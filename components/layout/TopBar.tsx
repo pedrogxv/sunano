@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, ChevronDown, Globe, MessageCircle, Youtube } from "lucide-react"
+import { Check, ChevronDown, Globe, MessageCircle, Send, Youtube } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,8 +19,20 @@ import { useLocale } from "@/lib/locale-context"
 import { cn } from "@/lib/utils"
 
 const SOCIAL_LINKS = [
-  { label: "YouTube", icon: Youtube, href: "https://youtube.com/@sunano", color: "text-red-400 hover:text-red-300" },
-  { label: "Telegram", icon: MessageCircle, href: "https://t.me/sumano", color: "text-sky-400 hover:text-sky-300" },
+  {
+    label: "YouTube",
+    icon: Youtube,
+    href: "https://youtube.com/@sunano",
+    color: "bg-red-600 text-white hover:bg-red-500",
+    text: "YouTube",
+  },
+  {
+    label: "Telegram",
+    icon: Send,
+    href: "https://t.me/sumano",
+    color: "bg-[#0088cc] text-white hover:bg-[#0088cc]/90",
+    text: "Acesse o Grupo do Telegram",
+  },
 ]
 
 export function TopBar() {
@@ -102,12 +114,13 @@ export function TopBar() {
                   rel="noreferrer"
                   aria-label={link.label}
                   className={cn(
-                    "flex size-9 items-center justify-center rounded-lg bg-white/[0.05] text-slate-400 transition-all hover:bg-white/[0.1]",
+                    "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all",
                     link.color
                   )}
                   title={link.label}
                 >
                   <Icon className="size-4" />
+                  <span className="hidden sm:inline">{link.text}</span>
                 </a>
               )
             })}

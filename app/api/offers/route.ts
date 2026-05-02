@@ -29,12 +29,13 @@ export async function GET(request: Request) {
     const workingCounts: Record<string, number> = {}
     const userVotes = new Set<string>()
 
-    for (const vote of votes ?? []) {
-      if (vote.is_working) {
-        workingCounts[vote.offer_id] = (workingCounts[vote.offer_id] ?? 0) + 1
+    for (const vote of (votes ?? []) as any[]) {
+      const v = vote as any
+      if (v.is_working) {
+        workingCounts[v.offer_id] = (workingCounts[v.offer_id] ?? 0) + 1
       }
-      if (vote.voter_hash === identifier) {
-        userVotes.add(vote.offer_id)
+      if (v.voter_hash === identifier) {
+        userVotes.add(v.offer_id)
       }
     }
 

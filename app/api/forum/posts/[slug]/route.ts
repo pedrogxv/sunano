@@ -6,7 +6,18 @@ type RouteParams = {
   params: { slug: string }
 }
 
-export async function GET(_: Request, { params }: RouteParams) {
+export async function GET(_: Request, context: any) {
+  let params: { slug: string } | undefined = context?.params
+  if (params && typeof (params as any).then === "function") {
+    try {
+      params = await params
+    } catch (_) {
+      params = undefined
+    }
+  }
+  if (!params?.slug) {
+    return NextResponse.json({ error: "Missing slug." }, { status: 400 })
+  }
   try {
     const supabase = createSupabaseAdminClient()
 
@@ -28,7 +39,7 @@ export async function GET(_: Request, { params }: RouteParams) {
     const { data: comments } = await supabase
       .from("forum_comments")
       .select("id, body, author_name, created_at")
-      .eq("post_id", post.id)
+      .eq("post_id", (post as any).id)
       .eq("is_hidden", false)
       .order("created_at", { ascending: true })
 

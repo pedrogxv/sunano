@@ -50,7 +50,7 @@ export async function checkRateLimit({
     return { allowed: false, retryAfterSeconds: windowSeconds }
   }
 
-  await supabase.from("rate_limit_events").insert({ action, identifier })
+  await (supabase.from("rate_limit_events").insert({ action, identifier } as any) as any)
 
   return { allowed: true }
 }

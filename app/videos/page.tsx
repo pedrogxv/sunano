@@ -66,20 +66,6 @@ export default async function VideosPage() {
                         <p className="truncate text-xs text-muted-foreground">{channel.customUrl || "Canal no YouTube"}</p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-center">
-                      <div className="rounded-lg border border-border bg-muted/30 px-2 py-2">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Inscritos</p>
-                        <p className="text-sm font-semibold text-foreground">{formatCount(channel.subscriberCount)}</p>
-                      </div>
-                      <div className="rounded-lg border border-border bg-muted/30 px-2 py-2">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Views</p>
-                        <p className="text-sm font-semibold text-foreground">{formatCount(channel.viewCount)}</p>
-                      </div>
-                      <div className="rounded-lg border border-border bg-muted/30 px-2 py-2">
-                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Vídeos</p>
-                        <p className="text-sm font-semibold text-foreground">{formatCount(channel.videoCount)}</p>
-                      </div>
-                    </div>
                     <Button asChild className="w-full bg-red-500 text-white-950 hover:bg-red-500">
                       <Link href={channel.channelUrl} target="_blank" rel="noreferrer">
                         Ver canal no YouTube

@@ -15,7 +15,18 @@ const commentSchema = z.object({
   website: z.string().optional(),
 })
 
-export async function POST(request: Request, { params }: RouteParams) {
+export async function POST(request: Request, context: any) {
+  let params: { slug: string } | undefined = context?.params
+  if (params && typeof (params as any).then === "function") {
+    try {
+      params = await params
+    } catch (_) {
+      params = undefined
+    }
+  }
+  if (!params?.slug) {
+    return NextResponse.json({ error: "Missing slug." }, { status: 400 })
+  }
   try {
     const body = await request.json()
     const parsed = commentSchema.safeParse(body)
@@ -56,19 +67,19 @@ export async function POST(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Post nao encontrado." }, { status: 404 })
     }
 
-    if (post.is_locked) {
+    if ((post as any).is_locked) {
       return NextResponse.json({ error: "Este post esta fechado para comentarios." }, { status: 403 })
     }
 
     const payload = {
-      post_id: post.id,
+      post_id: (post as any).id,
       body: parsed.data.body.trim(),
       author_name: parsed.data.author_name.trim(),
       author_email: parsed.data.author_email?.trim() || null,
       is_hidden: false,
     }
 
-    const { error } = await supabase.from("forum_comments").insert(payload)
+    const { error } = await (supabase.from("forum_comments").insert(payload as any) as any)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })

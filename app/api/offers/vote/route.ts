@@ -39,9 +39,9 @@ export async function POST(request: Request) {
       is_working: parsed.data.is_working ?? true,
     }
 
-    const { error } = await supabase
+    const { error } = await (supabase
       .from("offers_votes")
-      .upsert(payload, { onConflict: "offer_id,voter_hash" })
+      .upsert(payload as any, { onConflict: "offer_id,voter_hash" }) as any)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })

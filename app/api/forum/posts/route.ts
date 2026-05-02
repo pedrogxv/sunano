@@ -32,7 +32,7 @@ async function createUniqueSlug(baseSlug: string) {
     .select("slug")
     .ilike("slug", `${baseSlug}%`)
 
-  const taken = new Set((data ?? []).map((item) => item.slug))
+  const taken = new Set(((data ?? []) as any[]).map((item) => (item as any).slug))
   let slug = baseSlug
   let index = 2
 
@@ -57,7 +57,7 @@ export async function GET() {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    const postIds = (posts ?? []).map((post) => post.id)
+    const postIds = ((posts ?? []) as any[]).map((post) => (post as any).id)
     const commentCounts: Record<string, number> = {}
 
     if (postIds.length > 0) {
@@ -67,14 +67,15 @@ export async function GET() {
         .in("post_id", postIds)
         .eq("is_hidden", false)
 
-      for (const comment of comments ?? []) {
-        commentCounts[comment.post_id] = (commentCounts[comment.post_id] ?? 0) + 1
+      for (const comment of (comments ?? []) as any[]) {
+        const postId = (comment as any).post_id
+        commentCounts[postId] = (commentCounts[postId] ?? 0) + 1
       }
     }
 
-    const formatted = (posts ?? []).map((post) => ({
-      ...post,
-      comment_count: commentCounts[post.id] ?? 0,
+    const formatted = ((posts ?? []) as any[]).map((post) => ({
+      ...(post as any),
+      comment_count: commentCounts[(post as any).id] ?? 0,
     }))
 
     return NextResponse.json({ ok: true, posts: formatted })
@@ -123,7 +124,7 @@ export async function POST(request: Request) {
       is_locked: false,
     }
 
-    const { error } = await supabase.from("forum_posts").insert(payload)
+    const { error } = await (supabase.from("forum_posts").insert(payload as any) as any)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })

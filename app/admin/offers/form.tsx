@@ -174,16 +174,16 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
         <Label className="text-sm font-semibold">{isEnglish ? "Offer image (banner)" : "Imagem da oferta (banner)"}</Label>
         <div className="flex items-start gap-4">
           {imagePreview && (
-            <div className="h-28 w-40 overflow-hidden rounded-lg border border-white/10 bg-black/20">
+            <div className="h-28 w-40 overflow-hidden rounded-lg border border-border bg-muted/30">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img alt={isEnglish ? "Offer preview" : "Preview da oferta"} className="h-full w-full object-cover" src={imagePreview} />
             </div>
           )}
-          <label className="flex-1 cursor-pointer rounded-lg border-2 border-dashed border-white/20 p-5 transition hover:border-white/40">
+          <label className="flex-1 cursor-pointer rounded-lg border-2 border-dashed border-border p-5 transition hover:border-primary/40">
             <input accept="image/*" className="hidden" onChange={handleImageSelect} type="file" />
             <div className="flex flex-col items-center gap-2 text-center">
-              <Upload className="size-5 text-slate-400" />
-              <p className="text-sm text-slate-300">{isEnglish ? "Click to upload offer image" : "Clique para enviar imagem da oferta"}</p>
+              <Upload className="size-5 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">{isEnglish ? "Click to upload offer image" : "Clique para enviar imagem da oferta"}</p>
             </div>
           </label>
         </div>
@@ -299,7 +299,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
         </div>
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-white/10 pt-4">
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
         <Button
           type="button"
           variant="outline"

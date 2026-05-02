@@ -3,6 +3,7 @@ import { Inter, Space_Grotesk } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { TopBar } from "@/components/layout/TopBar"
 import { LocaleProvider } from "@/lib/locale-context"
+import { ThemeProvider } from "@/lib/theme-context"
 
 import "./globals.css"
 
@@ -34,12 +35,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="pt-BR" className="bg-background">
+    <html lang="pt-BR" className="bg-background" data-theme="midnight" suppressHydrationWarning>
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans`}>
-        <LocaleProvider>
-          <TopBar />
-          <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
-        </LocaleProvider>
+        <ThemeProvider>
+          <LocaleProvider>
+            <TopBar />
+            <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+          </LocaleProvider>
+        </ThemeProvider>
       </body>
     </html>
   )

@@ -79,12 +79,12 @@ export function AdminLoginForm() {
   return (
     <form ref={formRef} action={formAction} className="space-y-4">
       <div className="space-y-2">
-        <label className="text-sm font-medium text-slate-200" htmlFor="email">
+        <label className="text-sm font-medium text-foreground" htmlFor="email">
           Email
         </label>
         <Input
           autoComplete="email"
-          className="border-white/10 bg-white/[0.04] text-slate-50 placeholder:text-slate-500"
+          className="border-border bg-card/50 text-foreground placeholder:text-muted-foreground"
           id="email"
           name="email"
           placeholder="admin@sunano.com"
@@ -93,12 +93,12 @@ export function AdminLoginForm() {
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm font-medium text-slate-200" htmlFor="password">
+        <label className="text-sm font-medium text-foreground" htmlFor="password">
           {isEnglish ? "Password" : "Senha"}
         </label>
         <Input
           autoComplete="current-password"
-          className="border-white/10 bg-white/[0.04] text-slate-50 placeholder:text-slate-500"
+          className="border-border bg-card/50 text-foreground placeholder:text-muted-foreground"
           id="password"
           name="password"
           placeholder={isEnglish ? "Your password" : "Sua senha"}

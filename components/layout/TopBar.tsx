@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, ChevronDown, Globe, MessageCircle, Send, Youtube } from "lucide-react"
+import { Check, ChevronDown, Globe, MessageCircle, Palette, Send, Youtube } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,7 @@ import {
   type LocaleCode,
 } from "@/lib/i18n"
 import { useLocale } from "@/lib/locale-context"
+import { useTheme } from "@/lib/theme-context"
 import { cn } from "@/lib/utils"
 
 const SOCIAL_LINKS = [
@@ -37,6 +38,7 @@ const SOCIAL_LINKS = [
 
 export function TopBar() {
   const { locale, setLocale } = useLocale()
+  const { theme, setTheme, themes } = useTheme()
 
   const selectedLanguage = getLanguageEntry(locale)
 
@@ -45,16 +47,16 @@ export function TopBar() {
   }
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-white/[0.08] bg-[#0d1117] backdrop-blur-md">
+    <div className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-border bg-background backdrop-blur-md">
       <div className="h-full max-w-full flex items-center justify-between px-5">
         {/* Left Section - Logo/Brand */}
         <div className="flex items-center gap-3">
-          <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500 to-cyan-600 font-bold text-white shadow-lg shadow-cyan-500/20">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80 font-bold text-primary-foreground shadow-lg shadow-black/20">
             S
           </div>
           <div className="hidden sm:flex flex-col">
-            <span className="text-sm font-semibold tracking-tight text-slate-50">Sunano</span>
-            <span className="text-[9px] font-medium uppercase tracking-widest text-slate-500">Tierlist</span>
+            <span className="text-sm font-semibold tracking-tight text-foreground">Sunano</span>
+            <span className="text-[9px] font-medium uppercase tracking-widest text-muted-foreground">Tierlist</span>
           </div>
         </div>
 
@@ -63,23 +65,65 @@ export function TopBar() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.05] px-3 text-sm font-medium text-slate-200 transition-all hover:bg-white/[0.1]"
+                className="flex h-9 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40"
                 type="button"
               >
-                <Globe className="size-4 text-cyan-300" />
-                <span className="hidden sm:inline">{selectedLanguage.nativeLabel}</span>
-                <span className="sm:hidden">{selectedLanguage.shortLabel}</span>
-                <ChevronDown className="size-3.5 text-slate-500" />
+                <Palette className="size-4 text-primary" />
+                <span className="hidden sm:inline">
+                  {themes.find((option) => option.key === theme)?.label ?? "Theme"}
+                </span>
+                <span className="sm:hidden">{themes.find((option) => option.key === theme)?.label.slice(0, 3) ?? "Thm"}</span>
+                <ChevronDown className="size-3.5 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 border-white/10 bg-[#131a28]">
+            <DropdownMenuContent align="end" className="w-56 border-border bg-popover text-foreground shadow-xl">
               <DropdownMenuLabel className="space-y-0.5 px-2 py-1.5">
-                <div className="text-sm font-semibold text-slate-100">{I18N[locale].topbar.languageLabel}</div>
-                <div className="text-xs font-normal text-slate-500">
+                <div className="text-sm font-semibold text-foreground">{I18N[locale].topbar.themeLabel ?? (locale === "en-US" ? "Theme" : "Tema")}</div>
+                <div className="text-xs font-normal text-muted-foreground">
+                  {I18N[locale].topbar.themeHelper ?? (locale === "en-US" ? "Pick a color mood" : "Escolha um clima de cor")}
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-border" />
+              {themes.map((option) => {
+                const isActive = option.key === theme
+
+                return (
+                  <DropdownMenuItem
+                    key={option.key}
+                    className={cn(
+                      "flex items-center justify-between rounded-md px-2 py-2 text-sm text-foreground focus:bg-muted/40 focus:text-foreground",
+                      isActive && "bg-primary/15 text-primary"
+                    )}
+                    onSelect={() => setTheme(option.key)}
+                  >
+                    <span className="font-medium">{option.label}</span>
+                    {isActive && <Check className="size-4 text-primary" />}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="flex h-9 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40"
+                type="button"
+              >
+                <Globe className="size-4 text-primary" />
+                <span className="hidden sm:inline">{selectedLanguage.nativeLabel}</span>
+                <span className="sm:hidden">{selectedLanguage.shortLabel}</span>
+                <ChevronDown className="size-3.5 text-muted-foreground" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 border-border bg-popover text-foreground shadow-xl">
+              <DropdownMenuLabel className="space-y-0.5 px-2 py-1.5">
+                <div className="text-sm font-semibold text-foreground">{I18N[locale].topbar.languageLabel}</div>
+                <div className="text-xs font-normal text-muted-foreground">
                   {I18N[locale].topbar.languageHelper}
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-white/[0.08]" />
+              <DropdownMenuSeparator className="bg-border" />
               {LANGUAGE_OPTIONS.map((language) => {
                 const isActive = language.code === locale
 
@@ -87,16 +131,16 @@ export function TopBar() {
                   <DropdownMenuItem
                     key={language.code}
                     className={cn(
-                      "flex items-center justify-between rounded-md px-2 py-2 text-sm text-slate-200 focus:bg-white/[0.06] focus:text-slate-50",
-                      isActive && "bg-cyan-500/10 text-cyan-200"
+                      "flex items-center justify-between rounded-md px-2 py-2 text-sm text-foreground focus:bg-muted/40 focus:text-foreground",
+                      isActive && "bg-primary/15 text-primary"
                     )}
                     onSelect={() => updateLocale(language.code)}
                   >
                     <div className="flex flex-col items-start">
                       <span className="font-medium">{language.nativeLabel}</span>
-                      <span className="text-xs text-slate-500">{language.label}</span>
+                      <span className="text-xs text-muted-foreground">{language.label}</span>
                     </div>
-                    {isActive && <Check className="size-4 text-cyan-300" />}
+                    {isActive && <Check className="size-4 text-primary" />}
                   </DropdownMenuItem>
                 )
               })}

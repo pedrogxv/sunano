@@ -259,8 +259,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </Button>
       </Link>
 
-      <Card className="mt-4 border-white/10 bg-[#131a28]/90">
-        <CardHeader className="border-b border-white/10">
+      <Card className="mt-4 border-border bg-card/90">
+        <CardHeader className="border-b border-border">
           <CardTitle>{peripheralId ? (isEnglish ? "Edit Peripheral" : "Editar Periférico") : (isEnglish ? "New Peripheral" : "Novo Periférico")}</CardTitle>
           <CardDescription>
             {peripheralId ? (isEnglish ? "Edit peripheral information" : "Edite as informações do periférico") : (isEnglish ? "Create a new peripheral" : "Crie um novo periférico")}
@@ -272,15 +272,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Imagem */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Image" : "Imagem"}</label>
+              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Image" : "Imagem"}</label>
               <div className="flex gap-4 items-start">
                 {imagePreview && (
-                  <div className="relative w-32 h-32 rounded-lg border border-white/10 overflow-hidden">
+                  <div className="relative w-32 h-32 rounded-lg border border-border overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img alt="Preview" className="w-full h-full object-cover" src={imagePreview} />
                   </div>
                 )}
-                <label className="flex-1 border-2 border-dashed border-white/20 rounded-lg p-6 cursor-pointer hover:border-white/40 transition">
+                <label className="flex-1 border-2 border-dashed border-border rounded-lg p-6 cursor-pointer hover:border-primary/40 transition">
                   <input
                     accept="image/*"
                     className="hidden"
@@ -288,8 +288,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     type="file"
                   />
                   <div className="flex flex-col items-center gap-2">
-                    <Upload className="size-6 text-slate-400" />
-                    <div className="text-sm text-slate-300">{isEnglish ? "Click to upload or drag the image" : "Clique para enviar ou arraste a imagem"}</div>
+                    <Upload className="size-6 text-muted-foreground" />
+                    <div className="text-sm text-muted-foreground">{isEnglish ? "Click to upload or drag the image" : "Clique para enviar ou arraste a imagem"}</div>
                   </div>
                 </label>
               </div>
@@ -298,9 +298,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             {/* Informações Básicas */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Name" : "Nome"}</label>
+                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Name" : "Nome"}</label>
                 <Input
-                  className="border-white/10 bg-white/5"
+                  className="border-border bg-card/50"
                   placeholder="Ex: Logitech G Pro X Superlight 2"
                   {...form.register("name")}
                 />
@@ -310,9 +310,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Brand" : "Marca"}</label>
+                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Brand" : "Marca"}</label>
                 <Input
-                  className="border-white/10 bg-white/5"
+                  className="border-border bg-card/50"
                   placeholder="Ex: Logitech"
                   {...form.register("brand")}
                 />
@@ -322,9 +322,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
 
               <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Price ($)" : "Preço (R$)"}</label>
+                  <label className="text-sm font-semibold text-foreground">{isEnglish ? "Price ($)" : "Preço (R$)"}</label>
                 <Input
-                    className="border-white/10 bg-white/5"
+                    className="border-border bg-card/50"
                     placeholder={isEnglish ? "159" : "159"}
                   type="number"
                   step="0.01"
@@ -336,12 +336,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Category" : "Categoria"}</label>
+                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Category" : "Categoria"}</label>
                 <Select
                   onValueChange={(value) => form.setValue("category", value as Category)}
                   value={form.watch("category")}
                 >
-                  <SelectTrigger className="border-white/10 bg-white/5">
+                  <SelectTrigger className="border-border bg-card/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -355,12 +355,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-100">Tier</label>
+                <label className="text-sm font-semibold text-foreground">Tier</label>
                 <Select
                   onValueChange={(value) => form.setValue("tier", value as Tier)}
                   value={form.watch("tier")}
                 >
-                  <SelectTrigger className="border-white/10 bg-white/5">
+                  <SelectTrigger className="border-border bg-card/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -376,15 +376,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
             {/* Tags */}
             <div className="space-y-3">
-              <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Tags" : "Tags"}</label>
+              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Tags" : "Tags"}</label>
               <div className="flex gap-2 flex-wrap">
                 {TAGS_OPTIONS.map((tag) => (
                   <Badge
                     key={tag}
                     className={`cursor-pointer transition ${
                       selectedTags.includes(tag)
-                        ? "bg-sky-500 text-white"
-                        : "bg-white/10 text-slate-300 hover:bg-white/20"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/40 text-muted-foreground hover:bg-muted/60"
                     }`}
                     onClick={() => toggleTag(tag)}
                     variant="secondary"
@@ -396,45 +396,45 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               {selectedTags.length === 0 && (
                 <p className="text-red-400 text-xs">{isEnglish ? "At least one tag selection is required" : "Seleção de pelo menos uma tag é obrigatória"}</p>
               )}
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 {isEnglish ? "Selected" : "Selecionadas"}: {selectedTags.length} {isEnglish ? "of" : "de"} {TAGS_OPTIONS.length}
               </p>
             </div>
 
             {/* Specs Específicas por Categoria */}
-            <div className="space-y-4 border-t border-white/10 pt-6">
-              <h3 className="font-semibold text-slate-100">{isEnglish ? "Specifications" : "Especificações"}</h3>
+            <div className="space-y-4 border-t border-border pt-6">
+              <h3 className="font-semibold text-foreground">{isEnglish ? "Specifications" : "Especificações"}</h3>
 
               {form.watch("category") === "mouse" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Mouse Shape</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Mouse Shape</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="symmetrical, ergonomic"
                       {...form.register("mouseShape")}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Driver</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Driver</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="HERO 2, PMW 3389"
                       {...form.register("driver")}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Connectivity</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Connectivity</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="wired, wireless"
                       {...form.register("connectivity")}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Size</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Size</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="small, medium, large"
                       {...form.register("size")}
                     />
@@ -445,25 +445,25 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               {form.watch("category") === "keyboard" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Layout</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Layout</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="60%, 75%, TKL, Full-size"
                       {...form.register("keyboardLayout")}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Profile</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Profile</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="Rapid Trigger, Hall Effect"
                       {...form.register("profile")}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Connectivity</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Connectivity</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="wired, wireless"
                       {...form.register("connectivity")}
                     />
@@ -474,17 +474,17 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               {form.watch("category") === "mousepad" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Surface</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Surface</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="cloth, hybrid, glass"
                       {...form.register("surface")}
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">Profile</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Profile</label>
                     <Input
-                      className="border-white/10 bg-white/5"
+                      className="border-border bg-card/50"
                       placeholder="Control, Speed"
                       {...form.register("profile")}
                     />
@@ -494,7 +494,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             </div>
 
             {/* Botões */}
-            <div className="flex gap-3 justify-end border-t border-white/10 pt-6">
+            <div className="flex gap-3 justify-end border-t border-border pt-6">
               <Link href="/admin/peripherals">
                 <Button variant="outline">{isEnglish ? "Cancel" : "Cancelar"}</Button>
               </Link>

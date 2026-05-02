@@ -49,6 +49,7 @@ export function PublicSidebar({
     { href: "/", label: isEnglish ? "Tier List" : "Tier List", icon: LayoutGrid },
     { href: "/blog", label: isEnglish ? "Reviews" : "Reviews", icon: Newspaper },
     { href: "/offers", label: isEnglish ? "Offers" : "Ofertas", icon: BadgePercent },
+    { href: "/forum", label: isEnglish ? "Forum" : "Forum", icon: MessageCircle },
     { href: "/videos", label: isEnglish ? "Videos" : "Videos", icon: PlaySquare },
   ]
 
@@ -65,7 +66,7 @@ export function PublicSidebar({
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 flex h-screen w-64 shrink-0 flex-col border-r border-white/[0.08] bg-[#0d1117] transition-transform duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex h-screen w-64 shrink-0 flex-col border-r border-border bg-card transition-transform duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -88,8 +89,8 @@ export function PublicSidebar({
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                       isActive
-                        ? "bg-cyan-500/10 text-cyan-300"
-                        : "text-slate-300 hover:bg-white/[0.05] hover:text-slate-100"
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                     )}
                   >
                     <Icon className="size-[18px]" />
@@ -101,15 +102,15 @@ export function PublicSidebar({
           </div>
 
           {/* Divider */}
-          <div className="my-4 h-px bg-white/[0.08]" />
+          <div className="my-4 h-px bg-border" />
 
           {/* Coming Soon Section */}
           <div className="space-y-1">
-            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+            <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               {isEnglish ? "Coming Soon" : "Em Breve"}
             </p>
-            <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-slate-500">
-              <div className="size-[18px] rounded bg-white/[0.05]" />
+            <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground">
+              <div className="size-[18px] rounded bg-muted/40" />
               <span>{isEnglish ? "Store" : "Loja"}</span>
               <span className="ml-auto rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300">
                 Soon
@@ -119,15 +120,15 @@ export function PublicSidebar({
         </nav>
 
         {/* Changelog Link */}
-        <div className="border-t border-white/[0.08] px-3 py-3">
+        <div className="border-t border-border px-3 py-3">
           <Link
             href="/changelog"
             onClick={() => setIsMobileOpen(false)}
             className={cn(
               "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
               pathname?.startsWith("/changelog")
-                ? "bg-cyan-500/10 text-cyan-300"
-                : "text-slate-300 hover:bg-white/[0.05] hover:text-slate-100"
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             )}
           >
             <Clock3 className="size-[16px]" />
@@ -138,7 +139,7 @@ export function PublicSidebar({
 
       {/* Mobile Toggle Button */}
       <Button
-        className="fixed bottom-4 right-4 z-50 flex size-12 items-center justify-center rounded-full border border-white/[0.1] bg-[#131921] text-slate-100 shadow-lg hover:bg-[#1c2433] md:hidden"
+        className="fixed bottom-4 right-4 z-50 flex size-12 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-lg hover:bg-muted/40 md:hidden"
         onClick={() => setIsMobileOpen(!isMobileOpen)}
         size="icon"
       >

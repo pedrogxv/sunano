@@ -51,7 +51,7 @@ export default async function Page() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100 pt-16">
+    <div className="min-h-screen bg-background text-foreground pt-16">
       <div className="flex">
         {/* Sidebar */}
         <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">

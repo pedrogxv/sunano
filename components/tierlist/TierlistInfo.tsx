@@ -25,7 +25,7 @@ export function TierlistInfo() {
         title: isEnglish ? "About" : "Sobre",
         icon: Info,
         content: (
-          <div className="space-y-3 text-sm leading-relaxed text-slate-300">
+          <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
             <p>
               {isEnglish
                 ? "Peripherals are personal. This tierlist prioritizes practical performance, value, and consistency in real usage."
@@ -44,9 +44,9 @@ export function TierlistInfo() {
         title: isEnglish ? "Categories" : "Categorias",
         icon: Tag,
         content: (
-          <div className="space-y-3 text-sm text-slate-300">
+          <div className="space-y-3 text-sm text-muted-foreground">
             <p>{isEnglish ? "Primary tags:" : "Tags principais:"}</p>
-            <ul className="space-y-1.5 text-slate-400">
+            <ul className="space-y-1.5 text-muted-foreground">
               <li>{isEnglish ? "Competitive: maximum performance focus" : "Competitivo: foco em performance máxima"}</li>
               <li>{isEnglish ? "Versatile: balanced all-around usage" : "Versátil: equilíbrio para uso geral"}</li>
               <li>{isEnglish ? "Value: best cost-benefit picks" : "Valor: melhores opções de custo-benefício"}</li>
@@ -60,7 +60,7 @@ export function TierlistInfo() {
         title: isEnglish ? "Tiers" : "Tiers",
         icon: Star,
         content: (
-          <div className="space-y-2 text-sm text-slate-300">
+          <div className="space-y-2 text-sm text-muted-foreground">
             <p>{isEnglish ? "T0 / T0.5: premium and top-level picks." : "T0 / T0.5: opções premium e de topo."}</p>
             <p>{isEnglish ? "T1: strong choices with excellent consistency." : "T1: escolhas fortes com excelente consistência."}</p>
             <p>{isEnglish ? "T2: solid options that can require adaptation." : "T2: opções sólidas que podem exigir adaptação."}</p>
@@ -72,9 +72,9 @@ export function TierlistInfo() {
         title: isEnglish ? "Criteria" : "Criterios",
         icon: ListChecks,
         content: (
-          <div className="space-y-2 text-sm text-slate-300">
+          <div className="space-y-2 text-sm text-muted-foreground">
             <p>{isEnglish ? "Evaluation considers:" : "A avaliação considera:"}</p>
-            <ul className="space-y-1.5 text-slate-400">
+            <ul className="space-y-1.5 text-muted-foreground">
               <li>{isEnglish ? "Real-game usage and daily use" : "Uso real em jogos e no dia a dia"}</li>
               <li>{isEnglish ? "Build quality and materials" : "Qualidade de construção e materiais"}</li>
               <li>{isEnglish ? "Latency and consistency" : "Latência e consistência"}</li>
@@ -88,8 +88,8 @@ export function TierlistInfo() {
         title: isEnglish ? "Latest Update" : "Ultima Atualizacao",
         icon: Clock,
         content: (
-          <div className="space-y-2 text-sm text-slate-300">
-              <p className="text-cyan-300">{isEnglish ? "April 2026" : "Abril 2026"}</p>
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p className="text-primary">{isEnglish ? "April 2026" : "Abril 2026"}</p>
               <p>
                 {isEnglish
                   ? "Lists are updated continuously based on new releases, firmware revisions, and market price changes."
@@ -104,15 +104,15 @@ export function TierlistInfo() {
   const activeContent = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]
 
   return (
-    <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0d1117]">
-      <div className="border-b border-white/[0.08] bg-[#0a0d14] px-4 py-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-          <span className="size-2 rounded-sm bg-cyan-400" />
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <div className="border-b border-border bg-muted/30 px-4 py-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <span className="size-2 rounded-sm bg-primary" />
           {isEnglish ? "Tierlist Information" : "Informações da Tierlist"}
         </h2>
       </div>
 
-      <div className="flex overflow-x-auto border-b border-white/[0.08] bg-white/[0.01]">
+      <div className="flex overflow-x-auto border-b border-border bg-muted/20">
         {tabs.map((tab) => {
           const Icon = tab.icon
           const isActive = activeTab === tab.id
@@ -124,8 +124,8 @@ export function TierlistInfo() {
               className={cn(
                 "flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-all",
                 isActive
-                  ? "border-cyan-400 text-cyan-300"
-                  : "border-transparent text-slate-400 hover:bg-white/[0.02] hover:text-slate-200"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground"
               )}
             >
               <Icon className="size-4" />

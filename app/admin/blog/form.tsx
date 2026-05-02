@@ -250,8 +250,8 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         </Button>
       </Link>
 
-      <Card className="border-white/10 bg-[#131a28]/90">
-        <CardHeader className="border-b border-white/10">
+      <Card className="border-border bg-card/90">
+        <CardHeader className="border-b border-border">
           <CardTitle>{postId ? (isEnglish ? "Edit article" : "Editar artigo") : (isEnglish ? "New article" : "Novo artigo")}</CardTitle>
           <CardDescription>
             {isEnglish ? "Main image standard: blog card. Header cover is optional and can be adapted automatically." : "Padrão principal de capa: card do blog. A capa de header é opcional e pode ser adaptada automaticamente."}
@@ -263,8 +263,8 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
           ) : null}
 
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
-            <div className="rounded-lg border border-cyan-400/20 bg-cyan-500/5 p-4 text-xs leading-5 text-slate-300">
-              <p className="font-semibold text-cyan-200">{isEnglish ? "Blog image standards" : "Padrões de imagem do blog"}</p>
+            <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-xs leading-5 text-muted-foreground">
+              <p className="font-semibold text-primary">{isEnglish ? "Blog image standards" : "Padrões de imagem do blog"}</p>
               <p>
                 {isEnglish
                   ? `Card cover (main standard): ratio ${BLOG_IMAGE_STANDARDS.thumbnail.aspectRatio}, recommended resolution ${BLOG_IMAGE_STANDARDS.thumbnail.width}x${BLOG_IMAGE_STANDARDS.thumbnail.height}. This image is used in the reviews listing and should remain readable at reduced size.`
@@ -283,12 +283,12 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Related peripheral" : "Periférico relacionado"}</label>
+              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Related peripheral" : "Periférico relacionado"}</label>
               <Select
                 value={form.watch("peripheral_id")}
                 onValueChange={(value) => form.setValue("peripheral_id", value, { shouldValidate: true })}
               >
-                <SelectTrigger className="border-white/10 bg-white/5">
+                <SelectTrigger className="border-border bg-card/50">
                   <SelectValue placeholder={isEnglish ? "Select a peripheral" : "Selecione um periférico"} />
                 </SelectTrigger>
                 <SelectContent>
@@ -305,13 +305,13 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Title" : "Título"}</label>
+              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Title" : "Título"}</label>
               <Input
-                className="border-white/10 bg-white/5"
+                className="border-border bg-card/50"
                 placeholder="Review: Logitech G Pro X Superlight 2"
                 {...form.register("title")}
               />
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 {isEnglish ? "The slug is generated automatically in the backend and cannot be edited." : "O slug é gerado automaticamente no backend e não pode ser editado."}
               </p>
               {form.formState.errors.title ? (
@@ -320,9 +320,9 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Summary" : "Resumo"}</label>
+              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Summary" : "Resumo"}</label>
               <Textarea
-                className="min-h-20 border-white/10 bg-white/5"
+                className="min-h-20 border-border bg-card/50"
                 placeholder={isEnglish ? "Short summary for blog listing" : "Resumo curto para a listagem do blog"}
                 {...form.register("excerpt")}
               />
@@ -330,20 +330,20 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Header cover (upload)" : "Capa do header (Upload)"}</label>
-                <label className="block rounded-lg border-2 border-dashed border-white/20 p-5 cursor-pointer hover:border-white/40 transition">
+                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Header cover (upload)" : "Capa do header (Upload)"}</label>
+                <label className="block rounded-lg border-2 border-dashed border-border p-5 cursor-pointer hover:border-primary/40 transition">
                   <input
                     accept="image/*"
                     className="hidden"
                     onChange={(event) => handleCoverImageSelect(event, "header")}
                     type="file"
                   />
-                  <div className="flex items-center justify-center gap-2 text-sm text-slate-300">
-                    <Upload className="size-4 text-slate-400" />
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Upload className="size-4 text-muted-foreground" />
                     {isEnglish ? "Click to upload the main image" : "Clique para enviar a imagem principal"}
                   </div>
                 </label>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-muted-foreground">
                   {isEnglish
                     ? `Optional cover for article top. Header standard: ${BLOG_IMAGE_STANDARDS.header.width}x${BLOG_IMAGE_STANDARDS.header.height} (${BLOG_IMAGE_STANDARDS.header.aspectRatio}), with horizontal framing and center focus.`
                     : `Capa opcional para topo do artigo. Padrão do header: ${BLOG_IMAGE_STANDARDS.header.width}x${BLOG_IMAGE_STANDARDS.header.height} (${BLOG_IMAGE_STANDARDS.header.aspectRatio}), com enquadramento horizontal e foco no centro.`}
@@ -354,20 +354,20 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Card cover (upload)" : "Capa do card (Upload)"}</label>
-                <label className="block rounded-lg border-2 border-dashed border-white/20 p-5 cursor-pointer hover:border-white/40 transition">
+                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Card cover (upload)" : "Capa do card (Upload)"}</label>
+                <label className="block rounded-lg border-2 border-dashed border-border p-5 cursor-pointer hover:border-primary/40 transition">
                   <input
                     accept="image/*"
                     className="hidden"
                     onChange={(event) => handleCoverImageSelect(event, "thumbnail")}
                     type="file"
                   />
-                  <div className="flex items-center justify-center gap-2 text-sm text-slate-300">
-                    <Upload className="size-4 text-slate-400" />
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                    <Upload className="size-4 text-muted-foreground" />
                     {isEnglish ? "Click to upload the thumbnail" : "Clique para enviar a miniatura"}
                   </div>
                 </label>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-muted-foreground">
                   {isEnglish
                     ? `Card cover standard: ${BLOG_IMAGE_STANDARDS.thumbnail.width}x${BLOG_IMAGE_STANDARDS.thumbnail.height} (${BLOG_IMAGE_STANDARDS.thumbnail.aspectRatio}). If not uploaded, the thumbnail will be adapted from the header cover.`
                     : `Padrão da capa de card: ${BLOG_IMAGE_STANDARDS.thumbnail.width}x${BLOG_IMAGE_STANDARDS.thumbnail.height} (${BLOG_IMAGE_STANDARDS.thumbnail.aspectRatio}). Se não enviar, a miniatura será adaptada a partir da capa de header.`}
@@ -378,13 +378,13 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Video (external link)" : "Vídeo (link externo)"}</label>
+                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Video (external link)" : "Vídeo (link externo)"}</label>
                 <Input
-                  className="border-white/10 bg-white/5"
+                  className="border-border bg-card/50"
                   placeholder="https://youtube.com/watch?v=..."
                   {...form.register("video_url")}
                 />
-                <p className="text-xs text-slate-400">{isEnglish ? "Video only via URL (YouTube/Vimeo), no upload." : "Vídeo sempre via URL (YouTube/Vimeo), sem upload."}</p>
+                <p className="text-xs text-muted-foreground">{isEnglish ? "Video only via URL (YouTube/Vimeo), no upload." : "Vídeo sempre via URL (YouTube/Vimeo), sem upload."}</p>
                 {form.formState.errors.video_url ? (
                   <p className="text-xs text-red-400">{form.formState.errors.video_url.message}</p>
                 ) : null}
@@ -394,33 +394,33 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {selectedHeaderUrl ? (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold tracking-[0.12em] text-slate-400 uppercase">Preview header</p>
+                  <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Preview header</p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={selectedHeaderUrl}
                     alt="Capa do header"
-                    className="aspect-video w-full rounded-lg border border-white/10 object-cover"
+                    className="aspect-video w-full rounded-lg border border-border object-cover"
                   />
                 </div>
               ) : null}
 
               {selectedThumbnailUrl ? (
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold tracking-[0.12em] text-slate-400 uppercase">Preview card</p>
+                  <p className="text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase">Preview card</p>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={selectedThumbnailUrl}
                     alt="Capa do card"
-                    className="aspect-[2/1] w-full rounded-lg border border-white/10 object-cover"
+                    className="aspect-[2/1] w-full rounded-lg border border-border object-cover"
                   />
                 </div>
               ) : null}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Article content" : "Conteúdo do artigo"}</label>
+              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Article content" : "Conteúdo do artigo"}</label>
               <Textarea
-                className="min-h-64 border-white/10 bg-white/5 leading-6"
+                className="min-h-64 border-border bg-card/50 leading-6"
                 placeholder={isEnglish ? "Write the full review/article..." : "Escreva o review/artigo completo..."}
                 {...form.register("content")}
               />
@@ -430,12 +430,12 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-100">{isEnglish ? "Status" : "Status"}</label>
+              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Status" : "Status"}</label>
               <Select
                 value={form.watch("status")}
                 onValueChange={(value) => form.setValue("status", value as "published" | "draft")}
               >
-                <SelectTrigger className="border-white/10 bg-white/5">
+                <SelectTrigger className="border-border bg-card/50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

@@ -40,7 +40,7 @@ export const BentoGridItem = ({
   const content = (
     <div
       className={cn(
-        "group/bento row-span-1 flex flex-col justify-between space-y-4 rounded-2xl border border-white/[0.08] bg-[#0d1117] p-4 text-slate-100 shadow-[0_16px_40px_rgba(0,0,0,0.18)] transition duration-200 hover:border-cyan-500/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.28)]",
+        "group/bento row-span-1 flex flex-col justify-between space-y-4 rounded-2xl border border-border bg-card p-4 text-foreground shadow-[0_16px_40px_rgba(0,0,0,0.18)] transition duration-200 hover:border-primary/20 hover:shadow-[0_20px_60px_rgba(0,0,0,0.28)]",
         href ? "cursor-pointer" : "",
         className,
       )}
@@ -48,13 +48,13 @@ export const BentoGridItem = ({
       {header}
       <div className="transition duration-200 group-hover/bento:translate-x-2">
         {icon}
-        <div className="mt-2 mb-2 font-sans font-bold text-slate-50">
+        <div className="mt-2 mb-2 font-sans font-bold text-foreground">
           {title}
         </div>
-        <div className="font-sans text-xs font-normal text-slate-400">
+        <div className="font-sans text-xs font-normal text-muted-foreground">
           {description}
         </div>
-        <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-cyan-300">
+        <div className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary">
           {ctaLabel}
           <span className="transition-transform duration-200 group-hover/bento:translate-x-0.5">
             →

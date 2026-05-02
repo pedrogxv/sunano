@@ -30,12 +30,16 @@ export const I18N = {
     topbar: {
       languageLabel: "Idioma",
       languageHelper: "Escolha o idioma da interface",
+      themeLabel: "Tema",
+      themeHelper: "Escolha um clima de cor",
     },
   },
   "en-US": {
     topbar: {
       languageLabel: "Language",
       languageHelper: "Choose the interface language",
+      themeLabel: "Theme",
+      themeHelper: "Pick a color mood",
     },
   },
 } as const

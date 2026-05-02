@@ -15,7 +15,7 @@ type AdminProfile = {
   email: string | null
   display_name: string
   avatar_url: string | null
-  role: "admin" | "webmaster"
+  role: "admin" | "moderator" | "webmaster"
   permissions: Record<string, boolean>
 }
 
@@ -42,7 +42,7 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [role, setRole] = useState<"admin" | "webmaster">("admin")
+  const [role, setRole] = useState<"admin" | "moderator" | "webmaster">("admin")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [videoStatusLoading, setVideoStatusLoading] = useState(false)

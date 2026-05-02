@@ -62,8 +62,8 @@ export default function AdminOffersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-50">{isEnglish ? "Offers" : "Ofertas"}</h1>
-        <p className="mt-1 text-sm text-slate-400">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">{isEnglish ? "Offers" : "Ofertas"}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           {isEnglish
             ? "Offers are now synced directly from Telegram group messages. Manual create/edit has been disabled."
             : "As ofertas agora são sincronizadas diretamente das mensagens do grupo no Telegram. Cadastro/edição manual foi desativado."}
@@ -86,35 +86,35 @@ export default function AdminOffersPage() {
 
       {loading ? (
         <div className="flex items-center justify-center py-14">
-          <div className="flex items-center gap-3 text-slate-400">
+          <div className="flex items-center gap-3 text-muted-foreground">
             <Loader2 className="size-5 animate-spin" />
             <span>{isEnglish ? "Loading Telegram offers..." : "Carregando ofertas do Telegram..."}</span>
           </div>
         </div>
       ) : offers.length === 0 ? (
-        <Card className="border-white/10 bg-[#0d1117]">
-          <CardContent className="py-8 text-sm text-slate-400">
+        <Card className="border-border bg-card">
+          <CardContent className="py-8 text-sm text-muted-foreground">
             {isEnglish ? "No Telegram messages found for offers." : "Nenhuma mensagem de oferta encontrada no Telegram."}
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {offers.map((offer) => (
-            <Card key={offer.id} className="border-white/10 bg-[#0d1117]">
+            <Card key={offer.id} className="border-border bg-card">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="line-clamp-2 text-base text-slate-100">
+                  <CardTitle className="line-clamp-2 text-base text-foreground">
                     {offer.chatTitle || (isEnglish ? "Telegram Offer" : "Oferta Telegram")}
                   </CardTitle>
-                  <MessageCircle className="size-4 text-cyan-300" />
+                  <MessageCircle className="size-4 text-primary" />
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-muted-foreground">
                   {new Date(offer.date).toLocaleString("pt-BR")}
                   {offer.author ? ` · ${offer.author}` : ""}
                 </p>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-6 text-slate-300">{offer.text}</p>
+                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">{offer.text}</p>
                 {offer.url ? (
                   <a href={offer.url} target="_blank" rel="noreferrer" className="block">
                     <Button className="w-full" size="sm" variant="outline">

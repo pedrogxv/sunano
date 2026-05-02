@@ -76,7 +76,7 @@ export function FilterBar({
   ]
 
   return (
-    <div className="space-y-3 rounded-xl border border-white/[0.08] bg-[#0d1117] p-4">
+    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
       <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
         {categoryOptions.map((category) => {
           const active = selectedCategory === category.key
@@ -86,8 +86,8 @@ export function FilterBar({
               className={cn(
                 "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
                 active
-                  ? "border-cyan-500/50 bg-cyan-500/15 text-cyan-300"
-                  : "border-white/[0.1] bg-white/[0.02] text-slate-300 hover:bg-white/[0.05]"
+                  ? "border-primary/50 bg-primary/15 text-primary"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/40"
               )}
               key={category.key}
               onClick={() => onCategoryChange(category.key)}
@@ -103,10 +103,10 @@ export function FilterBar({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
         {/* Search Input */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             aria-label={isEnglish ? "Search peripherals" : "Buscar periféricos"}
-            className="h-10 border-white/[0.1] bg-white/[0.02] pl-10 text-sm placeholder:text-slate-500 focus-visible:border-cyan-500/50 focus-visible:ring-cyan-500/20"
+            className="h-10 border-border bg-muted/30 pl-10 text-sm placeholder:text-muted-foreground focus-visible:border-primary/50 focus-visible:ring-primary/20"
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder={isEnglish ? "Search products, brands, sensors..." : "Buscar produtos, marcas, sensores..."}
             value={query}
@@ -121,14 +121,14 @@ export function FilterBar({
                 variant="outline" 
                 size="sm"
                 className={cn(
-                  "gap-2 border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05]",
-                  activeFiltersCount > 0 && "border-cyan-500/40 text-cyan-300"
+                  "gap-2 border-border bg-muted/30 hover:bg-muted/40",
+                  activeFiltersCount > 0 && "border-primary/40 text-primary"
                 )}
               >
                 <SlidersHorizontal className="size-4" />
                 {isEnglish ? "Filters" : "Filtros"}
                 {activeFiltersCount > 0 && (
-                  <span className="ml-1 flex size-5 items-center justify-center rounded-full bg-cyan-500/20 text-xs font-medium text-cyan-300">
+                  <span className="ml-1 flex size-5 items-center justify-center rounded-full bg-primary/20 text-xs font-medium text-primary">
                     {activeFiltersCount}
                   </span>
                 )}
@@ -136,25 +136,25 @@ export function FilterBar({
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-80 space-y-4 rounded-xl border-white/[0.1] bg-[#0d1117] p-4 shadow-xl sm:w-96"
+              className="w-80 space-y-4 rounded-xl border-border bg-popover p-4 shadow-xl sm:w-96"
             >
               <div>
-                <h3 className="text-sm font-semibold text-slate-100">{isEnglish ? "Filter Tierlist" : "Filtrar Tierlist"}</h3>
-                <p className="mt-0.5 text-xs text-slate-400">
+                <h3 className="text-sm font-semibold text-foreground">{isEnglish ? "Filter Tierlist" : "Filtrar Tierlist"}</h3>
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {isEnglish ? "Price, brand, and category-specific options." : "Preço, marca e opções específicas por categoria."}
                 </p>
               </div>
 
-              <div className="h-px bg-white/[0.08]" />
+              <div className="h-px bg-border" />
 
               <div className="grid gap-4 sm:grid-cols-2">
                 {/* Brand Filter */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                  <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     Marca
                   </label>
                   <Select onValueChange={onBrandChange} value={selectedBrand}>
-                    <SelectTrigger className="border-white/[0.1] bg-white/[0.02]">
+                    <SelectTrigger className="border-border bg-muted/30">
                       <SelectValue placeholder={isEnglish ? "Brand" : "Marca"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -169,14 +169,14 @@ export function FilterBar({
 
                 {/* Price Filter */}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                  <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     {isEnglish ? "Price Range" : "Faixa de Preço"}
                   </label>
                   <Select
                     onValueChange={(value) => onPriceBandChange(value as PriceBand)}
                     value={selectedPriceBand}
                   >
-                    <SelectTrigger className="border-white/[0.1] bg-white/[0.02]">
+                    <SelectTrigger className="border-border bg-muted/30">
                       <SelectValue placeholder={isEnglish ? "Price" : "Preço"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -191,14 +191,14 @@ export function FilterBar({
                 {/* Mouse Shape Filter */}
                 {showMouseShapeFilter && (
                   <div className="space-y-2">
-                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                    <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                       {isEnglish ? "Mouse Shape" : "Shape do Mouse"}
                     </label>
                     <Select
                       onValueChange={(value) => onMouseShapeChange(value as MouseShape | "all")}
                       value={selectedMouseShape}
                     >
-                      <SelectTrigger className="border-white/[0.1] bg-white/[0.02]">
+                      <SelectTrigger className="border-border bg-muted/30">
                         <SelectValue placeholder="Shape" />
                       </SelectTrigger>
                       <SelectContent>
@@ -213,14 +213,14 @@ export function FilterBar({
                 {/* Keyboard Layout Filter */}
                 {showKeyboardLayoutFilter && (
                   <div className="space-y-2">
-                    <label className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+                    <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                       {isEnglish ? "Keyboard Layout" : "Layout do Teclado"}
                     </label>
                     <Select
                       onValueChange={(value) => onKeyboardLayoutChange(value as KeyboardLayout | "all")}
                       value={selectedKeyboardLayout}
                     >
-                      <SelectTrigger className="border-white/[0.1] bg-white/[0.02]">
+                      <SelectTrigger className="border-border bg-muted/30">
                         <SelectValue placeholder="Layout" />
                       </SelectTrigger>
                       <SelectContent>
@@ -244,7 +244,7 @@ export function FilterBar({
               variant="ghost" 
               size="sm" 
               onClick={onReset}
-              className="gap-1.5 text-slate-400 hover:text-slate-200"
+              className="gap-1.5 text-muted-foreground hover:text-foreground"
             >
               <X className="size-4" />
               {isEnglish ? "Clear" : "Limpar"}
@@ -255,14 +255,14 @@ export function FilterBar({
 
       {/* Active Filters Display */}
       <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="secondary" className="rounded-full bg-white/[0.05] px-3 py-1 text-xs text-slate-300">
+        <Badge variant="secondary" className="rounded-full bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
           {filteredCount} {filteredCount === 1 ? (isEnglish ? "item" : "item") : (isEnglish ? "items" : "itens")} {isEnglish ? "found" : "encontrados"}
         </Badge>
         
         {query.trim() && (
-          <Badge variant="outline" className="gap-1.5 rounded-full border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-300">
+          <Badge variant="outline" className="gap-1.5 rounded-full border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary">
             {isEnglish ? "Search" : "Busca"}: {query.trim()}
-            <button onClick={() => onQueryChange("")} className="hover:text-cyan-200">
+            <button onClick={() => onQueryChange("")} className="hover:text-primary">
               <X className="size-3" />
             </button>
           </Badge>

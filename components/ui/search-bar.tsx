@@ -75,36 +75,36 @@ const SearchComponent = ({
           <Input
             type="text"
             placeholder={placeholder}
-            className="w-full border-white/[0.08] bg-[#0d1117] pr-10 text-slate-100 placeholder:text-slate-500"
+            className="w-full border-border bg-card pr-10 text-foreground placeholder:text-muted-foreground"
             onChange={(event) => setQuery(event.target.value)}
             value={query}
           />
           <Search
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
             size={18}
           />
         </div>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="w-full border-white/[0.08] bg-[#0d1117] text-slate-100 hover:bg-[#121826] sm:w-auto">
+            <Button variant="outline" className="w-full border-border bg-card text-foreground hover:bg-muted/40 sm:w-auto">
               {label}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-44 border-white/[0.08] bg-[#0d1117] text-slate-100">
+          <DropdownMenuContent align="end" className="w-44 border-border bg-popover text-foreground">
             <DropdownMenuItem
               onClick={() => setSortOrder("asc")}
-              className="flex items-center justify-between gap-2 text-slate-100 focus:bg-white/[0.06] focus:text-slate-50"
+              className="flex items-center justify-between gap-2 text-foreground focus:bg-muted/40 focus:text-foreground"
             >
               <span>Title Ascending</span>
-              <ArrowUpAZ className="ml-2 h-4 w-4 text-cyan-300" />
+              <ArrowUpAZ className="ml-2 h-4 w-4 text-primary" />
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setSortOrder("desc")}
-              className="flex items-center justify-between gap-2 text-slate-100 focus:bg-white/[0.06] focus:text-slate-50"
+              className="flex items-center justify-between gap-2 text-foreground focus:bg-muted/40 focus:text-foreground"
             >
               <span>Title Descending</span>
-              <ArrowDownAZ className="ml-2 h-4 w-4 text-cyan-300" />
+              <ArrowDownAZ className="ml-2 h-4 w-4 text-primary" />
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -1,4 +1,4 @@
-export type AdminRole = "admin" | "webmaster"
+export type AdminRole = "admin" | "moderator" | "webmaster"
 
 export type AdminPermissionKey =
   | "dashboard_read"
@@ -30,7 +30,7 @@ export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" 
 
 export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKey: AdminPermissionKey; writeKey: AdminPermissionKey }> = [
   { key: "dashboard", label: "Dashboard", readKey: "dashboard_read", writeKey: "dashboard_read" },
-  { key: "peripherals", label: "Periféricos", readKey: "peripherals_read", writeKey: "peripherals_write" },
+  { key: "peripherals", label: "Tier List", readKey: "peripherals_read", writeKey: "peripherals_write" },
   { key: "blog", label: "Blog", readKey: "blog_read", writeKey: "blog_write" },
   { key: "settings", label: "Configurações", readKey: "settings_read", writeKey: "settings_write" },
   { key: "tiers", label: "Tiers", readKey: "tiers_read", writeKey: "tiers_write" },

@@ -20,7 +20,7 @@ interface BentoGridDemoProps {
 }
 
 const Skeleton = ({ coverImageUrl }: { coverImageUrl: string | null }) => (
-  <div className="relative flex h-full min-h-[6rem] w-full overflow-hidden rounded-xl border border-white/[0.08] bg-[#0d1117]">
+  <div className="relative flex h-full min-h-[6rem] w-full overflow-hidden rounded-xl border border-border bg-card">
     {coverImageUrl ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -29,9 +29,9 @@ const Skeleton = ({ coverImageUrl }: { coverImageUrl: string | null }) => (
         className="absolute inset-0 h-full w-full object-cover opacity-90 transition-transform duration-500 group-hover/bento:scale-105"
       />
     ) : (
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_30%),linear-gradient(135deg,#0f172a,#111827)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_30%),linear-gradient(135deg,var(--card),var(--background))]" />
     )}
-    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0d14] via-[#0a0d14]/70 to-transparent" />
+    <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-transparent" />
   </div>
 )
 
@@ -48,7 +48,7 @@ export function BentoGridDemo({ posts }: BentoGridDemoProps) {
       title: post.title,
       description: post.excerpt ?? post.peripheral?.name ?? "Artigo publicado no blog",
       header: <BlogPreview post={post} />,
-      icon: IconComponent ? <IconComponent className="h-4 w-4 text-cyan-400" /> : null,
+      icon: IconComponent ? <IconComponent className="h-4 w-4 text-primary" /> : null,
     }
   })
 

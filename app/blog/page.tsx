@@ -168,7 +168,7 @@ function BlogPageContent() {
   const currentPosts = filteredPosts
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100 flex pt-16">
+    <div className="min-h-screen bg-background text-foreground flex pt-16">
       {/* Sidebar */}
       <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
         <PublicSidebar />
@@ -180,10 +180,10 @@ function BlogPageContent() {
           {/* Header */}
           <div className="space-y-4">
             <div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-slate-50 md:text-4xl">
+              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                 Reviews
               </h1>
-              <p className="mt-1 text-sm text-slate-400">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {isEnglish
                   ? "Articles, full reviews, and detailed analysis of tierlist peripherals."
                   : "Artigos, reviews completos e analises detalhadas dos periféricos da tierlist."}
@@ -201,15 +201,15 @@ function BlogPageContent() {
           {/* Posts Grid */}
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="flex items-center gap-3 text-slate-400">
-                <div className="size-5 animate-spin rounded-full border-2 border-slate-600 border-t-cyan-400" />
+              <div className="flex items-center gap-3 text-muted-foreground">
+                <div className="size-5 animate-spin rounded-full border-2 border-border border-t-primary" />
                 <span>{isEnglish ? "Loading articles..." : "Carregando artigos..."}</span>
               </div>
             </div>
           ) : currentPosts.length === 0 ? (
-            <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-10 text-center">
-              <p className="text-slate-400">{isEnglish ? "No articles found." : "Nenhum artigo encontrado."}</p>
-              <p className="mt-2 text-sm text-slate-500">
+            <div className="rounded-2xl border border-border bg-card p-10 text-center">
+              <p className="text-muted-foreground">{isEnglish ? "No articles found." : "Nenhum artigo encontrado."}</p>
+              <p className="mt-2 text-sm text-muted-foreground">
                 {isEnglish ? "New reviews and analysis will be published soon." : "Novos reviews e analises serao publicados em breve."}
               </p>
             </div>
@@ -248,11 +248,11 @@ function BlogPageContent() {
 
 export default function BlogPage() {
   return (
-    <Suspense 
+    <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0a0d14] flex items-center justify-center">
-          <div className="flex items-center gap-3 text-slate-400">
-            <div className="size-5 animate-spin rounded-full border-2 border-slate-600 border-t-cyan-400" />
+        <div className="min-h-screen bg-background flex items-center justify-center">
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <div className="size-5 animate-spin rounded-full border-2 border-border border-t-primary" />
             <span>Loading blog...</span>
           </div>
         </div>

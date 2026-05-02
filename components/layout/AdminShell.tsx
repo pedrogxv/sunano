@@ -20,7 +20,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: "/admin", label: isEnglish ? "Dashboard" : "Dashboard", icon: Home, permission: "dashboard_read" },
-    { href: "/admin/peripherals", label: isEnglish ? "Peripherals" : "Periféricos", icon: Package, permission: "peripherals_read" },
+    { href: "/admin/peripherals", label: isEnglish ? "Tier List" : "Tier List", icon: Package, permission: "peripherals_read" },
     { href: "/admin/blog", label: isEnglish ? "Blog & Reviews" : "Blog & Reviews", icon: NotebookPen, permission: "blog_read" },
     { href: "/admin/offers", label: isEnglish ? "Offers" : "Ofertas", icon: Gift, permission: "offers_read" },
     { href: "/admin/users", label: isEnglish ? "Users" : "Usuários", icon: Users, requiresWebMaster: true },
@@ -67,7 +67,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   })
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-slate-100">
+    <div className="min-h-screen bg-background text-foreground">
       <div className="flex min-h-screen pt-16 md:pl-64">
         {isMobileMenuOpen && (
           <div
@@ -78,7 +78,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
         <aside
           className={cn(
-            "fixed left-0 top-16 z-40 flex h-[calc(100vh-4rem)] w-64 shrink-0 flex-col border-r border-white/[0.08] bg-[#0d1117] transition-transform duration-300 md:translate-x-0",
+            "fixed left-0 top-16 z-40 flex h-[calc(100vh-4rem)] w-64 shrink-0 flex-col border-r border-border bg-card transition-transform duration-300 md:translate-x-0",
             isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           )}
         >
@@ -96,8 +96,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                     className={cn(
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                       active
-                        ? "bg-cyan-500/10 text-cyan-300"
-                        : "text-slate-300 hover:bg-white/[0.05] hover:text-slate-100"
+                        ? "bg-primary/15 text-primary"
+                        : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                     )}
                   >
                     <Icon className="size-[18px]" />
@@ -107,23 +107,23 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               })}
             </div>
 
-            <div className="my-4 h-px bg-white/[0.08]" />
+            <div className="my-4 h-px bg-border" />
 
             <div className="space-y-1">
-              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-slate-500">
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                 {isEnglish ? "Actions" : "Acoes"}
               </p>
               <Link
                 href="/"
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-slate-300 transition-all hover:bg-emerald-500/10 hover:text-emerald-300"
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary"
               >
                 <Eye className="size-[18px]" />
                 <span>{isEnglish ? "View Site" : "Ver Site"}</span>
               </Link>
               <form action={logoutAction}>
                 <Button
-                  className="w-full justify-start gap-3 text-slate-300 hover:bg-red-500/10 hover:text-red-300"
+                  className="w-full justify-start gap-3 text-muted-foreground hover:bg-red-500/10 hover:text-red-300"
                   type="submit"
                   variant="ghost"
                 >
@@ -134,8 +134,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
           </nav>
 
-          <div className="border-t border-white/[0.08] px-4 py-3">
-            <p className="text-[10px] text-slate-600">Sunano Admin v1.0</p>
+          <div className="border-t border-border px-4 py-3">
+            <p className="text-[10px] text-muted-foreground">Sunano Admin v1.0</p>
           </div>
         </aside>
 
@@ -146,7 +146,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </main>
 
         <Button
-          className="fixed bottom-4 right-4 z-50 flex size-12 items-center justify-center rounded-full border border-white/[0.1] bg-[#131921] text-slate-100 shadow-lg hover:bg-[#1c2433] md:hidden"
+          className="fixed bottom-4 right-4 z-50 flex size-12 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-lg hover:bg-muted/40 md:hidden"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           size="icon"
         >

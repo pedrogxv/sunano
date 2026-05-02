@@ -139,13 +139,13 @@ export default function BlogPostPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0f1420] p-8 text-slate-300">{isEnglish ? "Loading article..." : "Carregando artigo..."}</div>
+      <div className="min-h-screen bg-background p-8 text-muted-foreground">{isEnglish ? "Loading article..." : "Carregando artigo..."}</div>
     )
   }
 
   if (!post) {
     return (
-      <div className="min-h-screen bg-[#0f1420] p-8 text-slate-300">
+      <div className="min-h-screen bg-background p-8 text-muted-foreground">
         <p>{isEnglish ? "Article not found." : "Artigo não encontrado."}</p>
         <Link href="/blog" className="mt-4 inline-block">
           <Button variant="outline">{isEnglish ? "Back to blog" : "Voltar ao blog"}</Button>
@@ -155,7 +155,7 @@ export default function BlogPostPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] text-foreground flex pt-16">
+    <div className="min-h-screen bg-background text-foreground flex pt-16">
       {/* Sidebar */}
       <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
         <PublicSidebar
@@ -166,7 +166,7 @@ export default function BlogPostPage() {
       {/* Main Content */}
       <main className="flex-1 min-w-0 md:pl-6">
         <div className="mx-auto max-w-4xl p-4 md:p-5 lg:p-6">
-          <Card className="overflow-hidden border-white/10 bg-[#0d1117]/90 shadow-2xl shadow-black/20">
+          <Card className="overflow-hidden border-border bg-card/90 shadow-2xl shadow-black/20">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")}
@@ -174,33 +174,33 @@ export default function BlogPostPage() {
               className="h-72 w-full object-cover"
             />
 
-            <CardHeader className="space-y-3 border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),transparent)] p-6">
+            <CardHeader className="space-y-3 border-b border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] p-6">
               <div className="flex flex-wrap items-center gap-2">
                 {post.peripherals ? (
-                  <Badge variant="secondary" className="bg-cyan-500/15 text-cyan-200">
+                  <Badge variant="secondary" className="bg-primary/15 text-primary">
                     {relatedPeripheral ? `${relatedPeripheral.brand} • ${relatedPeripheral.name}` : (isEnglish ? "No peripheral" : "Sem periférico")}
                   </Badge>
                 ) : null}
-                <Badge variant="outline" className="border-white/10 bg-white/[0.03] text-slate-300">
+                <Badge variant="outline" className="border-border bg-muted/40 text-muted-foreground">
                   {new Date(post.created_at).toLocaleDateString(locale)}
                 </Badge>
               </div>
-              <div className="flex items-center gap-3 text-slate-300">
-                <Avatar className="h-9 w-9 border border-white/10">
+              <div className="flex items-center gap-3 text-muted-foreground">
+                <Avatar className="h-9 w-9 border border-border">
                   <AvatarImage src={authorAvatar} alt={authorName} />
                   <AvatarFallback>{authorName.slice(0, 1).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <p className="text-sm">
-                  {isEnglish ? "By" : "Por"} <span className="font-semibold text-slate-100">{authorName}</span>
+                  {isEnglish ? "By" : "Por"} <span className="font-semibold text-foreground">{authorName}</span>
                 </p>
               </div>
-              <CardTitle className="text-3xl text-slate-50 md:text-4xl">{post.title}</CardTitle>
-              {post.excerpt ? <p className="max-w-2xl text-slate-300">{post.excerpt}</p> : null}
+              <CardTitle className="text-3xl text-foreground md:text-4xl">{post.title}</CardTitle>
+              {post.excerpt ? <p className="max-w-2xl text-muted-foreground">{post.excerpt}</p> : null}
             </CardHeader>
 
             <CardContent className="space-y-6 p-6 md:p-7">
               {embedUrl ? (
-                <div className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+                <div className="overflow-hidden rounded-xl border border-border bg-muted/30">
                   <iframe
                     title={isEnglish ? "Related video" : "Video relacionado"}
                     src={embedUrl}
@@ -210,12 +210,12 @@ export default function BlogPostPage() {
                   />
                 </div>
               ) : post.video_url ? (
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-                  {isEnglish ? "External video:" : "Video externo:"} <a className="text-sky-300 underline" href={post.video_url} target="_blank" rel="noreferrer">{post.video_url}</a>
+                <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+                  {isEnglish ? "External video:" : "Video externo:"} <a className="text-primary underline" href={post.video_url} target="_blank" rel="noreferrer">{post.video_url}</a>
                 </div>
               ) : null}
 
-              <article className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-7 text-slate-200">
+              <article className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-7 text-foreground">
                 {post.content}
               </article>
 

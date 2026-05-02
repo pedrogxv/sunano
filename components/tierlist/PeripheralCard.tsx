@@ -78,7 +78,7 @@ function RatingStars({ rating, max = 5 }: { rating: number; max?: number }) {
           key={i}
           className={cn(
             "size-3",
-            i < rating ? "fill-amber-400 text-amber-400" : "fill-slate-700 text-slate-700"
+            i < rating ? "fill-amber-400 text-amber-400" : "fill-muted-foreground/40 text-muted-foreground/40"
           )}
         />
       ))}
@@ -203,10 +203,10 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
 
           {/* Name Below - Fixed Space */}
           <div className="pt-3 text-center flex-1 w-full flex flex-col justify-start">
-            <h3 className="text-xs font-bold text-slate-100 leading-tight line-clamp-2">
+            <h3 className="text-xs font-bold text-foreground leading-tight line-clamp-2">
               {item.name}
             </h3>
-            <p className="text-[9px] font-medium text-slate-500">
+            <p className="text-[9px] font-medium text-muted-foreground">
               {item.brand}
             </p>
           </div>
@@ -214,7 +214,7 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
       </TooltipTrigger>
 
       <TooltipContent
-        className="flex flex-col rounded-lg border border-white/[0.12] bg-[#0a0e17]/95 p-5 shadow-xl backdrop-blur-md max-w-xs"
+        className="flex flex-col rounded-lg border border-border bg-popover/95 p-5 shadow-xl backdrop-blur-md max-w-xs"
         sideOffset={12}
         side="bottom"
         align="center"
@@ -238,8 +238,8 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
             )}
           </div>
           <div className="text-center">
-            <h4 className="text-sm font-bold text-slate-50">{item.name}</h4>
-            <p className="text-xs text-slate-500 mt-0.5">{item.brand}</p>
+            <h4 className="text-sm font-bold text-foreground">{item.name}</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">{item.brand}</p>
           </div>
             <div className="flex items-center gap-2">
             <span className={cn(
@@ -255,7 +255,7 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
 
         {/* Tags - Vertical */}
         <div className="mb-4 flex flex-col items-center">
-          <p className="text-[10px] font-semibold uppercase text-slate-500 mb-2.5">{isEnglish ? "Features" : "Características"}</p>
+          <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-2.5">{isEnglish ? "Features" : "Características"}</p>
           <div className="flex gap-2">
             {item.tags.map((tag) => {
               const style = CARD_TAG_STYLES[tag]
@@ -278,12 +278,12 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
 
         {/* Specifications - Vertical */}
         <div className="flex flex-col items-center">
-          <p className="text-[10px] font-semibold uppercase text-slate-500 mb-2.5">{isEnglish ? "Specifications" : "Especificações"}</p>
+          <p className="text-[10px] font-semibold uppercase text-muted-foreground mb-2.5">{isEnglish ? "Specifications" : "Especificações"}</p>
           <div className="grid grid-cols-2 gap-2.5">
             {getAllSpecs(item, isEnglish).slice(0, 4).map((spec) => (
-              <div key={spec.label} className="bg-white/[0.05] rounded-lg p-2.5 border border-white/[0.08]">
-                <p className="text-[9px] text-slate-500 font-medium mb-1">{spec.label}</p>
-                <p className="text-sm font-bold text-slate-100">{spec.value}</p>
+              <div key={spec.label} className="bg-muted/30 rounded-lg p-2.5 border border-border">
+                <p className="text-[9px] text-muted-foreground font-medium mb-1">{spec.label}</p>
+                <p className="text-sm font-bold text-foreground">{spec.value}</p>
               </div>
             ))}
           </div>

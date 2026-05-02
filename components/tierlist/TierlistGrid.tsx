@@ -265,12 +265,12 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-col gap-4 rounded-xl border border-white/[0.08] bg-[#0d1117] p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-medium text-slate-400">{isEnglish ? "You are viewing the tierlist sorted by:" : "Voce esta vendo a tierlist ordenada por:"}</p>
-          <p className="mt-0.5 text-sm font-semibold text-slate-200">{localizedModeDescription}</p>
+          <p className="text-xs font-medium text-muted-foreground">{isEnglish ? "You are viewing the tierlist sorted by:" : "Voce esta vendo a tierlist ordenada por:"}</p>
+          <p className="mt-0.5 text-sm font-semibold text-foreground">{localizedModeDescription}</p>
         </div>
-        <div className="flex rounded-lg border border-white/[0.1] bg-white/[0.02] p-1">
+        <div className="flex rounded-lg border border-border bg-muted/30 p-1">
           {ratingModes.map((mode) => (
             <button
               key={mode.key}
@@ -278,8 +278,8 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
               className={cn(
                 "rounded-md px-4 py-2 text-sm font-medium transition-all",
                 ratingMode === mode.key
-                  ? "bg-cyan-500/20 text-cyan-300"
-                  : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-200"
+                  ? "bg-primary/20 text-primary"
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
               )}
               type="button"
             >
@@ -289,15 +289,15 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#0d1117] shadow-lg">
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-lg">
         <table className="hidden w-full border-collapse md:table">
           <thead>
-            <tr className="bg-[#0a0d14]">
-              <th className="h-12 w-20 border-r border-white/[0.08] text-center">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Tier</span>
+            <tr className="bg-muted/30">
+              <th className="h-12 w-20 border-r border-border text-center">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Tier</span>
               </th>
               {modeConfig.columns.map((column) => (
-                <th key={column.key} className="h-12 border-r border-white/[0.08] text-center last:border-r-0">
+                <th key={column.key} className="h-12 border-r border-border text-center last:border-r-0">
                   <span className={cn("text-xs font-semibold uppercase tracking-wider", column.color)}>
                     {column.title}
                   </span>
@@ -309,11 +309,11 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
             {itemsByTier.map((tierRow, tierIndex) => (
               <tr
                 key={tierRow.key}
-                className={cn(tierIndex < itemsByTier.length - 1 && "border-b border-white/[0.08]")}
+                className={cn(tierIndex < itemsByTier.length - 1 && "border-b border-border")}
               >
                 <td
                   className={cn(
-                    "border-r border-white/[0.08] h-48 w-20 align-middle text-center bg-gradient-to-b",
+                    "border-r border-border h-48 w-20 align-middle text-center bg-gradient-to-b",
                     tierRow.gradient
                   )}
                 >
@@ -329,8 +329,8 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
                   <td
                     key={`${tierRow.key}-${column.key}`}
                     className={cn(
-                      "border-r border-white/[0.08] align-top h-48 last:border-r-0",
-                      colIndex % 2 === 0 ? "bg-white/[0.01]" : "bg-transparent"
+                      "border-r border-border align-top h-48 last:border-r-0",
+                      colIndex % 2 === 0 ? "bg-muted/20" : "bg-transparent"
                     )}
                   >
                     <div className="flex h-full items-start justify-center p-2">
@@ -342,7 +342,7 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
                         </div>
                       ) : (
                         <div className="flex h-full items-center justify-center">
-                          <span className="text-xs text-slate-600">-</span>
+                          <span className="text-xs text-muted-foreground">-</span>
                         </div>
                       )}
                     </div>
@@ -356,10 +356,10 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
         <div className="md:hidden">
           {!hasItems ? (
             <div className="p-8 text-center">
-              <p className="text-sm text-slate-400">{isEnglish ? "No items found with the current filters." : "Nenhum item encontrado com os filtros atuais."}</p>
+              <p className="text-sm text-muted-foreground">{isEnglish ? "No items found with the current filters." : "Nenhum item encontrado com os filtros atuais."}</p>
             </div>
           ) : (
-            <div className="divide-y divide-white/[0.08]">
+            <div className="divide-y divide-border">
               {itemsByTier.map((tierRow) => {
                 const allTierItems = tierRow.itemsByColumn.flatMap((column) => column.items)
 

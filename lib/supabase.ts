@@ -51,13 +51,64 @@ export type Database = {
           email: string | null
           display_name: string | null
           avatar_url: string | null
-          role: "admin" | "webmaster"
+          role: "admin" | "moderator" | "webmaster"
           permissions: Record<string, boolean>
           created_at: string
           updated_at: string
         }
         Insert: Omit<Database["public"]["Tables"]["admin_profiles"]["Row"], "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["admin_profiles"]["Insert"]>
+      }
+      forum_posts: {
+        Row: {
+          id: string
+          slug: string
+          title: string
+          body: string
+          author_name: string
+          author_email: string | null
+          is_hidden: boolean
+          is_locked: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["forum_posts"]["Row"], "id" | "created_at" | "updated_at">
+        Update: Partial<Database["public"]["Tables"]["forum_posts"]["Insert"]>
+      }
+      forum_comments: {
+        Row: {
+          id: string
+          post_id: string
+          body: string
+          author_name: string
+          author_email: string | null
+          is_hidden: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["forum_comments"]["Row"], "id" | "created_at" | "updated_at">
+        Update: Partial<Database["public"]["Tables"]["forum_comments"]["Insert"]>
+      }
+      rate_limit_events: {
+        Row: {
+          id: string
+          action: string
+          identifier: string
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["rate_limit_events"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["rate_limit_events"]["Insert"]>
+      }
+      offers_votes: {
+        Row: {
+          id: string
+          offer_id: string
+          voter_hash: string
+          is_working: boolean
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["offers_votes"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["offers_votes"]["Insert"]>
       }
       youtube_cache_snapshots: {
         Row: {

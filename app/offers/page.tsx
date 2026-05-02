@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { format } from "date-fns"
 import { enUS, ptBR } from "date-fns/locale"
-import { AlertCircle, ExternalLink, Loader2, MessageCircle } from "lucide-react"
+import { AlertCircle, CheckCircle2, ExternalLink, Loader2, MessageCircle } from "lucide-react"
 
 import { PublicSidebar } from "@/components/layout/PublicSidebar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -20,6 +20,8 @@ type TelegramOffer = {
   author: string | null
   chatTitle: string | null
   url: string | null
+  votes_working: number
+  user_voted: boolean
 }
 
 type OffersApiResponse = {
@@ -41,6 +43,8 @@ export default function OffersPage() {
   const [offers, setOffers] = useState<TelegramOffer[]>([])
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
+  const [votingId, setVotingId] = useState<string | null>(null)
+  const [voteError, setVoteError] = useState<string | null>(null)
 
   useEffect(() => {
     loadOffers()
@@ -55,6 +59,7 @@ export default function OffersPage() {
       setLoading(true)
       setError(null)
       setWarning(null)
+      setVoteError(null)
 
       const response = await fetch("/api/offers")
       const data = (await response.json().catch(() => null)) as OffersApiResponse | null
@@ -69,6 +74,41 @@ export default function OffersPage() {
       setError(err instanceof Error ? err.message : (isEnglish ? "Failed to load Telegram offers" : "Erro ao carregar ofertas do Telegram"))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function voteOffer(offerId: string) {
+    try {
+      setVotingId(offerId)
+      setVoteError(null)
+
+      const response = await fetch("/api/offers/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offerId, is_working: true }),
+      })
+
+      const data = (await response.json().catch(() => null)) as { error?: string; ok?: boolean } | null
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error ?? (isEnglish ? "Failed to register vote" : "Erro ao registrar voto"))
+      }
+
+      setOffers((current) =>
+        current.map((offer) =>
+          offer.id === offerId
+            ? {
+                ...offer,
+                votes_working: offer.user_voted ? offer.votes_working : offer.votes_working + 1,
+                user_voted: true,
+              }
+            : offer
+        )
+      )
+    } catch (err) {
+      setVoteError(err instanceof Error ? err.message : (isEnglish ? "Failed to register vote" : "Erro ao registrar voto"))
+    } finally {
+      setVotingId(null)
     }
   }
 
@@ -90,7 +130,7 @@ export default function OffersPage() {
   const dateFormat = isEnglish ? "MMMM dd, yyyy HH:mm" : "dd 'de' MMMM 'de' yyyy 'às' HH:mm"
 
   return (
-    <div className="min-h-screen bg-[#0a0d14] pt-16 text-slate-100">
+    <div className="min-h-screen bg-background pt-16 text-slate-100">
       <div className="flex">
         <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
           <PublicSidebar />
@@ -133,7 +173,14 @@ export default function OffersPage() {
               </Alert>
             ) : null}
 
-            <div className="rounded-xl border border-white/[0.08] bg-[#0d1117] p-4">
+            {voteError ? (
+              <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
+                <AlertCircle className="size-3.5 text-red-300" />
+                <AlertDescription className="text-xs leading-5 text-red-200">{voteError}</AlertDescription>
+              </Alert>
+            ) : null}
+
+            <div className="rounded-xl border border-border bg-card p-4">
               <p className="mb-2 text-xs font-medium text-slate-400">{isEnglish ? "Search messages" : "Buscar mensagens"}</p>
               <Input
                 value={search}
@@ -151,14 +198,14 @@ export default function OffersPage() {
                 </div>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="rounded-2xl border border-white/[0.08] bg-[#0d1117] p-10 text-center">
+              <div className="rounded-2xl border border-border bg-card p-10 text-center">
                 <p className="text-slate-300">{isEnglish ? "No messages found." : "Nenhuma mensagem encontrada."}</p>
               </div>
             ) : (
               <>
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {pageItems.map((offer) => (
-                    <Card key={offer.id} className="flex h-full flex-col border-white/[0.08] bg-[#0d1117]">
+                    <Card key={offer.id} className="flex h-full flex-col border-border bg-card">
                       <CardHeader className="space-y-2 pb-3">
                         <div className="flex items-start justify-between gap-2">
                           <CardTitle className="line-clamp-2 text-base text-slate-50">
@@ -173,14 +220,32 @@ export default function OffersPage() {
                       </CardHeader>
                       <CardContent className="flex flex-1 flex-col gap-4">
                         <p className="line-clamp-8 whitespace-pre-wrap text-sm leading-6 text-slate-200">{offer.text}</p>
-                        {offer.url ? (
-                          <a href={offer.url} target="_blank" rel="noopener noreferrer" className="mt-auto block">
-                            <Button className="w-full" size="sm">
-                              <ExternalLink className="mr-2 size-4" />
-                              {isEnglish ? "Open in Telegram" : "Abrir no Telegram"}
-                            </Button>
-                          </a>
-                        ) : null}
+                        <div className="mt-auto space-y-3">
+                          <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                            <span>{isEnglish ? "It worked" : "Ta funcionando"}</span>
+                            <span className="text-sm font-semibold text-emerald-100">{offer.votes_working}</span>
+                          </div>
+                          <Button
+                            className="w-full"
+                            size="sm"
+                            variant={offer.user_voted ? "outline" : "default"}
+                            onClick={() => voteOffer(offer.id)}
+                            disabled={offer.user_voted || votingId === offer.id}
+                          >
+                            <CheckCircle2 className="mr-2 size-4" />
+                            {offer.user_voted
+                              ? (isEnglish ? "Thanks for confirming" : "Obrigado por confirmar")
+                              : (isEnglish ? "Vote: It worked" : "Votar: Ta funcionando")}
+                          </Button>
+                          {offer.url ? (
+                            <a href={offer.url} target="_blank" rel="noopener noreferrer" className="block">
+                              <Button className="w-full" size="sm" variant="outline">
+                                <ExternalLink className="mr-2 size-4" />
+                                {isEnglish ? "Open in Telegram" : "Abrir no Telegram"}
+                              </Button>
+                            </a>
+                          ) : null}
+                        </div>
                       </CardContent>
                     </Card>
                   ))}

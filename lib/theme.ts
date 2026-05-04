@@ -6,21 +6,21 @@
 export const THEME = {
   // Main Background Colors
   bg: {
-    page: "bg-[#0a0d14]",
-    primary: "bg-[#0d1117]",
-    secondary: "bg-[#131921]",
-    tertiary: "bg-[#171d28]",
-    hover: "bg-[#1c2433]",
-    elevated: "bg-[#1f2937]",
+    page: "bg-[#0a0b0e]",
+    primary: "bg-[#0e1014]",
+    secondary: "bg-[#13161b]",
+    tertiary: "bg-[#181c22]",
+    hover: "bg-[#1d222a]",
+    elevated: "bg-[#212733]",
     glass: "bg-white/[0.03]",
     glassHover: "bg-white/[0.06]",
   },
 
   // Border Colors
   border: {
-    default: "border-white/[0.08]",
-    light: "border-white/[0.05]",
-    hover: "border-white/[0.15]",
+    default: "border-white/[0.06]",
+    light: "border-white/[0.035]",
+    hover: "border-white/[0.12]",
     accent: "border-cyan-500/30",
     accentHover: "border-cyan-400/50",
   },

@@ -6,8 +6,9 @@ import { usePathname } from "next/navigation"
 import {
   BadgePercent,
   Clock3,
+  Home,
   Instagram,
-  LayoutGrid,
+  Mouse,
   PlaySquare,
   Menu,
   MessageCircle,
@@ -46,7 +47,9 @@ export function PublicSidebar({
 
   const isHomePage = pathname === "/"
   const navItems = [
-    { href: "/", label: isEnglish ? "Tier List" : "Tier List", icon: LayoutGrid },
+    { href: "/", label: isEnglish ? "Home" : "Home", icon: Home },
+    { href: "/noticias", label: isEnglish ? "News" : "Noticias", icon: Newspaper },
+    { href: "/perifericos", label: isEnglish ? "Peripherals" : "Perifericos", icon: Mouse },
     { href: "/blog", label: isEnglish ? "Reviews" : "Reviews", icon: Newspaper },
     { href: "/offers", label: isEnglish ? "Offers" : "Ofertas", icon: BadgePercent },
     { href: "/forum", label: isEnglish ? "Forum" : "Forum", icon: MessageCircle },

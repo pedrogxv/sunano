@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, ChevronDown, Globe, MessageCircle, Palette, Send, Youtube } from "lucide-react"
+import { Check, ChevronDown, Globe, MessageCircle, Moon, Palette, Send, Sun, Youtube } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +40,8 @@ export function TopBar() {
   const { locale, setLocale } = useLocale()
   const { theme, setTheme, themes } = useTheme()
 
+  const isLight = theme === "light"
+
   const selectedLanguage = getLanguageEntry(locale)
 
   const updateLocale = (nextLocale: LocaleCode) => {
@@ -62,6 +64,17 @@ export function TopBar() {
 
         {/* Right Section - Language + Social Links */}
         <div className="flex items-center gap-3">
+          <button
+            className="flex h-9 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40"
+            type="button"
+            onClick={() => setTheme(isLight ? "midnight" : "light")}
+            aria-label={isLight ? "Ativar modo night" : "Ativar modo dia"}
+          >
+            {isLight ? <Moon className="size-4 text-primary" /> : <Sun className="size-4 text-primary" />}
+            <span className="hidden sm:inline">{isLight ? "Night" : "Day"}</span>
+            <span className="sm:hidden">{isLight ? "Ngt" : "Day"}</span>
+          </button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button

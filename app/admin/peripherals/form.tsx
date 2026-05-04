@@ -11,6 +11,7 @@ import * as z from "zod"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
   Select,
@@ -32,6 +33,15 @@ const peripheralSchema = z.object({
   category: z.enum(["keyboard", "mouse", "mousepad", "glasspad", "iem", "headset"]),
   tier: z.enum(["T0", "T0.5", "T1", "T2"]),
   price: z.number().positive("Price must be greater than 0"),
+  summary: z.string().optional(),
+  highlights: z.string().optional(),
+  pros: z.string().optional(),
+  cons: z.string().optional(),
+  gallery: z.string().optional(),
+  buyLinks: z.string().optional(),
+  compatibility: z.string().optional(),
+  notes: z.string().optional(),
+  comparisons: z.string().optional(),
   mouseShape: z.string().optional(),
   keyboardLayout: z.string().optional(),
   connectivity: z.string().optional(),
@@ -77,6 +87,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       category: "mouse",
       tier: "T1",
       price: 0,
+      summary: "",
+      highlights: "",
+      pros: "",
+      cons: "",
+      gallery: "",
+      buyLinks: "",
+      compatibility: "",
+      notes: "",
+      comparisons: "",
     },
   })
 
@@ -135,6 +154,27 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           category: data.category,
           tier: data.tier,
           price: displayedPrice,
+          summary: data.specs?.details?.summary ?? "",
+          highlights: Array.isArray(data.specs?.details?.highlights)
+            ? data.specs.details.highlights.join("\n")
+            : data.specs?.details?.highlights ?? "",
+          pros: Array.isArray(data.specs?.details?.pros)
+            ? data.specs.details.pros.join("\n")
+            : data.specs?.details?.pros ?? "",
+          cons: Array.isArray(data.specs?.details?.cons)
+            ? data.specs.details.cons.join("\n")
+            : data.specs?.details?.cons ?? "",
+          gallery: Array.isArray(data.specs?.details?.gallery)
+            ? data.specs.details.gallery.join("\n")
+            : data.specs?.details?.gallery ?? "",
+          buyLinks: Array.isArray(data.specs?.details?.buyLinks)
+            ? data.specs.details.buyLinks.map((link: { label: string; url: string }) => `${link.label} | ${link.url}`).join("\n")
+            : data.specs?.details?.buyLinks ?? "",
+          compatibility: data.specs?.details?.compatibility ?? "",
+          notes: data.specs?.details?.notes ?? "",
+          comparisons: Array.isArray(data.specs?.details?.comparisons)
+            ? data.specs.details.comparisons.join("\n")
+            : data.specs?.details?.comparisons ?? "",
           ...data.specs,
         })
         setSelectedTags(data.tags || [])
@@ -172,6 +212,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         imageUrl = urlData.publicUrl
       }
 
+      const splitLines = (value?: string) =>
+        value
+          ? value
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean)
+          : []
+
+      const parseBuyLinks = (value?: string) =>
+        splitLines(value).map((line) => {
+          const [label, url] = line.split("|").map((part) => part.trim())
+          return { label: url ? label || "Comprar" : "Comprar", url: url || label }
+        })
+
       const specs = {
         mouseShape: data.mouseShape,
         keyboardLayout: data.keyboardLayout,
@@ -180,6 +234,17 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         surface: data.surface,
         driver: data.driver,
         profile: data.profile,
+        details: {
+          summary: data.summary || undefined,
+          highlights: splitLines(data.highlights),
+          pros: splitLines(data.pros),
+          cons: splitLines(data.cons),
+          gallery: splitLines(data.gallery),
+          buyLinks: parseBuyLinks(data.buyLinks),
+          compatibility: data.compatibility || undefined,
+          notes: data.notes || undefined,
+          comparisons: splitLines(data.comparisons),
+        },
       }
 
       // Convert price to USD before saving (store prices in USD)
@@ -491,6 +556,101 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Conteudo da Wiki */}
+            <div className="space-y-4 border-t border-border pt-6">
+              <h3 className="font-semibold text-foreground">{isEnglish ? "Wiki content" : "Conteudo da wiki"}</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Summary" : "Resumo"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Short summary" : "Resumo curto"}
+                    {...form.register("summary")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Compatibility" : "Compatibilidade"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Windows, macOS, PS5" : "Windows, macOS, PS5"}
+                    {...form.register("compatibility")}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Highlights" : "Destaques"}</label>
+                  <Textarea
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "One per line" : "Um por linha"}
+                    rows={4}
+                    {...form.register("highlights")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Comparisons" : "Comparacoes"}</label>
+                  <Textarea
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "One per line" : "Um por linha"}
+                    rows={4}
+                    {...form.register("comparisons")}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Pros</label>
+                  <Textarea
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "One per line" : "Um por linha"}
+                    rows={4}
+                    {...form.register("pros")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Cons</label>
+                  <Textarea
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "One per line" : "Um por linha"}
+                    rows={4}
+                    {...form.register("cons")}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Gallery URLs" : "URLs da galeria"}</label>
+                <Textarea
+                  className="border-border bg-card/50"
+                  placeholder={isEnglish ? "One image URL per line" : "Uma URL por linha"}
+                  rows={4}
+                  {...form.register("gallery")}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Buy links" : "Links de compra"}</label>
+                <Textarea
+                  className="border-border bg-card/50"
+                  placeholder={isEnglish ? "Label | https://... (one per line)" : "Label | https://... (uma por linha)"}
+                  rows={4}
+                  {...form.register("buyLinks")}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Notes" : "Notas"}</label>
+                <Textarea
+                  className="border-border bg-card/50"
+                  placeholder={isEnglish ? "Extra notes" : "Observacoes extras"}
+                  rows={3}
+                  {...form.register("notes")}
+                />
+              </div>
             </div>
 
             {/* Botões */}

@@ -27,12 +27,24 @@ type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headse
 type Tier = "T0" | "T0.5" | "T1" | "T2"
 type Tag = "competitive" | "versatile" | "value" | "comfort"
 
+const optionalNumber = z.preprocess((value) => {
+  if (value === "" || value === null || typeof value === "undefined") return undefined
+  const num = Number(value)
+  return Number.isFinite(num) ? num : undefined
+}, z.number().min(0).max(6).optional())
+
 const peripheralSchema = z.object({
   name: z.string().min(1, "Name is required"),
   brand: z.string().min(1, "Brand is required"),
   category: z.enum(["keyboard", "mouse", "mousepad", "glasspad", "iem", "headset"]),
   tier: z.enum(["T0", "T0.5", "T1", "T2"]),
   price: z.number().positive("Price must be greater than 0"),
+  rankLabel: z.string().optional(),
+  priceRange: z.string().optional(),
+  reviewUrl: z.string().optional(),
+  reviewNote: z.string().optional(),
+  guideUrl: z.string().optional(),
+  notesLong: z.string().optional(),
   summary: z.string().optional(),
   highlights: z.string().optional(),
   pros: z.string().optional(),
@@ -42,6 +54,21 @@ const peripheralSchema = z.object({
   compatibility: z.string().optional(),
   notes: z.string().optional(),
   comparisons: z.string().optional(),
+  weight: z.string().optional(),
+  latency: z.string().optional(),
+  switchType: z.string().optional(),
+  coating: z.string().optional(),
+  shape: z.string().optional(),
+  gripSmall: z.string().optional(),
+  gripMedium: z.string().optional(),
+  gripLarge: z.string().optional(),
+  ratingOverall: optionalNumber,
+  ratingBuild: optionalNumber,
+  ratingSoftware: optionalNumber,
+  ratingBattery: optionalNumber,
+  ratingPerformance: optionalNumber,
+  ratingQc: optionalNumber,
+  ratingValue: optionalNumber,
   mouseShape: z.string().optional(),
   keyboardLayout: z.string().optional(),
   connectivity: z.string().optional(),
@@ -87,6 +114,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       category: "mouse",
       tier: "T1",
       price: 0,
+      rankLabel: "",
+      priceRange: "",
+      reviewUrl: "",
+      reviewNote: "",
+      guideUrl: "",
+      notesLong: "",
       summary: "",
       highlights: "",
       pros: "",
@@ -96,6 +129,21 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       compatibility: "",
       notes: "",
       comparisons: "",
+      weight: "",
+      latency: "",
+      switchType: "",
+      coating: "",
+      shape: "",
+      gripSmall: "",
+      gripMedium: "",
+      gripLarge: "",
+      ratingOverall: undefined,
+      ratingBuild: undefined,
+      ratingSoftware: undefined,
+      ratingBattery: undefined,
+      ratingPerformance: undefined,
+      ratingQc: undefined,
+      ratingValue: undefined,
     },
   })
 
@@ -154,6 +202,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           category: data.category,
           tier: data.tier,
           price: displayedPrice,
+          rankLabel: data.specs?.details?.rankLabel ?? "",
+          priceRange: data.specs?.details?.priceRange ?? "",
+          reviewUrl: data.specs?.details?.reviewUrl ?? "",
+          reviewNote: data.specs?.details?.reviewNote ?? "",
+          guideUrl: data.specs?.details?.guideUrl ?? "",
+          notesLong: data.specs?.details?.notesLong ?? "",
           summary: data.specs?.details?.summary ?? "",
           highlights: Array.isArray(data.specs?.details?.highlights)
             ? data.specs.details.highlights.join("\n")
@@ -175,6 +229,21 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           comparisons: Array.isArray(data.specs?.details?.comparisons)
             ? data.specs.details.comparisons.join("\n")
             : data.specs?.details?.comparisons ?? "",
+          weight: data.specs?.details?.weight ?? "",
+          latency: data.specs?.details?.latency ?? "",
+          switchType: data.specs?.details?.switchType ?? "",
+          coating: data.specs?.details?.coating ?? "",
+          shape: data.specs?.details?.shape ?? "",
+          gripSmall: data.specs?.details?.gripSmall ?? "",
+          gripMedium: data.specs?.details?.gripMedium ?? "",
+          gripLarge: data.specs?.details?.gripLarge ?? "",
+          ratingOverall: data.specs?.details?.ratings?.overall ?? undefined,
+          ratingBuild: data.specs?.details?.ratings?.build ?? undefined,
+          ratingSoftware: data.specs?.details?.ratings?.software ?? undefined,
+          ratingBattery: data.specs?.details?.ratings?.battery ?? undefined,
+          ratingPerformance: data.specs?.details?.ratings?.performance ?? undefined,
+          ratingQc: data.specs?.details?.ratings?.qc ?? undefined,
+          ratingValue: data.specs?.details?.ratings?.value ?? undefined,
           ...data.specs,
         })
         setSelectedTags(data.tags || [])
@@ -226,6 +295,19 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           return { label: url ? label || "Comprar" : "Comprar", url: url || label }
         })
 
+      const ratings = {
+        overall: data.ratingOverall,
+        build: data.ratingBuild,
+        software: data.ratingSoftware,
+        battery: data.ratingBattery,
+        performance: data.ratingPerformance,
+        qc: data.ratingQc,
+        value: data.ratingValue,
+      }
+      const cleanedRatings = Object.fromEntries(
+        Object.entries(ratings).filter(([, value]) => typeof value === "number" && !Number.isNaN(value))
+      )
+
       const specs = {
         mouseShape: data.mouseShape,
         keyboardLayout: data.keyboardLayout,
@@ -235,6 +317,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         driver: data.driver,
         profile: data.profile,
         details: {
+          rankLabel: data.rankLabel || undefined,
+          priceRange: data.priceRange || undefined,
+          reviewUrl: data.reviewUrl || undefined,
+          reviewNote: data.reviewNote || undefined,
+          guideUrl: data.guideUrl || undefined,
+          notesLong: data.notesLong || undefined,
           summary: data.summary || undefined,
           highlights: splitLines(data.highlights),
           pros: splitLines(data.pros),
@@ -244,6 +332,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           compatibility: data.compatibility || undefined,
           notes: data.notes || undefined,
           comparisons: splitLines(data.comparisons),
+          weight: data.weight || undefined,
+          latency: data.latency || undefined,
+          switchType: data.switchType || undefined,
+          coating: data.coating || undefined,
+          shape: data.shape || undefined,
+          gripSmall: data.gripSmall || undefined,
+          gripMedium: data.gripMedium || undefined,
+          gripLarge: data.gripLarge || undefined,
+          ratings: Object.keys(cleanedRatings).length > 0 ? cleanedRatings : undefined,
         },
       }
 
@@ -582,6 +679,193 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Rank label" : "Rank"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "GOAT, S, A" : "GOAT, S, A"}
+                    {...form.register("rankLabel")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Price range" : "Faixa de preco"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "R$1050-1130" : "R$1050-1130"}
+                    {...form.register("priceRange")}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Review URL" : "Review URL"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder="https://youtube.com/..."
+                    {...form.register("reviewUrl")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Guide URL" : "Guia URL"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder="https://..."
+                    {...form.register("guideUrl")}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Review note" : "Nota do review"}</label>
+                <Textarea
+                  className="border-border bg-card/50"
+                  placeholder={isEnglish ? "Short note about the review" : "Nota curta sobre o review"}
+                  rows={2}
+                  {...form.register("reviewNote")}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Weight" : "Peso"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "61g" : "61g"}
+                    {...form.register("weight")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Latency" : "Latencia"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "0.62 ms" : "0.62 ms"}
+                    {...form.register("latency")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Switch" : "Switch"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Magnetic" : "Magnetico"}
+                    {...form.register("switchType")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Shape" : "Shape"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Symmetrical" : "Simetrico"}
+                    {...form.register("shape")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Coating" : "Coating"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Plastic" : "Plastico"}
+                    {...form.register("coating")}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Grip (small hand)" : "Pegada (mao pequena)"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Claw/Palm" : "Claw/Palm"}
+                    {...form.register("gripSmall")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Grip (medium hand)" : "Pegada (mao media)"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Claw/Palm" : "Claw/Palm"}
+                    {...form.register("gripMedium")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Grip (large hand)" : "Pegada (mao grande)"}</label>
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Claw/Finger" : "Claw/Finger"}
+                    {...form.register("gripLarge")}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Ratings (0-6)" : "Notas (0-6)"}</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Overall" : "Geral"}
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="6"
+                    {...form.register("ratingOverall")}
+                  />
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Build" : "Construcao"}
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="6"
+                    {...form.register("ratingBuild")}
+                  />
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Software" : "Software"}
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="6"
+                    {...form.register("ratingSoftware")}
+                  />
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Battery" : "Bateria"}
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="6"
+                    {...form.register("ratingBattery")}
+                  />
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Performance" : "Performance"}
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="6"
+                    {...form.register("ratingPerformance")}
+                  />
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "QC" : "QC"}
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="6"
+                    {...form.register("ratingQc")}
+                  />
+                  <Input
+                    className="border-border bg-card/50"
+                    placeholder={isEnglish ? "Value" : "CxB"}
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="6"
+                    {...form.register("ratingValue")}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
                   <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Highlights" : "Destaques"}</label>
                   <Textarea
                     className="border-border bg-card/50"
@@ -639,6 +923,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   placeholder={isEnglish ? "Label | https://... (one per line)" : "Label | https://... (uma por linha)"}
                   rows={4}
                   {...form.register("buyLinks")}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Notes (large)" : "Notas (grande)"}</label>
+                <Textarea
+                  className="border-border bg-card/50"
+                  placeholder={isEnglish ? "Main notes and context" : "Notas principais e contexto"}
+                  rows={6}
+                  {...form.register("notesLong")}
                 />
               </div>
 

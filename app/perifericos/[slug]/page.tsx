@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Star } from "lucide-react"
 
 import { PublicSidebar } from "@/components/layout/PublicSidebar"
 import { Badge } from "@/components/ui/badge"
@@ -56,6 +57,39 @@ function parseLinkLines(value?: string | null) {
   })
 }
 
+function normalizeRating(value: unknown, max = 6) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return 0
+  return Math.max(0, Math.min(max, Math.round(parsed)))
+}
+
+function RatingStars({ rating, max = 6 }: { rating: number; max?: number }) {
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: max }).map((_, index) => (
+        <Star
+          key={index}
+          className={
+            index < rating
+              ? "size-3 fill-amber-400 text-amber-400"
+              : "size-3 fill-muted-foreground/30 text-muted-foreground/30"
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
+function formatSpecValue(value: unknown) {
+  if (value === null || typeof value === "undefined" || value === "") return "-"
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    if (!trimmed) return "-"
+    return /^[a-z0-9-]+$/.test(trimmed) ? formatLabel(trimmed) : trimmed
+  }
+  return String(value)
+}
+
 export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const resolvedParams = await params
   const supabase = await createSupabaseServerClient()
@@ -108,6 +142,39 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const comparisons = Array.isArray(details.comparisons) ? details.comparisons : splitLines(details.comparisons)
   const highlights = Array.isArray(details.highlights) ? details.highlights : splitLines(details.highlights)
 
+  const ratings = {
+    overall: normalizeRating(details?.ratings?.overall ?? details.ratingOverall),
+    build: normalizeRating(details?.ratings?.build ?? details.ratingBuild),
+    software: normalizeRating(details?.ratings?.software ?? details.ratingSoftware),
+    battery: normalizeRating(details?.ratings?.battery ?? details.ratingBattery),
+    performance: normalizeRating(details?.ratings?.performance ?? details.ratingPerformance),
+    qc: normalizeRating(details?.ratings?.qc ?? details.ratingQc),
+    value: normalizeRating(details?.ratings?.value ?? details.ratingValue),
+  }
+
+  const rankLabel = details.rankLabel || data.tier
+  const priceRange = details.priceRange
+  const reviewUrl = details.reviewUrl
+  const reviewNote = details.reviewNote
+  const guideUrl = details.guideUrl
+  const notesLong = details.notesLong
+
+  const specsTable = [
+    { label: "Preco base", value: formatCurrency(data.price) },
+    { label: "Peso", value: details.weight ?? specs.weight },
+    { label: "Latencia", value: details.latency ?? specs.latency },
+    { label: "Sensor", value: specs.driver ?? details.sensor },
+    { label: "Switch", value: details.switchType ?? specs.switchType },
+    { label: "Shape", value: details.shape ?? specs.mouseShape },
+    { label: "Coating", value: details.coating ?? specs.coating },
+  ]
+
+  const gripInfo = [
+    { label: "Mao pequena", value: details.gripSmall },
+    { label: "Mao media", value: details.gripMedium },
+    { label: "Mao grande", value: details.gripLarge },
+  ]
+
   const { data: relatedPosts } = await supabase
     .from("blog_posts")
     .select("id, title, slug, cover_thumbnail_url, cover_image_url, created_at")
@@ -123,9 +190,20 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
         </div>
 
         <main className="flex-1 min-w-0">
-          <div className="mx-auto max-w-6xl px-4 py-8 md:px-6 lg:px-8 space-y-6">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-              <div className="w-full max-w-sm space-y-4">
+          <div className="mx-auto max-w-6xl px-4 py-4 md:px-6 lg:px-8">
+            <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+              <div className="space-y-3">
+                <Card className="border-border bg-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-xs">Rank</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex items-center justify-center">
+                    <div className="size-16 rounded-full border border-border bg-muted/40 flex items-center justify-center text-xl font-bold text-foreground">
+                      {rankLabel}
+                    </div>
+                  </CardContent>
+                </Card>
+
                 <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-border bg-muted/40">
                   {data.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -148,31 +226,55 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                   </div>
                 )}
 
-                {buyLinks.length > 0 && (
-                  <Card className="border-border bg-card">
-                    <CardHeader className="space-y-1">
-                      <CardTitle className="text-sm">Onde comprar</CardTitle>
-                      <CardDescription className="text-xs">Links oficiais e lojas recomendadas.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2">
-                      {buyLinks.map((link: { label: string; url: string }) => (
-                        <a
-                          key={link.url}
-                          href={link.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/40"
-                        >
-                          <span>{link.label}</span>
-                          <span className="text-primary">→</span>
-                        </a>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
+                <Card className="border-border bg-card">
+                  <CardHeader className="space-y-1">
+                    <CardTitle className="text-xs">Notas gerais</CardTitle>
+                    <CardDescription className="text-[10px]">Escala de 0 a 6 (GOAT = 6).</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between">
+                      <span>Geral</span>
+                      <RatingStars rating={ratings.overall} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Construcao</span>
+                      <RatingStars rating={ratings.build} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Software</span>
+                      <RatingStars rating={ratings.software} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Bateria</span>
+                      <RatingStars rating={ratings.battery} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Performance</span>
+                      <RatingStars rating={ratings.performance} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>QC</span>
+                      <RatingStars rating={ratings.qc} />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>CxB</span>
+                      <RatingStars rating={ratings.value} />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <CardTitle className="text-xs">Notas</CardTitle>
+                    <CardDescription className="text-[10px]">Contexto e observacoes principais.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="max-h-48 overflow-auto text-xs text-muted-foreground whitespace-pre-wrap">
+                    {notesLong || "Sem notas cadastradas."}
+                  </CardContent>
+                </Card>
               </div>
 
-              <div className="flex-1 space-y-4">
+              <div className="space-y-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     {data.category && (
@@ -195,9 +297,9 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                   <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                     {data.name}
                   </h1>
-                  <p className="text-sm text-muted-foreground">{data.brand}</p>
+                  <p className="text-xs text-muted-foreground">{data.brand}</p>
                   {details.summary && (
-                    <p className="mt-3 text-sm text-muted-foreground">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       {details.summary}
                     </p>
                   )}
@@ -206,111 +308,191 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                 <div className="grid gap-4 md:grid-cols-2">
                   <Card className="border-border bg-card">
                     <CardHeader>
-                      <CardTitle className="text-sm">Ficha tecnica</CardTitle>
-                      <CardDescription className="text-xs">Principais dados do produto.</CardDescription>
+                      <CardTitle className="text-xs">Especs</CardTitle>
+                      <CardDescription className="text-[10px]">Principais dados do produto.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-2 text-sm text-muted-foreground">
-                      <div className="flex items-center justify-between">
-                        <span>Preco base</span>
-                        <span className="font-semibold text-foreground">
-                          {formatCurrency(data.price)}
-                        </span>
+                    <CardContent className="space-y-1 text-xs text-muted-foreground">
+                      {specsTable.map((row) => (
+                        <div key={row.label} className="flex items-center justify-between">
+                          <span>{row.label}</span>
+                          <span className="font-semibold text-foreground">{formatSpecValue(row.value)}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-xs">Pegada</CardTitle>
+                      <CardDescription className="text-[10px]">Recomendacao por tamanho de mao.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-1 text-xs text-muted-foreground">
+                      {gripInfo.map((row) => (
+                        <div key={row.label} className="flex items-center justify-between">
+                          <span>{row.label}</span>
+                          <span className="font-semibold text-foreground">{formatSpecValue(row.value)}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-xs">Review completa no YouTube</CardTitle>
+                      <CardDescription className="text-[10px]">Conteudo principal do canal.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-xs text-muted-foreground">
+                      {reviewUrl ? (
+                        <a
+                          href={reviewUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/40"
+                        >
+                          <span>Assistir review</span>
+                          <span className="text-primary">→</span>
+                        </a>
+                      ) : (
+                        <p>Nenhum review linkado.</p>
+                      )}
+                      {reviewNote && <p className="text-[10px] text-muted-foreground">{reviewNote}</p>}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-xs">Guia</CardTitle>
+                      <CardDescription className="text-[10px]">Links e materiais extras.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-xs text-muted-foreground">
+                      {guideUrl ? (
+                        <a
+                          href={guideUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/40"
+                        >
+                          <span>Acessar guia</span>
+                          <span className="text-primary">→</span>
+                        </a>
+                      ) : (
+                        <p>Nenhum guia cadastrado.</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <CardTitle className="text-xs">Comentarios e recomendacoes</CardTitle>
+                    <CardDescription className="text-[10px]">Resumo geral do periférico.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="max-h-56 overflow-auto space-y-3 text-xs text-muted-foreground">
+                    {priceRange && (
+                      <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs">
+                        <span>Faixa de preco</span>
+                        <span className="font-semibold text-foreground">{priceRange}</span>
                       </div>
-                      {specs.connectivity && <div className="flex items-center justify-between"><span>Conectividade</span><span>{formatLabel(specs.connectivity)}</span></div>}
-                      {specs.driver && <div className="flex items-center justify-between"><span>Sensor</span><span>{specs.driver}</span></div>}
-                      {specs.keyboardLayout && <div className="flex items-center justify-between"><span>Layout</span><span>{String(specs.keyboardLayout).toUpperCase()}</span></div>}
-                      {specs.surface && <div className="flex items-center justify-between"><span>Superficie</span><span>{formatLabel(specs.surface)}</span></div>}
-                      {specs.size && <div className="flex items-center justify-between"><span>Tamanho</span><span>{formatLabel(specs.size)}</span></div>}
-                      {specs.profile && <div className="flex items-center justify-between"><span>Perfil</span><span>{specs.profile}</span></div>}
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border bg-card">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Destaques</CardTitle>
-                      <CardDescription className="text-xs">Resumo rapido do que importa.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-sm text-muted-foreground">
-                      {highlights.length > 0 ? (
-                        <ul className="list-disc space-y-2 pl-4">
-                          {highlights.map((item: string) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>Nenhum destaque cadastrado.</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card className="border-border bg-card">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Pontos fortes</CardTitle>
-                      <CardDescription className="text-xs">O que este periferico faz bem.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-sm text-muted-foreground">
-                      {pros.length > 0 ? (
-                        <ul className="list-disc space-y-2 pl-4">
-                          {pros.map((item: string) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>Sem pontos fortes cadastrados.</p>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border bg-card">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Pontos fracos</CardTitle>
-                      <CardDescription className="text-xs">Aspectos que podem melhorar.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-sm text-muted-foreground">
-                      {cons.length > 0 ? (
-                        <ul className="list-disc space-y-2 pl-4">
-                          {cons.map((item: string) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p>Sem pontos fracos cadastrados.</p>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
+                    )}
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <p className="text-[10px] font-semibold text-emerald-400">Pontos positivos</p>
+                        {pros.length > 0 ? (
+                          <ul className="list-disc space-y-1 pl-4">
+                            {pros.map((item: string) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>Sem pontos fortes cadastrados.</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-rose-400">Pontos negativos</p>
+                        {cons.length > 0 ? (
+                          <ul className="list-disc space-y-1 pl-4">
+                            {cons.map((item: string) => (
+                              <li key={item}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>Sem pontos fracos cadastrados.</p>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <Card className="border-border bg-card">
                     <CardHeader>
-                      <CardTitle className="text-sm">Compatibilidade</CardTitle>
-                      <CardDescription className="text-xs">Plataformas, softwares e requisitos.</CardDescription>
+                      <CardTitle className="text-xs">Software</CardTitle>
+                      <CardDescription className="text-[10px]">Plataformas, softwares e requisitos.</CardDescription>
                     </CardHeader>
-                    <CardContent className="text-sm text-muted-foreground">
+                    <CardContent className="text-xs text-muted-foreground">
                       {details.compatibility ? details.compatibility : "Informacao de compatibilidade nao cadastrada."}
                     </CardContent>
                   </Card>
 
                   <Card className="border-border bg-card">
                     <CardHeader>
-                      <CardTitle className="text-sm">Notas e observacoes</CardTitle>
-                      <CardDescription className="text-xs">Detalhes extras da equipe.</CardDescription>
+                      <CardTitle className="text-xs">Comentarios</CardTitle>
+                      <CardDescription className="text-[10px]">Detalhes extras da equipe.</CardDescription>
                     </CardHeader>
-                    <CardContent className="text-sm text-muted-foreground">
+                    <CardContent className="text-xs text-muted-foreground">
                       {details.notes ? details.notes : "Sem observacoes adicionais."}
                     </CardContent>
                   </Card>
                 </div>
 
+                {highlights.length > 0 && (
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-xs">Destaques</CardTitle>
+                      <CardDescription className="text-[10px]">Resumo rapido do que importa.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="max-h-40 overflow-auto space-y-2 text-xs text-muted-foreground">
+                      <ul className="list-disc space-y-2 pl-4">
+                        {highlights.map((item: string) => (
+                          <li key={item}>{item}</li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {buyLinks.length > 0 && (
+                  <Card className="border-border bg-card">
+                    <CardHeader className="space-y-1">
+                      <CardTitle className="text-xs">Onde comprar</CardTitle>
+                      <CardDescription className="text-[10px]">Links oficiais e lojas recomendadas.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="max-h-40 overflow-auto space-y-2">
+                      {buyLinks.map((link: { label: string; url: string }) => (
+                        <a
+                          key={link.url}
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/40"
+                        >
+                          <span>{link.label}</span>
+                          <span className="text-primary">→</span>
+                        </a>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
                 {comparisons.length > 0 && (
                   <Card className="border-border bg-card">
                     <CardHeader>
-                      <CardTitle className="text-sm">Comparacoes</CardTitle>
-                      <CardDescription className="text-xs">Alternativas diretas para avaliar.</CardDescription>
+                      <CardTitle className="text-xs">Comparacoes</CardTitle>
+                      <CardDescription className="text-[10px]">Alternativas diretas para avaliar.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-2 text-sm text-muted-foreground">
+                    <CardContent className="max-h-40 overflow-auto space-y-2 text-xs text-muted-foreground">
                       <ul className="list-disc space-y-2 pl-4">
                         {comparisons.map((item: string) => (
                           <li key={item}>{item}</li>
@@ -322,10 +504,10 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
                 <Card className="border-border bg-card">
                   <CardHeader>
-                    <CardTitle className="text-sm">Reviews e analises</CardTitle>
-                    <CardDescription className="text-xs">Artigos e conteudos relacionados.</CardDescription>
+                    <CardTitle className="text-xs">Reviews e analises</CardTitle>
+                    <CardDescription className="text-[10px]">Artigos e conteudos relacionados.</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardContent className="max-h-48 overflow-auto space-y-3">
                     {relatedPosts && relatedPosts.length > 0 ? (
                       relatedPosts.map((post) => (
                         <Link

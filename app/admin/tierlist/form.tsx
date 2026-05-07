@@ -26,6 +26,7 @@ import { mapTier } from "@/lib/tier-utils"
 
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
+type TierField = Tier | "__none__"
 type Tag = "competitive" | "versatile" | "value" | "comfort"
 
 const optionalNumber = z.preprocess((value) => {
@@ -38,7 +39,7 @@ const peripheralSchema = z.object({
   name: z.string().min(1, "Name is required"),
   brand: z.string().min(1, "Brand is required"),
   category: z.enum(["keyboard", "mouse", "mousepad", "glasspad", "iem", "headset"]),
-  tier: z.enum(["GOAT", "SS", "S", "A", "B", "C", "L"]),
+  tier: z.union([z.enum(["GOAT", "SS", "S", "A", "B", "C", "L"]), z.literal("__none__")]),
   price: z.number().positive("Price must be greater than 0"),
   rankLabel: z.string().optional(),
   priceRange: z.string().optional(),
@@ -113,7 +114,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       name: "",
       brand: "",
       category: "mouse",
-      tier: "S",
+      tier: "__none__",
       price: 0,
       rankLabel: "",
       priceRange: "",
@@ -201,7 +202,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           name: data.name,
           brand: data.brand,
           category: data.category,
-          tier: mapTier(data.tier),
+          tier: data.tier ? mapTier(data.tier) : "__none__",
           price: displayedPrice,
           rankLabel: data.specs?.details?.rankLabel ?? "",
           priceRange: data.specs?.details?.priceRange ?? "",
@@ -369,7 +370,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         name: data.name,
         brand: data.brand,
         category: data.category,
-        tier: data.tier,
+        tier: data.tier === "__none__" ? null : data.tier,
         price: priceToSave,
         image_url: imageUrl,
         tags: selectedTags,
@@ -520,13 +521,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-foreground">Tier</label>
                 <Select
-                  onValueChange={(value) => form.setValue("tier", value as Tier)}
+                  onValueChange={(value) => form.setValue("tier", value as TierField)}
                   value={form.watch("tier")}
                 >
                   <SelectTrigger className="border-border bg-card/50">
-                    <SelectValue />
+                    <SelectValue placeholder={isEnglish ? "No tier" : "Sem tier"} />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="__none__">{isEnglish ? "No tier" : "Sem tier"}</SelectItem>
                     {TIERS.map((tier) => (
                       <SelectItem key={tier} value={tier}>
                         {tier}

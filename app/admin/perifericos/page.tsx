@@ -26,7 +26,7 @@ export default async function AdminPerifericosPage() {
     brand: p.brand,
     image_url: p.image_url,
     category: p.category as "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset",
-    tier: mapTier(p.tier),
+    tier: p.tier ? mapTier(p.tier) : null,
     price: p.price,
     tags: (p.tags || []) as ("competitive" | "versatile" | "value" | "comfort")[],
     specs: (p.specs || {}) as {

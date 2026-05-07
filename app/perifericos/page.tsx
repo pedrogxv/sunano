@@ -14,7 +14,18 @@ export default async function PerifericosPage() {
     console.error("Error fetching peripherals:", error)
   }
 
-  const peripheralsList = (peripherals ?? []) as any[]
+  const peripheralsList = (peripherals ?? []) as Array<{
+    id: string
+    name: string
+    brand: string
+    image_url: string | null
+    category: string
+    tier: string | null
+    price: number
+    tags?: string[] | null
+    specs?: Record<string, unknown> | null
+    description?: string | null
+  }>
 
   const items = peripheralsList.map((p) => ({
     id: p.id,
@@ -22,7 +33,7 @@ export default async function PerifericosPage() {
     brand: p.brand,
     image_url: p.image_url,
     category: p.category as "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset",
-    tier: mapTier(p.tier),
+    tier: p.tier ? mapTier(p.tier) : null,
     price: p.price,
     tags: (p.tags || []) as ("competitive" | "versatile" | "value" | "comfort")[],
     specs: (p.specs || {}) as {

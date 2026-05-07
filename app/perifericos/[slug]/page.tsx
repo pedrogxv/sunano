@@ -17,7 +17,7 @@ type PeripheralRow = {
   name: string
   brand: string
   category: string
-  tier: string
+  tier: string | null
   price: number
   image_url: string | null
   tags: string[]
@@ -152,7 +152,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     value: normalizeRating(details?.ratings?.value ?? details.ratingValue),
   }
 
-  const rankLabel = details.rankLabel || mapTier(data.tier)
+  const rankLabel = details.rankLabel || (data.tier ? mapTier(data.tier) : "Sem tier")
   const priceRange = details.priceRange
   const reviewUrl = details.reviewUrl
   const reviewNote = details.reviewNote

@@ -34,6 +34,7 @@ async function getUsdToBrlRate(): Promise<number | null> {
 
 type Tag = "competitive" | "versatile" | "value" | "comfort"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
+type TierValue = Tier | null
 
 interface PeripheralCardProps {
   id: string
@@ -41,7 +42,7 @@ interface PeripheralCardProps {
   brand: string
   image_url: string | null
   price: number
-  tier: Tier
+  tier: TierValue
   category: string
   tags: Tag[]
   specs: {
@@ -115,7 +116,8 @@ function getAllSpecs(item: PeripheralCardProps, isEnglish: boolean): Array<{ lab
 export function PeripheralCard({ ...item }: PeripheralCardProps) {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
-  const tierStyle = CARD_TIER_STYLES[item.tier] ?? CARD_TIER_STYLES.L
+  const tierStyle = item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L
+  const tierLabel = item.tier ?? (isEnglish ? "No tier" : "Sem tier")
   const primaryTag = item.tags[0]
   const tagStyle = primaryTag ? CARD_TAG_STYLES[primaryTag] : CARD_TAG_STYLES.versatile
   
@@ -247,7 +249,7 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
               tierStyle.bg,
               tierStyle.text,
             )}>
-              {item.tier}
+              {tierLabel}
             </span>
             <span className="text-sm font-bold text-emerald-400">{displayPrice}</span>
           </div>

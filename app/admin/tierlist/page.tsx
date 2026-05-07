@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Edit, Plus, Trash2, AlertCircle } from "lucide-react"
@@ -50,6 +50,7 @@ type RatingMode = "performance" | "value" | "recommended"
 
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
+type TierValue = Tier | null
 type Tag = "competitive" | "versatile" | "value" | "comfort"
 
 interface Peripheral {
@@ -57,7 +58,7 @@ interface Peripheral {
   name: string
   brand: string
   category: Category
-  tier: Tier
+  tier: TierValue
   price: number
   image_url: string | null
   tags: Tag[]
@@ -97,6 +98,8 @@ const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
   { key: "value", en: "Value", pt: "Custo-Beneficio" },
   { key: "recommended", en: "Recommended", pt: "Recomendado" },
 ]
+
+const UNASSIGNED_SLOT_COUNT = 8
 
 type PriceBand = "budget" | "mid" | "premium"
 
@@ -154,14 +157,15 @@ function getPriceBand(price: number): PriceBand {
   return "premium"
 }
 
-function getTierScore(tier: Tier) {
+function getTierScore(tier: TierValue) {
   if (tier === "GOAT") return 7
   if (tier === "SS") return 6
   if (tier === "S") return 5
   if (tier === "A") return 4
   if (tier === "B") return 3
   if (tier === "C") return 2
-  return 1
+  if (tier === "L") return 1
+  return 0
 }
 
 function getRecommendedScore(item: Peripheral) {
@@ -246,7 +250,7 @@ function DraggablePeripheralCard({
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: item.id,
   })
-  const tierStyle = CARD_TIER_STYLES[item.tier] ?? CARD_TIER_STYLES.L
+  const tierStyle = item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L
   const tagStyle = item.tags[0] ? CARD_TAG_STYLES[item.tags[0]] : CARD_TAG_STYLES.versatile
 
   const style = {
@@ -451,6 +455,65 @@ function DroppableColumn({
   )
 }
 
+function UnassignedSlot({ index, item, onDelete }: { index: number; item: Peripheral | undefined; onDelete: (id: string) => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `unassigned-${index}` })
+
+  if (!item) {
+    return (
+      <div
+        ref={setNodeRef}
+        className={`flex min-h-[124px] items-center justify-center rounded-xl border border-dashed transition-colors ${
+          isOver ? "border-cyan-400 bg-cyan-500/10" : "border-white/[0.12] bg-white/[0.03]"
+        }`}
+      >
+        <div className="text-center">
+          <p className="text-xs font-medium text-slate-400">Slot vazio</p>
+          <p className="mt-1 text-[10px] text-slate-500">Solte um periférico aqui</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={setNodeRef} className={`relative group ${isOver ? "ring-2 ring-cyan-400/70 ring-offset-0" : ""}`}>
+      <Card className="border border-white/[0.08] bg-[#0a0e17]/95 p-0 shadow-lg hover:border-white/[0.12] hover:bg-[#0a0e17]/95 transition-all">
+        <CardContent className="p-3">
+          <div className="flex gap-2 items-start">
+            <div className={`grid size-10 shrink-0 place-items-center rounded-lg overflow-hidden text-xs font-bold ${(item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L).bg} ${(item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L).text}`}>
+              {item.image_url ? (
+                <Image
+                  src={item.image_url}
+                  alt={item.name}
+                  width={40}
+                  height={40}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                item.brand.slice(0, 2).toUpperCase()
+              )}
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <p className="truncate text-xs font-bold text-slate-100">{item.name}</p>
+              <p className="text-[9px] text-slate-500">{item.brand}</p>
+              <p className="mt-1 text-[10px] font-semibold text-slate-500">Sem tags</p>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs border-white/[0.08] hover:border-white/[0.12] hover:bg-white/[0.05]"
+              onClick={() => onDelete(item.id)}
+            >
+              Remover
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 
 export default function AdminPeripheralsPage() {
   const { locale } = useLocale()
@@ -476,11 +539,7 @@ export default function AdminPeripheralsPage() {
     })
   )
 
-  useEffect(() => {
-    loadPeripherals()
-  }, [])
-
-  async function loadPeripherals() {
+  const loadPeripherals = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -496,7 +555,11 @@ export default function AdminPeripheralsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [isEnglish])
+
+  useEffect(() => {
+    loadPeripherals()
+  }, [loadPeripherals])
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -506,8 +569,49 @@ export default function AdminPeripheralsPage() {
     const draggedItem = peripherals.find((p) => p.id === active.id)
     if (!draggedItem) return
 
-    const [newTier, newColumn] = over.id.toString().split("-") as [Tier, string]
+    const overId = over.id.toString()
     const specs = draggedItem.specs ?? {}
+
+    if (overId.startsWith("unassigned-")) {
+      const nextPeripherals = peripherals.map((item) =>
+        item.id === draggedItem.id
+          ? {
+              ...item,
+              tier: null,
+              specs: {
+                ...specs,
+                adminValueBand: undefined,
+                adminRecommendedBand: undefined,
+              },
+            }
+          : item
+      )
+
+      setPeripherals(nextPeripherals)
+
+      try {
+        const { error: err } = await supabase
+          .from("peripherals")
+          .update({
+            tier: null,
+            specs: {
+              ...specs,
+              adminValueBand: null,
+              adminRecommendedBand: null,
+            },
+          })
+          .eq("id", draggedItem.id)
+
+        if (err) throw err
+      } catch (err) {
+        setPeripherals(peripherals)
+        setError(err instanceof Error ? err.message : (isEnglish ? "Failed to update" : "Erro ao atualizar"))
+      }
+
+      return
+    }
+
+    const [newTier, newColumn] = overId.split("-") as [Tier, string]
 
     const currentColumn =
       ratingMode === "performance"
@@ -609,6 +713,7 @@ export default function AdminPeripheralsPage() {
   const selectedCategoryMeta = CATEGORY_META.find((c) => c.key === selectedCategory)
   const categoryLabel = selectedCategoryMeta ? (isEnglish ? selectedCategoryMeta.en : selectedCategoryMeta.pt) : "Tierlist"
   const filtered = peripherals.filter((item) => item.category === selectedCategory)
+  const unassignedItems = filtered.filter((item) => item.tier === null)
   const modeConfig = MODE_CONFIGS[ratingMode]
   const modeDescription = isEnglish ? modeConfig.enDescription : modeConfig.ptDescription
 
@@ -731,63 +836,45 @@ export default function AdminPeripheralsPage() {
             </section>
           </DndContext>
 
-          {/* Periféricos sem tags */}
-          {filtered.filter((p) => p.tags.length === 0).length > 0 && (
-            <div className="space-y-3 mt-6">
-              <Alert className="border-amber-500/30 bg-amber-500/10">
-                <AlertCircle className="size-3.5 text-amber-400" />
-                <AlertDescription className="text-xs leading-5 text-amber-300">
-                  ⚠️ {filtered.filter((p) => p.tags.length === 0).length} {isEnglish ? "peripheral(s) without tags. Click to add a tag or drag into the tierlist." : "periférico(s) sem tags. Clique para adicionar uma tag ou arraste para a tierlist."}
-                </AlertDescription>
-              </Alert>
+          {/* Periféricos sem tier */}
+          <div className="mt-6 space-y-3">
+            <Alert className="border-amber-500/30 bg-amber-500/10">
+              <AlertCircle className="size-3.5 text-amber-400" />
+              <AlertDescription className="text-xs leading-5 text-amber-300">
+                ⚠️ {unassignedItems.length} {isEnglish ? "peripheral(s) without tier. Drag them to a tier when you want to rank them." : "periférico(s) sem tier. Arraste para um tier quando quiser ranqueá-los."}
+              </AlertDescription>
+            </Alert>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {filtered
-                  .filter((p) => p.tags.length === 0)
-                  .map((item) => (
-                    <div key={item.id} className="relative group">
-                      <Card className="border border-white/[0.08] bg-card p-0 shadow-lg hover:border-white/[0.12] hover:bg-card transition-all">
-                        <CardContent className="p-3">
-                          <div className="flex gap-2 items-start">
-                                    <div className={`grid size-10 shrink-0 place-items-center rounded-lg overflow-hidden text-xs font-bold ${(CARD_TIER_STYLES[item.tier] ?? CARD_TIER_STYLES.L).bg} ${(CARD_TIER_STYLES[item.tier] ?? CARD_TIER_STYLES.L).text}`}>
-                              {item.image_url ? (
-                                <Image
-                                  src={item.image_url}
-                                  alt={item.name}
-                                  width={40}
-                                  height={40}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                item.brand.slice(0, 2).toUpperCase()
-                              )}
-                            </div>
+            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#05070d] shadow-lg">
+              <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">
+                    {isEnglish ? "No tier peripherals" : "Periféricos sem tier"}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {isEnglish ? "Visible only in the admin editor." : "Visível apenas no editor admin."}
+                  </p>
+                </div>
+                <p className="text-xs text-slate-500">
+                  {unassignedItems.length}/{UNASSIGNED_SLOT_COUNT} {isEnglish ? "filled" : "ocupados"}
+                </p>
+              </div>
 
-                            <div className="flex-1 min-w-0">
-                              <p className="truncate text-xs font-bold text-slate-100">{item.name}</p>
-                              <p className="text-[9px] text-slate-500">{item.brand}</p>
-                              <p className="mt-1 text-[10px] font-semibold text-slate-500">{isEnglish ? "No tags" : "Sem tags"}</p>
-                            </div>
-
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 px-2 text-xs border-white/[0.08] hover:border-white/[0.12] hover:bg-white/[0.05]"
-                              onClick={() => {
-                                setTagsDialog({ open: true, item })
-                                setSelectedTag("competitive")
-                              }}
-                            >
-                              +Tag
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  ))}
+              <div className="grid gap-3 p-4 [grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]">
+                {Array.from({ length: Math.max(UNASSIGNED_SLOT_COUNT, unassignedItems.length) }).map((_, index) => (
+                  <UnassignedSlot
+                    key={`slot-${index}`}
+                    index={index}
+                    item={unassignedItems[index]}
+                    onDelete={(id) => {
+                      const item = peripherals.find((peripheral) => peripheral.id === id)
+                      if (item) setTagsDialog({ open: true, item })
+                    }}
+                  />
+                ))}
               </div>
             </div>
-          )}
+          </div>
         </>
       )}
 

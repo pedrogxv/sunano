@@ -13,7 +13,7 @@ type PeripheralRow = {
   name: string
   brand: string
   category: string
-  tier: string
+  tier: string | null
   price: number
   image_url: string | null
   tags: string[]
@@ -127,7 +127,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
                     <Badge variant="secondary" className="bg-muted/50 text-xs text-muted-foreground">
                       {formatLabel(item.category)}
                     </Badge>
-                    <Badge className="bg-primary/15 text-xs text-primary">{item.tier}</Badge>
+                    <Badge className="bg-primary/15 text-xs text-primary">{item.tier ?? "Sem tier"}</Badge>
                     {item.tags?.map((tag) => (
                       <Badge key={tag} variant="outline" className="border-border text-xs text-muted-foreground">
                         {formatLabel(tag)}

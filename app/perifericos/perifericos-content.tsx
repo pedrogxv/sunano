@@ -19,13 +19,14 @@ type PriceBand = "all" | "budget" | "mid" | "premium"
 
 type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 
+type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type Peripheral = {
   id: string
   name: string
   brand: string
   image_url: string | null
   category: Exclude<Category, "all">
-  tier: "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
+  tier: Tier | null
   price: number
   tags: Array<"competitive" | "versatile" | "value" | "comfort">
   specs: {

@@ -13,6 +13,7 @@ import {
 } from "@/lib/tierlist-theme"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
+type TierValue = Tier | null
 type Tag = "competitive" | "versatile" | "value" | "comfort"
 type RatingMode = "performance" | "value" | "recommended"
 type PriceBand = "budget" | "mid" | "premium"
@@ -23,7 +24,7 @@ interface Peripheral {
   brand: string
   image_url: string | null
   category: string
-  tier: Tier
+  tier: TierValue
   price: number
   tags: Tag[]
   specs: {
@@ -146,14 +147,15 @@ function getPriceBand(price: number): PriceBand {
   return "premium"
 }
 
-function getTierScore(tier: Tier) {
+function getTierScore(tier: TierValue) {
   if (tier === "GOAT") return 7
   if (tier === "SS") return 6
   if (tier === "S") return 5
   if (tier === "A") return 4
   if (tier === "B") return 3
   if (tier === "C") return 2
-  return 1
+  if (tier === "L") return 1
+  return 0
 }
 
 function getRecommendedScore(item: Peripheral) {
@@ -306,6 +308,20 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
     [filtered, modeConfig, tierRows]
   )
 
+  const untieredItems = useMemo(
+    () => modeConfig.sortItems(filtered.filter((item) => item.tier === null)),
+    [filtered, modeConfig]
+  )
+
+  const untieredItemsByColumn = useMemo(
+    () =>
+      modeConfig.columns.map((column) => ({
+        ...column,
+        items: untieredItems.filter((item) => modeConfig.getColumnKeys(item).includes(column.key)),
+      })),
+    [modeConfig, untieredItems]
+  )
+
   const hasItems = filtered.length > 0
 
   return (
@@ -398,6 +414,48 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
           </tbody>
         </table>
 
+        {untieredItems.length > 0 && (
+          <div className="border-t border-border bg-muted/10">
+            <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="text-xl font-black text-slate-100">-</span>
+                <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+                  {isEnglish ? "No tier" : "Sem tier"}
+                </span>
+              </div>
+              <span className="text-sm font-semibold text-muted-foreground">
+                {untieredItems.length} {isEnglish ? "items" : "itens"}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-0 md:grid-cols-[repeat(4,minmax(0,1fr))]">
+              {untieredItemsByColumn.map((column, colIndex) => (
+                <div
+                  key={`untiered-${column.key}`}
+                  className={cn(
+                    "border-r border-border last:border-r-0",
+                    colIndex % 2 === 0 ? "bg-muted/20" : "bg-transparent"
+                  )}
+                >
+                  <div className="flex h-full items-start justify-center p-2 min-h-48">
+                    {column.items.length > 0 ? (
+                      <div className="grid w-full auto-rows-max grid-cols-2 gap-3">
+                        {column.items.map((item) => (
+                          <PeripheralCard key={item.id} {...item} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <span className="text-xs text-muted-foreground">-</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="md:hidden">
           {!hasItems ? (
             <div className="p-8 text-center">
@@ -441,6 +499,35 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
                   </div>
                 )
               })}
+
+              {untieredItems.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between bg-gradient-to-r from-slate-700 to-slate-800 px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl font-black text-slate-100">-</span>
+                      <span className="text-xs font-medium opacity-80 text-slate-100">{isEnglish ? "No tier" : "Sem tier"}</span>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-100">{untieredItems.length} {isEnglish ? "items" : "itens"}</span>
+                  </div>
+
+                  <div className="space-y-4 p-4">
+                    {untieredItemsByColumn
+                      .filter((column) => column.items.length > 0)
+                      .map((column) => (
+                        <div key={column.key}>
+                          <p className={cn("mb-2 text-[10px] font-semibold uppercase tracking-widest", column.color)}>
+                            {column.title}
+                          </p>
+                          <div className="space-y-2">
+                            {column.items.map((item) => (
+                              <PeripheralCard key={item.id} {...item} />
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

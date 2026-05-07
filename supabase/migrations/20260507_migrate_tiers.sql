@@ -38,10 +38,10 @@ SET specs = jsonb_set(specs, '{details,rankLabel}', to_jsonb(
 WHERE specs IS NOT NULL
   AND (specs->'details'->> 'rankLabel') IN ('T0','T0.5','T1','T2');
 
--- 4) Recria a constraint da coluna tier para aceitar os novos valores
+-- 4) Recria a constraint da coluna tier para aceitar os novos valores (e NULL)
 ALTER TABLE peripherals
   ADD CONSTRAINT peripherals_tier_check
-  CHECK (tier IN ('GOAT', 'SS', 'S', 'A', 'B', 'C', 'L'));
+  CHECK (tier IS NULL OR tier IN ('GOAT', 'SS', 'S', 'A', 'B', 'C', 'L'));
 
 -- 5) Confirmação simples: contagem antes/depois (opcional)
 -- SELECT count(*) FROM backup_peripherals_tier_migration;

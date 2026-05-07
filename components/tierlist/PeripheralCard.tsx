@@ -173,17 +173,27 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale, item.price])
 
+  const isGoat = item.tier === "GOAT"
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div className="group cursor-pointer h-32 w-24 flex flex-col items-center justify-start">
           {/* Card Container - Fixed Height */}
           <div className="relative w-20 h-20">
+            {/* GOAT glow layers */}
+            {isGoat && (
+              <>
+                <div className="absolute -inset-2 rounded-xl bg-gradient-to-br from-red-500/60 via-orange-400/20 to-red-600/50 blur-xl animate-pulse" />
+                <div className="absolute -inset-0.5 rounded-lg bg-gradient-to-br from-red-400/40 to-orange-400/20 blur-sm animate-pulse" />
+              </>
+            )}
             {/* Avatar/Image */}
             <div className={cn(
-              "grid size-20 place-items-center overflow-hidden rounded-lg text-3xl font-black shadow-lg relative",
+              "relative grid size-20 place-items-center overflow-hidden rounded-lg text-3xl font-black shadow-lg",
               tierStyle.bg,
               tierStyle.text,
+              isGoat && "ring-2 ring-red-400/70 shadow-[0_0_16px_rgba(240,97,97,0.4)]",
             )}>
               {item.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -195,7 +205,7 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
               ) : (
                 item.brand.slice(0, 2).toUpperCase()
               )}
-              
+
               {/* Price Tag - Top Right */}
               <Badge className="absolute top-0 right-0 rounded-sm h-5 px-1.5 py-0.5 m-1 text-[10px]" variant="secondary">
                 {displayPrice}

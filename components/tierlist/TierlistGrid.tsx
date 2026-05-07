@@ -352,20 +352,6 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
 
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-lg">
         <table className="hidden w-full border-collapse md:table">
-          <thead>
-            <tr className="bg-muted/30">
-              <th className="h-12 w-20 border-r border-border text-center">
-                <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Tier</span>
-              </th>
-              {modeConfig.columns.map((column) => (
-                <th key={column.key} className="h-12 border-r border-border text-center last:border-r-0">
-                  <span className={cn("text-xs font-semibold uppercase tracking-wider", column.color)}>
-                    {column.title}
-                  </span>
-                </th>
-              ))}
-            </tr>
-          </thead>
           <tbody>
             {itemsByTier.map((tierRow, tierIndex) => (
               <tr

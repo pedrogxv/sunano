@@ -7,13 +7,15 @@ import { Edit, Plus, Trash2, AlertCircle } from "lucide-react"
 import {
   DndContext,
   DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
   PointerSensor,
   useDraggable,
   useDroppable,
   useSensor,
   useSensors,
 } from "@dnd-kit/core"
-import { CSS } from "@dnd-kit/utilities"
+import { cn } from "@/lib/utils"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -92,14 +94,11 @@ const COLUMNS: { key: Tag; title: string }[] = [
   { key: "comfort", title: "Comfort" },
 ]
 
-const TAGS_OPTIONS: Tag[] = ["competitive", "versatile", "value", "comfort"]
 const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
   { key: "performance", en: "Performance", pt: "Performance" },
   { key: "value", en: "Value", pt: "Custo-Beneficio" },
   { key: "recommended", en: "Recommended", pt: "Recomendado" },
 ]
-
-const UNASSIGNED_SLOT_COUNT = 8
 
 type PriceBand = "budget" | "mid" | "premium"
 
@@ -128,27 +127,17 @@ function formatLabel(value: string) {
     .join(" ")
 }
 
-function getSpecBadges(item: Peripheral) {
-  const badges: string[] = [`$${item.price}`]
-
+function getSpecPairs(item: Peripheral): { label: string; value: string }[] {
   const specs = item.specs ?? {}
-  if (typeof specs.mouseShape === "string") badges.push(formatLabel(specs.mouseShape))
-  if (typeof specs.keyboardLayout === "string") badges.push(specs.keyboardLayout.toUpperCase())
-  if (typeof specs.connectivity === "string") badges.push(formatLabel(specs.connectivity))
-  if (typeof specs.surface === "string") badges.push(formatLabel(specs.surface))
-
-  return badges
-}
-
-function getSecondaryLine(item: Peripheral) {
-  const specs = item.specs ?? {}
-  const parts: string[] = []
-
-  if (typeof specs.size === "string") parts.push(formatLabel(specs.size))
-  if (typeof specs.driver === "string") parts.push(specs.driver)
-  if (typeof specs.profile === "string") parts.push(specs.profile)
-
-  return parts.join(" • ")
+  const pairs: { label: string; value: string }[] = []
+  if (typeof specs.connectivity === "string") pairs.push({ label: "Connect.", value: formatLabel(specs.connectivity) })
+  if (typeof specs.size === "string") pairs.push({ label: "Size", value: formatLabel(specs.size) })
+  if (typeof specs.driver === "string") pairs.push({ label: "Driver", value: String(specs.driver) })
+  if (typeof specs.mouseShape === "string") pairs.push({ label: "Shape", value: formatLabel(specs.mouseShape) })
+  if (typeof specs.keyboardLayout === "string") pairs.push({ label: "Layout", value: specs.keyboardLayout.toUpperCase() })
+  if (typeof specs.surface === "string") pairs.push({ label: "Surface", value: formatLabel(specs.surface) })
+  if (typeof specs.profile === "string") pairs.push({ label: "Profile", value: String(specs.profile) })
+  return pairs
 }
 
 function getPriceBand(price: number): PriceBand {
@@ -246,91 +235,61 @@ function DraggablePeripheralCard({
 }) {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
-
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: item.id,
-  })
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.id })
   const tierStyle = item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L
-  const tagStyle = item.tags[0] ? CARD_TAG_STYLES[item.tags[0]] : CARD_TAG_STYLES.versatile
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    opacity: isDragging ? 0.5 : 1,
-    transition: "all 0.2s ease",
-  }
+  const categoryMeta = CATEGORY_META.find((c) => c.key === item.category)
+  const specPairs = getSpecPairs(item)
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <div
           ref={setNodeRef}
-          style={style}
-          className="group relative cursor-grab active:cursor-grabbing"
+          style={{ opacity: isDragging ? 0.2 : 1 }}
+          className="group cursor-grab active:cursor-grabbing transition-opacity duration-100"
           {...attributes}
           {...listeners}
         >
-          <Card className="group cursor-default overflow-visible border border-white/[0.12] bg-[#0a0e17]/95 p-0 shadow-xl transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.18] hover:bg-[#0a0e17]/95">
+          <Card className="border border-white/[0.10] bg-[#0a0e17]/90 p-0 shadow-md transition-all duration-200 hover:border-white/[0.22] hover:shadow-lg">
             <CardContent className="p-0">
-              <div className="flex gap-2.5 p-2.5">
-                <div className={`grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg text-sm font-bold shadow-lg ${tierStyle.bg} ${tierStyle.text}`}>
+              <div className="flex items-start gap-2.5 p-2.5">
+                <div className={cn("grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg text-[10px] font-bold shadow-md", tierStyle.bg, tierStyle.text)}>
                   {item.image_url ? (
-                    <Image
-                      src={item.image_url}
-                      alt={item.name}
-                      width={48}
-                      height={48}
-                      className="h-full w-full object-cover"
-                    />
+                    <Image src={item.image_url} alt={item.name} width={40} height={40} className="h-full w-full object-cover" />
                   ) : (
                     item.brand.slice(0, 2).toUpperCase()
                   )}
                 </div>
 
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-xs font-bold leading-tight text-slate-100">
-                      {item.name}
-                    </h3>
-                    <p className="mt-0.5 text-[9px] font-medium text-slate-500">
-                      {item.brand}
-                    </p>
+                <div className="min-w-0 flex-1 pt-px">
+                  <p className="truncate text-[11px] font-bold leading-tight text-slate-100">{item.name}</p>
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <span className="truncate text-[9px] text-slate-500">{item.brand}</span>
+                    <span className="text-slate-700">·</span>
+                    <span className="text-[9px] font-semibold text-emerald-400">${item.price}</span>
                   </div>
-
-                  <div className="flex flex-wrap gap-1">
-                    {getSpecBadges(item).map((badge, index) => (
-                      <Badge
-                        className="rounded-sm border border-white/[0.08] bg-white/[0.05] px-1.5 py-0.5 text-[10px] text-slate-100"
-                        key={`${item.id}-${badge}-${index}`}
-                        variant="outline"
-                      >
-                        {badge}
-                      </Badge>
-                    ))}
-                  </div>
-
-                  <div className={`truncate text-[10px] font-semibold uppercase ${tagStyle.text}`}>
-                    {getSecondaryLine(item)}
-                  </div>
+                  {item.tags.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {item.tags.slice(0, 3).map((tag) => (
+                        <span
+                          key={tag}
+                          className={cn("rounded px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide", CARD_TAG_STYLES[tag].bg, CARD_TAG_STYLES[tag].text)}
+                        >
+                          {tag.slice(0, 4)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <div className="flex shrink-0 flex-col gap-0.5 pt-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
                   <Link href={`/admin/tierlist/${item.id}`}>
-                    <Button
-                      className="h-7 w-7 text-slate-300 hover:text-slate-100"
-                      size="icon"
-                      variant="ghost"
-                    >
-                      <Edit className="size-3.5" />
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-slate-400 hover:text-slate-100">
+                      <Edit className="size-3" />
                     </Button>
                   </Link>
-
-                  <Button
-                    className="h-7 w-7 text-red-400 hover:text-red-300"
-                    onClick={() => onDelete(item.id)}
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Trash2 className="size-3.5" />
+                  <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500 hover:text-red-400" onClick={() => onDelete(item.id)}>
+                    <Trash2 className="size-3" />
                   </Button>
                 </div>
               </div>
@@ -340,80 +299,107 @@ function DraggablePeripheralCard({
       </TooltipTrigger>
 
       <TooltipContent
-        arrowClassName="!bg-[#0a0e17] !fill-[#0a0e17]"
-        className="max-w-sm rounded-lg border border-white/[0.12] bg-[#0a0e17]/95 p-5 text-left shadow-xl backdrop-blur-md"
+        className="max-w-xs rounded-xl border border-white/[0.12] bg-[#0a0e17]/95 p-4 shadow-2xl backdrop-blur-md"
         sideOffset={12}
       >
-        <div className="space-y-3.5">
-          <div className="border-b border-white/[0.08] pb-3">
-            <div className="flex items-start justify-between gap-3">
+        <div className="space-y-3">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className={cn("grid size-14 place-items-center overflow-hidden rounded-xl font-bold shadow-lg", tierStyle.bg, tierStyle.text)}>
               {item.image_url ? (
-                <div className={`size-12 shrink-0 overflow-hidden rounded-lg ${tierStyle.bg} ${tierStyle.text}`}>
-                  <Image
-                    src={item.image_url}
-                    alt={item.name}
-                    width={48}
-                    height={48}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              ) : null}
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-slate-100">{item.name}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
-                  {item.brand} • {(isEnglish
-                    ? CATEGORY_META.find((category) => category.key === item.category)?.en
-                    : CATEGORY_META.find((category) => category.key === item.category)?.pt)}
-                </p>
-              </div>
-              <Badge className={`rounded-md px-2 py-1 text-center text-[10px] font-bold ${tierStyle.bg} ${tierStyle.text}`} variant="secondary">
-                {item.tier}
+                <Image src={item.image_url} alt={item.name} width={56} height={56} className="h-full w-full object-cover" />
+              ) : (
+                item.brand.slice(0, 2).toUpperCase()
+              )}
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-100">{item.name}</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {item.brand} · {isEnglish ? categoryMeta?.en : categoryMeta?.pt}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge className={cn("text-[10px] font-bold px-2 py-0.5", tierStyle.bg, tierStyle.text)} variant="secondary">
+                {item.tier ?? (isEnglish ? "No tier" : "Sem tier")}
               </Badge>
+              <span className="text-sm font-bold text-emerald-400">${item.price}</span>
+              <span className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-400">
+                {getPriceBand(item.price)}
+              </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5">
-            <div className="rounded-md border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center transition-colors duration-150 hover:bg-white/[0.08]">
-              <div className="text-lg font-bold text-emerald-400">${item.price}</div>
-              <div className="text-xs uppercase tracking-[0.1em] text-slate-500">Price</div>
-            </div>
-            <div className="rounded-md border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center transition-colors duration-150 hover:bg-white/[0.08]">
-              <div className="text-sm font-bold text-slate-100">{getPriceBand(item.price).toUpperCase()}</div>
-              <div className="text-xs uppercase tracking-[0.1em] text-slate-500">Band</div>
-            </div>
-            <div className="rounded-md border border-white/[0.08] bg-white/[0.05] px-3 py-2.5 text-center transition-colors duration-150 hover:bg-white/[0.08]">
-              <div className="text-sm font-bold text-slate-100">Admin</div>
-              <div className="text-xs uppercase tracking-[0.1em] text-slate-500">Status</div>
-            </div>
-          </div>
-
-          <div className="rounded-md border border-white/[0.08] bg-white/[0.05] px-3.5 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Specs</p>
-            <p className="mt-1.5 text-sm text-slate-100">
-              {getSecondaryLine(item) || "No extra specs"}
-            </p>
-          </div>
-
-          <div className="rounded-md border border-white/[0.08] bg-white/[0.05] px-3.5 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Tags</p>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {item.tags.length > 0 ? (
-                item.tags.map((tag) => (
+          {item.tags.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Tags</p>
+              <div className="flex flex-wrap gap-1.5">
+                {item.tags.map((tag) => (
                   <Badge
                     key={tag}
-                    className={`rounded-full border px-2.5 py-1 text-xs ${CARD_TAG_STYLES[tag].bg} ${CARD_TAG_STYLES[tag].text} ${CARD_TAG_STYLES[tag].border}`}
+                    className={cn("rounded-full border px-2.5 py-1 text-xs", CARD_TAG_STYLES[tag].bg, CARD_TAG_STYLES[tag].text, CARD_TAG_STYLES[tag].border)}
                   >
                     {formatLabel(tag)}
                   </Badge>
-                ))
-              ) : (
-                <span className="text-xs text-slate-300">{isEnglish ? "No tags" : "Sem tags"}</span>
-              )}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {specPairs.length > 0 && (
+            <div>
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Specs</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {specPairs.slice(0, 4).map((pair) => (
+                  <div key={pair.label} className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-2">
+                    <p className="text-[9px] font-medium text-slate-500">{pair.label}</p>
+                    <p className="text-xs font-semibold text-slate-100">{pair.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+// Floating card that follows the cursor during drag
+function DragOverlayCard({ item }: { item: Peripheral }) {
+  const tierStyle = item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L
+
+  return (
+    <div className="w-[240px] rotate-1 scale-105 cursor-grabbing drop-shadow-2xl">
+      <Card className="border border-cyan-400/50 bg-[#0a0e17] p-0 ring-2 ring-cyan-400/20">
+        <CardContent className="p-0">
+          <div className="flex items-start gap-2.5 p-2.5">
+            <div className={cn("grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg text-[10px] font-bold shadow-md", tierStyle.bg, tierStyle.text)}>
+              {item.image_url ? (
+                <Image src={item.image_url} alt={item.name} width={40} height={40} className="h-full w-full object-cover" />
+              ) : (
+                item.brand.slice(0, 2).toUpperCase()
+              )}
+            </div>
+            <div className="min-w-0 flex-1 pt-px">
+              <p className="truncate text-[11px] font-bold leading-tight text-slate-100">{item.name}</p>
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <span className="text-[9px] text-slate-500">{item.brand}</span>
+                <span className="text-slate-700">·</span>
+                <span className="text-[9px] font-semibold text-emerald-400">${item.price}</span>
+              </div>
+              {item.tags.length > 0 && (
+                <div className="mt-1.5 flex gap-1">
+                  {item.tags.slice(0, 2).map((tag) => (
+                    <span key={tag} className={cn("rounded px-1.5 py-0.5 text-[8px] font-bold uppercase", CARD_TAG_STYLES[tag].bg, CARD_TAG_STYLES[tag].text)}>
+                      {tag.slice(0, 4)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
 
@@ -423,93 +409,115 @@ function DroppableColumn({
   column,
   items,
   onDelete,
+  isDragging,
 }: {
   tier: Tier
   column: string
   items: Peripheral[]
   onDelete: (id: string) => void
+  isDragging: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `${tier}-${column}` })
 
   return (
     <div
       ref={setNodeRef}
-      className={`border-r border-white/[0.08] last:border-r-0 transition-colors ${
-        isOver ? "bg-white/5" : ""
-      }`}
+      className={cn(
+        "relative border-r border-white/[0.08] last:border-r-0 transition-all duration-150",
+        isOver && "bg-cyan-500/[0.06]"
+      )}
     >
-      <div className="space-y-1.5 p-2 min-h-[60px]">
+      {isOver && (
+        <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-cyan-400/50" />
+      )}
+
+      <div className="space-y-1.5 p-2">
         {items.length > 0 ? (
-          items.map((item) => (
-            <DraggablePeripheralCard
-              key={item.id}
-              item={item}
-              onDelete={onDelete}
-            />
-          ))
+          <>
+            {items.map((item) => (
+              <DraggablePeripheralCard key={item.id} item={item} onDelete={onDelete} />
+            ))}
+            {isOver && (
+              <div className="flex h-7 items-center justify-center rounded border border-dashed border-cyan-400/50 bg-cyan-500/5">
+                <p className="text-[9px] font-medium text-cyan-400">Soltar aqui</p>
+              </div>
+            )}
+          </>
         ) : (
-          <div className="px-1 py-2 text-xs text-slate-400">Vazio</div>
+          <div
+            className={cn(
+              "flex min-h-[72px] items-center justify-center rounded-lg border-2 border-dashed transition-all duration-200",
+              isOver
+                ? "border-cyan-400 bg-cyan-500/10"
+                : isDragging
+                  ? "border-white/[0.18] bg-white/[0.02]"
+                  : "border-white/[0.05]"
+            )}
+          >
+            <p
+              className={cn(
+                "text-[10px] font-medium transition-colors",
+                isOver ? "text-cyan-300" : isDragging ? "text-slate-600" : "text-transparent"
+              )}
+            >
+              {isOver ? "Soltar aqui" : "+"}
+            </p>
+          </div>
         )}
       </div>
     </div>
   )
 }
 
-function UnassignedSlot({ index, item, onDelete }: { index: number; item: Peripheral | undefined; onDelete: (id: string) => void }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `unassigned-${index}` })
-
-  if (!item) {
-    return (
-      <div
-        ref={setNodeRef}
-        className={`flex min-h-[124px] items-center justify-center rounded-xl border border-dashed transition-colors ${
-          isOver ? "border-cyan-400 bg-cyan-500/10" : "border-white/[0.12] bg-white/[0.03]"
-        }`}
-      >
-        <div className="text-center">
-          <p className="text-xs font-medium text-slate-400">Slot vazio</p>
-          <p className="mt-1 text-[10px] text-slate-500">Solte um periférico aqui</p>
-        </div>
-      </div>
-    )
-  }
+function DroppableUnassignedPool({
+  items,
+  onDelete,
+  isDragging,
+}: {
+  items: Peripheral[]
+  onDelete: (id: string) => void
+  isDragging: boolean
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: "unassigned-pool" })
+  const { locale } = useLocale()
+  const isEnglish = locale === "en-US"
 
   return (
-    <div ref={setNodeRef} className={`relative group ${isOver ? "ring-2 ring-cyan-400/70 ring-offset-0" : ""}`}>
-      <Card className="border border-white/[0.08] bg-[#0a0e17]/95 p-0 shadow-lg hover:border-white/[0.12] hover:bg-[#0a0e17]/95 transition-all">
-        <CardContent className="p-3">
-          <div className="flex gap-2 items-start">
-            <div className={`grid size-10 shrink-0 place-items-center rounded-lg overflow-hidden text-xs font-bold ${(item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L).bg} ${(item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L).text}`}>
-              {item.image_url ? (
-                <Image
-                  src={item.image_url}
-                  alt={item.name}
-                  width={40}
-                  height={40}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                item.brand.slice(0, 2).toUpperCase()
-              )}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-xs font-bold text-slate-100">{item.name}</p>
-              <p className="text-[9px] text-slate-500">{item.brand}</p>
-              <p className="mt-1 text-[10px] font-semibold text-slate-500">Sem tags</p>
-            </div>
-
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 px-2 text-xs border-white/[0.08] hover:border-white/[0.12] hover:bg-white/[0.05]"
-              onClick={() => onDelete(item.id)}
-            >
-              Remover
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+    <div
+      ref={setNodeRef}
+      className={cn("transition-colors duration-150", isOver && "bg-amber-500/5")}
+    >
+      {items.length > 0 ? (
+        <div className="grid gap-2 p-3 [grid-template-columns:repeat(auto-fill,minmax(220px,1fr))]">
+          {items.map((item) => (
+            <DraggablePeripheralCard key={item.id} item={item} onDelete={onDelete} />
+          ))}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "m-3 flex min-h-[72px] items-center justify-center rounded-lg border-2 border-dashed transition-all duration-200",
+            isOver
+              ? "border-amber-400 bg-amber-500/10"
+              : isDragging
+                ? "border-amber-500/40 bg-amber-500/5"
+                : "border-white/[0.06]"
+          )}
+        >
+          <p
+            className={cn(
+              "text-xs font-medium transition-colors duration-150",
+              isOver ? "text-amber-300" : isDragging ? "text-amber-400/70" : "text-slate-600"
+            )}
+          >
+            {isOver
+              ? (isEnglish ? "Release to remove tier" : "Solte para remover o tier")
+              : isDragging
+                ? (isEnglish ? "Drop here to remove tier" : "Solte aqui para remover o tier")
+                : (isEnglish ? "No peripherals without tier" : "Nenhum periférico sem tier")}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -525,11 +533,7 @@ export default function AdminPeripheralsPage() {
   const [error, setError] = useState<string | null>(null)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
   const [deleting, setDeleting] = useState(false)
-  const [tagsDialog, setTagsDialog] = useState<{ open: boolean; item: Peripheral | null }>({
-    open: false,
-    item: null,
-  })
-  const [selectedTag, setSelectedTag] = useState<Tag>("competitive")
+  const [activeId, setActiveId] = useState<string | null>(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -561,7 +565,12 @@ export default function AdminPeripheralsPage() {
     loadPeripherals()
   }, [loadPeripherals])
 
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(event.active.id.toString())
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null)
     const { active, over } = event
 
     if (!over) return
@@ -572,7 +581,7 @@ export default function AdminPeripheralsPage() {
     const overId = over.id.toString()
     const specs = draggedItem.specs ?? {}
 
-    if (overId.startsWith("unassigned-")) {
+    if (overId === "unassigned-pool") {
       const nextPeripherals = peripherals.map((item) =>
         item.id === draggedItem.id
           ? {
@@ -685,35 +694,11 @@ export default function AdminPeripheralsPage() {
     }
   }
 
-  async function saveQuickTags() {
-    if (!tagsDialog.item) return
-
-    const itemId = tagsDialog.item.id
-
-    const nextPeripherals = peripherals.map((item) =>
-      item.id === itemId ? { ...item, tags: [selectedTag] } : item
-    )
-
-    setPeripherals(nextPeripherals)
-
-    try {
-      const { error: err } = await supabase
-        .from("peripherals")
-        .update({ tags: [selectedTag] })
-        .eq("id", itemId)
-
-      if (err) throw err
-      setTagsDialog({ open: false, item: null })
-    } catch (err) {
-      setPeripherals(peripherals)
-      setError(err instanceof Error ? err.message : (isEnglish ? "Failed to save tags" : "Erro ao salvar tags"))
-    }
-  }
-
   const selectedCategoryMeta = CATEGORY_META.find((c) => c.key === selectedCategory)
   const categoryLabel = selectedCategoryMeta ? (isEnglish ? selectedCategoryMeta.en : selectedCategoryMeta.pt) : "Tierlist"
   const filtered = peripherals.filter((item) => item.category === selectedCategory)
   const unassignedItems = filtered.filter((item) => item.tier === null)
+  const activeItem = activeId ? peripherals.find((p) => p.id === activeId) ?? null : null
   const modeConfig = MODE_CONFIGS[ratingMode]
   const modeDescription = isEnglish ? modeConfig.enDescription : modeConfig.ptDescription
 
@@ -800,82 +785,75 @@ export default function AdminPeripheralsPage() {
           <CardContent className="pt-6 text-center text-slate-400">{isEnglish ? "Loading..." : "Carregando..."}</CardContent>
         </Card>
       ) : (
-        <>
-          <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-            <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-card shadow-lg">
-
-              {itemsByTier.map((tierRow) => (
-                <div
-                  key={tierRow.key}
-                  className="grid border-b border-white/[0.08] last:border-b-0"
-                  style={{
-                    gridTemplateColumns: `70px repeat(${modeConfig.columns.length}, minmax(220px, 1fr))`,
-                  }}
-                >
-                  {/* Tier Label */}
-                  <div className={`flex items-center justify-center bg-gradient-to-b ${tierRow.accent} text-2xl font-black ${tierRow.textColor}`}>
-                    {tierRow.label}
-                  </div>
-
-                  {/* Columns */}
-                  {tierRow.itemsByColumn.map((column) => (
-                    <div
-                      key={`${tierRow.key}-${column.key}`}
-                      data-drop-zone={`${tierRow.key}-${column.key}`}
-                    >
-                      <DroppableColumn
-                        tier={tierRow.key}
-                        column={column.key}
-                        items={column.items}
-                        onDelete={(id) => setDeleteDialog({ open: true, id })}
-                      />
-                    </div>
-                  ))}
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-card shadow-lg">
+            {itemsByTier.map((tierRow) => (
+              <div
+                key={tierRow.key}
+                className="grid border-b border-white/[0.08] last:border-b-0"
+                style={{
+                  gridTemplateColumns: `70px repeat(${modeConfig.columns.length}, minmax(220px, 1fr))`,
+                }}
+              >
+                <div className={`flex items-center justify-center bg-gradient-to-b ${tierRow.accent} text-2xl font-black ${tierRow.textColor}`}>
+                  {tierRow.label}
                 </div>
-              ))}
-            </section>
-          </DndContext>
 
-          {/* Periféricos sem tier */}
-          <div className="mt-6 space-y-3">
-            <Alert className="border-amber-500/30 bg-amber-500/10">
-              <AlertCircle className="size-3.5 text-amber-400" />
-              <AlertDescription className="text-xs leading-5 text-amber-300">
-                ⚠️ {unassignedItems.length} {isEnglish ? "peripheral(s) without tier. Drag them to a tier when you want to rank them." : "periférico(s) sem tier. Arraste para um tier quando quiser ranqueá-los."}
-              </AlertDescription>
-            </Alert>
+                {tierRow.itemsByColumn.map((column) => (
+                  <div
+                    key={`${tierRow.key}-${column.key}`}
+                    data-drop-zone={`${tierRow.key}-${column.key}`}
+                  >
+                    <DroppableColumn
+                      tier={tierRow.key}
+                      column={column.key}
+                      items={column.items}
+                      onDelete={(id) => setDeleteDialog({ open: true, id })}
+                      isDragging={activeId !== null}
+                    />
+                  </div>
+                ))}
+              </div>
+            ))}
+          </section>
 
-            <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-[#05070d] shadow-lg">
-              <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
+          <div
+            className={cn(
+              "mt-6 overflow-hidden rounded-xl border bg-[#05070d] shadow-lg transition-colors duration-200",
+              unassignedItems.length > 0 ? "border-amber-500/20" : activeId ? "border-amber-500/20" : "border-white/[0.08]"
+            )}
+          >
+            <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
+              <div className="flex items-center gap-3">
+                {unassignedItems.length > 0 && <AlertCircle className="size-4 text-amber-400" />}
                 <div>
-                  <p className="text-sm font-semibold text-slate-100">
+                  <p className={cn("text-sm font-semibold", unassignedItems.length > 0 ? "text-amber-300" : "text-slate-400")}>
                     {isEnglish ? "No tier peripherals" : "Periféricos sem tier"}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {isEnglish ? "Visible only in the admin editor." : "Visível apenas no editor admin."}
+                    {unassignedItems.length > 0
+                      ? (isEnglish ? "Drag to a tier row to rank them" : "Arraste para um tier para ranqueá-los")
+                      : (isEnglish ? "Drop a peripheral here to remove its tier" : "Solte um periférico aqui para remover o tier")}
                   </p>
                 </div>
-                <p className="text-xs text-slate-500">
-                  {unassignedItems.length}/{UNASSIGNED_SLOT_COUNT} {isEnglish ? "filled" : "ocupados"}
-                </p>
               </div>
-
-              <div className="grid gap-3 p-4 [grid-template-columns:repeat(auto-fill,minmax(148px,1fr))]">
-                {Array.from({ length: Math.max(UNASSIGNED_SLOT_COUNT, unassignedItems.length) }).map((_, index) => (
-                  <UnassignedSlot
-                    key={`slot-${index}`}
-                    index={index}
-                    item={unassignedItems[index]}
-                    onDelete={(id) => {
-                      const item = peripherals.find((peripheral) => peripheral.id === id)
-                      if (item) setTagsDialog({ open: true, item })
-                    }}
-                  />
-                ))}
-              </div>
+              {unassignedItems.length > 0 && (
+                <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-400">
+                  {unassignedItems.length} {isEnglish ? "items" : "itens"}
+                </span>
+              )}
             </div>
+            <DroppableUnassignedPool
+              items={unassignedItems}
+              onDelete={(id) => setDeleteDialog({ open: true, id })}
+              isDragging={activeId !== null}
+            />
           </div>
-        </>
+
+          <DragOverlay dropAnimation={null}>
+            {activeItem ? <DragOverlayCard item={activeItem} /> : null}
+          </DragOverlay>
+        </DndContext>
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -906,53 +884,7 @@ export default function AdminPeripheralsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Quick Tags Dialog */}
-      <Dialog
-        open={tagsDialog.open}
-        onOpenChange={(open) => !open && setTagsDialog({ open: false, item: null })}
-      >
-        <DialogContent className="border border-white/[0.12] bg-[#0a0e17]/95">
-          <DialogHeader>
-            <DialogTitle>{isEnglish ? "Add Tags" : "Adicionar Tags"}</DialogTitle>
-            <DialogDescription>
-              {isEnglish ? "Select tags for" : "Selecione as tags para"} {tagsDialog.item?.name}
-            </DialogDescription>
-          </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300">{isEnglish ? "Primary tag" : "Tag principal"}</label>
-              <Select value={selectedTag} onValueChange={(value) => setSelectedTag(value as Tag)}>
-                <SelectTrigger className="border-white/10 bg-white/5">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TAGS_OPTIONS.map((tag) => (
-                    <SelectItem key={tag} value={tag}>
-                      {tag.charAt(0).toUpperCase() + tag.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-xs text-slate-400">
-              {isEnglish ? "The card will appear in a single column to avoid duplication." : "O card vai aparecer em uma única coluna para evitar duplicação."}
-            </p>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setTagsDialog({ open: false, item: null })}
-            >
-              {isEnglish ? "Cancel" : "Cancelar"}
-            </Button>
-            <Button onClick={saveQuickTags}>
-              {isEnglish ? "Save Tags" : "Salvar Tags"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Total */}
       <div className="text-sm text-slate-400 text-center">

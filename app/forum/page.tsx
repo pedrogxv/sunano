@@ -125,142 +125,129 @@ export default function ForumPage() {
   const postItems = useMemo(() => posts, [posts])
 
   return (
-    <div className="min-h-screen bg-background pt-16 text-slate-100">
-      <div className="flex">
-        <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
-          <PublicSidebar />
-        </div>
 
-        <main className="min-w-0 flex-1">
-          <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
+      <div className="space-y-2">
+        <h1 className="font-display text-3xl font-bold tracking-tight text-slate-50 md:text-4xl">
+          {isEnglish ? "Community Forum" : "Forum da comunidade"}
+        </h1>
+        <p className="text-sm text-slate-400">
+          {isEnglish
+            ? "Share tips, ask for help, and discuss peripherals."
+            : "Compartilhe dicas, tire duvidas e discuta periféricos."}
+        </p>
+      </div>
+
+      <Card className="border-border bg-card">
+        <CardHeader className="space-y-1">
+          <CardTitle className="flex items-center gap-2 text-base text-slate-50">
+            <Plus className="size-4 text-cyan-300" />
+            {isEnglish ? "Start a new topic" : "Criar novo topico"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {formError ? (
+            <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
+              <AlertDescription className="text-xs leading-5 text-red-200">{formError}</AlertDescription>
+            </Alert>
+          ) : null}
+
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <h1 className="font-display text-3xl font-bold tracking-tight text-slate-50 md:text-4xl">
-                {isEnglish ? "Community Forum" : "Forum da comunidade"}
-              </h1>
-              <p className="text-sm text-slate-400">
-                {isEnglish
-                  ? "Share tips, ask for help, and discuss peripherals." 
-                  : "Compartilhe dicas, tire duvidas e discuta periféricos."}
-              </p>
+              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {isEnglish ? "Your name" : "Seu nome"}
+              </label>
+              <Input
+                value={authorName}
+                onChange={(event) => setAuthorName(event.target.value)}
+                className="border-white/10 bg-white/[0.03] text-slate-100"
+                placeholder={isEnglish ? "Ex: Ana" : "Ex: Ana"}
+              />
             </div>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                {isEnglish ? "Email (optional)" : "Email (opcional)"}
+              </label>
+              <Input
+                value={authorEmail}
+                onChange={(event) => setAuthorEmail(event.target.value)}
+                className="border-white/10 bg-white/[0.03] text-slate-100"
+                placeholder="email@exemplo.com"
+              />
+            </div>
+          </div>
 
-            <Card className="border-border bg-card">
-              <CardHeader className="space-y-1">
-                <CardTitle className="flex items-center gap-2 text-base text-slate-50">
-                  <Plus className="size-4 text-cyan-300" />
-                  {isEnglish ? "Start a new topic" : "Criar novo topico"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {formError ? (
-                  <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-                    <AlertDescription className="text-xs leading-5 text-red-200">{formError}</AlertDescription>
-                  </Alert>
-                ) : null}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {isEnglish ? "Title" : "Titulo"}
+            </label>
+            <Input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              className="border-white/10 bg-white/[0.03] text-slate-100"
+              placeholder={isEnglish ? "Ex: Best wireless mouse under $100" : "Ex: Melhor mouse sem fio ate R$500"}
+            />
+          </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      {isEnglish ? "Your name" : "Seu nome"}
-                    </label>
-                    <Input
-                      value={authorName}
-                      onChange={(event) => setAuthorName(event.target.value)}
-                      className="border-white/10 bg-white/[0.03] text-slate-100"
-                      placeholder={isEnglish ? "Ex: Ana" : "Ex: Ana"}
-                    />
+          <div className="space-y-2">
+            <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              {isEnglish ? "Message" : "Mensagem"}
+            </label>
+            <Textarea
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
+              className="min-h-[140px] border-white/10 bg-white/[0.03] text-slate-100"
+              placeholder={isEnglish ? "Tell us what you need..." : "Conte o que voce precisa..."}
+            />
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={submitPost} disabled={saving}>
+              {saving ? (isEnglish ? "Publishing..." : "Publicando...") : (isEnglish ? "Publish" : "Publicar")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {error ? (
+        <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
+          <AlertDescription className="text-xs leading-5 text-red-200">{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {loading ? (
+        <div className="text-sm text-slate-400">{isEnglish ? "Loading forum..." : "Carregando forum..."}</div>
+      ) : postItems.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card p-10 text-center">
+          <p className="text-slate-300">{isEnglish ? "No topics yet." : "Nenhum topico ainda."}</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {postItems.map((post) => (
+            <Card key={post.id} className="border-border bg-card">
+              <CardContent className="space-y-3 p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <Link href={`/forum/${post.slug}`} className="text-base font-semibold text-slate-50 hover:text-cyan-200">
+                      {post.title}
+                    </Link>
+                    <p className="text-xs text-slate-500">
+                      {format(new Date(post.created_at), "PPp", { locale: dateLocale })} · {post.author_name}
+                    </p>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                      {isEnglish ? "Email (optional)" : "Email (opcional)"}
-                    </label>
-                    <Input
-                      value={authorEmail}
-                      onChange={(event) => setAuthorEmail(event.target.value)}
-                      className="border-white/10 bg-white/[0.03] text-slate-100"
-                      placeholder="email@exemplo.com"
-                    />
+                  <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 py-1 text-xs text-slate-300">
+                    <MessageCircle className="size-3" />
+                    {post.comment_count}
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {isEnglish ? "Title" : "Titulo"}
-                  </label>
-                  <Input
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                    className="border-white/10 bg-white/[0.03] text-slate-100"
-                    placeholder={isEnglish ? "Ex: Best wireless mouse under $100" : "Ex: Melhor mouse sem fio ate R$500"}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    {isEnglish ? "Message" : "Mensagem"}
-                  </label>
-                  <Textarea
-                    value={body}
-                    onChange={(event) => setBody(event.target.value)}
-                    className="min-h-[140px] border-white/10 bg-white/[0.03] text-slate-100"
-                    placeholder={isEnglish ? "Tell us what you need..." : "Conte o que voce precisa..."}
-                  />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={submitPost} disabled={saving}>
-                    {saving ? (isEnglish ? "Publishing..." : "Publicando...") : (isEnglish ? "Publish" : "Publicar")}
-                  </Button>
-                </div>
+                <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">
+                  {post.body}
+                </p>
               </CardContent>
             </Card>
-
-            {error ? (
-              <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-                <AlertDescription className="text-xs leading-5 text-red-200">{error}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {loading ? (
-              <div className="text-sm text-slate-400">{isEnglish ? "Loading forum..." : "Carregando forum..."}</div>
-            ) : postItems.length === 0 ? (
-              <div className="rounded-2xl border border-border bg-card p-10 text-center">
-                <p className="text-slate-300">{isEnglish ? "No topics yet." : "Nenhum topico ainda."}</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {postItems.map((post) => (
-                  <Card key={post.id} className="border-border bg-card">
-                    <CardContent className="space-y-3 p-5">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="space-y-1">
-                          <Link href={`/forum/${post.slug}`} className="text-base font-semibold text-slate-50 hover:text-cyan-200">
-                            {post.title}
-                          </Link>
-                          <p className="text-xs text-slate-500">
-                            {format(new Date(post.created_at), "PPp", { locale: dateLocale })} · {post.author_name}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 py-1 text-xs text-slate-300">
-                          <MessageCircle className="size-3" />
-                          {post.comment_count}
-                        </div>
-                      </div>
-                      <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">
-                        {post.body}
-                      </p>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </div>
-        </main>
-
-        <div className="md:hidden">
-          <PublicSidebar />
+          ))}
         </div>
-      </div>
+      )}
     </div>
   )
 }

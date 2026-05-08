@@ -2,11 +2,12 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { BarChart3, ChevronLeft, ChevronRight, Eye, Gift, Home, LogOut, Menu, NotebookPen, Package, Settings, Users, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Eye, Gift, Home, LogOut, Menu, NotebookPen, Package, Settings, Users, X } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { logoutAction } from "@/app/admin/actions"
 import { Button } from "@/components/ui/button"
+import { useSidebar } from "@/lib/sidebar-context"
 import { useLocale } from "@/lib/locale-context"
 import { cn } from "@/lib/utils"
 import { hasAdminPermission, type AdminPermissionKey, type AdminProfile, isWebMaster } from "@/lib/admin-permissions"
@@ -16,7 +17,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const isEnglish = locale === "en-US"
   const pathname = usePathname()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const { adminCollapsed: isCollapsed, toggleAdmin: toggleCollapsed } = useSidebar()
   const [profile, setProfile] = useState<AdminProfile | null>(null)
 
   const navItems = [
@@ -69,18 +70,18 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   })
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <div className={cn("flex min-h-screen pt-16", isCollapsed ? "md:pl-16" : "md:pl-64")}>
+    <div className="min-h-screen text-foreground">
+      <div className={cn("flex min-h-screen ", isCollapsed ? "md:pl-16" : "md:pl-64")}>
         {isMobileMenuOpen && (
           <div
-            className="fixed inset-0 top-16 z-30 bg-black/60 backdrop-blur-sm md:hidden"
+            className="fixed inset-0 top-16 z-30  backdrop-blur-sm md:hidden"
             onClick={() => setIsMobileMenuOpen(false)}
           />
         )}
 
         <aside
           className={cn(
-            "fixed left-0 top-16 z-40 flex h-[calc(100vh-4rem)] shrink-0 flex-col border-r border-border bg-card transition-all duration-300 md:translate-x-0",
+            "fixed left-0 top-16 z-40 flex h-[calc(100vh-4rem)] shrink-0 flex-col transition-all duration-300 md:translate-x-0",
             isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
             isCollapsed ? "md:w-16" : "md:w-64"
           )}
@@ -88,8 +89,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div className={cn("flex items-center justify-end px-3 pt-4", isCollapsed && "justify-center")}>
             <button
               type="button"
-              onClick={() => setIsCollapsed((prev) => !prev)}
-              className="hidden md:flex size-8 items-center justify-center rounded-full border border-border bg-muted/40 text-foreground transition hover:bg-muted/60"
+              onClick={toggleCollapsed}
+              className="hidden md:flex size-8 items-center justify-center rounded-full  bg-muted/40 text-foreground transition hover:bg-muted/60"
               aria-label={isCollapsed ? "Expandir sidebar" : "Recolher sidebar"}
               title={isCollapsed ? "Expandir" : "Recolher"}
             >
@@ -123,7 +124,6 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               })}
             </div>
 
-            <div className="my-4 h-px bg-border" />
 
             <div className="space-y-1">
               <p className={cn("mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground", isCollapsed && "hidden")}>
@@ -156,7 +156,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </div>
           </nav>
 
-          <div className="border-t border-border px-4 py-3">
+          <div className="px-4 py-3">
             <p className={cn("text-[10px] text-muted-foreground", isCollapsed && "hidden")}>Sunano Admin v1.0</p>
           </div>
         </aside>
@@ -168,7 +168,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         </main>
 
         <Button
-          className="fixed bottom-4 right-4 z-50 flex size-12 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-lg hover:bg-muted/40 md:hidden"
+          className="fixed bottom-4 right-4 z-50 flex size-12 items-center justify-center rounded-full bg-card text-foreground shadow-lg hover:bg-muted/40 md:hidden"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           size="icon"
         >

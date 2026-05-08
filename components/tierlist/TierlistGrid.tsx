@@ -272,10 +272,10 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
     },
   ]
 
-  const ratingModes: { key: RatingMode; label: string }[] = [
-    { key: "performance", label: isEnglish ? "Performance" : "Performance" },
-    { key: "value", label: isEnglish ? "Value" : "Custo-Beneficio" },
-    { key: "recommended", label: isEnglish ? "Recommended" : "Recomendado" },
+  const ratingModes: { key: RatingMode; label: string; color: string }[] = [
+    { key: "performance", label: isEnglish ? "Performance" : "Performance", color: "bg-red-400" },
+    { key: "value", label: isEnglish ? "Value" : "Custo-Beneficio", color: "bg-emerald-400" },
+    { key: "recommended", label: isEnglish ? "Recommended" : "Recomendado", color: "bg-purple-400" },
   ]
 
   const localizedModeDescription =
@@ -339,8 +339,8 @@ export function TierlistGrid({ filtered }: TierlistGridProps) {
               className={cn(
                 "rounded-md px-4 py-2 text-sm font-medium transition-all",
                 ratingMode === mode.key
-                  ? "bg-primary/20 text-primary"
-                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                  ? `bg-primary/20 text-primary ${mode.color}`
+                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
               )}
               type="button"
             >

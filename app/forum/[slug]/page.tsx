@@ -133,137 +133,125 @@ export default function ForumPostPage() {
   const dateLocale = isEnglish ? enUS : ptBR
 
   return (
-    <div className="min-h-screen bg-background pt-16 text-slate-100">
-      <div className="flex">
-        <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
-          <PublicSidebar />
-        </div>
 
-        <main className="min-w-0 flex-1">
-          <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
-            <Button asChild variant="ghost" className="gap-2 text-slate-300 hover:text-slate-50">
-              <Link href="/forum">
-                <ChevronLeft className="size-4" />
-                {isEnglish ? "Back to forum" : "Voltar ao forum"}
-              </Link>
-            </Button>
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
+      <Button asChild variant="ghost" className="gap-2 text-slate-300 hover:text-slate-50">
+        <Link href="/forum">
+          <ChevronLeft className="size-4" />
+          {isEnglish ? "Back to forum" : "Voltar ao forum"}
+        </Link>
+      </Button>
 
-            {error ? (
-              <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-                <AlertDescription className="text-xs leading-5 text-red-200">{error}</AlertDescription>
-              </Alert>
-            ) : null}
+      {error ? (
+        <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
+          <AlertDescription className="text-xs leading-5 text-red-200">{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-            {loading ? (
-              <div className="text-sm text-slate-400">{isEnglish ? "Loading post..." : "Carregando post..."}</div>
-            ) : post ? (
-              <>
-                <Card className="border-border bg-card">
-                  <CardHeader className="space-y-2">
-                    <CardTitle className="text-2xl text-slate-50">{post.title}</CardTitle>
-                    <p className="text-xs text-slate-500">
-                      {format(new Date(post.created_at), "PPp", { locale: dateLocale })} · {post.author_name}
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{post.body}</p>
-                  </CardContent>
-                </Card>
+      {loading ? (
+        <div className="text-sm text-slate-400">{isEnglish ? "Loading post..." : "Carregando post..."}</div>
+      ) : post ? (
+        <>
+          <Card className="border-border bg-card">
+            <CardHeader className="space-y-2">
+              <CardTitle className="text-2xl text-slate-50">{post.title}</CardTitle>
+              <p className="text-xs text-slate-500">
+                {format(new Date(post.created_at), "PPp", { locale: dateLocale })} · {post.author_name}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{post.body}</p>
+            </CardContent>
+          </Card>
 
-                <Card className="border-border bg-card">
-                  <CardHeader className="space-y-1">
-                    <CardTitle className="flex items-center gap-2 text-base text-slate-50">
-                      <MessageCircle className="size-4 text-cyan-300" />
-                      {isEnglish ? "Comments" : "Comentarios"} ({comments.length})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {comments.length === 0 ? (
-                      <p className="text-sm text-slate-400">{isEnglish ? "No comments yet." : "Nenhum comentario ainda."}</p>
-                    ) : (
-                      <div className="space-y-4">
-                        {comments.map((comment) => (
-                          <div key={comment.id} className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
-                            <p className="text-xs text-slate-500">
-                              {format(new Date(comment.created_at), "PPp", { locale: dateLocale })} · {comment.author_name}
-                            </p>
-                            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{comment.body}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-border bg-card">
-                  <CardHeader className="space-y-1">
-                    <CardTitle className="text-base text-slate-50">
-                      {post.is_locked ? (isEnglish ? "Comments closed" : "Comentarios fechados") : (isEnglish ? "Leave a comment" : "Deixe um comentario")}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {formError ? (
-                      <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-                        <AlertDescription className="text-xs leading-5 text-red-200">{formError}</AlertDescription>
-                      </Alert>
-                    ) : null}
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          {isEnglish ? "Your name" : "Seu nome"}
-                        </label>
-                        <Input
-                          value={authorName}
-                          onChange={(event) => setAuthorName(event.target.value)}
-                          className="border-white/10 bg-white/[0.03] text-slate-100"
-                          placeholder={isEnglish ? "Ex: Ana" : "Ex: Ana"}
-                          disabled={post.is_locked}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                          {isEnglish ? "Email (optional)" : "Email (opcional)"}
-                        </label>
-                        <Input
-                          value={authorEmail}
-                          onChange={(event) => setAuthorEmail(event.target.value)}
-                          className="border-white/10 bg-white/[0.03] text-slate-100"
-                          placeholder="email@exemplo.com"
-                          disabled={post.is_locked}
-                        />
-                      </div>
+          <Card className="border-border bg-card">
+            <CardHeader className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-base text-slate-50">
+                <MessageCircle className="size-4 text-cyan-300" />
+                {isEnglish ? "Comments" : "Comentarios"} ({comments.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {comments.length === 0 ? (
+                <p className="text-sm text-slate-400">{isEnglish ? "No comments yet." : "Nenhum comentario ainda."}</p>
+              ) : (
+                <div className="space-y-4">
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+                      <p className="text-xs text-slate-500">
+                        {format(new Date(comment.created_at), "PPp", { locale: dateLocale })} · {comment.author_name}
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm text-slate-200">{comment.body}</p>
                     </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                        {isEnglish ? "Message" : "Mensagem"}
-                      </label>
-                      <Textarea
-                        value={body}
-                        onChange={(event) => setBody(event.target.value)}
-                        className="min-h-[120px] border-white/10 bg-white/[0.03] text-slate-100"
-                        placeholder={isEnglish ? "Write your comment..." : "Escreva seu comentario..."}
-                        disabled={post.is_locked}
-                      />
-                    </div>
+          <Card className="border-border bg-card">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-base text-slate-50">
+                {post.is_locked ? (isEnglish ? "Comments closed" : "Comentarios fechados") : (isEnglish ? "Leave a comment" : "Deixe um comentario")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {formError ? (
+                <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
+                  <AlertDescription className="text-xs leading-5 text-red-200">{formError}</AlertDescription>
+                </Alert>
+              ) : null}
 
-                    <div className="flex justify-end">
-                      <Button onClick={submitComment} disabled={saving || post.is_locked}>
-                        {saving ? (isEnglish ? "Sending..." : "Enviando...") : (isEnglish ? "Send comment" : "Enviar comentario")}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            ) : null}
-          </div>
-        </main>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    {isEnglish ? "Your name" : "Seu nome"}
+                  </label>
+                  <Input
+                    value={authorName}
+                    onChange={(event) => setAuthorName(event.target.value)}
+                    className="border-white/10 bg-white/[0.03] text-slate-100"
+                    placeholder={isEnglish ? "Ex: Ana" : "Ex: Ana"}
+                    disabled={post.is_locked}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    {isEnglish ? "Email (optional)" : "Email (opcional)"}
+                  </label>
+                  <Input
+                    value={authorEmail}
+                    onChange={(event) => setAuthorEmail(event.target.value)}
+                    className="border-white/10 bg-white/[0.03] text-slate-100"
+                    placeholder="email@exemplo.com"
+                    disabled={post.is_locked}
+                  />
+                </div>
+              </div>
 
-        <div className="md:hidden">
-          <PublicSidebar />
-        </div>
-      </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  {isEnglish ? "Message" : "Mensagem"}
+                </label>
+                <Textarea
+                  value={body}
+                  onChange={(event) => setBody(event.target.value)}
+                  className="min-h-[120px] border-white/10 bg-white/[0.03] text-slate-100"
+                  placeholder={isEnglish ? "Write your comment..." : "Escreva seu comentario..."}
+                  disabled={post.is_locked}
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button onClick={submitComment} disabled={saving || post.is_locked}>
+                  {saving ? (isEnglish ? "Sending..." : "Enviando...") : (isEnglish ? "Send comment" : "Enviar comentario")}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      ) : null}
     </div>
+
   )
 }

@@ -9,7 +9,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     pathname === "/admin/login" ? (
-      <div className="min-h-screen bg-background text-foreground pt-16">{children}</div>
+      <div className="min-h-screen bg-background text-foreground ">{children}</div>
     ) : (
       <AdminShell>{children}</AdminShell>
     )

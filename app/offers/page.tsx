@@ -98,10 +98,10 @@ export default function OffersPage() {
         current.map((offer) =>
           offer.id === offerId
             ? {
-                ...offer,
-                votes_working: offer.user_voted ? offer.votes_working : offer.votes_working + 1,
-                user_voted: true,
-              }
+              ...offer,
+              votes_working: offer.user_voted ? offer.votes_working : offer.votes_working + 1,
+              user_voted: true,
+            }
             : offer
         )
       )
@@ -130,159 +130,146 @@ export default function OffersPage() {
   const dateFormat = isEnglish ? "MMMM dd, yyyy HH:mm" : "dd 'de' MMMM 'de' yyyy 'às' HH:mm"
 
   return (
-    <div className="min-h-screen bg-background pt-16 text-slate-100">
-      <div className="flex">
-        <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
-          <PublicSidebar />
-        </div>
 
-        <main className="min-w-0 flex-1">
-          <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
-            <div className="space-y-2">
-              <h1 className="font-display text-3xl font-bold tracking-tight text-slate-50 md:text-4xl">
-                {isEnglish ? "Offers from Telegram" : "Ofertas via Telegram"}
-              </h1>
-              <p className="text-sm text-slate-400">
-                {isEnglish
-                  ? "Latest public group messages published as offers."
-                  : "Últimas mensagens do grupo público publicadas como ofertas."}
-              </p>
-            </div>
-
-            <Alert className="border-amber-500/30 bg-amber-500/10 py-2.5 [&>svg]:left-3 [&>svg~*]:pl-7">
-              <AlertCircle className="size-3.5 text-amber-300" />
-              <AlertDescription className="text-xs leading-5 text-amber-200">
-                <strong>{isEnglish ? "Disclaimer:" : "Isenção:"}</strong>{" "}
-                {isEnglish
-                  ? "Messages are published by third parties and may change at any time."
-                  : "As mensagens são publicadas por terceiros e podem mudar a qualquer momento."}
-              </AlertDescription>
-            </Alert>
-
-            {error ? (
-              <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-                <AlertCircle className="size-3.5 text-red-300" />
-                <AlertDescription className="text-xs leading-5 text-red-200">{error}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {warning ? (
-              <Alert className="border-amber-500/30 bg-amber-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-                <AlertCircle className="size-3.5 text-amber-300" />
-                <AlertDescription className="text-xs leading-5 text-amber-200">{warning}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            {voteError ? (
-              <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-                <AlertCircle className="size-3.5 text-red-300" />
-                <AlertDescription className="text-xs leading-5 text-red-200">{voteError}</AlertDescription>
-              </Alert>
-            ) : null}
-
-            <div className="rounded-xl border border-border bg-card p-4">
-              <p className="mb-2 text-xs font-medium text-slate-400">{isEnglish ? "Search messages" : "Buscar mensagens"}</p>
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder={isEnglish ? "Search by text or author" : "Buscar por texto ou autor"}
-                className="border-white/10 bg-white/[0.03] text-slate-100 placeholder:text-slate-500"
-              />
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-14">
-                <div className="flex items-center gap-3 text-slate-400">
-                  <Loader2 className="size-5 animate-spin" />
-                  <span>{isEnglish ? "Loading Telegram offers..." : "Carregando ofertas do Telegram..."}</span>
-                </div>
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="rounded-2xl border border-border bg-card p-10 text-center">
-                <p className="text-slate-300">{isEnglish ? "No messages found." : "Nenhuma mensagem encontrada."}</p>
-              </div>
-            ) : (
-              <>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {pageItems.map((offer) => (
-                    <Card key={offer.id} className="flex h-full flex-col border-border bg-card">
-                      <CardHeader className="space-y-2 pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <CardTitle className="line-clamp-2 text-base text-slate-50">
-                            {offer.chatTitle || (isEnglish ? "Telegram Offer" : "Oferta Telegram")}
-                          </CardTitle>
-                          <MessageCircle className="size-4 text-cyan-300" />
-                        </div>
-                        <p className="text-xs text-slate-500">
-                          {format(new Date(offer.date), dateFormat, { locale: dateLocale })}
-                          {offer.author ? ` · ${offer.author}` : ""}
-                        </p>
-                      </CardHeader>
-                      <CardContent className="flex flex-1 flex-col gap-4">
-                        <p className="line-clamp-8 whitespace-pre-wrap text-sm leading-6 text-slate-200">{offer.text}</p>
-                        <div className="mt-auto space-y-3">
-                          <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
-                            <span>{isEnglish ? "It worked" : "Ta funcionando"}</span>
-                            <span className="text-sm font-semibold text-emerald-100">{offer.votes_working}</span>
-                          </div>
-                          <Button
-                            className="w-full"
-                            size="sm"
-                            variant={offer.user_voted ? "outline" : "default"}
-                            onClick={() => voteOffer(offer.id)}
-                            disabled={offer.user_voted || votingId === offer.id}
-                          >
-                            <CheckCircle2 className="mr-2 size-4" />
-                            {offer.user_voted
-                              ? (isEnglish ? "Thanks for confirming" : "Obrigado por confirmar")
-                              : (isEnglish ? "Vote: It worked" : "Votar: Ta funcionando")}
-                          </Button>
-                          {offer.url ? (
-                            <a href={offer.url} target="_blank" rel="noopener noreferrer" className="block">
-                              <Button className="w-full" size="sm" variant="outline">
-                                <ExternalLink className="mr-2 size-4" />
-                                {isEnglish ? "Open in Telegram" : "Abrir no Telegram"}
-                              </Button>
-                            </a>
-                          ) : null}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                {totalPages > 1 ? (
-                  <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.07]"
-                      onClick={() => setPage(Math.max(1, safePage - 1))}
-                      disabled={safePage === 1}
-                    >
-                      {isEnglish ? "Previous" : "Anterior"}
-                    </Button>
-                    <span className="px-2 text-sm text-slate-400">
-                      {safePage} / {totalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.07]"
-                      onClick={() => setPage(Math.min(totalPages, safePage + 1))}
-                      disabled={safePage === totalPages}
-                    >
-                      {isEnglish ? "Next" : "Próxima"}
-                    </Button>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </div>
-        </main>
-
-        <div className="md:hidden">
-          <PublicSidebar />
-        </div>
+    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
+      <div className="space-y-2">
+        <h1 className="font-display text-3xl font-bold tracking-tight text-slate-50 md:text-4xl">
+          {isEnglish ? "Offers from Telegram" : "Ofertas via Telegram"}
+        </h1>
+        <p className="text-sm text-slate-400">
+          {isEnglish
+            ? "Latest public group messages published as offers."
+            : "Últimas mensagens do grupo público publicadas como ofertas."}
+        </p>
       </div>
+
+      <Alert className="border-amber-500/30 bg-amber-500/10 py-2.5 [&>svg]:left-3 [&>svg~*]:pl-7">
+        <AlertCircle className="size-3.5 text-amber-300" />
+        <AlertDescription className="text-xs leading-5 text-amber-200">
+          <strong>{isEnglish ? "Disclaimer:" : "Isenção:"}</strong>{" "}
+          {isEnglish
+            ? "Messages are published by third parties and may change at any time."
+            : "As mensagens são publicadas por terceiros e podem mudar a qualquer momento."}
+        </AlertDescription>
+      </Alert>
+
+      {error ? (
+        <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
+          <AlertCircle className="size-3.5 text-red-300" />
+          <AlertDescription className="text-xs leading-5 text-red-200">{error}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {warning ? (
+        <Alert className="border-amber-500/30 bg-amber-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
+          <AlertCircle className="size-3.5 text-amber-300" />
+          <AlertDescription className="text-xs leading-5 text-amber-200">{warning}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {voteError ? (
+        <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
+          <AlertCircle className="size-3.5 text-red-300" />
+          <AlertDescription className="text-xs leading-5 text-red-200">{voteError}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      <div className="rounded-xl border border-border bg-card p-4">
+        <p className="mb-2 text-xs font-medium text-slate-400">{isEnglish ? "Search messages" : "Buscar mensagens"}</p>
+        <Input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder={isEnglish ? "Search by text or author" : "Buscar por texto ou autor"}
+          className="border-white/10 bg-white/[0.03] text-slate-100 placeholder:text-slate-500"
+        />
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-14">
+          <div className="flex items-center gap-3 text-slate-400">
+            <Loader2 className="size-5 animate-spin" />
+            <span>{isEnglish ? "Loading Telegram offers..." : "Carregando ofertas do Telegram..."}</span>
+          </div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card p-10 text-center">
+          <p className="text-slate-300">{isEnglish ? "No messages found." : "Nenhuma mensagem encontrada."}</p>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {pageItems.map((offer) => (
+              <Card key={offer.id} className="flex h-full flex-col border-border bg-card">
+                <CardHeader className="space-y-2 pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="line-clamp-2 text-base text-slate-50">
+                      {offer.chatTitle || (isEnglish ? "Telegram Offer" : "Oferta Telegram")}
+                    </CardTitle>
+                    <MessageCircle className="size-4 text-cyan-300" />
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {format(new Date(offer.date), dateFormat, { locale: dateLocale })}
+                    {offer.author ? ` · ${offer.author}` : ""}
+                  </p>
+                </CardHeader>
+                <CardContent className="flex flex-1 flex-col gap-4">
+                  <p className="line-clamp-8 whitespace-pre-wrap text-sm leading-6 text-slate-200">{offer.text}</p>
+                  <div className="mt-auto space-y-3">
+                    <div className="flex items-center justify-between rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                      <span>{isEnglish ? "It worked" : "Ta funcionando"}</span>
+                      <span className="text-sm font-semibold text-emerald-100">{offer.votes_working}</span>
+                    </div>
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      variant={offer.user_voted ? "outline" : "default"}
+                      onClick={() => voteOffer(offer.id)}
+                      disabled={offer.user_voted || votingId === offer.id}
+                    >
+                      <CheckCircle2 className="mr-2 size-4" />
+                      {offer.user_voted
+                        ? (isEnglish ? "Thanks for confirming" : "Obrigado por confirmar")
+                        : (isEnglish ? "Vote: It worked" : "Votar: Ta funcionando")}
+                    </Button>
+                    {offer.url ? (
+                      <a href={offer.url} target="_blank" rel="noopener noreferrer" className="block">
+                        <Button className="w-full" size="sm" variant="outline">
+                          <ExternalLink className="mr-2 size-4" />
+                          {isEnglish ? "Open in Telegram" : "Abrir no Telegram"}
+                        </Button>
+                      </a>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {totalPages > 1 ? (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.07]"
+                onClick={() => setPage(Math.max(1, safePage - 1))}
+                disabled={safePage === 1}
+              >
+                {isEnglish ? "Previous" : "Anterior"}
+              </Button>
+              <span className="px-2 text-sm text-slate-400">
+                {safePage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                className="border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.07]"
+                onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                disabled={safePage === totalPages}
+              >
+                {isEnglish ? "Next" : "Próxima"}
+              </Button>
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   )
 }

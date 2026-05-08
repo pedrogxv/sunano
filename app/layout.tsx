@@ -1,11 +1,12 @@
+import "./globals.css"
+
 import type { Metadata, Viewport } from "next"
 import { Inter, Space_Grotesk } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { TopBar } from "@/components/layout/TopBar"
 import { LocaleProvider } from "@/lib/locale-context"
 import { ThemeProvider } from "@/lib/theme-context"
-
-import "./globals.css"
+import { SidebarProvider } from "@/lib/sidebar-context"
+import { LayoutShell } from "@/components/layout/LayoutShell"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -39,8 +40,11 @@ export default function RootLayout({
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans`}>
         <ThemeProvider>
           <LocaleProvider>
-            <TopBar />
-            <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
+            <SidebarProvider>
+              <TooltipProvider delayDuration={200}>
+                <LayoutShell>{children}</LayoutShell>
+              </TooltipProvider>
+            </SidebarProvider>
           </LocaleProvider>
         </ThemeProvider>
       </body>

@@ -77,14 +77,14 @@ export default function BlogPostPage() {
       let data: any
       let error: any
 
-      ;({ data, error } = await supabase
-        .from("blog_posts")
-        .select(
-          "id, title, slug, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, created_at, admin_profiles(display_name, avatar_url, email), peripherals(name, brand)"
-        )
-        .eq("slug", postSlug)
-        .eq("is_published", true)
-        .single())
+        ; ({ data, error } = await supabase
+          .from("blog_posts")
+          .select(
+            "id, title, slug, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, created_at, admin_profiles(display_name, avatar_url, email), peripherals(name, brand)"
+          )
+          .eq("slug", postSlug)
+          .eq("is_published", true)
+          .single())
 
       // If error, try without cover_thumbnail_url
       if (error) {
@@ -155,82 +155,71 @@ export default function BlogPostPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex pt-16">
-      {/* Sidebar */}
-      <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
-        <PublicSidebar
-          onCategoryChange={() => {}}
+
+    <div className="mx-auto max-w-4xl p-4 md:p-5 lg:p-6">
+      <Card className="overflow-hidden border-border bg-card/90 shadow-2xl shadow-black/20">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")}
+          alt={post.title}
+          className="h-72 w-full object-cover"
         />
-      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 min-w-0 md:pl-6">
-        <div className="mx-auto max-w-4xl p-4 md:p-5 lg:p-6">
-          <Card className="overflow-hidden border-border bg-card/90 shadow-2xl shadow-black/20">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")}
-              alt={post.title}
-              className="h-72 w-full object-cover"
-            />
+        <CardHeader className="space-y-3 border-b border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            {post.peripherals ? (
+              <Badge variant="secondary" className="bg-primary/15 text-primary">
+                {relatedPeripheral ? `${relatedPeripheral.brand} • ${relatedPeripheral.name}` : (isEnglish ? "No peripheral" : "Sem periférico")}
+              </Badge>
+            ) : null}
+            <Badge variant="outline" className="border-border bg-muted/40 text-muted-foreground">
+              {new Date(post.created_at).toLocaleDateString(locale)}
+            </Badge>
+          </div>
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <Avatar className="h-9 w-9 border border-border">
+              <AvatarImage src={authorAvatar} alt={authorName} />
+              <AvatarFallback>{authorName.slice(0, 1).toUpperCase()}</AvatarFallback>
+            </Avatar>
+            <p className="text-sm">
+              {isEnglish ? "By" : "Por"} <span className="font-semibold text-foreground">{authorName}</span>
+            </p>
+          </div>
+          <CardTitle className="text-3xl text-foreground md:text-4xl">{post.title}</CardTitle>
+          {post.excerpt ? <p className="max-w-2xl text-muted-foreground">{post.excerpt}</p> : null}
+        </CardHeader>
 
-            <CardHeader className="space-y-3 border-b border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] p-6">
-              <div className="flex flex-wrap items-center gap-2">
-                {post.peripherals ? (
-                  <Badge variant="secondary" className="bg-primary/15 text-primary">
-                    {relatedPeripheral ? `${relatedPeripheral.brand} • ${relatedPeripheral.name}` : (isEnglish ? "No peripheral" : "Sem periférico")}
-                  </Badge>
-                ) : null}
-                <Badge variant="outline" className="border-border bg-muted/40 text-muted-foreground">
-                  {new Date(post.created_at).toLocaleDateString(locale)}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-3 text-muted-foreground">
-                <Avatar className="h-9 w-9 border border-border">
-                  <AvatarImage src={authorAvatar} alt={authorName} />
-                  <AvatarFallback>{authorName.slice(0, 1).toUpperCase()}</AvatarFallback>
-                </Avatar>
-                <p className="text-sm">
-                  {isEnglish ? "By" : "Por"} <span className="font-semibold text-foreground">{authorName}</span>
-                </p>
-              </div>
-              <CardTitle className="text-3xl text-foreground md:text-4xl">{post.title}</CardTitle>
-              {post.excerpt ? <p className="max-w-2xl text-muted-foreground">{post.excerpt}</p> : null}
-            </CardHeader>
+        <CardContent className="space-y-6 p-6 md:p-7">
+          {embedUrl ? (
+            <div className="overflow-hidden rounded-xl border border-border bg-muted/30">
+              <iframe
+                title={isEnglish ? "Related video" : "Video relacionado"}
+                src={embedUrl}
+                className="h-[360px] w-full"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          ) : post.video_url ? (
+            <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+              {isEnglish ? "External video:" : "Video externo:"} <a className="text-primary underline" href={post.video_url} target="_blank" rel="noreferrer">{post.video_url}</a>
+            </div>
+          ) : null}
 
-            <CardContent className="space-y-6 p-6 md:p-7">
-              {embedUrl ? (
-                <div className="overflow-hidden rounded-xl border border-border bg-muted/30">
-                  <iframe
-                    title={isEnglish ? "Related video" : "Video relacionado"}
-                    src={embedUrl}
-                    className="h-[360px] w-full"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    allowFullScreen
-                  />
-                </div>
-              ) : post.video_url ? (
-                <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                  {isEnglish ? "External video:" : "Video externo:"} <a className="text-primary underline" href={post.video_url} target="_blank" rel="noreferrer">{post.video_url}</a>
-                </div>
-              ) : null}
+          <article className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-7 text-foreground">
+            {post.content}
+          </article>
 
-              <article className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm leading-7 text-foreground">
-                {post.content}
-              </article>
-
-              <div className="flex flex-wrap gap-3">
-                <Link href="/blog">
-                  <Button variant="outline">{isEnglish ? "Back to blog" : "Voltar ao blog"}</Button>
-                </Link>
-                <Link href="/">
-                  <Button>{isEnglish ? "View tier list" : "Ver tierlist"}</Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </main>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/blog">
+              <Button variant="outline">{isEnglish ? "Back to blog" : "Voltar ao blog"}</Button>
+            </Link>
+            <Link href="/">
+              <Button>{isEnglish ? "View tier list" : "Ver tierlist"}</Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

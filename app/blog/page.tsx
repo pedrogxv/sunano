@@ -168,80 +168,65 @@ function BlogPageContent() {
   const currentPosts = filteredPosts
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex pt-16">
-      {/* Sidebar */}
-      <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
-        <PublicSidebar />
-      </div>
-
-      {/* Main Content */}
-      <main className="flex-1 min-w-0">
-        <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 lg:px-8 space-y-6">
-          {/* Header */}
-          <div className="space-y-4">
-            <div>
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                Reviews
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {isEnglish
-                  ? "Articles, full reviews, and detailed analysis of tierlist peripherals."
-                  : "Artigos, reviews completos e analises detalhadas dos periféricos da tierlist."}
-              </p>
-            </div>
-          </div>
-
-          <SearchComponent
-            data={searchData}
-            placeholder={isEnglish ? "Search blog..." : "Buscar no blog..."}
-            label="Sort by"
-            onFilteredDataChange={handleFilteredDataChange}
-          />
-
-          {/* Posts Grid */}
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="flex items-center gap-3 text-muted-foreground">
-                <div className="size-5 animate-spin rounded-full border-2 border-border border-t-primary" />
-                <span>{isEnglish ? "Loading articles..." : "Carregando artigos..."}</span>
-              </div>
-            </div>
-          ) : currentPosts.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-card p-10 text-center">
-              <p className="text-muted-foreground">{isEnglish ? "No articles found." : "Nenhum artigo encontrado."}</p>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {isEnglish ? "New reviews and analysis will be published soon." : "Novos reviews e analises serao publicados em breve."}
-              </p>
-            </div>
-          ) : (
-            <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-              {currentPosts.map((post) => {
-                const meta = getArticleMeta(post, locale)
-
-                return (
-                  <Link key={post.id} href={`/blog/${post.slug}`} className="block">
-                    <GlassBlogCard
-                      className="max-w-none"
-                      title={meta.title}
-                      excerpt={meta.excerpt}
-                      image={meta.image}
-                      author={meta.author}
-                      date={meta.date}
-                      readTime={meta.readTime}
-                      tags={meta.tags}
-                    />
-                  </Link>
-                )
-              })}
-            </div>
-          )}
+    <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 lg:px-8 space-y-6">
+      {/* Header */}
+      <div className="space-y-4">
+        <div>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            Reviews
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isEnglish
+              ? "Articles, full reviews, and detailed analysis of tierlist peripherals."
+              : "Artigos, reviews completos e analises detalhadas dos periféricos da tierlist."}
+          </p>
         </div>
-      </main>
-
-      {/* Mobile Sidebar */}
-      <div className="md:hidden">
-        <PublicSidebar />
       </div>
+
+      <SearchComponent
+        data={searchData}
+        placeholder={isEnglish ? "Search blog..." : "Buscar no blog..."}
+        label="Sort by"
+        onFilteredDataChange={handleFilteredDataChange}
+      />
+
+      {/* Posts Grid */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="flex items-center gap-3 text-muted-foreground">
+            <div className="size-5 animate-spin rounded-full border-2 border-border border-t-primary" />
+            <span>{isEnglish ? "Loading articles..." : "Carregando artigos..."}</span>
+          </div>
+        </div>
+      ) : currentPosts.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card p-10 text-center">
+          <p className="text-muted-foreground">{isEnglish ? "No articles found." : "Nenhum artigo encontrado."}</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {isEnglish ? "New reviews and analysis will be published soon." : "Novos reviews e analises serao publicados em breve."}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {currentPosts.map((post) => {
+            const meta = getArticleMeta(post, locale)
+
+            return (
+              <Link key={post.id} href={`/blog/${post.slug}`} className="block">
+                <GlassBlogCard
+                  className="max-w-none"
+                  title={meta.title}
+                  excerpt={meta.excerpt}
+                  image={meta.image}
+                  author={meta.author}
+                  date={meta.date}
+                  readTime={meta.readTime}
+                  tags={meta.tags}
+                />
+              </Link>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

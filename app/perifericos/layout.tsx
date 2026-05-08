@@ -28,9 +28,9 @@ export default async function PerifericosLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground pt-16">
+    <div className="min-h-screen bg-background text-foreground ">
       <div className="flex">
-        <div className="hidden md:flex md:sticky md:top-16 md:h-[calc(100vh-64px)] md:shrink-0">
+        <div className="hidden md:flex md:sticky  md:h-[calc(100vh-64px)] md:shrink-0">
           <PublicSidebar />
         </div>
 

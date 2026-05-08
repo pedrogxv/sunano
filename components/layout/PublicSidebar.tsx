@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react"
 
+import { AuthUser } from "@/components/auth/auth-user"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/lib/sidebar-context"
 import { useLocale } from "@/lib/locale-context"
@@ -138,6 +139,11 @@ export function PublicSidebar({ onCategoryChange }: PublicSidebarProps) {
             <Clock3 className="size-[16px] shrink-0" />
             <span className={cn(isCollapsed && "hidden")}>Changelog</span>
           </Link>
+        </div>
+
+        {/* User */}
+        <div className="border-t border-border px-3 py-2">
+          <AuthUser isCollapsed={isCollapsed} />
         </div>
       </aside>
 

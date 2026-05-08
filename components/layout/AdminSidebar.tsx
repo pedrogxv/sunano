@@ -1,14 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import {
-  ChevronLeft,
-  ChevronRight,
   Eye,
   Gift,
   Home,
-  LogOut,
   Menu,
   NotebookPen,
   Package,
@@ -18,7 +15,7 @@ import {
 } from "lucide-react"
 import { useEffect, useState } from "react"
 
-import { logoutAction } from "@/app/admin/actions"
+import { AuthUser } from "@/components/auth/auth-user"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/lib/sidebar-context"
 import { useLocale } from "@/lib/locale-context"
@@ -42,8 +39,7 @@ export function AdminSidebar() {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
   const pathname = usePathname()
-  const router = useRouter()
-  const { adminCollapsed: isCollapsed, toggleAdmin, isAdminMobileOpen, setAdminMobileOpen } = useSidebar()
+  const { adminCollapsed: isCollapsed, isAdminMobileOpen, setAdminMobileOpen } = useSidebar()
 
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
@@ -196,25 +192,12 @@ export function AdminSidebar() {
               <Eye className="size-[18px] shrink-0" />
               <span className={cn(isCollapsed && "hidden")}>{isEnglish ? "View Site" : "Ver Site"}</span>
             </Link>
-            <form action={logoutAction}>
-              <Button
-                type="submit"
-                variant="ghost"
-                className={cn(
-                  "w-full justify-start gap-3 text-muted-foreground hover:bg-red-500/10 hover:text-red-300",
-                  isCollapsed && "justify-center"
-                )}
-              >
-                <LogOut className="size-[18px] shrink-0" />
-                <span className={cn(isCollapsed && "hidden")}>{isEnglish ? "Sign out" : "Sair"}</span>
-              </Button>
-            </form>
           </div>
         </nav>
 
-        {/* Footer */}
-        <div className="border-t border-border px-4 py-3">
-          <p className={cn("text-[10px] text-muted-foreground", isCollapsed && "hidden")}>Sunano Admin v1.0</p>
+        {/* User */}
+        <div className="border-t border-border px-3 py-2">
+          <AuthUser isCollapsed={isCollapsed} />
         </div>
       </aside>
 

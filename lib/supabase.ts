@@ -8,7 +8,7 @@ export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey, {
     // The default Web Locks-based lock causes 5s hangs on rapid page refresh when
     // a previous navigation leaves an orphaned lock. Since this site doesn't rely
     // on concurrent multi-tab token refresh coordination, a no-op lock is safe.
-    lock: (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
+    lock: <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn(),
   },
 })
 

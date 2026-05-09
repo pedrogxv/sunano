@@ -1,5 +1,6 @@
 "use client"
 
+import type { SVGProps } from "react"
 import { Check, ChevronDown, Globe, Moon, PanelLeft, Send, Sun, Youtube } from "lucide-react"
 import { usePathname } from "next/navigation"
 import {
@@ -24,12 +25,26 @@ const SOCIAL_LINKS = [
     color: "bg-red-600 text-white hover:bg-red-500",
   },
   {
+    label: "Discord",
+    icon: DiscordIcon,
+    href: "https://discord.gg/kAHbEe5w3D",
+    color: "bg-[#5865F2] text-white hover:bg-[#5865F2]/90",
+  },
+  {
     label: "Telegram",
     icon: Send,
     href: "https://t.me/sumano",
     color: "bg-[#0088cc] text-white hover:bg-[#0088cc]/90",
   },
 ]
+
+function DiscordIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M20.317 4.369a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.211.375-.444.864-.608 1.249a18.27 18.27 0 0 0-5.487 0c-.164-.385-.4-.874-.61-1.249a.077.077 0 0 0-.079-.037c-1.69.288-3.32.79-4.885 1.515a.07.07 0 0 0-.032.027C1.309 8.207.219 12.047.77 15.816a.08.08 0 0 0 .031.053 19.9 19.9 0 0 0 5.993 3.031.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.993a.076.076 0 0 0-.041-.106 13.07 13.07 0 0 1-1.872-.897.077.077 0 0 1-.008-.127c.125-.094.25-.192.369-.291a.074.074 0 0 1 .077-.01c3.927 1.792 8.18 1.792 12.061 0a.074.074 0 0 1 .078.01c.12.099.244.197.37.291a.077.077 0 0 1-.007.127c-.59.344-1.214.643-1.873.897a.076.076 0 0 0-.04.107c.36.698.772 1.362 1.225 1.993a.077.077 0 0 0 .084.028 19.876 19.876 0 0 0 6-3.032.077.077 0 0 0 .031-.052c.654-3.487-.55-7.294-3.178-11.42a.062.062 0 0 0-.031-.028ZM8.02 13.37c-1.18 0-2.148-1.085-2.148-2.419 0-1.334.94-2.418 2.148-2.418 1.218 0 2.196 1.094 2.177 2.418 0 1.334-.958 2.419-2.177 2.419Zm7.96 0c-1.18 0-2.148-1.085-2.148-2.419 0-1.334.94-2.418 2.148-2.418 1.219 0 2.197 1.094 2.177 2.418 0 1.334-.958 2.419-2.177 2.419Z" />
+    </svg>
+  )
+}
 
 const PAGE_TITLES: Record<string, string> = {
   "/": "Tier List",

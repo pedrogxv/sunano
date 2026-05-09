@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react"
 
-type ThemeKey = "midnight" | "emerald" | "amber" | "rose" | "light"
+type ThemeKey = "midnight" | "emerald" | "amber" | "rose" | "light" | "dark"
 
 type ThemeOption = {
   key: ThemeKey
@@ -21,10 +21,11 @@ const THEME_STORAGE_KEY = "sunano-theme"
 
 const THEME_OPTIONS: ThemeOption[] = [
   { key: "midnight", label: "Midnight" },
+  { key: "dark", label: "Dark (Pure Black)" },
+  { key: "light", label: "Light (Pure White)" },
   { key: "emerald", label: "Emerald" },
   { key: "amber", label: "Amber" },
   { key: "rose", label: "Rose" },
-  { key: "light", label: "Light" },
 ]
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {

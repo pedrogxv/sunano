@@ -1,7 +1,6 @@
 import Link from "next/link"
-import { ExternalLink, ListVideo, PlayCircle, Users, Video } from "lucide-react"
+import { ExternalLink, PlayCircle } from "lucide-react"
 
-import { PublicSidebar } from "@/components/layout/PublicSidebar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,22 +17,16 @@ function formatDate(value: string) {
   })
 }
 
-function formatCount(value: number | null) {
-  if (value === null) return "-"
-  return new Intl.NumberFormat("pt-BR").format(value)
-}
-
 export default async function VideosPage() {
-  const { data: feed, error } = await getYouTubeChannelFeed()
+  const { data: feed, error } = await getYouTubeChannelFeed({ forceRefresh: true })
 
   const videos = feed?.videos ?? []
-  const playlists = feed?.playlists ?? []
   const channel = feed?.channel ?? null
 
   return (
 
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-6 lg:px-8">
-      <section className="overflow-hidden rounded-2xl border border-border bg-card p-5 [background-image:radial-gradient(circle_at_top_right,rgba(34,211,238,0.18),transparent_40%)] md:p-7">
+      <section className="overflow-hidden rounded-2xl border border-border bg-background p-5 md:p-7">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
             <Badge variant="outline" className="border-border bg-muted/40 text-muted-foreground">
@@ -45,7 +38,7 @@ export default async function VideosPage() {
           </div>
 
           {channel ? (
-            <Card className="w-full max-w-sm border-border bg-muted/30">
+            <Card className="w-full max-w-sm border-border bg-background">
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-center gap-3">
                   {channel.thumbnailUrl ? (
@@ -61,12 +54,48 @@ export default async function VideosPage() {
                     <p className="truncate text-xs text-muted-foreground">{channel.customUrl || "Canal no YouTube"}</p>
                   </div>
                 </div>
-                <Button asChild className="w-full bg-red-500 text-white-950 hover:bg-red-500">
-                  <Link href={channel.channelUrl} target="_blank" rel="noreferrer">
-                    Ver canal no YouTube
-                    <ExternalLink className="size-4" />
-                  </Link>
-                </Button>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full border-border bg-background text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Link href={channel.channelUrl} target="_blank" rel="noreferrer">
+                        YouTube
+                      <ExternalLink className="size-4 ml-2" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full border-border bg-background text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Link href="https://www.tiktok.com/@_sunano" target="_blank" rel="noreferrer">
+                      TikTok
+                      <ExternalLink className="size-4 ml-2" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full border-border bg-background text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Link href="https://x.com/_sunan0" target="_blank" rel="noreferrer">
+                      X
+                      <ExternalLink className="size-4 ml-2" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="w-full border-border bg-background text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Link href="https://www.instagram.com/sunano.gg?igsh=NWk0ZnQ1dXg2aWxw" target="_blank" rel="noreferrer">
+                      Instagram
+                      <ExternalLink className="size-4 ml-2" />
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : null}
@@ -93,7 +122,7 @@ export default async function VideosPage() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <PlayCircle className="size-5 text-primary" />
-            <h2 className="text-xl font-semibold text-foreground">Últimos 6 vídeos</h2>
+            <h2 className="text-xl font-semibold text-foreground">Últimos 12 vídeos</h2>
           </div>
           {channel ? (
             <Button asChild variant="outline" className="border-border bg-muted/40 text-foreground hover:bg-muted/60">
@@ -111,7 +140,7 @@ export default async function VideosPage() {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {videos.slice(0, 6).map((video) => (
+            {videos.slice(0, 12).map((video) => (
               <Link key={video.id} href={video.watchUrl} target="_blank" rel="noreferrer" className="block">
                 <Card className="h-full overflow-hidden border-border bg-card transition-colors hover:border-primary/50">
                   {video.thumbnailUrl ? (
@@ -132,48 +161,7 @@ export default async function VideosPage() {
         )}
       </section>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <ListVideo className="size-5 text-primary" />
-            <h2 className="text-xl font-semibold text-foreground">Playlists do canal</h2>
-          </div>
-          {channel ? (
-            <Button asChild variant="outline" className="border-border bg-muted/40 text-foreground hover:bg-muted/60">
-              <Link href={channel.playlistsUrl} target="_blank" rel="noreferrer">
-                Ver todas as playlists
-                <ExternalLink className="size-4" />
-              </Link>
-            </Button>
-          ) : null}
-        </div>
-
-        {playlists.length === 0 ? (
-          <Card className="border-border bg-card">
-            <CardContent className="py-7 text-sm text-muted-foreground">Nenhuma playlist encontrada no momento.</CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {playlists.slice(0, 6).map((playlist) => (
-              <Link key={playlist.id} href={playlist.playlistUrl} target="_blank" rel="noreferrer" className="block">
-                <Card className="h-full overflow-hidden border-border bg-card transition-colors hover:border-primary/50">
-                  {playlist.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={playlist.thumbnailUrl} alt={playlist.title} className="h-40 w-full object-cover" />
-                  ) : null}
-                  <CardHeader className="space-y-1.5">
-                    <CardTitle className="line-clamp-2 text-sm text-foreground md:text-base">{playlist.title}</CardTitle>
-                    <p className="text-xs text-muted-foreground">{formatDate(playlist.publishedAt)}</p>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="line-clamp-2 text-sm text-muted-foreground">{playlist.description || "Sem descrição"}</p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
+      
     </div>
   )
 }

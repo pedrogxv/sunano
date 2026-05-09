@@ -1,26 +1,20 @@
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
 
-const DAILY_SYNC_LIMIT = 6
+const DAILY_SYNC_LIMIT = 12
 const SNAPSHOT_KEY = "youtube_channel_feed"
 
 type YouTubeApiListResponse<T> = {
   items?: T[]
 }
 
-type YouTubeChannelSearchItem = {
-  id?: {
-    channelId?: string
-  }
-}
-
-type YouTubeVideoItem = {
-  id?: {
-    videoId?: string
-  }
+type YouTubePlaylistItemResource = {
   snippet?: {
     title?: string
     description?: string
     publishedAt?: string
+    resourceId?: {
+      videoId?: string
+    }
     thumbnails?: {
       medium?: { url?: string }
       high?: { url?: string }
@@ -59,6 +53,11 @@ type YouTubeChannelItem = {
     subscriberCount?: string
     viewCount?: string
     videoCount?: string
+  }
+  contentDetails?: {
+    relatedPlaylists?: {
+      uploads?: string
+    }
   }
 }
 
@@ -186,16 +185,14 @@ async function resolveChannelId(apiKey: string): Promise<string> {
 
   const handle = process.env.YOUTUBE_CHANNEL_HANDLE?.trim() || "@sunano_"
 
-  const searchUrl = buildApiUrl("search", {
-    part: "snippet",
-    type: "channel",
-    q: handle,
-    maxResults: 1,
+  const channelUrl = buildApiUrl("channels", {
+    part: "id",
+    forHandle: handle,
     key: apiKey,
   })
 
-  const searchData = await fetchJson<YouTubeApiListResponse<YouTubeChannelSearchItem>>(searchUrl)
-  const channelId = searchData.items?.[0]?.id?.channelId
+  const channelData = await fetchJson<YouTubeApiListResponse<{ id?: string }>>(channelUrl)
+  const channelId = channelData.items?.[0]?.id
 
   if (!channelId) {
     throw new Error("Canal do YouTube não encontrado")
@@ -207,12 +204,9 @@ async function resolveChannelId(apiKey: string): Promise<string> {
 async function fetchLiveFeedFromYouTube(apiKey: string): Promise<ChannelFeedData> {
   const channelId = await resolveChannelId(apiKey)
 
-  const videosUrl = buildApiUrl("search", {
-    part: "snippet",
-    channelId,
-    order: "date",
-    type: "video",
-    maxResults: DAILY_SYNC_LIMIT,
+  const channelInfoUrl = buildApiUrl("channels", {
+    part: "snippet,statistics,contentDetails",
+    id: channelId,
     key: apiKey,
   })
 
@@ -223,22 +217,31 @@ async function fetchLiveFeedFromYouTube(apiKey: string): Promise<ChannelFeedData
     key: apiKey,
   })
 
-  const channelInfoUrl = buildApiUrl("channels", {
-    part: "snippet,statistics",
-    id: channelId,
-    maxResults: 1,
-    key: apiKey,
-  })
-
-  const [videosData, playlistsData, channelData] = await Promise.all([
-    fetchJson<YouTubeApiListResponse<YouTubeVideoItem>>(videosUrl),
-    fetchJson<YouTubeApiListResponse<YouTubePlaylistItem>>(playlistsUrl),
+  const [channelData, playlistsData] = await Promise.all([
     fetchJson<YouTubeApiListResponse<YouTubeChannelItem>>(channelInfoUrl),
+    fetchJson<YouTubeApiListResponse<YouTubePlaylistItem>>(playlistsUrl),
   ])
 
   const channelItem = channelData.items?.[0]
   const channelTitle = channelItem?.snippet?.title || "Canal YouTube"
   const customUrl = channelItem?.snippet?.customUrl || null
+
+  // Pega a playlist de uploads do canal (contém todos os vídeos publicados)
+  const uploadsPlaylistId = channelItem?.contentDetails?.relatedPlaylists?.uploads
+
+  if (!uploadsPlaylistId) {
+    throw new Error("Não foi possível encontrar a playlist de uploads do canal")
+  }
+
+  // Busca os vídeos pela playlist de uploads — retorna exatamente 12
+  const uploadsUrl = buildApiUrl("playlistItems", {
+    part: "snippet",
+    playlistId: uploadsPlaylistId,
+    maxResults: DAILY_SYNC_LIMIT,
+    key: apiKey,
+  })
+
+  const uploadsData = await fetchJson<YouTubeApiListResponse<YouTubePlaylistItemResource>>(uploadsUrl)
 
   const channel: ChannelInfo = {
     id: channelId,
@@ -256,9 +259,9 @@ async function fetchLiveFeedFromYouTube(apiKey: string): Promise<ChannelFeedData
     playlistsUrl: `https://www.youtube.com/channel/${channelId}/playlists`,
   }
 
-  const videos: ChannelVideo[] = (videosData.items ?? [])
+  const videos: ChannelVideo[] = (uploadsData.items ?? [])
     .map((item) => {
-      const videoId = item.id?.videoId
+      const videoId = item.snippet?.resourceId?.videoId
       if (!videoId) return null
 
       const snippet = item.snippet
@@ -323,7 +326,20 @@ async function readSnapshot() {
 
 async function writeSnapshot(payload: ChannelFeedData, lastError: string | null) {
   const adminClient = createSupabaseAdminClient()
-  const { error } = await (adminClient.from("youtube_cache_snapshots") as any).upsert(
+  const snapshotsTable = adminClient.from("youtube_cache_snapshots") as unknown as {
+    upsert: (
+      values: {
+        cache_key: string
+        payload: Record<string, unknown>
+        fetched_at: string
+        source: string
+        last_error: string | null
+      },
+      options: { onConflict: string }
+    ) => PromiseLike<{ error: { message: string } | null }>
+  }
+
+  const { error } = await snapshotsTable.upsert(
     {
       cache_key: SNAPSHOT_KEY,
       payload: payload as unknown as Record<string, unknown>,

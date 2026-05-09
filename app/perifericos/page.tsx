@@ -7,7 +7,7 @@ export default async function PerifericosPage() {
 
   const { data: peripherals, error } = await supabase
     .from("peripherals")
-    .select("*")
+    .select("id, name, brand, image_url, category, tier, price, tags, specs, description")
     .order("created_at", { ascending: false })
 
   if (error) {

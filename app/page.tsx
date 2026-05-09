@@ -9,7 +9,7 @@ export default async function Page() {
 
   const { data: peripherals, error } = await supabase
     .from("peripherals")
-    .select("*")
+    .select("id, name, brand, image_url, category, tier, price, tags, specs")
     .order("created_at", { ascending: false })
 
   if (error) {

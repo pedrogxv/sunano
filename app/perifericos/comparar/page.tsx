@@ -50,7 +50,7 @@ export default async function ComparePage({ searchParams }: ComparePageProps) {
 
   const { data: peripherals } = await supabase
     .from("peripherals")
-    .select("*")
+    .select("id, name, brand, image_url, category, tier, price, tags, specs")
     .in("id", ids)
 
   const items = (peripherals ?? []) as PeripheralRow[]

@@ -113,7 +113,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                       "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                       isCollapsed && "justify-center",
                       active
-                        ? "bg-primary/15 text-primary"
+                        ? "bg-primary text-primary-foreground"
                         : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                     )}
                   >

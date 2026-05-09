@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Upload } from "lucide-react"
+import { ChevronLeft, Upload, ChevronDown, ChevronUp, ImageIcon, Tag, Star, Layers, FileText, ShoppingCart, Info } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -76,9 +76,122 @@ const peripheralSchema = z.object({
 
 type PeripheralFormData = z.infer<typeof peripheralSchema>
 
-const CATEGORIES = ["keyboard", "mouse", "mousepad", "glasspad", "iem", "headset"] as const
-const TIERS = ["GOAT", "SS", "S", "A", "B", "C", "L"] as const
-const TAGS_OPTIONS = ["competitive", "versatile", "value", "comfort"] as const
+const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
+  { key: "mouse", label: "Mouse", emoji: "🖱️" },
+  { key: "keyboard", label: "Teclado", emoji: "⌨️" },
+  { key: "mousepad", label: "Mousepad", emoji: "🟦" },
+  { key: "glasspad", label: "Glasspad", emoji: "🪟" },
+  { key: "iem", label: "IEM", emoji: "🎧" },
+  { key: "headset", label: "Headset", emoji: "🎙️" },
+]
+
+const TIER_OPTIONS: { key: Tier; color: string; textColor: string; bg: string }[] = [
+  { key: "GOAT", color: "border-orange-400 bg-orange-500/20 text-orange-300", textColor: "text-orange-300", bg: "bg-orange-500/20" },
+  { key: "SS", color: "border-yellow-400 bg-yellow-500/20 text-yellow-300", textColor: "text-yellow-300", bg: "bg-yellow-500/20" },
+  { key: "S", color: "border-amber-400 bg-amber-500/20 text-amber-300", textColor: "text-amber-300", bg: "bg-amber-500/20" },
+  { key: "A", color: "border-lime-400 bg-lime-500/20 text-lime-300", textColor: "text-lime-300", bg: "bg-lime-500/20" },
+  { key: "B", color: "border-cyan-400 bg-cyan-500/20 text-cyan-300", textColor: "text-cyan-300", bg: "bg-cyan-500/20" },
+  { key: "C", color: "border-blue-400 bg-blue-500/20 text-blue-300", textColor: "text-blue-300", bg: "bg-blue-500/20" },
+  { key: "L", color: "border-border bg-muted/40 text-muted-foreground", textColor: "text-muted-foreground", bg: "bg-muted/40" },
+]
+
+const TAGS_OPTIONS: { key: Tag; label: string; color: string }[] = [
+  { key: "competitive", label: "Competitive", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400" },
+  { key: "versatile", label: "Versatile", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
+  { key: "value", label: "Value", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400" },
+  { key: "comfort", label: "Comfort", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400" },
+]
+
+const RATING_FIELDS: { key: keyof PeripheralFormData; label: string; ptLabel: string }[] = [
+  { key: "ratingOverall", label: "Overall", ptLabel: "Geral" },
+  { key: "ratingBuild", label: "Build", ptLabel: "Construção" },
+  { key: "ratingPerformance", label: "Performance", ptLabel: "Performance" },
+  { key: "ratingValue", label: "Value", ptLabel: "Custo-Benefício" },
+  { key: "ratingSoftware", label: "Software", ptLabel: "Software" },
+  { key: "ratingBattery", label: "Battery", ptLabel: "Bateria" },
+  { key: "ratingQc", label: "QC", ptLabel: "Controle de Qualidade" },
+]
+
+interface SectionProps {
+  title: string
+  icon: React.ReactNode
+  children: React.ReactNode
+  defaultOpen?: boolean
+}
+
+function FormSection({ title, icon, children, defaultOpen = true }: SectionProps) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <Card className="border-border bg-card/50">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between p-4 text-left"
+      >
+        <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
+          <span className="text-muted-foreground">{icon}</span>
+          {title}
+        </div>
+        {open ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+      </button>
+      {open && <CardContent className="border-t border-border pt-4 pb-5">{children}</CardContent>}
+    </Card>
+  )
+}
+
+function RatingInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: number | undefined
+  onChange: (v: number | undefined) => void
+}) {
+  const dots = [1, 2, 3, 4, 5, 6]
+  const current = value ?? 0
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-muted-foreground">{label}</label>
+        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-bold text-foreground">
+          {value !== undefined ? `${value}/6` : "—"}
+        </span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onChange(undefined)}
+          className={`flex size-6 items-center justify-center rounded text-[10px] font-bold transition-colors ${
+            current === 0 ? "bg-muted/60 text-foreground" : "text-muted-foreground hover:bg-muted/40"
+          }`}
+          title="Limpar"
+        >
+          ×
+        </button>
+        {dots.map((dot) => (
+          <button
+            key={dot}
+            type="button"
+            onClick={() => onChange(dot)}
+            className={`h-6 flex-1 rounded transition-all ${
+              dot <= current
+                ? current >= 5
+                  ? "bg-emerald-500 shadow-sm shadow-emerald-500/30"
+                  : current >= 3
+                    ? "bg-primary/80"
+                    : "bg-muted-foreground/60"
+                : "bg-muted/40 hover:bg-muted/70"
+            }`}
+            title={`${dot}/6`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 interface PeripheralEditProps {
   peripheralId?: string
@@ -91,13 +204,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [uploading, setUploading] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
-  // Pré-selecionar todas as tags por padrão
-  const [selectedTags, setSelectedTags] = useState<Tag[]>([
-    "competitive",
-    "versatile",
-    "value",
-    "comfort",
-  ])
+  const [selectedTag, setSelectedTag] = useState<Tag | null>("competitive")
   const [error, setError] = useState<string | null>(null)
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
   const [originalUsdPrice, setOriginalUsdPrice] = useState<number | null>(null)
@@ -110,56 +217,30 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       category: "mouse",
       tier: "__none__",
       price: 0,
-      rankLabel: "",
-      priceRange: "",
-      reviewUrl: "",
-      reviewNote: "",
-      guideUrl: "",
-      notesLong: "",
-      summary: "",
-      highlights: "",
-      pros: "",
-      cons: "",
-      gallery: "",
-      buyLinks: "",
-      compatibility: "",
-      notes: "",
-      comparisons: "",
-      weight: "",
-      latency: "",
-      switchType: "",
-      coating: "",
-      shape: "",
-      gripSmall: "",
-      gripMedium: "",
-      gripLarge: "",
-      ratingOverall: undefined,
-      ratingBuild: undefined,
-      ratingSoftware: undefined,
-      ratingBattery: undefined,
-      ratingPerformance: undefined,
-      ratingQc: undefined,
-      ratingValue: undefined,
+      rankLabel: "", priceRange: "", reviewUrl: "", reviewNote: "", guideUrl: "",
+      notesLong: "", summary: "", highlights: "", pros: "", cons: "", gallery: "",
+      buyLinks: "", compatibility: "", notes: "", comparisons: "",
+      weight: "", latency: "", switchType: "", coating: "", shape: "",
+      gripSmall: "", gripMedium: "", gripLarge: "",
+      ratingOverall: undefined, ratingBuild: undefined, ratingSoftware: undefined,
+      ratingBattery: undefined, ratingPerformance: undefined, ratingQc: undefined, ratingValue: undefined,
     },
   })
 
+  const watchedTier = form.watch("tier")
+  const watchedCategory = form.watch("category")
+
   useEffect(() => {
-    if (peripheralId) {
-      loadPeripheral()
-    }
+    if (peripheralId) loadPeripheral()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peripheralId])
 
   useEffect(() => {
-    // fetch exchange rate only when locale is pt-BR
-    if (locale === "pt-BR") {
-      fetchUsdToBrl()
-    }
+    if (locale === "pt-BR") fetchUsdToBrl()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale])
 
   useEffect(() => {
-    // if we loaded a peripheral and later got the rate, update displayed price
     if (usdToBrl && originalUsdPrice !== null && locale === "pt-BR") {
       form.setValue("price", Number((originalUsdPrice * usdToBrl).toFixed(2)))
     }
@@ -170,32 +251,19 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     try {
       const res = await fetch("https://api.exchangerate.host/latest?base=USD&symbols=BRL")
       const json = await res.json()
-      if (json && json.rates && json.rates.BRL) {
-        setUsdToBrl(Number(json.rates.BRL))
-      }
-    } catch (err) {
-      // ignore failures; fallback will be no conversion
-      // console.error(err)
-    }
+      if (json?.rates?.BRL) setUsdToBrl(Number(json.rates.BRL))
+    } catch { /* ignore */ }
   }
 
   async function loadPeripheral() {
     try {
-      const { data, error: err } = await supabase
-        .from("peripherals")
-        .select("*")
-        .eq("id", peripheralId)
-        .single()
-
+      const { data, error: err } = await supabase.from("peripherals").select("id, name, brand, category, tier, price, image_url, tags, specs").eq("id", peripheralId).single()
       if (err) throw err
       if (data) {
-        // store original USD price and set displayed value according to locale
         setOriginalUsdPrice(data.price)
         const displayedPrice = locale === "pt-BR" && usdToBrl ? Number((data.price * usdToBrl).toFixed(2)) : data.price
         form.reset({
-          name: data.name,
-          brand: data.brand,
-          category: data.category,
+          name: data.name, brand: data.brand, category: data.category,
           tier: data.tier ? mapTier(data.tier) : "__none__",
           price: displayedPrice,
           rankLabel: data.specs?.details?.rankLabel ?? "",
@@ -205,26 +273,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           guideUrl: data.specs?.details?.guideUrl ?? "",
           notesLong: data.specs?.details?.notesLong ?? "",
           summary: data.specs?.details?.summary ?? "",
-          highlights: Array.isArray(data.specs?.details?.highlights)
-            ? data.specs.details.highlights.join("\n")
-            : data.specs?.details?.highlights ?? "",
-          pros: Array.isArray(data.specs?.details?.pros)
-            ? data.specs.details.pros.join("\n")
-            : data.specs?.details?.pros ?? "",
-          cons: Array.isArray(data.specs?.details?.cons)
-            ? data.specs.details.cons.join("\n")
-            : data.specs?.details?.cons ?? "",
-          gallery: Array.isArray(data.specs?.details?.gallery)
-            ? data.specs.details.gallery.join("\n")
-            : data.specs?.details?.gallery ?? "",
+          highlights: Array.isArray(data.specs?.details?.highlights) ? data.specs.details.highlights.join("\n") : data.specs?.details?.highlights ?? "",
+          pros: Array.isArray(data.specs?.details?.pros) ? data.specs.details.pros.join("\n") : data.specs?.details?.pros ?? "",
+          cons: Array.isArray(data.specs?.details?.cons) ? data.specs.details.cons.join("\n") : data.specs?.details?.cons ?? "",
+          gallery: Array.isArray(data.specs?.details?.gallery) ? data.specs.details.gallery.join("\n") : data.specs?.details?.gallery ?? "",
           buyLinks: Array.isArray(data.specs?.details?.buyLinks)
-            ? data.specs.details.buyLinks.map((link: { label: string; url: string }) => `${link.label} | ${link.url}`).join("\n")
+            ? data.specs.details.buyLinks.map((l: { label: string; url: string }) => `${l.label} | ${l.url}`).join("\n")
             : data.specs?.details?.buyLinks ?? "",
           compatibility: data.specs?.details?.compatibility ?? "",
           notes: data.specs?.details?.notes ?? "",
-          comparisons: Array.isArray(data.specs?.details?.comparisons)
-            ? data.specs.details.comparisons.join("\n")
-            : data.specs?.details?.comparisons ?? "",
+          comparisons: Array.isArray(data.specs?.details?.comparisons) ? data.specs.details.comparisons.join("\n") : data.specs?.details?.comparisons ?? "",
           weight: data.specs?.details?.weight ?? "",
           latency: data.specs?.details?.latency ?? "",
           switchType: data.specs?.details?.switchType ?? "",
@@ -233,19 +291,17 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           gripSmall: data.specs?.details?.gripSmall ?? "",
           gripMedium: data.specs?.details?.gripMedium ?? "",
           gripLarge: data.specs?.details?.gripLarge ?? "",
-          ratingOverall: data.specs?.details?.ratings?.overall ?? undefined,
-          ratingBuild: data.specs?.details?.ratings?.build ?? undefined,
-          ratingSoftware: data.specs?.details?.ratings?.software ?? undefined,
-          ratingBattery: data.specs?.details?.ratings?.battery ?? undefined,
-          ratingPerformance: data.specs?.details?.ratings?.performance ?? undefined,
-          ratingQc: data.specs?.details?.ratings?.qc ?? undefined,
-          ratingValue: data.specs?.details?.ratings?.value ?? undefined,
+          ratingOverall: data.specs?.details?.ratings?.overall,
+          ratingBuild: data.specs?.details?.ratings?.build,
+          ratingSoftware: data.specs?.details?.ratings?.software,
+          ratingBattery: data.specs?.details?.ratings?.battery,
+          ratingPerformance: data.specs?.details?.ratings?.performance,
+          ratingQc: data.specs?.details?.ratings?.qc,
+          ratingValue: data.specs?.details?.ratings?.value,
           ...data.specs,
         })
-        setSelectedTags(data.tags || [])
-        if (data.image_url) {
-          setImagePreview(data.image_url)
-        }
+        setSelectedTag(data.tags?.[0] ?? null)
+        if (data.image_url) setImagePreview(data.image_url)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : (isEnglish ? "Failed to load peripheral" : "Erro ao carregar periférico"))
@@ -255,127 +311,78 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   async function onSubmit(data: PeripheralFormData): Promise<void> {
     try {
       setError(null)
-
-      // Validar tags
-      if (selectedTags.length === 0) {
-        setError(isEnglish ? "Select at least one tag" : "Selecione pelo menos uma tag")
+      if (!selectedTag) {
+        setError(isEnglish ? "Select a tag" : "Selecione uma tag")
         return
       }
 
       let imageUrl = imagePreview
-
       if (imageFile) {
         setUploading(true)
         const fileName = `${Date.now()}-${imageFile.name}`
-        const { error: uploadErr } = await supabase.storage
-          .from("peripherals")
-          .upload(fileName, imageFile)
-
+        const { error: uploadErr } = await supabase.storage.from("peripherals").upload(fileName, imageFile)
         if (uploadErr) throw uploadErr
-
         const { data: urlData } = supabase.storage.from("peripherals").getPublicUrl(fileName)
         imageUrl = urlData.publicUrl
       }
 
       const splitLines = (value?: string) =>
-        value
-          ? value
-              .split("\n")
-              .map((line) => line.trim())
-              .filter(Boolean)
-          : []
+        value ? value.split("\n").map((l) => l.trim()).filter(Boolean) : []
 
       const parseBuyLinks = (value?: string) =>
         splitLines(value).map((line) => {
-          const [label, url] = line.split("|").map((part) => part.trim())
+          const [label, url] = line.split("|").map((p) => p.trim())
           return { label: url ? label || "Comprar" : "Comprar", url: url || label }
         })
 
       const ratings = {
-        overall: data.ratingOverall,
-        build: data.ratingBuild,
-        software: data.ratingSoftware,
-        battery: data.ratingBattery,
-        performance: data.ratingPerformance,
-        qc: data.ratingQc,
-        value: data.ratingValue,
+        overall: data.ratingOverall, build: data.ratingBuild, software: data.ratingSoftware,
+        battery: data.ratingBattery, performance: data.ratingPerformance, qc: data.ratingQc, value: data.ratingValue,
       }
       const cleanedRatings = Object.fromEntries(
-        Object.entries(ratings).filter(([, value]) => typeof value === "number" && !Number.isNaN(value))
+        Object.entries(ratings).filter(([, v]) => typeof v === "number" && !Number.isNaN(v))
       )
 
       const specs = {
-        mouseShape: data.mouseShape,
-        keyboardLayout: data.keyboardLayout,
-        connectivity: data.connectivity,
-        size: data.size,
-        surface: data.surface,
-        driver: data.driver,
-        profile: data.profile,
+        mouseShape: data.mouseShape, keyboardLayout: data.keyboardLayout, connectivity: data.connectivity,
+        size: data.size, surface: data.surface, driver: data.driver, profile: data.profile,
         details: {
-          rankLabel: data.rankLabel || undefined,
-          priceRange: data.priceRange || undefined,
-          reviewUrl: data.reviewUrl || undefined,
-          reviewNote: data.reviewNote || undefined,
-          guideUrl: data.guideUrl || undefined,
-          notesLong: data.notesLong || undefined,
-          summary: data.summary || undefined,
-          highlights: splitLines(data.highlights),
-          pros: splitLines(data.pros),
-          cons: splitLines(data.cons),
-          gallery: splitLines(data.gallery),
-          buyLinks: parseBuyLinks(data.buyLinks),
-          compatibility: data.compatibility || undefined,
-          notes: data.notes || undefined,
-          comparisons: splitLines(data.comparisons),
-          weight: data.weight || undefined,
-          latency: data.latency || undefined,
-          switchType: data.switchType || undefined,
-          coating: data.coating || undefined,
-          shape: data.shape || undefined,
-          gripSmall: data.gripSmall || undefined,
-          gripMedium: data.gripMedium || undefined,
-          gripLarge: data.gripLarge || undefined,
+          rankLabel: data.rankLabel || undefined, priceRange: data.priceRange || undefined,
+          reviewUrl: data.reviewUrl || undefined, reviewNote: data.reviewNote || undefined,
+          guideUrl: data.guideUrl || undefined, notesLong: data.notesLong || undefined,
+          summary: data.summary || undefined, highlights: splitLines(data.highlights),
+          pros: splitLines(data.pros), cons: splitLines(data.cons), gallery: splitLines(data.gallery),
+          buyLinks: parseBuyLinks(data.buyLinks), compatibility: data.compatibility || undefined,
+          notes: data.notes || undefined, comparisons: splitLines(data.comparisons),
+          weight: data.weight || undefined, latency: data.latency || undefined,
+          switchType: data.switchType || undefined, coating: data.coating || undefined,
+          shape: data.shape || undefined, gripSmall: data.gripSmall || undefined,
+          gripMedium: data.gripMedium || undefined, gripLarge: data.gripLarge || undefined,
           ratings: Object.keys(cleanedRatings).length > 0 ? cleanedRatings : undefined,
         },
       }
 
-      // Convert price to USD before saving (store prices in USD)
       let priceToSave = data.price
       if (locale === "pt-BR") {
-        // convert BRL -> USD: USD = BRL / (USD->BRL)
         let rate = usdToBrl
         if (!rate) {
-          // try fetching a fresh rate
           try {
             const res = await fetch("https://api.exchangerate.host/latest?base=USD&symbols=BRL")
             const json = await res.json()
             rate = json?.rates?.BRL ? Number(json.rates.BRL) : null
-          } catch (e) {
-            rate = null
-          }
+          } catch { rate = null }
         }
-        if (rate && rate > 0) {
-          priceToSave = Number((data.price / rate).toFixed(2))
-        }
+        if (rate && rate > 0) priceToSave = Number((data.price / rate).toFixed(2))
       }
 
       const peripheralData = {
-        name: data.name,
-        brand: data.brand,
-        category: data.category,
+        name: data.name, brand: data.brand, category: data.category,
         tier: data.tier === "__none__" ? null : data.tier,
-        price: priceToSave,
-        image_url: imageUrl,
-        tags: selectedTags,
-        specs,
+        price: priceToSave, image_url: imageUrl, tags: selectedTag ? [selectedTag] : [], specs,
       }
 
       if (peripheralId) {
-        const { error: err } = await supabase
-          .from("peripherals")
-          .update(peripheralData)
-          .eq("id", peripheralId)
+        const { error: err } = await supabase.from("peripherals").update(peripheralData).eq("id", peripheralId)
         if (err) throw err
       } else {
         const { error: err } = await supabase.from("peripherals").insert([peripheralData])
@@ -395,21 +402,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     if (file) {
       setImageFile(file)
       const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string)
-      }
+      reader.onloadend = () => setImagePreview(reader.result as string)
       reader.readAsDataURL(file)
     }
   }
 
-  const toggleTag = (tag: Tag) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    )
+  const toggleTag = (tag: Tag) =>
+    setSelectedTag((prev) => prev === tag ? null : tag)
+
+  const setRating = (field: keyof PeripheralFormData, value: number | undefined) => {
+    form.setValue(field as any, value)
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 pb-10">
       <Link href="/admin/tierlist">
         <Button className="gap-2" variant="ghost">
           <ChevronLeft className="size-4" />
@@ -417,545 +423,454 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </Button>
       </Link>
 
-      <Card className="mt-4 border-border bg-card/90">
-        <CardHeader className="border-b border-border">
-          <CardTitle>{peripheralId ? (isEnglish ? "Edit Peripheral" : "Editar Periférico") : (isEnglish ? "New Peripheral" : "Novo Periférico")}</CardTitle>
-          <CardDescription>
-            {peripheralId ? (isEnglish ? "Edit peripheral information" : "Edite as informações do periférico") : (isEnglish ? "Create a new peripheral" : "Crie um novo periférico")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          {error && <div className="bg-red-500/15 border border-red-500/30 text-red-300 p-3 rounded mb-4">{error}</div>}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          {peripheralId ? (isEnglish ? "Edit Peripheral" : "Editar Periférico") : (isEnglish ? "New Peripheral" : "Novo Periférico")}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {peripheralId
+            ? (isEnglish ? "Update the peripheral information below" : "Atualize as informações do periférico abaixo")
+            : (isEnglish ? "Fill in the details to add a new peripheral to the tierlist" : "Preencha os dados para adicionar um novo periférico à tierlist")}
+        </p>
+      </div>
 
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Imagem */}
+      {error && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>
+      )}
+
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+
+        {/* SECTION 1: Imagem */}
+        <FormSection title={isEnglish ? "Image" : "Imagem"} icon={<ImageIcon className="size-4" />} defaultOpen>
+          <div className="flex gap-4 items-start">
+            {imagePreview && (
+              <div className="relative w-28 h-28 rounded-xl border border-border overflow-hidden shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img alt="Preview" className="w-full h-full object-cover" src={imagePreview} />
+              </div>
+            )}
+            <label className="flex-1 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:border-primary/40 hover:bg-muted/10 transition group">
+              <input accept="image/*" className="hidden" onChange={handleImageSelect} type="file" />
+              <div className="flex flex-col items-center gap-2 text-center">
+                <Upload className="size-6 text-muted-foreground group-hover:text-foreground transition-colors" />
+                <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                  {imagePreview
+                    ? (isEnglish ? "Click to change image" : "Clique para trocar a imagem")
+                    : (isEnglish ? "Click to upload image" : "Clique para enviar a imagem")}
+                </p>
+                <p className="text-xs text-muted-foreground/60">PNG, JPG, WebP</p>
+              </div>
+            </label>
+          </div>
+        </FormSection>
+
+        {/* SECTION 2: Informações Básicas */}
+        <FormSection title={isEnglish ? "Basic Info" : "Informações Básicas"} icon={<Info className="size-4" />} defaultOpen>
+          <div className="space-y-4">
+            {/* Category picker */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Image" : "Imagem"}</label>
-              <div className="flex gap-4 items-start">
-                {imagePreview && (
-                  <div className="relative w-32 h-32 rounded-lg border border-border overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt="Preview" className="w-full h-full object-cover" src={imagePreview} />
-                  </div>
-                )}
-                <label className="flex-1 border-2 border-dashed border-border rounded-lg p-6 cursor-pointer hover:border-primary/40 transition">
-                  <input
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageSelect}
-                    type="file"
-                  />
-                  <div className="flex flex-col items-center gap-2">
-                    <Upload className="size-6 text-muted-foreground" />
-                    <div className="text-sm text-muted-foreground">{isEnglish ? "Click to upload or drag the image" : "Clique para enviar ou arraste a imagem"}</div>
-                  </div>
-                </label>
+              <label className="text-sm font-medium text-foreground">{isEnglish ? "Category" : "Categoria"}</label>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.key}
+                    type="button"
+                    onClick={() => form.setValue("category", cat.key)}
+                    className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                      watchedCategory === cat.key
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
+                    }`}
+                  >
+                    <span>{cat.emoji}</span>
+                    <span>{cat.label}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Informações Básicas */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Name" : "Nome"}</label>
-                <Input
-                  className="border-border bg-card/50"
-                  placeholder="Ex: Logitech G Pro X Superlight 2"
-                  {...form.register("name")}
-                />
-                {form.formState.errors.name && (
-                  <p className="text-red-400 text-xs">{form.formState.errors.name.message}</p>
-                )}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{isEnglish ? "Name" : "Nome"}</label>
+                <Input className="border-border bg-background" placeholder="G Pro X Superlight 2" {...form.register("name")} />
+                {form.formState.errors.name && <p className="text-xs text-red-400">{form.formState.errors.name.message}</p>}
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Brand" : "Marca"}</label>
-                <Input
-                  className="border-border bg-card/50"
-                  placeholder="Ex: Logitech"
-                  {...form.register("brand")}
-                />
-                {form.formState.errors.brand && (
-                  <p className="text-red-400 text-xs">{form.formState.errors.brand.message}</p>
-                )}
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{isEnglish ? "Brand" : "Marca"}</label>
+                <Input className="border-border bg-background" placeholder="Logitech" {...form.register("brand")} />
+                {form.formState.errors.brand && <p className="text-xs text-red-400">{form.formState.errors.brand.message}</p>}
               </div>
+            </div>
 
-              <div className="space-y-2">
-                  <label className="text-sm font-semibold text-foreground">{isEnglish ? "Price ($)" : "Preço (R$)"}</label>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">
+                {isEnglish ? "Price (USD)" : "Preço (USD)"}
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                 <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "159" : "159"}
+                  className="border-border bg-background pl-7"
+                  placeholder="159.00"
                   type="number"
                   step="0.01"
                   {...form.register("price", { valueAsNumber: true })}
                 />
-                {form.formState.errors.price && (
-                  <p className="text-red-400 text-xs">{form.formState.errors.price.message}</p>
-                )}
               </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">{isEnglish ? "Category" : "Categoria"}</label>
-                <Select
-                  onValueChange={(value) => form.setValue("category", value as Category)}
-                  value={form.watch("category")}
-                >
-                  <SelectTrigger className="border-border bg-card/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORIES.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat.charAt(0).toUpperCase() + cat.slice(1)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">Tier</label>
-                <Select
-                  onValueChange={(value) => form.setValue("tier", value as TierField)}
-                  value={form.watch("tier")}
-                >
-                  <SelectTrigger className="border-border bg-card/50">
-                    <SelectValue placeholder={isEnglish ? "No tier" : "Sem tier"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">{isEnglish ? "No tier" : "Sem tier"}</SelectItem>
-                    {TIERS.map((tier) => (
-                      <SelectItem key={tier} value={tier}>
-                        {tier}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {form.formState.errors.price && <p className="text-xs text-red-400">{form.formState.errors.price.message}</p>}
             </div>
+          </div>
+        </FormSection>
 
-            {/* Tags */}
-            <div className="space-y-3">
-              <label className="text-sm font-semibold text-foreground">{isEnglish ? "Tags" : "Tags"}</label>
-              <div className="flex gap-2 flex-wrap">
-                {TAGS_OPTIONS.map((tag) => (
-                  <Badge
-                    key={tag}
-                    className={`cursor-pointer transition ${
-                      selectedTags.includes(tag)
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted/40 text-muted-foreground hover:bg-muted/60"
-                    }`}
-                    onClick={() => toggleTag(tag)}
-                    variant="secondary"
+        {/* SECTION 3: Tier */}
+        <FormSection title="Tier" icon={<Layers className="size-4" />} defaultOpen>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">{isEnglish ? "Select the tier that best represents this peripheral's performance" : "Selecione o tier que melhor representa a performance deste periférico"}</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => form.setValue("tier", "__none__")}
+                className={`rounded-lg border px-4 py-2 text-sm font-bold transition-all ${
+                  watchedTier === "__none__"
+                    ? "border-border bg-muted text-foreground"
+                    : "border-border/40 text-muted-foreground hover:border-border hover:text-foreground"
+                }`}
+              >
+                {isEnglish ? "No tier" : "Sem tier"}
+              </button>
+              {TIER_OPTIONS.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => form.setValue("tier", t.key)}
+                  className={`rounded-lg border px-5 py-2 text-sm font-black transition-all ${t.color} ${
+                    watchedTier === t.key ? "scale-105 shadow-md" : "opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  {t.key}
+                </button>
+              ))}
+            </div>
+          </div>
+        </FormSection>
+
+        {/* SECTION 4: Tags */}
+        <FormSection title="Tag" icon={<Tag className="size-4" />} defaultOpen>
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">{isEnglish ? "Select the primary tag for this peripheral (one only)" : "Selecione a tag principal deste periférico (apenas uma)"}</p>
+            <div className="flex flex-wrap gap-2">
+              {TAGS_OPTIONS.map((tag) => {
+                const active = selectedTag === tag.key
+                return (
+                  <button
+                    key={tag.key}
+                    type="button"
+                    data-active={active}
+                    onClick={() => toggleTag(tag.key)}
+                    className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${tag.color} ${active ? "scale-105 shadow-sm" : "opacity-60 hover:opacity-100"}`}
                   >
-                    {tag.charAt(0).toUpperCase() + tag.slice(1)}
-                  </Badge>
-                ))}
-              </div>
-              {selectedTags.length === 0 && (
-                <p className="text-red-400 text-xs">{isEnglish ? "At least one tag selection is required" : "Seleção de pelo menos uma tag é obrigatória"}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                {isEnglish ? "Selected" : "Selecionadas"}: {selectedTags.length} {isEnglish ? "of" : "de"} {TAGS_OPTIONS.length}
-              </p>
+                    {tag.label}
+                    {active && " ✓"}
+                  </button>
+                )
+              })}
             </div>
+            {!selectedTag && (
+              <p className="text-xs text-red-400">{isEnglish ? "Select a tag" : "Selecione uma tag"}</p>
+            )}
+          </div>
+        </FormSection>
 
-            {/* Specs Específicas por Categoria */}
-            <div className="space-y-4 border-t border-border pt-6">
-              <h3 className="font-semibold text-foreground">{isEnglish ? "Specifications" : "Especificações"}</h3>
-
-              {form.watch("category") === "mouse" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Mouse Shape</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="symmetrical, ergonomic"
-                      {...form.register("mouseShape")}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Driver</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="HERO 2, PMW 3389"
-                      {...form.register("driver")}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Connectivity</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="wired, wireless"
-                      {...form.register("connectivity")}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Size</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="small, medium, large"
-                      {...form.register("size")}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {form.watch("category") === "keyboard" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Layout</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="60%, 75%, TKL, Full-size"
-                      {...form.register("keyboardLayout")}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Profile</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="Rapid Trigger, Hall Effect"
-                      {...form.register("profile")}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Connectivity</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="wired, wireless"
-                      {...form.register("connectivity")}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {form.watch("category") === "mousepad" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Surface</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="cloth, hybrid, glass"
-                      {...form.register("surface")}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-muted-foreground">Profile</label>
-                    <Input
-                      className="border-border bg-card/50"
-                      placeholder="Control, Speed"
-                      {...form.register("profile")}
-                    />
-                  </div>
-                </div>
-              )}
+        {/* SECTION 5: Ratings */}
+        <FormSection title={isEnglish ? "Ratings (0–6)" : "Notas (0–6)"} icon={<Star className="size-4" />} defaultOpen={false}>
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              {isEnglish
+                ? "Rate each aspect from 1 (worst) to 6 (best). Click × to clear a rating."
+                : "Avalie cada aspecto de 1 (pior) a 6 (melhor). Clique × para limpar."}
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {RATING_FIELDS.map((field) => (
+                <RatingInput
+                  key={field.key}
+                  label={isEnglish ? field.label : field.ptLabel}
+                  value={form.watch(field.key) as number | undefined}
+                  onChange={(v) => setRating(field.key, v)}
+                />
+              ))}
             </div>
+          </div>
+        </FormSection>
 
-            {/* Conteudo da Wiki */}
-            <div className="space-y-4 border-t border-border pt-6">
-              <h3 className="font-semibold text-foreground">{isEnglish ? "Wiki content" : "Conteudo da wiki"}</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Summary" : "Resumo"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Short summary" : "Resumo curto"}
-                    {...form.register("summary")}
-                  />
+        {/* SECTION 6: Specs por categoria */}
+        <FormSection title={isEnglish ? "Technical Specs" : "Especificações Técnicas"} icon={<FileText className="size-4" />} defaultOpen>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {watchedCategory === "mouse" && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Shape" : "Formato"}</label>
+                  <Select value={form.watch("mouseShape") || ""} onValueChange={(v) => form.setValue("mouseShape", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={isEnglish ? "Select shape" : "Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="symmetrical">Symmetrical</SelectItem>
+                      <SelectItem value="ergonomic">Ergonomic</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Compatibility" : "Compatibilidade"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Windows, macOS, PS5" : "Windows, macOS, PS5"}
-                    {...form.register("compatibility")}
-                  />
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Connectivity" : "Conectividade"}</label>
+                  <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
+                      <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Size" : "Tamanho"}</label>
+                  <Select value={form.watch("size") || ""} onValueChange={(v) => form.setValue("size", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="small">{isEnglish ? "Small" : "Pequeno"}</SelectItem>
+                      <SelectItem value="medium">{isEnglish ? "Medium" : "Médio"}</SelectItem>
+                      <SelectItem value="large">{isEnglish ? "Large" : "Grande"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sensor</label>
+                  <Input className="border-border bg-background" placeholder="HERO 2, PMW 3395" {...form.register("driver")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Weight" : "Peso"}</label>
+                  <Input className="border-border bg-background" placeholder="61g" {...form.register("weight")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Latency" : "Latência"}</label>
+                  <Input className="border-border bg-background" placeholder="0.62ms" {...form.register("latency")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
+                  <Input className="border-border bg-background" placeholder={isEnglish ? "Magnetic, Optical" : "Magnético, Óptico"} {...form.register("switchType")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coating</label>
+                  <Input className="border-border bg-background" placeholder="Matte, Glossy" {...form.register("coating")} />
+                </div>
+                <div className="md:col-span-2 grid grid-cols-3 gap-3">
+                  {[
+                    { field: "gripSmall", label: isEnglish ? "Grip · Small hand" : "Grip · Mão pequena" },
+                    { field: "gripMedium", label: isEnglish ? "Grip · Medium hand" : "Grip · Mão média" },
+                    { field: "gripLarge", label: isEnglish ? "Grip · Large hand" : "Grip · Mão grande" },
+                  ].map(({ field, label }) => (
+                    <div key={field} className="space-y-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</label>
+                      <Input className="border-border bg-background" placeholder="Claw / Palm" {...form.register(field as any)} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {watchedCategory === "keyboard" && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</label>
+                  <Select value={form.watch("keyboardLayout") || ""} onValueChange={(v) => form.setValue("keyboardLayout", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={isEnglish ? "Select layout" : "Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["60%", "65%", "75%", "TKL", "Full-size"].map((l) => (
+                        <SelectItem key={l} value={l}>{l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Connectivity" : "Conectividade"}</label>
+                  <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
+                      <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profile</label>
+                  <Input className="border-border bg-background" placeholder="Rapid Trigger, Hall Effect" {...form.register("profile")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
+                  <Input className="border-border bg-background" placeholder="Linear, Tactile, Clicky" {...form.register("switchType")} />
+                </div>
+              </>
+            )}
+
+            {(watchedCategory === "mousepad" || watchedCategory === "glasspad") && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Surface</label>
+                  <Select value={form.watch("surface") || ""} onValueChange={(v) => form.setValue("surface", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={isEnglish ? "Select surface" : "Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cloth">Cloth</SelectItem>
+                      <SelectItem value="hybrid">Hybrid</SelectItem>
+                      <SelectItem value="glass">Glass</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profile</label>
+                  <Input className="border-border bg-background" placeholder="Control / Speed" {...form.register("profile")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Size" : "Tamanho"}</label>
+                  <Input className="border-border bg-background" placeholder="480×400mm, XL" {...form.register("size")} />
+                </div>
+              </>
+            )}
+
+            {(watchedCategory === "iem" || watchedCategory === "headset") && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Connectivity" : "Conectividade"}</label>
+                  <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
+                      <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Compatibility" : "Compatibilidade"}</label>
+                  <Input className="border-border bg-background" placeholder="Windows, macOS, PS5" {...form.register("compatibility")} />
+                </div>
+              </>
+            )}
+          </div>
+        </FormSection>
+
+        {/* SECTION 7: Wiki / Conteúdo */}
+        <FormSection title={isEnglish ? "Wiki Content" : "Conteúdo da Wiki"} icon={<FileText className="size-4" />} defaultOpen={false}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{isEnglish ? "Summary" : "Resumo"}</label>
+                <Input className="border-border bg-background" placeholder={isEnglish ? "One-line description" : "Descrição em uma linha"} {...form.register("summary")} />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Rank label" : "Rank"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "GOAT, S, A" : "GOAT, S, A"}
-                    {...form.register("rankLabel")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Price range" : "Faixa de preco"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "R$1050-1130" : "R$1050-1130"}
-                    {...form.register("priceRange")}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{isEnglish ? "Rank label" : "Label de rank"}</label>
+                <Input className="border-border bg-background" placeholder="GOAT, Top S, Solid A" {...form.register("rankLabel")} />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Review URL" : "Review URL"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder="https://youtube.com/..."
-                    {...form.register("reviewUrl")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Guide URL" : "Guia URL"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder="https://..."
-                    {...form.register("guideUrl")}
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{isEnglish ? "Price range" : "Faixa de preço"}</label>
+                <Input className="border-border bg-background" placeholder="R$1050–1130" {...form.register("priceRange")} />
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Review note" : "Nota do review"}</label>
-                <Textarea
-                  className="border-border bg-card/50"
-                  placeholder={isEnglish ? "Short note about the review" : "Nota curta sobre o review"}
-                  rows={2}
-                  {...form.register("reviewNote")}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Weight" : "Peso"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "61g" : "61g"}
-                    {...form.register("weight")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Latency" : "Latencia"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "0.62 ms" : "0.62 ms"}
-                    {...form.register("latency")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Switch" : "Switch"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Magnetic" : "Magnetico"}
-                    {...form.register("switchType")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Shape" : "Shape"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Symmetrical" : "Simetrico"}
-                    {...form.register("shape")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Coating" : "Coating"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Plastic" : "Plastico"}
-                    {...form.register("coating")}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Grip (small hand)" : "Pegada (mao pequena)"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Claw/Palm" : "Claw/Palm"}
-                    {...form.register("gripSmall")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Grip (medium hand)" : "Pegada (mao media)"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Claw/Palm" : "Claw/Palm"}
-                    {...form.register("gripMedium")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Grip (large hand)" : "Pegada (mao grande)"}</label>
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Claw/Finger" : "Claw/Finger"}
-                    {...form.register("gripLarge")}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Ratings (0-6)" : "Notas (0-6)"}</label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Overall" : "Geral"}
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="6"
-                    {...form.register("ratingOverall")}
-                  />
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Build" : "Construcao"}
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="6"
-                    {...form.register("ratingBuild")}
-                  />
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Software" : "Software"}
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="6"
-                    {...form.register("ratingSoftware")}
-                  />
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Battery" : "Bateria"}
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="6"
-                    {...form.register("ratingBattery")}
-                  />
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Performance" : "Performance"}
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="6"
-                    {...form.register("ratingPerformance")}
-                  />
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "QC" : "QC"}
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="6"
-                    {...form.register("ratingQc")}
-                  />
-                  <Input
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "Value" : "CxB"}
-                    type="number"
-                    step="1"
-                    min="0"
-                    max="6"
-                    {...form.register("ratingValue")}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Highlights" : "Destaques"}</label>
-                  <Textarea
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "One per line" : "Um por linha"}
-                    rows={4}
-                    {...form.register("highlights")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Comparisons" : "Comparacoes"}</label>
-                  <Textarea
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "One per line" : "Um por linha"}
-                    rows={4}
-                    {...form.register("comparisons")}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">Pros</label>
-                  <Textarea
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "One per line" : "Um por linha"}
-                    rows={4}
-                    {...form.register("pros")}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">Cons</label>
-                  <Textarea
-                    className="border-border bg-card/50"
-                    placeholder={isEnglish ? "One per line" : "Um por linha"}
-                    rows={4}
-                    {...form.register("cons")}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Gallery URLs" : "URLs da galeria"}</label>
-                <Textarea
-                  className="border-border bg-card/50"
-                  placeholder={isEnglish ? "One image URL per line" : "Uma URL por linha"}
-                  rows={4}
-                  {...form.register("gallery")}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Buy links" : "Links de compra"}</label>
-                <Textarea
-                  className="border-border bg-card/50"
-                  placeholder={isEnglish ? "Label | https://... (one per line)" : "Label | https://... (uma por linha)"}
-                  rows={4}
-                  {...form.register("buyLinks")}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Notes (large)" : "Notas (grande)"}</label>
-                <Textarea
-                  className="border-border bg-card/50"
-                  placeholder={isEnglish ? "Main notes and context" : "Notas principais e contexto"}
-                  rows={6}
-                  {...form.register("notesLong")}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-muted-foreground">{isEnglish ? "Notes" : "Notas"}</label>
-                <Textarea
-                  className="border-border bg-card/50"
-                  placeholder={isEnglish ? "Extra notes" : "Observacoes extras"}
-                  rows={3}
-                  {...form.register("notes")}
-                />
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{isEnglish ? "Compatibility" : "Compatibilidade"}</label>
+                <Input className="border-border bg-background" placeholder="Windows, macOS, PS5" {...form.register("compatibility")} />
               </div>
             </div>
 
-            {/* Botões */}
-            <div className="flex gap-3 justify-end border-t border-border pt-6">
-              <Link href="/admin/tierlist">
-                <Button variant="outline">{isEnglish ? "Cancel" : "Cancelar"}</Button>
-              </Link>
-              <Button disabled={uploading || form.formState.isSubmitting} type="submit">
-                {uploading || form.formState.isSubmitting ? (isEnglish ? "Saving..." : "Salvando...") : (isEnglish ? "Save" : "Salvar")}
-              </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{isEnglish ? "Review URL" : "URL do Review"}</label>
+                <Input className="border-border bg-background" placeholder="https://youtube.com/..." {...form.register("reviewUrl")} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{isEnglish ? "Guide URL" : "URL do Guia"}</label>
+                <Input className="border-border bg-background" placeholder="https://..." {...form.register("guideUrl")} />
+              </div>
             </div>
-          </form>
-        </CardContent>
-      </Card>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{isEnglish ? "Review note" : "Nota do review"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={isEnglish ? "Short observation about the review" : "Observação curta sobre o review"} rows={2} {...form.register("reviewNote")} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[
+                { field: "highlights", label: isEnglish ? "Highlights" : "Destaques" },
+                { field: "comparisons", label: isEnglish ? "Comparisons" : "Comparações" },
+                { field: "pros", label: "Pros" },
+                { field: "cons", label: "Cons" },
+              ].map(({ field, label }) => (
+                <div key={field} className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">{label}</label>
+                  <Textarea
+                    className="border-border bg-background resize-none"
+                    placeholder={isEnglish ? "One per line" : "Um por linha"}
+                    rows={4}
+                    {...form.register(field as any)}
+                  />
+                  <p className="text-[10px] text-muted-foreground">{isEnglish ? "Each line becomes a separate item" : "Cada linha vira um item separado"}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{isEnglish ? "Gallery URLs" : "URLs da Galeria"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={isEnglish ? "One image URL per line" : "Uma URL de imagem por linha"} rows={4} {...form.register("gallery")} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{isEnglish ? "Notes (extended)" : "Notas (estendidas)"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={isEnglish ? "Main notes and context" : "Notas principais e contexto"} rows={5} {...form.register("notesLong")} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{isEnglish ? "Extra notes" : "Notas extras"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={isEnglish ? "Additional observations" : "Observações adicionais"} rows={3} {...form.register("notes")} />
+            </div>
+          </div>
+        </FormSection>
+
+        {/* SECTION 8: Links de compra */}
+        <FormSection title={isEnglish ? "Buy Links" : "Links de Compra"} icon={<ShoppingCart className="size-4" />} defaultOpen={false}>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              {isEnglish
+                ? "Format: Label | https://... — one per line. Example: Amazon | https://amazon.com/..."
+                : "Formato: Label | https://... — um por linha. Exemplo: Amazon | https://amazon.com/..."}
+            </p>
+            <Textarea
+              className="border-border bg-background font-mono text-xs resize-none"
+              placeholder={"Amazon | https://amazon.com/...\nMercado Livre | https://mercadolivre.com/..."}
+              rows={5}
+              {...form.register("buyLinks")}
+            />
+          </div>
+        </FormSection>
+
+        {/* Footer actions */}
+        <div className="flex gap-3 justify-end pt-2">
+          <Link href="/admin/tierlist">
+            <Button variant="outline">{isEnglish ? "Cancel" : "Cancelar"}</Button>
+          </Link>
+          <Button disabled={uploading || form.formState.isSubmitting} type="submit" className="min-w-28">
+            {uploading || form.formState.isSubmitting
+              ? (isEnglish ? "Saving..." : "Salvando...")
+              : peripheralId
+                ? (isEnglish ? "Save changes" : "Salvar alterações")
+                : (isEnglish ? "Create peripheral" : "Criar periférico")}
+          </Button>
+        </div>
+      </form>
     </div>
   )
 }

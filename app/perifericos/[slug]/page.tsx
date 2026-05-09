@@ -102,7 +102,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   if (idFromSlug) {
     const { data: byId, error: byIdError } = await supabase
       .from("peripherals")
-      .select("*")
+      .select("id, name, brand, category, tier, price, image_url, tags, specs")
       .eq("id", idFromSlug)
       .maybeSingle()
 
@@ -117,7 +117,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     const searchPattern = slugToSearchPattern(baseSlug)
     const { data: byName, error: byNameError } = await supabase
       .from("peripherals")
-      .select("*")
+      .select("id, name, brand, category, tier, price, image_url, tags, specs")
       .ilike("name", searchPattern)
       .limit(1)
 

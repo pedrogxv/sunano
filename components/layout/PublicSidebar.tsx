@@ -132,7 +132,7 @@ export function PublicSidebar({ onCategoryChange }: PublicSidebarProps) {
               "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
               isCollapsed && "justify-center",
               pathname?.startsWith("/changelog")
-                ? "bg-primary/15 text-primary"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             )}
           >

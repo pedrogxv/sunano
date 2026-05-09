@@ -75,36 +75,6 @@ function BlogPageContent() {
     setFilteredPosts(posts)
   }, [posts])
 
-  // Load author data for posts that don't have it
-  useEffect(() => {
-    const postsNeedingAuthors = posts.filter((p) => p.author_id && !p.admin_profiles)
-
-    if (postsNeedingAuthors.length === 0) return
-
-    async function loadAuthors() {
-      const authorIds = [...new Set(postsNeedingAuthors.map((p) => p.author_id).filter(Boolean))]
-
-      const { data: authorsData } = await supabase
-        .from("admin_profiles")
-        .select("id, display_name, avatar_url, email")
-        .in("id", authorIds)
-
-      if (authorsData) {
-        const authorsMap = new Map(authorsData.map((a) => [a.id, a]))
-
-        setPosts((prevPosts) =>
-          prevPosts.map((post) =>
-            post.author_id && !post.admin_profiles
-              ? { ...post, admin_profiles: authorsMap.get(post.author_id) || null }
-              : post
-          )
-        )
-      }
-    }
-
-    loadAuthors()
-  }, [posts])
-
   async function loadPosts() {
     setLoading(true)
 
@@ -112,7 +82,7 @@ function BlogPageContent() {
     let baseQuery = supabase
       .from("blog_posts")
       .select(
-        "id, title, slug, author_id, excerpt, cover_image_url, cover_thumbnail_url, read_time_minutes, created_at, peripherals(id, name, brand)"
+        "id, title, slug, author_id, excerpt, cover_image_url, cover_thumbnail_url, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email), peripherals(id, name, brand)"
       )
       .eq("is_published", true)
       .order("created_at", { ascending: false })
@@ -130,7 +100,7 @@ function BlogPageContent() {
       return
     }
 
-    const normalizedPosts = ((data ?? []) as Array<Partial<BlogPost>>).map((post) => ({
+    const normalizedPosts = ((data ?? []) as unknown as Array<Partial<BlogPost>>).map((post) => ({
       ...post,
       cover_thumbnail_url: post.cover_thumbnail_url ?? null,
       read_time_minutes: post.read_time_minutes ?? null,

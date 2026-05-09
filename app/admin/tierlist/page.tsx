@@ -550,7 +550,7 @@ export default function AdminPeripheralsPage() {
       setError(null)
       const { data, error: err } = await supabase
         .from("peripherals")
-        .select("*")
+        .select("id, name, brand, category, tier, price, image_url, tags, specs, created_at")
         .order("created_at", { ascending: false })
 
       if (err) throw err

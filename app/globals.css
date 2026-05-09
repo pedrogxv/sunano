@@ -244,13 +244,13 @@ button,
   top: 0;
   left: 0;
   transform: rotateY(var(--face-ry, 0deg)) rotateX(var(--face-rx, 0deg)) translateZ(calc(var(--size) / 2));
-  background: var(--face-bg, oklch(0.68 0.12 220));
+  background: var(--face-bg, oklch(0.35 0.01 250));
 }
 
-.face-front { --face-bg: oklch(0.72 0.14 220); }
-.face-back  { --face-ry: 180deg; --face-bg: oklch(0.46 0.14 220); }
-.face-right { --face-ry: 90deg;  --face-bg: oklch(0.56 0.14 220); }
-.face-top   { --face-rx: -90deg; --face-bg: oklch(0.84 0.14 220); }
+.face-front { --face-bg: oklch(0.42 0.01 250); }
+.face-back  { --face-ry: 180deg; --face-bg: oklch(0.20 0.01 250); }
+.face-right { --face-ry: 90deg;  --face-bg: oklch(0.30 0.01 250); }
+.face-top   { --face-rx: -90deg; --face-bg: oklch(0.58 0.01 250); }
 
 @keyframes box1 {
   0%, 50% { transform: translate(100%, 0); }

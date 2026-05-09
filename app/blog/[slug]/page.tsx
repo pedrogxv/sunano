@@ -73,50 +73,14 @@ export default function BlogPostPage() {
     async function loadPost(postSlug: string) {
       setLoading(true)
 
-      // Try with full query including author data (without read_time_minutes since it might not exist)
-      let data: any
-      let error: any
-
-        ; ({ data, error } = await supabase
-          .from("blog_posts")
-          .select(
-            "id, title, slug, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, created_at, admin_profiles(display_name, avatar_url, email), peripherals(name, brand)"
-          )
-          .eq("slug", postSlug)
-          .eq("is_published", true)
-          .single())
-
-      // If error, try without cover_thumbnail_url
-      if (error) {
-        const retryResponse = await supabase
-          .from("blog_posts")
-          .select(
-            "id, title, slug, author_id, excerpt, cover_image_url, video_url, content, created_at, admin_profiles(display_name, avatar_url, email), peripherals(name, brand)"
-          )
-          .eq("slug", postSlug)
-          .eq("is_published", true)
-          .single()
-
-        if (!retryResponse.error) {
-          data = retryResponse.data as any
-          error = retryResponse.error
-        }
-      }
-
-      // If still error, try basic query without author
-      if (error) {
-        const basicResponse = await supabase
-          .from("blog_posts")
-          .select(
-            "id, title, slug, excerpt, cover_image_url, video_url, content, created_at, peripherals(name, brand)"
-          )
-          .eq("slug", postSlug)
-          .eq("is_published", true)
-          .single()
-
-        data = basicResponse.data
-        error = basicResponse.error
-      }
+      const { data, error } = await supabase
+        .from("blog_posts")
+        .select(
+          "id, title, slug, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, created_at, admin_profiles(display_name, avatar_url, email), peripherals(name, brand)"
+        )
+        .eq("slug", postSlug)
+        .eq("is_published", true)
+        .maybeSingle()
 
       if (error) {
         console.error("Error loading blog post:", error)
@@ -125,7 +89,7 @@ export default function BlogPostPage() {
         return
       }
 
-      setPost({ ...(data as object), cover_thumbnail_url: (data as BlogPost).cover_thumbnail_url ?? null } as BlogPost)
+      setPost(data ? { ...data, cover_thumbnail_url: data.cover_thumbnail_url ?? null } as unknown as BlogPost : null)
       setLoading(false)
     }
 

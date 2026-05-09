@@ -1,13 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ShieldCheck, Users as UsersIcon } from "lucide-react"
+import { ShieldCheck, Users as UsersIcon, UserPlus, Lock, Save, ChevronDown, ChevronUp } from "lucide-react"
 
 import BoxLoader from "@/components/ui/box-loader"
 import { ADMIN_FEATURES, createDefaultPermissions, normalizePermissions, type AdminProfile } from "@/lib/admin-permissions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useLocale } from "@/lib/locale-context"
 
@@ -30,6 +31,195 @@ type NewUserForm = {
   permissions: Record<string, boolean>
 }
 
+/* ── Toggle switch component ─────────────────────────────── */
+function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => !disabled && onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+        disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"
+      } ${checked ? "bg-primary" : "bg-muted"}`}
+    >
+      <span className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
+    </button>
+  )
+}
+
+/* ── Permission grid for a user ─────────────────────────── */
+function PermissionGrid({
+  permissions,
+  locked,
+  onChange,
+  isEnglish,
+}: {
+  permissions: Record<string, boolean>
+  locked: boolean
+  onChange: (key: string, value: boolean) => void
+  isEnglish: boolean
+}) {
+  const features = ADMIN_FEATURES.filter((f) => f.key !== "dashboard")
+  const norm = normalizePermissions(permissions)
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {features.map((feature) => {
+        const canRead = norm[feature.readKey]
+        const canWrite = norm[feature.writeKey]
+        return (
+          <div key={feature.key} className={`rounded-xl border p-3 transition-colors ${canWrite ? "border-primary/20 bg-primary/5" : canRead ? "border-border bg-muted/10" : "border-border/40 bg-muted/5"}`}>
+            <p className="mb-2.5 text-xs font-semibold text-foreground">{feature.label}</p>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground">{isEnglish ? "Read" : "Leitura"}</span>
+                <Toggle
+                  checked={canRead}
+                  disabled={locked}
+                  onChange={(v) => onChange(feature.readKey, v)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground">{isEnglish ? "Edit" : "Edição"}</span>
+                <Toggle
+                  checked={canWrite}
+                  disabled={locked}
+                  onChange={(v) => onChange(feature.writeKey, v)}
+                />
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ── Role badge ──────────────────────────────────────────── */
+function RoleBadge({ role }: { role: string }) {
+  if (role === "webmaster") return <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/20">WEB Master</Badge>
+  if (role === "admin") return <Badge className="bg-primary/20 text-primary border-primary/30 hover:bg-primary/20">Admin</Badge>
+  return <Badge variant="secondary">Moderador</Badge>
+}
+
+/* ── User card ───────────────────────────────────────────── */
+function UserCard({
+  user,
+  isCurrentUser,
+  isEnglish,
+  savingId,
+  onRoleChange,
+  onPermissionChange,
+  onSave,
+}: {
+  user: AdminUser
+  isCurrentUser: boolean
+  isEnglish: boolean
+  savingId: string | null
+  onRoleChange: (id: string, role: "admin" | "moderator" | "webmaster") => void
+  onPermissionChange: (id: string, key: string, value: boolean) => void
+  onSave: (user: AdminUser) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const isWebMaster = user.role === "webmaster"
+  const locked = isWebMaster
+  const initials = (user.display_name ?? user.email ?? "?").slice(0, 2).toUpperCase()
+
+  return (
+    <div className={`rounded-2xl border transition-colors ${expanded ? "border-border bg-card/80" : "border-border/60 bg-card/40"}`}>
+      {/* Header row */}
+      <div className="flex items-center gap-3 p-4">
+        {/* Avatar */}
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-sm font-bold text-muted-foreground">
+          {user.avatar_url
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={user.avatar_url} alt={initials} className="size-full rounded-full object-cover" />
+            : initials}
+        </div>
+
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-foreground truncate">{user.display_name || user.email}</p>
+            <RoleBadge role={user.role} />
+            {isCurrentUser && <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">Você</Badge>}
+          </div>
+          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex shrink-0 items-center gap-2">
+          {!locked && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onSave(user)}
+              disabled={savingId === user.id}
+              className="gap-1.5 text-xs"
+            >
+              <Save className="size-3.5" />
+              {savingId === user.id ? (isEnglish ? "Saving..." : "Salvando...") : (isEnglish ? "Save" : "Salvar")}
+            </Button>
+          )}
+          {locked && (
+            <div className="flex items-center gap-1 text-xs text-amber-400/80">
+              <Lock className="size-3.5" />
+              <span className="hidden sm:inline">{isEnglish ? "Locked" : "Bloqueado"}</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex size-8 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted/40 transition-colors"
+          >
+            {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Expanded */}
+      {expanded && (
+        <div className="space-y-4 border-t border-border px-4 pb-4 pt-4">
+          {/* Role selector */}
+          {!locked && (
+            <div className="flex items-center gap-3">
+              <label className="min-w-16 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "Role" : "Cargo"}</label>
+              <Select value={user.role} onValueChange={(v) => onRoleChange(user.id, v as "admin" | "moderator" | "webmaster")}>
+                <SelectTrigger className="w-44 border-border bg-card/50 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="moderator">{isEnglish ? "Moderator" : "Moderador"}</SelectItem>
+                  <SelectItem value="webmaster">WEB Master</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {locked && (
+            <p className="text-xs text-amber-400/80">
+              {isEnglish
+                ? "WEB Master permissions are protected and cannot be changed from the panel."
+                : "As permissões do WEB Master são protegidas e não podem ser alteradas pelo painel."}
+            </p>
+          )}
+
+          <PermissionGrid
+            permissions={normalizePermissions(user.permissions)}
+            locked={locked}
+            isEnglish={isEnglish}
+            onChange={(key, value) => onPermissionChange(user.id, key, value)}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── Main page ───────────────────────────────────────────── */
 export default function AdminUsersPage() {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
@@ -38,8 +228,10 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [createSuccess, setCreateSuccess] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [newUser, setNewUser] = useState<NewUserForm>({
     email: "",
     displayName: "",
@@ -47,29 +239,17 @@ export default function AdminUsersPage() {
     permissions: normalizePermissions(createDefaultPermissions()),
   })
 
-  useEffect(() => {
-    loadUsers()
-  }, [])
+  useEffect(() => { loadUsers() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadUsers() {
     try {
       setLoading(true)
       setError(null)
-
-      const response = await fetch("/api/admin/users")
-      const data = (await response.json().catch(() => null)) as UsersResponse | null
-
-      if (!response.ok || !data?.users) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to load users" : "Erro ao carregar usuários"))
-      }
-
+      const res = await fetch("/api/admin/users")
+      const data = await res.json().catch(() => null) as UsersResponse | null
+      if (!res.ok || !data?.users) throw new Error(data?.error ?? (isEnglish ? "Failed to load users" : "Erro ao carregar usuários"))
       setCurrentUserId(data.current_user_id ?? null)
-      setUsers(
-        data.users.map((user) => ({
-          ...user,
-          permissions: normalizePermissions(user.permissions),
-        }))
-      )
+      setUsers(data.users.map((u) => ({ ...u, permissions: normalizePermissions(u.permissions) })))
     } catch (err) {
       setError(err instanceof Error ? err.message : (isEnglish ? "Failed to load users" : "Erro ao carregar usuários"))
     } finally {
@@ -78,72 +258,40 @@ export default function AdminUsersPage() {
   }
 
   function updateUserRole(userId: string, nextRole: "admin" | "moderator" | "webmaster") {
-    setUsers((currentUsers) =>
-      currentUsers.map((user) => (user.id === userId ? { ...user, role: nextRole } : user))
-    )
+    setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: nextRole } : u))
   }
 
-  function updateUserPermission(userId: string, permissionKey: string, value: boolean) {
-    setUsers((currentUsers) =>
-      currentUsers.map((user) =>
-        user.id === userId
-          ? {
-              ...user,
-              permissions: {
-                ...normalizePermissions(user.permissions),
-                [permissionKey]: value,
-              },
-            }
-          : user
-      )
-    )
+  function updateUserPermission(userId: string, key: string, value: boolean) {
+    setUsers((prev) => prev.map((u) =>
+      u.id === userId ? { ...u, permissions: { ...normalizePermissions(u.permissions), [key]: value } } : u
+    ))
   }
 
   async function saveUser(user: AdminUser) {
     try {
       setSavingId(user.id)
       setError(null)
-
-      const response = await fetch("/api/admin/users", {
+      const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: user.id,
-          role: user.role,
-          permissions: normalizePermissions(user.permissions),
-        }),
+        body: JSON.stringify({ id: user.id, role: user.role, permissions: normalizePermissions(user.permissions) }),
       })
-
-      const data = (await response.json().catch(() => null)) as { error?: string; ok?: boolean } | null
-
-      if (!response.ok || !data?.ok) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to save user" : "Erro ao salvar usuário"))
-      }
-
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? (isEnglish ? "Failed to save" : "Erro ao salvar"))
       await loadUsers()
     } catch (err) {
-      setError(err instanceof Error ? err.message : (isEnglish ? "Failed to save user" : "Erro ao salvar usuário"))
+      setError(err instanceof Error ? err.message : (isEnglish ? "Failed to save" : "Erro ao salvar"))
     } finally {
       setSavingId(null)
     }
-  }
-
-  function updateNewUserPermission(permissionKey: string, value: boolean) {
-    setNewUser((current) => ({
-      ...current,
-      permissions: {
-        ...normalizePermissions(current.permissions),
-        [permissionKey]: value,
-      },
-    }))
   }
 
   async function createUser() {
     try {
       setCreating(true)
       setCreateError(null)
-
-      const response = await fetch("/api/admin/users", {
+      setCreateSuccess(false)
+      const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -153,249 +301,149 @@ export default function AdminUsersPage() {
           permissions: normalizePermissions(newUser.permissions),
         }),
       })
-
-      const data = (await response.json().catch(() => null)) as { error?: string; ok?: boolean } | null
-
-      if (!response.ok || !data?.ok) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to create user" : "Erro ao criar usuário"))
-      }
-
-      setNewUser({
-        email: "",
-        displayName: "",
-        role: "admin",
-        permissions: normalizePermissions(createDefaultPermissions()),
-      })
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? (isEnglish ? "Failed to create" : "Erro ao criar"))
+      setNewUser({ email: "", displayName: "", role: "admin", permissions: normalizePermissions(createDefaultPermissions()) })
+      setCreateSuccess(true)
+      setShowCreateForm(false)
       await loadUsers()
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : (isEnglish ? "Failed to create user" : "Erro ao criar usuário"))
+      setCreateError(err instanceof Error ? err.message : (isEnglish ? "Failed to create" : "Erro ao criar"))
     } finally {
       setCreating(false)
     }
   }
 
-  const visibleFeatures = ADMIN_FEATURES.filter((feature) => feature.key !== "dashboard")
-
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl border border-border bg-card shadow-[0_24px_80px_rgba(0,0,0,0.22)]">
-        <div className="relative p-6 md:p-8">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.12),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(16,185,129,0.08),transparent_28%)]" />
-          <div className="relative max-w-3xl space-y-4">
-            <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
-              <ShieldCheck className="size-3.5" />
-              {isEnglish ? "WEB Master only" : "Apenas WEB Master"}
-            </p>
+      {/* Hero header */}
+      <section className="overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+        <div className="relative p-6">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(34,211,238,0.08),transparent_40%)]" />
+          <div className="relative flex items-start justify-between gap-4">
             <div className="space-y-2">
-              <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-                {isEnglish ? "Users and permissions" : "Usuários e permissões"}
+              <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+                <ShieldCheck className="size-3.5" />
+                {isEnglish ? "WEB Master only" : "Apenas WEB Master"}
+              </p>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                {isEnglish ? "Users & permissions" : "Usuários e permissões"}
               </h1>
-              <p className="max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
+              <p className="text-sm text-muted-foreground">
                 {isEnglish
-                  ? "Set who can view and edit each part of the site. WEB Master permissions are locked in the backend and cannot be changed."
-                  : "Ajuste quem pode ver e editar cada parte do site. As permissões do WEB Master ficam bloqueadas no backend e não podem ser alteradas."}
+                  ? "Control who can read or edit each section. WEB Master is always protected."
+                  : "Controle quem pode ler ou editar cada seção. WEB Master é sempre protegido."}
               </p>
             </div>
+            <Button onClick={() => { setShowCreateForm((v) => !v); setCreateError(null) }} className="shrink-0 gap-2">
+              <UserPlus className="size-4" />
+              {isEnglish ? "New user" : "Novo usuário"}
+            </Button>
           </div>
         </div>
       </section>
 
-      {error ? (
-        <div className="rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>
-      ) : null}
+      {/* Errors */}
+      {error && <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>}
+      {createSuccess && <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">{isEnglish ? "User created and invite sent." : "Usuário criado e convite enviado."}</div>}
 
-      {createError ? (
-        <div className="rounded border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{createError}</div>
-      ) : null}
+      {/* Create user form */}
+      {showCreateForm && (
+        <Card className="border-border bg-card/90">
+          <CardHeader className="border-b border-border pb-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <UserPlus className="size-4 text-primary" />
+              {isEnglish ? "Invite new user" : "Convidar novo usuário"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5 pt-5">
+            {createError && (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{createError}</div>
+            )}
 
-      {loading ? (
-        <div className="flex items-center justify-center py-14">
-          <BoxLoader />
-        </div>
-      ) : null}
-
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
-          <CardTitle className="text-foreground">{isEnglish ? "Create new user" : "Criar novo usuário"}</CardTitle>
-          <CardDescription>
-            {isEnglish
-              ? "Invite a new admin or moderator and set initial permissions."
-              : "Convide um novo admin ou moderador e defina as permissões iniciais."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {isEnglish ? "Email" : "Email"}
-              </label>
-              <input
-                value={newUser.email}
-                onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))}
-                placeholder="nome@email.com"
-                className="h-10 w-full rounded-lg border border-border bg-card/50 px-3 text-sm text-foreground"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {isEnglish ? "Display name" : "Nome"}
-              </label>
-              <input
-                value={newUser.displayName}
-                onChange={(event) => setNewUser((current) => ({ ...current, displayName: event.target.value }))}
-                placeholder={isEnglish ? "Ex: Ana Souza" : "Ex: Ana Souza"}
-                className="h-10 w-full rounded-lg border border-border bg-card/50 px-3 text-sm text-foreground"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                {isEnglish ? "Role" : "Cargo"}
-              </label>
-              <Select
-                value={newUser.role}
-                onValueChange={(value) => setNewUser((current) => ({ ...current, role: value as "admin" | "moderator" }))}
-              >
-                <SelectTrigger className="border-border bg-card/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="moderator">{isEnglish ? "Moderator" : "Moderador"}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {visibleFeatures.map((feature) => (
-              <div key={`new-user-${feature.key}`} className="rounded-xl border border-border bg-muted/30 p-3">
-                <p className="text-sm font-medium text-foreground">{feature.label}</p>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                  <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                    <input
-                      checked={Boolean(normalizePermissions(newUser.permissions)[feature.readKey])}
-                      onChange={(event) => updateNewUserPermission(feature.readKey, event.target.checked)}
-                      type="checkbox"
-                    />
-                    {isEnglish ? "Read" : "Ler"}
-                  </label>
-                  <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                    <input
-                      checked={Boolean(normalizePermissions(newUser.permissions)[feature.writeKey])}
-                      onChange={(event) => updateNewUserPermission(feature.writeKey, event.target.checked)}
-                      type="checkbox"
-                    />
-                    {isEnglish ? "Edit" : "Editar"}
-                  </label>
-                </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</label>
+                <Input
+                  value={newUser.email}
+                  onChange={(e) => setNewUser((p) => ({ ...p, email: e.target.value }))}
+                  placeholder="nome@email.com"
+                  type="email"
+                  className="border-border bg-background"
+                />
               </div>
-            ))}
-          </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "Display name" : "Nome"}</label>
+                <Input
+                  value={newUser.displayName}
+                  onChange={(e) => setNewUser((p) => ({ ...p, displayName: e.target.value }))}
+                  placeholder={isEnglish ? "e.g. Ana Souza" : "ex: Ana Souza"}
+                  className="border-border bg-background"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "Role" : "Cargo"}</label>
+                <Select value={newUser.role} onValueChange={(v) => setNewUser((p) => ({ ...p, role: v as "admin" | "moderator" }))}>
+                  <SelectTrigger className="border-border bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="moderator">{isEnglish ? "Moderator" : "Moderador"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-          <div className="flex justify-end">
-            <Button onClick={createUser} disabled={creating || !newUser.email.trim()}>
-              {creating ? (isEnglish ? "Creating..." : "Criando...") : (isEnglish ? "Send invite" : "Enviar convite")}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div>
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "Initial permissions" : "Permissões iniciais"}</p>
+              <PermissionGrid
+                permissions={newUser.permissions}
+                locked={false}
+                isEnglish={isEnglish}
+                onChange={(key, value) => setNewUser((p) => ({ ...p, permissions: { ...p.permissions, [key]: value } }))}
+              />
+            </div>
 
+            <div className="flex justify-end gap-2 border-t border-border pt-4">
+              <Button variant="outline" onClick={() => setShowCreateForm(false)}>{isEnglish ? "Cancel" : "Cancelar"}</Button>
+              <Button onClick={createUser} disabled={creating || !newUser.email.trim()} className="gap-2">
+                <UserPlus className="size-4" />
+                {creating ? (isEnglish ? "Sending..." : "Enviando...") : (isEnglish ? "Send invite" : "Enviar convite")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Users list */}
       <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
-          <CardTitle className="flex items-center gap-2 text-foreground">
-            <UsersIcon className="size-5 text-primary" />
-            {isEnglish ? "User list" : "Lista de usuários"}
+        <CardHeader className="border-b border-border pb-4">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <UsersIcon className="size-4 text-primary" />
+            {isEnglish ? "Users" : "Usuários"}
+            {!loading && <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{users.length}</span>}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4 pt-6">
-          {users.map((user) => {
-            const isCurrentUser = user.id === currentUserId
-            const isWebMaster = user.role === "webmaster"
-            const locked = isWebMaster
-
-            return (
-              <div key={user.id} className="rounded-2xl border border-border bg-muted/20 p-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-semibold text-foreground">{user.display_name}</h3>
-                      <Badge variant={isWebMaster ? "default" : "secondary"}>
-                        {isWebMaster ? "WEB Master" : user.role === "moderator" ? (isEnglish ? "Moderator" : "Moderador") : "Admin"}
-                      </Badge>
-                      {isCurrentUser ? (
-                        <Badge variant="outline" className="border-primary/30 text-primary">
-                          You
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <p className="text-sm text-muted-foreground">{user.email ?? "Sem email"}</p>
-                    {locked ? (
-                      <p className="text-xs text-amber-200/80">{isEnglish ? "WEB Master permissions are locked." : "Permissões do WEB Master ficam bloqueadas."}</p>
-                    ) : null}
-                  </div>
-
-                  <div className="min-w-[180px] space-y-2">
-                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      {isEnglish ? "Role" : "Cargo"}
-                    </label>
-                    {locked ? (
-                      <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-                        WEB Master
-                      </div>
-                    ) : (
-                      <Select
-                        value={user.role}
-                        onValueChange={(value) => updateUserRole(user.id, value as "admin" | "moderator" | "webmaster")}
-                      >
-                        <SelectTrigger className="border-border bg-card/50">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="admin">Admin</SelectItem>
-                          <SelectItem value="moderator">{isEnglish ? "Moderator" : "Moderador"}</SelectItem>
-                          <SelectItem value="webmaster">WEB Master</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  {visibleFeatures.map((feature) => (
-                    <div key={`${user.id}-${feature.key}`} className="rounded-xl border border-border bg-muted/30 p-3">
-                      <p className="text-sm font-medium text-foreground">{feature.label}</p>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-sm text-muted-foreground">
-                        <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                          <input
-                            checked={Boolean(normalizePermissions(user.permissions)[feature.readKey])}
-                            disabled={locked}
-                            onChange={(event) => updateUserPermission(user.id, feature.readKey, event.target.checked)}
-                            type="checkbox"
-                          />
-                          {isEnglish ? "Read" : "Ler"}
-                        </label>
-                        <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                          <input
-                            checked={Boolean(normalizePermissions(user.permissions)[feature.writeKey])}
-                            disabled={locked}
-                            onChange={(event) => updateUserPermission(user.id, feature.writeKey, event.target.checked)}
-                            type="checkbox"
-                          />
-                          {isEnglish ? "Edit" : "Editar"}
-                        </label>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-4 flex justify-end">
-                  <Button onClick={() => saveUser(user)} disabled={savingId === user.id || locked}>
-                    {savingId === user.id ? (isEnglish ? "Saving..." : "Salvando...") : locked ? (isEnglish ? "Locked" : "Bloqueado") : (isEnglish ? "Save permissions" : "Salvar permissões")}
-                  </Button>
-                </div>
-              </div>
-            )
-          })}
+        <CardContent className="space-y-3 pt-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-10">
+              <BoxLoader />
+            </div>
+          ) : users.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">{isEnglish ? "No users found." : "Nenhum usuário encontrado."}</p>
+          ) : users.map((user) => (
+            <UserCard
+              key={user.id}
+              user={user}
+              isCurrentUser={user.id === currentUserId}
+              isEnglish={isEnglish}
+              savingId={savingId}
+              onRoleChange={updateUserRole}
+              onPermissionChange={updateUserPermission}
+              onSave={saveUser}
+            />
+          ))}
         </CardContent>
       </Card>
     </div>

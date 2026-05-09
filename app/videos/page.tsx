@@ -33,7 +33,7 @@ export default async function VideosPage() {
   return (
 
     <div className="mx-auto max-w-6xl space-y-8 px-4 py-6 md:px-6 lg:px-8">
-      <section className="overflow-hidden rounded-2xl border border-border bg-card p-5 [background-image:radial-gradient(circle_at_top_right,rgba(34,211,238,0.18),transparent_40%)] md:p-7">
+      <section className="overflow-hidden rounded-2xl border border-border bg-background p-5 md:p-7">
         <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
             <Badge variant="outline" className="border-border bg-muted/40 text-muted-foreground">
@@ -45,7 +45,7 @@ export default async function VideosPage() {
           </div>
 
           {channel ? (
-            <Card className="w-full max-w-sm border-border bg-muted/30">
+            <Card className="w-full max-w-sm border-border bg-background">
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-center gap-3">
                   {channel.thumbnailUrl ? (
@@ -61,12 +61,44 @@ export default async function VideosPage() {
                     <p className="truncate text-xs text-muted-foreground">{channel.customUrl || "Canal no YouTube"}</p>
                   </div>
                 </div>
-                <Button asChild className="w-full bg-red-500 text-white-950 hover:bg-red-500">
+                <Button asChild className="w-full border border-border bg-background text-foreground hover:bg-muted">
                   <Link href={channel.channelUrl} target="_blank" rel="noreferrer">
                     Ver canal no YouTube
                     <ExternalLink className="size-4" />
                   </Link>
                 </Button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="flex-1 min-w-[140px] border-border bg-background text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Link href="https://www.tiktok.com/@_sunano" target="_blank" rel="noreferrer">
+                      TikTok
+                      <ExternalLink className="size-4 ml-2" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="flex-1 min-w-[140px] border-border bg-background text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Link href="https://x.com/_sunan0" target="_blank" rel="noreferrer">
+                      X
+                      <ExternalLink className="size-4 ml-2" />
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="flex-1 min-w-[140px] border-border bg-background text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Link href="https://www.instagram.com/sunano.gg?igsh=NWk0ZnQ1dXg2aWxw" target="_blank" rel="noreferrer">
+                      Instagram
+                      <ExternalLink className="size-4 ml-2" />
+                    </Link>
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : null}

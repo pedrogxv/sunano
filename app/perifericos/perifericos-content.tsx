@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { ArrowLeftRight, Check, Plus, Search, X } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,12 @@ type Category = "all" | "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" |
 type PriceBand = "all" | "budget" | "mid" | "premium"
 type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
+type MouseShape = "symmetrical" | "ergonomic"
+type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
+type KeyboardType = "mechanical" | "magnetic"
+type PadType = "speed" | "control" | "hybrid"
+type Surface = PadType | "glass" | "cloth"
+type PanelType = "ips" | "tn" | "va" | "oled" | "other"
 
 type Peripheral = {
   id: string
@@ -29,11 +35,15 @@ type Peripheral = {
   specs: {
     mouseShape?: "symmetrical" | "ergonomic"
     keyboardLayout?: string
+    keyboardType?: KeyboardType
     connectivity?: "wired" | "wireless"
     size?: "small" | "medium" | "large"
-    surface?: "cloth" | "hybrid" | "glass"
+    surface?: Surface
+    padType?: PadType
     driver?: string
     profile?: string
+    refreshRate?: number
+    panelType?: PanelType
   }
 }
 
@@ -98,6 +108,14 @@ export function PerifericosContent({ initialData, showAdminActions }: Periferico
   const [selectedBrand, setSelectedBrand] = useState("all")
   const [selectedPriceBand, setSelectedPriceBand] = useState<PriceBand>("all")
   const [selectedConnectivity, setSelectedConnectivity] = useState("all")
+  const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
+  const [selectedKeyboardLayout, setSelectedKeyboardLayout] = useState<KeyboardLayout | "all">("all")
+  const [selectedKeyboardType, setSelectedKeyboardType] = useState<KeyboardType | "all">("all")
+  const [selectedSurface, setSelectedSurface] = useState<Surface | "all">("all")
+  const [selectedProfile, setSelectedProfile] = useState<string | "all">("all")
+  const [selectedPadType, setSelectedPadType] = useState<PadType | "all">("all")
+  const [selectedRefreshRate, setSelectedRefreshRate] = useState<string | "all">("all")
+  const [selectedPanelType, setSelectedPanelType] = useState<PanelType | "all">("all")
   const [sortKey, setSortKey] = useState<SortKey>("recent")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
@@ -108,10 +126,117 @@ export function PerifericosContent({ initialData, showAdminActions }: Periferico
     return initialData.find((i) => i.id === selectedIds[0])?.category ?? null
   }, [initialData, selectedIds])
 
+  const effectiveCategory = lockedCategory ?? (selectedCategory === "all" ? null : selectedCategory)
+
+  const showConnectivityFilter = useMemo(() => {
+    if (!effectiveCategory) return false
+    return ["mouse", "keyboard", "headset", "iem", "dac_amp"].includes(effectiveCategory)
+  }, [effectiveCategory])
+
+  const showMouseShapeFilter = effectiveCategory === "mouse"
+  const showKeyboardLayoutFilter = effectiveCategory === "keyboard"
+  const showSurfaceFilter = effectiveCategory === "mousepad" || effectiveCategory === "glasspad"
+  const showProfileFilter = effectiveCategory === "mousepad" || effectiveCategory === "glasspad"
+
   const availableBrands = useMemo(() => {
-    const base = selectedCategory === "all" ? initialData : initialData.filter((i) => i.category === selectedCategory)
+    const base = effectiveCategory ? initialData.filter((i) => i.category === effectiveCategory) : initialData
     return ["all", ...Array.from(new Set(base.map((i) => i.brand)))]
-  }, [initialData, selectedCategory])
+  }, [initialData, effectiveCategory])
+
+  const availableMouseShapes = useMemo(() => {
+    if (!showMouseShapeFilter) return [] as MouseShape[]
+    const values = new Set<MouseShape>()
+    initialData
+      .filter((item) => item.category === "mouse")
+      .forEach((item) => {
+        if (item.specs.mouseShape) values.add(item.specs.mouseShape)
+      })
+    return Array.from(values)
+  }, [initialData, showMouseShapeFilter])
+
+  const availableKeyboardLayouts = useMemo(() => {
+    if (!showKeyboardLayoutFilter) return [] as KeyboardLayout[]
+    const values = new Set<KeyboardLayout>()
+    initialData
+      .filter((item) => item.category === "keyboard")
+      .forEach((item) => {
+        if (item.specs.keyboardLayout) values.add(item.specs.keyboardLayout)
+      })
+    return Array.from(values)
+  }, [initialData, showKeyboardLayoutFilter])
+
+  const showKeyboardTypeFilter = effectiveCategory === "keyboard"
+  const showPadTypeFilter = effectiveCategory === "mousepad"
+  const showMonitorFilters = effectiveCategory === "monitors"
+
+  const availableKeyboardTypes = useMemo(() => {
+    if (!showKeyboardTypeFilter) return [] as KeyboardType[]
+    const values = new Set<KeyboardType>()
+    initialData
+      .filter((item) => item.category === "keyboard")
+      .forEach((item) => {
+        if (item.specs.keyboardType) values.add(item.specs.keyboardType)
+      })
+    return Array.from(values)
+  }, [initialData, showKeyboardTypeFilter])
+
+  const availablePadTypes = useMemo(() => {
+    if (!showPadTypeFilter) return [] as PadType[]
+    const values = new Set<PadType>()
+    initialData
+      .filter((item) => item.category === "mousepad")
+      .forEach((item) => {
+        if (item.specs.padType) values.add(item.specs.padType)
+      })
+    return Array.from(values)
+  }, [initialData, showPadTypeFilter])
+
+  const availableRefreshRates = useMemo(() => {
+    if (!showMonitorFilters) return [] as string[]
+    const rates = new Set<number>()
+    initialData
+      .filter((item) => item.category === "monitors")
+      .forEach((item) => {
+        if (typeof item.specs.refreshRate === "number") rates.add(item.specs.refreshRate)
+      })
+    const common = [144, 165, 240, 360, 480, 600]
+    const found = Array.from(rates).sort((a, b) => a - b)
+    const merged = Array.from(new Set([...found, ...common]))
+    return merged.map(String)
+  }, [initialData, showMonitorFilters])
+
+  const availablePanelTypes = useMemo(() => {
+    if (!showMonitorFilters) return [] as PanelType[]
+    const values = new Set<PanelType>()
+    initialData
+      .filter((item) => item.category === "monitors")
+      .forEach((item) => {
+        if (item.specs.panelType) values.add(item.specs.panelType)
+      })
+    return Array.from(values)
+  }, [initialData, showMonitorFilters])
+
+  const availableSurfaces = useMemo(() => {
+    if (!showSurfaceFilter || !effectiveCategory) return [] as Surface[]
+    const values = new Set<Surface>()
+    initialData
+      .filter((item) => item.category === effectiveCategory)
+      .forEach((item) => {
+        if (item.specs.surface) values.add(item.specs.surface)
+      })
+    return Array.from(values)
+  }, [initialData, effectiveCategory, showSurfaceFilter])
+
+  const availableProfiles = useMemo(() => {
+    if (!showProfileFilter || !effectiveCategory) return [] as string[]
+    const values = new Set<string>()
+    initialData
+      .filter((item) => item.category === effectiveCategory)
+      .forEach((item) => {
+        if (item.specs.profile) values.add(String(item.specs.profile))
+      })
+    return Array.from(values)
+  }, [initialData, effectiveCategory, showProfileFilter])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -124,7 +249,15 @@ export function PerifericosContent({ initialData, showAdminActions }: Periferico
         (q === "" || searchable.includes(q)) &&
         (selectedBrand === "all" || item.brand === selectedBrand) &&
         (selectedPriceBand === "all" || getPriceBand(item.price) === selectedPriceBand) &&
-        (selectedConnectivity === "all" || item.specs.connectivity === selectedConnectivity)
+        (!showConnectivityFilter || selectedConnectivity === "all" || item.specs.connectivity === selectedConnectivity) &&
+        (!showMouseShapeFilter || selectedMouseShape === "all" || item.specs.mouseShape === selectedMouseShape) &&
+        (!showKeyboardLayoutFilter || selectedKeyboardLayout === "all" || item.specs.keyboardLayout === selectedKeyboardLayout) &&
+        (!showKeyboardTypeFilter || selectedKeyboardType === "all" || item.specs.keyboardType === selectedKeyboardType) &&
+        (!showSurfaceFilter || selectedSurface === "all" || item.specs.surface === selectedSurface) &&
+        (!showPadTypeFilter || selectedPadType === "all" || item.specs.padType === selectedPadType) &&
+        (!showProfileFilter || selectedProfile === "all" || item.specs.profile === selectedProfile) &&
+        (!showMonitorFilters || selectedRefreshRate === "all" || Number(item.specs.refreshRate) === Number(selectedRefreshRate)) &&
+        (!showMonitorFilters || selectedPanelType === "all" || item.specs.panelType === selectedPanelType)
       )
     })
 
@@ -136,13 +269,46 @@ export function PerifericosContent({ initialData, showAdminActions }: Periferico
       case "price-desc": sorted.sort((a, b) => b.price - a.price || a.name.localeCompare(b.name)); break
     }
     return sorted
-  }, [initialData, query, selectedCategory, selectedBrand, selectedPriceBand, selectedConnectivity, sortKey, lockedCategory])
+  }, [
+    initialData,
+    query,
+    selectedCategory,
+    selectedBrand,
+    selectedPriceBand,
+    selectedConnectivity,
+    selectedMouseShape,
+    selectedKeyboardLayout,
+    selectedSurface,
+    selectedProfile,
+    sortKey,
+    lockedCategory,
+    showConnectivityFilter,
+    showMouseShapeFilter,
+    showKeyboardLayoutFilter,
+    showSurfaceFilter,
+    showProfileFilter,
+  ])
 
   const activeFiltersCount = useMemo(() =>
-    [selectedBrand, selectedPriceBand, selectedConnectivity].filter((v) => v !== "all").length +
+    [selectedBrand, selectedPriceBand, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType]
+      .filter((v) => v !== "all").length +
     (selectedCategory !== "all" ? 1 : 0) +
     (query.trim() ? 1 : 0),
-    [query, selectedBrand, selectedCategory, selectedConnectivity, selectedPriceBand]
+    [
+      query,
+      selectedBrand,
+      selectedCategory,
+      selectedConnectivity,
+      selectedPriceBand,
+      selectedMouseShape,
+      selectedKeyboardLayout,
+      selectedKeyboardType,
+      selectedPadType,
+      selectedSurface,
+      selectedProfile,
+      selectedRefreshRate,
+      selectedPanelType,
+    ]
   )
 
   const resetFilters = () => {
@@ -151,8 +317,39 @@ export function PerifericosContent({ initialData, showAdminActions }: Periferico
     setSelectedBrand("all")
     setSelectedPriceBand("all")
     setSelectedConnectivity("all")
+    setSelectedMouseShape("all")
+    setSelectedKeyboardLayout("all")
+    setSelectedKeyboardType("all")
+    setSelectedSurface("all")
+    setSelectedProfile("all")
+    setSelectedPadType("all")
+    setSelectedRefreshRate("all")
+    setSelectedPanelType("all")
     setSortKey("recent")
   }
+
+  useEffect(() => {
+    if (!showConnectivityFilter) setSelectedConnectivity("all")
+    if (!showMouseShapeFilter) setSelectedMouseShape("all")
+    if (!showKeyboardLayoutFilter) setSelectedKeyboardLayout("all")
+    if (!showKeyboardTypeFilter) setSelectedKeyboardType("all")
+    if (!showSurfaceFilter) setSelectedSurface("all")
+    if (!showProfileFilter) setSelectedProfile("all")
+    if (!showPadTypeFilter) setSelectedPadType("all")
+    if (!showMonitorFilters) {
+      setSelectedRefreshRate("all")
+      setSelectedPanelType("all")
+    }
+  }, [
+    showConnectivityFilter,
+    showMouseShapeFilter,
+    showKeyboardLayoutFilter,
+    showKeyboardTypeFilter,
+    showSurfaceFilter,
+    showProfileFilter,
+    showPadTypeFilter,
+    showMonitorFilters,
+  ])
 
   const toggleSelection = (id: string, category: Exclude<Category, "all">) => {
     setSelectedIds((prev) => {
@@ -267,16 +464,138 @@ export function PerifericosContent({ initialData, showAdminActions }: Periferico
             </SelectContent>
           </Select>
 
-          <Select value={selectedConnectivity} onValueChange={setSelectedConnectivity}>
-            <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
-              <SelectValue placeholder={isEnglish ? "Connectivity" : "Conexão"} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
-              <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
-              <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
-            </SelectContent>
-          </Select>
+          {showConnectivityFilter && (
+            <Select value={selectedConnectivity} onValueChange={setSelectedConnectivity}>
+              <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                <SelectValue placeholder={isEnglish ? "Connectivity" : "Conexão"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
+                <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+
+          {showMouseShapeFilter && availableMouseShapes.length > 0 && (
+            <Select value={selectedMouseShape} onValueChange={(v) => setSelectedMouseShape(v as MouseShape | "all")}>
+              <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                <SelectValue placeholder={isEnglish ? "Shape" : "Shape"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                {availableMouseShapes.map((shape) => (
+                  <SelectItem key={shape} value={shape}>
+                    {isEnglish ? formatLabel(shape) : (shape === "symmetrical" ? "Simetrico" : "Ergonomico")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {showKeyboardLayoutFilter && availableKeyboardLayouts.length > 0 && (
+            <Select value={selectedKeyboardLayout} onValueChange={(v) => setSelectedKeyboardLayout(v as KeyboardLayout | "all")}>
+              <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                <SelectValue placeholder={isEnglish ? "Layout" : "Layout"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                {availableKeyboardLayouts.map((layout) => (
+                  <SelectItem key={layout} value={layout}>
+                    {layout.toUpperCase()}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {showKeyboardTypeFilter && availableKeyboardTypes.length > 0 && (
+            <Select value={selectedKeyboardType} onValueChange={(v) => setSelectedKeyboardType(v as KeyboardType | "all")}>
+              <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                <SelectValue placeholder={isEnglish ? "Type" : "Tipo"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                {availableKeyboardTypes.map((t) => (
+                  <SelectItem key={t} value={t}>{isEnglish ? formatLabel(t) : (t === 'mechanical' ? 'Mecânico' : 'Magnético')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {showSurfaceFilter && availableSurfaces.length > 0 && (
+            <Select value={selectedSurface} onValueChange={(v) => setSelectedSurface(v as Surface | "all")}>
+              <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                <SelectValue placeholder={isEnglish ? "Surface" : "Superficie"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                {availableSurfaces.map((surface) => (
+                  <SelectItem key={surface} value={surface}>
+                    {isEnglish ? formatLabel(surface) : (surface === "cloth" ? "Tecido" : surface === "glass" ? "Vidro" : "Hibrido")}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {showPadTypeFilter && availablePadTypes.length > 0 && (
+            <Select value={selectedPadType} onValueChange={(v) => setSelectedPadType(v as PadType | "all")}>
+              <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                <SelectValue placeholder={isEnglish ? "Pad" : "Pad"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                {availablePadTypes.map((p) => (
+                  <SelectItem key={p} value={p}>{isEnglish ? formatLabel(p) : (p === 'speed' ? 'Speed' : p === 'control' ? 'Control' : 'Híbrido')}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {showProfileFilter && availableProfiles.length > 0 && (
+            <Select value={selectedProfile} onValueChange={setSelectedProfile}>
+              <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                <SelectValue placeholder={isEnglish ? "Profile" : "Perfil"} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                {availableProfiles.map((profile) => (
+                  <SelectItem key={profile} value={profile}>
+                    {formatLabel(profile)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {showMonitorFilters && (
+            <>
+              <Select value={selectedRefreshRate} onValueChange={setSelectedRefreshRate}>
+                <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                  <SelectValue placeholder={isEnglish ? "Hz" : "Hz"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                  {availableRefreshRates.map((r) => (
+                    <SelectItem key={r} value={r}>{r} Hz</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={selectedPanelType} onValueChange={(v) => setSelectedPanelType(v as PanelType | "all")}>
+                <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
+                  <SelectValue placeholder={isEnglish ? "Panel" : "Painel"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                  {availablePanelTypes.map((p) => (
+                    <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
 
           <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
             <SelectTrigger className="h-9 w-auto min-w-[100px] border-border bg-muted/20 text-sm">
@@ -332,8 +651,11 @@ export function PerifericosContent({ initialData, showAdminActions }: Periferico
               item.specs.connectivity ? formatLabel(item.specs.connectivity) : null,
               item.specs.driver ?? null,
               item.specs.keyboardLayout ? item.specs.keyboardLayout.toUpperCase() : null,
+              item.specs.keyboardType ? (item.specs.keyboardType === 'mechanical' ? (isEnglish ? 'Mechanical' : 'Mecânico') : (isEnglish ? 'Magnetic' : 'Magnético')) : null,
               item.specs.surface ? formatLabel(item.specs.surface) : null,
               item.specs.mouseShape ? formatLabel(item.specs.mouseShape) : null,
+              item.specs.refreshRate ? `${item.specs.refreshRate}Hz` : null,
+              item.specs.panelType ? String(item.specs.panelType).toUpperCase() : null,
             ].filter(Boolean) as string[]
 
             return (

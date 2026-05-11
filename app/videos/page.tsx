@@ -33,7 +33,7 @@ export default async function VideosPage() {
               Vídeos
             </Badge>
             <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-              Últimos vídeos e playlists
+              Últimos vídeos e redes sociais
             </h1>
           </div>
 

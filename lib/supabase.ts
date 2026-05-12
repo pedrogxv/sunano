@@ -32,6 +32,17 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["peripherals"]["Row"], "id" | "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["peripherals"]["Insert"]>
       }
+      user_profiles: {
+        Row: {
+          id: string
+          display_name: string | null
+          avatar_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["user_profiles"]["Row"], "created_at" | "updated_at">
+        Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>
+      }
       blog_posts: {
         Row: {
           id: string
@@ -74,6 +85,8 @@ export type Database = {
           body: string
           author_name: string
           author_email: string | null
+          user_id: string | null
+          peripheral_refs: string[]
           is_hidden: boolean
           is_locked: boolean
           created_at: string
@@ -89,6 +102,8 @@ export type Database = {
           body: string
           author_name: string
           author_email: string | null
+          user_id: string | null
+          peripheral_refs: string[]
           is_hidden: boolean
           created_at: string
           updated_at: string

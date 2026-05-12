@@ -908,10 +908,6 @@ export default function AdminPeripheralsPage() {
 
 
 
-      {/* Total */}
-      <div className="text-sm text-slate-400 text-center">
-        {isEnglish ? "Total" : "Total"}: {filtered.length} {isEnglish ? "peripherals in" : "periféricos em"} {categoryLabel}
-      </div>
     </div>
   )
 }

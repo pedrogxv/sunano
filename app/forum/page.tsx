@@ -1,18 +1,16 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
-import { enUS, ptBR } from "date-fns/locale"
-import { MessageCircle, Plus } from "lucide-react"
+import { ptBR } from "date-fns/locale"
+import { ChevronDown, ChevronUp, Clock, Flame, Lock, MessageCircle, Pin, Plus, Tag, X } from "lucide-react"
 
 import BoxLoader from "@/components/ui/box-loader"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { useLocale } from "@/lib/locale-context"
+import { supabase } from "@/lib/supabase"
 
 type ForumPost = {
   id: string
@@ -20,234 +18,532 @@ type ForumPost = {
   title: string
   body: string
   author_name: string
+  author_display_name: string
+  author_avatar_url: string | null
+  peripheral_refs: string[]
+  peripherals?: { id: string; name: string; brand: string; category: string; image_url: string | null }[]
   created_at: string
   is_locked: boolean
+  is_pinned: boolean
+  vote_score: number
   comment_count: number
 }
 
-type PostsResponse = {
-  ok?: boolean
-  error?: string
-  posts?: ForumPost[]
+type Peripheral = { id: string; name: string; brand: string; category: string; image_url?: string | null }
+type AuthUser = { id: string; display_name: string; avatar_url: string | null } | null
+type Tab = "recent" | "hot" | "peripheral"
+
+const CATEGORIES = [
+  { value: "mouse",     label: "Mouse" },
+  { value: "keyboard",  label: "Teclado" },
+  { value: "mousepad",  label: "Mousepad" },
+  { value: "glasspad",  label: "Glasspad" },
+  { value: "iem",       label: "IEM" },
+  { value: "headset",   label: "Headset" },
+]
+
+const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.value, c.label]))
+
+function UserAvatar({ name, avatarUrl, size = 8 }: { name: string; avatarUrl?: string | null; size?: number }) {
+  const initials = name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+  const sizeClass = `size-${size}`
+  if (avatarUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={avatarUrl} alt={name} className={`${sizeClass} rounded-full object-cover border border-border`} />
+    )
+  }
+  return (
+    <div className={`${sizeClass} flex items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary`}>
+      {initials}
+    </div>
+  )
 }
 
-const AUTHOR_NAME_KEY = "sunano-forum-author"
-const AUTHOR_EMAIL_KEY = "sunano-forum-email"
+function PeripheralCard({ peripheral }: { peripheral: { id: string; name: string; brand: string; category: string; image_url?: string | null } }) {
+  return (
+    <Link
+      href={`/perifericos/${peripheral.id}`}
+      onClick={(e) => e.stopPropagation()}
+      className="group flex items-center gap-2.5 rounded-xl border border-border/50 bg-card px-2.5 py-2 transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm"
+    >
+      <div className="size-9 shrink-0 overflow-hidden rounded-lg bg-muted/50 flex items-center justify-center">
+        {peripheral.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={peripheral.image_url} alt={peripheral.name} className="size-9 object-contain p-0.5" />
+        ) : (
+          <span className="text-[11px] font-bold text-muted-foreground">
+            {peripheral.brand.slice(0, 2).toUpperCase()}
+          </span>
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold leading-tight text-foreground group-hover:text-primary transition-colors truncate max-w-[160px]">
+          {peripheral.brand} {peripheral.name}
+        </p>
+        <p className="mt-0.5 text-[10px] font-medium text-primary/60 leading-none">
+          {CATEGORY_LABEL[peripheral.category] ?? peripheral.category}
+        </p>
+      </div>
+    </Link>
+  )
+}
+
+function VoteColumn({
+  post,
+  userVote,
+  onVote,
+  disabled,
+}: {
+  post: ForumPost
+  userVote: number
+  onVote: (v: 1 | -1 | 0) => void
+  disabled: boolean
+}) {
+  const score = post.vote_score ?? 0
+  return (
+    <div className="flex flex-col items-center gap-0.5 shrink-0 w-8 pt-0.5">
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onVote(userVote === 1 ? 0 : 1) }}
+        disabled={disabled}
+        title={disabled ? "Entre para votar" : userVote === 1 ? "Remover voto" : "Voto positivo"}
+        className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+          userVote === 1
+            ? "text-primary bg-primary/15 hover:bg-primary/20"
+            : "text-muted-foreground hover:text-primary hover:bg-primary/10"
+        } disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        <ChevronUp className="size-4" />
+      </button>
+      <span className={`text-xs font-bold tabular-nums leading-none ${
+        score > 0 ? "text-primary" : score < 0 ? "text-destructive" : "text-muted-foreground"
+      }`}>
+        {score}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onVote(userVote === -1 ? 0 : -1) }}
+        disabled={disabled}
+        title={disabled ? "Entre para votar" : userVote === -1 ? "Remover voto" : "Voto negativo"}
+        className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors ${
+          userVote === -1
+            ? "text-destructive bg-destructive/15 hover:bg-destructive/20"
+            : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+        } disabled:cursor-not-allowed disabled:opacity-40`}
+      >
+        <ChevronDown className="size-4" />
+      </button>
+    </div>
+  )
+}
 
 export default function ForumPage() {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
-
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [posts, setPosts] = useState<ForumPost[]>([])
+  const [authUser, setAuthUser] = useState<AuthUser>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [userVotes, setUserVotes] = useState<Record<string, number>>({})
+
+  const [activeTab, setActiveTab] = useState<Tab>("recent")
+  const [activeCategory, setActiveCategory] = useState("")
+
+  // New post form
+  const [showForm, setShowForm] = useState(false)
   const [title, setTitle] = useState("")
   const [body, setBody] = useState("")
-  const [authorName, setAuthorName] = useState("")
-  const [authorEmail, setAuthorEmail] = useState("")
+  const [selectedPeripherals, setSelectedPeripherals] = useState<Peripheral[]>([])
+  const [peripheralSearch, setPeripheralSearch] = useState("")
+  const [peripheralResults, setPeripheralResults] = useState<Peripheral[]>([])
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
-    const storedName = typeof window !== "undefined" ? localStorage.getItem(AUTHOR_NAME_KEY) : null
-    const storedEmail = typeof window !== "undefined" ? localStorage.getItem(AUTHOR_EMAIL_KEY) : null
-    if (storedName) setAuthorName(storedName)
-    if (storedEmail) setAuthorEmail(storedEmail)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from("user_profiles").select("display_name, avatar_url")
+          .eq("id", session.user.id).maybeSingle()
+        setAuthUser({
+          id: session.user.id,
+          display_name: profile?.display_name || session.user.email?.split("@")[0] || "Usuário",
+          avatar_url: profile?.avatar_url || null,
+        })
+      } else {
+        setAuthUser(null)
+        setUserVotes({})
+      }
+      setAuthLoading(false)
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
-  useEffect(() => {
-    loadPosts()
+  const loadUserVotes = useCallback(async (postIds: string[]) => {
+    if (!postIds.length) return
+    const { data } = await (supabase as any).from("forum_votes")
+      .select("post_id, value").in("post_id", postIds)
+    const map: Record<string, number> = {}
+    for (const v of (data ?? []) as any[]) map[v.post_id] = v.value
+    setUserVotes(map)
   }, [])
 
-  async function loadPosts() {
+  const loadPosts = useCallback(async (tab: Tab, category: string, withVotes: boolean) => {
     try {
       setLoading(true)
       setError(null)
-
-      const response = await fetch("/api/forum/posts")
-      const data = (await response.json().catch(() => null)) as PostsResponse | null
-
-      if (!response.ok || !data?.posts) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to load forum posts" : "Erro ao carregar posts"))
+      const params = new URLSearchParams({ tab })
+      if (tab === "peripheral" && category) params.set("category", category)
+      const res = await fetch(`/api/forum/posts?${params}`)
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.posts) throw new Error(data?.error ?? "Erro ao carregar posts")
+      const loaded = data.posts as ForumPost[]
+      setPosts(loaded)
+      if (withVotes && loaded.length > 0) {
+        await loadUserVotes(loaded.map((p) => p.id))
       }
-
-      setPosts(data.posts)
     } catch (err) {
-      setError(err instanceof Error ? err.message : (isEnglish ? "Failed to load forum posts" : "Erro ao carregar posts"))
+      setError(err instanceof Error ? err.message : "Erro ao carregar posts")
     } finally {
       setLoading(false)
     }
+  }, [loadUserVotes])
+
+  useEffect(() => {
+    loadPosts(activeTab, activeCategory, !!authUser)
+  }, [activeTab, activeCategory, authUser, loadPosts])
+
+  async function handleVote(post: ForumPost, value: 1 | -1 | 0) {
+    if (!authUser) return
+    const prevVote = userVotes[post.id] ?? 0
+    const prevScore = post.vote_score
+    const delta = value - prevVote
+
+    setUserVotes((prev) => ({ ...prev, [post.id]: value }))
+    setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, vote_score: p.vote_score + delta } : p))
+
+    const res = await fetch(`/api/forum/posts/${post.slug}/vote`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value }),
+    })
+
+    if (!res.ok) {
+      setUserVotes((prev) => ({ ...prev, [post.id]: prevVote }))
+      setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, vote_score: prevScore } : p))
+    } else {
+      const data = await res.json().catch(() => null)
+      if (data?.vote_score !== undefined) {
+        setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, vote_score: data.vote_score } : p))
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (peripheralSearch.trim().length < 2) { setPeripheralResults([]); return }
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from("peripherals").select("id, name, brand, category")
+        .ilike("name", `%${peripheralSearch.trim()}%`).limit(8)
+      setPeripheralResults((data ?? []) as Peripheral[])
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [peripheralSearch])
+
+  function addPeripheral(p: Peripheral) {
+    if (selectedPeripherals.length >= 3 || selectedPeripherals.find((s) => s.id === p.id)) return
+    setSelectedPeripherals((prev) => [...prev, p])
+    setPeripheralSearch("")
+    setPeripheralResults([])
+  }
+
+  function removePeripheral(id: string) {
+    setSelectedPeripherals((prev) => prev.filter((p) => p.id !== id))
   }
 
   async function submitPost() {
+    if (!authUser) return
     try {
       setSaving(true)
       setFormError(null)
-
-      const response = await fetch("/api/forum/posts", {
+      const res = await fetch("/api/forum/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          body,
-          author_name: authorName,
-          author_email: authorEmail || undefined,
-          website: "",
-        }),
+        body: JSON.stringify({ title, body, peripheral_refs: selectedPeripherals.map((p) => p.id) }),
       })
-
-      const data = (await response.json().catch(() => null)) as { error?: string; ok?: boolean; slug?: string } | null
-
-      if (!response.ok || !data?.ok || !data.slug) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to create post" : "Erro ao criar post"))
-      }
-
-      if (typeof window !== "undefined") {
-        localStorage.setItem(AUTHOR_NAME_KEY, authorName)
-        if (authorEmail) {
-          localStorage.setItem(AUTHOR_EMAIL_KEY, authorEmail)
-        }
-      }
-
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.ok || !data.slug) throw new Error(data?.error ?? "Erro ao criar post")
       setTitle("")
       setBody("")
-
-      await loadPosts()
+      setSelectedPeripherals([])
+      setShowForm(false)
+      await loadPosts(activeTab, activeCategory, !!authUser)
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : (isEnglish ? "Failed to create post" : "Erro ao criar post"))
+      setFormError(err instanceof Error ? err.message : "Erro ao criar post")
     } finally {
       setSaving(false)
     }
   }
 
-  const dateLocale = isEnglish ? enUS : ptBR
+  function switchTab(tab: Tab) {
+    setActiveTab(tab)
+    if (tab !== "peripheral") setActiveCategory("")
+  }
 
-  const postItems = useMemo(() => posts, [posts])
+  const canSubmit = title.trim().length >= 4 && body.trim().length >= 20
+
+  const emptyMessage =
+    activeTab === "hot" ? "Nenhum tópico em destaque no momento." :
+    activeTab === "peripheral" && activeCategory ? `Nenhum tópico sobre ${CATEGORY_LABEL[activeCategory] ?? activeCategory} ainda.` :
+    activeTab === "peripheral" ? "Nenhum tópico com periféricos ainda." :
+    "Nenhum tópico ainda. Seja o primeiro!"
 
   return (
+    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:px-6">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            Fórum
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Compartilhe dicas, tire dúvidas e discuta periféricos.
+          </p>
+        </div>
 
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-6 md:px-6 lg:px-8">
-      <div className="space-y-2">
-        <h1 className="font-display text-3xl font-bold tracking-tight text-slate-50 md:text-4xl">
-          {isEnglish ? "Community Forum" : "Forum da comunidade"}
-        </h1>
-        <p className="text-sm text-slate-400">
-          {isEnglish
-            ? "Share tips, ask for help, and discuss peripherals."
-            : "Compartilhe dicas, tire duvidas e discuta periféricos."}
-        </p>
+        {!authLoading && (
+          authUser ? (
+            <Button size="sm" className="shrink-0 gap-2" onClick={() => setShowForm((v) => !v)}>
+              {showForm ? <X className="size-4" /> : <Plus className="size-4" />}
+              {showForm ? "Cancelar" : "Novo tópico"}
+            </Button>
+          ) : (
+            <Link href="/login">
+              <Button size="sm" variant="outline" className="shrink-0 gap-2 border-border">
+                Entrar para postar
+              </Button>
+            </Link>
+          )
+        )}
       </div>
 
-      <Card className="border-border bg-card">
-        <CardHeader className="space-y-1">
-          <CardTitle className="flex items-center gap-2 text-base text-slate-50">
-            <Plus className="size-4 text-cyan-300" />
-            {isEnglish ? "Start a new topic" : "Criar novo topico"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {formError ? (
-            <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-              <AlertDescription className="text-xs leading-5 text-red-200">{formError}</AlertDescription>
-            </Alert>
-          ) : null}
+      {/* Tab bar */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-1 rounded-xl border border-border bg-card p-1">
+          {(
+            [
+              { value: "recent" as Tab,     label: "Recente",        icon: Clock  },
+              { value: "hot" as Tab,        label: "Em Alta",        icon: Flame  },
+              { value: "peripheral" as Tab, label: "Por Periférico", icon: Tag    },
+            ] as const
+          ).map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => switchTab(value)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                activeTab === value
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Icon className="size-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                {isEnglish ? "Your name" : "Seu nome"}
-              </label>
-              <Input
-                value={authorName}
-                onChange={(event) => setAuthorName(event.target.value)}
-                className="border-white/10 bg-white/[0.03] text-slate-100"
-                placeholder={isEnglish ? "Ex: Ana" : "Ex: Ana"}
-              />
+        {activeTab === "peripheral" && (
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => setActiveCategory("")}
+              className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                !activeCategory
+                  ? "border-primary bg-primary/15 text-primary"
+                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+              }`}
+            >
+              Todos
+            </button>
+            {CATEGORIES.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => setActiveCategory(c.value)}
+                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                  activeCategory === c.value
+                    ? "border-primary bg-primary/15 text-primary"
+                    : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                }`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* New post form */}
+      {showForm && authUser && (
+        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <UserAvatar name={authUser.display_name} avatarUrl={authUser.avatar_url} size={6} />
+            Postando como <span className="text-primary">{authUser.display_name}</span>
+          </div>
+
+          {formError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {formError}
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                {isEnglish ? "Email (optional)" : "Email (opcional)"}
-              </label>
-              <Input
-                value={authorEmail}
-                onChange={(event) => setAuthorEmail(event.target.value)}
-                className="border-white/10 bg-white/[0.03] text-slate-100"
-                placeholder="email@exemplo.com"
-              />
-            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Título</label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} className="border-border bg-muted/20" placeholder="Ex: Melhor mouse sem fio até R$500?" />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {isEnglish ? "Title" : "Titulo"}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mensagem</label>
+            <Textarea value={body} onChange={(e) => setBody(e.target.value)} className="min-h-[120px] border-border bg-muted/20" placeholder="Descreva sua dúvida ou dica..." />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Periféricos relacionados <span className="normal-case font-normal">(até 3)</span>
             </label>
-            <Input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="border-white/10 bg-white/[0.03] text-slate-100"
-              placeholder={isEnglish ? "Ex: Best wireless mouse under $100" : "Ex: Melhor mouse sem fio ate R$500"}
-            />
+            {selectedPeripherals.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {selectedPeripherals.map((p) => (
+                  <span key={p.id} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-xs text-primary">
+                    {p.brand} {p.name}
+                    <button type="button" onClick={() => removePeripheral(p.id)} className="hover:text-destructive">
+                      <X className="size-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {selectedPeripherals.length < 3 && (
+              <div className="relative">
+                <Input value={peripheralSearch} onChange={(e) => setPeripheralSearch(e.target.value)} className="border-border bg-muted/20 text-sm" placeholder="Buscar periférico por nome..." />
+                {peripheralResults.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-card shadow-xl">
+                    {peripheralResults.map((p) => (
+                      <button key={p.id} type="button" onClick={() => addPeripheral(p)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/40">
+                        <span className="font-medium text-foreground">{p.name}</span>
+                        <span className="text-muted-foreground">{p.brand}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              {isEnglish ? "Message" : "Mensagem"}
-            </label>
-            <Textarea
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              className="min-h-[140px] border-white/10 bg-white/[0.03] text-slate-100"
-              placeholder={isEnglish ? "Tell us what you need..." : "Conte o que voce precisa..."}
-            />
-          </div>
-
-          <div className="flex justify-end">
-            <Button onClick={submitPost} disabled={saving}>
-              {saving ? (isEnglish ? "Publishing..." : "Publicando...") : (isEnglish ? "Publish" : "Publicar")}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancelar</Button>
+            <Button size="sm" onClick={submitPost} disabled={saving || !canSubmit}>
+              {saving ? "Publicando…" : "Publicar"}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
 
-      {error ? (
-        <Alert className="border-red-500/30 bg-red-500/10 py-2 [&>svg]:left-3 [&>svg~*]:pl-7">
-          <AlertDescription className="text-xs leading-5 text-red-200">{error}</AlertDescription>
-        </Alert>
-      ) : null}
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
+      {/* Post list */}
       {loading ? (
-        <div className="flex items-center justify-center py-14">
+        <div className="flex items-center justify-center py-16">
           <BoxLoader />
         </div>
-      ) :postItems.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card p-10 text-center">
-          <p className="text-slate-300">{isEnglish ? "No topics yet." : "Nenhum topico ainda."}</p>
+      ) : posts.length === 0 ? (
+        <div className="rounded-2xl border border-border bg-card p-12 text-center">
+          <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+          {!authUser && (
+            <Link href="/login">
+              <Button size="sm" className="mt-4">Entrar para postar</Button>
+            </Link>
+          )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {postItems.map((post) => (
-            <Card key={post.id} className="border-border bg-card">
-              <CardContent className="space-y-3 p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1">
-                    <Link href={`/forum/${post.slug}`} className="text-base font-semibold text-slate-50 hover:text-cyan-200">
-                      {post.title}
-                    </Link>
-                    <p className="text-xs text-slate-500">
-                      {format(new Date(post.created_at), "PPp", { locale: dateLocale })} · {post.author_name}
+        <div className="space-y-3">
+          {posts.map((post) => (
+            <div
+              key={post.id}
+              className={`group relative rounded-xl border bg-card transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20 ${
+                post.is_pinned
+                  ? "border-primary/30 bg-primary/[0.03] hover:border-primary/50"
+                  : "border-border hover:border-border/70"
+              }`}
+            >
+              {post.is_pinned && (
+                <div className="absolute -top-px left-0 right-0 h-px rounded-t-xl bg-gradient-to-r from-primary/60 via-primary/30 to-transparent" />
+              )}
+
+              <div className="flex items-start gap-3 p-4 pb-3.5">
+                {/* Vote column — outside Link to avoid navigation */}
+                <VoteColumn
+                  post={post}
+                  userVote={userVotes[post.id] ?? 0}
+                  onVote={(v) => handleVote(post, v)}
+                  disabled={!authUser}
+                />
+
+                {/* Post content — inside Link */}
+                <Link href={`/forum/${post.slug}`} className="flex flex-1 min-w-0 items-start gap-3">
+                  <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={8} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <h2 className="font-semibold text-foreground group-hover:text-primary transition-colors leading-tight">
+                        {post.is_pinned && (
+                          <span className="mr-1.5 inline-flex items-center gap-1 rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary align-middle">
+                            <Pin className="size-2.5" />
+                            Fixado
+                          </span>
+                        )}
+                        {post.title}
+                      </h2>
+                      <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                        {post.is_locked && <Lock className="size-3 text-amber-500" />}
+                        <MessageCircle className="size-3.5" />
+                        <span>{post.comment_count}</span>
+                      </div>
+                    </div>
+
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {post.author_display_name} · {format(new Date(post.created_at), "dd MMM yyyy", { locale: ptBR })}
                     </p>
+
+                    <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted-foreground">
+                      {post.body}
+                    </p>
+
+                    {post.peripherals && post.peripherals.length > 0 && (
+                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                        {post.peripherals.map((p) => (
+                          <PeripheralCard key={p.id} peripheral={p} />
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-3 py-1 text-xs text-slate-300">
-                    <MessageCircle className="size-3" />
-                    {post.comment_count}
-                  </div>
-                </div>
-                <p className="line-clamp-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">
-                  {post.body}
-                </p>
-              </CardContent>
-            </Card>
+                </Link>
+              </div>
+            </div>
           ))}
+        </div>
+      )}
+
+      {!authLoading && !authUser && !loading && posts.length > 0 && (
+        <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            <Link href="/login" className="font-medium text-primary hover:underline">Entre na sua conta</Link>
+            {" "}para criar tópicos, comentar e votar.
+          </p>
         </div>
       )}
     </div>

@@ -5,13 +5,16 @@ import { usePathname } from "next/navigation"
 import {
   BadgePercent,
   Clock3,
+  Home,
   Menu,
   MessageCircle,
   Mouse,
   Newspaper,
   Package,
   PlaySquare,
-  Store,
+  Recycle,
+  ShoppingBag,
+  ShoppingCart,
   X,
 } from "lucide-react"
 
@@ -19,30 +22,30 @@ import { AuthUser } from "@/components/auth/auth-user"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/lib/sidebar-context"
 import { useLocale } from "@/lib/locale-context"
+import { useCart } from "@/lib/cart-context"
 import { cn } from "@/lib/utils"
 
-type Category = "all" | "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
-
-interface PublicSidebarProps {
-  onCategoryChange?: (category: Category) => void
-}
-
-export function PublicSidebar({ onCategoryChange }: PublicSidebarProps) {
+export function PublicSidebar() {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
   const { publicCollapsed: isCollapsed, isMobileOpen, setMobileOpen } = useSidebar()
   const pathname = usePathname()
+  const { count: cartCount, setOpen: openCart } = useCart()
 
   const isHomePage = pathname === "/"
-  const navItems = [
-    { href: "/", label: isEnglish ? "Tierlist" : "Tierlist", icon: Package },
+
+  const mainNavItems = [
+    { href: "/", label: isEnglish ? "Home" : "Início", icon: Home },
+    { href: "/tierlist", label: "Tierlist", icon: Package },
     { href: "/noticias", label: isEnglish ? "News" : "Noticias", icon: Newspaper },
     { href: "/perifericos", label: isEnglish ? "Peripherals" : "Perifericos", icon: Mouse },
-    { href: "/blog", label: isEnglish ? "Reviews" : "Reviews", icon: Newspaper },
+    { href: "/blog", label: "Reviews", icon: Newspaper },
     { href: "/offers", label: isEnglish ? "Offers" : "Ofertas", icon: BadgePercent },
-    { href: "/forum", label: isEnglish ? "Forum" : "Forum", icon: MessageCircle },
-    { href: "/videos", label: isEnglish ? "Videos" : "Videos", icon: PlaySquare },
+    { href: "/forum", label: "Forum", icon: MessageCircle },
+    { href: "/videos", label: "Videos", icon: PlaySquare },
   ]
+
+  const isInStore = pathname?.startsWith("/loja") || pathname?.startsWith("/bazar")
 
   return (
     <>
@@ -63,7 +66,7 @@ export function PublicSidebar({ onCategoryChange }: PublicSidebarProps) {
         )}
       >
         {/* Navigation */}
-        <nav className="flex-1 overflow-hidden px-3 pt-6 pb-4">
+        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-4">
           <div className="flex items-center gap-3 pb-6">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-lg from-primary to-primary/80 font-bold text-primary-foreground shadow-lg shadow-black/20">
               S
@@ -76,7 +79,7 @@ export function PublicSidebar({ onCategoryChange }: PublicSidebarProps) {
 
           {/* Main Nav */}
           <div className="space-y-1">
-            {navItems.map((item) => {
+            {mainNavItems.map((item) => {
               const Icon = item.icon
               const isActive = item.href === "/" ? isHomePage : pathname?.startsWith(item.href)
 
@@ -84,10 +87,7 @@ export function PublicSidebar({ onCategoryChange }: PublicSidebarProps) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  onClick={() => {
-                    if (item.href === "/") onCategoryChange?.("all")
-                    setMobileOpen(false)
-                  }}
+                  onClick={() => setMobileOpen(false)}
                   className={cn(
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                     isCollapsed && "justify-center",
@@ -103,23 +103,103 @@ export function PublicSidebar({ onCategoryChange }: PublicSidebarProps) {
             })}
           </div>
 
-          {/* Divider */}
-          <div className="my-4 h-px bg-border" />
+          {/* Store section */}
+          <div className="mt-4">
+            {/* Section label */}
+            {!isCollapsed && (
+              <p className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+                {isEnglish ? "Shop" : "Compras"}
+              </p>
+            )}
+            {isCollapsed && <div className="mb-2 h-px bg-border" />}
 
-          {/* Coming Soon */}
-          <div className="space-y-1">
-            <p className={cn("mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground", isCollapsed && "hidden")}>
-              {isEnglish ? "Coming Soon" : "Em Breve"}
-            </p>
-            <div className={cn("flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground", isCollapsed && "justify-center")}>
-              <div className="size-[18px] shrink-0 rounded bg-muted/40">
-              <Store className="size-[18px] shrink-0" />
-              </div>
-              <span className={cn(isCollapsed && "hidden")}> {isEnglish ? "Store" : "Loja"}</span>
-              <span className={cn("ml-auto rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-medium text-amber-300", isCollapsed && "hidden")}>
-                Soon
-              </span>
+            <div className="space-y-1">
+              {/* Loja */}
+              {(() => {
+                const isActive = pathname?.startsWith("/loja")
+                return (
+                  <Link
+                    href="/loja"
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                      isCollapsed && "justify-center",
+                      isActive
+                        ? "bg-emerald-600/80 text-white shadow-sm shadow-emerald-900/40"
+                        : "border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+                    )}
+                  >
+                    <ShoppingBag className="size-[18px] shrink-0" />
+                    <span className={cn("flex-1", isCollapsed && "hidden")}>
+                      {isEnglish ? "Store" : "Loja"}
+                    </span>
+                    {/* Cart badge */}
+                    {cartCount > 0 && (
+                      <button
+                        onClick={(e) => { e.preventDefault(); openCart(true) }}
+                        className={cn(
+                          "flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-bold transition-colors",
+                          isCollapsed && "absolute -top-1 -right-1",
+                          isActive
+                            ? "bg-white/20 text-white"
+                            : "bg-emerald-500 text-white"
+                        )}
+                        title="Ver carrinho"
+                      >
+                        <ShoppingCart className={cn("size-2.5", isCollapsed && "hidden")} />
+                        {cartCount > 9 ? "9+" : cartCount}
+                      </button>
+                    )}
+                  </Link>
+                )
+              })()}
+
+              {/* Bazar */}
+              {(() => {
+                const isActive = pathname?.startsWith("/bazar")
+                return (
+                  <Link
+                    href="/bazar"
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                      isCollapsed && "justify-center",
+                      isActive
+                        ? "bg-amber-600/80 text-white shadow-sm shadow-amber-900/40"
+                        : "border border-amber-500/20 bg-amber-500/5 text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/10 hover:text-amber-300"
+                    )}
+                  >
+                    <Recycle className="size-[18px] shrink-0" />
+                    <span className={cn("flex-1", isCollapsed && "hidden")}>Bazar</span>
+                    {/* "Usado" pill */}
+                    {!isCollapsed && (
+                      <span className={cn(
+                        "rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
+                        isActive ? "bg-white/20 text-white" : "bg-amber-500/20 text-amber-400"
+                      )}>
+                        {isEnglish ? "Used" : "Usado"}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })()}
             </div>
+
+            {/* Cart quick-open — only when in store area or has items */}
+            {(isInStore || cartCount > 0) && !isCollapsed && (
+              <button
+                onClick={() => openCart(true)}
+                className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
+              >
+                <ShoppingCart className="size-3.5 shrink-0" />
+                <span className="flex-1 text-left">{isEnglish ? "Cart" : "Carrinho"}</span>
+                {cartCount > 0 && (
+                  <span className="flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-white">
+                    {cartCount > 9 ? "9+" : cartCount}
+                  </span>
+                )}
+              </button>
+            )}
           </div>
         </nav>
 

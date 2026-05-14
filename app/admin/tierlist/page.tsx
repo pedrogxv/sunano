@@ -18,7 +18,6 @@ import {
 } from "@dnd-kit/core"
 import { cn } from "@/lib/utils"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import {
@@ -48,6 +47,7 @@ import {
   TIER_THEMES,
   VALUE_COLUMN_COLORS,
 } from "@/lib/tierlist-theme"
+import { TierItemTooltipContent } from "@/components/tierlist/TierItemTooltipContent"
 
 type RatingMode = "performance" | "value" | "recommended"
 
@@ -321,65 +321,21 @@ function DraggablePeripheralCard({
       </TooltipTrigger>
 
       <TooltipContent
-        className="max-w-xs rounded-xl border border-white/[0.12] bg-[#0a0e17]/95 p-4 shadow-2xl backdrop-blur-md"
+        className="rounded-xl border border-white/[0.12] bg-[#0a0e17]/95 p-4 shadow-2xl backdrop-blur-md"
         sideOffset={12}
       >
-        <div className="space-y-3">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div className={cn("grid size-14 place-items-center overflow-hidden rounded-xl font-bold shadow-lg", tierStyle.bg, tierStyle.text)}>
-              {item.image_url ? (
-                <Image src={item.image_url} alt={item.name} width={56} height={56} className="h-full w-full object-cover" />
-              ) : (
-                item.brand.slice(0, 2).toUpperCase()
-              )}
-            </div>
-            <div>
-              <p className="text-sm font-bold text-slate-100">{item.name}</p>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {item.brand} · {isEnglish ? categoryMeta?.en : categoryMeta?.pt}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge className={cn("text-[10px] font-bold px-2 py-0.5", tierStyle.bg, tierStyle.text)} variant="secondary">
-                {item.tier ?? (isEnglish ? "No tier" : "Sem tier")}
-              </Badge>
-              <span className="text-sm font-bold text-emerald-400">${item.price}</span>
-              <span className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-slate-400">
-                {getPriceBand(item.price)}
-              </span>
-            </div>
-          </div>
-
-          {item.tags.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Tags</p>
-              <div className="flex flex-wrap gap-1.5">
-                {item.tags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    className={cn("rounded-full border px-2.5 py-1 text-xs", CARD_TAG_STYLES[tag].bg, CARD_TAG_STYLES[tag].text, CARD_TAG_STYLES[tag].border)}
-                  >
-                    {formatLabel(tag)}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {specPairs.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Specs</p>
-              <div className="grid grid-cols-2 gap-1.5">
-                {specPairs.slice(0, 4).map((pair) => (
-                  <div key={pair.label} className="rounded-md border border-white/[0.08] bg-white/[0.04] px-2.5 py-2">
-                    <p className="text-[9px] font-medium text-slate-500">{pair.label}</p>
-                    <p className="text-xs font-semibold text-slate-100">{pair.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <TierItemTooltipContent
+          name={item.name}
+          brand={item.brand}
+          categoryLabel={isEnglish ? (categoryMeta?.en ?? item.category) : (categoryMeta?.pt ?? item.category)}
+          image_url={item.image_url}
+          tier={item.tier}
+          tags={item.tags}
+          specs={specPairs}
+          displayPrice={`$${item.price}`}
+          isEnglish={isEnglish}
+          priceBand={getPriceBand(item.price)}
+        />
       </TooltipContent>
     </Tooltip>
   )

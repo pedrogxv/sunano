@@ -17,6 +17,8 @@ type TierValue = Tier | null
 type Tag = "competitive" | "versatile" | "value" | "comfort"
 type RatingMode = "performance" | "value" | "recommended"
 type PriceBand = "budget" | "mid" | "premium"
+type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
+type Ratings = Partial<Record<RatingKey, number>>
 
 interface Peripheral {
   id: string
@@ -27,6 +29,7 @@ interface Peripheral {
   tier: TierValue
   price: number
   tags: Tag[]
+  ratings?: Ratings
   specs: {
     mouseShape?: "symmetrical" | "ergonomic"
     keyboardLayout?: string
@@ -369,6 +372,24 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-lg">
         <table className="hidden w-full border-collapse md:table">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="w-20 border-r border-border bg-muted/30" />
+              {modeConfig.columns.map((column, colIndex) => (
+                <th
+                  key={column.key}
+                  className={cn(
+                    "border-r border-border px-3 py-2.5 text-left last:border-r-0",
+                    colIndex % 2 === 0 ? "bg-muted/20" : "bg-transparent",
+                  )}
+                >
+                  <span className={cn("text-[11px] font-bold uppercase tracking-widest", column.color)}>
+                    {column.title}
+                  </span>
+                </th>
+              ))}
+            </tr>
+          </thead>
           <tbody>
             {itemsByTier.map((tierRow, tierIndex) => (
               <tr
@@ -377,14 +398,14 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
               >
                 <td
                   className={cn(
-                    "border-r border-border h-48 w-20 align-middle text-center bg-gradient-to-b",
+                    "border-r border-border w-20 align-middle text-center bg-gradient-to-b",
                     tierRow.gradient
                   )}
                 >
-                  <div className={cn("text-2xl font-black", tierRow.textColor)}>{tierRow.label}</div>
+                  <div className={cn("py-3 text-2xl font-black", tierRow.textColor)}>{tierRow.label}</div>
                   {tierRow.totalItems > 0 && (
-                    <div className={cn("mt-1 text-[10px] font-medium opacity-80", tierRow.textColor)}>
-                      {tierRow.totalItems} {isEnglish ? "items" : "itens"}
+                    <div className={cn("pb-2 text-[10px] font-medium opacity-80", tierRow.textColor)}>
+                      {tierRow.totalItems}
                     </div>
                   )}
                 </td>
@@ -393,20 +414,20 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                   <td
                     key={`${tierRow.key}-${column.key}`}
                     className={cn(
-                      "border-r border-border align-top h-48 last:border-r-0",
+                      "border-r border-border align-top last:border-r-0",
                       colIndex % 2 === 0 ? "bg-muted/20" : "bg-transparent"
                     )}
                   >
-                    <div className="flex h-full items-start justify-center p-2">
+                    <div className="p-2">
                       {column.items.length > 0 ? (
-                        <div className="grid w-full auto-rows-max grid-cols-2 gap-3">
+                        <div className="grid w-full auto-rows-max grid-cols-2 gap-2">
                           {column.items.map((item) => (
                             <PeripheralCard key={item.id} {...item} />
                           ))}
                         </div>
                       ) : (
-                        <div className="flex h-full items-center justify-center">
-                          <span className="text-xs text-muted-foreground">-</span>
+                        <div className="flex min-h-[48px] items-center justify-center">
+                          <span className="text-xs text-muted-foreground/30">—</span>
                         </div>
                       )}
                     </div>
@@ -440,16 +461,16 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                     colIndex % 2 === 0 ? "bg-muted/20" : "bg-transparent"
                   )}
                 >
-                  <div className="flex h-full items-start justify-center p-2 min-h-48">
+                  <div className="p-2">
                     {column.items.length > 0 ? (
-                      <div className="grid w-full auto-rows-max grid-cols-2 gap-3">
+                      <div className="grid w-full auto-rows-max grid-cols-2 gap-2">
                         {column.items.map((item) => (
                           <PeripheralCard key={item.id} {...item} />
                         ))}
                       </div>
                     ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <span className="text-xs text-muted-foreground">-</span>
+                      <div className="flex min-h-[48px] items-center justify-center">
+                        <span className="text-xs text-muted-foreground/30">—</span>
                       </div>
                     )}
                   </div>
@@ -491,7 +512,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                             <p className={cn("mb-2 text-[10px] font-semibold uppercase tracking-widest", column.color)}>
                               {column.title}
                             </p>
-                            <div className="space-y-2">
+                            <div className="grid grid-cols-3 gap-2">
                               {column.items.map((item) => (
                                 <PeripheralCard key={item.id} {...item} />
                               ))}

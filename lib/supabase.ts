@@ -16,6 +16,7 @@ export type Database = {
   public: {
     Tables: {
       peripherals: {
+        Relationships: []
         Row: {
           id: string
           name: string
@@ -33,6 +34,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["peripherals"]["Insert"]>
       }
       user_profiles: {
+        Relationships: []
         Row: {
           id: string
           display_name: string | null
@@ -44,6 +46,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>
       }
       blog_posts: {
+        Relationships: []
         Row: {
           id: string
           peripheral_id: string
@@ -64,6 +67,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["blog_posts"]["Insert"]>
       }
       admin_profiles: {
+        Relationships: []
         Row: {
           id: string
           email: string | null
@@ -78,6 +82,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["admin_profiles"]["Insert"]>
       }
       forum_posts: {
+        Relationships: []
         Row: {
           id: string
           slug: string
@@ -96,6 +101,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["forum_posts"]["Insert"]>
       }
       forum_comments: {
+        Relationships: []
         Row: {
           id: string
           post_id: string
@@ -112,6 +118,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["forum_comments"]["Insert"]>
       }
       rate_limit_events: {
+        Relationships: []
         Row: {
           id: string
           action: string
@@ -122,6 +129,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["rate_limit_events"]["Insert"]>
       }
       offers_votes: {
+        Relationships: []
         Row: {
           id: string
           offer_id: string
@@ -133,6 +141,7 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["offers_votes"]["Insert"]>
       }
       youtube_cache_snapshots: {
+        Relationships: []
         Row: {
           cache_key: string
           payload: Record<string, unknown>
@@ -144,6 +153,109 @@ export type Database = {
         }
         Insert: Omit<Database["public"]["Tables"]["youtube_cache_snapshots"]["Row"], "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["youtube_cache_snapshots"]["Insert"]>
+      }
+      store_products: {
+        Relationships: []
+        Row: {
+          id: string
+          slug: string
+          name: string
+          description: string | null
+          price_cents: number
+          stock: number
+          images: string[]
+          category: string | null
+          type: "store" | "bazaar"
+          condition: "new" | "used" | "opened"
+          condition_notes: string | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          slug: string
+          name: string
+          description?: string | null
+          price_cents: number
+          stock?: number
+          images?: string[]
+          category?: string | null
+          type: "store" | "bazaar"
+          condition?: "new" | "used" | "opened"
+          condition_notes?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          slug?: string
+          name?: string
+          description?: string | null
+          price_cents?: number
+          stock?: number
+          images?: string[]
+          category?: string | null
+          type?: "store" | "bazaar"
+          condition?: "new" | "used" | "opened"
+          condition_notes?: string | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      store_orders: {
+        Relationships: []
+        Row: {
+          id: string
+          stripe_session_id: string | null
+          stripe_payment_intent_id: string | null
+          customer_email: string | null
+          customer_name: string | null
+          items: Record<string, unknown>[]
+          total_cents: number
+          status: "pending" | "paid" | "cancelled" | "refunded"
+          payment_method: string | null
+          metadata: Record<string, unknown>
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          stripe_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          items: Record<string, unknown>[]
+          total_cents: number
+          status?: "pending" | "paid" | "cancelled" | "refunded"
+          payment_method?: string | null
+          metadata?: Record<string, unknown>
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          stripe_session_id?: string | null
+          stripe_payment_intent_id?: string | null
+          customer_email?: string | null
+          customer_name?: string | null
+          items?: Record<string, unknown>[]
+          total_cents?: number
+          status?: "pending" | "paid" | "cancelled" | "refunded"
+          payment_method?: string | null
+          metadata?: Record<string, unknown>
+          created_at?: string
+          updated_at?: string
+        }
+      }
+    }
+    Views: Record<string, never>
+    Functions: {
+      decrement_store_stock: {
+        Args: { p_product_id: string; p_quantity: number }
+        Returns: undefined
       }
     }
   }

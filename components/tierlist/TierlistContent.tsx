@@ -12,6 +12,9 @@ type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
 type PriceBand = "all" | "budget" | "mid" | "premium"
 type Tag = "competitive" | "versatile" | "value" | "comfort"
 
+type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
+type Ratings = Partial<Record<RatingKey, number>>
+
 type Peripheral = {
   id: string
   name: string
@@ -21,6 +24,7 @@ type Peripheral = {
   tier: TierValue
   price: number
   tags: Tag[]
+  ratings?: Ratings
   specs: {
     mouseShape?: MouseShape
     keyboardLayout?: KeyboardLayout

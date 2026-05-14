@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr"
 import * as z from "zod"
 
 import { createSupabaseAdminClient } from "@/lib/supabase-admin"
+import type { Database } from "@/lib/supabase"
 
 const postSchema = z.object({
   title: z.string().trim().min(4).max(120),
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
     if (tab === "peripheral") {
       if (category) {
         const { data: perifs } = await supabase
-          .from("peripherals").select("id").eq("category", category)
+          .from("peripherals").select("id").eq("category", category as Database["public"]["Tables"]["peripherals"]["Row"]["category"])
         const perifIds = ((perifs ?? []) as any[]).map((p: any) => p.id)
         if (!perifIds.length) return NextResponse.json({ ok: true, posts: [] })
         query = (query as any).overlaps("peripheral_refs", perifIds)

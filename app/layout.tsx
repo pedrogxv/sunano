@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { LocaleProvider } from "@/lib/locale-context"
 import { ThemeProvider } from "@/lib/theme-context"
 import { SidebarProvider } from "@/lib/sidebar-context"
+import { CartProvider } from "@/lib/cart-context"
 import { LayoutShell } from "@/components/layout/LayoutShell"
 
 const inter = Inter({
@@ -41,9 +42,11 @@ export default function RootLayout({
         <ThemeProvider>
           <LocaleProvider>
             <SidebarProvider>
-              <TooltipProvider delayDuration={200}>
-                <LayoutShell>{children}</LayoutShell>
-              </TooltipProvider>
+              <CartProvider>
+                <TooltipProvider delayDuration={200}>
+                  <LayoutShell>{children}</LayoutShell>
+                </TooltipProvider>
+              </CartProvider>
             </SidebarProvider>
           </LocaleProvider>
         </ThemeProvider>

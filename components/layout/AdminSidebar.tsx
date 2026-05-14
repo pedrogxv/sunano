@@ -11,6 +11,7 @@ import {
   NotebookPen,
   Package,
   Settings,
+  ShoppingBag,
   Users,
   X,
 } from "lucide-react"
@@ -52,6 +53,7 @@ export function AdminSidebar() {
     { href: "/admin/blog", label: "Blog & Reviews", icon: NotebookPen, permission: "blog_read" },
     { href: "/admin/forum", label: isEnglish ? "Forum" : "Fórum", icon: MessageSquare, permission: "forum_read" },
     { href: "/admin/offers", label: isEnglish ? "Offers" : "Ofertas", icon: Gift, permission: "offers_read" },
+    { href: "/admin/store", label: isEnglish ? "Store & Bazar" : "Loja & Bazar", icon: ShoppingBag, permission: "store_read" },
     { href: "/admin/users", label: isEnglish ? "Users" : "Usuários", icon: Users, requiresWebMaster: true },
     { href: "/admin/settings", label: isEnglish ? "Settings" : "Configurações", icon: Settings, permission: "settings_read" },
   ]

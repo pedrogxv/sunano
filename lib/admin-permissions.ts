@@ -18,6 +18,8 @@ export type AdminPermissionKey =
   | "offers_write"
   | "forum_read"
   | "forum_write"
+  | "store_read"
+  | "store_write"
 
 export type AdminProfile = {
   id: string
@@ -28,7 +30,7 @@ export type AdminProfile = {
   permissions: Record<string, boolean> | null
 }
 
-export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum"
+export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store"
 
 export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKey: AdminPermissionKey; writeKey: AdminPermissionKey }> = [
   { key: "dashboard", label: "Dashboard", readKey: "dashboard_read", writeKey: "dashboard_read" },
@@ -40,6 +42,7 @@ export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKe
   { key: "maintenance", label: "Manutenção", readKey: "maintenance_read", writeKey: "maintenance_write" },
   { key: "profile", label: "Perfil", readKey: "profile_read", writeKey: "profile_write" },
   { key: "offers", label: "Ofertas", readKey: "offers_read", writeKey: "offers_write" },
+  { key: "store", label: "Loja / Bazar", readKey: "store_read", writeKey: "store_write" },
 ]
 
 export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [
@@ -60,6 +63,8 @@ export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [
   "maintenance_write",
   "offers_read",
   "offers_write",
+  "store_read",
+  "store_write",
 ]
 
 export function createFullPermissions() {
@@ -83,12 +88,14 @@ export function normalizePermissions(permissions: Record<string, boolean> | null
   }, {})
 }
 
-export function isWebMaster(profile: AdminProfile | null | undefined) {
+type PermissionProfile = Pick<AdminProfile, "role" | "permissions">
+
+export function isWebMaster(profile: PermissionProfile | null | undefined) {
   return profile?.role === "webmaster"
 }
 
 export function hasAdminPermission(
-  profile: AdminProfile | null | undefined,
+  profile: PermissionProfile | null | undefined,
   permission: AdminPermissionKey
 ) {
   if (!profile) return false
@@ -100,16 +107,16 @@ export function hasAdminPermission(
 }
 
 export function hasAnyPermission(
-  profile: AdminProfile | null | undefined,
+  profile: PermissionProfile | null | undefined,
   permissions: AdminPermissionKey[]
 ) {
   return permissions.some((permission) => hasAdminPermission(profile, permission))
 }
 
-export function canChangePasswords(profile: AdminProfile | null | undefined) {
+export function canChangePasswords(profile: PermissionProfile | null | undefined) {
   return isWebMaster(profile)
 }
 
-export function canEditOtherWebMaster(profile: AdminProfile | null | undefined) {
+export function canEditOtherWebMaster(profile: PermissionProfile | null | undefined) {
   return isWebMaster(profile)
 }

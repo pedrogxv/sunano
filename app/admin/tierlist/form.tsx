@@ -483,16 +483,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       }
 
       let priceToSave = data.price
-      if (locale === "pt-BR") {
-        let rate = usdToBrl
-        if (!rate) {
-          try {
-            const res = await fetch("https://api.exchangerate.host/latest?base=USD&symbols=BRL")
-            const json = await res.json()
-            rate = json?.rates?.BRL ? Number(json.rates.BRL) : null
-          } catch { rate = null }
-        }
-        if (rate && rate > 0) priceToSave = Number((data.price / rate).toFixed(2))
+      if (locale === "pt-BR" && originalUsdPrice !== null && usdToBrl && usdToBrl > 0) {
+        priceToSave = Number((data.price / usdToBrl).toFixed(2))
       }
 
       const peripheralData = {
@@ -509,7 +501,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         if (err) throw err
       }
 
-      router.push("/admin/tierlist")
+      router.replace("/admin/tierlist")
+      router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : (isEnglish ? "Failed to save" : "Erro ao salvar"))
     } finally {

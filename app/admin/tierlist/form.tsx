@@ -132,6 +132,65 @@ const TAGS_OPTIONS: { key: Tag; en: string; pt: string; color: string }[] = [
   { key: "trimode", en: "Trimode", pt: "Trimode", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400" },
 ]
 
+const BRAND_OPTIONS = [
+  "Akko",
+  "AOC",
+  "Apple",
+  "Artisan",
+  "Asus",
+  "Asus Rog",
+  "ATK",
+  "Attack Shark",
+  "Audio-Technica",
+  "BenQ",
+  "Beyerdynamic",
+  "Cooler Master",
+  "Corsair",
+  "Dell",
+  "Ducky",
+  "Endgame Gear",
+  "Everglide",
+  "Fantech",
+  "Filco",
+  "Finalmouse",
+  "Gamemax",
+  "Glorious",
+  "G-Wolves",
+  "HyperX",
+  "IROK",
+  "Keychron",
+  "Lamzu",
+  "Leopold",
+  "Lian Li",
+  "LG",
+  "Logitech",
+  "Mad Catz",
+  "MCHOSE",
+  "Msi",
+  "Nollie",
+  "NZXT",
+  "Pulsar",
+  "Rakka",
+  "Razer",
+  "Reddragon",
+  "Roccat",
+  "Samsung",
+  "Scyrox",
+  "Sennheiser",
+  "SteelSeries",
+  "Tekkusai",
+  "Varmilo",
+  "VGN",
+  "VXE",
+  "Waizowl",
+  "Wallhack",
+  "Wob",
+  "Wooting",
+  "Xiaomi",
+  "Zowie",
+  "ZL Mouse",
+]
+
 const COATING_OPTIONS = [
   "Emborrachado",
   "Plastico",
@@ -545,7 +604,18 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">{isEnglish ? "Brand" : "Marca"}</label>
-                <Input className="border-border bg-background" placeholder="Logitech" {...form.register("brand")} />
+                <Select value={form.watch("brand")} onValueChange={(value) => form.setValue("brand", value)}>
+                  <SelectTrigger className="border-border bg-background">
+                    <SelectValue placeholder={isEnglish ? "Select a brand" : "Selecione uma marca"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BRAND_OPTIONS.map((brand) => (
+                      <SelectItem key={brand} value={brand}>
+                        {brand}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 {form.formState.errors.brand && <p className="text-xs text-red-400">{form.formState.errors.brand.message}</p>}
               </div>
             </div>

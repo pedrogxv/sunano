@@ -15,7 +15,7 @@ import {
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
 type Tag = "competitive" | "versatile" | "value" | "comfort" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode"
-type RatingMode = "oled" | "performance" | "value" | "recommended"
+type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping"
 type PriceBand = "budget" | "mid" | "premium"
 type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
 type Ratings = Partial<Record<RatingKey, number>>
@@ -239,6 +239,24 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
     sortItems: (items) =>
       [...items].sort((left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name)),
   },
+  soundTyping: {
+    description: "Ordenado por som e digitação",
+    columns: [
+      { key: "thocky-linear", title: "Thocky Linear", color: "text-cyan-400" },
+      { key: "thocky-tactile", title: "Thocky Tactile", color: "text-cyan-300" },
+      { key: "clacky-linear", title: "Clacky Linear", color: "text-blue-400" },
+      { key: "clacky-tactile", title: "Clacky Tactile", color: "text-blue-300" },
+      { key: "hollow-linear", title: "Hollow Linear", color: "text-purple-400" },
+      { key: "hollow-tactile", title: "Hollow Tactile", color: "text-purple-300" },
+    ],
+    getColumnKeys: (item) => {
+      const sound = getStoredModeColumn(item, "adminSoundProfile", "thocky")
+      const typing = getStoredModeColumn(item, "adminTypingFeel", "linear")
+      return [`${sound}-${typing}`]
+    },
+    sortItems: (items) =>
+      [...items].sort((left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name)),
+  },
 }
 
 interface TierlistGridProps {
@@ -309,6 +327,9 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     { key: "performance", label: getRatingModeLabel("performance", category), color: "bg-red-400" },
     { key: "value", label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
     { key: "recommended", label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
+    ...(category === "switches" ? [
+      { key: "soundTyping", label: "Som e Digitação", color: "bg-cyan-500" },
+    ] : []),
   ]
 
   const localizedModeDescription =
@@ -324,9 +345,13 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
           ? isEnglish
             ? "Grouped by price range within each tier"
             : "Distribuído por faixa de preco dentro de cada tier"
-          : isEnglish
-            ? "Suggested picks by Sunano, prioritizing overall balance"
-            : "Escolhas sugeridas por Sunano, priorizando equilibrio geral"
+          : ratingMode === "soundTyping"
+            ? isEnglish
+              ? "Sorted by sound and typing feel"
+              : "Ordenado por som e digitação"
+            : isEnglish
+              ? "Suggested picks by Sunano, prioritizing overall balance"
+              : "Escolhas sugeridas por Sunano, priorizando equilibrio geral"
 
   const itemsByTier = useMemo(
     () =>
@@ -364,6 +389,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   // If category isn't monitors, don't allow OLED mode
   useEffect(() => {
     if (ratingMode === "oled" && category !== "monitors") setRatingMode("performance")
+    if (ratingMode === "soundTyping" && category !== "switches") setRatingMode("performance")
   }, [category, ratingMode])
 
   return (

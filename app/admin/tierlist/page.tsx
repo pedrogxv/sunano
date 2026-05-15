@@ -49,7 +49,7 @@ import {
 } from "@/lib/tierlist-theme"
 import { TierItemTooltipContent } from "@/components/tierlist/TierItemTooltipContent"
 
-type RatingMode = "oled" | "performance" | "value" | "recommended"
+type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping"
 
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -105,6 +105,7 @@ const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
   { key: "performance", en: "Performance", pt: "Performance" },
   { key: "value", en: "Value", pt: "Custo-Beneficio" },
   { key: "recommended", en: "Recommended", pt: "Recomendado" },
+  { key: "soundTyping", en: "Sound & Typing", pt: "Som e Digitação" },
 ]
 
 // Labels específicos por categoria para MOUSEPAD e GLASSPAD
@@ -113,6 +114,10 @@ function getRatingModeLabel(mode: RatingMode, category: string, isEnglish: boole
     if (mode === "performance") return "Geral"
     if (mode === "value") return "Nacional"
     if (mode === "recommended") return "Recomendado"
+  }
+  
+  if (category !== "switches" && mode === "soundTyping") {
+    return ""
   }
   
   const mode_obj = RATING_MODES.find(m => m.key === mode)
@@ -255,6 +260,25 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
     getColumnKeys: (item) => {
       const spec = item.specs?.panelType
       return typeof spec === "string" && spec.toLowerCase().includes("oled") ? ["oled"] : []
+    },
+    sortItems: (items) =>
+      [...items].sort((left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name)),
+  },
+  soundTyping: {
+    enDescription: "Sorted by sound and typing feel",
+    ptDescription: "Ordenado por som e digitação",
+    columns: [
+      { key: "thocky-linear", title: "Thocky Linear", color: "text-cyan-400" },
+      { key: "thocky-tactile", title: "Thocky Tactile", color: "text-cyan-300" },
+      { key: "clacky-linear", title: "Clacky Linear", color: "text-blue-400" },
+      { key: "clacky-tactile", title: "Clacky Tactile", color: "text-blue-300" },
+      { key: "hollow-linear", title: "Hollow Linear", color: "text-purple-400" },
+      { key: "hollow-tactile", title: "Hollow Tactile", color: "text-purple-300" },
+    ],
+    getColumnKeys: (item) => {
+      const sound = getStoredModeColumn(item, "adminSoundProfile", "thocky")
+      const typing = getStoredModeColumn(item, "adminTypingFeel", "linear")
+      return [`${sound}-${typing}`]
     },
     sortItems: (items) =>
       [...items].sort((left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name)),
@@ -560,6 +584,7 @@ export default function AdminPeripheralsPage() {
   // Ensure OLED mode is only active for monitors
   useEffect(() => {
     if (ratingMode === "oled" && selectedCategory !== "monitors") setRatingMode("performance")
+    if (ratingMode === "soundTyping" && selectedCategory !== "switches") setRatingMode("performance")
   }, [ratingMode, selectedCategory])
 
   function handleDragStart(event: DragStartEvent) {
@@ -588,6 +613,8 @@ export default function AdminPeripheralsPage() {
                 ...specs,
                 adminValueBand: undefined,
                 adminRecommendedBand: undefined,
+                adminSoundProfile: undefined,
+                adminTypingFeel: undefined,
               },
             }
           : item
@@ -604,6 +631,8 @@ export default function AdminPeripheralsPage() {
               ...specs,
               adminValueBand: null,
               adminRecommendedBand: null,
+              adminSoundProfile: null,
+              adminTypingFeel: null,
             },
           })
           .eq("id", draggedItem.id)
@@ -636,7 +665,13 @@ export default function AdminPeripheralsPage() {
               )
             : ratingMode === "oled"
               ? (typeof draggedItem.specs?.panelType === "string" && draggedItem.specs.panelType.toLowerCase().includes("oled") ? "oled" : "")
-              : ""
+              : ratingMode === "soundTyping"
+                ? (() => {
+                    const sound = getStoredModeColumn(draggedItem, "adminSoundProfile", "thocky")
+                    const typing = getStoredModeColumn(draggedItem, "adminTypingFeel", "linear")
+                    return `${sound}-${typing}`
+                  })()
+                : ""
 
     if (draggedItem.tier === newTier && currentColumn === newColumn) {
       return
@@ -646,6 +681,10 @@ export default function AdminPeripheralsPage() {
       ...specs,
       ...(ratingMode === "value" ? { adminValueBand: newColumn } : {}),
       ...(ratingMode === "recommended" ? { adminRecommendedBand: newColumn } : {}),
+      ...(ratingMode === "soundTyping" ? (() => {
+        const [sound, typing] = newColumn.split("-")
+        return { adminSoundProfile: sound, adminTypingFeel: typing }
+      })() : {}),
     }
 
     const nextPeripherals = peripherals.map((item) =>
@@ -753,7 +792,11 @@ export default function AdminPeripheralsPage() {
             </Select>
           </div>
           <div className="flex rounded-lg border border-white/[0.1] bg-white/[0.02] p-1">
-            {RATING_MODES.filter((m) => (m.key !== "oled" ? true : selectedCategory === "monitors")).map((mode) => (
+            {RATING_MODES.filter((m) => {
+              if (m.key === "oled" && selectedCategory !== "monitors") return false
+              if (m.key === "soundTyping" && selectedCategory !== "switches") return false
+              return true
+            }).map((mode) => (
               <button
                 key={mode.key}
                 type="button"

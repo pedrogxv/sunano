@@ -35,6 +35,8 @@ type Peripheral = {
     profile?: string
     adminValueBand?: string
     adminRecommendedBand?: string
+    adminSoundProfile?: string
+    adminTypingFeel?: string
   }
 }
 

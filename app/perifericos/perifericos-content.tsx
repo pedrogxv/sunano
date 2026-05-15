@@ -18,7 +18,7 @@ type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type MouseShape = "symmetrical" | "ergonomic"
 type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
-type KeyboardType = "mechanical" | "magnetic"
+type KeyboardType = "mechanical" | "magnetic" | "optical"
 type PadType = "speed" | "control" | "hybrid"
 type Surface = PadType | "glass" | "cloth"
 type PanelType = "ips" | "tn" | "va" | "oled" | "other"
@@ -524,7 +524,7 @@ export function PerifericosContent({ initialData, showAdminActions }: Periferico
               <SelectContent>
                 <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
                 {availableKeyboardTypes.map((t) => (
-                  <SelectItem key={t} value={t}>{isEnglish ? formatLabel(t) : (t === 'mechanical' ? 'Mecânico' : 'Magnético')}</SelectItem>
+                  <SelectItem key={t} value={t}>{isEnglish ? formatLabel(t) : (t === 'mechanical' ? 'Mecânico' : t === 'magnetic' ? 'Magnético' : 'Óptico')}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

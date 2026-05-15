@@ -687,7 +687,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
-                  <Input className="border-border bg-background" placeholder={isEnglish ? "Magnetic, Optical" : "Magnético, Óptico"} {...form.register("switchType")} />
+                  <Select value={form.watch("switchType") || ""} onValueChange={(v) => form.setValue("switchType", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="magnetic">{isEnglish ? "Magnetic" : "Magnético"}</SelectItem>
+                      <SelectItem value="optical">{isEnglish ? "Optical" : "Óptico"}</SelectItem>
+                      <SelectItem value="mechanical">{isEnglish ? "Mechanical" : "Mecânico"}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coating</label>
@@ -746,14 +755,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="mechanical">Mechanical</SelectItem>
-                      <SelectItem value="magnetic">Magnetic</SelectItem>
+                      <SelectItem value="mechanical">{isEnglish ? "Mechanical" : "Mecânico"}</SelectItem>
+                      <SelectItem value="optical">{isEnglish ? "Optical" : "Óptico"}</SelectItem>
+                      <SelectItem value="magnetic">{isEnglish ? "Magnetic" : "Magnético"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
-                  <Input className="border-border bg-background" placeholder="Linear, Tactile, Clicky" {...form.register("switchType")} />
+                  <Input className="border-border bg-background" placeholder={isEnglish ? "Linear, Tactile, Clicky" : "Linear, Tátil, Clicky"} {...form.register("switchType")} />
                 </div>
               </>
             )}

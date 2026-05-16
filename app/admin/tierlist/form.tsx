@@ -975,8 +975,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                         </DropdownMenuTrigger>
                         <DropdownMenuContent>
                           {(["Não recomendado", "Finger", "Claw", "Palm"]).map((opt) => {
-                            const current = (form.watch(field as any) || "").toString()
-                            const selected = current.split("/").map((s) => s.trim().toLowerCase()).filter(Boolean).includes(opt.toLowerCase())
+                            const current: string = String(form.watch(field as any) ?? "")
+                            const selected = current.split("/").map((s: string) => s.trim().toLowerCase()).filter(Boolean).includes(opt.toLowerCase())
                             const specialOptions = ["Não recomendado"]
                             const isSpecial = specialOptions.some((v) => v.toLowerCase() === opt.toLowerCase())
                             return (
@@ -985,7 +985,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                                 checked={selected}
                                 onCheckedChange={(checked) => {
                                   const isChecked = checked === true
-                                  const currArr = (form.getValues(field as any) || "").toString().split("/").map((s) => s.trim()).filter(Boolean)
+                                  const currArr: string[] = String(form.getValues(field as any) ?? "").split("/").map((s: string) => s.trim()).filter(Boolean)
                                   if (isChecked && isSpecial) {
                                     form.setValue(field as any, opt)
                                     return
@@ -993,11 +993,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                                   let next = currArr
                                   if (isChecked) {
                                     next = Array.from(new Set([
-                                      ...currArr.filter((c) => !specialOptions.some((v) => v.toLowerCase() === c.toLowerCase())),
+                                      ...currArr.filter((c: string) => !specialOptions.some((v) => v.toLowerCase() === c.toLowerCase())),
                                       opt,
                                     ]))
                                   } else {
-                                    next = currArr.filter((c) => c.toLowerCase() !== opt.toLowerCase())
+                                    next = currArr.filter((c: string) => c.toLowerCase() !== opt.toLowerCase())
                                   }
                                   form.setValue(field as any, next.join(" / "))
                                 }}

@@ -14,7 +14,7 @@ import {
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
-type Tag = "competitive" | "versatile" | "value" | "comfort" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode"
 type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping"
 type PriceBand = "budget" | "mid" | "premium"
 type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
@@ -148,7 +148,6 @@ const TAG_COLUMNS: { key: Tag; title: string; color: string }[] = [
   { key: "competitive", title: "Competitivo", color: TAG_COLUMN_COLORS.competitive },
   { key: "versatile", title: "Versatil", color: TAG_COLUMN_COLORS.versatile },
   { key: "value", title: "Valor", color: TAG_COLUMN_COLORS.value },
-  { key: "comfort", title: "Conforto", color: TAG_COLUMN_COLORS.comfort },
 ]
 
 function getPerformanceColumnKeys(item: Peripheral) {
@@ -184,11 +183,10 @@ function getTierScore(tier: TierValue) {
 }
 
 function getRecommendedScore(item: Peripheral) {
-  const tagScore = item.tags.reduce((accumulator, tag) => {
+    const tagScore = item.tags.reduce((accumulator, tag) => {
     if (tag === "competitive") return accumulator + 0.8
     if (tag === "versatile") return accumulator + 0.6
     if (tag === "value") return accumulator + 0.7
-    if (tag === "comfort") return accumulator + 0.4
     return accumulator
   }, 0)
 
@@ -235,7 +233,7 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
   },
   oled: {
     description: "Apenas painéis OLED",
-    columns: [{ key: "oled", title: "OLED", color: TAG_COLUMNS[2].color }],
+    columns: [{ key: "oled", title: "OLED", color: TAG_COLUMN_COLORS.value }],
     getColumnKeys: (item) => {
       const spec = item.specs?.panelType
       return typeof spec === "string" && spec.toLowerCase().includes("oled") ? ["oled"] : []

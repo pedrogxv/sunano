@@ -56,7 +56,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 
 const TAG_LABEL: Record<string, string> = {
   competitive: "Competitivo", versatile: "Versátil",
-  value: "Custo-benefício", comfort: "Conforto",
+  value: "Custo-benefício",
 }
 
 const MAX_ITEMS = 4

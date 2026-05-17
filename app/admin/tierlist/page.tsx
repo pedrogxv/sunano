@@ -55,7 +55,7 @@ type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTypin
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
-type Tag = "competitive" | "versatile" | "value" | "comfort" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode"
 
 interface Peripheral {
   id: string
@@ -98,7 +98,6 @@ const COLUMNS: { key: Tag; title: string }[] = [
   { key: "competitive", title: "Competitive" },
   { key: "versatile", title: "Versatile" },
   { key: "value", title: "Value" },
-  { key: "comfort", title: "Comfort" },
 ]
 
 const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
@@ -191,7 +190,6 @@ function getRecommendedScore(item: Peripheral) {
     if (tag === "competitive") return accumulator + 0.8
     if (tag === "versatile") return accumulator + 0.6
     if (tag === "value") return accumulator + 0.7
-    if (tag === "comfort") return accumulator + 0.4
     return accumulator
   }, 0)
 

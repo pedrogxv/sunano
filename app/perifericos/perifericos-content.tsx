@@ -41,7 +41,7 @@ type Peripheral = {
   category: Category
   tier: Tier | null
   price: number
-  tags: Array<"competitive" | "versatile" | "value" | "comfort" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode">
+  tags: Array<"competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode">
   specs: {
     mouseShape?: "symmetrical" | "ergonomic"
     keyboardLayout?: string

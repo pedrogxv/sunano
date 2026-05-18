@@ -202,7 +202,7 @@ const BRAND_OPTIONS = [
   "Wooting",
   "Xiaomi",
   "Zowie",
-  "ZL Mouse",
+  "WL Mouse",
 ]
 
 const COATING_OPTIONS = [

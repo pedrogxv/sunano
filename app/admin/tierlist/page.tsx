@@ -192,10 +192,21 @@ function getRecommendedScore(item: Peripheral) {
   return getTierScore(item.tier) + tagScore - Math.min(item.price / 300, 1)
 }
 
+const PERFORMANCE_COLUMN_KEYS: Tag[] = ["competitive", "versatile", "value"]
+
 function getPerformanceColumnKeys(item: Peripheral) {
-  const primaryTag = getPrimaryTag(item)
-  if (item.category === "mouse") return [primaryTag ?? "versatile"]
-  return item.tags.length > 0 ? item.tags : ["value"]
+  const allowed = PERFORMANCE_COLUMN_KEYS as readonly string[]
+
+  if (item.category === "mouse") {
+    const primaryTag = getPrimaryTag(item)
+    if (primaryTag && allowed.includes(primaryTag)) return [primaryTag]
+    const fallback = item.tags.find((tag) => allowed.includes(tag))
+    return [fallback ?? "versatile"]
+  }
+
+  if (item.tags.length === 0) return ["value"]
+  const matched = item.tags.filter((tag) => allowed.includes(tag))
+  return matched.length > 0 ? matched : ["versatile"]
 }
 
 function getStoredModeColumn(item: Peripheral, fieldName: string, fallbackValue: string) {
@@ -921,27 +932,6 @@ export default function AdminPeripheralsPage() {
       ) :(
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-card shadow-lg">
-            <div
-              className="grid border-b border-white/[0.08]"
-              style={{
-                gridTemplateColumns: `70px repeat(${modeConfig.columns.length}, minmax(220px, 1fr))`,
-              }}
-            >
-              <div className="border-r border-white/[0.08] bg-white/[0.02]" />
-              {modeConfig.columns.map((column, colIndex) => (
-                <div
-                  key={`header-${column.key}`}
-                  className={cn(
-                    "border-r border-white/[0.08] px-3 py-2.5 text-left last:border-r-0",
-                    colIndex % 2 === 0 ? "bg-white/[0.02]" : "bg-transparent",
-                  )}
-                >
-                  <span className={cn("text-[11px] font-bold uppercase tracking-widest", column.color)}>
-                    {column.title}
-                  </span>
-                </div>
-              ))}
-            </div>
             {itemsByTier.map((tierRow) => (
               <div
                 key={tierRow.key}

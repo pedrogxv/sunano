@@ -41,6 +41,7 @@ export async function GET(request: Request) {
 
     const offersWithVotes = offers.map((offer) => ({
       ...offer,
+      chatTitle: null,
       votes_working: workingCounts[offer.id] ?? 0,
       user_voted: userVotes.has(offer.id),
     }))

@@ -166,7 +166,7 @@ const BRAND_OPTIONS = [
   "Endgame Gear",
   "Everglide",
   "Fantech",
-  "Filco",
+  "Philco",
   "Finalmouse",
   "Gamemax",
   "Glorious",

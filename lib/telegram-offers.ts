@@ -7,13 +7,31 @@ type TelegramChat = {
   type?: string
 }
 
+type TelegramPhotoSize = {
+  file_id?: string
+  width?: number
+  height?: number
+  file_size?: number
+}
+
+type TelegramDocument = {
+  file_id?: string
+  mime_type?: string
+  file_name?: string
+  file_size?: number
+  thumb?: TelegramPhotoSize
+}
+
 type TelegramMessage = {
   message_id?: number
   date?: number
   text?: string
   caption?: string
   chat?: TelegramChat
+  photo?: TelegramPhotoSize[]
+  document?: TelegramDocument
   from?: {
+    id?: number
     first_name?: string
     username?: string
   }
@@ -31,14 +49,30 @@ type TelegramGetUpdatesResponse = {
   description?: string
 }
 
+type TelegramGetUserProfilePhotosResponse = {
+  ok?: boolean
+  result?: {
+    photos?: TelegramPhotoSize[][]
+  }
+  description?: string
+}
+
+export type TelegramOfferImage = {
+  fileId: string
+  width: number | null
+  height: number | null
+}
+
 export type TelegramOffer = {
   id: string
   messageId: number
   text: string
   date: string
   author: string | null
+  authorAvatar: TelegramOfferImage | null
   chatTitle: string | null
   url: string | null
+  image: TelegramOfferImage | null
 }
 
 export type TelegramOffersResult = {
@@ -61,6 +95,64 @@ function buildTelegramMessageUrl(message: TelegramMessage, fallbackUrl: string |
   if (!fallbackUrl) return null
 
   return `${fallbackUrl.replace(/\/$/, "")}/${messageId}`
+}
+
+function pickBestPhoto(photos?: TelegramPhotoSize[]) {
+  if (!photos?.length) return null
+
+  return photos.reduce((best, current) => {
+    const bestScore = (best.file_size ?? 0) * 10 + (best.width ?? 0)
+    const currentScore = (current.file_size ?? 0) * 10 + (current.width ?? 0)
+    return currentScore > bestScore ? current : best
+  }, photos[0])
+}
+
+function extractOfferImage(message: TelegramMessage): TelegramOfferImage | null {
+  const bestPhoto = pickBestPhoto(message.photo)
+  if (bestPhoto?.file_id) {
+    return {
+      fileId: bestPhoto.file_id,
+      width: bestPhoto.width ?? null,
+      height: bestPhoto.height ?? null,
+    }
+  }
+
+  const document = message.document
+  if (document?.file_id && document.mime_type?.startsWith("image/")) {
+    return {
+      fileId: document.file_id,
+      width: document.thumb?.width ?? null,
+      height: document.thumb?.height ?? null,
+    }
+  }
+
+  return null
+}
+
+async function fetchUserProfilePhoto(userId: number, botToken: string): Promise<TelegramOfferImage | null> {
+  const params = new URLSearchParams()
+  params.set("user_id", String(userId))
+  params.set("limit", "1")
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/getUserProfilePhotos?${params.toString()}`)
+  const data = (await response.json().catch(() => null)) as TelegramGetUserProfilePhotosResponse | null
+
+  if (!response.ok || !data?.ok) {
+    return null
+  }
+
+  const firstPhotoSet = data.result?.photos?.[0]
+  const bestPhoto = pickBestPhoto(firstPhotoSet)
+
+  if (!bestPhoto?.file_id) {
+    return null
+  }
+
+  return {
+    fileId: bestPhoto.file_id,
+    width: bestPhoto.width ?? null,
+    height: bestPhoto.height ?? null,
+  }
 }
 
 async function fetchTelegramOffers(limit = 30): Promise<TelegramOffersResult> {
@@ -106,9 +198,28 @@ async function fetchTelegramOffers(limit = 30): Promise<TelegramOffersResult> {
     })
     .sort((a, b) => (b.date || 0) - (a.date || 0))
 
-  const offers = messages.slice(0, limit).map((message) => {
+  const visibleMessages = messages.slice(0, limit)
+  const authorIds = Array.from(
+    new Set(
+      visibleMessages
+        .map((message) => message.from?.id)
+        .filter((id): id is number => typeof id === "number")
+    )
+  )
+  const authorAvatarMap = new Map<number, TelegramOfferImage | null>()
+
+  await Promise.all(
+    authorIds.map(async (authorId) => {
+      const avatar = await fetchUserProfilePhoto(authorId, botToken)
+      authorAvatarMap.set(authorId, avatar)
+    })
+  )
+
+  const offers = visibleMessages.map((message) => {
     const text = (message.text || message.caption || "").trim()
     const date = message.date ? new Date(message.date * 1000).toISOString() : new Date().toISOString()
+    const image = extractOfferImage(message)
+    const authorId = message.from?.id ?? null
 
     return {
       id: `telegram-${message.message_id || Math.random().toString(36).slice(2)}`,
@@ -116,8 +227,10 @@ async function fetchTelegramOffers(limit = 30): Promise<TelegramOffersResult> {
       text,
       date,
       author: message.from?.first_name || message.from?.username || null,
+      authorAvatar: authorId ? (authorAvatarMap.get(authorId) ?? null) : null,
       chatTitle: message.chat?.title || null,
       url: buildTelegramMessageUrl(message, fallbackPublicUrl),
+      image,
     }
   })
 

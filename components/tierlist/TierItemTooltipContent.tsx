@@ -178,7 +178,6 @@ export function TierItemTooltipContent({
       {/* Tags */}
       {tags && tags.length > 0 && (
         <div>
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Tags</p>
           <div className="flex flex-wrap gap-1.5">
             {tags.map((tag) => (
               <span
@@ -201,9 +200,6 @@ export function TierItemTooltipContent({
       {/* Ratings (public-first) */}
       {ratings && (
         <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            {isEnglish ? "Ratings" : "Notas"}
-          </p>
           {ratingEntries.length > 0 ? (
             <div className="space-y-2">
               {ratingEntries.map((entry) => (
@@ -221,9 +217,6 @@ export function TierItemTooltipContent({
       {/* Specs (admin only) */}
       {specs && specs.length > 0 && (
         <div>
-          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-            {isEnglish ? "Specifications" : "Especificações"}
-          </p>
           <div className="grid grid-cols-2 gap-1.5">
             {specs.slice(0, 4).map((spec) => (
               <div

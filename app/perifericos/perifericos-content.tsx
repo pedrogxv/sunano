@@ -824,7 +824,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
               </p>
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {filtered.map((item) => {
                 const isSelected = selectedIds.includes(item.id)
                 const specChips = [
@@ -918,8 +918,6 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                           ))}
                         </div>
                       )}
-
-                      <div className="mt-auto flex items-center justify-end pt-3" />
 
                       {showAdminActions ? (
                         <div className="grid grid-cols-2 gap-2">

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { ArrowLeft, Check, ExternalLink, Plus, Search, X } from "lucide-react"
+import { ArrowLeft, Check, ExternalLink, Plus, Search, Trophy, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import BoxLoader from "@/components/ui/box-loader"
@@ -321,6 +321,20 @@ export function ComparePageClient() {
   }
   const maxWins = hasEnough ? Math.max(...Object.values(winsMap)) : 0
 
+  // Único vencedor: maior nº de vantagens → melhor tier → menor preço → ordem de entrada
+  const winnerId = (() => {
+    if (!hasEnough || !categoriesMatch || maxWins === 0) return null
+    const ranked = [...items].sort((a, b) => {
+      const winsDiff = (winsMap[b.id] ?? 0) - (winsMap[a.id] ?? 0)
+      if (winsDiff !== 0) return winsDiff
+      const tierA = a.tier ? TIER_ORDER.indexOf(a.tier) : Infinity
+      const tierB = b.tier ? TIER_ORDER.indexOf(b.tier) : Infinity
+      if (tierA !== tierB) return tierA - tierB
+      return a.price - b.price
+    })
+    return ranked[0].id
+  })()
+
   const rowsWithValues = ROWS.filter((row) => {
     const values = items.map((i) => row.getValue(i))
     return values.some((v) => v !== null)
@@ -360,7 +374,7 @@ export function ComparePageClient() {
           <p className="mt-1 text-sm text-muted-foreground">
             {items.length} {categoryLabel.toLowerCase()}{items.length !== 1 ? "s" : ""}
             {hasEnough && categoriesMatch && differentRows.length > 0
-              ? ` · ${differentRows.length} diferencial${differentRows.length !== 1 ? "is" : ""}`
+              ? ` · ${differentRows.length} ${differentRows.length !== 1 ? "diferenciais" : "diferencial"}`
               : ""}
           </p>
         )}
@@ -378,21 +392,32 @@ export function ComparePageClient() {
         >
           {items.map((item) => {
             const wins = winsMap[item.id] ?? 0
-            const isWinner = wins === maxWins && maxWins > 0 && hasEnough
+            const isWinner = item.id === winnerId
             const isSwapping = activeSearch === item.id
 
             return (
               <div
                 key={item.id}
                 className={cn(
-                  "relative rounded-2xl border bg-card p-4 text-center flex flex-col transition-all",
-                  isWinner && !isSwapping ? "border-primary/50 shadow-lg shadow-primary/10" : "border-border",
-                  isSwapping && "border-primary ring-2 ring-primary/30"
+                  "group relative flex flex-col rounded-2xl border bg-gradient-to-b from-card to-card/60 p-5 pt-7 text-center transition-all duration-300",
+                  isWinner && !isSwapping
+                    ? "border-primary/40 shadow-[0_0_0_1px_rgba(var(--primary-rgb,250_204_21),0.15),0_20px_50px_-15px_rgba(0,0,0,0.5)]"
+                    : "border-border hover:border-border/80",
+                  isSwapping && "border-primary ring-2 ring-primary/40"
                 )}
               >
+                {/* Winner glow */}
+                {isWinner && !isSwapping && (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 top-0 h-24 rounded-t-2xl bg-gradient-to-b from-primary/15 to-transparent"
+                  />
+                )}
+
                 {/* Winner badge */}
                 {isWinner && items.length > 1 && !isSwapping && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-primary/40 bg-primary/15 px-3 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+                  <div className="absolute -top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-primary/50 bg-primary/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-primary shadow-md shadow-primary/20 backdrop-blur">
+                    <Trophy className="size-3" />
                     Melhor opção
                   </div>
                 )}
@@ -400,40 +425,44 @@ export function ComparePageClient() {
                 {/* Remove button */}
                 <button
                   onClick={() => removeItem(item.id)}
-                  className="absolute right-2.5 top-2.5 flex size-6 items-center justify-center rounded-full bg-muted/40 text-muted-foreground transition-colors hover:bg-destructive/20 hover:text-destructive"
+                  className="absolute right-2.5 top-2.5 z-10 flex size-7 items-center justify-center rounded-full bg-muted/30 text-muted-foreground opacity-60 transition-all hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
                   title="Remover da comparação"
                 >
                   <X className="size-3.5" />
                 </button>
 
                 {/* Image */}
-                <div className="mx-auto mb-3 size-20 overflow-hidden rounded-xl border border-border bg-muted/20">
+                <div className="relative mx-auto mb-4 size-24 overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-muted/30 to-muted/10">
                   {item.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.image_url} alt={item.name} className="h-full w-full object-contain p-2" />
+                    <img
+                      src={item.image_url}
+                      alt={item.name}
+                      className="h-full w-full object-contain p-2.5 transition-transform duration-300 group-hover:scale-105"
+                    />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center text-lg font-black text-muted-foreground/20">
+                    <div className="flex h-full w-full items-center justify-center text-xl font-black text-muted-foreground/25">
                       {item.brand.slice(0, 2).toUpperCase()}
                     </div>
                   )}
                 </div>
 
                 {/* Info */}
-                <div className="flex-1 space-y-1">
+                <div className="flex-1 space-y-1.5">
                   <p className="text-sm font-bold leading-tight text-foreground">{item.name}</p>
-                  <p className="text-xs text-muted-foreground">{item.brand}</p>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground/80">{item.brand}</p>
                   {item.tier && (
-                    <div className="flex justify-center pt-0.5">
+                    <div className="flex justify-center pt-1">
                       <TierBadge tier={item.tier} />
                     </div>
                   )}
                 </div>
 
                 {/* Price */}
-                <div className="mt-3 border-t border-border pt-3">
-                  <p className="text-base font-bold text-foreground">{formatCurrency(item.price)}</p>
+                <div className="mt-4 border-t border-border/60 pt-3">
+                  <p className="text-lg font-bold tracking-tight text-foreground">{formatCurrency(item.price)}</p>
                   {wins > 0 && (
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="mt-0.5 text-[10px] font-medium text-muted-foreground/70">
                       {wins} vantage{wins === 1 ? "m" : "ns"}
                     </p>
                   )}
@@ -444,17 +473,17 @@ export function ComparePageClient() {
                   <button
                     onClick={() => openSwap(item.id)}
                     className={cn(
-                      "flex-1 rounded-lg border py-1.5 text-xs font-medium transition-colors",
+                      "flex-1 rounded-lg border py-2 text-xs font-semibold transition-all",
                       isSwapping
                         ? "border-primary/40 bg-primary/10 text-primary"
-                        : "border-border text-muted-foreground hover:border-border/70 hover:text-foreground"
+                        : "border-border bg-muted/10 text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
                     )}
                   >
                     {isSwapping ? "Cancelar" : "Trocar"}
                   </button>
                   <Link
                     href={`/perifericos/${item.id}`}
-                    className="flex items-center justify-center rounded-lg border border-border px-2 py-1.5 text-muted-foreground transition-colors hover:border-border/70 hover:text-foreground"
+                    className="flex items-center justify-center rounded-lg border border-border bg-muted/10 px-2.5 py-2 text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
                     title="Ver detalhes"
                   >
                     <ExternalLink className="size-3.5" />
@@ -469,19 +498,21 @@ export function ComparePageClient() {
             <button
               onClick={openAdd}
               className={cn(
-                "flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed transition-colors",
+                "group flex min-h-[260px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed transition-all duration-200",
                 activeSearch === "add"
-                  ? "border-primary/50 bg-primary/5 text-primary"
-                  : "border-border text-muted-foreground hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                  ? "border-primary/60 bg-primary/5 text-primary"
+                  : "border-border/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/[0.03] hover:text-primary"
               )}
             >
               <div className={cn(
-                "flex size-10 items-center justify-center rounded-full border-2 transition-colors",
-                activeSearch === "add" ? "border-primary/50 bg-primary/10" : "border-border"
+                "flex size-12 items-center justify-center rounded-full border transition-all duration-200",
+                activeSearch === "add"
+                  ? "border-primary/50 bg-primary/10"
+                  : "border-border/70 group-hover:scale-110 group-hover:border-primary/40 group-hover:bg-primary/10"
               )}>
-                {activeSearch === "add" ? <X className="size-4" /> : <Plus className="size-4" />}
+                {activeSearch === "add" ? <X className="size-5" /> : <Plus className="size-5" />}
               </div>
-              <span className="text-xs font-medium">
+              <span className="text-sm font-medium">
                 {activeSearch === "add" ? "Cancelar" : "Adicionar"}
               </span>
             </button>
@@ -628,16 +659,19 @@ export function ComparePageClient() {
         <>
           {/* Diferenciais */}
           {differentRows.length > 0 && (
-            <section className="space-y-3">
+            <section className="space-y-4">
               <div className="flex items-center gap-3">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">Diferenciais</h2>
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="size-1.5 rounded-full bg-primary" />
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">Diferenciais</h2>
+                </div>
+                <div className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
+                <span className="rounded-full border border-border bg-muted/20 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
                   {differentRows.length} spec{differentRows.length !== 1 ? "s" : ""}
                 </span>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-border">
+              <div className="overflow-hidden rounded-2xl border border-border bg-card/40 backdrop-blur-sm">
                 {differentRows.map((row, idx) => {
                   const bestId = row.getBest?.(items) ?? null
                   const values = items.map((i) => row.getValue(i))
@@ -645,11 +679,14 @@ export function ComparePageClient() {
                   return (
                     <div
                       key={row.key}
-                      className={cn("grid items-center", idx < differentRows.length - 1 && "border-b border-border/60")}
-                      style={{ gridTemplateColumns: `160px repeat(${items.length}, 1fr)` }}
+                      className={cn(
+                        "grid items-stretch transition-colors hover:bg-muted/[0.03]",
+                        idx < differentRows.length - 1 && "border-b border-border/50"
+                      )}
+                      style={{ gridTemplateColumns: `170px repeat(${items.length}, 1fr)` }}
                     >
-                      <div className="bg-muted/10 px-5 py-4 self-stretch flex items-center border-r border-border/60">
-                        <span className="text-xs font-semibold text-muted-foreground">{row.label}</span>
+                      <div className="flex items-center border-r border-border/50 bg-muted/[0.04] px-5 py-4">
+                        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">{row.label}</span>
                       </div>
 
                       {items.map((item, i) => {
@@ -660,24 +697,27 @@ export function ComparePageClient() {
                           <div
                             key={item.id}
                             className={cn(
-                              "flex flex-col items-center justify-center gap-1.5 px-4 py-4",
-                              isBest && "bg-primary/5",
-                              i < items.length - 1 && "border-r border-border/40"
+                              "relative flex flex-col items-center justify-center gap-1.5 px-4 py-4",
+                              isBest && "bg-primary/[0.06]",
+                              i < items.length - 1 && "border-r border-border/30"
                             )}
                           >
+                            {isBest && (
+                              <div aria-hidden className="absolute inset-x-3 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+                            )}
                             {value !== null ? (
                               <>
                                 {row.renderValue ? row.renderValue(value) : (
                                   <span className={cn(
-                                    "text-sm font-semibold text-center leading-snug",
+                                    "text-center text-sm font-semibold leading-snug",
                                     isBest ? "text-primary" : "text-foreground"
                                   )}>
                                     {value}
                                   </span>
                                 )}
                                 {isBest && (
-                                  <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
-                                    <Check className="size-2.5" />
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                                    <Check className="size-2.5" strokeWidth={3} />
                                     Melhor
                                   </span>
                                 )}
@@ -697,31 +737,36 @@ export function ComparePageClient() {
 
           {/* Em comum */}
           {sameRows.length > 0 && (
-            <section className="space-y-3">
+            <section className="space-y-4">
               <div className="flex items-center gap-3">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/60">Em comum</h2>
-                <div className="h-px flex-1 bg-border/50" />
-                <span className="text-xs text-muted-foreground/50">
+                <div className="flex items-center gap-2">
+                  <div className="size-1.5 rounded-full bg-muted-foreground/40" />
+                  <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground/70">Em comum</h2>
+                </div>
+                <div className="h-px flex-1 bg-gradient-to-r from-border/50 to-transparent" />
+                <span className="rounded-full border border-border/50 bg-muted/10 px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground/60">
                   {sameRows.length} spec{sameRows.length !== 1 ? "s" : ""}
                 </span>
               </div>
 
-              <div className="overflow-hidden rounded-xl border border-border/50">
+              <div className="overflow-hidden rounded-2xl border border-border/50 bg-muted/[0.02]">
                 {sameRows.map((row, idx) => {
                   const value = row.getValue(items[0])
                   return (
                     <div
                       key={row.key}
                       className={cn(
-                        "flex items-center gap-4 px-5 py-3 bg-muted/5",
-                        idx < sameRows.length - 1 && "border-b border-border/40"
+                        "flex items-center gap-4 px-5 py-3.5",
+                        idx < sameRows.length - 1 && "border-b border-border/30"
                       )}
                     >
-                      <span className="w-36 shrink-0 text-xs font-medium text-muted-foreground/60">{row.label}</span>
+                      <span className="w-36 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{row.label}</span>
                       <div className="flex items-center gap-2">
-                        <Check className="size-3.5 text-muted-foreground/40" />
+                        <div className="flex size-4 items-center justify-center rounded-full bg-muted-foreground/15">
+                          <Check className="size-2.5 text-muted-foreground/70" strokeWidth={3} />
+                        </div>
                         {row.renderValue && value ? row.renderValue(value) : (
-                          <span className="text-sm text-muted-foreground">{value}</span>
+                          <span className="text-sm font-medium text-foreground/80">{value}</span>
                         )}
                       </div>
                     </div>
@@ -733,25 +778,41 @@ export function ComparePageClient() {
 
           {/* Score summary */}
           {maxWins > 0 && (
-            <div className="rounded-xl border border-border bg-card/50 p-5">
-              <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Placar de vantagens
-              </h3>
-              <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${items.length}, 1fr)` }}>
+            <div className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-card/40 p-5">
+              <div className="mb-4 flex items-center gap-2">
+                <Trophy className="size-3.5 text-primary/80" />
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Placar de vantagens
+                </h3>
+              </div>
+              <div className="grid gap-5" style={{ gridTemplateColumns: `repeat(${items.length}, 1fr)` }}>
                 {items.map((item) => {
                   const wins = winsMap[item.id] ?? 0
                   const pct = maxWins > 0 ? (wins / maxWins) * 100 : 0
+                  const isWinner = item.id === winnerId
                   return (
                     <div key={item.id} className="space-y-2">
                       <div className="flex items-baseline justify-between gap-2">
-                        <p className="truncate text-xs font-medium text-foreground">{item.name}</p>
-                        <span className="shrink-0 text-sm font-bold text-foreground">{wins}</span>
+                        <p className={cn(
+                          "truncate text-xs font-semibold",
+                          isWinner ? "text-primary" : "text-foreground/90"
+                        )}>
+                          {item.name}
+                        </p>
+                        <span className={cn(
+                          "shrink-0 text-base font-bold tabular-nums",
+                          isWinner ? "text-primary" : "text-foreground"
+                        )}>
+                          {wins}
+                        </span>
                       </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/30">
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-muted/30">
                         <div
                           className={cn(
-                            "h-full rounded-full transition-all duration-500",
-                            wins === maxWins ? "bg-primary" : "bg-muted-foreground/30"
+                            "h-full rounded-full transition-all duration-700 ease-out",
+                            isWinner
+                              ? "bg-gradient-to-r from-primary/80 to-primary shadow-[0_0_10px_rgba(var(--primary-rgb,250_204_21),0.4)]"
+                              : "bg-muted-foreground/30"
                           )}
                           style={{ width: `${pct}%` }}
                         />

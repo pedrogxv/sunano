@@ -37,8 +37,8 @@ const TAG_LABELS: Record<Tag, { en: string; pt: string }> = {
   value: { en: "Value", pt: "Custo-benefício" },
   cheap: { en: "Cheap", pt: "Barato" },
   expensive: { en: "Expensive", pt: "Caro" },
-  light: { en: "Light mouse", pt: "Mouse Leve" },
-  heavy: { en: "Heavy mouse", pt: "Mouse Pesado" },
+  light: { en: "Light", pt: "Leve" },
+  heavy: { en: "Heavy", pt: "Pesado" },
   unbalanced: { en: "Unbalanced weight", pt: "Peso Desbalanceado" },
   dpi_deviation: { en: "DPI Deviation", pt: "DPI Deviation" },
   wobble_high: { en: "High wobble", pt: "Wooble Alto" },
@@ -118,7 +118,7 @@ export function TierItemTooltipContent({
 }: TierItemTooltipContentProps) {
   const tierStyle = tier ? CARD_TIER_STYLES[tier] : CARD_TIER_STYLES.L
   const tierTheme = tier ? TIER_THEMES[tier] : TIER_THEMES.L
-  const tierLabel = tier ?? (isEnglish ? "No tier" : "Sem tier")
+  const tierLabel = tier ?? (isEnglish ? "Under Review" : "Sob Revisão")
 
   const labels = isEnglish ? RATING_LABELS_EN : RATING_LABELS_PT
   const ratingEntries = ratings

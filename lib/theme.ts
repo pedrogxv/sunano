@@ -1,5 +1,5 @@
 /**
- * Centralized Theme System - Sunano Tierlist
+ * Centralized Theme System - SunaUnder Reviewlist
  * Modern dark gaming theme inspired by Prydwen.gg
  */
 

@@ -53,7 +53,7 @@ function getPriceBand(price: number): Exclude<PriceBand, "all"> {
 
 export function TierlistContent({ initialData, categoryLabels }: TierlistContentProps) {
   const [query, setQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<Category>("all")
+  const [selectedCategory, setSelectedCategory] = useState<Category>("mouse")
   const [selectedBrand, setSelectedBrand] = useState("all")
   const [selectedPriceBand, setSelectedPriceBand] = useState<PriceBand>("all")
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")

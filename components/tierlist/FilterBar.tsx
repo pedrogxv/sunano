@@ -66,7 +66,6 @@ export function FilterBar({
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
   const categoryOptions: { key: Category; label: string }[] = [
-    { key: "all", label: isEnglish ? "All" : "Todas" },
     { key: "keyboard", label: isEnglish ? "Keyboards" : "Teclados" },
     { key: "mouse", label: isEnglish ? "Mice" : "Mouses" },
     { key: "mousepad", label: "Mousepads" },
@@ -82,26 +81,28 @@ export function FilterBar({
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-card p-4">
-      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-        {categoryOptions.map((category) => {
-          const active = selectedCategory === category.key
+      <div>
+        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
+          {categoryOptions.map((category) => {
+            const active = selectedCategory === category.key
 
-          return (
-            <button
-              className={cn(
-                "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
-                active
-                  ? "border-primary/50 bg-primary/15 text-primary"
-                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/40"
-              )}
-              key={category.key}
-              onClick={() => onCategoryChange(category.key)}
-              type="button"
-            >
-              {category.label}
-            </button>
-          )
-        })}
+            return (
+              <button
+                className={cn(
+                  "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                  active
+                    ? "border-primary/50 bg-primary/15 text-primary"
+                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/40"
+                )}
+                key={category.key}
+                onClick={() => onCategoryChange(category.key)}
+                type="button"
+              >
+                {category.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
 
       {/* Search and Controls Row */}
@@ -122,8 +123,8 @@ export function FilterBar({
         <div className="flex flex-wrap items-center gap-2">
           <Popover>
             <PopoverTrigger asChild>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 className={cn(
                   "gap-2 border-border bg-muted/30 hover:bg-muted/40",
@@ -245,9 +246,9 @@ export function FilterBar({
 
           {/* Reset Button */}
           {activeFiltersCount > 0 && (
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={onReset}
               className="gap-1.5 text-muted-foreground hover:text-foreground"
             >
@@ -263,7 +264,7 @@ export function FilterBar({
         <Badge variant="secondary" className="rounded-full bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
           {filteredCount} {filteredCount === 1 ? (isEnglish ? "item" : "item") : (isEnglish ? "items" : "itens")} {isEnglish ? "found" : "encontrados"}
         </Badge>
-        
+
         {query.trim() && (
           <Badge variant="outline" className="gap-1.5 rounded-full border-primary/30 bg-primary/10 px-3 py-1 text-xs text-primary">
             {isEnglish ? "Search" : "Busca"}: {query.trim()}
@@ -272,7 +273,7 @@ export function FilterBar({
             </button>
           </Badge>
         )}
-        
+
         {selectedBrand !== "all" && (
           <Badge variant="outline" className="gap-1.5 rounded-full border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
             {formatLabel(selectedBrand)}
@@ -281,7 +282,7 @@ export function FilterBar({
             </button>
           </Badge>
         )}
-        
+
         {selectedPriceBand !== "all" && (
           <Badge variant="outline" className="gap-1.5 rounded-full border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-300">
             {formatLabel(selectedPriceBand)}

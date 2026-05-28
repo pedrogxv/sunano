@@ -40,8 +40,8 @@ const TAG_LABELS: Record<Tag, string> = {
   value: "Custo-beneficio",
   cheap: "Barato",
   expensive: "Caro",
-  light: "Mouse Leve",
-  heavy: "Mouse Pesado",
+  light: "Leve",
+  heavy: "Pesado",
   unbalanced: "Peso Desbalanceado",
   dpi_deviation: "DPI Deviation",
   wobble_high: "Wooble Alto",
@@ -145,7 +145,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     value: normalizeRating(details?.ratings?.value ?? details.ratingValue),
   }
 
-  const rankLabel = details.rankLabel || (data.tier ? mapTier(data.tier) : "Sem tier")
+  const rankLabel = details.rankLabel || (data.tier ? mapTier(data.tier) : "Sob Revisão")
   const priceRange = details.priceRange
   const reviewUrl = details.reviewUrl
   const reviewNote = details.reviewNote

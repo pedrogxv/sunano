@@ -25,6 +25,12 @@ interface Peripheral {
   tags: Tag[]
   ratings?: Ratings
   specs: {
+    adminTierOrder?: number
+    adminTierOrder_performance?: number
+    adminTierOrder_value?: number
+    adminTierOrder_recommended?: number
+    adminTierOrder_oled?: number
+    adminTierOrder_soundTyping?: number
     mouseShape?: "symmetrical" | "ergonomic"
     keyboardLayout?: string
     connectivity?: "wired" | "wireless"
@@ -34,6 +40,26 @@ interface Peripheral {
     profile?: string
     panelType?: string
   }
+}
+
+const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
+  overall: "adminTierOrder_performance",
+  value: "adminTierOrder_value",
+  recommended: "adminTierOrder_recommended",
+  oled: "adminTierOrder_oled",
+  soundTyping: "adminTierOrder_soundTyping",
+}
+
+function getTierOrder(item: Peripheral, orderKey: string, allowLegacyFallback: boolean): number | null {
+  const value = item.specs?.[orderKey as keyof Peripheral["specs"]]
+  if (typeof value === "number" && Number.isFinite(value)) return value
+
+  if (allowLegacyFallback) {
+    const legacyValue = item.specs?.adminTierOrder
+    return typeof legacyValue === "number" && Number.isFinite(legacyValue) ? legacyValue : null
+  }
+
+  return null
 }
 
 interface TierRow {
@@ -47,7 +73,7 @@ interface TierRow {
 interface ModeConfig {
   // Optional filter — only OLED mode narrows the item set.
   filterItem?: (item: Peripheral) => boolean
-  sortItems: (items: Peripheral[]) => Peripheral[]
+  fallbackSort: (items: Peripheral[]) => Peripheral[]
 }
 
 // Labels específicos por categoria para MOUSEPAD e GLASSPAD
@@ -87,7 +113,7 @@ function getTierSubtitle(tier: Tier, isEnglish: boolean) {
     S: "Muito bom",
     A: "Bom",
     B: "Decente",
-    C: "Decente",
+    C: "Usável",
     L: "Veio Podi",
   }
   return subtitles[tier]
@@ -104,23 +130,31 @@ function getRecommendedScore(item: Peripheral) {
   return getTierScore(item.tier) + tagScore - Math.min(item.price / 300, 1)
 }
 
-function sortByTierThenName(items: Peripheral[]) {
-  return [...items].sort(
-    (left, right) =>
-      getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name),
-  )
+function sortByTierThenName(items: Peripheral[], orderKey: string, allowLegacyFallback: boolean) {
+  return [...items].sort((left, right) => {
+    const tierDiff = getTierScore(right.tier) - getTierScore(left.tier)
+    if (tierDiff !== 0) return tierDiff
+
+    const leftOrder = getTierOrder(left, orderKey, allowLegacyFallback)
+    const rightOrder = getTierOrder(right, orderKey, allowLegacyFallback)
+    if (leftOrder !== null && rightOrder !== null) return leftOrder - rightOrder || left.name.localeCompare(right.name)
+    if (leftOrder !== null) return -1
+    if (rightOrder !== null) return 1
+
+    return left.name.localeCompare(right.name)
+  })
 }
 
 const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
   overall: {
-    sortItems: sortByTierThenName,
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   value: {
-    sortItems: (items) =>
+    fallbackSort: (items) =>
       [...items].sort((left, right) => left.price - right.price || left.name.localeCompare(right.name)),
   },
   recommended: {
-    sortItems: (items) =>
+    fallbackSort: (items) =>
       [...items].sort(
         (left, right) => getRecommendedScore(right) - getRecommendedScore(left) || left.name.localeCompare(right.name),
       ),
@@ -128,11 +162,22 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
   oled: {
     filterItem: (item) =>
       typeof item.specs?.panelType === "string" && item.specs.panelType.toLowerCase().includes("oled"),
-    sortItems: sortByTierThenName,
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   soundTyping: {
-    sortItems: sortByTierThenName,
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
+}
+
+function sortWithTierOrder(
+  items: Peripheral[],
+  orderKey: string,
+  allowLegacyFallback: boolean,
+  fallbackSort: (items: Peripheral[]) => Peripheral[],
+): Peripheral[] {
+  const withOrder = sortByTierThenName(items, orderKey, allowLegacyFallback)
+  const hasAnyOrder = withOrder.some((item) => getTierOrder(item, orderKey, allowLegacyFallback) !== null)
+  return hasAnyOrder ? withOrder : fallbackSort(items)
 }
 
 interface TierlistGridProps {
@@ -145,6 +190,8 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   const isEnglish = locale === "en-US"
   const [ratingMode, setRatingMode] = useState<RatingMode>("overall")
   const modeConfig = MODE_CONFIGS[ratingMode]
+  const orderKey = ORDER_KEY_BY_MODE[ratingMode]
+  const allowLegacyFallback = ratingMode === "overall"
 
   const tierRows: TierRow[] = [
     {
@@ -236,17 +283,17 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
         if (modeConfig.filterItem) tierItems = tierItems.filter(modeConfig.filterItem)
         return {
           ...tier,
-          items: modeConfig.sortItems(tierItems),
+          items: sortWithTierOrder(tierItems, orderKey, allowLegacyFallback, modeConfig.fallbackSort),
         }
       }),
-    [filtered, modeConfig, tierRows]
+    [filtered, modeConfig, tierRows, orderKey, allowLegacyFallback]
   )
 
   const untieredItems = useMemo(() => {
     let items = filtered.filter((item) => item.tier === null)
     if (modeConfig.filterItem) items = items.filter(modeConfig.filterItem)
-    return modeConfig.sortItems(items)
-  }, [filtered, modeConfig])
+    return sortWithTierOrder(items, orderKey, allowLegacyFallback, modeConfig.fallbackSort)
+  }, [filtered, modeConfig, orderKey, allowLegacyFallback])
 
   const hasItems = filtered.length > 0
 
@@ -366,7 +413,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
               <div className="flex items-center gap-3">
                 <span className="text-xl font-black text-slate-100">-</span>
                 <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                  {isEnglish ? "No tier" : "Sem tier"}
+                  {isEnglish ? "Under Review" : "Sob Revisão"}
                 </span>
               </div>
             </div>

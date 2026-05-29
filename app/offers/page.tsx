@@ -11,6 +11,31 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { useLocale } from "@/components/providers/locale-context"
 
+const URL_REGEX = /(https?:\/\/[^\s]+)/g
+
+function TextWithLinks({ text }: { text: string }) {
+  const parts = text.split(URL_REGEX)
+  return (
+    <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">
+      {parts.map((part, i) =>
+        URL_REGEX.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="break-all text-cyan-400 underline underline-offset-2 hover:text-cyan-300"
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        )
+      )}
+    </p>
+  )
+}
+
 type TelegramOfferImage = {
   fileId: string
   width: number | null
@@ -191,7 +216,7 @@ export default function OffersPage() {
                         </div>
                       ) : null}
 
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{offer.text}</p>
+                      <TextWithLinks text={offer.text} />
 
                       {offer.url ? (
                         <a href={offer.url} target="_blank" rel="noopener noreferrer" className="inline-flex">

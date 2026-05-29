@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useLocale } from "@/components/providers/locale-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -23,7 +24,6 @@ import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
 import { cn } from "@/lib/utils"
 
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
-type PriceBand = "all" | "budget" | "mid" | "premium"
 type SortKey = "recent" | "rank" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type MouseShape = "symmetrical" | "ergonomic"
@@ -61,6 +61,7 @@ type Peripheral = {
 
 const WEIGHT_MIN_G = 0
 const WEIGHT_MAX_G = 300
+const PRICE_MIN = 0
 
 interface PerifericosContentProps {
   initialData: Peripheral[]
@@ -141,52 +142,46 @@ function formatTagLabel(tag: Tag, category?: string) {
   return TAG_LABELS[tag] ?? formatLabel(tag)
 }
 
-function getPriceBand(price: number): Exclude<PriceBand, "all"> {
-  if (price <= 80) return "budget"
-  if (price <= 160) return "mid"
-  return "premium"
+function PriceSlider({ value, onChange, isEnglish, max }: { value: [number, number]; onChange: (v: [number, number]) => void; isEnglish: boolean; max: number }) {
+  const [minVal, maxVal] = value
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">{isEnglish ? "BRL" : "Reais"}</span>
+        <span className="text-xs font-medium text-foreground">R${minVal} – R${maxVal}</span>
+      </div>
+      <Slider
+        min={PRICE_MIN}
+        max={max}
+        step={10}
+        value={[minVal, maxVal]}
+        onValueChange={([min, max]) => onChange([min, max])}
+        className="w-full"
+      />
+      <div className="flex justify-between text-[10px] text-muted-foreground/60">
+        <span>R${PRICE_MIN}</span>
+        <span>R${max}</span>
+      </div>
+    </div>
+  )
 }
 
 function WeightSlider({ value, onChange }: { value: [number, number]; onChange: (v: [number, number]) => void }) {
   const [minVal, maxVal] = value
-  const trackLeft = ((minVal - WEIGHT_MIN_G) / (WEIGHT_MAX_G - WEIGHT_MIN_G)) * 100
-  const trackRight = ((WEIGHT_MAX_G - maxVal) / (WEIGHT_MAX_G - WEIGHT_MIN_G)) * 100
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Gramas</span>
         <span className="text-xs font-medium text-foreground">{minVal}g – {maxVal}g</span>
       </div>
-      <div className="relative my-1 flex h-1.5 items-center rounded-full bg-muted/40">
-        <div
-          className="absolute h-full rounded-full bg-primary"
-          style={{ left: `${trackLeft}%`, right: `${trackRight}%` }}
-        />
-      </div>
-      <input
-        type="range"
+      <Slider
         min={WEIGHT_MIN_G}
         max={WEIGHT_MAX_G}
         step={5}
-        value={minVal}
-        onChange={(e) => {
-          const v = Math.min(Number(e.target.value), maxVal - 5)
-          onChange([v, maxVal])
-        }}
-        className="w-full accent-primary"
-      />
-      <input
-        type="range"
-        min={WEIGHT_MIN_G}
-        max={WEIGHT_MAX_G}
-        step={5}
-        value={maxVal}
-        onChange={(e) => {
-          const v = Math.max(Number(e.target.value), minVal + 5)
-          onChange([minVal, v])
-        }}
-        className="w-full accent-primary"
+        value={[minVal, maxVal]}
+        onValueChange={([min, max]) => onChange([min, max])}
+        className="w-full"
       />
       <div className="flex justify-between text-[10px] text-muted-foreground/60">
         <span>{WEIGHT_MIN_G}g</span>
@@ -231,7 +226,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   const [query, setQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<Category>("mouse")
   const [selectedBrand, setSelectedBrand] = useState("all")
-  const [selectedPriceBand, setSelectedPriceBand] = useState<PriceBand>("all")
+  const [priceRange, setPriceRange] = useState<[number, number]>([PRICE_MIN, 0])
   const [selectedConnectivity, setSelectedConnectivity] = useState("all")
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
   const [selectedKeyboardLayout, setSelectedKeyboardLayout] = useState<KeyboardLayout | "all">("all")
@@ -267,8 +262,18 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
   const availableBrands = useMemo(() => {
     const base = effectiveCategory ? initialData.filter((i) => i.category === effectiveCategory) : initialData
-    return ["all", ...Array.from(new Set(base.map((i) => i.brand)))]
+    return ["all", ...Array.from(new Set(base.map((i) => i.brand))).sort((a, b) => a.localeCompare(b))]
   }, [initialData, effectiveCategory])
+
+  const maxPrice = useMemo(() => {
+    const base = effectiveCategory ? initialData.filter((i) => i.category === effectiveCategory) : initialData
+    const max = Math.max(...base.map((i) => i.price), 0)
+    return Math.ceil(max / 10) * 10
+  }, [initialData, effectiveCategory])
+
+  useEffect(() => {
+    setPriceRange([PRICE_MIN, maxPrice])
+  }, [maxPrice])
 
   const availableMouseShapes = useMemo(() => {
     if (!showMouseShapeFilter) return [] as MouseShape[]
@@ -349,6 +354,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   }, [initialData, effectiveCategory, showProfileFilter])
 
   const isWeightFiltered = showWeightFilter && (weightRange[0] > WEIGHT_MIN_G || weightRange[1] < WEIGHT_MAX_G)
+  const isPriceFiltered = priceRange[0] > PRICE_MIN || priceRange[1] < maxPrice
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -360,7 +366,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       return (
         (q === "" || searchable.includes(q)) &&
         (selectedBrand === "all" || item.brand === selectedBrand) &&
-        (selectedPriceBand === "all" || getPriceBand(item.price) === selectedPriceBand) &&
+        (!isPriceFiltered || (item.price >= priceRange[0] && item.price <= priceRange[1])) &&
         (!showConnectivityFilter || selectedConnectivity === "all" || item.specs.connectivity === selectedConnectivity) &&
         (!showMouseShapeFilter || selectedMouseShape === "all" || item.specs.mouseShape === selectedMouseShape) &&
         (!showKeyboardLayoutFilter || selectedKeyboardLayout === "all" || item.specs.keyboardLayout === selectedKeyboardLayout) &&
@@ -384,25 +390,25 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     }
     return sorted
   }, [
-    initialData, query, selectedCategory, selectedBrand, selectedPriceBand, selectedConnectivity,
+    initialData, query, selectedCategory, selectedBrand, selectedConnectivity,
     selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedSurface, selectedProfile,
     selectedPadType, selectedRefreshRate, selectedPanelType, sortKey, lockedCategory,
     showConnectivityFilter, showMouseShapeFilter, showKeyboardLayoutFilter, showKeyboardTypeFilter,
     showSurfaceFilter, showProfileFilter, showPadTypeFilter, showMonitorFilters,
-    isWeightFiltered, weightRange,
+    isWeightFiltered, weightRange, isPriceFiltered, priceRange,
   ])
 
   const activeFiltersCount = useMemo(() =>
-    [selectedBrand, selectedPriceBand, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType]
-      .filter((v) => v !== "all").length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0),
-    [query, selectedBrand, selectedCategory, selectedConnectivity, selectedPriceBand, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered]
+    [selectedBrand, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType]
+      .filter((v) => v !== "all").length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0) + (isPriceFiltered ? 1 : 0),
+    [query, selectedBrand, selectedCategory, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered, isPriceFiltered]
   )
 
   const resetFilters = () => {
     setQuery("")
     setSelectedCategory("mouse")
     setSelectedBrand("all")
-    setSelectedPriceBand("all")
+    setPriceRange([PRICE_MIN, maxPrice])
     setSelectedConnectivity("all")
     setSelectedMouseShape("all")
     setSelectedKeyboardLayout("all")
@@ -555,17 +561,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Price */}
       <FilterSection title={isEnglish ? "Price" : "Preço"}>
-        <Select value={selectedPriceBand} onValueChange={(v) => setSelectedPriceBand(v as PriceBand)}>
-          <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{isEnglish ? "All prices" : "Todos"}</SelectItem>
-            <SelectItem value="budget">{isEnglish ? "Budget (≤$80)" : "Budget (≤R$80)"}</SelectItem>
-            <SelectItem value="mid">{isEnglish ? "Mid ($81–$160)" : "Mid (R$81–R$160)"}</SelectItem>
-            <SelectItem value="premium">{isEnglish ? "Premium ($160+)" : "Premium (R$160+)"}</SelectItem>
-          </SelectContent>
-        </Select>
+        <PriceSlider value={priceRange} onChange={setPriceRange} isEnglish={isEnglish} max={maxPrice} />
       </FilterSection>
 
       {/* Connectivity */}

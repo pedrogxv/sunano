@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag, Layers, FileText, ShoppingCart, Info, Link2, Search, X } from "lucide-react"
+import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag, Layers, FileText, ShoppingCart, Info, Link2, Search, X, Scissors, RotateCcw, Loader2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -33,6 +33,7 @@ import { useLocale } from "@/components/providers/locale-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { mapTier } from "@/lib/tier-utils"
 import { RATING_LEVEL_COLORS } from "@/lib/tierlist-theme"
+import { removeBackground, fileToDataUrl } from "@/lib/client/remove-background"
 
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -469,6 +470,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [loadingPeripheral, setLoadingPeripheral] = useState(Boolean(peripheralId))
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  // Guarda o original e o recorte para permitir alternar entre eles.
+  const [originalImage, setOriginalImage] = useState<{ file: File; preview: string } | null>(null)
+  const [processedImage, setProcessedImage] = useState<{ file: File; preview: string } | null>(null)
+  const [bgRemoved, setBgRemoved] = useState(false)
+  const [removingBg, setRemovingBg] = useState(false)
   const [selectedTag, setSelectedTag] = useState<Tag[]>([])
   const [error, setError] = useState<string | null>(null)
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
@@ -759,13 +765,69 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     }
   }
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      setImageFile(file)
-      const reader = new FileReader()
-      reader.onloadend = () => setImagePreview(reader.result as string)
-      reader.readAsDataURL(file)
+    // Reseta o input para permitir reenviar o mesmo arquivo.
+    e.target.value = ""
+    if (!file) return
+
+    // Mostra o original imediatamente.
+    const originalPreview = await fileToDataUrl(file)
+    setOriginalImage({ file, preview: originalPreview })
+    setProcessedImage(null)
+    setImageFile(file)
+    setImagePreview(originalPreview)
+    setBgRemoved(false)
+
+    // Tenta remover o fundo automaticamente.
+    setRemovingBg(true)
+    try {
+      const result = await removeBackground(file)
+      const resultPreview = await fileToDataUrl(result)
+      setProcessedImage({ file: result, preview: resultPreview })
+      setImageFile(result)
+      setImagePreview(resultPreview)
+      setBgRemoved(true)
+    } catch (err) {
+      console.error("Falha ao remover o fundo:", err)
+      toast.error(isEnglish ? "Couldn't remove the background automatically." : "Não foi possível remover o fundo automaticamente.")
+    } finally {
+      setRemovingBg(false)
+    }
+  }
+
+  const toggleBackground = async () => {
+    if (!originalImage || removingBg) return
+
+    if (bgRemoved) {
+      // Volta para a imagem original.
+      setImageFile(originalImage.file)
+      setImagePreview(originalImage.preview)
+      setBgRemoved(false)
+      return
+    }
+
+    // Reaplica o recorte (reaproveita se já foi calculado).
+    if (processedImage) {
+      setImageFile(processedImage.file)
+      setImagePreview(processedImage.preview)
+      setBgRemoved(true)
+      return
+    }
+
+    setRemovingBg(true)
+    try {
+      const result = await removeBackground(originalImage.file)
+      const resultPreview = await fileToDataUrl(result)
+      setProcessedImage({ file: result, preview: resultPreview })
+      setImageFile(result)
+      setImagePreview(resultPreview)
+      setBgRemoved(true)
+    } catch (err) {
+      console.error("Falha ao remover o fundo:", err)
+      toast.error(isEnglish ? "Couldn't remove the background automatically." : "Não foi possível remover o fundo automaticamente.")
+    } finally {
+      setRemovingBg(false)
     }
   }
 
@@ -817,25 +879,70 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
         {/* SECTION 1: Imagem */}
         <FormSection title={isEnglish ? "Image" : "Imagem"} icon={<ImageIcon className="size-4" />} defaultOpen>
-          <div className="flex gap-4 items-start">
-            {imagePreview && (
-              <div className="relative w-28 h-28 rounded-xl border border-border overflow-hidden shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img alt="Preview" className="w-full h-full object-cover" src={imagePreview} />
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-4 items-start">
+              {imagePreview && (
+                <div
+                  className="relative w-28 h-28 rounded-xl border border-border overflow-hidden shrink-0"
+                  style={{
+                    backgroundImage:
+                      "conic-gradient(#0000 90deg, #80808022 0 180deg, #0000 0 270deg, #80808022 0)",
+                    backgroundSize: "16px 16px",
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt="Preview" className="w-full h-full object-contain" src={imagePreview} />
+                  {removingBg && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+                      <Loader2 className="size-5 animate-spin text-foreground" />
+                    </div>
+                  )}
+                </div>
+              )}
+              <label className="flex-1 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:border-primary/40 hover:bg-muted/10 transition group">
+                <input accept="image/*" className="hidden" onChange={handleImageSelect} type="file" />
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <Upload className="size-6 text-muted-foreground group-hover:text-foreground transition-colors" />
+                  <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                    {imagePreview
+                      ? (isEnglish ? "Click to change image" : "Clique para trocar a imagem")
+                      : (isEnglish ? "Click to upload image" : "Clique para enviar a imagem")}
+                  </p>
+                  <p className="text-xs text-muted-foreground/60">PNG, JPG, WebP</p>
+                </div>
+              </label>
+            </div>
+
+            {originalImage && (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={removingBg}
+                  onClick={toggleBackground}
+                  className="gap-1.5"
+                >
+                  {removingBg ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : bgRemoved ? (
+                    <RotateCcw className="size-3.5" />
+                  ) : (
+                    <Scissors className="size-3.5" />
+                  )}
+                  {removingBg
+                    ? (isEnglish ? "Removing background…" : "Removendo fundo…")
+                    : bgRemoved
+                      ? (isEnglish ? "Restore original background" : "Restaurar fundo original")
+                      : (isEnglish ? "Remove background" : "Remover fundo")}
+                </Button>
+                <p className="text-xs text-muted-foreground/70">
+                  {bgRemoved
+                    ? (isEnglish ? "Background removed automatically." : "Fundo removido automaticamente.")
+                    : (isEnglish ? "Works best with solid/white backgrounds." : "Funciona melhor com fundo sólido/branco.")}
+                </p>
               </div>
             )}
-            <label className="flex-1 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:border-primary/40 hover:bg-muted/10 transition group">
-              <input accept="image/*" className="hidden" onChange={handleImageSelect} type="file" />
-              <div className="flex flex-col items-center gap-2 text-center">
-                <Upload className="size-6 text-muted-foreground group-hover:text-foreground transition-colors" />
-                <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
-                  {imagePreview
-                    ? (isEnglish ? "Click to change image" : "Clique para trocar a imagem")
-                    : (isEnglish ? "Click to upload image" : "Clique para enviar a imagem")}
-                </p>
-                <p className="text-xs text-muted-foreground/60">PNG, JPG, WebP</p>
-              </div>
-            </label>
           </div>
         </FormSection>
 
@@ -1548,7 +1655,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           <Link href={backHref}>
             <Button variant="outline">{isEnglish ? "Cancel" : "Cancelar"}</Button>
           </Link>
-          <Button disabled={uploading || form.formState.isSubmitting} type="submit" className="min-w-28">
+          <Button disabled={uploading || removingBg || form.formState.isSubmitting} type="submit" className="min-w-28">
             {uploading || form.formState.isSubmitting
               ? (isEnglish ? "Saving..." : "Salvando...")
               : peripheralId

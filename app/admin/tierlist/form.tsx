@@ -1025,14 +1025,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 : "Avalie cada aspecto de 1 (pior) a 6 (melhor). Clique × para limpar."}
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {RATING_FIELDS.map((field) => (
-                <RatingInput
-                  key={field.key}
-                  label={isEnglish ? field.label : field.ptLabel}
-                  value={form.watch(field.key) as number | undefined}
-                  onChange={(v) => setRating(field.key, v)}
-                />
-              ))}
+              {RATING_FIELDS.map((field) => {
+                let label = isEnglish ? field.label : field.ptLabel
+                if (field.key === "ratingBattery" && watchedCategory === "keyboard") {
+                  label = isEnglish ? "Typing" : "Digitação"
+                }
+                return (
+                  <RatingInput
+                    key={field.key}
+                    label={label}
+                    value={form.watch(field.key) as number | undefined}
+                    onChange={(v) => setRating(field.key, v)}
+                  />
+                )
+              })}
             </div>
           </div>
         </FormSection>

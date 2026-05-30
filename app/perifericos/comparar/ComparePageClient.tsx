@@ -198,6 +198,8 @@ export function ComparePageClient() {
   const [searchQuery, setSearchQuery] = useState("")
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
+  const [defaultResults, setDefaultResults] = useState<SearchResult[]>([])
+  const [defaultLoading, setDefaultLoading] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const searchPanelRef = useRef<HTMLDivElement>(null)
 
@@ -237,8 +239,25 @@ export function ComparePageClient() {
     } else {
       setSearchQuery("")
       setSearchResults([])
+      setDefaultResults([])
     }
   }, [activeSearch])
+
+  // Load default results when panel opens (no query needed)
+  useEffect(() => {
+    if (!activeSearch) return
+    setDefaultLoading(true)
+    const params = new URLSearchParams({ full: "1", limit: "8" })
+    if (category) params.set("category", category)
+    const excluded = activeSearch === "add" ? ids : ids.filter((id) => id !== activeSearch)
+    if (excluded.length > 0) params.set("exclude", excluded.join(","))
+    fetch(`/api/peripherals?${params}`)
+      .then((res) => res.json())
+      .then((data) => setDefaultResults((data?.peripherals ?? []) as SearchResult[]))
+      .catch(() => setDefaultResults([]))
+      .finally(() => setDefaultLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSearch, ids.join(","), category])
 
   // Scroll search panel into view when it opens
   useEffect(() => {
@@ -279,9 +298,12 @@ export function ComparePageClient() {
 
   // ── Mutation helpers ─────────────────────────────────────────────────────────
 
+  const [pendingRemoveId, setPendingRemoveId] = useState<string | null>(null)
+
   const removeItem = useCallback((id: string) => {
     setIds((prev) => prev.filter((i) => i !== id))
     setActiveSearch((prev) => (prev === id ? null : prev))
+    setPendingRemoveId(null)
   }, [])
 
   const selectResult = useCallback((result: SearchResult) => {
@@ -422,14 +444,32 @@ export function ComparePageClient() {
                   </div>
                 )}
 
-                {/* Remove button */}
-                <button
-                  onClick={() => removeItem(item.id)}
-                  className="absolute right-2.5 top-2.5 z-10 flex size-7 items-center justify-center rounded-full bg-muted/30 text-muted-foreground opacity-60 transition-all hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
-                  title="Remover da comparação"
-                >
-                  <X className="size-3.5" />
-                </button>
+                {/* Remove button / inline confirm */}
+                {pendingRemoveId === item.id ? (
+                  <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-xl border border-destructive/30 bg-card px-2 py-1 shadow-lg">
+                    <span className="text-[10px] font-semibold text-muted-foreground">Remover?</span>
+                    <button
+                      onClick={() => removeItem(item.id)}
+                      className="rounded-md bg-destructive/10 px-2 py-0.5 text-[10px] font-bold text-destructive transition-colors hover:bg-destructive/20"
+                    >
+                      Sim
+                    </button>
+                    <button
+                      onClick={() => setPendingRemoveId(null)}
+                      className="rounded-md px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      Não
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setPendingRemoveId(item.id)}
+                    className="absolute right-2.5 top-2.5 z-10 flex size-7 items-center justify-center rounded-full bg-muted/30 text-muted-foreground opacity-60 transition-all hover:bg-destructive/20 hover:text-destructive hover:opacity-100"
+                    title="Remover da comparação"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
 
                 {/* Image */}
                 <div className="relative mx-auto mb-4 size-24 overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-muted/30 to-muted/10">
@@ -569,57 +609,62 @@ export function ComparePageClient() {
 
           {/* Results */}
           <div className="max-h-72 overflow-y-auto">
-            {searchLoading ? (
+            {searchLoading || (defaultLoading && searchQuery.trim().length < 2) ? (
               <div className="flex items-center justify-center py-8">
                 <div className="size-5 animate-spin rounded-full border-2 border-border border-t-primary" />
               </div>
-            ) : searchResults.length > 0 ? (
-              <div className="divide-y divide-border/50">
-                {searchResults.map((result) => (
-                  <button
-                    key={result.id}
-                    onClick={() => selectResult(result)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/20"
-                  >
-                    {/* Thumbnail */}
-                    <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/20">
-                      {result.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={result.image_url} alt={result.name} className="h-full w-full object-contain p-1" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">
-                          {result.brand.slice(0, 2).toUpperCase()}
-                        </div>
+            ) : (() => {
+              const isSearching = searchQuery.trim().length >= 2
+              const results = isSearching ? searchResults : defaultResults
+              return results.length > 0 ? (
+                <div className="divide-y divide-border/50">
+                  {!isSearching && (
+                    <p className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                      Sugestões
+                    </p>
+                  )}
+                  {results.map((result) => (
+                    <button
+                      key={result.id}
+                      onClick={() => selectResult(result)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/20"
+                    >
+                      {/* Thumbnail */}
+                      <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/20">
+                        {result.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={result.image_url} alt={result.name} className="h-full w-full object-contain p-1" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">
+                            {result.brand.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">{result.name}</p>
+                        <p className="text-xs text-muted-foreground">{result.brand} · {formatCurrency(result.price)}</p>
+                      </div>
+
+                      {/* Tier */}
+                      {result.tier && (
+                        <TierBadge tier={result.tier} />
                       )}
-                    </div>
 
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">{result.name}</p>
-                      <p className="text-xs text-muted-foreground">{result.brand} · {formatCurrency(result.price)}</p>
-                    </div>
-
-                    {/* Tier */}
-                    {result.tier && (
-                      <TierBadge tier={result.tier} />
-                    )}
-
-                    {/* Action label */}
-                    <span className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                      {activeSearch === "add" ? "Adicionar" : "Selecionar"}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : searchQuery.trim().length >= 2 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Nenhum resultado para &quot;{searchQuery}&quot;.
-              </p>
-            ) : (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                Digite pelo menos 2 caracteres para buscar.
-              </p>
-            )}
+                      {/* Action label */}
+                      <span className="shrink-0 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                        {activeSearch === "add" ? "Adicionar" : "Selecionar"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : isSearching ? (
+                <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+                  Nenhum resultado para &quot;{searchQuery}&quot;.
+                </p>
+              ) : null
+            })()}
           </div>
         </div>
       )}

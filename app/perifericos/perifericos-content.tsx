@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowLeftRight, Check, ChevronDown, Edit, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react"
+import { ArrowLeftRight, Check, ChevronDown, Edit, Headphones, Keyboard, Layers, LayoutGrid, Monitor, Mouse, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -109,6 +109,18 @@ const CATEGORY_DESCRIPTIONS_EN: Record<Category, string> = {
 }
 
 const CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+
+const HERO_MAIN_CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors"]
+const HERO_OTHER_CATEGORIES: Category[] = ["iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+
+const HERO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
+  mouse: Mouse,
+  keyboard: Keyboard,
+  mousepad: Layers,
+  headset: Headphones,
+  monitors: Monitor,
+  outros: LayoutGrid,
+}
 
 const TIER_ORDER: Record<string, number> = { GOAT: 0, SS: 1, S: 2, A: 3, B: 4, C: 5, L: 6 }
 
@@ -403,6 +415,18 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       .filter((v) => v !== "all").length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0) + (isPriceFiltered ? 1 : 0),
     [query, selectedBrand, selectedCategory, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered, isPriceFiltered]
   )
+
+  const heroCategoryStats = useMemo(() => {
+    const counts = CATEGORIES.reduce<Record<string, number>>((acc, cat) => {
+      acc[cat] = initialData.filter((i) => i.category === cat).length
+      return acc
+    }, {})
+    const othersCount = HERO_OTHER_CATEGORIES.reduce((sum, cat) => sum + (counts[cat] ?? 0), 0)
+    return [
+      ...HERO_MAIN_CATEGORIES.map((cat) => ({ key: cat as Category | "outros", label: categoryLabels[cat], count: counts[cat] ?? 0 })),
+      { key: "outros" as Category | "outros", label: isEnglish ? "Others" : "Outros", count: othersCount },
+    ]
+  }, [initialData, categoryLabels, isEnglish])
 
   const resetFilters = () => {
     setQuery("")
@@ -749,6 +773,96 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-8 md:px-6 lg:px-8">
+      {/* Public hero banner */}
+      {!showAdminActions && (
+        <div className="relative overflow-hidden rounded-2xl border border-border/40 bg-card/60 px-6 pb-8 pt-10">
+          {/* Top glow */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-primary/[0.05] to-transparent" />
+
+          {/* Header */}
+          <div className="relative text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
+              {isEnglish ? "Gaming Gear Database" : "Banco de Periféricos"}
+            </p>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground md:text-4xl">
+              {isEnglish ? "Find and Compare" : "Descubra e Compare"}
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {isEnglish ? "Gaming Peripherals" : "Periféricos Gamer"}
+            </p>
+          </div>
+
+          {/* Category cards */}
+          <div className="relative mt-8 grid grid-cols-3 gap-2.5 sm:grid-cols-6 md:gap-3">
+            {heroCategoryStats.map(({ key, label, count }) => {
+              const Icon = HERO_ICONS[key] ?? LayoutGrid
+              const isActive = selectedCategory === key
+              const isOthers = key === "outros"
+
+              if (isOthers) {
+                return (
+                  <div
+                    key="outros"
+                    className="flex flex-col items-center gap-2 rounded-xl border border-border/25 bg-muted/[0.06] px-2 py-5"
+                  >
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-muted/20">
+                      <Icon className="size-5 text-muted-foreground/40" />
+                    </div>
+                    <span className="text-xl font-black leading-none tabular-nums text-foreground/40 md:text-2xl">{count}</span>
+                    <span className="text-[11px] text-muted-foreground/40 md:text-xs">{label}</span>
+                  </div>
+                )
+              }
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    if (lockedCategory && (key as Category) !== lockedCategory) clearSelection()
+                    setSelectedCategory(key as Category)
+                  }}
+                  className={cn(
+                    "group relative flex flex-col items-center gap-2 rounded-xl border px-2 py-5 transition-all duration-200",
+                    isActive
+                      ? "border-primary/40 bg-primary/[0.07] shadow-md shadow-primary/10 ring-1 ring-primary/20"
+                      : "border-border/35 bg-muted/[0.06] hover:-translate-y-0.5 hover:border-primary/25 hover:bg-muted/15 hover:shadow-lg hover:shadow-black/20"
+                  )}
+                >
+                  {/* Active top bar */}
+                  {isActive && (
+                    <span className="absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
+                  )}
+
+                  <div className={cn(
+                    "flex size-10 items-center justify-center rounded-xl transition-all duration-200",
+                    isActive
+                      ? "bg-primary/20 text-primary"
+                      : "bg-muted/25 text-muted-foreground/70 group-hover:bg-primary/10 group-hover:text-primary/80"
+                  )}>
+                    <Icon className="size-5" />
+                  </div>
+
+                  <span className={cn(
+                    "text-xl font-black leading-none tabular-nums transition-colors duration-200 md:text-2xl",
+                    isActive ? "text-primary" : "text-foreground group-hover:text-foreground"
+                  )}>
+                    {count}
+                  </span>
+
+                  <span className={cn(
+                    "text-[11px] transition-colors duration-200 md:text-xs",
+                    isActive ? "text-primary/70 font-medium" : "text-muted-foreground"
+                  )}>
+                    {label}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Admin actions */}
       {showAdminActions && (
         <div className="flex justify-end">

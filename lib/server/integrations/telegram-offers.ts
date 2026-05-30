@@ -59,6 +59,20 @@ type TelegramGetUserProfilePhotosResponse = {
   description?: string
 }
 
+type TelegramGetChatResponse = {
+  ok?: boolean
+  result?: {
+    id?: number
+    title?: string
+    username?: string
+    photo?: {
+      small_file_id?: string
+      big_file_id?: string
+    }
+  }
+  description?: string
+}
+
 export type TelegramOfferImage = {
   fileId: string
   width: number | null
@@ -131,6 +145,23 @@ function extractOfferImage(message: TelegramMessage): TelegramOfferImage | null 
   return null
 }
 
+async function fetchChatPhoto(chatId: number, botToken: string): Promise<TelegramOfferImage | null> {
+  const params = new URLSearchParams()
+  params.set("chat_id", String(chatId))
+
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/getChat?${params.toString()}`)
+  const data = (await response.json().catch(() => null)) as TelegramGetChatResponse | null
+
+  if (!response.ok || !data?.ok || !data.result?.photo) {
+    return null
+  }
+
+  const fileId = data.result.photo.big_file_id || data.result.photo.small_file_id
+  if (!fileId) return null
+
+  return { fileId, width: null, height: null }
+}
+
 async function fetchUserProfilePhoto(userId: number, botToken: string): Promise<TelegramOfferImage | null> {
   const params = new URLSearchParams()
   params.set("user_id", String(userId))
@@ -201,6 +232,7 @@ async function fetchTelegramOffers(limit = 30): Promise<TelegramOffersResult> {
     .sort((a, b) => (b.date || 0) - (a.date || 0))
 
   const visibleMessages = messages.slice(0, limit)
+
   const authorIds = Array.from(
     new Set(
       visibleMessages
@@ -210,26 +242,44 @@ async function fetchTelegramOffers(limit = 30): Promise<TelegramOffersResult> {
   )
   const authorAvatarMap = new Map<number, TelegramOfferImage | null>()
 
-  await Promise.all(
-    authorIds.map(async (authorId) => {
+  const chatIdsWithoutAuthor = Array.from(
+    new Set(
+      visibleMessages
+        .filter((m) => !m.from?.id && typeof m.chat?.id === "number")
+        .map((m) => m.chat!.id!)
+    )
+  )
+  const chatPhotoMap = new Map<number, TelegramOfferImage | null>()
+
+  await Promise.all([
+    ...authorIds.map(async (authorId) => {
       const avatar = await fetchUserProfilePhoto(authorId, botToken)
       authorAvatarMap.set(authorId, avatar)
-    })
-  )
+    }),
+    ...chatIdsWithoutAuthor.map(async (chatId) => {
+      const photo = await fetchChatPhoto(chatId, botToken)
+      chatPhotoMap.set(chatId, photo)
+    }),
+  ])
 
   const offers = visibleMessages.map((message) => {
     const text = (message.text || message.caption || "").trim()
     const date = message.date ? new Date(message.date * 1000).toISOString() : new Date().toISOString()
     const image = extractOfferImage(message)
     const authorId = message.from?.id ?? null
+    const chatId = message.chat?.id ?? null
 
     return {
       id: `telegram-${message.message_id || Math.random().toString(36).slice(2)}`,
       messageId: message.message_id || 0,
       text,
       date,
-      author: message.from?.first_name || message.from?.username || null,
-      authorAvatar: authorId ? (authorAvatarMap.get(authorId) ?? null) : null,
+      author: message.from?.first_name || message.from?.username || message.chat?.title || null,
+      authorAvatar: authorId
+        ? (authorAvatarMap.get(authorId) ?? null)
+        : chatId
+          ? (chatPhotoMap.get(chatId) ?? null)
+          : null,
       chatTitle: message.chat?.title || null,
       url: buildTelegramMessageUrl(message, fallbackPublicUrl),
       image,

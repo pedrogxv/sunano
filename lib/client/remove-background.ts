@@ -15,11 +15,14 @@ export interface RemoveBackgroundOptions {
   tolerance?: number
   /** Faixa extra de distância usada para suavizar a borda (anti-aliasing). */
   feather?: number
+  /** Maior dimensão (px) da saída; imagens maiores são reduzidas proporcionalmente. */
+  maxDimension?: number
 }
 
 const DEFAULTS: Required<RemoveBackgroundOptions> = {
   tolerance: 42,
   feather: 28,
+  maxDimension: 2000,
 }
 
 interface RGB {
@@ -34,14 +37,20 @@ interface RGB {
  */
 export async function removeBackground(
   file: File,
-  options: RemoveBackgroundOptions = {},
+  options: RemoveBackgroundOptions = {}
 ): Promise<File> {
-  const { tolerance, feather } = { ...DEFAULTS, ...options }
+  const { tolerance, feather, maxDimension } = { ...DEFAULTS, ...options }
 
   const bitmap = await loadBitmap(file)
+  // Reduz imagens muito grandes para manter o PNG (com transparência) leve e
+  // o processamento rápido. Fotos de produto não precisam de mais que isso.
+  const scale = Math.min(
+    1,
+    maxDimension / Math.max(bitmap.width, bitmap.height)
+  )
   const canvas = document.createElement("canvas")
-  canvas.width = bitmap.width
-  canvas.height = bitmap.height
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale))
 
   const ctx = canvas.getContext("2d", { willReadFrequently: true })
   if (!ctx) {
@@ -49,7 +58,7 @@ export async function removeBackground(
     throw new Error("Canvas 2D não suportado neste navegador.")
   }
 
-  ctx.drawImage(bitmap, 0, 0)
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close?.()
 
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
@@ -61,7 +70,11 @@ export async function removeBackground(
   return new File([blob], name, { type: "image/png" })
 }
 
-function applyBackgroundRemoval(image: ImageData, tolerance: number, feather: number) {
+function applyBackgroundRemoval(
+  image: ImageData,
+  tolerance: number,
+  feather: number
+) {
   const { data, width, height } = image
   const bg = estimateBackgroundColor(data, width, height)
   const total = width * height
@@ -141,7 +154,11 @@ function applyBackgroundRemoval(image: ImageData, tolerance: number, feather: nu
  * (12 bits). Pega o balde mais frequente e tira a média real dos pixels nele,
  * o que é robusto mesmo quando parte do produto encosta na borda.
  */
-function estimateBackgroundColor(data: Uint8ClampedArray, width: number, height: number): RGB {
+function estimateBackgroundColor(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number
+): RGB {
   const buckets = new Map<number, RGB & { n: number }>()
 
   const sample = (x: number, y: number) => {
@@ -176,7 +193,9 @@ function estimateBackgroundColor(data: Uint8ClampedArray, width: number, height:
   return { r: best.r / best.n, g: best.g / best.n, b: best.b / best.n }
 }
 
-async function loadBitmap(file: File): Promise<ImageBitmap & { close?: () => void }> {
+async function loadBitmap(
+  file: File
+): Promise<ImageBitmap & { close?: () => void }> {
   if (typeof createImageBitmap === "function") {
     return createImageBitmap(file)
   }
@@ -187,7 +206,8 @@ async function loadBitmap(file: File): Promise<ImageBitmap & { close?: () => voi
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image()
       el.onload = () => resolve(el)
-      el.onerror = () => reject(new Error("Não foi possível carregar a imagem."))
+      el.onerror = () =>
+        reject(new Error("Não foi possível carregar a imagem."))
       el.src = url
     })
     return img as unknown as ImageBitmap & { close?: () => void }
@@ -199,8 +219,9 @@ async function loadBitmap(file: File): Promise<ImageBitmap & { close?: () => voi
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => (blob ? resolve(blob) : reject(new Error("Falha ao gerar a imagem."))),
-      "image/png",
+      (blob) =>
+        blob ? resolve(blob) : reject(new Error("Falha ao gerar a imagem.")),
+      "image/png"
     )
   })
 }

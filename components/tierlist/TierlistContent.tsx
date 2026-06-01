@@ -1,6 +1,7 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { usePathname } from "next/navigation"
 import { FilterBar } from "./FilterBar"
 import { TierlistGrid } from "./TierlistGrid"
 
@@ -52,14 +53,24 @@ function getPriceBand(price: number): Exclude<PriceBand, "all"> {
 }
 
 export function TierlistContent({ initialData, categoryLabels }: TierlistContentProps) {
+  const pathname = usePathname()
   const [query, setQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<Category>("mouse")
+  const [selectedCategory, setSelectedCategory] = useState<Category>("keyboard")
   const [selectedBrand, setSelectedBrand] = useState("all")
   const [selectedPriceBand, setSelectedPriceBand] = useState<PriceBand>("all")
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
   const [selectedKeyboardLayout, setSelectedKeyboardLayout] = useState<KeyboardLayout | "all">("all")
 
   const categoryLabel = categoryLabels[selectedCategory]
+
+  useEffect(() => {
+    if (pathname === "/tierlist") {
+      setSelectedCategory("keyboard")
+      setSelectedBrand("all")
+      setSelectedMouseShape("all")
+      setSelectedKeyboardLayout("all")
+    }
+  }, [pathname])
 
   const handleCategoryChange = (category: Category) => {
     setSelectedCategory(category)

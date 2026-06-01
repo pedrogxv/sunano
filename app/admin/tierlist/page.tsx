@@ -576,7 +576,7 @@ export default function AdminPeripheralsPage() {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
   const [peripherals, setPeripherals] = useState<Peripheral[]>([])
-  const [selectedCategory, setSelectedCategory] = useState<Category>("mouse")
+  const [selectedCategory, setSelectedCategory] = useState<Category>("keyboard")
   const [query, setQuery] = useState("")
   const [selectedBrand, setSelectedBrand] = useState("all")
   const [selectedPriceBand, setSelectedPriceBand] = useState<PriceBand>("all")

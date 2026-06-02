@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ShieldCheck, Users as UsersIcon, UserPlus, Lock, Save, ChevronDown, ChevronUp } from "lucide-react"
+import { ShieldCheck, Users as UsersIcon, UserPlus, Lock, Save, ChevronDown, ChevronUp, KeyRound } from "lucide-react"
 import { toast } from "sonner"
 
 import BoxLoader from "@/components/ui/box-loader"
@@ -110,6 +110,7 @@ function RoleBadge({ role }: { role: string }) {
 function UserCard({
   user,
   isCurrentUser,
+  isCurrentUserWebMaster,
   isEnglish,
   savingId,
   onRoleChange,
@@ -118,6 +119,7 @@ function UserCard({
 }: {
   user: AdminUser
   isCurrentUser: boolean
+  isCurrentUserWebMaster: boolean
   isEnglish: boolean
   savingId: string | null
   onRoleChange: (id: string, role: "admin" | "moderator" | "webmaster") => void
@@ -125,9 +127,35 @@ function UserCard({
   onSave: (user: AdminUser) => void
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+  const [savingPassword, setSavingPassword] = useState(false)
   const isWebMaster = user.role === "webmaster"
   const locked = isWebMaster
+  const canChangeThisPassword = isCurrentUserWebMaster && (!isWebMaster || isCurrentUser)
   const initials = (user.display_name ?? user.email ?? "?").slice(0, 2).toUpperCase()
+
+  async function handlePasswordSave() {
+    if (!newPassword || newPassword.length < 8) return
+    try {
+      setSavingPassword(true)
+      const res = await fetch(`/api/admin/users/${user.id}/password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: newPassword }),
+      })
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? (isEnglish ? "Failed to change password" : "Erro ao alterar senha"))
+      toast.success(isEnglish ? "Password changed" : "Senha alterada", { description: user.display_name || user.email })
+      setNewPassword("")
+      setShowPasswordForm(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to change password" : "Erro ao alterar senha")
+      toast.error(isEnglish ? "Failed to change password" : "Erro ao alterar senha", { description: message })
+    } finally {
+      setSavingPassword(false)
+    }
+  }
 
   return (
     <div className={`rounded-2xl border transition-colors ${expanded ? "border-border bg-card/80" : "border-border/60 bg-card/40"}`}>
@@ -165,7 +193,18 @@ function UserCard({
               {savingId === user.id ? (isEnglish ? "Saving..." : "Salvando...") : (isEnglish ? "Save" : "Salvar")}
             </Button>
           )}
-          {locked && (
+          {canChangeThisPassword && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { setShowPasswordForm((v) => !v); setNewPassword("") }}
+              className="gap-1.5 text-xs"
+            >
+              <KeyRound className="size-3.5" />
+              <span className="hidden sm:inline">{isEnglish ? "Password" : "Senha"}</span>
+            </Button>
+          )}
+          {locked && !isCurrentUser && (
             <div className="flex items-center gap-1 text-xs text-amber-400/80">
               <Lock className="size-3.5" />
               <span className="hidden sm:inline">{isEnglish ? "Locked" : "Bloqueado"}</span>
@@ -201,7 +240,7 @@ function UserCard({
             </div>
           )}
 
-          {locked && (
+          {locked && !isCurrentUser && (
             <p className="text-xs text-amber-400/80">
               {isEnglish
                 ? "WEB Master permissions are protected and cannot be changed from the panel."
@@ -215,6 +254,42 @@ function UserCard({
             isEnglish={isEnglish}
             onChange={(key, value) => onPermissionChange(user.id, key, value)}
           />
+        </div>
+      )}
+
+      {/* Password change form */}
+      {showPasswordForm && canChangeThisPassword && (
+        <div className="border-t border-border px-4 pb-4 pt-4">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {isEnglish ? "Change password" : "Alterar senha"}
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder={isEnglish ? "New password (min. 8 chars)" : "Nova senha (mín. 8 caracteres)"}
+              className="border-border bg-background"
+              onKeyDown={(e) => { if (e.key === "Enter") handlePasswordSave() }}
+            />
+            <Button
+              size="sm"
+              onClick={handlePasswordSave}
+              disabled={savingPassword || newPassword.length < 8}
+              className="shrink-0 gap-1.5"
+            >
+              <KeyRound className="size-3.5" />
+              {savingPassword ? (isEnglish ? "Saving..." : "Salvando...") : (isEnglish ? "Save" : "Salvar")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { setShowPasswordForm(false); setNewPassword("") }}
+              className="shrink-0"
+            >
+              {isEnglish ? "Cancel" : "Cancelar"}
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -234,6 +309,7 @@ export default function AdminUsersPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const isCurrentUserWebMaster = users.find((u) => u.id === currentUserId)?.role === "webmaster"
   const [newUser, setNewUser] = useState<NewUserForm>({
     email: "",
     displayName: "",
@@ -442,6 +518,7 @@ export default function AdminUsersPage() {
               key={user.id}
               user={user}
               isCurrentUser={user.id === currentUserId}
+              isCurrentUserWebMaster={isCurrentUserWebMaster}
               isEnglish={isEnglish}
               savingId={savingId}
               onRoleChange={updateUserRole}

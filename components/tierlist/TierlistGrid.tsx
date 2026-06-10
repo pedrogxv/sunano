@@ -31,6 +31,7 @@ interface Peripheral {
     adminTierOrder_recommended?: number
     adminTierOrder_oled?: number
     adminTierOrder_soundTyping?: number
+    adminTierOrder_mechanical?: number
     mouseShape?: "symmetrical" | "ergonomic"
     keyboardLayout?: string
     connectivity?: "wired" | "wireless"
@@ -310,6 +311,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   useEffect(() => {
     if (ratingMode === "oled" && category !== "monitors") setRatingMode("overall")
     if (ratingMode === "soundTyping" && category !== "switches") setRatingMode("overall")
+    if (ratingMode === "mechanical" && category !== "keyboard") setRatingMode("overall")
   }, [category, ratingMode])
 
   return (

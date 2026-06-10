@@ -193,6 +193,16 @@ interface TierlistGridProps {
 
 const COMING_SOON_CATEGORIES = ["iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp"]
 
+const MASCOT_IMAGES: Record<string, string> = {
+  iem: "/images/mascot/mascot-working.png",
+  headset: "/images/mascot/mascot-digging.png",
+  feet: "/images/mascot/mascot-warning.png",
+  chairs: "/images/mascot/coming-soon.png",
+  monitors: "/images/mascot/mascot-working.png",
+  switches: "/images/mascot/mascot-digging.png",
+  dac_amp: "/images/mascot/mascot-warning.png",
+}
+
 export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
@@ -318,12 +328,13 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   }, [category, ratingMode])
 
   if (isComingSoon) {
+    const mascotImage = MASCOT_IMAGES[category]
     return (
       <section className="space-y-4">
         <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-gradient-to-b from-card to-card/50 p-12 text-center">
           <div className="mb-6 h-48 w-48">
             <img
-              src="/images/mascot/coming-soon.png"
+              src={mascotImage}
               alt="Coming soon"
               className="h-full w-full object-contain"
               onError={(e) => {

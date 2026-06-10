@@ -38,7 +38,7 @@ export function PublicSidebar() {
   const mainNavItems = [
     { href: "/", label: isEnglish ? "Home" : "Início", icon: Home },
     { href: "/tierlist", label: "Tierlist", icon: Trophy },
-    { href: "/noticias", label: isEnglish ? "News" : "Noticias", icon: Newspaper },
+    { href: "/noticias", label: isEnglish ? "News" : "Novidades", icon: Newspaper },
     { href: "/perifericos", label: isEnglish ? "Peripherals" : "Periféricos", icon: Mouse },
     { href: "/blog", label: "Reviews", icon: Newspaper },
     { href: "/offers", label: isEnglish ? "Offers" : "Ofertas", icon: BadgePercent },

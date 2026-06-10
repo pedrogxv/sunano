@@ -41,7 +41,7 @@ import {
 import { TierItemTooltipContent, type Ratings, type RatingKey } from "@/components/tierlist/TierItemTooltipContent"
 import { FilterBar } from "@/components/tierlist/FilterBar"
 
-type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping"
+type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb"
 
 type Category = "all" | "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -90,9 +90,12 @@ const TIER_ROWS: { key: Tier; label: string; accent: string; textColor: string }
 const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
   { key: "oled", en: "OLED", pt: "OLED" },
   { key: "performance", en: "General", pt: "Geral" },
-  { key: "value", en: "Value", pt: "Custo-Beneficio" },
+  { key: "value", en: "Value", pt: "Custo Benefício" },
   { key: "recommended", en: "Recommended", pt: "Recomendado" },
   { key: "soundTyping", en: "Sound & Typing", pt: "Som e Digitação" },
+  { key: "mechanical", en: "Mechanical", pt: "Mecânico" },
+  { key: "magnetic", en: "Magnetic", pt: "Magnético" },
+  { key: "pcb", en: "PCB", pt: "PCB" },
 ]
 
 // Labels específicos por categoria para MOUSEPAD e GLASSPAD
@@ -119,6 +122,9 @@ const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
   recommended: "adminTierOrder_recommended",
   oled: "adminTierOrder_oled",
   soundTyping: "adminTierOrder_soundTyping",
+  mechanical: "adminTierOrder_mechanical",
+  magnetic: "adminTierOrder_magnetic",
+  pcb: "adminTierOrder_pcb",
 }
 
 type ModeConfig = {
@@ -279,6 +285,21 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
   soundTyping: {
     enDescription: "Sorted by sound and typing feel",
     ptDescription: "Ordenado por som e digitação",
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  mechanical: {
+    enDescription: "Sorted by mechanical performance",
+    ptDescription: "Ordenado por desempenho puro",
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  magnetic: {
+    enDescription: "Sorted by magnetic performance",
+    ptDescription: "Ordenado por desempenho magnético",
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  pcb: {
+    enDescription: "Sorted by PCB performance",
+    ptDescription: "Ordenado por desempenho PCB",
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
 }
@@ -771,10 +792,11 @@ export default function AdminPeripheralsPage() {
     }
   }, [])
 
-  // Ensure OLED mode is only active for monitors
   useEffect(() => {
     if (ratingMode === "oled" && selectedCategory !== "monitors") setRatingMode("performance")
     if (ratingMode === "soundTyping" && selectedCategory !== "switches") setRatingMode("performance")
+    if ((ratingMode === "mechanical" || ratingMode === "magnetic" || ratingMode === "pcb") && selectedCategory !== "keyboard") setRatingMode("performance")
+    if ((ratingMode === "performance" || ratingMode === "recommended") && selectedCategory === "keyboard") setRatingMode("magnetic")
   }, [ratingMode, selectedCategory])
 
   function handleDragStart(event: DragStartEvent) {
@@ -1115,6 +1137,8 @@ export default function AdminPeripheralsPage() {
           {RATING_MODES.filter((m) => {
             if (m.key === "oled" && selectedCategory !== "monitors") return false
             if (m.key === "soundTyping" && selectedCategory !== "switches") return false
+            if ((m.key === "mechanical" || m.key === "magnetic" || m.key === "pcb") && selectedCategory !== "keyboard") return false
+            if ((m.key === "performance" || m.key === "recommended") && selectedCategory === "keyboard") return false
             return true
           }).map((mode) => (
             <button

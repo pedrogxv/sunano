@@ -10,7 +10,7 @@ import { TIER_THEMES } from "@/lib/tierlist-theme"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
 type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado"
-type RatingMode = "oled" | "overall" | "value" | "recommended" | "soundTyping" | "mechanical"
+type RatingMode = "oled" | "overall" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb"
 type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
 type Ratings = Partial<Record<RatingKey, number>>
 
@@ -32,6 +32,8 @@ interface Peripheral {
     adminTierOrder_oled?: number
     adminTierOrder_soundTyping?: number
     adminTierOrder_mechanical?: number
+    adminTierOrder_magnetic?: number
+    adminTierOrder_pcb?: number
     mouseShape?: "symmetrical" | "ergonomic"
     keyboardLayout?: string
     connectivity?: "wired" | "wireless"
@@ -50,6 +52,8 @@ const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
   oled: "adminTierOrder_oled",
   soundTyping: "adminTierOrder_soundTyping",
   mechanical: "adminTierOrder_mechanical",
+  magnetic: "adminTierOrder_magnetic",
+  pcb: "adminTierOrder_pcb",
 }
 
 function getTierOrder(item: Peripheral, orderKey: string, allowLegacyFallback: boolean): number | null {
@@ -86,13 +90,22 @@ function getRatingModeLabel(mode: RatingMode, category: string): string {
     if (mode === "recommended") return "Recomendado"
   }
 
+  if (category === "keyboard") {
+    if (mode === "magnetic") return "Magnético"
+    if (mode === "value") return "Custo Benefício"
+    if (mode === "mechanical") return "Mecânico"
+    if (mode === "pcb") return "PCB"
+  }
+
   const modeMap: Record<RatingMode, string> = {
     oled: "OLED",
     overall: "Geral",
-    value: "Custo-Beneficio",
+    value: "Custo Benefício",
     recommended: "Recomendado",
     soundTyping: "Som e Digitação",
     mechanical: "Mecânico",
+    magnetic: "Magnético",
+    pcb: "PCB",
   }
   return modeMap[mode]
 }
@@ -171,6 +184,12 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   mechanical: {
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  magnetic: {
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  pcb: {
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
 }
@@ -264,40 +283,41 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     },
   ]
 
-  const ratingModes: { key: RatingMode; label: string; color: string }[] = [
-    ...(category === "monitors" ? [{ key: "oled" as const, label: getRatingModeLabel("oled", category), color: "bg-amber-400" }] : []),
-    { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
-    { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
-    ...(category === "keyboard" ? [
-      { key: "mechanical" as const, label: getRatingModeLabel("mechanical", category), color: "bg-purple-400" },
-    ] : [
-      { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
-    ]),
-    ...(category === "switches" ? [
-      { key: "soundTyping" as const, label: "Som e Digitação", color: "bg-cyan-500" },
-    ] : []),
-  ]
+  const ratingModes: { key: RatingMode; label: string; color: string }[] = category === "keyboard"
+    ? [
+        { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
+        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+        { key: "mechanical" as const, label: getRatingModeLabel("mechanical", category), color: "bg-purple-400" },
+        { key: "pcb" as const, label: getRatingModeLabel("pcb", category), color: "bg-orange-400" },
+      ]
+    : [
+        ...(category === "monitors" ? [{ key: "oled" as const, label: getRatingModeLabel("oled", category), color: "bg-amber-400" }] : []),
+        { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
+        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+        { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
+        ...(category === "switches" ? [
+          { key: "soundTyping" as const, label: "Som e Digitação", color: "bg-cyan-500" },
+        ] : []),
+      ]
 
   const localizedModeDescription =
     ratingMode === "oled"
-      ? isEnglish
-        ? "Showing OLED panels"
-        : "Mostrando painéis OLED"
+      ? isEnglish ? "Showing OLED panels" : "Mostrando painéis OLED"
       : ratingMode === "overall"
-        ? isEnglish
-          ? "Sorted by overall performance"
-          : "Ordenado por desempenho geral"
+        ? isEnglish ? "Sorted by overall performance" : "Ordenado por desempenho geral"
         : ratingMode === "value"
-          ? isEnglish
-            ? "Sorted by price"
-            : "Ordenado por preço"
+          ? isEnglish ? "Sorted by price" : "Ordenado por preço"
           : ratingMode === "soundTyping"
-            ? isEnglish
-              ? "Sorted by sound and typing feel"
-              : "Ordenado por som e digitação"
-            : isEnglish
-              ? "Suggested picks by Sunano, prioritizing overall balance"
-              : "Escolhas sugeridas por Sunano, priorizando equilibrio geral"
+            ? isEnglish ? "Sorted by sound and typing feel" : "Ordenado por som e digitação"
+            : ratingMode === "mechanical"
+              ? isEnglish ? "Sorted by mechanical performance" : "Ordenado por desempenho puro"
+              : ratingMode === "magnetic"
+                ? isEnglish ? "Sorted by magnetic performance" : "Ordenado por desempenho magnético"
+                : ratingMode === "pcb"
+                  ? isEnglish ? "Sorted by PCB performance" : "Ordenado por desempenho PCB"
+                  : isEnglish
+                    ? "Suggested picks by Sunano, prioritizing overall balance"
+                    : "Escolhas sugeridas por Sunano, priorizando equilibrio geral"
 
   const itemsByTier = useMemo(
     () =>
@@ -320,11 +340,11 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
   const hasItems = filtered.length > 0
 
-  // If category isn't monitors, don't allow OLED mode
   useEffect(() => {
     if (ratingMode === "oled" && category !== "monitors") setRatingMode("overall")
     if (ratingMode === "soundTyping" && category !== "switches") setRatingMode("overall")
-    if (ratingMode === "mechanical" && category !== "keyboard") setRatingMode("overall")
+    if ((ratingMode === "mechanical" || ratingMode === "magnetic" || ratingMode === "pcb") && category !== "keyboard") setRatingMode("overall")
+    if ((ratingMode === "overall" || ratingMode === "recommended") && category === "keyboard") setRatingMode("magnetic")
   }, [category, ratingMode])
 
   if (isComingSoon) {

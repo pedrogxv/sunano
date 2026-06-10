@@ -320,13 +320,22 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   if (isComingSoon) {
     return (
       <section className="space-y-4">
-        <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card/50 p-12 text-center">
-          <div className="mb-4 text-5xl">🚀</div>
-          <h2 className="text-2xl font-bold text-foreground">{isEnglish ? "Coming Soon" : "Em Breve"}</h2>
-          <p className="mt-2 text-muted-foreground">
+        <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-gradient-to-b from-card to-card/50 p-12 text-center">
+          <div className="mb-6 h-48 w-48">
+            <img
+              src="/images/mascot/coming-soon.png"
+              alt="Coming soon"
+              className="h-full w-full object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = "none"
+              }}
+            />
+          </div>
+          <h2 className="text-3xl font-bold text-foreground">{isEnglish ? "Coming Soon" : "Em Breve"}</h2>
+          <p className="mt-4 max-w-md text-base text-muted-foreground">
             {isEnglish
-              ? "This tierlist category is under development and will be available soon."
-              : "Esta categoria de tierlist está em desenvolvimento e em breve estará disponível."}
+              ? "This tierlist category is under development and will be available soon. Stay tuned!"
+              : "Esta categoria de tierlist está em desenvolvimento e em breve estará disponível. Fique atento!"}
           </p>
         </div>
       </section>

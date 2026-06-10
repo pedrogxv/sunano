@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  BarChart2,
   BadgePercent,
   Clock3,
   Home,
@@ -40,6 +41,7 @@ export function PublicSidebar() {
     { href: "/tierlist", label: "Tierlist", icon: Trophy },
     { href: "/noticias", label: isEnglish ? "News" : "Novidades", icon: Newspaper },
     { href: "/perifericos", label: isEnglish ? "Peripherals" : "Periféricos", icon: Mouse },
+    { href: "/ranking", label: "Ranking", icon: BarChart2 },
     { href: "/blog", label: "Reviews", icon: Newspaper },
     { href: "/offers", label: isEnglish ? "Offers" : "Ofertas", icon: BadgePercent },
     { href: "/forum", label: "Forum", icon: MessageCircle },

@@ -167,6 +167,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
   const rankLabel = details.rankLabel || (data.tier ? mapTier(data.tier) : "Sob Revisão")
   const ranking = details.ranking ? Number(details.ranking) : null
+  const score = details.score != null ? Number(details.score) : null
   const priceRange = details.priceRange
   const reviewUrl = details.reviewUrl
   const reviewNote = details.reviewNote
@@ -349,10 +350,20 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                         </Badge>
                       )}
                     </div>
-                    {ranking && (
-                      <div className="flex shrink-0 flex-col items-center leading-none select-none">
-                        <span className="font-display text-xs font-bold uppercase tracking-widest text-muted-foreground">Rank</span>
-                        <span className="font-display text-6xl font-black tracking-tight text-foreground leading-none">#{ranking}</span>
+                    {(ranking || score) && (
+                      <div className="flex shrink-0 items-center gap-3 leading-none select-none">
+                        {ranking && (
+                          <div className="flex flex-col items-center">
+                            <span className="font-display text-xs font-bold uppercase tracking-widest text-muted-foreground">Rank</span>
+                            <span className="font-display text-5xl font-black tracking-tight text-foreground leading-none">#{ranking}</span>
+                          </div>
+                        )}
+                        {score && (
+                          <div className="flex flex-col items-center">
+                            <span className="font-display text-xs font-bold uppercase tracking-widest text-muted-foreground">Pts</span>
+                            <span className="font-display text-5xl font-black tracking-tight text-primary leading-none">{score}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

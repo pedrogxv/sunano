@@ -59,6 +59,7 @@ const peripheralSchema = z.object({
     .positive("Preço deve ser maior que zero"),
   rankLabel: z.string().optional(),
   ranking: z.coerce.number().int().positive().optional(),
+  score: z.coerce.number().min(0).optional(),
   priceRange: z.string().optional(),
   reviewUrl: z.string().optional(),
   reviewNote: z.string().optional(),
@@ -509,7 +510,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [originalUsdPrice, setOriginalUsdPrice] = useState<number | null>(null)
   const [linkedStore, setLinkedStore] = useState<LinkedProduct | null>(null)
   const [linkedBazaar, setLinkedBazaar] = useState<LinkedProduct | null>(null)
-  const [rankedPeripherals, setRankedPeripherals] = useState<{ id: string; name: string; tier: string; ranking: number }[]>([])
+  const [rankedPeripherals, setRankedPeripherals] = useState<{ id: string; name: string; tier: string; ranking: number; score: number | null }[]>([])
 
   const form = useForm<PeripheralFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -520,7 +521,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       category: "mouse",
       tier: "__none__",
       price: 0,
-      rankLabel: "", ranking: undefined, priceRange: "", reviewUrl: "", reviewNote: "", guideUrl: "", wikiUrl: "",
+      rankLabel: "", ranking: undefined, score: undefined, priceRange: "", reviewUrl: "", reviewNote: "", guideUrl: "", wikiUrl: "",
       notesLong: "", summary: "", highlights: "", pros: "", cons: "", gallery: "",
       buyLinks: "", compatibility: "", notes: "", comparisons: "",
       weight: "", latency: "", switchType: "", coating: "", shape: "",
@@ -575,12 +576,13 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     fetch(`/api/admin/peripherals?category=${watchedCategory}`)
       .then((r) => r.json())
       .then((json) => {
-        const list = (json.data ?? json ?? []) as { id: string; name: string; tier?: string; specs?: Record<string, any> }[]
+        const list = (json.peripherals ?? json.data ?? json ?? []) as { id: string; name: string; tier?: string; specs?: Record<string, any> }[]
         const all = list.map((p) => ({
           id: p.id,
           name: p.name,
           tier: p.tier ?? "",
           ranking: Number(p.specs?.details?.ranking) || 0,
+          score: p.specs?.details?.score != null ? Number(p.specs.details.score) : null,
         }))
         all.sort((a, b) => {
           if (a.ranking > 0 && b.ranking > 0) return a.ranking - b.ranking
@@ -618,6 +620,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           price: displayedPrice,
           rankLabel: data.specs?.details?.rankLabel ?? "",
           ranking: data.specs?.details?.ranking ? Number(data.specs.details.ranking) : undefined,
+          score: data.specs?.details?.score != null ? Number(data.specs.details.score) : undefined,
           priceRange: data.specs?.details?.priceRange ?? "",
           reviewUrl: data.specs?.details?.reviewUrl ?? "",
           reviewNote: data.specs?.details?.reviewNote ?? "",
@@ -738,7 +741,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         refreshRate: typeof data.refreshRate === "number" && !Number.isNaN(data.refreshRate) ? data.refreshRate : undefined,
         panelType: data.panelType || undefined,
         details: {
-          rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, priceRange: data.priceRange || undefined,
+          rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: data.score ?? undefined, priceRange: data.priceRange || undefined,
           reviewUrl: data.reviewUrl || undefined, reviewNote: data.reviewNote || undefined,
           guideUrl: data.guideUrl || undefined, wikiUrl: data.wikiUrl || undefined,
           notesLong: data.notesLong || undefined,
@@ -1881,22 +1884,29 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <Input className="border-border bg-background" placeholder="GOAT, Top S, Solid A" {...form.register("rankLabel")} />
               </div>
               <div className="space-y-1.5 md:col-span-2">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Ranking (position #)" : "Ranking (posição #)"}</label>
-                <Input className="border-border bg-background" type="number" min={1} placeholder="1" {...form.register("ranking", { valueAsNumber: true })} />
-                {rankedPeripherals.length > 0 && (
+                <div className="flex gap-3">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">{isEnglish ? "Ranking (position #)" : "Ranking (posição #)"}</label>
+                    <Input className="border-border bg-background" type="number" min={1} placeholder="1" {...form.register("ranking", { valueAsNumber: true })} />
+                  </div>
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-sm font-medium text-foreground">{isEnglish ? "Score (points)" : "Pontuação"}</label>
+                    <Input className="border-border bg-background" type="number" min={0} step={0.25} placeholder="788.5" {...form.register("score", { valueAsNumber: true })} />
+                  </div>
+                </div>
+                {rankedPeripherals.filter(p => p.ranking > 0).length > 0 && (
                   <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-border bg-muted/30 divide-y divide-border">
                     <p className="sticky top-0 z-10 bg-muted/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground backdrop-blur">
-                      {isEnglish ? "All" : "Todos"} {watchedCategory} — {rankedPeripherals.filter(p => p.ranking > 0).length} {isEnglish ? "ranked" : "com ranking"}
+                      {rankedPeripherals.filter(p => p.ranking > 0).length} {isEnglish ? "ranked" : "com ranking"} — {watchedCategory}
                     </p>
-                    {rankedPeripherals.map((p) => (
+                    {rankedPeripherals.filter(p => p.ranking > 0).map((p) => (
                       <div key={p.id} className={`flex items-center gap-2 px-3 py-2 text-xs ${p.id === peripheralId ? "bg-primary/10" : ""}`}>
-                        {p.ranking > 0
-                          ? <span className="w-7 shrink-0 text-center font-bold text-foreground">#{p.ranking}</span>
-                          : <span className="w-7 shrink-0 text-center text-muted-foreground/40">—</span>
-                        }
-                        {p.tier && <span className="shrink-0 rounded px-1 py-0.5 text-[10px] font-bold bg-muted text-muted-foreground">{p.tier}</span>}
-                        <span className={`truncate ${p.id === peripheralId ? "font-semibold text-primary" : "text-foreground"}`}>{p.name}</span>
-                        {p.id === peripheralId && <span className="ml-auto shrink-0 text-[10px] text-primary font-semibold">← {isEnglish ? "this" : "este"}</span>}
+                        <span className="w-6 shrink-0 text-center font-bold text-muted-foreground/60">#{p.ranking}</span>
+                        <span className={`flex-1 truncate ${p.id === peripheralId ? "font-semibold text-primary" : "text-foreground"}`}>{p.name}</span>
+                        {p.score != null && (
+                          <span className="shrink-0 tabular-nums text-muted-foreground">{p.score}</span>
+                        )}
+                        {p.id === peripheralId && <span className="shrink-0 text-[10px] text-primary font-semibold">←</span>}
                       </div>
                     ))}
                   </div>

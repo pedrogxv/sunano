@@ -20,11 +20,19 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const { id } = await params
 
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("blog_posts")
-    .select("id, title, slug, peripheral_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, is_published")
-    .eq("id", id)
-    .maybeSingle()
+  const select = (withType: boolean) =>
+    db
+      .from("blog_posts")
+      .select(
+        `id, title, slug, ${withType ? "post_type, " : ""}peripheral_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, is_published`
+      )
+      .eq("id", id)
+      .maybeSingle()
+
+  let { data, error } = await select(true)
+  if (error && error.message.includes("post_type")) {
+    ({ data, error } = await select(false))
+  }
 
   if (error) {
     const { body, status } = dbErrorResponse(error, "Erro ao buscar artigo.")

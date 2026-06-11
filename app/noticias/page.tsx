@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react"
 import Link from "next/link"
-import { Clock, MessageCircle, TrendingUp } from "lucide-react"
+import { Clock, MessageCircle, PenSquare, TrendingUp } from "lucide-react"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
 import BoxLoader from "@/components/ui/box-loader"
 
@@ -15,6 +15,7 @@ type NewsPost = {
   cover_thumbnail_url: string | null
   read_time_minutes: number | null
   created_at: string
+  comment_count?: number
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
   peripherals?: { id: string; name: string; brand: string }[] | null
 }
@@ -106,6 +107,11 @@ function NewsListItem({ post }: { post: NewsPost }) {
               </span>
             </>
           )}
+          <span>•</span>
+          <span className="flex items-center gap-1">
+            <MessageCircle className="size-3" />
+            {post.comment_count ?? 0}
+          </span>
         </div>
       </div>
     </Link>
@@ -115,6 +121,7 @@ function NewsListItem({ post }: { post: NewsPost }) {
 function NoticiasPageContent() {
   const [posts, setPosts] = useState<NewsPost[]>([])
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     fetch("/api/blog")
@@ -124,18 +131,45 @@ function NoticiasPageContent() {
       .finally(() => setLoading(false))
   }, [])
 
-  const trending = posts.slice(0, 5)
+  // Atalho de criação só aparece para quem tem perfil admin.
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setIsAdmin(Boolean(d?.adminProfile)))
+      .catch(() => setIsAdmin(false))
+  }, [])
+
+  // "Em Alta": prioriza engajamento (mais comentadas), com a recência como
+  // critério de desempate.
+  const trending = [...posts]
+    .sort((a, b) => {
+      const byComments = (b.comment_count ?? 0) - (a.comment_count ?? 0)
+      if (byComments !== 0) return byComments
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+    .slice(0, 5)
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-6 space-y-8">
       {/* Header */}
-      <div>
-        <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-          Notícias
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Atualizações, anúncios e novidades da Sunano em um só lugar.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+            Notícias
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Atualizações, anúncios e novidades da Sunano em um só lugar.
+          </p>
+        </div>
+        {isAdmin && (
+          <Link
+            href="/admin/blog/new"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <PenSquare className="size-4" />
+            <span className="hidden sm:inline">Nova notícia</span>
+          </Link>
+        )}
       </div>
 
       {loading ? (

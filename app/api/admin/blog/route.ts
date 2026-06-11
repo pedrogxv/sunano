@@ -5,17 +5,29 @@ import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
-const blogPostSchema = z.object({
-  id: z.string().optional(),
-  peripheral_id: z.string().min(1, "Selecione um periférico"),
-  title: z.string().min(5, "Título deve ter no mínimo 5 caracteres"),
-  excerpt: z.string().nullable().optional(),
-  cover_image_url: z.string().nullable().optional(),
-  cover_thumbnail_url: z.string().nullable().optional(),
-  video_url: z.string().nullable().optional(),
-  content: z.string().min(20, "Conteúdo deve ter no mínimo 20 caracteres"),
-  is_published: z.boolean(),
-})
+const blogPostSchema = z
+  .object({
+    id: z.string().optional(),
+    post_type: z.enum(["news", "review"]).default("review"),
+    peripheral_id: z.string().nullable().optional(),
+    title: z.string().min(5, "Título deve ter no mínimo 5 caracteres"),
+    excerpt: z.string().nullable().optional(),
+    cover_image_url: z.string().nullable().optional(),
+    cover_thumbnail_url: z.string().nullable().optional(),
+    video_url: z.string().nullable().optional(),
+    content: z.string().min(20, "Conteúdo deve ter no mínimo 20 caracteres"),
+    is_published: z.boolean(),
+  })
+  .superRefine((data, ctx) => {
+    // Reviews exigem periférico; notícias não.
+    if (data.post_type === "review" && !data.peripheral_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["peripheral_id"],
+        message: "Selecione um periférico",
+      })
+    }
+  })
 
 function slugify(value: string) {
   return value
@@ -116,7 +128,8 @@ export async function POST(request: Request) {
     }
 
     const payload = {
-      peripheral_id: parsed.data.peripheral_id,
+      post_type: parsed.data.post_type,
+      peripheral_id: parsed.data.post_type === "review" ? parsed.data.peripheral_id : null,
       title: parsed.data.title,
       excerpt: parsed.data.excerpt?.trim() || null,
       cover_image_url:
@@ -182,6 +195,20 @@ export async function POST(request: Request) {
       : await (supabase.from("blog_posts") as any).insert([
           { ...payloadWithAuthor, slug: await generateUniqueSlug(supabase, parsed.data.title) },
         ])
+
+    // Fallback: migração `blog_post_type.sql` ainda não aplicada. Reviews
+    // continuam funcionando sem a coluna; notícias exigem a migração.
+    if (isMissingColumnError(result.error?.message, "post_type")) {
+      const payloadNoType = { ...payload } as Record<string, unknown>
+      delete payloadNoType.post_type
+      const payloadWithAuthorNoType = { ...payloadWithAuthor } as Record<string, unknown>
+      delete payloadWithAuthorNoType.post_type
+      result = parsed.data.id
+        ? await (supabase.from("blog_posts") as any).update(payloadNoType as any).eq("id", parsed.data.id)
+        : await (supabase.from("blog_posts") as any).insert([
+            { ...payloadWithAuthorNoType, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+          ])
+    }
 
     if (isMissingColumnError(result.error?.message, "cover_thumbnail_url")) {
       result = parsed.data.id

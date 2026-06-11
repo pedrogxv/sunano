@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
-import { Upload, ImageIcon, FileText, Link2, Eye, EyeOff, Search, CheckCircle2, Circle, Youtube } from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Upload, ImageIcon, FileText, Link2, Eye, EyeOff, Search, CheckCircle2, Circle, Youtube, Newspaper, Mouse } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -26,16 +26,28 @@ type PeripheralOption = {
   image_url: string | null
 }
 
-const postSchema = z.object({
-  peripheral_id: z.string().min(1, "Selecione o periférico relacionado"),
-  title: z.string().min(5, "Título deve ter no mínimo 5 caracteres").max(200, "Título muito longo (máx. 200)"),
-  excerpt: z.string().max(500, "Resumo muito longo (máx. 500)").optional(),
-  cover_image_url: z.string().url("URL da imagem inválida (use http:// ou https://)").optional().or(z.literal("")),
-  cover_thumbnail_url: z.string().url("URL da miniatura inválida (use http:// ou https://)").optional().or(z.literal("")),
-  video_url: z.string().url("URL do vídeo inválida (use http:// ou https://)").optional().or(z.literal("")),
-  content: z.string().min(20, "Conteúdo deve ter no mínimo 20 caracteres"),
-  status: z.enum(["published", "draft"]),
-})
+const postSchema = z
+  .object({
+    post_type: z.enum(["news", "review"]),
+    peripheral_id: z.string().optional().or(z.literal("")),
+    title: z.string().min(5, "Título deve ter no mínimo 5 caracteres").max(200, "Título muito longo (máx. 200)"),
+    excerpt: z.string().max(500, "Resumo muito longo (máx. 500)").optional(),
+    cover_image_url: z.string().url("URL da imagem inválida (use http:// ou https://)").optional().or(z.literal("")),
+    cover_thumbnail_url: z.string().url("URL da miniatura inválida (use http:// ou https://)").optional().or(z.literal("")),
+    video_url: z.string().url("URL do vídeo inválida (use http:// ou https://)").optional().or(z.literal("")),
+    content: z.string().min(20, "Conteúdo deve ter no mínimo 20 caracteres"),
+    status: z.enum(["published", "draft"]),
+  })
+  .superRefine((data, ctx) => {
+    // Só reviews precisam de periférico vinculado.
+    if (data.post_type === "review" && !data.peripheral_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["peripheral_id"],
+        message: "Selecione o periférico relacionado",
+      })
+    }
+  })
 
 type PostFormData = z.infer<typeof postSchema>
 
@@ -47,6 +59,8 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const initialType: "news" | "review" = searchParams.get("type") === "news" ? "news" : "review"
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [uploadingCover, setUploadingCover] = useState<"header" | "thumbnail" | null>(null)
@@ -61,6 +75,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
   const form = useForm<PostFormData>({
     resolver: zodResolver(postSchema),
     defaultValues: {
+      post_type: initialType,
       peripheral_id: "",
       title: "",
       excerpt: "",
@@ -73,17 +88,25 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
   })
 
   const watchedStatus = form.watch("status")
+  const watchedPostType = form.watch("post_type")
   const watchedPeripheralId = form.watch("peripheral_id")
+  const isReview = watchedPostType === "review"
   const watchedContent = form.watch("content")
   const watchedTitle = form.watch("title")
 
+  const headerTitle = postId
+    ? isReview
+      ? (isEnglish ? "Edit review" : "Editar review")
+      : (isEnglish ? "Edit news" : "Editar notícia")
+    : isReview
+      ? (isEnglish ? "New review" : "Novo review")
+      : (isEnglish ? "New news" : "Nova notícia")
+
   usePageHeader(
-    postId
-      ? (isEnglish ? "Edit article" : "Editar artigo")
-      : (isEnglish ? "New article" : "Novo artigo"),
-    postId
-      ? (isEnglish ? "Update the article content below." : "Atualize o conteúdo do artigo abaixo.")
-      : (isEnglish ? "Write a review or article linked to a peripheral." : "Escreva um review ou artigo vinculado a um periférico.")
+    headerTitle,
+    isReview
+      ? (isEnglish ? "Review linked to a peripheral." : "Review vinculado a um periférico.")
+      : (isEnglish ? "News / announcement — no peripheral required." : "Notícia / anúncio — sem periférico obrigatório.")
   )
 
   useEffect(() => { loadPeripherals() }, [])
@@ -118,7 +141,8 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
     }
     const data = json.post
     form.reset({
-      peripheral_id: data.peripheral_id,
+      post_type: data.post_type === "news" ? "news" : "review",
+      peripheral_id: data.peripheral_id ?? "",
       title: data.title,
       excerpt: data.excerpt ?? "",
       cover_image_url: data.cover_image_url ?? "",
@@ -180,7 +204,8 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: postId,
-          peripheral_id: values.peripheral_id,
+          post_type: values.post_type,
+          peripheral_id: values.post_type === "review" ? values.peripheral_id : null,
           title: values.title,
           excerpt: values.excerpt?.trim() || null,
           cover_image_url: coverImageUrl,
@@ -274,6 +299,40 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
 
+        {/* Content type */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {isEnglish ? "Content type" : "Tipo de conteúdo"}
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {([
+              { value: "news", icon: Newspaper, label: isEnglish ? "News" : "Notícia", desc: isEnglish ? "Announcement / editorial" : "Anúncio / editorial" },
+              { value: "review", icon: Mouse, label: "Review", desc: isEnglish ? "Linked to a peripheral" : "Vinculado a um periférico" },
+            ] as const).map((opt) => {
+              const Icon = opt.icon
+              const active = watchedPostType === opt.value
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => form.setValue("post_type", opt.value, { shouldValidate: true })}
+                  className={`flex items-center gap-3 rounded-xl border p-3.5 text-left transition-all ${
+                    active
+                      ? "border-primary/40 bg-primary/10 text-foreground"
+                      : "border-border/40 text-muted-foreground hover:border-border"
+                  }`}
+                >
+                  <Icon className={`size-5 shrink-0 ${active ? "text-primary" : ""}`} />
+                  <div>
+                    <p className="text-sm font-semibold">{opt.label}</p>
+                    <p className="text-[10px] opacity-70">{opt.desc}</p>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Title — proeminente */}
         <div className="space-y-1.5">
           <Input
@@ -301,7 +360,8 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
           />
         </div>
 
-        {/* Peripheral picker */}
+        {/* Peripheral picker — só para reviews */}
+        {isReview && (
         <div className="space-y-2">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {isEnglish ? "Related peripheral" : "Periférico relacionado"}
@@ -369,6 +429,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             <p className="text-xs text-red-400">{form.formState.errors.peripheral_id.message}</p>
           )}
         </div>
+        )}
 
         {/* Images */}
         <div className="space-y-3">

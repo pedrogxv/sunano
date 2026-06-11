@@ -4,7 +4,16 @@
       "Bash(npm run *)",
       "Bash(mv 4866b53ab4ac30b249e54a354829f6f2a143d5738a0e79c6222b38b533f98f89.png mascot-working.png)",
       "Bash(mv 796b615d9d932fff49e7168ccbdaa007ae33974acf10233594d2d36f709a7303.png mascot-warning.png)",
-      "Bash(mv 7bd9aa9d23cd63731b144d91ef1362fb21e4734ba974f44814be5452aa108531.png mascot-digging.png)"
+      "Bash(mv 7bd9aa9d23cd63731b144d91ef1362fb21e4734ba974f44814be5452aa108531.png mascot-digging.png)",
+      "Bash(npx eslint *)",
+      "Bash(grep -n \"export function hasAdminPermission\" /Users/gustavonakamura/Documents/GitHub/sunano/lib/admin-permissions.ts; sed -n '/export function hasAdminPermission/,/^}/p' /Users/gustavonakamura/Documents/GitHub/sunano/lib/admin-permissions.ts; echo \"=== summary return ===\"; sed -n '49,90p' /Users/gustavonakamura/Documents/GitHub/sunano/lib/server/repositories/users-repository.ts)",
+      "Bash(echo \"=== full tsc exit: $? ===\")",
+      "Bash(echo \"=== eslint exit: $? ===\")",
+      "Bash(git stash *)",
+      "Bash(echo \"=== tsc exit: $? ===\")"
+    ],
+    "additionalDirectories": [
+      "/Users/gustavonakamura/Documents/GitHub/sunano/lib"
     ]
   }
 }

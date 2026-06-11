@@ -18,10 +18,18 @@ export async function GET(_request: NextRequest) {
   }
 
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("blog_posts")
-    .select("id, title, slug, excerpt, cover_thumbnail_url, cover_image_url, is_published, created_at, peripherals(name, brand)")
-    .order("created_at", { ascending: false })
+  const select = (withType: boolean) =>
+    db
+      .from("blog_posts")
+      .select(
+        `id, title, slug, ${withType ? "post_type, " : ""}excerpt, cover_thumbnail_url, cover_image_url, is_published, created_at, peripherals(name, brand)`
+      )
+      .order("created_at", { ascending: false })
+
+  let { data, error } = await select(true)
+  if (error && error.message.includes("post_type")) {
+    ({ data, error } = await select(false))
+  }
 
   if (error) {
     const { body, status } = dbErrorResponse(error, "Erro ao listar artigos.")

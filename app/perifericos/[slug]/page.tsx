@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 import { mapTier } from "@/lib/tier-utils"
 import { CARD_TAG_STYLES, CARD_TIER_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { BackButton } from "@/components/ui/back-button"
+import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 
 interface PerifericoPageProps {
   params: Promise<{ slug: string }>
@@ -472,6 +473,9 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                             <span className="font-semibold text-foreground">{formatSpecValue(row.value)}</span>
                           </div>
                         ))}
+                        <div className="pt-3">
+                          <GripArchitectureImage />
+                        </div>
                       </CardContent>
                     </Card>
                   )}

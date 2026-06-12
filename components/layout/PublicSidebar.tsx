@@ -261,7 +261,7 @@ export function PublicSidebar() {
 
         {/* User */}
         <div className="border-t border-border px-3 py-2">
-          <AuthUser isCollapsed={isCollapsed} />
+          <AuthUser isCollapsed={isCollapsed} loginHref="/login" />
         </div>
       </aside>
 

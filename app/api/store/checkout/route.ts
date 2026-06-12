@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getStripe } from "@/lib/server/integrations/stripe"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { getRequestUser } from "@/lib/server/auth/current-user"
 
 interface CheckoutItem {
   productId: string
@@ -9,6 +10,15 @@ interface CheckoutItem {
 
 export async function POST(request: NextRequest) {
   try {
+    // Comprar exige conta: bloqueia checkout para usuários não autenticados.
+    const user = await getRequestUser(request)
+    if (!user) {
+      return NextResponse.json(
+        { error: "Você precisa estar logado para finalizar a compra." },
+        { status: 401 }
+      )
+    }
+
     const body = (await request.json()) as { items: CheckoutItem[] }
     const { items } = body
 

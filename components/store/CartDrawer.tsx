@@ -50,6 +50,12 @@ export function CartDrawer() {
         }),
       })
 
+      // Comprar exige conta: leva ao login quando não autenticado.
+      if (res.status === 401) {
+        window.location.href = "/login"
+        return
+      }
+
       const data = (await res.json()) as { url?: string; error?: string }
 
       if (!res.ok || !data.url) {

@@ -86,3 +86,49 @@ export async function upsertUserProfileFromAuth(params: {
     { onConflict: "id", ignoreDuplicates: true }
   )
 }
+
+/** Dados de compra do cadastro completo (todos opcionais). */
+export type PurchaseProfileInput = {
+  fullName?: string | null
+  cpf?: string | null
+  phone?: string | null
+  postalCode?: string | null
+  street?: string | null
+  number?: string | null
+  complement?: string | null
+  neighborhood?: string | null
+  city?: string | null
+  state?: string | null
+}
+
+/**
+ * Cria/atualiza o perfil de um usuário no cadastro: nome de exibição e,
+ * quando informados, os dados de compra (cadastro completo). Sobrescreve o
+ * registro (onConflict id) para que o cadastro defina o perfil inicial.
+ */
+export async function upsertUserProfileOnSignup(params: {
+  id: string
+  displayName: string
+  purchase?: PurchaseProfileInput | null
+}): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const p = params.purchase ?? {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (db.from("user_profiles") as any).upsert(
+    {
+      id: params.id,
+      display_name: params.displayName,
+      full_name: p.fullName ?? null,
+      cpf: p.cpf ?? null,
+      phone: p.phone ?? null,
+      postal_code: p.postalCode ?? null,
+      street: p.street ?? null,
+      number: p.number ?? null,
+      complement: p.complement ?? null,
+      neighborhood: p.neighborhood ?? null,
+      city: p.city ?? null,
+      state: p.state ?? null,
+    },
+    { onConflict: "id" }
+  )
+}

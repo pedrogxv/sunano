@@ -31,6 +31,9 @@ pnpm-debug.log*
 # env files
 .env*.local
 
+# local Claude settings
+.claude/settings.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

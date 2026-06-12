@@ -29,9 +29,11 @@ function getInitials(name: string) {
 
 interface AuthUserProps {
   isCollapsed?: boolean
+  /** Para onde mandar ao logar/deslogar. Sidebar pública usa "/login"; admin, "/admin/login". */
+  loginHref?: string
 }
 
-export function AuthUser({ isCollapsed = false }: AuthUserProps) {
+export function AuthUser({ isCollapsed = false, loginHref = "/admin/login" }: AuthUserProps) {
   const { locale } = useLocale()
   const isEnglish = locale === "en-US"
   const [user, setUser] = useState<UserState | null>(null)
@@ -72,7 +74,7 @@ export function AuthUser({ isCollapsed = false }: AuthUserProps) {
   if (!user) {
     return (
       <Link
-        href="/admin/login"
+        href={loginHref}
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground",
           isCollapsed && "justify-center px-0"
@@ -153,7 +155,7 @@ export function AuthUser({ isCollapsed = false }: AuthUserProps) {
           className="cursor-pointer text-red-400 focus:bg-red-500/10 focus:text-red-300"
           onSelect={async () => {
             await supabaseAuth.auth.signOut()
-            window.location.href = "/admin/login"
+            window.location.href = loginHref
           }}
         >
           <LogOut className="size-4" />

@@ -11,6 +11,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   const isAdmin = pathname.startsWith("/admin") && !isAdminLogin
   const isAuthPage =
     pathname === "/login" ||
+    pathname === "/register" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password"
 

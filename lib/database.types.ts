@@ -34,6 +34,16 @@ export type Database = {
           id: string
           display_name: string | null
           avatar_url: string | null
+          full_name: string | null
+          cpf: string | null
+          phone: string | null
+          postal_code: string | null
+          street: string | null
+          number: string | null
+          complement: string | null
+          neighborhood: string | null
+          city: string | null
+          state: string | null
           created_at: string
           updated_at: string
         }

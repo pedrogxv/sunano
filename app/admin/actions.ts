@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation"
 
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 type AuthState = {
@@ -50,6 +51,12 @@ export async function loginAction(_: AuthState, formData: FormData): Promise<Aut
   if (!hasAdminPermission(profile, "dashboard_read")) {
     await supabase.auth.signOut()
     return { error: AUTH_ERRORS.noAdminAccess }
+  }
+
+  // 2FA ativo: conclui o segundo fator antes de liberar o painel.
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
+    redirect("/2fa?next=%2Fadmin")
   }
 
   redirect("/admin")

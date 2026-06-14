@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 
 interface Offer {
   id: string
@@ -47,8 +47,7 @@ interface OfferFormProps {
 }
 
 export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -75,11 +74,11 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
       const res = await fetch("/api/peripherals?limit=1000", { cache: "no-store" })
       const data = (await res.json().catch(() => null)) as { peripherals?: PeripheralOption[]; error?: string } | null
       if (!res.ok || !data?.peripherals) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to load peripherals" : "Erro ao carregar periféricos"))
+        throw new Error(data?.error ?? t.admin.blog.form.failedToLoadPeripheralsOffer)
       }
       setPeripherals(data.peripherals)
     } catch (err) {
-      setError(err instanceof Error ? err.message : (isEnglish ? "Failed to load peripherals" : "Erro ao carregar periféricos"))
+      setError(err instanceof Error ? err.message : t.admin.blog.form.failedToLoadPeripheralsOffer)
     }
   }
 
@@ -104,7 +103,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
         const uploadData = (await uploadResponse.json()) as { ok?: boolean; error?: string; publicUrl?: string }
 
         if (!uploadResponse.ok || !uploadData.ok || !uploadData.publicUrl) {
-          throw new Error(uploadData.error ?? (isEnglish ? "Failed to upload offer image" : "Erro ao enviar imagem da oferta"))
+          throw new Error(uploadData.error ?? t.admin.blog.form.failedToUploadOfferImage)
         }
 
         imageUrl = uploadData.publicUrl
@@ -136,21 +135,19 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
       const data = (await response.json()) as { ok?: boolean; error?: string }
 
       if (!response.ok || !data.ok) {
-        throw new Error(data.error ?? (isEnglish ? "Failed to save offer" : "Erro ao salvar oferta"))
+        throw new Error(data.error ?? t.admin.blog.form.failedToSaveOffer)
       }
 
       toast.success(
-        offer
-          ? (isEnglish ? "Offer updated" : "Oferta atualizada")
-          : (isEnglish ? "Offer created" : "Oferta criada"),
+        offer ? t.admin.blog.form.offerUpdated : t.admin.blog.form.offerCreated,
         { description: formData.name }
       )
 
       onSuccess()
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to save offer" : "Erro ao salvar oferta")
+      const message = err instanceof Error ? err.message : t.admin.blog.form.failedToSaveOffer
       setError(message)
-      toast.error(isEnglish ? "Failed to save offer" : "Erro ao salvar oferta", { description: message })
+      toast.error(t.admin.blog.form.failedToSaveOffer, { description: message })
     } finally {
       setUploading(false)
       setLoading(false)
@@ -179,19 +176,19 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
       )}
 
       <div className="space-y-2">
-        <Label className="text-sm font-semibold">{isEnglish ? "Offer image (banner)" : "Imagem da oferta (banner)"}</Label>
+        <Label className="text-sm font-semibold">{t.admin.blog.form.offerImage}</Label>
         <div className="flex items-start gap-4">
           {imagePreview && (
             <div className="h-28 w-40 overflow-hidden rounded-lg border border-border bg-muted/30">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt={isEnglish ? "Offer preview" : "Preview da oferta"} className="h-full w-full object-cover" src={imagePreview} />
+              <img alt={t.admin.blog.form.offerPreview} className="h-full w-full object-cover" src={imagePreview} />
             </div>
           )}
           <label className="flex-1 cursor-pointer rounded-lg border-2 border-dashed border-border p-5 transition hover:border-primary/40">
             <input accept="image/*" className="hidden" onChange={handleImageSelect} type="file" />
             <div className="flex flex-col items-center gap-2 text-center">
               <Upload className="size-5 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">{isEnglish ? "Click to upload offer image" : "Clique para enviar imagem da oferta"}</p>
+              <p className="text-sm text-muted-foreground">{t.admin.blog.form.clickToUploadOffer}</p>
             </div>
           </label>
         </div>
@@ -200,7 +197,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="name">
-            {isEnglish ? "Offer Name" : "Nome da Oferta"} <span className="text-red-400">*</span>
+            {t.admin.blog.form.offerName} <span className="text-red-400">*</span>
           </Label>
           <Input
             id="name"
@@ -212,13 +209,13 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
             maxLength={200}
           />
           <p className="text-[10px] text-muted-foreground/60">
-            {isEnglish ? "Required. 2–200 characters." : "Obrigatório. Entre 2 e 200 caracteres."}
+            {t.admin.blog.form.offerNameMin}
           </p>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="link">
-            {isEnglish ? "Offer Link" : "Link da Oferta"} <span className="text-red-400">*</span>
+            {t.admin.blog.form.offerLink} <span className="text-red-400">*</span>
           </Label>
           <Input
             id="link"
@@ -229,7 +226,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
             required
           />
           <p className="text-[10px] text-muted-foreground/60">
-            {isEnglish ? "Full URL starting with http:// or https://" : "URL completa começando com http:// ou https://"}
+            {t.admin.blog.form.offerLinkFull}
           </p>
         </div>
       </div>
@@ -237,7 +234,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="value">
-            {isEnglish ? "Price" : "Valor"} <span className="text-red-400">*</span>
+            {t.admin.blog.form.price} <span className="text-red-400">*</span>
           </Label>
           <Input
             id="value"
@@ -250,12 +247,12 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
             required
           />
           <p className="text-[10px] text-muted-foreground/60">
-            {isEnglish ? "Greater than 0." : "Maior que zero."}
+            {t.admin.blog.form.priceGtZero}
           </p>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="currency">{isEnglish ? "Currency" : "Moeda"}</Label>
+          <Label htmlFor="currency">{t.admin.blog.form.currency}</Label>
           <Input
             id="currency"
             value={formData.currency}
@@ -265,7 +262,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="currency_symbol">{isEnglish ? "Symbol" : "Símbolo"}</Label>
+          <Label htmlFor="currency_symbol">{t.admin.blog.form.symbol}</Label>
           <Input
             id="currency_symbol"
             value={formData.currency_symbol}
@@ -280,7 +277,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>{isEnglish ? "Linked Peripheral (Optional)" : "Periférico Vinculado (Opcional)"}</Label>
+          <Label>{t.admin.blog.form.linkedPeripheral}</Label>
           <Select
             value={formData.peripheral_id || NO_PERIPHERAL_VALUE}
             onValueChange={(value) =>
@@ -291,10 +288,10 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
             }
           >
             <SelectTrigger>
-              <SelectValue placeholder={isEnglish ? "Select a peripheral" : "Selecione um periférico"} />
+              <SelectValue placeholder={t.admin.blog.form.selectPeripheral} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NO_PERIPHERAL_VALUE}>{isEnglish ? "No linked peripheral" : "Sem periférico vinculado"}</SelectItem>
+              <SelectItem value={NO_PERIPHERAL_VALUE}>{t.admin.blog.form.noLinkedPeripheral}</SelectItem>
               {peripherals.map((peripheral) => (
                 <SelectItem key={peripheral.id} value={peripheral.id}>
                   {peripheral.brand} - {peripheral.name}
@@ -305,7 +302,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="coupon_code">{isEnglish ? "Coupon Code (Optional)" : "Código do Cupom (Opcional)"}</Label>
+          <Label htmlFor="coupon_code">{t.admin.blog.form.couponCode}</Label>
           <Input
             id="coupon_code"
             value={formData.coupon_code}
@@ -315,7 +312,7 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="expires_at">{isEnglish ? "Expiration Date (Optional)" : "Data de Expiração (Opcional)"}</Label>
+          <Label htmlFor="expires_at">{t.admin.blog.form.expirationDate}</Label>
           <Input
             id="expires_at"
             type="date"
@@ -332,11 +329,11 @@ export function OfferForm({ offer, onSuccess, onCancel }: OfferFormProps) {
           onClick={onCancel}
           disabled={loading || uploading}
         >
-          {isEnglish ? "Cancel" : "Cancelar"}
+          {t.admin.blog.form.cancel}
         </Button>
         <Button type="submit" disabled={loading || uploading}>
           {(loading || uploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {offer ? (isEnglish ? "Update" : "Atualizar") : (isEnglish ? "Create" : "Criar")} {isEnglish ? "Offer" : "Oferta"}
+          {offer ? t.admin.blog.form.update : t.admin.blog.form.create} {t.admin.blog.form.offer}
         </Button>
       </div>
     </form>

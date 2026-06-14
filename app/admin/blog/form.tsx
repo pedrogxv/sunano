@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { BLOG_IMAGE_STANDARDS } from "@/lib/blog-images"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 import { usePageHeader } from "@/components/providers/page-header-context"
 
 type PeripheralOption = {
@@ -56,8 +56,7 @@ interface BlogPostFormProps {
 }
 
 export function BlogPostForm({ postId }: BlogPostFormProps) {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const router = useRouter()
   const searchParams = useSearchParams()
   const initialType: "news" | "review" = searchParams.get("type") === "news" ? "news" : "review"
@@ -96,17 +95,15 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
 
   const headerTitle = postId
     ? isReview
-      ? (isEnglish ? "Edit review" : "Editar review")
-      : (isEnglish ? "Edit news" : "Editar notícia")
+      ? t.admin.blog.form.editReview
+      : t.admin.blog.form.editNews
     : isReview
-      ? (isEnglish ? "New review" : "Novo review")
-      : (isEnglish ? "New news" : "Nova notícia")
+      ? t.admin.blog.form.newReview
+      : t.admin.blog.form.newNews
 
   usePageHeader(
     headerTitle,
-    isReview
-      ? (isEnglish ? "Review linked to a peripheral." : "Review vinculado a um periférico.")
-      : (isEnglish ? "News / announcement — no peripheral required." : "Notícia / anúncio — sem periférico obrigatório.")
+    isReview ? t.admin.blog.form.reviewDesc : t.admin.blog.form.newsDesc
   )
 
   useEffect(() => { loadPeripherals() }, [])
@@ -118,13 +115,13 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
       const res = await fetch("/api/peripherals?limit=1000", { cache: "no-store" })
       const json = (await res.json().catch(() => null)) as { peripherals?: PeripheralOption[]; error?: string } | null
       if (!res.ok || !json?.peripherals) {
-        throw new Error(json?.error ?? (isEnglish ? "Failed to load peripherals" : "Erro ao carregar periféricos"))
+        throw new Error(json?.error ?? t.admin.blog.form.failedToLoadPeripherals)
       }
       setPeripherals(json.peripherals)
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to load peripherals" : "Erro ao carregar periféricos")
+      const message = err instanceof Error ? err.message : t.admin.blog.form.failedToLoadPeripherals
       setError(message)
-      toast.error(isEnglish ? "Failed to load peripherals" : "Erro ao carregar periféricos", { description: message })
+      toast.error(t.admin.blog.form.failedToLoadPeripherals, { description: message })
     } finally {
       setPeripheralsLoading(false)
     }
@@ -134,9 +131,9 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
     const res = await fetch(`/api/admin/blog/posts/${id}`, { cache: "no-store" })
     const json = (await res.json().catch(() => null)) as { post?: any; error?: string } | null
     if (!res.ok || !json?.post) {
-      const message = json?.error ?? (isEnglish ? "Failed to load article" : "Erro ao carregar artigo")
+      const message = json?.error ?? t.admin.blog.form.failedToLoadArticle
       setError(message)
-      toast.error(isEnglish ? "Failed to load article" : "Erro ao carregar artigo", { description: message })
+      toast.error(t.admin.blog.form.failedToLoadArticle, { description: message })
       return
     }
     const data = json.post
@@ -183,7 +180,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         body.append("variant", "header")
         const res = await fetch("/api/admin/blog/upload-cover", { method: "POST", body })
         const data = await res.json().catch(() => null) as { error?: string; publicUrl?: string } | null
-        if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? (isEnglish ? "Failed to upload cover" : "Erro ao enviar capa"))
+        if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? t.admin.blog.form.failedToUploadCover)
         coverImageUrl = data.publicUrl
       }
 
@@ -195,7 +192,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         body.append("variant", "thumbnail")
         const res = await fetch("/api/admin/blog/upload-cover", { method: "POST", body })
         const data = await res.json().catch(() => null) as { error?: string; publicUrl?: string } | null
-        if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? (isEnglish ? "Failed to upload thumbnail" : "Erro ao enviar miniatura"))
+        if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? t.admin.blog.form.failedToUploadThumbnail)
         coverThumbnailUrl = data.publicUrl
       }
 
@@ -217,20 +214,18 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
       })
 
       const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
-      if (!res.ok) throw new Error(data?.error ?? (isEnglish ? "Failed to save article" : "Erro ao salvar artigo"))
+      if (!res.ok) throw new Error(data?.error ?? t.admin.blog.form.failedToSave)
 
       toast.success(
-        postId
-          ? (isEnglish ? "Article updated" : "Artigo atualizado")
-          : (isEnglish ? "Article created" : "Artigo criado"),
+        postId ? t.admin.blog.form.articleUpdated : t.admin.blog.form.articleCreated,
         { description: values.title }
       )
 
       router.push("/admin/blog")
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to save article" : "Erro ao salvar artigo")
+      const message = err instanceof Error ? err.message : t.admin.blog.form.failedToSave
       setError(message)
-      toast.error(isEnglish ? "Failed to save article" : "Erro ao salvar artigo", { description: message })
+      toast.error(t.admin.blog.form.failedToSave, { description: message })
     } finally {
       setUploadingCover(null)
       setSaving(false)
@@ -256,11 +251,11 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
       <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between gap-4 px-6 py-3">
         <BackBreadcrumb
           href="/admin/blog"
-          parentLabel={isEnglish ? "Articles" : "Artigos"}
+          parentLabel={t.admin.blog.form.articles}
           currentLabel={
             postId
-              ? (watchedTitle?.trim() || (isEnglish ? "Edit" : "Editar"))
-              : (isEnglish ? "New" : "Novo")
+              ? (watchedTitle?.trim() || t.admin.blog.form.edit)
+              : t.admin.blog.form.new
           }
         />
         <div className="flex items-center gap-3">
@@ -275,19 +270,19 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             }`}
           >
             {watchedStatus === "published"
-              ? <><Eye className="size-3.5" />{isEnglish ? "Published" : "Publicado"}</>
-              : <><EyeOff className="size-3.5" />{isEnglish ? "Draft" : "Rascunho"}</>}
+              ? <><Eye className="size-3.5" />{t.admin.blog.form.publishedLabel}</>
+              : <><EyeOff className="size-3.5" />{t.admin.blog.form.draftLabel}</>}
           </button>
           <Button onClick={form.handleSubmit(onSubmit)} disabled={isBusy} size="sm" className="min-w-28">
             {isBusy
               ? (uploadingCover === "header"
-                ? (isEnglish ? "Uploading header..." : "Enviando header...")
+                ? t.admin.blog.form.uploadingHeader
                 : uploadingCover === "thumbnail"
-                  ? (isEnglish ? "Uploading thumbnail..." : "Enviando miniatura...")
-                  : (isEnglish ? "Saving..." : "Salvando..."))
+                  ? t.admin.blog.form.uploadingThumbnail
+                  : t.admin.blog.form.saving)
               : postId
-                ? (isEnglish ? "Save changes" : "Salvar alterações")
-                : (isEnglish ? "Publish" : "Publicar")}
+                ? t.admin.blog.form.saveChanges
+                : t.admin.blog.form.publish}
           </Button>
         </div>
       </div>
@@ -302,12 +297,12 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         {/* Content type */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {isEnglish ? "Content type" : "Tipo de conteúdo"}
+            {t.admin.blog.form.contentType}
           </label>
           <div className="grid grid-cols-2 gap-3">
             {([
-              { value: "news", icon: Newspaper, label: isEnglish ? "News" : "Notícia", desc: isEnglish ? "Announcement / editorial" : "Anúncio / editorial" },
-              { value: "review", icon: Mouse, label: "Review", desc: isEnglish ? "Linked to a peripheral" : "Vinculado a um periférico" },
+              { value: "news", icon: Newspaper, label: t.admin.blog.form.newsType, desc: t.admin.blog.form.newsTypeDesc },
+              { value: "review", icon: Mouse, label: "Review", desc: t.admin.blog.form.reviewTypeDesc },
             ] as const).map((opt) => {
               const Icon = opt.icon
               const active = watchedPostType === opt.value
@@ -337,25 +332,25 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         <div className="space-y-1.5">
           <Input
             className="border-0 border-b border-border rounded-none bg-transparent px-0 text-2xl font-bold text-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 focus-visible:border-primary"
-            placeholder={isEnglish ? "Article title..." : "Título do artigo..."}
+            placeholder={t.admin.blog.form.titlePlaceholder}
             {...form.register("title")}
           />
           {form.formState.errors.title && (
             <p className="text-xs text-red-400">{form.formState.errors.title.message}</p>
           )}
           {watchedTitle && (
-            <p className="text-[10px] text-muted-foreground">{watchedTitle.length} {isEnglish ? "chars" : "caracteres"}</p>
+            <p className="text-[10px] text-muted-foreground">{watchedTitle.length} {t.admin.blog.form.chars}</p>
           )}
         </div>
 
         {/* Excerpt */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {isEnglish ? "Summary / excerpt" : "Resumo / excerpt"}
+            {t.admin.blog.form.summaryLabel}
           </label>
           <Textarea
             className="min-h-16 resize-none border-border bg-card/40 text-sm leading-relaxed"
-            placeholder={isEnglish ? "Short description shown in article listings..." : "Descrição curta exibida na listagem de artigos..."}
+            placeholder={t.admin.blog.form.summaryPlaceholder}
             {...form.register("excerpt")}
           />
         </div>
@@ -364,7 +359,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         {isReview && (
         <div className="space-y-2">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {isEnglish ? "Related peripheral" : "Periférico relacionado"}
+            {t.admin.blog.form.relatedPeripheral}
           </label>
 
           {selectedPeripheral ? (
@@ -380,7 +375,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
                 <p className="text-xs text-muted-foreground">{selectedPeripheral.brand} · <span className="capitalize">{selectedPeripheral.category}</span></p>
               </div>
               <Button type="button" variant="ghost" size="sm" className="shrink-0 text-muted-foreground" onClick={() => { form.setValue("peripheral_id", ""); setPeripheralSearch("") }}>
-                {isEnglish ? "Change" : "Trocar"}
+                {t.admin.blog.form.change}
               </Button>
             </div>
           ) : (
@@ -389,16 +384,16 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   className="pl-9 border-border bg-card/40"
-                  placeholder={isEnglish ? "Search by brand or name..." : "Buscar por marca ou nome..."}
+                  placeholder={t.admin.blog.form.searchBrandOrName}
                   value={peripheralSearch}
                   onChange={(e) => setPeripheralSearch(e.target.value)}
                 />
               </div>
               <div className="max-h-56 overflow-y-auto rounded-xl border border-border bg-card">
                 {peripheralsLoading ? (
-                  <p className="p-4 text-sm text-muted-foreground">{isEnglish ? "Loading peripherals..." : "Carregando periféricos..."}</p>
+                  <p className="p-4 text-sm text-muted-foreground">{t.admin.blog.form.loadingPeripherals}</p>
                 ) : filteredPeripherals.length === 0 ? (
-                  <p className="p-4 text-sm text-muted-foreground">{isEnglish ? "No peripherals found" : "Nenhum periférico encontrado"}</p>
+                  <p className="p-4 text-sm text-muted-foreground">{t.admin.blog.form.noPeripheralsFound}</p>
                 ) : filteredPeripherals.map((p) => (
                   <button
                     key={p.id}
@@ -434,13 +429,13 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         {/* Images */}
         <div className="space-y-3">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {isEnglish ? "Cover images" : "Imagens de capa"}
+            {t.admin.blog.form.coverImages}
           </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {/* Header */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground">{isEnglish ? "Article header" : "Header do artigo"}</span>
+                <span className="text-xs font-medium text-foreground">{t.admin.blog.form.articleHeader}</span>
                 <Badge variant="secondary" className="text-[10px]">
                   {BLOG_IMAGE_STANDARDS.header.width}×{BLOG_IMAGE_STANDARDS.header.height} · {BLOG_IMAGE_STANDARDS.header.aspectRatio}
                 </Badge>
@@ -453,7 +448,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
                     <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "header")} type="file" />
                     <div className="flex flex-col items-center gap-1 text-white">
                       <Upload className="size-5" />
-                      <span className="text-xs">{isEnglish ? "Change image" : "Trocar imagem"}</span>
+                      <span className="text-xs">{t.admin.blog.form.changeImage}</span>
                     </div>
                   </label>
                 </div>
@@ -461,8 +456,8 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
                 <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/10 transition hover:border-primary/40 hover:bg-muted/20">
                   <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "header")} type="file" />
                   <ImageIcon className="size-8 text-muted-foreground/40" />
-                  <span className="text-xs text-muted-foreground">{isEnglish ? "Click to upload" : "Clique para enviar"}</span>
-                  <span className="text-[10px] text-muted-foreground/60">{isEnglish ? "Optional — adapts from card if missing" : "Opcional — adapta do card se ausente"}</span>
+                  <span className="text-xs text-muted-foreground">{t.admin.blog.form.clickToUpload}</span>
+                  <span className="text-[10px] text-muted-foreground/60">{t.admin.blog.form.optionalAdapts}</span>
                 </label>
               )}
             </div>
@@ -470,7 +465,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             {/* Thumbnail */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground">{isEnglish ? "Card thumbnail" : "Thumbnail do card"}</span>
+                <span className="text-xs font-medium text-foreground">{t.admin.blog.form.cardThumbnail}</span>
                 <Badge variant="secondary" className="text-[10px]">
                   {BLOG_IMAGE_STANDARDS.thumbnail.width}×{BLOG_IMAGE_STANDARDS.thumbnail.height} · {BLOG_IMAGE_STANDARDS.thumbnail.aspectRatio}
                 </Badge>
@@ -483,7 +478,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
                     <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "thumbnail")} type="file" />
                     <div className="flex flex-col items-center gap-1 text-white">
                       <Upload className="size-5" />
-                      <span className="text-xs">{isEnglish ? "Change image" : "Trocar imagem"}</span>
+                      <span className="text-xs">{t.admin.blog.form.changeImage}</span>
                     </div>
                   </label>
                 </div>
@@ -491,8 +486,8 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
                 <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/10 transition hover:border-primary/40 hover:bg-muted/20">
                   <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "thumbnail")} type="file" />
                   <ImageIcon className="size-8 text-muted-foreground/40" />
-                  <span className="text-xs text-muted-foreground">{isEnglish ? "Click to upload" : "Clique para enviar"}</span>
-                  <span className="text-[10px] text-muted-foreground/60">{isEnglish ? "Recommended — shown in article listing" : "Recomendado — exibido na listagem"}</span>
+                  <span className="text-xs text-muted-foreground">{t.admin.blog.form.clickToUpload}</span>
+                  <span className="text-[10px] text-muted-foreground/60">{t.admin.blog.form.recommendedShown}</span>
                 </label>
               )}
             </div>
@@ -503,7 +498,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
             <Youtube className="size-3.5" />
-            {isEnglish ? "Video link (YouTube / Vimeo)" : "Link do vídeo (YouTube / Vimeo)"}
+            {t.admin.blog.form.videoLink}
           </label>
           <div className="relative">
             <Link2 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -523,15 +518,15 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
           <div className="flex items-center justify-between">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <FileText className="size-3.5" />
-              {isEnglish ? "Article content" : "Conteúdo do artigo"}
+              {t.admin.blog.form.articleContent}
             </label>
             <span className="text-[10px] text-muted-foreground">
-              {watchedContent?.length ?? 0} {isEnglish ? "chars" : "caracteres"}
+              {watchedContent?.length ?? 0} {t.admin.blog.form.chars}
             </span>
           </div>
           <Textarea
             className="min-h-80 resize-y border-border bg-card/40 font-mono text-sm leading-7"
-            placeholder={isEnglish ? "Write the full review or article here..." : "Escreva o review ou artigo completo aqui..."}
+            placeholder={t.admin.blog.form.contentPlaceholder}
             {...form.register("content")}
           />
           {form.formState.errors.content && (
@@ -543,7 +538,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         <Card className="border-border bg-card/50">
           <CardContent className="p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {isEnglish ? "Publication status" : "Status de publicação"}
+              {t.admin.blog.form.publicationStatus}
             </p>
             <div className="grid grid-cols-2 gap-3">
               {(["draft", "published"] as const).map((s) => (
@@ -564,12 +559,10 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
                     : <Circle className="size-4 shrink-0" />}
                   <div>
                     <p className="text-sm font-semibold">
-                      {s === "published" ? (isEnglish ? "Published" : "Publicado") : (isEnglish ? "Draft" : "Rascunho")}
+                      {s === "published" ? t.admin.blog.form.publishedLabel : t.admin.blog.form.draftLabel}
                     </p>
                     <p className="text-[10px] opacity-70">
-                      {s === "published"
-                        ? (isEnglish ? "Visible to everyone" : "Visível para todos")
-                        : (isEnglish ? "Only visible to admins" : "Visível apenas para admins")}
+                      {s === "published" ? t.admin.blog.form.visibleToAll : t.admin.blog.form.visibleToAdmins}
                     </p>
                   </div>
                 </button>

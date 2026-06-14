@@ -1,45 +1,48 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 
 import { loginAction } from "@/app/admin/actions"
+import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 
 const initialState = { error: null as string | null }
 
-const LOGIN_ERROR_MESSAGES = {
-  missing_credentials: { en: "Enter email and password.", pt: "Informe email e senha." },
-  invalid_credentials: { en: "Invalid credentials.", pt: "Credenciais inválidas." },
-  no_admin_access: { en: "Account has no admin access.", pt: "Conta sem acesso ao admin." },
+const LOGIN_ERROR_KEYS = {
+  missing_credentials: "missingCredentials",
+  invalid_credentials: "invalidCredentials",
+  no_admin_access: "noAdminAccess",
 } as const
 
-function LoginSubmitButton({ isEnglish }: { isEnglish: boolean }) {
+function LoginSubmitButton() {
   const { pending } = useFormStatus()
+  const t = useT()
   return (
     <Button className="w-full" disabled={pending} type="submit">
-      {pending ? (isEnglish ? "Signing in..." : "Entrando...") : (isEnglish ? "Sign in" : "Entrar")}
+      {pending ? t.admin.login.signingIn : t.admin.login.signIn}
     </Button>
   )
 }
 
-function ForgotSubmitButton({ isEnglish }: { isEnglish: boolean }) {
+function ForgotSubmitButton() {
   const { pending } = useFormStatus()
+  const t = useT()
   return (
     <Button className="w-full" disabled={pending} type="submit">
-      {pending
-        ? (isEnglish ? "Sending..." : "Enviando...")
-        : (isEnglish ? "Send reset link" : "Enviar link de redefinição")}
+      {pending ? t.admin.login.sending : t.admin.login.sendResetLink}
     </Button>
   )
 }
 
-type ForgotModeProps = { isEnglish: boolean; onBack: () => void }
+type ForgotModeProps = { onBack: () => void }
 
-function ForgotMode({ isEnglish, onBack }: ForgotModeProps) {
+function ForgotMode({ onBack }: ForgotModeProps) {
+  const t = useT()
   const [sent, setSent] = useState(false)
   const [pending, setPending] = useState(false)
   const [email, setEmail] = useState("")
@@ -50,12 +53,12 @@ function ForgotMode({ isEnglish, onBack }: ForgotModeProps) {
     const trimmed = email.trim()
 
     if (!trimmed) {
-      setError(isEnglish ? "Enter your email." : "Informe seu email.")
+      setError(t.admin.login.enterEmail)
       return
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setError(isEnglish ? "Enter a valid email." : "Informe um email válido.")
+      setError(t.admin.login.enterValidEmail)
       return
     }
 
@@ -80,12 +83,10 @@ function ForgotMode({ isEnglish, onBack }: ForgotModeProps) {
     return (
       <div className="space-y-5">
         <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-4 text-sm text-emerald-200">
-          {isEnglish
-            ? "If the email is registered, you will receive the reset instructions shortly."
-            : "Se o email estiver cadastrado, você receberá as instruções em breve."}
+          {t.admin.login.resetSentIfRegistered}
         </div>
         <button type="button" onClick={onBack} className="text-xs text-primary hover:underline">
-          ← {isEnglish ? "Back to login" : "Voltar ao login"}
+          ← {t.admin.login.backToLogin}
         </button>
       </div>
     )
@@ -95,12 +96,10 @@ function ForgotMode({ isEnglish, onBack }: ForgotModeProps) {
     <div className="space-y-5">
       <div>
         <p className="text-sm font-medium text-foreground">
-          {isEnglish ? "Password reset" : "Redefinição de senha"}
+          {t.admin.login.passwordReset}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          {isEnglish
-            ? "Enter your account email and we'll send a reset link."
-            : "Informe o email da sua conta e enviaremos um link para criar uma nova senha."}
+          {t.admin.login.passwordResetDesc}
         </p>
       </div>
 
@@ -129,43 +128,51 @@ function ForgotMode({ isEnglish, onBack }: ForgotModeProps) {
         )}
 
         <Button className="w-full" disabled={pending} type="submit">
-          {pending
-            ? (isEnglish ? "Sending..." : "Enviando...")
-            : (isEnglish ? "Send reset link" : "Enviar link de redefinição")}
+          {pending ? t.admin.login.sending : t.admin.login.sendResetLink}
         </Button>
       </form>
 
       <button type="button" onClick={onBack} className="text-xs text-primary hover:underline">
-        ← {isEnglish ? "Back to login" : "Voltar ao login"}
+        ← {t.admin.login.backToLogin}
       </button>
     </div>
   )
 }
 
 export function AdminLoginForm() {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const [mode, setMode] = useState<"login" | "forgot">("login")
   const [state, formAction] = useActionState(loginAction, initialState)
 
   const localizedError = state.error
-    ? LOGIN_ERROR_MESSAGES[state.error as keyof typeof LOGIN_ERROR_MESSAGES]
-      ? isEnglish
-        ? LOGIN_ERROR_MESSAGES[state.error as keyof typeof LOGIN_ERROR_MESSAGES].en
-        : LOGIN_ERROR_MESSAGES[state.error as keyof typeof LOGIN_ERROR_MESSAGES].pt
+    ? LOGIN_ERROR_KEYS[state.error as keyof typeof LOGIN_ERROR_KEYS]
+      ? t.admin.login.errors[LOGIN_ERROR_KEYS[state.error as keyof typeof LOGIN_ERROR_KEYS]]
       : state.error
     : null
 
   if (mode === "forgot") {
-    return <ForgotMode isEnglish={isEnglish} onBack={() => setMode("login")} />
+    return <ForgotMode onBack={() => setMode("login")} />
   }
 
   return (
-    <form action={formAction} className="space-y-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground" htmlFor="email">
-          Email
-        </label>
+    <div className="space-y-4">
+      <GoogleAuthButton label={t.admin.login.continueWithGoogle} next="/admin" />
+      <DiscordAuthButton label={t.admin.login.continueWithDiscord} next="/admin" />
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-border" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="bg-card px-3 text-xs text-muted-foreground">{t.admin.login.or}</span>
+        </div>
+      </div>
+
+      <form action={formAction} className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-foreground" htmlFor="email">
+            Email
+          </label>
         <Input
           autoComplete="email"
           className="border-border bg-card/50 text-foreground placeholder:text-muted-foreground"
@@ -178,14 +185,14 @@ export function AdminLoginForm() {
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-foreground" htmlFor="password">
-          {isEnglish ? "Password" : "Senha"}
+          {t.admin.login.password}
         </label>
         <Input
           autoComplete="current-password"
           className="border-border bg-card/50 text-foreground placeholder:text-muted-foreground"
           id="password"
           name="password"
-          placeholder={isEnglish ? "Your password" : "Sua senha"}
+          placeholder={t.admin.login.yourPassword}
           type="password"
         />
       </div>
@@ -196,7 +203,7 @@ export function AdminLoginForm() {
         </div>
       )}
 
-      <LoginSubmitButton isEnglish={isEnglish} />
+      <LoginSubmitButton />
 
       <Button
         className="w-full"
@@ -204,8 +211,9 @@ export function AdminLoginForm() {
         variant="ghost"
         onClick={() => setMode("forgot")}
       >
-        {isEnglish ? "Forgot my password" : "Esqueci minha senha"}
+        {t.admin.login.forgotPassword}
       </Button>
-    </form>
+      </form>
+    </div>
   )
 }

@@ -15,6 +15,12 @@ function Tabs({
     <TabsPrimitive.Root
       data-slot="tabs"
       data-orientation={orientation}
+      // As classes utilitárias (`data-horizontal:`, `group-data-horizontal/tabs:`)
+      // dependem de atributos booleanos de orientação na raiz, não de
+      // `data-orientation`. Sem eles, o layout cai para linha e o indicador
+      // ativo some.
+      data-horizontal={orientation === "horizontal" ? "" : undefined}
+      data-vertical={orientation === "vertical" ? "" : undefined}
       className={cn(
         "group/tabs flex gap-2 data-horizontal:flex-col",
         className

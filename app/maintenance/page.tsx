@@ -1,11 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 
 export default function MaintenancePage() {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
 
   return (
     <main className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-hidden bg-background px-6 py-10 text-foreground">
@@ -13,21 +12,17 @@ export default function MaintenancePage() {
 
       <section className="relative w-full max-w-3xl flex-col items-center rounded-3xl border border-border bg-card/70 p-10 text-center shadow-[0_28px_80px_rgba(0,0,0,0.35)] backdrop-blur">
         <p className="mb-4 rounded-full border border-amber-300/40 bg-amber-300/10 px-4 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-amber-200">
-          {isEnglish ? "Maintenance Mode" : "Modo Manutenção"}
+          {t.maintenance.mode}
         </p>
 
         <h1 className="font-display text-4xl font-bold tracking-tight text-foreground md:text-5xl">
-          {isEnglish ? "We are updating the website" : "Estamos ajustando o site"}
+          {t.maintenance.title}
         </h1>
 
         <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-          {isEnglish
-            ? "Public content is temporarily unavailable while we perform improvements."
-            : "O conteúdo público está temporariamente indisponível enquanto realizamos melhorias."}
+          {t.maintenance.body1}
           {" "}
-          {isEnglish
-            ? "Authenticated administrators continue to have normal access."
-            : "Administradores autenticados continuam com acesso normal."}
+          {t.maintenance.body2}
         </p>
 
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
@@ -35,14 +30,14 @@ export default function MaintenancePage() {
             href="/admin/login"
             className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
           >
-            {isEnglish ? "Sign in as admin" : "Entrar como admin"}
+            {t.maintenance.signInAsAdmin}
           </Link>
 
           <Link
             href="/"
             className="rounded-xl border border-border px-5 py-2.5 text-sm font-semibold text-foreground transition hover:bg-muted/40"
           >
-            {isEnglish ? "Try again" : "Tentar novamente"}
+            {t.maintenance.tryAgain}
           </Link>
         </div>
       </section>

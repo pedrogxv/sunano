@@ -10,6 +10,7 @@ import { SidebarProvider } from "@/components/providers/sidebar-context"
 import { CartProvider } from "@/components/providers/cart-context"
 import { PageHeaderProvider } from "@/components/providers/page-header-context"
 import { LayoutShell } from "@/components/layout/LayoutShell"
+import { CookieBanner } from "@/components/lgpd/CookieBanner"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -49,6 +50,7 @@ export default function RootLayout({
                   <TooltipProvider delayDuration={200}>
                     <LayoutShell>{children}</LayoutShell>
                     <Toaster />
+                    <CookieBanner />
                   </TooltipProvider>
                 </PageHeaderProvider>
               </CartProvider>

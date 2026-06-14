@@ -33,6 +33,7 @@ import { useLocale } from "@/components/providers/locale-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { mapTier } from "@/lib/tier-utils"
 import { RATING_LEVEL_COLORS } from "@/lib/tierlist-theme"
+import { useT } from "@/lib/use-t"
 import { removeBackground, fileToDataUrl } from "@/lib/client/remove-background"
 
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
@@ -368,13 +369,13 @@ function LinkedProductPicker({
   value,
   onChange,
   excludeId,
-  isEnglish,
+  t,
 }: {
   kind: "store" | "bazaar"
   value: LinkedProduct | null
   onChange: (product: LinkedProduct | null) => void
   excludeId: string | null
-  isEnglish: boolean
+  t: ReturnType<typeof useT>
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -400,8 +401,8 @@ function LinkedProductPicker({
   const visible = filtered.filter((p) => p.id !== excludeId)
 
   const placeholderLabel = kind === "store"
-    ? (isEnglish ? "Search a store product…" : "Buscar produto da Loja…")
-    : (isEnglish ? "Search a bazaar item…" : "Buscar item do Bazar…")
+    ? t.admin.tierlistForm.pickerSearchStore
+    : t.admin.tierlistForm.pickerSearchBazaar
 
   return (
     <div className="space-y-2">
@@ -435,20 +436,20 @@ function LinkedProductPicker({
           <div className="flex items-center gap-2">
             <Input
               autoFocus
-              placeholder={isEnglish ? "Type to filter…" : "Digite para filtrar…"}
+              placeholder={t.admin.tierlistForm.pickerTypeToFilter}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="border-border bg-background"
             />
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
-              {isEnglish ? "Close" : "Fechar"}
+              {t.admin.tierlistForm.pickerClose}
             </Button>
           </div>
           <div className="max-h-56 overflow-auto rounded-md border border-border/60 bg-background/40">
             {loading ? (
-              <p className="p-3 text-xs text-muted-foreground">{isEnglish ? "Loading…" : "Carregando…"}</p>
+              <p className="p-3 text-xs text-muted-foreground">{t.admin.tierlistForm.pickerLoading}</p>
             ) : visible.length === 0 ? (
-              <p className="p-3 text-xs text-muted-foreground">{isEnglish ? "No items found." : "Nenhum item encontrado."}</p>
+              <p className="p-3 text-xs text-muted-foreground">{t.admin.tierlistForm.pickerNoItems}</p>
             ) : (
               <ul className="divide-y divide-border/60">
                 {visible.map((p) => (
@@ -488,13 +489,13 @@ interface PeripheralEditProps {
 
 export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) => {
   const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const router = useRouter()
   const pathname = usePathname()
   const backHref = pathname?.startsWith("/admin/perifericos") ? "/admin/perifericos" : "/admin/tierlist"
   const parentLabel = pathname?.startsWith("/admin/perifericos")
-    ? (isEnglish ? "Peripherals" : "Periféricos")
-    : "Tierlist"
+    ? t.admin.tierlistForm.parentPeripherals
+    : t.admin.tierlistForm.parentTierlist
   const [uploading, setUploading] = useState(false)
   const [loadingPeripheral, setLoadingPeripheral] = useState(Boolean(peripheralId))
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -548,10 +549,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const watchedCategory = form.watch("category")
 
   usePageHeader(
-    peripheralId ? (isEnglish ? "Edit Peripheral" : "Editar Periférico") : (isEnglish ? "New Peripheral" : "Novo Periférico"),
+    peripheralId ? t.admin.tierlistForm.headerEdit : t.admin.tierlistForm.headerNew,
     peripheralId
-      ? (isEnglish ? "Update the peripheral information below." : "Atualize as informações do periférico abaixo.")
-      : (isEnglish ? "Fill in the details to add a new peripheral to the tierlist." : "Preencha os dados para adicionar um novo periférico à tierlist.")
+      ? t.admin.tierlistForm.headerEditDesc
+      : t.admin.tierlistForm.headerNewDesc
   )
 
   useEffect(() => {
@@ -609,7 +610,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     try {
       const res = await fetch(`/api/admin/peripherals/${peripheralId}`, { cache: "no-store" })
       const json = (await res.json().catch(() => null)) as { peripheral?: any; error?: string } | null
-      if (!res.ok || !json?.peripheral) throw new Error(json?.error ?? (isEnglish ? "Failed to load peripheral" : "Erro ao carregar periférico"))
+      if (!res.ok || !json?.peripheral) throw new Error(json?.error ?? t.admin.tierlistForm.failedLoadPeripheral)
       const data = json.peripheral
       if (data) {
         setOriginalUsdPrice(data.price)
@@ -674,9 +675,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         }
       } catch { /* ignore — links are optional */ }
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to load peripheral" : "Erro ao carregar periférico")
+      const message = err instanceof Error ? err.message : t.admin.tierlistForm.failedLoadPeripheral
       setError(message)
-      toast.error(isEnglish ? "Failed to load peripheral" : "Erro ao carregar periférico", {
+      toast.error(t.admin.tierlistForm.failedLoadPeripheral, {
         description: message,
       })
     } finally {
@@ -688,7 +689,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     try {
       setError(null)
       if (!selectedTag || selectedTag.length === 0) {
-        const msg = isEnglish ? "Select a tag" : "Selecione uma tag"
+        const msg = t.admin.tierlistForm.selectTag
         setError(msg)
         toast.error(msg)
         return
@@ -705,7 +706,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         })
         const uploadData = (await uploadRes.json().catch(() => null)) as { publicUrl?: string; error?: string; ok?: boolean } | null
         if (!uploadRes.ok || !uploadData?.publicUrl) {
-          throw new Error(uploadData?.error ?? (isEnglish ? "Failed to upload image" : "Erro ao enviar imagem"))
+          throw new Error(uploadData?.error ?? t.admin.tierlistForm.failedUploadImage)
         }
         imageUrl = uploadData.publicUrl
       }
@@ -783,10 +784,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           if (json?.field) {
             form.setError(json.field as any, { type: "server", message: json.error })
           }
-          throw new Error(json?.error ?? (isEnglish ? "Failed to save" : "Erro ao salvar"))
+          throw new Error(json?.error ?? t.admin.tierlistForm.failedSave)
         }
         savedId = json?.peripheral?.id ?? peripheralId
-        toast.success(isEnglish ? "Peripheral updated" : "Periférico atualizado", {
+        toast.success(t.admin.tierlistForm.updated, {
           description: data.name,
         })
       } else {
@@ -800,10 +801,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           if (json?.field) {
             form.setError(json.field as any, { type: "server", message: json.error })
           }
-          throw new Error(json?.error ?? (isEnglish ? "Failed to save" : "Erro ao salvar"))
+          throw new Error(json?.error ?? t.admin.tierlistForm.failedSave)
         }
         savedId = json?.peripheral?.id ?? null
-        toast.success(isEnglish ? "Peripheral created" : "Periférico criado", {
+        toast.success(t.admin.tierlistForm.created, {
           description: data.name,
         })
       }
@@ -819,16 +820,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         })
         if (!linkRes.ok) {
           const linkJson = (await linkRes.json().catch(() => null)) as { error?: string } | null
-          throw new Error(linkJson?.error ?? (isEnglish ? "Failed to save linked products" : "Erro ao salvar produtos vinculados"))
+          throw new Error(linkJson?.error ?? t.admin.tierlistForm.failedSaveLinked)
         }
       }
 
       router.replace(backHref)
       router.refresh()
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to save" : "Erro ao salvar")
+      const message = err instanceof Error ? err.message : t.admin.tierlistForm.failedSave
       setError(message)
-      toast.error(isEnglish ? "Failed to save peripheral" : "Erro ao salvar periférico", {
+      toast.error(t.admin.tierlistForm.failedSavePeripheral, {
         description: message,
       })
     } finally {
@@ -861,7 +862,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       setBgRemoved(true)
     } catch (err) {
       console.error("Falha ao remover o fundo:", err)
-      toast.error(isEnglish ? "Couldn't remove the background automatically." : "Não foi possível remover o fundo automaticamente.")
+      toast.error(t.admin.tierlistForm.failedRemoveBg)
     } finally {
       setRemovingBg(false)
     }
@@ -896,7 +897,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       setBgRemoved(true)
     } catch (err) {
       console.error("Falha ao remover o fundo:", err)
-      toast.error(isEnglish ? "Couldn't remove the background automatically." : "Não foi possível remover o fundo automaticamente.")
+      toast.error(t.admin.tierlistForm.failedRemoveBg)
     } finally {
       setRemovingBg(false)
     }
@@ -912,9 +913,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const watchedName = form.watch("name")
   const currentLabel = peripheralId
     ? (loadingPeripheral && !watchedName
-        ? (isEnglish ? "Loading…" : "Carregando…")
-        : watchedName || (isEnglish ? "Edit" : "Editar"))
-    : (isEnglish ? "New" : "Novo")
+        ? t.admin.tierlistForm.currentLoading
+        : watchedName || t.admin.tierlistForm.currentEdit)
+    : t.admin.tierlistForm.currentNew
 
   if (loadingPeripheral) {
     return (
@@ -925,12 +926,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           <BoxLoader />
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">
-              {isEnglish ? "Loading peripheral…" : "Carregando periférico…"}
+              {t.admin.tierlistForm.loadingPeripheral}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {isEnglish
-                ? "Fetching saved info, image and specs."
-                : "Buscando informações, imagem e especificações salvas."}
+              {t.admin.tierlistForm.loadingPeripheralDesc}
             </p>
           </div>
         </div>
@@ -949,7 +948,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
 
         {/* SECTION 1: Imagem */}
-        <FormSection title={isEnglish ? "Image" : "Imagem"} icon={<ImageIcon className="size-4" />} defaultOpen>
+        <FormSection title={t.admin.tierlistForm.sectionImage} icon={<ImageIcon className="size-4" />} defaultOpen>
           <div className="flex flex-col gap-3">
             <div className="flex gap-4 items-start">
               {imagePreview && (
@@ -976,8 +975,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <Upload className="size-6 text-muted-foreground group-hover:text-foreground transition-colors" />
                   <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
                     {imagePreview
-                      ? (isEnglish ? "Click to change image" : "Clique para trocar a imagem")
-                      : (isEnglish ? "Click to upload image" : "Clique para enviar a imagem")}
+                      ? t.admin.tierlistForm.clickChangeImage
+                      : t.admin.tierlistForm.clickUploadImage}
                   </p>
                   <p className="text-xs text-muted-foreground/60">PNG, JPG, WebP</p>
                 </div>
@@ -1002,15 +1001,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     <Scissors className="size-3.5" />
                   )}
                   {removingBg
-                    ? (isEnglish ? "Removing background…" : "Removendo fundo…")
+                    ? t.admin.tierlistForm.removingBg
                     : bgRemoved
-                      ? (isEnglish ? "Restore original background" : "Restaurar fundo original")
-                      : (isEnglish ? "Remove background" : "Remover fundo")}
+                      ? t.admin.tierlistForm.restoreOriginalBg
+                      : t.admin.tierlistForm.removeBg}
                 </Button>
                 <p className="text-xs text-muted-foreground/70">
                   {bgRemoved
-                    ? (isEnglish ? "Background removed automatically." : "Fundo removido automaticamente.")
-                    : (isEnglish ? "Works best with solid/white backgrounds." : "Funciona melhor com fundo sólido/branco.")}
+                    ? t.admin.tierlistForm.bgRemovedAuto
+                    : t.admin.tierlistForm.bgBestWithSolid}
                 </p>
               </div>
             )}
@@ -1018,17 +1017,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </FormSection>
 
         {/* SECTION 2: Informações Básicas */}
-        <FormSection title={isEnglish ? "Basic Info" : "Informações Básicas"} icon={<Info className="size-4" />} defaultOpen>
+        <FormSection title={t.admin.tierlistForm.sectionBasicInfo} icon={<Info className="size-4" />} defaultOpen>
           <div className="space-y-4">
             {/* Category picker */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
-                {isEnglish ? "Category" : "Categoria"} <span className="text-red-400">*</span>
+                  {t.admin.tierlistForm.category} <span className="text-red-400">*</span>
               </label>
               <p className="text-xs text-muted-foreground/80">
-                {isEnglish
-                  ? "Required. Pick one of the categories below — values are validated by the database."
-                  : "Obrigatório. Escolha uma das categorias abaixo — os valores são validados pelo banco."}
+                "Obrigatório. Escolha uma das categorias abaixo — os valores são validados pelo banco."
               </p>
               <div className="flex flex-wrap gap-2">
                 {CATEGORIES.map((cat) => (
@@ -1055,7 +1052,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">
-                  {isEnglish ? "Name" : "Nome"} <span className="text-red-400">*</span>
+                  {t.admin.tierlistForm.name} <span className="text-red-400">*</span>
                 </label>
                 <Input
                   className="border-border bg-background"
@@ -1065,17 +1062,17 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   {...form.register("name")}
                 />
                 <p className="text-[10px] text-muted-foreground/60">
-                  {isEnglish ? "1–200 characters" : "Entre 1 e 200 caracteres"}
+                  {t.admin.tierlistForm.charsHint}
                 </p>
                 {form.formState.errors.name && <p className="text-xs text-red-400">{form.formState.errors.name.message}</p>}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">
-                  {isEnglish ? "Brand" : "Marca"} <span className="text-red-400">*</span>
+                  {t.admin.tierlistForm.brand} <span className="text-red-400">*</span>
                 </label>
                 <Select value={form.watch("brand")} onValueChange={(value) => form.setValue("brand", value, { shouldValidate: true })}>
                   <SelectTrigger className="border-border bg-background" aria-invalid={!!form.formState.errors.brand}>
-                    <SelectValue placeholder={isEnglish ? "Select a brand" : "Selecione uma marca"} />
+                    <SelectValue placeholder={t.admin.tierlistForm.selectBrand} />
                   </SelectTrigger>
                   <SelectContent>
                     {BRAND_OPTIONS.map((brand) => (
@@ -1086,7 +1083,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground/60">
-                  {isEnglish ? "Pick from the list above" : "Escolha uma das marcas da lista"}
+                  {t.admin.tierlistForm.brandHint}
                 </p>
                 {form.formState.errors.brand && <p className="text-xs text-red-400">{form.formState.errors.brand.message}</p>}
               </div>
@@ -1094,7 +1091,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">
-                {isEnglish ? "Price (USD)" : "Preço (USD)"} <span className="text-red-400">*</span>
+                {t.admin.tierlistForm.priceUsd} <span className="text-red-400">*</span>
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
@@ -1109,9 +1106,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 />
               </div>
               <p className="text-[10px] text-muted-foreground/60">
-                {isEnglish
-                  ? "Use a positive value in US dollars (e.g. 159.00). It will be converted automatically."
-                  : "Use um valor positivo em dólares (ex: 159.00). A conversão é feita automaticamente."}
+                "Use um valor positivo em dólares (ex: 159.00). A conversão é feita automaticamente."
               </p>
               {form.formState.errors.price && <p className="text-xs text-red-400">{form.formState.errors.price.message}</p>}
             </div>
@@ -1121,7 +1116,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         {/* SECTION 3: Tier */}
         <FormSection title="Tier" icon={<Layers className="size-4" />} defaultOpen>
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">{isEnglish ? "Select the tier that best represents this peripheral's performance" : "Selecione o tier que melhor representa a performance deste periférico"}</p>
+            <p className="text-xs text-muted-foreground">{t.admin.tierlistForm.tierHint}</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -1132,7 +1127,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     : "border-border/40 text-muted-foreground hover:border-border hover:text-foreground"
                 }`}
               >
-                {isEnglish ? "Under Review" : "Sob Revisão"}
+                {t.admin.tierlistForm.underReview}
               </button>
               {TIER_OPTIONS.map((t) => (
                 <button
@@ -1154,9 +1149,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <FormSection title="Tag" icon={<Tag className="size-4" />} defaultOpen>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              {isEnglish
-                ? "Required — select at least one tag describing this peripheral."
-                : "Obrigatório — selecione ao menos uma tag que descreva este periférico."}
+              "Obrigatório — selecione ao menos uma tag que descreva este periférico."
             </p>
             <div className="flex flex-wrap gap-2">
               {TAGS_OPTIONS.map((tag) => {
@@ -1169,21 +1162,21 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     onClick={() => toggleTag(tag.key)}
                     className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${tag.color} ${active ? "scale-105 shadow-sm" : "opacity-60 hover:opacity-100"}`}
                   >
-                      {isEnglish ? tag.en : tag.pt}
+                      {tag.pt}
                     {active && " ✓"}
                   </button>
                 )
               })}
             </div>
             {selectedTag.length === 0 && (
-              <p className="text-xs text-red-400">{isEnglish ? "Select at least one tag." : "Selecione pelo menos uma tag."}</p>
+              <p className="text-xs text-red-400">{t.admin.tierlistForm.selectAtLeastOneTag}</p>
             )}
           </div>
         </FormSection>
 
         {/* SECTION 5: Ratings */}
         <FormSection
-          title={isEnglish ? "Ratings (0–6)" : "Notas (0–6)"}
+          title={t.admin.tierlistForm.sectionRatings}
           icon={
             <div className="flex items-center gap-1">
               <span className="w-4 h-1 rounded bg-red-600" />
@@ -1198,55 +1191,53 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         >
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              {isEnglish
-                ? "Rate each aspect from 1 (worst) to 6 (best). Click × to clear a rating."
-                : "Avalie cada aspecto de 1 (pior) a 6 (melhor). Clique × para limpar."}
+              "Avalie cada aspecto de 1 (pior) a 6 (melhor). Clique × para limpar."
             </p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {RATING_FIELDS.map((field) => {
-                let label = isEnglish ? field.label : field.ptLabel
+                let label = field.ptLabel
                 if (field.key === "ratingBattery" && watchedCategory === "keyboard") {
-                  label = isEnglish ? "Typing" : "Digitação"
+                  label = "Digitação"
                 }
                 if (watchedCategory === "mousepad") {
-                  if (field.key === "ratingSoftware") label = isEnglish ? "Base" : "Base"
-                  if (field.key === "ratingBuild") label = isEnglish ? "Surface" : "Superfície"
-                  if (field.key === "ratingBattery") label = isEnglish ? "Stitching" : "Costura"
+                  if (field.key === "ratingSoftware") label = "Base"
+                  if (field.key === "ratingBuild") label = "Superfície"
+                  if (field.key === "ratingBattery") label = "Costura"
                 }
                 if (watchedCategory === "iem" || watchedCategory === "headset") {
-                  if (field.key === "ratingSoftware") label = isEnglish ? "Equalization" : "Equalização"
+                  if (field.key === "ratingSoftware") label = "Equalização"
                   if (field.key === "ratingBattery" && watchedCategory === "iem") return null
                   if (field.key === "ratingBattery" && watchedCategory === "headset" && !form.watch("hasBattery")) return null
                 }
                 if (watchedCategory === "feet") {
-                  if (field.key === "ratingBuild") label = isEnglish ? "Material" : "Material"
-                  if (field.key === "ratingSoftware") label = isEnglish ? "Speed" : "Velocidade"
+                  if (field.key === "ratingBuild") label = "Material"
+                  if (field.key === "ratingSoftware") label = "Velocidade"
                   if (field.key === "ratingBattery" || field.key === "ratingQc") return null
                 }
                 if (watchedCategory === "glasspad") {
-                  if (field.key === "ratingSoftware") label = isEnglish ? "Base" : "Base"
-                  if (field.key === "ratingBuild") label = isEnglish ? "Surface" : "Superfície"
-                  if (field.key === "ratingBattery") label = isEnglish ? "Speed" : "Velocidade"
+                  if (field.key === "ratingSoftware") label = "Base"
+                  if (field.key === "ratingBuild") label = "Superfície"
+                  if (field.key === "ratingBattery") label = "Velocidade"
                 }
                 if (watchedCategory === "chairs") {
-                  if (field.key === "ratingPerformance") label = isEnglish ? "Comfort" : "Conforto"
-                  if (field.key === "ratingBattery") label = isEnglish ? "Warranty" : "Garantia"
-                  if (field.key === "ratingSoftware") label = isEnglish ? "Features" : "Recursos"
+                  if (field.key === "ratingPerformance") label = "Conforto"
+                  if (field.key === "ratingBattery") label = "Garantia"
+                  if (field.key === "ratingSoftware") label = "Recursos"
                 }
                 if (watchedCategory === "monitors") {
-                  if (field.key === "ratingBuild") label = isEnglish ? "Panel" : "Painel"
-                  if (field.key === "ratingSoftware") label = isEnglish ? "Settings Menu" : "Menu de Configuração"
-                  if (field.key === "ratingBattery") label = isEnglish ? "Warranty" : "Garantia"
-                  if (field.key === "ratingMaintenance") label = isEnglish ? "Build" : "Construção"
+                  if (field.key === "ratingBuild") label = "Painel"
+                  if (field.key === "ratingSoftware") label = "Menu de Configuração"
+                  if (field.key === "ratingBattery") label = "Garantia"
+                  if (field.key === "ratingMaintenance") label = "Construção"
                 }
                 if (watchedCategory === "switches") {
-                  if (field.key === "ratingSoftware") label = isEnglish ? "Sound" : "Som"
-                  if (field.key === "ratingBattery") label = isEnglish ? "Typing" : "Digitação"
+                  if (field.key === "ratingSoftware") label = "Som"
+                  if (field.key === "ratingBattery") label = "Digitação"
                   if (field.key === "ratingQc" || field.key === "ratingMaintenance") return null
                 }
                 if (watchedCategory === "dac_amp") {
-                  if (field.key === "ratingSoftware") label = isEnglish ? "Features" : "Recursos"
-                  if (field.key === "ratingBattery") label = isEnglish ? "Power" : "Potência"
+                  if (field.key === "ratingSoftware") label = "Recursos"
+                  if (field.key === "ratingBattery") label = "Potência"
                   if (field.key === "ratingMaintenance") return null
                 }
                 if (watchedCategory !== "chairs" && watchedCategory !== "monitors" && field.key === "ratingMaintenance") return null
@@ -1264,15 +1255,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </FormSection>
 
         {/* SECTION 6: Specs por categoria */}
-        <FormSection title={isEnglish ? "Technical Specs" : "Especificações Técnicas"} icon={<FileText className="size-4" />} defaultOpen>
+        <FormSection title={t.admin.tierlistForm.sectionTechnicalSpecs} icon={<FileText className="size-4" />} defaultOpen>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {watchedCategory === "mouse" && (
               <>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Shape" : "Formato"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Formato"}</label>
                   <Select value={form.watch("mouseShape") || ""} onValueChange={(v) => form.setValue("mouseShape", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select shape" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="symmetrical">Symmetrical</SelectItem>
@@ -1281,14 +1272,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Connectivity" : "Conectividade"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
-                      <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+                      <SelectItem value="wired">{"Com fio"}</SelectItem>
+                      <SelectItem value="wireless">{"Sem fio"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1296,25 +1287,25 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">{isEnglish ? "Yes" : "Sim"}</SelectItem>
-                      <SelectItem value="no">{isEnglish ? "No" : "Não"}</SelectItem>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Size" : "Tamanho"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Tamanho"}</label>
                   <Select value={form.watch("size") || ""} onValueChange={(v) => form.setValue("size", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="fingertip">Fingertip</SelectItem>
-                      <SelectItem value="small">{isEnglish ? "Small" : "Pequeno"}</SelectItem>
-                      <SelectItem value="medium">{isEnglish ? "Medium" : "Médio"}</SelectItem>
-                      <SelectItem value="large">{isEnglish ? "Large" : "Grande"}</SelectItem>
+                      <SelectItem value="small">{"Pequeno"}</SelectItem>
+                      <SelectItem value="medium">{"Médio"}</SelectItem>
+                      <SelectItem value="large">{"Grande"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1323,23 +1314,23 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <Input className="border-border bg-background" placeholder="HERO 2, PMW 3395" {...form.register("driver")} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Weight" : "Peso"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Peso"}</label>
                   <Input className="border-border bg-background" placeholder="61g" {...form.register("weight")} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Latency" : "Latência"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>
                   <Input className="border-border bg-background" placeholder="0.62ms" {...form.register("latency")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
                   <Select value={form.watch("switchType") || ""} onValueChange={(v) => form.setValue("switchType", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="magnetic">{isEnglish ? "Magnetic" : "Magnético"}</SelectItem>
-                      <SelectItem value="optical">{isEnglish ? "Optical" : "Óptico"}</SelectItem>
-                      <SelectItem value="mechanical">{isEnglish ? "Mechanical" : "Mecânico"}</SelectItem>
+                      <SelectItem value="magnetic">{"Magnético"}</SelectItem>
+                      <SelectItem value="optical">{"Óptico"}</SelectItem>
+                      <SelectItem value="mechanical">{"Mecânico"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1347,7 +1338,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coating</label>
                   <Select value={form.watch("coating") || ""} onValueChange={(v) => form.setValue("coating", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
                       {COATING_OPTIONS.map((option) => (
@@ -1360,9 +1351,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="md:col-span-2 grid grid-cols-3 gap-3">
                   {[
-                    { field: "gripSmall", label: isEnglish ? "Grip · Small hand" : "Grip · Mão pequena" },
-                    { field: "gripMedium", label: isEnglish ? "Grip · Medium hand" : "Grip · Mão média" },
-                    { field: "gripLarge", label: isEnglish ? "Grip · Large hand" : "Grip · Mão grande" },
+                    { field: "gripSmall", label: "Grip · Mão pequena" },
+                    { field: "gripMedium", label: "Grip · Mão média" },
+                    { field: "gripLarge", label: "Grip · Mão grande" },
                   ].map(({ field, label }) => (
                     <div key={field} className="space-y-1.5">
                       <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</label>
@@ -1370,7 +1361,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                         <DropdownMenuTrigger asChild>
                           <Button variant="outline" size="sm" type="button" className="w-full justify-between">
                             <span className="line-clamp-1">
-                              {(form.watch(field as any) || "") || (isEnglish ? "Select" : "Selecione")}
+                              {(form.watch(field as any) || "") || ("Selecione")}
                             </span>
                             <ChevronDown className="size-4 text-muted-foreground" />
                           </Button>
@@ -1422,7 +1413,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</label>
                   <Select value={form.watch("keyboardLayout") || ""} onValueChange={(v) => form.setValue("keyboardLayout", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select layout" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
                       {["60%", "65%", "75%", "TKL", "Full-size"].map((l) => (
@@ -1432,14 +1423,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Connectivity" : "Conectividade"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
-                      <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+                      <SelectItem value="wired">{"Com fio"}</SelectItem>
+                      <SelectItem value="wireless">{"Sem fio"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1447,37 +1438,37 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">{isEnglish ? "Yes" : "Sim"}</SelectItem>
-                      <SelectItem value="no">{isEnglish ? "No" : "Não"}</SelectItem>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Weight" : "Peso"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Peso"}</label>
                   <Input className="border-border bg-background" placeholder="800g" {...form.register("weight")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Type</label>
                   <Select value={form.watch("keyboardType") || ""} onValueChange={(v) => form.setValue("keyboardType", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="mechanical">{isEnglish ? "Mechanical" : "Mecânico"}</SelectItem>
-                      <SelectItem value="optical">{isEnglish ? "Optical" : "Óptico"}</SelectItem>
-                      <SelectItem value="magnetic">{isEnglish ? "Magnetic" : "Magnético"}</SelectItem>
+                      <SelectItem value="mechanical">{"Mecânico"}</SelectItem>
+                      <SelectItem value="optical">{"Óptico"}</SelectItem>
+                      <SelectItem value="magnetic">{"Magnético"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
-                  <Input className="border-border bg-background" placeholder={isEnglish ? "Linear, Tactile, Clicky" : "Linear, Tátil, Clicky"} {...form.register("switchType")} />
+                  <Input className="border-border bg-background" placeholder={"Linear, Tátil, Clicky"} {...form.register("switchType")} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Latency" : "Latência"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>
                   <Input className="border-border bg-background" placeholder="0.5ms" {...form.register("latency")} />
                 </div>
                 <div className="space-y-1.5">
@@ -1492,7 +1483,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Plate</label>
                   <Select value={form.watch("keyboardPlate") || ""} onValueChange={(v) => form.setValue("keyboardPlate", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="FR4">FR4</SelectItem>
@@ -1505,11 +1496,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hot Swap</label>
                   <Select value={form.watch("hotSwap") || ""} onValueChange={(v) => form.setValue("hotSwap", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">{isEnglish ? "Yes" : "Sim"}</SelectItem>
-                      <SelectItem value="no">{isEnglish ? "No" : "Não"}</SelectItem>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1517,7 +1508,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Case</label>
                   <Select value={form.watch("keyboardCase") || ""} onValueChange={(v) => form.setValue("keyboardCase", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Plástico">Plástico</SelectItem>
@@ -1763,7 +1754,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Panel</label>
                   <Select value={form.watch("panelType") || ""} onValueChange={(v) => form.setValue("panelType", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select panel" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ips">IPS</SelectItem>
@@ -1783,11 +1774,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Connectivity</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
-                      <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+                      <SelectItem value="wired">{"Com fio"}</SelectItem>
+                      <SelectItem value="wireless">{"Sem fio"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1795,11 +1786,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">{isEnglish ? "Yes" : "Sim"}</SelectItem>
-                      <SelectItem value="no">{isEnglish ? "No" : "Não"}</SelectItem>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1809,14 +1800,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             {(watchedCategory === "iem" || watchedCategory === "headset") && (
               <>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Connectivity" : "Conectividade"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
-                      <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+                      <SelectItem value="wired">{"Com fio"}</SelectItem>
+                      <SelectItem value="wireless">{"Sem fio"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1824,16 +1815,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
                     <SelectTrigger className="border-border bg-background">
-                      <SelectValue placeholder={isEnglish ? "Select" : "Selecione"} />
+                      <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yes">{isEnglish ? "Yes" : "Sim"}</SelectItem>
-                      <SelectItem value="no">{isEnglish ? "No" : "Não"}</SelectItem>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{isEnglish ? "Compatibility" : "Compatibilidade"}</label>
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Compatibilidade"}</label>
                   <Input className="border-border bg-background" placeholder="Windows, macOS, PS5" {...form.register("compatibility")} />
                 </div>
                 {watchedCategory === "headset" && (
@@ -1846,7 +1837,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       className="h-4 w-4 rounded border-border accent-primary"
                     />
                     <label htmlFor="hasBattery" className="text-sm text-muted-foreground cursor-pointer">
-                      {isEnglish ? "Has battery" : "Tem bateria"}
+                      {"Tem bateria"}
                     </label>
                   </div>
                 )}
@@ -1856,11 +1847,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </FormSection>
 
         {/* SECTION 7: Wiki / Conteúdo */}
-        <FormSection title={isEnglish ? "Wiki Content" : "Conteúdo da Wiki"} icon={<FileText className="size-4" />} defaultOpen={false}>
+        <FormSection title={t.admin.tierlistForm.sectionWikiContent} icon={<FileText className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
             <div className="space-y-1.5 rounded-lg border border-border bg-muted/20 p-3">
               <label className="text-sm font-medium text-foreground">
-                {isEnglish ? "External wiki URL (optional)" : "URL da wiki externa (opcional)"}
+                {"URL da wiki externa (opcional)"}
               </label>
               <Input
                 className="border-border bg-background"
@@ -1868,36 +1859,34 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 {...form.register("wikiUrl")}
               />
               <p className="text-[11px] text-muted-foreground">
-                {isEnglish
-                  ? "When filled, the public page shows a single link to this external wiki instead of the editorial content below."
-                  : "Quando preenchido, a página pública mostra apenas um botão para a wiki externa, no lugar do conteúdo editorial abaixo."}
+                "Quando preenchido, a página pública mostra apenas um botão para a wiki externa, no lugar do conteúdo editorial abaixo."
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Summary" : "Resumo"}</label>
-                <Input className="border-border bg-background" placeholder={isEnglish ? "One-line description" : "Descrição em uma linha"} {...form.register("summary")} />
+                <label className="text-sm font-medium text-foreground">{"Resumo"}</label>
+                <Input className="border-border bg-background" placeholder={"Descrição em uma linha"} {...form.register("summary")} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Rank label" : "Label de rank"}</label>
+                <label className="text-sm font-medium text-foreground">{"Label de rank"}</label>
                 <Input className="border-border bg-background" placeholder="GOAT, Top S, Solid A" {...form.register("rankLabel")} />
               </div>
               <div className="space-y-1.5 md:col-span-2">
                 <div className="flex gap-3">
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-sm font-medium text-foreground">{isEnglish ? "Ranking (position #)" : "Ranking (posição #)"}</label>
+                    <label className="text-sm font-medium text-foreground">{"Ranking (posição #)"}</label>
                     <Input className="border-border bg-background" type="number" min={1} placeholder="1" {...form.register("ranking", { valueAsNumber: true })} />
                   </div>
                   <div className="flex-1 space-y-1.5">
-                    <label className="text-sm font-medium text-foreground">{isEnglish ? "Score (points)" : "Pontuação"}</label>
+                    <label className="text-sm font-medium text-foreground">{"Pontuação"}</label>
                     <Input className="border-border bg-background" type="number" min={0} step={0.25} placeholder="788.5" {...form.register("score", { valueAsNumber: true })} />
                   </div>
                 </div>
                 {rankedPeripherals.filter(p => p.ranking > 0).length > 0 && (
                   <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-border bg-muted/30 divide-y divide-border">
                     <p className="sticky top-0 z-10 bg-muted/80 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground backdrop-blur">
-                      {rankedPeripherals.filter(p => p.ranking > 0).length} {isEnglish ? "ranked" : "com ranking"} — {watchedCategory}
+                      {rankedPeripherals.filter(p => p.ranking > 0).length} {"com ranking"} — {watchedCategory}
                     </p>
                     {rankedPeripherals.filter(p => p.ranking > 0).map((p) => (
                       <div key={p.id} className={`flex items-center gap-2 px-3 py-2 text-xs ${p.id === peripheralId ? "bg-primary/10" : ""}`}>
@@ -1913,35 +1902,35 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 )}
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Price range" : "Faixa de preço"}</label>
+                <label className="text-sm font-medium text-foreground">{"Faixa de preço"}</label>
                 <Input className="border-border bg-background" placeholder="R$1050–1130" {...form.register("priceRange")} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Compatibility" : "Compatibilidade"}</label>
+                <label className="text-sm font-medium text-foreground">{"Compatibilidade"}</label>
                 <Input className="border-border bg-background" placeholder="Windows, macOS, PS5" {...form.register("compatibility")} />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Review URL" : "URL do Review"}</label>
+                <label className="text-sm font-medium text-foreground">{"URL do Review"}</label>
                 <Input className="border-border bg-background" placeholder="https://youtube.com/..." {...form.register("reviewUrl")} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Guide URL" : "URL do Guia"}</label>
+                <label className="text-sm font-medium text-foreground">{"URL do Guia"}</label>
                 <Input className="border-border bg-background" placeholder="https://..." {...form.register("guideUrl")} />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{isEnglish ? "Review note" : "Nota do review"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={isEnglish ? "Short observation about the review" : "Observação curta sobre o review"} rows={2} {...form.register("reviewNote")} />
+              <label className="text-sm font-medium text-foreground">{"Nota do review"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Observação curta sobre o review"} rows={2} {...form.register("reviewNote")} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { field: "highlights", label: isEnglish ? "Highlights" : "Destaques" },
-                { field: "comparisons", label: isEnglish ? "Comparisons" : "Comparações" },
+                { field: "highlights", label: "Destaques" },
+                { field: "comparisons", label: "Comparações" },
                 { field: "pros", label: "Pros" },
                 { field: "cons", label: "Cons" },
               ].map(({ field, label }) => (
@@ -1949,59 +1938,57 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-sm font-medium text-foreground">{label}</label>
                   <Textarea
                     className="border-border bg-background resize-none"
-                    placeholder={isEnglish ? "One per line" : "Um por linha"}
+                    placeholder={"Um por linha"}
                     rows={4}
                     {...form.register(field as any)}
                   />
-                  <p className="text-[10px] text-muted-foreground">{isEnglish ? "Each line becomes a separate item" : "Cada linha vira um item separado"}</p>
+                  <p className="text-[10px] text-muted-foreground">{"Cada linha vira um item separado"}</p>
                 </div>
               ))}
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{isEnglish ? "Gallery URLs" : "URLs da Galeria"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={isEnglish ? "One image URL per line" : "Uma URL de imagem por linha"} rows={4} {...form.register("gallery")} />
+              <label className="text-sm font-medium text-foreground">{"URLs da Galeria"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Uma URL de imagem por linha"} rows={4} {...form.register("gallery")} />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{isEnglish ? "Notes (extended)" : "Notas (estendidas)"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={isEnglish ? "Main notes and context" : "Notas principais e contexto"} rows={5} {...form.register("notesLong")} />
+              <label className="text-sm font-medium text-foreground">{"Notas (estendidas)"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Notas principais e contexto"} rows={5} {...form.register("notesLong")} />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{isEnglish ? "Extra notes" : "Notas extras"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={isEnglish ? "Additional observations" : "Observações adicionais"} rows={3} {...form.register("notes")} />
+              <label className="text-sm font-medium text-foreground">{"Notas extras"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Observações adicionais"} rows={3} {...form.register("notes")} />
             </div>
           </div>
         </FormSection>
 
         {/* SECTION: Produtos vinculados */}
-        <FormSection title={isEnglish ? "Linked Products" : "Produtos Vinculados"} icon={<Link2 className="size-4" />} defaultOpen={false}>
+        <FormSection title={t.admin.tierlistForm.sectionLinkedProducts} icon={<Link2 className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              {isEnglish
-                ? "Tie this peripheral to a Loja product and/or a Bazar item. The link is shown on the public peripheral page, and Loja/Bazar pages cross-reference each other via this peripheral."
-                : "Vincule este periférico a um produto da Loja e/ou item do Bazar. O vínculo aparece na página do periférico, e as páginas da Loja e do Bazar mostram o item correspondente do outro lado."}
+              "Vincule este periférico a um produto da Loja e/ou item do Bazar. O vínculo aparece na página do periférico, e as páginas da Loja e do Bazar mostram o item correspondente do outro lado."
             </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Linked Loja product" : "Produto da Loja vinculado"}</label>
+                <label className="text-sm font-medium text-foreground">{t.admin.tierlistForm.linkedStoreProduct}</label>
                 <LinkedProductPicker
                   kind="store"
                   value={linkedStore}
                   onChange={setLinkedStore}
                   excludeId={linkedBazaar?.id ?? null}
-                  isEnglish={isEnglish}
+                  t={t}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{isEnglish ? "Linked Bazar item" : "Item do Bazar vinculado"}</label>
+                <label className="text-sm font-medium text-foreground">{t.admin.tierlistForm.linkedBazaarItem}</label>
                 <LinkedProductPicker
                   kind="bazaar"
                   value={linkedBazaar}
                   onChange={setLinkedBazaar}
                   excludeId={linkedStore?.id ?? null}
-                  isEnglish={isEnglish}
+                  t={t}
                 />
               </div>
             </div>
@@ -2009,12 +1996,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </FormSection>
 
         {/* SECTION 8: Links de compra */}
-        <FormSection title={isEnglish ? "Buy Links" : "Links de Compra"} icon={<ShoppingCart className="size-4" />} defaultOpen={false}>
+        <FormSection title={t.admin.tierlistForm.sectionBuyLinks} icon={<ShoppingCart className="size-4" />} defaultOpen={false}>
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground">
-              {isEnglish
-                ? "Format: Label | https://... — one per line. Example: Amazon | https://amazon.com/..."
-                : "Formato: Label | https://... — um por linha. Exemplo: Amazon | https://amazon.com/..."}
+              "Formato: Label | https://... — um por linha. Exemplo: Amazon | https://amazon.com/..."
             </p>
             <Textarea
               className="border-border bg-background font-mono text-xs resize-none"
@@ -2028,14 +2013,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         {/* Footer actions */}
         <div className="flex gap-3 justify-end pt-2">
           <Link href={backHref}>
-            <Button variant="outline">{isEnglish ? "Cancel" : "Cancelar"}</Button>
+            <Button variant="outline">{t.admin.tierlistForm.cancel}</Button>
           </Link>
           <Button disabled={uploading || removingBg || form.formState.isSubmitting} type="submit" className="min-w-28">
             {uploading || form.formState.isSubmitting
-              ? (isEnglish ? "Saving..." : "Salvando...")
+              ? t.admin.tierlistForm.saving
               : peripheralId
-                ? (isEnglish ? "Save changes" : "Salvar alterações")
-                : (isEnglish ? "Create peripheral" : "Criar periférico")}
+                ? t.admin.tierlistForm.saveChanges
+                : t.admin.tierlistForm.createPeripheral}
           </Button>
         </div>
       </form>

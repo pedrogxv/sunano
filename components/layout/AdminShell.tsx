@@ -8,26 +8,25 @@ import { useEffect, useState } from "react"
 import { logoutAction } from "@/app/admin/actions"
 import { Button } from "@/components/ui/button"
 import { useSidebar } from "@/components/providers/sidebar-context"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { hasAdminPermission, type AdminPermissionKey, type AdminProfile, isWebMaster } from "@/lib/admin-permissions"
 
 export function AdminShell({ children }: { children: React.ReactNode }) {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const pathname = usePathname()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const { adminCollapsed: isCollapsed, toggleAdmin: toggleCollapsed } = useSidebar()
   const [profile, setProfile] = useState<AdminProfile | null>(null)
 
   const navItems = [
-    { href: "/admin", label: isEnglish ? "Dashboard" : "Dashboard", icon: Home, permission: "dashboard_read" },
-    { href: "/admin/tierlist", label: isEnglish ? "Tierlist" : "Tierlist", icon: Package, permission: "peripherals_read" },
-    { href: "/admin/perifericos", label: isEnglish ? "Peripherals" : "Periféricos", icon: Mouse, permission: "peripherals_read" },
-    { href: "/admin/blog", label: isEnglish ? "Blog & Reviews" : "Blog & Reviews", icon: NotebookPen, permission: "blog_read" },
-    { href: "/admin/offers", label: isEnglish ? "Offers" : "Ofertas", icon: Gift, permission: "offers_read" },
-    { href: "/admin/users", label: isEnglish ? "Users" : "Usuários", icon: Users, requiresWebMaster: true },
-    { href: "/admin/settings", label: isEnglish ? "Settings" : "Configurações", icon: Settings, permission: "settings_read" },
+    { href: "/admin",            label: "Dashboard",               icon: Home,       permission: "dashboard_read" },
+    { href: "/admin/tierlist",   label: "Tierlist",                icon: Package,    permission: "peripherals_read" },
+    { href: "/admin/perifericos",label: t.admin.sidebar.peripherals, icon: Mouse,    permission: "peripherals_read" },
+    { href: "/admin/blog",       label: "Blog & Reviews",          icon: NotebookPen, permission: "blog_read" },
+    { href: "/admin/offers",     label: t.admin.sidebar.offers,    icon: Gift,       permission: "offers_read" },
+    { href: "/admin/users",      label: t.admin.sidebar.users,     icon: Users,      requiresWebMaster: true },
+    { href: "/admin/settings",   label: t.admin.sidebar.settings,  icon: Settings,   permission: "settings_read" },
   ]
 
   useEffect(() => {
@@ -127,7 +126,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
             <div className="space-y-1">
               <p className={cn("mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground", isCollapsed && "hidden")}>
-                {isEnglish ? "Actions" : "Acoes"}
+                {t.admin.sidebar.actions}
               </p>
               <Link
                 href="/"
@@ -138,7 +137,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 )}
               >
                 <Eye className="size-[18px]" />
-                <span className={cn(isCollapsed && "hidden")}>{isEnglish ? "View Site" : "Ver Site"}</span>
+                <span className={cn(isCollapsed && "hidden")}>{t.admin.sidebar.viewSite}</span>
               </Link>
               <form action={logoutAction}>
                 <Button
@@ -150,7 +149,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   variant="ghost"
                 >
                   <LogOut className="size-[18px]" />
-                  <span className={cn(isCollapsed && "hidden")}>{isEnglish ? "Sign out" : "Sair"}</span>
+                  <span className={cn(isCollapsed && "hidden")}>{t.admin.sidebar.signOut}</span>
                 </Button>
               </form>
             </div>

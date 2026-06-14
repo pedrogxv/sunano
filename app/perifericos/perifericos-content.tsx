@@ -17,7 +17,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
@@ -67,46 +67,6 @@ const PRICE_MIN = 0
 interface PerifericosContentProps {
   initialData: Peripheral[]
   showAdminActions?: boolean
-}
-
-const CATEGORY_LABELS_PT: Record<Category, string> = {
-  keyboard: "Teclados", mouse: "Mouses",
-  mousepad: "Mousepads", glasspad: "Glasspads", iem: "IEMs", headset: "Headsets",
-  feet: "Feet", chairs: "Cadeiras", monitors: "Monitores", switches: "Switches", dac_amp: "DAC/AMP",
-}
-
-const CATEGORY_LABELS_EN: Record<Category, string> = {
-  keyboard: "Keyboards", mouse: "Mice",
-  mousepad: "Mousepads", glasspad: "Glasspads", iem: "IEMs", headset: "Headsets",
-  feet: "Mouse Feet", chairs: "Chairs", monitors: "Monitors", switches: "Switches", dac_amp: "DAC/AMP",
-}
-
-const CATEGORY_DESCRIPTIONS_PT: Record<Category, string> = {
-  mouse: "Navegue e compare os melhores mouses gamer para encontrar o ideal para o seu estilo de jogo. Formato, tamanho e peso impactam diretamente no conforto e precisão, enquanto métricas como sensor, DPI e polling rate determinam a acurácia em cada movimento.",
-  keyboard: "Explore e compare teclados mecânicos, magnéticos e ópticos. O tipo de switch, layout e conectividade influenciam diretamente na experiência de digitação e performance em jogos competitivos.",
-  mousepad: "Compare mousepads de diferentes superfícies e tamanhos. A escolha da superfície, perfil e dimensões do pad afetam diretamente a velocidade, controle e precisão do seu mouse durante o jogo.",
-  glasspad: "Explore glasspads superfícies de vidro de alto desempenho que oferecem deslizamento extremamente suave e durabilidade superior comparado aos mousepads convencionais.",
-  headset: "Encontre o headset ideal para gaming e comunicação. Conectividade, qualidade de áudio e conforto são essenciais para longas sessões de jogo com máxima imersão sonora.",
-  iem: "Compare IEMs (In-Ear Monitors) para jogos e áudio de alta qualidade. Drivers, resposta de frequência e isolamento passivo de ruído são fatores cruciais para uma experiência sonora precisa e imersiva.",
-  dac_amp: "DACs e amplificadores para elevar a qualidade de áudio do seu setup. Essenciais para extrair o máximo de headsets e IEMs de alta impedância, garantindo fidelidade sonora excepcional.",
-  feet: "Mouse feet determinam o deslizamento do seu mouse. Material, espessura e formato impactam na velocidade, controle e vida útil, alterando completamente a sensação do periférico.",
-  chairs: "Cadeiras gamer e ergonômicas para longas sessões. Suporte lombar, ajuste de altura e material determinam o conforto e a saúde postural durante o jogo.",
-  monitors: "Monitores para gaming com foco em taxa de atualização, tempo de resposta e tipo de painel. Encontre o monitor ideal para vantagem competitiva ou experiência visual premium em cada jogo.",
-  switches: "Switches mecânicos, magnéticos e ópticos para teclados personalizados. Peso de atuação, sensação tátil e durabilidade influenciam na performance e preferência pessoal de cada jogador.",
-}
-
-const CATEGORY_DESCRIPTIONS_EN: Record<Category, string> = {
-  mouse: "Browse and compare the best gaming mice to find the ideal match for your play style. Shape, size, and weight directly impact comfort and precision, while performance metrics such as sensor, DPI and polling rate determine accuracy.",
-  keyboard: "Explore and compare mechanical, magnetic and optical keyboards. Switch type, layout and connectivity directly influence your typing experience and performance in competitive gaming.",
-  mousepad: "Compare mousepads with different surfaces and sizes. The choice of surface, profile and dimensions directly affect the speed, control and precision of your mouse during play.",
-  glasspad: "Explore glasspads — high-performance glass surfaces that offer extremely smooth glide and superior durability compared to conventional mousepads.",
-  headset: "Find the ideal headset for gaming and communication. Connectivity, audio quality and comfort are essential for long gaming sessions with maximum immersion.",
-  iem: "Compare IEMs (In-Ear Monitors) for gaming and high-quality audio. Drivers, frequency response and passive noise isolation are crucial factors for a precise and immersive sound experience.",
-  dac_amp: "DACs and amplifiers to elevate the audio quality of your setup. Essential for getting the most out of high-impedance headsets and IEMs, ensuring exceptional sound fidelity.",
-  feet: "Mouse feet determine how your mouse glides. Material, thickness and shape directly impact speed, control and pad lifespan, completely changing the feel of your peripheral.",
-  chairs: "Gaming and ergonomic chairs for long sessions. Lumbar support, height adjustment and material determine comfort and postural health during gaming.",
-  monitors: "Gaming monitors focused on refresh rate, response time and panel type. Find the ideal monitor for competitive advantage or premium visual experience in every game.",
-  switches: "Mechanical, magnetic and optical switches for custom keyboards. Actuation force, tactile feel and durability influence performance and each player's personal preference.",
 }
 
 const CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
@@ -168,12 +128,13 @@ function formatTagLabel(tag: Tag, category?: string) {
   return TAG_LABELS[tag] ?? formatLabel(tag)
 }
 
-function PriceSlider({ value, onChange, isEnglish, max }: { value: [number, number]; onChange: (v: [number, number]) => void; isEnglish: boolean; max: number }) {
+function PriceSlider({ value, onChange, max }: { value: [number, number]; onChange: (v: [number, number]) => void; max: number }) {
+  const t = useT()
   const [minVal, maxVal] = value
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">{isEnglish ? "BRL" : "Reais"}</span>
+        <span className="text-xs text-muted-foreground">{t.filters.brl}</span>
         <span className="text-xs font-medium text-foreground">R${minVal} – R${maxVal}</span>
       </div>
       <Slider
@@ -235,8 +196,7 @@ function FilterSection({ title, children, defaultOpen = false }: { title: string
 }
 
 export function PerifericosContent({ initialData: initialDataProp, showAdminActions }: PerifericosContentProps) {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
 
   const [initialData, setInitialData] = useState<Peripheral[]>(initialDataProp)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: "", name: "" })
@@ -265,8 +225,8 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   const [sortKey, setSortKey] = useState<SortKey>("recent")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
-  const categoryLabels = isEnglish ? CATEGORY_LABELS_EN : CATEGORY_LABELS_PT
-  const categoryDescriptions = isEnglish ? CATEGORY_DESCRIPTIONS_EN : CATEGORY_DESCRIPTIONS_PT
+  const categoryLabels = t.categories.labels
+  const categoryDescriptions = t.categories.descriptions
 
   const lockedCategory = useMemo(() => {
     if (selectedIds.length === 0) return null
@@ -438,9 +398,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     const othersCount = HERO_OTHER_CATEGORIES.reduce((sum, cat) => sum + (counts[cat] ?? 0), 0)
     return [
       ...HERO_MAIN_CATEGORIES.map((cat) => ({ key: cat as Category | "outros", label: categoryLabels[cat], count: counts[cat] ?? 0 })),
-      { key: "outros" as Category | "outros", label: isEnglish ? "Others" : "Outros", count: othersCount },
+      { key: "outros" as Category | "outros", label: t.categories.others, count: othersCount },
     ]
-  }, [initialData, categoryLabels, isEnglish])
+  }, [initialData, categoryLabels])
 
   const resetFilters = () => {
     setQuery("")
@@ -497,25 +457,23 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     try {
       const res = await fetch(`/api/admin/peripherals/${deleteDialog.id}`, { method: "DELETE" })
       const data = (await res.json().catch(() => null)) as { error?: string } | null
-      if (!res.ok) throw new Error(data?.error ?? (isEnglish ? "Failed to delete" : "Erro ao deletar"))
+      if (!res.ok) throw new Error(data?.error ?? (t.peripherals.delete.failed))
       setInitialData((prev) => prev.filter((p) => p.id !== deleteDialog.id))
       setSelectedIds((prev) => prev.filter((sid) => sid !== deleteDialog.id))
       setDeleteDialog({ open: false, id: "", name: "" })
-      toast.success(isEnglish ? "Peripheral deleted" : "Periférico deletado", { description: name })
+      toast.success(t.peripherals.delete.success, { description: name })
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to delete" : "Erro ao deletar")
+      const message = err instanceof Error ? err.message : (t.peripherals.delete.failed)
       setDeleteError(message)
-      toast.error(isEnglish ? "Failed to delete peripheral" : "Erro ao deletar periférico", { description: message })
+      toast.error(t.peripherals.delete.error, { description: message })
     } finally {
       setDeleting(false)
     }
   }
 
   usePageHeader(
-    isEnglish ? "Peripherals" : "Periféricos",
-    isEnglish
-      ? "A searchable wiki with filters by category, brand and price."
-      : "Wiki pesquisável com filtros por categoria, marca e preço."
+    t.peripherals.title,
+    t.peripherals.subtitle
   )
 
   const sidebarFilters = (
@@ -523,7 +481,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       {/* Category selector */}
       <div className="border-b border-border p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {isEnglish ? "Category" : "Categoria"}
+          {t.filters.category}
         </p>
         <Select
           value={selectedCategory}
@@ -552,10 +510,10 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
         <div className="relative">
           <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            aria-label={isEnglish ? "Search peripherals" : "Buscar periféricos"}
+            aria-label={t.filters.searchPeripherals}
             className="h-9 border-border bg-muted/20 pl-9 text-sm placeholder:text-muted-foreground focus-visible:ring-1"
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={isEnglish ? "Name, brand, sensor…" : "Nome, marca, sensor…"}
+            placeholder={t.filters.searchNameBrand}
             value={query}
           />
         </div>
@@ -564,33 +522,33 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       {/* Sort by */}
       <div className="border-b border-border p-4">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          {isEnglish ? "Sort by" : "Ordenar por"}
+          {t.filters.sortBy}
         </p>
         <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
           <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="recent">{isEnglish ? "Recently added" : "Recentes"}</SelectItem>
-            <SelectItem value="rank">{isEnglish ? "Best ranked" : "Melhor rankeado"}</SelectItem>
-            <SelectItem value="name-asc">{isEnglish ? "Name A→Z" : "Nome A→Z"}</SelectItem>
-            <SelectItem value="name-desc">{isEnglish ? "Name Z→A" : "Nome Z→A"}</SelectItem>
-            <SelectItem value="price-asc">{isEnglish ? "Price ↑" : "Preço ↑"}</SelectItem>
-            <SelectItem value="price-desc">{isEnglish ? "Price ↓" : "Preço ↓"}</SelectItem>
+            <SelectItem value="recent">{t.filters.recentlyAdded}</SelectItem>
+            <SelectItem value="rank">{t.filters.bestRanked}</SelectItem>
+            <SelectItem value="name-asc">{t.filters.nameAZ}</SelectItem>
+            <SelectItem value="name-desc">{t.filters.nameZA}</SelectItem>
+            <SelectItem value="price-asc">{t.filters.priceAsc}</SelectItem>
+            <SelectItem value="price-desc">{t.filters.priceDesc}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {/* Brand */}
-      <FilterSection title={isEnglish ? "Brand" : "Marca"}>
+      <FilterSection title={t.common.brand}>
         <Select value={selectedBrand} onValueChange={setSelectedBrand}>
           <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-            <SelectValue placeholder={isEnglish ? "Brand" : "Marca"} />
+            <SelectValue placeholder={t.common.brand} />
           </SelectTrigger>
           <SelectContent>
             {availableBrands.map((brand) => (
               <SelectItem key={brand} value={brand}>
-                {brand === "all" ? (isEnglish ? "All brands" : "Todas") : brand}
+                {brand === "all" ? (t.filters.allBrands) : brand}
               </SelectItem>
             ))}
           </SelectContent>
@@ -598,21 +556,21 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       </FilterSection>
 
       {/* Price */}
-      <FilterSection title={isEnglish ? "Price" : "Preço"}>
-        <PriceSlider value={priceRange} onChange={setPriceRange} isEnglish={isEnglish} max={maxPrice} />
+      <FilterSection title={t.common.price}>
+        <PriceSlider value={priceRange} onChange={setPriceRange} max={maxPrice} />
       </FilterSection>
 
       {/* Connectivity */}
       {showConnectivityFilter && (
-        <FilterSection title={isEnglish ? "Connectivity" : "Conexão"}>
+        <FilterSection title={t.filters.connectivity}>
           <Select value={selectedConnectivity} onValueChange={setSelectedConnectivity}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
-              <SelectItem value="wired">{isEnglish ? "Wired" : "Com fio"}</SelectItem>
-              <SelectItem value="wireless">{isEnglish ? "Wireless" : "Sem fio"}</SelectItem>
+              <SelectItem value="all">{t.common.any}</SelectItem>
+              <SelectItem value="wired">{t.filters.wired}</SelectItem>
+              <SelectItem value="wireless">{t.filters.wireless}</SelectItem>
             </SelectContent>
           </Select>
         </FilterSection>
@@ -620,16 +578,16 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Mouse shape */}
       {showMouseShapeFilter && availableMouseShapes.length > 0 && (
-        <FilterSection title={isEnglish ? "Shape" : "Formato"}>
+        <FilterSection title={t.filters.shape}>
           <Select value={selectedMouseShape} onValueChange={(v) => setSelectedMouseShape(v as MouseShape | "all")}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+              <SelectItem value="all">{t.common.any}</SelectItem>
               {availableMouseShapes.map((shape) => (
                 <SelectItem key={shape} value={shape}>
-                  {isEnglish ? formatLabel(shape) : (shape === "symmetrical" ? "Simétrico" : "Ergonômico")}
+                  {shape === "symmetrical" ? t.filters.symmetrical : t.filters.ergonomic}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -639,7 +597,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Weight (mouse only) */}
       {showWeightFilter && (
-        <FilterSection title={isEnglish ? "Weight" : "Peso"}>
+        <FilterSection title={t.filters.weight}>
           <WeightSlider value={weightRange} onChange={setWeightRange} />
         </FilterSection>
       )}
@@ -652,7 +610,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+              <SelectItem value="all">{t.common.any}</SelectItem>
               {availableKeyboardLayouts.map((layout) => (
                 <SelectItem key={layout} value={layout}>{layout.toUpperCase()}</SelectItem>
               ))}
@@ -663,16 +621,16 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Keyboard type */}
       {showKeyboardTypeFilter && availableKeyboardTypes.length > 0 && (
-        <FilterSection title={isEnglish ? "Type" : "Tipo"}>
+        <FilterSection title={t.common.type}>
           <Select value={selectedKeyboardType} onValueChange={(v) => setSelectedKeyboardType(v as KeyboardType | "all")}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
-              {availableKeyboardTypes.map((t) => (
-                <SelectItem key={t} value={t}>
-                  {isEnglish ? formatLabel(t) : (t === "mechanical" ? "Mecânico" : t === "magnetic" ? "Magnético" : "Óptico")}
+              <SelectItem value="all">{t.common.any}</SelectItem>
+              {availableKeyboardTypes.map((kbType) => (
+                <SelectItem key={kbType} value={kbType}>
+                  {kbType === "mechanical" ? t.filters.mechanical : kbType === "magnetic" ? t.filters.magnetic : t.filters.optical}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -682,16 +640,16 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Surface */}
       {showSurfaceFilter && availableSurfaces.length > 0 && (
-        <FilterSection title={isEnglish ? "Surface" : "Superfície"}>
+        <FilterSection title={t.filters.surface}>
           <Select value={selectedSurface} onValueChange={(v) => setSelectedSurface(v as Surface | "all")}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+              <SelectItem value="all">{t.common.any}</SelectItem>
               {availableSurfaces.map((surface) => (
                 <SelectItem key={surface} value={surface}>
-                  {isEnglish ? formatLabel(surface) : (surface === "cloth" ? "Tecido" : surface === "glass" ? "Vidro" : "Híbrido")}
+                  {surface === "cloth" ? t.filters.cloth : surface === "glass" ? t.filters.glass : t.filters.hybrid}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -701,16 +659,16 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Pad type */}
       {showPadTypeFilter && availablePadTypes.length > 0 && (
-        <FilterSection title={isEnglish ? "Pad Type" : "Tipo de Pad"}>
+        <FilterSection title={t.filters.padType}>
           <Select value={selectedPadType} onValueChange={(v) => setSelectedPadType(v as PadType | "all")}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+              <SelectItem value="all">{t.common.any}</SelectItem>
               {availablePadTypes.map((p) => (
                 <SelectItem key={p} value={p}>
-                  {isEnglish ? formatLabel(p) : (p === "speed" ? "Speed" : p === "control" ? "Control" : "Híbrido")}
+                  {p === "speed" ? "Speed" : p === "control" ? "Control" : t.filters.hybrid}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -720,13 +678,13 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Profile */}
       {showProfileFilter && availableProfiles.length > 0 && (
-        <FilterSection title={isEnglish ? "Profile" : "Perfil"}>
+        <FilterSection title={t.filters.profile}>
           <Select value={selectedProfile} onValueChange={setSelectedProfile}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+              <SelectItem value="all">{t.common.any}</SelectItem>
               {availableProfiles.map((profile) => (
                 <SelectItem key={profile} value={profile}>{formatLabel(profile)}</SelectItem>
               ))}
@@ -738,13 +696,13 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       {/* Monitor: Refresh rate */}
       {showMonitorFilters && (
         <>
-          <FilterSection title={isEnglish ? "Refresh Rate" : "Taxa de Atualização"}>
+          <FilterSection title={t.filters.refreshRate}>
             <Select value={selectedRefreshRate} onValueChange={setSelectedRefreshRate}>
               <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                <SelectItem value="all">{t.common.any}</SelectItem>
                 {availableRefreshRates.map((r) => (
                   <SelectItem key={r} value={r}>{r} Hz</SelectItem>
                 ))}
@@ -752,13 +710,13 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </Select>
           </FilterSection>
 
-          <FilterSection title={isEnglish ? "Panel Type" : "Tipo de Painel"}>
+          <FilterSection title={t.filters.panelType}>
             <Select value={selectedPanelType} onValueChange={(v) => setSelectedPanelType(v as PanelType | "all")}>
               <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{isEnglish ? "Any" : "Qualquer"}</SelectItem>
+                <SelectItem value="all">{t.common.any}</SelectItem>
                 {availablePanelTypes.map((p) => (
                   <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                 ))}
@@ -778,7 +736,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             className="h-9 w-full gap-1.5 text-muted-foreground hover:text-foreground"
           >
             <X className="size-3.5" />
-            {isEnglish ? `Clear filters (${activeFiltersCount})` : `Limpar filtros (${activeFiltersCount})`}
+            {t.filters.clearFilters(activeFiltersCount)}
           </Button>
         </div>
       )}
@@ -795,13 +753,13 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           {/* Header */}
           <div className="relative text-center">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/50">
-              {isEnglish ? "Gaming Gear Database" : "Banco de Periféricos"}
+              {t.peripherals.gamingGearDb}
             </p>
             <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground md:text-4xl">
-              {isEnglish ? "Find and Compare" : "Descubra e Compare"}
+              {t.peripherals.findAndCompare}
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              {isEnglish ? "Gaming Peripherals" : "Periféricos Gamer"}
+              {t.peripherals.gamingPeripherals}
             </p>
           </div>
 
@@ -881,7 +839,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           <Link href="/admin/perifericos/new" className="shrink-0">
             <Button size="sm" className="gap-2">
               <Plus className="size-4" />
-              {isEnglish ? "New" : "Novo"}
+              {t.peripherals.new}
             </Button>
           </Link>
         </div>
@@ -890,7 +848,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       {/* Mobile filter toggle */}
       <div className="flex items-center justify-between md:hidden">
         <p className="text-xs text-muted-foreground">
-          {filtered.length} {filtered.length === 1 ? (isEnglish ? "product" : "produto") : (isEnglish ? "products" : "produtos")}
+          {t.filters.productCount(filtered.length)}
         </p>
         <Button
           variant="outline"
@@ -899,7 +857,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           onClick={() => setMobileFiltersOpen((o) => !o)}
         >
           <SlidersHorizontal className="size-3.5" />
-          {isEnglish ? "Filters" : "Filtros"}
+          {t.common.filters}
           {activeFiltersCount > 0 && (
             <span className="flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
               {activeFiltersCount}
@@ -930,11 +888,11 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </p>
             <div className="mt-4 flex items-center gap-3">
               <span className="text-sm font-medium text-muted-foreground">
-                {filtered.length} {filtered.length === 1 ? (isEnglish ? "product" : "produto") : (isEnglish ? "products" : "produtos")}
+                {t.filters.productCount(filtered.length)}
               </span>
               {activeFiltersCount > 0 && (
                 <span className="text-xs text-muted-foreground/60">
-                  · {activeFiltersCount} {isEnglish ? "filter(s) active" : "filtro(s) ativo(s)"}
+                  · {activeFiltersCount} {t.filters.activeFilters}
                 </span>
               )}
             </div>
@@ -949,7 +907,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             return (
               <div className="mb-8">
                 <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  {isEnglish ? "Ranking" : "Ranking"}
+                  {t.peripherals.ranking}
                 </p>
                 <div className="flex flex-col gap-1.5">
                   {ranked.map((item) => {
@@ -988,10 +946,10 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           {filtered.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-12 text-center">
               <p className="text-sm text-muted-foreground">
-                {isEnglish ? "No peripherals found." : "Nenhum periférico encontrado."}
+                {t.peripherals.notFound}
               </p>
               <p className="mt-1 text-xs text-muted-foreground/60">
-                {isEnglish ? "Try adjusting your filters." : "Tente ajustar os filtros."}
+                {t.peripherals.adjustFilters}
               </p>
             </div>
           ) : (
@@ -1002,7 +960,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                   item.specs.connectivity ? formatLabel(item.specs.connectivity) : null,
                   item.specs.driver ?? null,
                   item.specs.keyboardLayout ? item.specs.keyboardLayout.toUpperCase() : null,
-                  item.specs.keyboardType ? (item.specs.keyboardType === "mechanical" ? (isEnglish ? "Mechanical" : "Mecânico") : (isEnglish ? "Magnetic" : "Magnético")) : null,
+                  item.specs.keyboardType ? (item.specs.keyboardType === "mechanical" ? (t.filters.mechanical) : (t.filters.magnetic)) : null,
                   item.specs.surface ? formatLabel(item.specs.surface) : null,
                   item.specs.mouseShape ? formatLabel(item.specs.mouseShape) : null,
                   item.specs.refreshRate ? `${item.specs.refreshRate}Hz` : null,
@@ -1094,7 +1052,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                         <div className="grid grid-cols-2 gap-2">
                           <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/20 py-2 text-xs font-semibold text-muted-foreground transition-all hover:bg-primary/10 hover:text-primary hover:border-primary/30">
                             <Edit className="size-3" />
-                            {isEnglish ? "Edit" : "Editar"}
+                            {t.common.edit}
                           </span>
                           <button
                             type="button"
@@ -1106,7 +1064,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                             className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/20 py-2 text-xs font-semibold text-muted-foreground transition-all hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
                           >
                             <Trash2 className="size-3" />
-                            {isEnglish ? "Delete" : "Deletar"}
+                            {t.common.delete}
                           </button>
                         </div>
                       ) : (
@@ -1125,9 +1083,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                           )}
                         >
                           {isSelected ? (
-                            <><Check className="size-3" />{isEnglish ? "Selected" : "Selecionado"}</>
+                            <><Check className="size-3" />{t.common.selected}</>
                           ) : (
-                            <><ArrowLeftRight className="size-3" />{isEnglish ? "Compare" : "Comparar"}</>
+                            <><ArrowLeftRight className="size-3" />{t.common.compare}</>
                           )}
                         </button>
                       )}
@@ -1164,7 +1122,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </div>
 
             <span className="whitespace-nowrap text-xs text-muted-foreground">
-              {selectedIds.length} {isEnglish ? "selected" : "selecionados"}
+              {selectedIds.length} {t.common.selected}
             </span>
 
             <div className="flex items-center gap-2">
@@ -1182,7 +1140,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                   className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                 >
                   <ArrowLeftRight className="size-3.5" />
-                  {isEnglish ? "Compare" : "Comparar"}
+                  {t.common.compare}
                 </Link>
               )}
             </div>
@@ -1204,17 +1162,17 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           <DialogContent className="border border-white/[0.12] bg-[#0a0e17]/95">
             <DialogHeader>
               <DialogTitle>
-                {isEnglish ? "Delete Peripheral?" : "Deletar Periférico?"}
+                {t.peripherals.delete.title}
               </DialogTitle>
               <DialogDescription>
                 {deleteDialog.name ? (
                   <>
-                    {isEnglish ? "You are about to delete " : "Você está prestes a deletar "}
+                    {t.peripherals.delete.aboutToDelete}
                     <span className="font-semibold text-foreground">{deleteDialog.name}</span>.{" "}
-                    {isEnglish ? "This action cannot be undone." : "Esta ação não pode ser desfeita."}
+                    {t.peripherals.delete.cannotUndo}
                   </>
                 ) : (
-                  isEnglish ? "This action cannot be undone." : "Esta ação não pode ser desfeita."
+                  t.peripherals.delete.cannotUndo
                 )}
               </DialogDescription>
             </DialogHeader>
@@ -1229,12 +1187,12 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                 onClick={() => setDeleteDialog({ open: false, id: "", name: "" })}
                 disabled={deleting}
               >
-                {isEnglish ? "Cancel" : "Cancelar"}
+                {t.common.cancel}
               </Button>
               <Button variant="destructive" onClick={handleConfirmDelete} disabled={deleting}>
                 {deleting
-                  ? (isEnglish ? "Deleting..." : "Deletando...")
-                  : (isEnglish ? "Delete" : "Deletar")}
+                  ? (t.common.deleting)
+                  : (t.common.delete)}
               </Button>
             </DialogFooter>
           </DialogContent>

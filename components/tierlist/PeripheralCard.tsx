@@ -3,7 +3,6 @@
 import Link from "next/link"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useLocale } from "@/components/providers/locale-context"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { cn } from "@/lib/utils"
 import { CARD_TAG_STYLES, CARD_TIER_STYLES, TIER_THEMES } from "@/lib/tierlist-theme"
@@ -35,8 +34,6 @@ interface PeripheralCardProps {
 }
 
 export function PeripheralCard({ ...item }: PeripheralCardProps) {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
   const tierStyle = item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L
   const tierTheme = item.tier ? TIER_THEMES[item.tier] : TIER_THEMES.L
   const primaryTag = item.tags[0]
@@ -112,7 +109,6 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
             tier={item.tier}
             ratings={item.ratings ?? {}}
             tags={item.tags}
-            isEnglish={isEnglish}
           />
         </Link>
       </TooltipContent>

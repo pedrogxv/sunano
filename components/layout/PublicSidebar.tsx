@@ -23,9 +23,10 @@ import { useEffect, useState } from "react"
 
 import { AuthUser } from "@/components/auth/auth-user"
 import { Button } from "@/components/ui/button"
+import { SunanoLogo } from "@/components/ui/SunanoLogo"
 import { useSidebar } from "@/components/providers/sidebar-context"
-import { useLocale } from "@/components/providers/locale-context"
 import { useCart } from "@/components/providers/cart-context"
+import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 
 type NavItem = {
@@ -74,19 +75,20 @@ function NavLink({
 }
 
 export function PublicSidebar() {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const { publicCollapsed: isCollapsed, isMobileOpen, setMobileOpen } = useSidebar()
   const pathname = usePathname()
   const { count: cartCount, setOpen: openCart } = useCart()
 
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdminLoading, setIsAdminLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
     fetch("/api/admin/profile")
       .then((res) => { if (mounted) setIsAdmin(res.ok) })
       .catch(() => { if (mounted) setIsAdmin(false) })
+      .finally(() => { if (mounted) setIsAdminLoading(false) })
     return () => { mounted = false }
   }, [])
 
@@ -95,16 +97,16 @@ export function PublicSidebar() {
     href === "/" ? pathname === "/" : pathname?.startsWith(href)
 
   const peripheralItems: NavItem[] = [
-    { href: "/tierlist",    label: "Tierlist",                            icon: Trophy },
-    { href: "/perifericos", label: isEnglish ? "Peripherals" : "Periféricos", icon: Mouse },
-    { href: "/ranking",     label: "Ranking",                             icon: BarChart2 },
+    { href: "/tierlist",    label: "Tierlist",           icon: Trophy },
+    { href: "/perifericos", label: t.nav.peripherals,    icon: Mouse },
+    { href: "/ranking",     label: "Ranking",            icon: BarChart2 },
   ]
 
   const contentItems: NavItem[] = [
-    { href: "/noticias", label: isEnglish ? "News" : "Notícias", icon: Newspaper },
-    { href: "/blog",     label: "Reviews",                        icon: BookOpen },
-    { href: "/videos",   label: isEnglish ? "Videos" : "Vídeos", icon: PlaySquare },
-    { href: "/forum",    label: isEnglish ? "Forum" : "Fórum",   icon: MessageCircle },
+    { href: "/noticias", label: t.nav.news,    icon: Newspaper },
+    { href: "/blog",     label: "Reviews",     icon: BookOpen },
+    { href: "/videos",   label: t.nav.videos,  icon: PlaySquare },
+    { href: "/forum",    label: t.nav.forum,   icon: MessageCircle },
   ]
 
   return (
@@ -130,29 +132,23 @@ export function PublicSidebar() {
             href="/"
             onClick={close}
             className={cn(
-              "flex items-center gap-3 pb-6",
-              isCollapsed && "justify-center"
+              "flex pb-6",
+              isCollapsed ? "justify-center" : "items-center"
             )}
           >
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground shadow-lg shadow-black/20">
-              S
-            </div>
-            <div className={cn("flex flex-col", isCollapsed && "hidden")}>
-              <span className="text-sm font-semibold tracking-tight text-foreground">Sunano</span>
-              <span className="text-[9px] font-medium uppercase tracking-widest text-muted-foreground">Tierlist</span>
-            </div>
+            <SunanoLogo showText={!isCollapsed} subtitle="Tierlist" />
           </Link>
 
           {/* Início */}
           <NavLink
-            item={{ href: "/", label: isEnglish ? "Home" : "Início", icon: Home }}
+            item={{ href: "/", label: t.nav.home, icon: Home }}
             isActive={pathname === "/"}
             collapsed={isCollapsed}
             onClick={close}
           />
 
           {/* Periféricos */}
-          <SectionLabel label={isEnglish ? "Peripherals" : "Periféricos"} collapsed={isCollapsed} />
+          <SectionLabel label={t.nav.peripherals} collapsed={isCollapsed} />
           <div className="space-y-1">
             {peripheralItems.map((item) => (
               <NavLink
@@ -166,7 +162,7 @@ export function PublicSidebar() {
           </div>
 
           {/* Conteúdo */}
-          <SectionLabel label={isEnglish ? "Content" : "Conteúdo"} collapsed={isCollapsed} />
+          <SectionLabel label={t.nav.content} collapsed={isCollapsed} />
           <div className="space-y-1">
             {contentItems.map((item) => (
               <NavLink
@@ -180,7 +176,7 @@ export function PublicSidebar() {
           </div>
 
           {/* Loja */}
-          <SectionLabel label={isEnglish ? "Shop" : "Loja"} collapsed={isCollapsed} />
+          <SectionLabel label={t.nav.shop} collapsed={isCollapsed} />
           <div className="space-y-1">
             {/* Loja */}
             <Link
@@ -196,7 +192,7 @@ export function PublicSidebar() {
             >
               <ShoppingBag className="size-[18px] shrink-0" />
               <span className={cn("flex-1", isCollapsed && "hidden")}>
-                {isEnglish ? "Store" : "Loja"}
+                {t.nav.store}
               </span>
               {cartCount > 0 && (
                 <button
@@ -232,14 +228,14 @@ export function PublicSidebar() {
                   "rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
                   isActive("/bazar") ? "bg-white/20 text-white" : "bg-amber-500/20 text-amber-400"
                 )}>
-                  {isEnglish ? "Used" : "Usado"}
+                  {t.nav.used}
                 </span>
               )}
             </Link>
 
             {/* Ofertas */}
             <NavLink
-              item={{ href: "/offers", label: isEnglish ? "Offers" : "Ofertas", icon: BadgePercent }}
+              item={{ href: "/offers", label: t.nav.offers, icon: BadgePercent }}
               isActive={isActive("/offers")}
               collapsed={isCollapsed}
               onClick={close}
@@ -247,8 +243,17 @@ export function PublicSidebar() {
           </div>
         </nav>
 
-        {/* Changelog — visível apenas para admins */}
-        {isAdmin && (
+        {/* Changelog — visível apenas para admins; shimmer enquanto carrega */}
+        {isAdminLoading ? (
+          <div className="border-t border-border px-3 py-3">
+            <div
+              className={cn(
+                "h-10 rounded-lg bg-muted/30 animate-pulse",
+                isCollapsed ? "w-10 mx-auto" : "w-full"
+              )}
+            />
+          </div>
+        ) : isAdmin ? (
           <div className="border-t border-border px-3 py-3">
             <NavLink
               item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
@@ -257,12 +262,33 @@ export function PublicSidebar() {
               onClick={close}
             />
           </div>
-        )}
+        ) : null}
 
         {/* User */}
         <div className="border-t border-border px-3 py-2">
-          <AuthUser isCollapsed={isCollapsed} loginHref="/login" />
+          <AuthUser isCollapsed={isCollapsed} loginHref="/login" variant="public" />
         </div>
+
+        {/* Links legais — ocultos quando colapsado */}
+        {!isCollapsed && (
+          <div className="border-t border-border/50 px-3 py-2">
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              <Link
+                href="/privacidade"
+                className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                Privacidade
+              </Link>
+              <Link
+                href="/termos"
+                className="text-[10px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+              >
+                Termos
+              </Link>
+              <span className="text-[10px] text-muted-foreground/30">LGPD</span>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Mobile toggle */}

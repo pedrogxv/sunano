@@ -7,6 +7,7 @@ import Link from "next/link"
 
 import { loginUserAction } from "@/app/login/actions"
 import { forgotPasswordAction } from "@/app/forgot-password/actions"
+import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -115,6 +116,7 @@ export function UserLoginForm() {
   return (
     <div className="space-y-5">
       <GoogleAuthButton label="Continuar com Google" next="/forum" />
+      <DiscordAuthButton label="Continuar com Discord" next="/forum" />
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">

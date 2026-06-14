@@ -9,6 +9,7 @@ import { SearchComponent, type SearchItem } from "@/components/ui/search-bar"
 import { GlassBlogCard } from "@/components/ui/glass-blog-card-shadcnui"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
 import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 
 type BlogPost = {
   id: string
@@ -30,13 +31,18 @@ function getDefaultAuthorName(email: string | null | undefined) {
   return localPart || null
 }
 
-function getArticleMeta(post: BlogPost, locale: "pt-BR" | "en-US") {
+function getArticleMeta(
+  post: BlogPost,
+  locale: "pt-BR" | "en-US",
+  articleOnBlog: string,
+  tagBlog: string,
+  minRead: (count: number) => string,
+) {
   const relatedPeripheral = Array.isArray(post.peripherals) ? post.peripherals[0] ?? null : null
-  const isEnglish = locale === "en-US"
 
   return {
     title: post.title,
-    excerpt: post.excerpt ?? relatedPeripheral?.name ?? (isEnglish ? "Article published on the blog" : "Artigo publicado no blog"),
+    excerpt: post.excerpt ?? relatedPeripheral?.name ?? articleOnBlog,
     image: getBlogImageWithFallback(post.cover_thumbnail_url, post.cover_image_url, "thumbnail"),
     author: {
       name:
@@ -50,14 +56,14 @@ function getArticleMeta(post: BlogPost, locale: "pt-BR" | "en-US") {
       month: "short",
       year: "numeric",
     }),
-    readTime: `${Math.max(1, post.read_time_minutes ?? 1)} min read`,
-    tags: [relatedPeripheral?.brand ?? "Blog"].filter(Boolean),
+    readTime: minRead(Math.max(1, post.read_time_minutes ?? 1)),
+    tags: [relatedPeripheral?.brand ?? tagBlog].filter(Boolean),
   }
 }
 
 function BlogPageContent() {
   const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const searchParams = useSearchParams()
   const peripheralFilter = searchParams.get("peripheral")
 
@@ -87,7 +93,7 @@ function BlogPageContent() {
       const data = await res.json().catch(() => null)
 
       if (!res.ok || !data?.posts) {
-        throw new Error(data?.error ?? "Erro ao carregar posts")
+        throw new Error(data?.error ?? t.blog.failedToLoad)
       }
 
       const normalizedPosts = (data.posts as Array<Partial<BlogPost>>).map((post) => ({
@@ -123,12 +129,12 @@ function BlogPageContent() {
       return {
         id: post.id,
         title: post.title,
-        description: post.excerpt ?? relatedPeripheral?.name ?? (isEnglish ? "Article published on the blog" : "Artigo publicado no blog"),
-        tags: [relatedPeripheral?.brand ?? "Blog"].filter(Boolean),
-        creator: relatedPeripheral?.brand ?? "Blog",
+        description: post.excerpt ?? relatedPeripheral?.name ?? t.blog.articleOnBlog,
+        tags: [relatedPeripheral?.brand ?? t.blog.tagBlog].filter(Boolean),
+        creator: relatedPeripheral?.brand ?? t.blog.tagBlog,
       }
     })
-  }, [posts])
+  }, [posts, t.blog.articleOnBlog, t.blog.tagBlog])
 
   const currentPosts = filteredPosts
 
@@ -138,20 +144,18 @@ function BlogPageContent() {
       <div className="space-y-4">
         <div>
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-            Reviews
+            {t.blog.title}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {isEnglish
-              ? "Articles, full reviews, and detailed analysis of tierlist peripherals."
-              : "Artigos, reviews completos e analises detalhadas dos periféricos da tierlist."}
+            {t.blog.subtitle}
           </p>
         </div>
       </div>
 
       <SearchComponent
         data={searchData}
-        placeholder={isEnglish ? "Search blog..." : "Buscar no blog..."}
-        label="Sort by"
+        placeholder={t.blog.searchPlaceholder}
+        label={t.blog.sortLabel}
         onFilteredDataChange={handleFilteredDataChange}
       />
 
@@ -162,15 +166,15 @@ function BlogPageContent() {
         </div>
       ) :currentPosts.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-10 text-center">
-          <p className="text-muted-foreground">{isEnglish ? "No articles found." : "Nenhum artigo encontrado."}</p>
+          <p className="text-muted-foreground">{t.blog.noArticles}</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            {isEnglish ? "New reviews and analysis will be published soon." : "Novos reviews e analises serao publicados em breve."}
+            {t.blog.comingSoon}
           </p>
         </div>
       ) : (
         <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {currentPosts.map((post) => {
-            const meta = getArticleMeta(post, locale)
+            const meta = getArticleMeta(post, locale, t.blog.articleOnBlog, t.blog.tagBlog, t.blog.minRead)
 
             return (
               <Link key={post.id} href={`/blog/${post.slug}`} className="block">
@@ -194,13 +198,15 @@ function BlogPageContent() {
 }
 
 export default function BlogPage() {
+  const t = useT()
+
   return (
     <Suspense
       fallback={
         <div className="min-h-screen bg-background flex items-center justify-center">
           <div className="flex items-center gap-3 text-muted-foreground">
             <div className="size-5 animate-spin rounded-full border-2 border-border border-t-primary" />
-            <span>Loading blog...</span>
+            <span>{t.blog.loading}</span>
           </div>
         </div>
       }

@@ -44,11 +44,41 @@ export type Database = {
           neighborhood: string | null
           city: string | null
           state: string | null
+          theme: string | null
+          locale: string | null
+          lgpd_consent_at: string | null
+          lgpd_consent_version: string | null
           created_at: string
           updated_at: string
         }
         Insert: Omit<Database["public"]["Tables"]["user_profiles"]["Row"], "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>
+      }
+      audit_log: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string | null
+          actor_id: string | null
+          action: string
+          table_name: string | null
+          record_id: string | null
+          metadata: Record<string, unknown>
+          ip_address: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          actor_id?: string | null
+          action: string
+          table_name?: string | null
+          record_id?: string | null
+          metadata?: Record<string, unknown>
+          ip_address?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["audit_log"]["Insert"]>
       }
       blog_posts: {
         Relationships: []
@@ -263,6 +293,10 @@ export type Database = {
     Functions: {
       decrement_store_stock: {
         Args: { p_product_id: string; p_quantity: number }
+        Returns: undefined
+      }
+      anonymize_user_data: {
+        Args: { p_user_id: string }
         Returns: undefined
       }
     }

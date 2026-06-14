@@ -1,13 +1,17 @@
 "use server"
 
+import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import {
   upsertUserProfileOnSignup,
+  recordLgpdConsent,
   type PurchaseProfileInput,
 } from "@/lib/server/repositories/users-repository"
 
 export type RegisterState = { error: string | null; needsConfirmation?: boolean }
+
+const LGPD_POLICY_VERSION = "2026-06"
 
 function clean(value: FormDataEntryValue | null): string {
   return String(value ?? "").trim()
@@ -26,6 +30,11 @@ export async function registerUserAction(
   const password = String(formData.get("password") || "")
   const confirmPassword = String(formData.get("confirm_password") || "")
   const displayName = clean(formData.get("display_name"))
+  const lgpdConsent = formData.get("lgpd_consent") === "on"
+
+  if (!lgpdConsent) {
+    return { error: "lgpd_consent_required" }
+  }
 
   if (!email || !password || !displayName) {
     return { error: "missing_fields" }
@@ -51,6 +60,14 @@ export async function registerUserAction(
     state: optional(formData.get("state")),
   }
 
+  const headersList = await headers()
+  const ipAddress =
+    headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    headersList.get("x-real-ip") ??
+    null
+
+  const consentAt = new Date().toISOString()
+
   const supabase = await createSupabaseServerClient()
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -59,7 +76,6 @@ export async function registerUserAction(
   })
 
   if (error) {
-    // Supabase sinaliza email já cadastrado de formas diferentes; tratamos o caso comum.
     if (/already registered|already exists|User already/i.test(error.message)) {
       return { error: "email_in_use" }
     }
@@ -70,11 +86,22 @@ export async function registerUserAction(
     return { error: "signup_failed" }
   }
 
-  // Cria o perfil (com dados de compra, se informados). Usa o id do usuário
-  // criado — funciona mesmo quando a confirmação de email está habilitada.
-  await upsertUserProfileOnSignup({ id: data.user.id, displayName, purchase })
+  // Cria o perfil com o registro de consentimento LGPD.
+  await upsertUserProfileOnSignup({
+    id: data.user.id,
+    displayName,
+    purchase,
+    lgpdConsentAt: consentAt,
+    lgpdConsentVersion: LGPD_POLICY_VERSION,
+  })
 
-  // Sem sessão = confirmação de email habilitada no projeto Supabase.
+  // Registra o consentimento no audit_log.
+  await recordLgpdConsent({
+    userId: data.user.id,
+    version: LGPD_POLICY_VERSION,
+    ipAddress,
+  })
+
   if (!data.session) {
     return { error: null, needsConfirmation: true }
   }

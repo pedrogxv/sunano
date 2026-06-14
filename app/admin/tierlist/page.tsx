@@ -33,6 +33,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 import {
   CARD_TAG_STYLES,
   CARD_TIER_STYLES,
@@ -99,7 +100,7 @@ const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
 ]
 
 // Labels específicos por categoria para MOUSEPAD e GLASSPAD
-function getRatingModeLabel(mode: RatingMode, category: string, isEnglish: boolean): string {
+function getRatingModeLabel(mode: RatingMode, category: string, locale: string): string {
   if (category === "mousepad" || category === "glasspad") {
     if (mode === "performance") return "Geral"
     if (mode === "value") return "Nacional"
@@ -111,7 +112,7 @@ function getRatingModeLabel(mode: RatingMode, category: string, isEnglish: boole
   }
 
   const mode_obj = RATING_MODES.find(m => m.key === mode)
-  return isEnglish ? (mode_obj?.en || "") : (mode_obj?.pt || "")
+  return locale === "en-US" ? (mode_obj?.en || "") : (mode_obj?.pt || "")
 }
 
 type PriceBand = "all" | "budget" | "mid" | "premium"
@@ -128,8 +129,6 @@ const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
 }
 
 type ModeConfig = {
-  enDescription: string
-  ptDescription: string
   // Optional filter — only OLED mode narrows the item set.
   filterItem?: (item: Peripheral) => boolean
   fallbackSort: (items: Peripheral[]) => Peripheral[]
@@ -242,40 +241,18 @@ function sortByTierThenName(items: Peripheral[], orderKey: string, allowLegacyFa
   })
 }
 
-function getTierSubtitle(tier: Tier, isEnglish: boolean) {
-  if (isEnglish) return ""
-  const subtitles: Record<Tier, string> = {
-    GOAT: "Simplesmente",
-    SS: "Excepcional",
-    S: "Muito bom",
-    A: "Bom",
-    B: "Decente",
-    C: "Usável",
-    L: "Veio Podi",
-  }
-  return subtitles[tier]
-}
-
 const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
   performance: {
-    enDescription: "Sorted by pure performance",
-    ptDescription: "Ordenado por desempenho puro",
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   value: {
-    enDescription: "Sorted by price",
-    ptDescription: "Ordenado por preço",
     fallbackSort: (items) => [...items].sort((left, right) => left.price - right.price || left.name.localeCompare(right.name)),
   },
   recommended: {
-    enDescription: "Suggested picks by Sunano, prioritizing overall balance",
-    ptDescription: "Escolhas sugeridas por Sunano, priorizando equilibrio geral",
     fallbackSort: (items) =>
       [...items].sort((left, right) => getRecommendedScore(right) - getRecommendedScore(left) || left.name.localeCompare(right.name)),
   },
   oled: {
-    enDescription: "Show only OLED panels",
-    ptDescription: "Apenas painéis OLED",
     filterItem: (item) => {
       const spec = item.specs?.panelType
       return typeof spec === "string" && spec.toLowerCase().includes("oled")
@@ -283,23 +260,15 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   soundTyping: {
-    enDescription: "Sorted by sound and typing feel",
-    ptDescription: "Ordenado por som e digitação",
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   mechanical: {
-    enDescription: "Sorted by mechanical performance",
-    ptDescription: "Ordenado por desempenho puro",
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   magnetic: {
-    enDescription: "Sorted by magnetic performance",
-    ptDescription: "Ordenado por desempenho magnético",
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   pcb: {
-    enDescription: "Sorted by PCB performance",
-    ptDescription: "Ordenado por desempenho PCB",
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
 }
@@ -325,8 +294,6 @@ function DraggablePeripheralCard({
   onDelete: (id: string) => void
   disableTooltip?: boolean
 }) {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
   const { attributes, listeners, setNodeRef: setDragNodeRef, isDragging } = useDraggable({ id: item.id })
   const tierStyle = item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L
 
@@ -411,7 +378,6 @@ function DraggablePeripheralCard({
           tier={item.tier}
           ratings={extractRatings(item)}
           tags={item.tags}
-          isEnglish={isEnglish}
         />
       </TooltipContent>
     </Tooltip>
@@ -547,8 +513,7 @@ function DroppableUnassignedPool({
   isDragging: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: "unassigned-pool" })
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
 
   return (
     <div
@@ -581,10 +546,10 @@ function DroppableUnassignedPool({
             )}
           >
             {isOver
-              ? (isEnglish ? "Release to remove tier" : "Solte para remover o tier")
+              ? t.admin.tierlistPage.releaseToRemove
               : isDragging
-                ? (isEnglish ? "Drop here to remove tier" : "Solte aqui para remover o tier")
-                : (isEnglish ? "No peripherals without tier" : "Nenhum periférico Sob Revisão")}
+                ? t.admin.tierlistPage.dropHereRemove
+                : t.admin.tierlistPage.noUnassigned}
           </p>
         </div>
       )}
@@ -595,7 +560,7 @@ function DroppableUnassignedPool({
 
 export default function AdminPeripheralsPage() {
   const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const [peripherals, setPeripherals] = useState<Peripheral[]>([])
   const [selectedCategory, setSelectedCategory] = useState<Category>("keyboard")
   const [query, setQuery] = useState("")
@@ -754,11 +719,11 @@ export default function AdminPeripheralsPage() {
 
         if (!res.ok) {
           const data = (await res.json().catch(() => null)) as { error?: string } | null
-          throw new Error(data?.error ?? (isEnglish ? "Failed to update order" : "Erro ao atualizar ordem"))
+          throw new Error(data?.error ?? t.admin.tierlistPage.failedToUpdateOrder)
         }
       }),
     )
-  }, [isEnglish])
+  }, [t])
 
   const loadPeripherals = useCallback(async () => {
     try {
@@ -767,17 +732,17 @@ export default function AdminPeripheralsPage() {
       const res = await fetch("/api/admin/peripherals", { cache: "no-store" })
       const data = (await res.json().catch(() => null)) as { peripherals?: Peripheral[]; error?: string } | null
       if (!res.ok || !data?.peripherals) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to load" : "Erro ao carregar"))
+        throw new Error(data?.error ?? t.admin.tierlistPage.failedToLoad)
       }
       setPeripherals(data.peripherals)
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to load" : "Erro ao carregar")
+      const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToLoad
       setError(message)
-      toast.error(isEnglish ? "Failed to load peripherals" : "Erro ao carregar periféricos", { description: message })
+      toast.error(t.admin.tierlistPage.failedToLoadPeripherals, { description: message })
     } finally {
       setLoading(false)
     }
-  }, [isEnglish])
+  }, [t])
 
   useEffect(() => {
     loadPeripherals()
@@ -886,14 +851,14 @@ export default function AdminPeripheralsPage() {
 
       try {
         await persistReorderedItems(previousPeripherals, nextPeripherals, orderKey, allowLegacyFallback)
-        toast.success(isEnglish ? "Order updated" : "Ordem atualizada", {
+        toast.success(t.admin.tierlistPage.orderUpdated, {
           description: draggedItem.name,
         })
       } catch (err) {
         setPeripherals(previousPeripherals)
-        const message = err instanceof Error ? err.message : (isEnglish ? "Failed to update" : "Erro ao atualizar")
+        const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdate
         setError(message)
-        toast.error(isEnglish ? "Failed to update peripheral order" : "Erro ao atualizar ordem dos periféricos", { description: message })
+        toast.error(t.admin.tierlistPage.failedToUpdateOrderDesc, { description: message })
       }
 
       return
@@ -915,14 +880,14 @@ export default function AdminPeripheralsPage() {
 
       try {
         await persistReorderedItems(previousPeripherals, nextPeripherals, orderKey, allowLegacyFallback)
-        toast.success(isEnglish ? "Tier removed" : "Tier removido", {
+        toast.success(t.admin.tierlistPage.tierRemoved, {
           description: draggedItem.name,
         })
       } catch (err) {
         setPeripherals(previousPeripherals)
-        const message = err instanceof Error ? err.message : (isEnglish ? "Failed to update" : "Erro ao atualizar")
+        const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdate
         setError(message)
-        toast.error(isEnglish ? "Failed to update peripheral" : "Erro ao atualizar periférico", { description: message })
+        toast.error(t.admin.tierlistPage.failedToUpdatePeripheral, { description: message })
       }
 
       return
@@ -947,14 +912,14 @@ export default function AdminPeripheralsPage() {
 
     try {
       await persistReorderedItems(previousPeripherals, nextPeripherals, orderKey, allowLegacyFallback)
-      toast.success(isEnglish ? `Moved to tier ${newTier}` : `Movido para tier ${newTier}`, {
+      toast.success(t.admin.tierlistPage.movedToTier(newTier), {
         description: draggedItem.name,
       })
     } catch (err) {
       setPeripherals(previousPeripherals)
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to update" : "Erro ao atualizar")
+      const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdate
       setError(message)
-      toast.error(isEnglish ? "Failed to update peripheral" : "Erro ao atualizar periférico", { description: message })
+      toast.error(t.admin.tierlistPage.failedToUpdatePeripheral, { description: message })
     }
   }
 
@@ -967,16 +932,16 @@ export default function AdminPeripheralsPage() {
       setDeleting(true)
       const res = await fetch(`/api/admin/peripherals/${deleteDialog.id}`, { method: "DELETE" })
       const data = (await res.json().catch(() => null)) as { error?: string } | null
-      if (!res.ok) throw new Error(data?.error ?? (isEnglish ? "Failed to delete" : "Erro ao deletar"))
+      if (!res.ok) throw new Error(data?.error ?? t.peripherals.delete.failed)
       setPeripherals(peripherals.filter((p) => p.id !== deleteDialog.id))
       setDeleteDialog({ open: false, id: "" })
-      toast.success(isEnglish ? "Peripheral deleted" : "Periférico deletado", {
+      toast.success(t.peripherals.delete.success, {
         description: deletedItem?.name,
       })
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to delete" : "Erro ao deletar")
+      const message = err instanceof Error ? err.message : t.peripherals.delete.failed
       setError(message)
-      toast.error(isEnglish ? "Failed to delete peripheral" : "Erro ao deletar periférico", { description: message })
+      toast.error(t.peripherals.delete.error, { description: message })
     } finally {
       setDeleting(false)
     }
@@ -984,14 +949,14 @@ export default function AdminPeripheralsPage() {
 
   const selectedCategoryMeta = CATEGORY_META.find((c) => c.key === selectedCategory)
   const categoryLabel = selectedCategory === "all"
-    ? (isEnglish ? "All" : "Geral")
+    ? t.common.all
     : selectedCategoryMeta
-      ? (isEnglish ? selectedCategoryMeta.en : selectedCategoryMeta.pt)
+      ? (locale === "en-US" ? selectedCategoryMeta.en : selectedCategoryMeta.pt)
       : "Tierlist"
 
   usePageHeader(
     `Admin Tierlist - ${categoryLabel}`,
-    isEnglish ? "Drag and drop to reorder. Click to edit." : "Arraste e solte para reorganizar. Clique para editar."
+    t.admin.tierlistPage.dragAndDropHint
   )
 
   const availableBrands = useMemo(() => {
@@ -1063,7 +1028,7 @@ export default function AdminPeripheralsPage() {
   const unassignedItems = filtered.filter((item) => item.tier === null)
   const activeItem = activeId ? peripherals.find((p) => p.id === activeId) ?? null : null
   const modeConfig = MODE_CONFIGS[ratingMode]
-  const modeDescription = isEnglish ? modeConfig.enDescription : modeConfig.ptDescription
+  const modeDescription = t.admin.tierlistPage.modeDescriptions[ratingMode]
 
   const itemsByTier = useMemo(
     () =>
@@ -1099,7 +1064,7 @@ export default function AdminPeripheralsPage() {
         <Link href="/admin/tierlist/new">
           <Button className="gap-2">
             <Plus className="size-4" />
-            {isEnglish ? "New Peripheral" : "Novo Periférico"}
+            {t.admin.tierlistPage.newPeripheral}
           </Button>
         </Link>
       </div>
@@ -1130,7 +1095,7 @@ export default function AdminPeripheralsPage() {
 
       <div className="flex flex-col gap-4 rounded-xl border border-white/[0.08] bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-xs font-medium text-slate-500">{isEnglish ? "You are viewing the tierlist sorted by:" : "Voce esta vendo a tierlist ordenada por:"}</p>
+          <p className="text-xs font-medium text-slate-500">{t.tierlist.viewingBy}</p>
           <p className="mt-0.5 text-sm font-semibold text-slate-100">{modeDescription}</p>
         </div>
         <div className="flex rounded-lg border border-white/[0.1] bg-white/[0.02] p-1">
@@ -1150,7 +1115,7 @@ export default function AdminPeripheralsPage() {
                 : "text-slate-400 hover:bg-white/[0.05] hover:text-slate-200"
                 }`}
             >
-              {getRatingModeLabel(mode.key, selectedCategory, isEnglish)}
+              {getRatingModeLabel(mode.key, selectedCategory, locale)}
             </button>
           ))}
         </div>
@@ -1180,9 +1145,9 @@ export default function AdminPeripheralsPage() {
               >
                 <div className={`flex flex-col items-center justify-center bg-gradient-to-b ${tierRow.accent} text-2xl font-black ${tierRow.textColor}`}>
                   {tierRow.label}
-                  {getTierSubtitle(tierRow.key, isEnglish) && (
+                  {t.tierlist.tierSubtitles[tierRow.key] && (
                     <span className="text-[10px] font-medium opacity-80">
-                      {getTierSubtitle(tierRow.key, isEnglish)}
+                      {t.tierlist.tierSubtitles[tierRow.key]}
                     </span>
                   )}
                 </div>
@@ -1211,18 +1176,18 @@ export default function AdminPeripheralsPage() {
                 {unassignedItems.length > 0 && <AlertCircle className="size-4 text-amber-400" />}
                 <div>
                   <p className={cn("text-sm font-semibold", unassignedItems.length > 0 ? "text-amber-300" : "text-slate-400")}>
-                    {isEnglish ? "Under Review peripherals" : "Periféricos Sob Revisão"}
+                    {t.admin.tierlistPage.underReviewPeripherals}
                   </p>
                   <p className="text-xs text-slate-500">
                     {unassignedItems.length > 0
-                      ? (isEnglish ? "Drag to a tier row to rank them" : "Arraste para um tier para ranqueá-los")
-                      : (isEnglish ? "Drop a peripheral here to remove its tier" : "Solte um periférico aqui para remover o tier")}
+                      ? t.admin.tierlistPage.dragToTierDesc
+                      : t.admin.tierlistPage.dropToRemoveDesc}
                   </p>
                 </div>
               </div>
               {unassignedItems.length > 0 && (
                 <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-400">
-                  {unassignedItems.length} {isEnglish ? "items" : "itens"}
+                  {t.admin.tierlistPage.itemsCount(unassignedItems.length)}
                 </span>
               )}
             </div>
@@ -1243,9 +1208,9 @@ export default function AdminPeripheralsPage() {
       <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>
         <DialogContent className="border border-white/[0.12] bg-[#0a0e17]/95">
           <DialogHeader>
-            <DialogTitle>{isEnglish ? "Delete Peripheral?" : "Deletar Periférico?"}</DialogTitle>
+            <DialogTitle>{t.peripherals.delete.title}</DialogTitle>
             <DialogDescription>
-              {isEnglish ? "This action cannot be undone." : "Esta ação não pode ser desfeita."}
+              {t.peripherals.delete.cannotUndo}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -1254,14 +1219,14 @@ export default function AdminPeripheralsPage() {
               onClick={() => setDeleteDialog({ open: false, id: "" })}
               disabled={deleting}
             >
-              {isEnglish ? "Cancel" : "Cancelar"}
+              {t.common.cancel}
             </Button>
             <Button
               variant="destructive"
               onClick={confirmDelete}
               disabled={deleting}
             >
-              {deleting ? (isEnglish ? "Deleting..." : "Deletando...") : (isEnglish ? "Delete" : "Deletar")}
+              {deleting ? t.common.deleting : t.common.delete}
             </Button>
           </DialogFooter>
         </DialogContent>

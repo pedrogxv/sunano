@@ -1,6 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
+import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isAdminUser, upsertUserProfileFromAuth } from "@/lib/server/repositories/users-repository"
 
@@ -35,11 +36,16 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
   })
 
   // Admins vão para o painel; demais usuários para o fórum.
-  if (await isAdminUser(authData.user.id)) {
-    redirect("/admin")
+  const destination = (await isAdminUser(authData.user.id)) ? "/admin" : "/forum"
+
+  // 2FA ativo: a sessão nasce em aal1 e precisa concluir o segundo fator
+  // antes de acessar qualquer coisa. Manda direto para a verificação.
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
+    redirect(`/2fa?next=${encodeURIComponent(destination)}`)
   }
 
-  redirect("/forum")
+  redirect(destination)
 }
 
 export async function logoutUserAction() {

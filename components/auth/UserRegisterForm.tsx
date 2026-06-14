@@ -4,9 +4,9 @@ import { useState } from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import Link from "next/link"
-import { ChevronDown, ShoppingBag } from "lucide-react"
 
 import { registerUserAction, type RegisterState } from "@/app/register/actions"
+import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,6 +18,7 @@ const REGISTER_ERRORS: Record<string, string> = {
   password_mismatch: "As senhas não coincidem.",
   email_in_use: "Já existe uma conta com este email.",
   signup_failed: "Não foi possível concluir o cadastro. Tente novamente.",
+  lgpd_consent_required: "Você precisa aceitar a Política de Privacidade para criar uma conta.",
 }
 
 const initialState: RegisterState = { error: null }
@@ -50,6 +51,7 @@ function Field({
 export function UserRegisterForm() {
   const [state, action] = useActionState(registerUserAction, initialState)
   const [showPurchase, setShowPurchase] = useState(false)
+  const [lgpdConsent, setLgpdConsent] = useState(false)
 
   const errorMessage = state.error ? (REGISTER_ERRORS[state.error] ?? state.error) : null
 
@@ -69,6 +71,7 @@ export function UserRegisterForm() {
   return (
     <div className="space-y-5">
       <GoogleAuthButton label="Cadastrar com Google" next="/forum" />
+      <DiscordAuthButton label="Cadastrar com Discord" next="/forum" />
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
@@ -113,59 +116,39 @@ export function UserRegisterForm() {
           required
         />
 
-        {/* Seção opcional: dados para compras (cadastro completo) */}
-        <div className="rounded-xl border border-border bg-muted/10">
-          <button
-            type="button"
-            onClick={() => setShowPurchase((v) => !v)}
-            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-          >
-            <span className="flex items-center gap-2.5">
-              <ShoppingBag className="size-4 text-primary" />
-              <span className="text-sm font-medium text-foreground">
-                Quero comprar na loja
-              </span>
-            </span>
-            <ChevronDown
-              className={cn(
-                "size-4 text-muted-foreground transition-transform",
-                showPurchase && "rotate-180"
-              )}
-            />
-          </button>
-
-          {showPurchase && (
-            <div className="space-y-4 border-t border-border px-4 pb-4 pt-4">
-              <p className="text-xs text-muted-foreground">
-                Opcional. Preencha para deixar seus dados de compra prontos. Você também
-                pode completar depois, na hora de comprar.
-              </p>
-              <Field
-                id="full_name"
-                label="Nome completo"
-                type="text"
-                autoComplete="name"
-                placeholder="Seu nome completo"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <Field id="cpf" label="CPF" type="text" inputMode="numeric" placeholder="000.000.000-00" />
-                <Field id="phone" label="Telefone" type="tel" autoComplete="tel" placeholder="(00) 00000-0000" />
-              </div>
-              <div className="grid grid-cols-[1fr_1fr] gap-3">
-                <Field id="postal_code" label="CEP" type="text" inputMode="numeric" placeholder="00000-000" autoComplete="postal-code" />
-                <Field id="state" label="Estado (UF)" type="text" maxLength={2} placeholder="SP" autoComplete="address-level1" />
-              </div>
-              <Field id="street" label="Rua / Logradouro" type="text" autoComplete="address-line1" placeholder="Av. Exemplo" />
-              <div className="grid grid-cols-[1fr_1.4fr] gap-3">
-                <Field id="number" label="Número" type="text" placeholder="123" />
-                <Field id="complement" label="Complemento" type="text" placeholder="Apto, bloco…" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Field id="neighborhood" label="Bairro" type="text" placeholder="Centro" />
-                <Field id="city" label="Cidade" type="text" autoComplete="address-level2" placeholder="São Paulo" />
-              </div>
-            </div>
-          )}
+        {/* Consentimento LGPD — obrigatório */}
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/10 px-4 py-3">
+          <input
+            id="lgpd_consent"
+            name="lgpd_consent"
+            type="checkbox"
+            required
+            checked={lgpdConsent}
+            onChange={(e) => setLgpdConsent(e.target.checked)}
+            className="mt-0.5 size-4 shrink-0 accent-primary"
+          />
+          <label htmlFor="lgpd_consent" className="cursor-pointer text-xs leading-relaxed text-muted-foreground">
+            Li e aceito a{" "}
+            <Link
+              href="/privacidade"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              Política de Privacidade
+            </Link>{" "}
+            e os{" "}
+            <Link
+              href="/termos"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              Termos de Uso
+            </Link>
+            . Concordo com o tratamento dos meus dados conforme a LGPD (Lei 13.709/2018).
+            <span className="ml-1 text-red-400">*</span>
+          </label>
         </div>
 
         {errorMessage && (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isAdminUser, upsertUserProfileFromAuth } from "@/lib/server/repositories/users-repository"
 
@@ -70,9 +71,17 @@ export async function GET(request: NextRequest) {
     })
 
     // Admins são redirecionados ao painel.
-    if (next === "/forum" && (await isAdminUser(authData.user.id))) {
-      return NextResponse.redirect(`${origin}/admin`)
+    const destination =
+      next === "/forum" && (await isAdminUser(authData.user.id)) ? "/admin" : next
+
+    // 2FA ativo: a sessão OAuth também nasce em aal1. Exige o segundo fator
+    // antes de seguir para o destino.
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+    if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
+      return NextResponse.redirect(`${origin}/2fa?next=${encodeURIComponent(destination)}`)
     }
+
+    return NextResponse.redirect(`${origin}${destination}`)
   }
 
   return NextResponse.redirect(`${origin}${next}`)

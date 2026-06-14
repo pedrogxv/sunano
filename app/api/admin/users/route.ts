@@ -21,7 +21,8 @@ const userUpdateSchema = z.object({
   id: z.string().uuid(),
   display_name: z.string().trim().max(80).optional(),
   avatar_url: z.string().trim().url().nullable().optional(),
-  role: z.enum(["admin", "moderator", "webmaster"]).optional(),
+  // "user" representa um usuário comum (sem linha em admin_profiles).
+  role: z.enum(["user", "admin", "moderator", "webmaster"]).optional(),
   permissions: z.record(z.string(), z.boolean()).optional(),
 })
 
@@ -33,9 +34,9 @@ const userCreateSchema = z.object({
 })
 
 function defaultNameFromEmail(email: string | null | undefined) {
-  if (!email) return "Admin"
+  if (!email) return "Usuário"
   const [localPart] = email.split("@")
-  return localPart || "Admin"
+  return localPart || "Usuário"
 }
 
 export async function GET() {
@@ -59,26 +60,59 @@ export async function GET() {
       return NextResponse.json({ error: "Apenas o WEB Master pode ver usuários." }, { status: 403 })
     }
 
-    const { data, error } = await supabase
-      .from("admin_profiles")
-      .select("id, email, display_name, avatar_url, role, permissions, created_at, updated_at")
-      .order("created_at", { ascending: true })
+    // Lista TODOS os usuários cadastrados (auth.users) e combina com os perfis
+    // administrativos e públicos. Quem não tem linha em admin_profiles é um
+    // usuário comum (role "user"). Usa o admin client (service role) para
+    // enxergar todas as linhas, sem depender de RLS.
+    const admin = createSupabaseAdminClient()
 
-    if (error) {
-      const { body, status } = dbErrorResponse(error, "Erro ao listar usuários.")
-      return NextResponse.json(body, { status })
+    const authUsers: { id: string; email: string | null; created_at: string }[] = []
+    for (let page = 1; ; page++) {
+      const { data: pageData, error: listError } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+      if (listError) {
+        return NextResponse.json({ error: "Erro ao listar usuários." }, { status: 500 })
+      }
+      authUsers.push(
+        ...pageData.users.map((u) => ({ id: u.id, email: u.email ?? null, created_at: u.created_at }))
+      )
+      if (pageData.users.length < 1000) break
     }
 
-    const users = ((data ?? []) as AdminProfileRow[]).map((item) => ({
-      id: item.id,
-      email: item.email,
-      display_name: item.display_name?.trim() || defaultNameFromEmail(item.email),
-      avatar_url: item.avatar_url,
-      role: item.role,
-      permissions: item.role === "webmaster" ? createFullPermissions() : normalizePermissions(item.permissions as Record<string, boolean> | null),
-      created_at: item.created_at,
-      updated_at: item.updated_at,
-    }))
+    const [{ data: adminRows }, { data: profileRows }] = await Promise.all([
+      admin.from("admin_profiles").select("id, email, display_name, avatar_url, role, permissions, updated_at"),
+      admin.from("user_profiles").select("id, display_name, avatar_url"),
+    ])
+
+    const adminMap = new Map<string, AdminProfileRow>()
+    for (const row of (adminRows ?? []) as AdminProfileRow[]) adminMap.set(row.id, row)
+    const profileMap = new Map<string, { display_name: string | null; avatar_url: string | null }>()
+    for (const row of (profileRows ?? []) as { id: string; display_name: string | null; avatar_url: string | null }[]) {
+      profileMap.set(row.id, { display_name: row.display_name, avatar_url: row.avatar_url })
+    }
+
+    const users = authUsers
+      .map((u) => {
+        const ap = adminMap.get(u.id)
+        const up = profileMap.get(u.id)
+        const role = ap?.role ?? "user"
+        const email = u.email ?? ap?.email ?? null
+        return {
+          id: u.id,
+          email,
+          display_name: ap?.display_name?.trim() || up?.display_name?.trim() || defaultNameFromEmail(email),
+          avatar_url: ap?.avatar_url ?? up?.avatar_url ?? null,
+          role,
+          permissions:
+            role === "webmaster"
+              ? createFullPermissions()
+              : role === "user"
+                ? {}
+                : normalizePermissions(ap?.permissions as Record<string, boolean> | null),
+          created_at: u.created_at,
+          updated_at: ap?.updated_at ?? u.created_at,
+        }
+      })
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
 
     return NextResponse.json({ ok: true, current_user_id: authData.user.id, users })
   } catch {
@@ -114,7 +148,12 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Apenas o WEB Master pode alterar usuários." }, { status: 403 })
     }
 
-    const { data: targetProfile } = await supabase
+    // Escritas usam o admin client (service role): a autorização já foi
+    // garantida acima (isWebMaster), e assim não dependemos de RLS — que antes
+    // bloqueava o WEB Master de editar outros usuários (erro 42501).
+    const admin = createSupabaseAdminClient()
+
+    const { data: targetProfile } = await admin
       .from("admin_profiles")
       .select("id, email, display_name, avatar_url, role, permissions")
       .eq("id", parsed.data.id)
@@ -122,13 +161,10 @@ export async function PATCH(request: Request) {
 
     const typedTargetProfile = targetProfile as AdminProfile | null
 
-    if (!typedTargetProfile) {
-      return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
-    }
+    const isTargetWebMaster = typedTargetProfile?.role === "webmaster"
+    const isTargetCurrentUser = parsed.data.id === authData.user.id
 
-    const isTargetWebMaster = typedTargetProfile.role === "webmaster"
-    const isTargetCurrentUser = typedTargetProfile.id === authData.user.id
-
+    // O WEB Master e o próprio usuário têm cargo/permissões protegidos.
     if ((isTargetCurrentUser || isTargetWebMaster) && (parsed.data.role !== undefined || parsed.data.permissions !== undefined)) {
       return NextResponse.json(
         { error: "As permissões do WEB Master não podem ser alteradas." },
@@ -136,21 +172,60 @@ export async function PATCH(request: Request) {
       )
     }
 
+    // Rebaixar para usuário comum: remove a linha de admin_profiles.
+    if (parsed.data.role === "user") {
+      if (typedTargetProfile) {
+        const { error } = await admin.from("admin_profiles").delete().eq("id", parsed.data.id)
+        if (error) {
+          const { body, status } = dbErrorResponse(error, "Erro ao atualizar usuário.")
+          return NextResponse.json(body, { status })
+        }
+      }
+      return NextResponse.json({ ok: true })
+    }
+
+    const nextRole = parsed.data.role ?? typedTargetProfile?.role
+    if (!nextRole) {
+      // Usuário comum sem mudança de cargo: nada a persistir em admin_profiles.
+      return NextResponse.json({ ok: true })
+    }
+
+    // Resolve identificação do alvo (que pode ainda não ter admin_profiles).
+    let targetEmail = typedTargetProfile?.email ?? null
+    let fallbackDisplay = typedTargetProfile?.display_name ?? null
+    let fallbackAvatar = typedTargetProfile?.avatar_url ?? null
+    if (!typedTargetProfile) {
+      const { data: authUser } = await admin.auth.admin.getUserById(parsed.data.id)
+      if (!authUser?.user) {
+        return NextResponse.json({ error: "Usuário não encontrado." }, { status: 404 })
+      }
+      targetEmail = authUser.user.email ?? null
+      const { data: up } = await admin
+        .from("user_profiles")
+        .select("display_name, avatar_url")
+        .eq("id", parsed.data.id)
+        .maybeSingle()
+      const typedUp = up as { display_name: string | null; avatar_url: string | null } | null
+      fallbackDisplay = typedUp?.display_name ?? null
+      fallbackAvatar = typedUp?.avatar_url ?? null
+    }
+
     const payload = {
       id: parsed.data.id,
-      email: typedTargetProfile.email ?? authData.user.email ?? null,
-      display_name: parsed.data.display_name?.trim() || typedTargetProfile.display_name?.trim() || defaultNameFromEmail(typedTargetProfile.email ?? authData.user.email),
-      avatar_url: parsed.data.avatar_url ?? typedTargetProfile.avatar_url ?? null,
-      role: parsed.data.role ?? typedTargetProfile.role,
+      email: targetEmail,
+      display_name: parsed.data.display_name?.trim() || fallbackDisplay?.trim() || defaultNameFromEmail(targetEmail),
+      avatar_url: parsed.data.avatar_url ?? fallbackAvatar ?? null,
+      role: nextRole,
       permissions:
-        parsed.data.role === "webmaster"
+        nextRole === "webmaster"
           ? createFullPermissions()
           : parsed.data.permissions
             ? normalizePermissions(parsed.data.permissions)
-            : typedTargetProfile.permissions ?? {},
+            : typedTargetProfile?.permissions ?? createDefaultPermissions(),
     }
 
-    const { error } = await supabase.from("admin_profiles").upsert(payload as any, { onConflict: "id" })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await admin.from("admin_profiles").upsert(payload as any, { onConflict: "id" })
 
     if (error) {
       const { body, status } = dbErrorResponse(error, "Erro ao atualizar usuário.")
@@ -225,6 +300,7 @@ export async function POST(request: Request) {
       permissions,
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await adminClient.from("admin_profiles").upsert(payload as any, { onConflict: "id" })
 
     if (error) {

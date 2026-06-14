@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 
 type BlogPost = {
   id: string
@@ -30,8 +30,7 @@ type FilterTab = "all" | "published" | "draft"
 type TypeTab = "all" | "news" | "review"
 
 export default function AdminBlogPage() {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const [posts, setPosts] = useState<BlogPost[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,33 +50,33 @@ export default function AdminBlogPage() {
       const res = await fetch("/api/admin/blog/posts", { cache: "no-store" })
       const data = (await res.json().catch(() => null)) as { posts?: BlogPost[]; error?: string } | null
       if (!res.ok || !data?.posts) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to load articles" : "Erro ao carregar artigos"))
+        throw new Error(data?.error ?? t.admin.blog.failedToLoad)
       }
       setPosts(data.posts)
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to load articles" : "Erro ao carregar artigos")
+      const message = err instanceof Error ? err.message : t.admin.blog.failedToLoad
       setError(message)
-      toast.error(isEnglish ? "Failed to load articles" : "Erro ao carregar artigos", { description: message })
+      toast.error(t.admin.blog.failedToLoad, { description: message })
     } finally {
       setLoading(false)
     }
   }
 
   async function removePost(id: string) {
-    if (!confirm(isEnglish ? "Are you sure you want to delete this article?" : "Tem certeza que deseja excluir este artigo?")) return
+    if (!confirm(t.admin.blog.confirmDelete)) return
 
     const target = posts.find((p) => p.id === id)
     const res = await fetch(`/api/admin/blog/posts/${id}`, { method: "DELETE" })
     const data = (await res.json().catch(() => null)) as { error?: string } | null
     if (!res.ok) {
-      const message = data?.error ?? (isEnglish ? "Failed to delete article" : "Erro ao deletar artigo")
+      const message = data?.error ?? t.admin.blog.failedToDelete
       setError(message)
-      toast.error(isEnglish ? "Failed to delete article" : "Erro ao deletar artigo", { description: message })
+      toast.error(t.admin.blog.failedToDelete, { description: message })
       return
     }
 
     setPosts((prev) => prev.filter((post) => post.id !== id))
-    toast.success(isEnglish ? "Article deleted" : "Artigo deletado", {
+    toast.success(t.admin.blog.articleDeleted, {
       description: target?.title,
     })
   }
@@ -108,21 +107,18 @@ export default function AdminBlogPage() {
   }, [posts, activeTab, typeTab, search])
 
   const tabs: { key: FilterTab; label: string; count: number }[] = [
-    { key: "all", label: isEnglish ? "All" : "Todos", count: stats.total },
-    { key: "published", label: isEnglish ? "Published" : "Publicados", count: stats.published },
-    { key: "draft", label: isEnglish ? "Drafts" : "Rascunhos", count: stats.drafts },
+    { key: "all", label: t.common.all, count: stats.total },
+    { key: "published", label: t.admin.blog.published, count: stats.published },
+    { key: "draft", label: t.admin.blog.drafts, count: stats.drafts },
   ]
 
   const typeTabs: { key: TypeTab; label: string; count: number }[] = [
-    { key: "all", label: isEnglish ? "All" : "Todos", count: stats.total },
-    { key: "news", label: isEnglish ? "News" : "Notícias", count: stats.news },
-    { key: "review", label: isEnglish ? "Reviews" : "Reviews", count: stats.reviews },
+    { key: "all", label: t.common.all, count: stats.total },
+    { key: "news", label: t.admin.blog.news, count: stats.news },
+    { key: "review", label: t.admin.blog.reviews, count: stats.reviews },
   ]
 
-  usePageHeader(
-    isEnglish ? "News & Reviews" : "Notícias & Reviews",
-    isEnglish ? "Manage news posts and peripheral reviews." : "Gerencie notícias e reviews de periféricos."
-  )
+  usePageHeader(t.admin.blog.pageTitle, t.admin.blog.pageDescription)
 
   return (
     <div className="space-y-6">
@@ -131,13 +127,13 @@ export default function AdminBlogPage() {
         <Link href="/admin/blog/new?type=news">
           <Button variant="outline" className="gap-2">
             <Plus className="size-4" />
-            {isEnglish ? "New news" : "Nova notícia"}
+            {t.admin.blog.newNews}
           </Button>
         </Link>
         <Link href="/admin/blog/new?type=review">
           <Button className="gap-2">
             <Plus className="size-4" />
-            {isEnglish ? "New review" : "Novo review"}
+            {t.admin.blog.newReview}
           </Button>
         </Link>
       </div>
@@ -151,7 +147,7 @@ export default function AdminBlogPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{stats.total}</p>
-              <p className="text-xs text-muted-foreground">{isEnglish ? "Total" : "Total"}</p>
+              <p className="text-xs text-muted-foreground">Total</p>
             </div>
           </CardContent>
         </Card>
@@ -162,7 +158,7 @@ export default function AdminBlogPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{stats.news}</p>
-              <p className="text-xs text-muted-foreground">{isEnglish ? "News" : "Notícias"}</p>
+              <p className="text-xs text-muted-foreground">{t.admin.blog.news}</p>
             </div>
           </CardContent>
         </Card>
@@ -173,7 +169,7 @@ export default function AdminBlogPage() {
             </div>
             <div>
               <p className="text-2xl font-bold text-foreground">{stats.reviews}</p>
-              <p className="text-xs text-muted-foreground">{isEnglish ? "Reviews" : "Reviews"}</p>
+              <p className="text-xs text-muted-foreground">{t.admin.blog.reviews}</p>
             </div>
           </CardContent>
         </Card>
@@ -236,7 +232,7 @@ export default function AdminBlogPage() {
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="w-full pl-9 sm:w-64 border-border bg-card"
-            placeholder={isEnglish ? "Search..." : "Buscar..."}
+            placeholder={t.common.search + "..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -252,25 +248,23 @@ export default function AdminBlogPage() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-card py-16 text-center">
           <FileText className="mb-3 size-10 text-muted-foreground/40" />
           <p className="text-sm font-medium text-foreground">
-            {search ? (isEnglish ? "Nothing found" : "Nada encontrado") : (isEnglish ? "Nothing here yet" : "Nada por aqui ainda")}
+            {search ? t.admin.blog.nothingFound : t.admin.blog.nothingYet}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {search
-              ? (isEnglish ? "Try a different search term" : "Tente um termo diferente")
-              : (isEnglish ? "Create your first post" : "Crie sua primeira publicação")}
+            {search ? t.admin.blog.differentSearch : t.admin.blog.createFirst}
           </p>
           {!search && (
             <div className="mt-4 flex gap-2">
               <Link href="/admin/blog/new?type=news">
                 <Button size="sm" variant="outline" className="gap-2">
                   <Plus className="size-3.5" />
-                  {isEnglish ? "New news" : "Nova notícia"}
+                  {t.admin.blog.newNews}
                 </Button>
               </Link>
               <Link href="/admin/blog/new?type=review">
                 <Button size="sm" className="gap-2">
                   <Plus className="size-3.5" />
-                  {isEnglish ? "New review" : "Novo review"}
+                  {t.admin.blog.newReview}
                 </Button>
               </Link>
             </div>
@@ -281,7 +275,7 @@ export default function AdminBlogPage() {
           {filtered.map((post) => {
             const relatedPeripheral = Array.isArray(post.peripherals) ? post.peripherals[0] : null
             const thumb = post.cover_thumbnail_url || post.cover_image_url
-            const date = new Date(post.created_at).toLocaleDateString(isEnglish ? "en-US" : "pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+            const date = new Date(post.created_at).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" })
 
             return (
               <Card key={post.id} className="group overflow-hidden border-border bg-card transition-all hover:border-border/80 hover:shadow-md">
@@ -300,12 +294,12 @@ export default function AdminBlogPage() {
                       variant={post.is_published ? "default" : "secondary"}
                       className={post.is_published ? "bg-emerald-500/90 text-white hover:bg-emerald-500" : ""}
                     >
-                      {post.is_published ? (isEnglish ? "Published" : "Publicado") : (isEnglish ? "Draft" : "Rascunho")}
+                      {post.is_published ? t.admin.blog.postPublished : t.admin.blog.draft}
                     </Badge>
                   </div>
                   <div className="absolute left-2 top-2">
                     <Badge variant="secondary" className="bg-background/80 backdrop-blur">
-                      {post.post_type === "news" ? (isEnglish ? "News" : "Notícia") : "Review"}
+                      {post.post_type === "news" ? t.admin.blog.newsType : "Review"}
                     </Badge>
                   </div>
                 </div>
@@ -364,8 +358,7 @@ export default function AdminBlogPage() {
       {/* Footer count */}
       {!loading && filtered.length > 0 && (
         <p className="text-center text-xs text-muted-foreground">
-          {filtered.length} {isEnglish ? "item(s)" : "item(ns)"}
-          {search && ` · ${isEnglish ? "filtered" : "filtrado(s)"}`}
+          {t.admin.blog.items(filtered.length, Boolean(search))}
         </p>
       )}
     </div>

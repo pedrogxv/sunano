@@ -10,7 +10,7 @@ import BoxLoader from "@/components/ui/box-loader"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 
 type TelegramOffer = {
   id: string
@@ -30,8 +30,7 @@ type AdminOffersResponse = {
 }
 
 export default function AdminOffersPage() {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -51,26 +50,21 @@ export default function AdminOffersPage() {
       const data = (await response.json().catch(() => null)) as AdminOffersResponse | null
 
       if (!response.ok || !data?.offers) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to load Telegram offers" : "Erro ao carregar ofertas do Telegram"))
+        throw new Error(data?.error ?? t.admin.offers.failedToLoad)
       }
 
       setOffers(data.offers)
       setWarning(data.warning ?? null)
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to load Telegram offers" : "Erro ao carregar ofertas do Telegram")
+      const message = err instanceof Error ? err.message : t.admin.offers.failedToLoad
       setError(message)
-      toast.error(isEnglish ? "Failed to load offers" : "Erro ao carregar ofertas", { description: message })
+      toast.error(t.admin.offers.failedToLoad, { description: message })
     } finally {
       setLoading(false)
     }
   }
 
-  usePageHeader(
-    isEnglish ? "Offers" : "Ofertas",
-    isEnglish
-      ? "Offers synced directly from Telegram group messages."
-      : "Ofertas direto do grupo no Telegram."
-  )
+  usePageHeader(t.admin.offers.pageTitle, t.admin.offers.pageDescription)
 
   return (
     <div className="space-y-6">
@@ -95,7 +89,7 @@ export default function AdminOffersPage() {
       ) :offers.length === 0 ? (
         <Card className="border-border bg-card">
           <CardContent className="py-8 text-sm text-muted-foreground">
-            {isEnglish ? "No Telegram messages found for offers." : "Nenhuma mensagem de oferta encontrada no Telegram."}
+            {t.admin.offers.noMessages}
           </CardContent>
         </Card>
       ) : (
@@ -105,7 +99,7 @@ export default function AdminOffersPage() {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="line-clamp-2 text-base text-foreground">
-                    {offer.chatTitle || (isEnglish ? "Telegram Offer" : "Oferta Telegram")}
+                    {offer.chatTitle || t.admin.offers.telegramOffer}
                   </CardTitle>
                   <MessageCircle className="size-4 text-primary" />
                 </div>
@@ -120,7 +114,7 @@ export default function AdminOffersPage() {
                   <a href={offer.url} target="_blank" rel="noreferrer" className="block">
                     <Button className="w-full" size="sm" variant="outline">
                       <ExternalLink className="mr-2 size-4" />
-                      {isEnglish ? "Open in Telegram" : "Abrir no Telegram"}
+                      {t.admin.offers.openInTelegram}
                     </Button>
                   </a>
                 ) : null}

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 
 type AdminProfile = {
   id: string
@@ -58,8 +58,7 @@ function PasswordStrength({ password }: { password: string }) {
 }
 
 export default function SettingsPage() {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -109,13 +108,13 @@ export default function SettingsPage() {
       const data = await res.json().catch(() => null) as { ok?: boolean; error?: string; warning?: string | null; status?: typeof videoStatus } | null
       if (!res.ok || !data?.status) throw new Error(data?.error ?? "")
       setVideoStatus(data.status)
-      const msg = data.warning ?? (isEnglish ? "YouTube snapshot refreshed." : "Snapshot do YouTube atualizado.")
+      const msg = data.warning ?? t.settings.youTubeSnapshotRefreshed
       setSuccess(msg)
-      toast.success(isEnglish ? "YouTube synced" : "YouTube sincronizado", { description: msg })
+      toast.success(t.settings.youTubeSynced, { description: msg })
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to refresh" : "Erro ao atualizar")
+      const message = err instanceof Error ? err.message : t.settings.failedToRefresh
       setError(message)
-      toast.error(isEnglish ? "Failed to refresh YouTube" : "Erro ao atualizar YouTube", { description: message })
+      toast.error(t.settings.failedToRefreshYoutube, { description: message })
     } finally {
       setVideoRefreshing(false)
     }
@@ -133,9 +132,9 @@ export default function SettingsPage() {
       setAvatarPreview(data.profile.avatar_url)
       setRole(data.profile.role)
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to load profile" : "Erro ao carregar perfil")
+      const message = err instanceof Error ? err.message : t.settings.failedToLoadProfileMsg
       setError(message)
-      toast.error(isEnglish ? "Failed to load profile" : "Erro ao carregar perfil", { description: message })
+      toast.error(t.settings.failedToLoadProfile, { description: message })
     } finally {
       setLoading(false)
     }
@@ -158,11 +157,11 @@ export default function SettingsPage() {
       if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
       setAvatarUrl(data.publicUrl)
       setAvatarPreview(data.publicUrl)
-      toast.success(isEnglish ? "Avatar uploaded" : "Avatar enviado")
+      toast.success(t.settings.avatarUploaded)
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to upload avatar" : "Erro ao enviar avatar")
+      const message = err instanceof Error ? err.message : t.settings.failedToUploadAvatar
       setError(message)
-      toast.error(isEnglish ? "Failed to upload avatar" : "Erro ao enviar avatar", { description: message })
+      toast.error(t.settings.failedToUploadAvatar, { description: message })
     } finally {
       setUploading(false)
     }
@@ -185,13 +184,13 @@ export default function SettingsPage() {
       setAvatarUrl(data.profile.avatar_url)
       setAvatarPreview(data.profile.avatar_url)
       setRole(data.profile.role)
-      const msg = isEnglish ? "Profile saved successfully." : "Perfil salvo com sucesso."
+      const msg = t.settings.profileSavedDesc
       setSuccess(msg)
-      toast.success(isEnglish ? "Profile saved" : "Perfil salvo")
+      toast.success(t.settings.profileSaved)
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to save profile" : "Erro ao salvar perfil")
+      const message = err instanceof Error ? err.message : t.settings.failedToSave
       setError(message)
-      toast.error(isEnglish ? "Failed to save profile" : "Erro ao salvar perfil", { description: message })
+      toast.error(t.settings.failedToSave, { description: message })
     } finally {
       setSaving(false)
     }
@@ -201,13 +200,13 @@ export default function SettingsPage() {
     setPasswordError(null)
     setPasswordSuccess(false)
     if (newPassword.length < 8) {
-      const msg = isEnglish ? "Password must be at least 8 characters." : "A senha deve ter no mínimo 8 caracteres."
+      const msg = t.settings.passwordMin8
       setPasswordError(msg)
       toast.error(msg)
       return
     }
     if (newPassword !== confirmPassword) {
-      const msg = isEnglish ? "Passwords do not match." : "As senhas não conferem."
+      const msg = t.settings.passwordsDoNotMatch
       setPasswordError(msg)
       toast.error(msg)
       return
@@ -223,21 +222,18 @@ export default function SettingsPage() {
       setNewPassword("")
       setConfirmPassword("")
       setPasswordSuccess(true)
-      toast.success(isEnglish ? "Password updated" : "Senha atualizada")
+      toast.success(t.settings.passwordUpdated)
     } catch (err) {
-      const message = err instanceof Error ? err.message : (isEnglish ? "Failed to change password" : "Erro ao alterar senha")
+      const message = err instanceof Error ? err.message : t.settings.failedToChangePassword
       setPasswordError(message)
-      toast.error(isEnglish ? "Failed to change password" : "Erro ao alterar senha", { description: message })
+      toast.error(t.settings.failedToChangePassword, { description: message })
     }
   }
 
   const previewName = useMemo(() => displayName.trim() || getNameFallback(email), [displayName, email])
-  const roleLabel = role === "webmaster" ? "WEB Master" : role === "moderator" ? (isEnglish ? "Moderator" : "Moderador") : "Admin"
+  const roleLabel = role === "webmaster" ? "WEB Master" : role === "moderator" ? t.settings.moderator : "Admin"
 
-  usePageHeader(
-    isEnglish ? "Settings" : "Configurações",
-    isEnglish ? "Manage your profile and system preferences." : "Gerencie seu perfil e preferências do sistema."
-  )
+  usePageHeader(t.settings.title, t.settings.subtitle)
 
   if (loading) {
     return (
@@ -258,12 +254,10 @@ export default function SettingsPage() {
         <CardHeader className="border-b border-border">
           <CardTitle className="flex items-center gap-2 text-base">
             <User className="size-4 text-primary" />
-            {isEnglish ? "Admin profile" : "Perfil do admin"}
+            {t.settings.adminProfile}
           </CardTitle>
           <CardDescription>
-            {isEnglish
-              ? "Your name and photo appear as authorship on blog articles."
-              : "Seu nome e foto aparecem como autoria nos artigos do blog."}
+            {t.settings.adminProfileDesc}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6 space-y-6">
@@ -289,7 +283,7 @@ export default function SettingsPage() {
               </div>
               <p className="text-sm text-muted-foreground">{email ?? "-"}</p>
               <p className="text-xs text-muted-foreground/60">
-                {isEnglish ? "This name appears on published articles." : "Este nome aparece nos artigos publicados."}
+                {t.settings.thisNameOnArticles}
               </p>
             </div>
           </div>
@@ -297,30 +291,30 @@ export default function SettingsPage() {
           <div className="grid gap-4 sm:grid-cols-2">
             {/* Email (readonly) */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "Account email" : "Email da conta"}</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.settings.accountEmail}</label>
               <Input value={email ?? "-"} readOnly className="border-border bg-muted/20 text-muted-foreground" />
-              <p className="text-[10px] text-muted-foreground/60">{isEnglish ? "Cannot be changed here." : "Não pode ser alterado aqui."}</p>
+              <p className="text-[10px] text-muted-foreground/60">{t.settings.cannotChange}</p>
             </div>
 
             {/* Display name */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "Display name" : "Nome de exibição"}</label>
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.settings.displayName}</label>
               <Input
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="border-border bg-background"
-                placeholder={isEnglish ? "e.g. Pedro" : "ex: Pedro"}
+                placeholder={t.settings.displayNamePlaceholder}
                 maxLength={80}
               />
               <p className="text-[10px] text-muted-foreground">
-                {isEnglish ? "Preview: " : "Prévia: "}<span className="text-foreground font-medium">{previewName}</span>
+                {t.settings.preview}<span className="text-foreground font-medium">{previewName}</span>
               </p>
             </div>
           </div>
 
           <div className="flex justify-end border-t border-border pt-4">
             <Button onClick={saveProfile} disabled={saving || uploading} className="gap-2 min-w-32">
-              {saving ? (isEnglish ? "Saving..." : "Salvando...") : (isEnglish ? "Save profile" : "Salvar perfil")}
+              {saving ? t.settings.saving : t.settings.saveProfile}
             </Button>
           </div>
         </CardContent>
@@ -332,10 +326,10 @@ export default function SettingsPage() {
           <CardHeader className="border-b border-amber-500/20">
             <CardTitle className="flex items-center gap-2 text-base text-amber-200">
               <KeyRound className="size-4" />
-              {isEnglish ? "Change password" : "Alterar senha"}
+              {t.settings.changePassword}
             </CardTitle>
             <CardDescription className="text-amber-200/60">
-              {isEnglish ? "Exclusive to WEB Master." : "Exclusivo para o WEB Master."}
+              {t.settings.exclusiveToWebmaster}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5 pt-5">
@@ -345,33 +339,33 @@ export default function SettingsPage() {
             {passwordSuccess && (
               <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-300">
                 <CheckCircle2 className="size-4 shrink-0" />
-                {isEnglish ? "Password updated successfully." : "Senha atualizada com sucesso."}
+                {t.settings.passwordUpdatedSuccess}
               </div>
             )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "New password" : "Nova senha"}</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.settings.newPassword}</label>
                 <Input
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setPasswordSuccess(false) }}
                   className="border-amber-500/20 bg-background"
-                  placeholder={isEnglish ? "Min. 8 characters" : "Mín. 8 caracteres"}
+                  placeholder={t.settings.minChars}
                   type="password"
                 />
                 <PasswordStrength password={newPassword} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "Confirm password" : "Confirmar senha"}</label>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.settings.confirmPassword}</label>
                 <Input
                   value={confirmPassword}
                   onChange={(e) => { setConfirmPassword(e.target.value); setPasswordSuccess(false) }}
                   className={`border-amber-500/20 bg-background ${confirmPassword && confirmPassword !== newPassword ? "border-red-500/50" : ""}`}
-                  placeholder={isEnglish ? "Repeat the password" : "Repita a senha"}
+                  placeholder={t.settings.repeatPassword}
                   type="password"
                 />
                 {confirmPassword && confirmPassword !== newPassword && (
-                  <p className="text-[10px] text-red-400">{isEnglish ? "Passwords do not match" : "As senhas não conferem"}</p>
+                  <p className="text-[10px] text-red-400">{t.settings.passwordsDoNotMatch}</p>
                 )}
               </div>
             </div>
@@ -383,7 +377,7 @@ export default function SettingsPage() {
                 className="gap-2 bg-amber-500 text-black hover:bg-amber-400 min-w-32"
               >
                 <KeyRound className="size-4" />
-                {isEnglish ? "Update password" : "Atualizar senha"}
+                {t.settings.updatePassword}
               </Button>
             </div>
           </CardContent>
@@ -395,12 +389,10 @@ export default function SettingsPage() {
         <CardHeader className="border-b border-border">
           <CardTitle className="flex items-center gap-2 text-base">
             <Youtube className="size-4 text-red-400" />
-            {isEnglish ? "YouTube sync" : "Sincronização YouTube"}
+            {t.settings.youtubeSync}
           </CardTitle>
           <CardDescription>
-            {isEnglish
-              ? "Daily snapshot used on the public videos page. Refresh manually if needed."
-              : "Snapshot diário usado na página pública de vídeos. Atualize manualmente se necessário."}
+            {t.settings.youtubeSyncDesc}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-5">
@@ -416,8 +408,8 @@ export default function SettingsPage() {
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Snapshot</p>
                 <p className="text-sm font-medium text-foreground">
                   {videoStatusLoading ? "..." : videoStatus?.hasSnapshot
-                    ? (isEnglish ? "Available" : "Disponível")
-                    : (isEnglish ? "Not available" : "Indisponível")}
+                    ? t.settings.available
+                    : t.settings.notAvailable}
                 </p>
               </div>
             </div>
@@ -427,7 +419,7 @@ export default function SettingsPage() {
                 <Clock className="size-4 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{isEnglish ? "Last sync" : "Última sync"}</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t.settings.lastSync}</p>
                 <p className="text-sm font-medium text-foreground">
                   {videoStatus?.fetchedAt
                     ? new Date(videoStatus.fetchedAt).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
@@ -443,9 +435,7 @@ export default function SettingsPage() {
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</p>
                 <p className="text-sm font-medium text-foreground">
-                  {videoStatus?.stale
-                    ? (isEnglish ? "Outdated" : "Desatualizado")
-                    : (isEnglish ? "Up to date" : "Atualizado")}
+                  {videoStatus?.stale ? t.settings.outdated : t.settings.upToDate}
                 </p>
               </div>
             </div>
@@ -460,11 +450,11 @@ export default function SettingsPage() {
 
           <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
             <Button variant="outline" onClick={loadVideoSnapshotStatus} disabled={videoStatusLoading || videoRefreshing} size="sm">
-              {videoStatusLoading ? (isEnglish ? "Refreshing..." : "Atualizando...") : (isEnglish ? "Reload status" : "Recarregar status")}
+              {videoStatusLoading ? t.settings.refreshing : t.settings.reloadStatus}
             </Button>
             <Button onClick={refreshVideoSnapshot} disabled={videoRefreshing || videoStatusLoading} size="sm" className="gap-2">
               <RefreshCw className={`size-4 ${videoRefreshing ? "animate-spin" : ""}`} />
-              {videoRefreshing ? (isEnglish ? "Syncing..." : "Sincronizando...") : (isEnglish ? "Force refresh" : "Forçar atualização")}
+              {videoRefreshing ? t.settings.syncing : t.settings.forceRefresh}
             </Button>
           </div>
         </CardContent>

@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { CARD_TAG_STYLES, CARD_TIER_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
+import { useLocale } from "@/components/providers/locale-context"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado"
@@ -70,7 +71,6 @@ export interface TierItemTooltipContentProps {
   categoryLabel: string
   image_url: string | null
   tier: Tier | null
-  isEnglish?: boolean
   // Public-only field (rating-first design)
   ratings?: Ratings
   // Legacy fields (admin still uses these). Render only when provided.
@@ -125,22 +125,23 @@ export function TierItemTooltipContent({
   categoryLabel,
   image_url,
   tier,
-  isEnglish,
   ratings,
   tags,
   specs,
   displayPrice,
   priceBand,
 }: TierItemTooltipContentProps) {
+  const { locale } = useLocale()
+  const en = locale === "en-US"
   const tierStyle = tier ? CARD_TIER_STYLES[tier] : CARD_TIER_STYLES.L
   const tierTheme = tier ? TIER_THEMES[tier] : TIER_THEMES.L
-  const tierLabel = tier ?? (isEnglish ? "Under Review" : "Sob Revisão")
+  const tierLabel = tier ?? (en ? "Under Review" : "Sob Revisão")
 
-  const labels = isEnglish ? RATING_LABELS_EN : RATING_LABELS_PT
+  const labels = en ? RATING_LABELS_EN : RATING_LABELS_PT
   const batteryLabel = categoryLabel === "keyboard"
-    ? (isEnglish ? "Typing" : "Digitação")
+    ? (en ? "Typing" : "Digitação")
     : categoryLabel === "mousepad"
-      ? (isEnglish ? "Stitching" : "Costura")
+      ? (en ? "Stitching" : "Costura")
       : labels.battery
   const ratingEntries = ratings
     ? RATING_ORDER.filter((key, index) => RATING_ORDER.indexOf(key) === index)
@@ -148,8 +149,8 @@ export function TierItemTooltipContent({
         .map((key) => {
           let label = key === "battery" ? batteryLabel : labels[key]
           if (categoryLabel === "mousepad") {
-            if (key === "software") label = isEnglish ? "Base" : "Base"
-            if (key === "build") label = isEnglish ? "Surface" : "Superfície"
+            if (key === "software") label = "Base"
+            if (key === "build") label = en ? "Surface" : "Superfície"
           }
           return { key, label, value: ratings[key] as number }
         })
@@ -215,7 +216,7 @@ export function TierItemTooltipContent({
                   CARD_TAG_STYLES[tag].border,
                 )}
               >
-                {formatTagLabel(tag, isEnglish)}
+                {formatTagLabel(tag, en)}
               </span>
             ))}
           </div>
@@ -233,7 +234,7 @@ export function TierItemTooltipContent({
             </div>
           ) : (
             <p className="text-[11px] text-slate-500">
-              {isEnglish ? "No ratings yet" : "Sem avaliações ainda"}
+              {en ? "No ratings yet" : "Sem avaliações ainda"}
             </p>
           )}
         </div>

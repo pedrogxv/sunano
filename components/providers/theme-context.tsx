@@ -40,6 +40,25 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
+  // Sincroniza a preferência salva no perfil (cross-device). Best-effort: se o
+  // usuário não estiver logado, /api/profile responde 401 e mantemos o local.
+  useEffect(() => {
+    let mounted = true
+    fetch("/api/profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const remote = data?.profile?.theme as ThemeKey | null | undefined
+        if (!mounted || !remote || !THEME_OPTIONS.some((t) => t.key === remote)) return
+        setThemeState(remote)
+        localStorage.setItem(THEME_STORAGE_KEY, remote)
+        document.documentElement.setAttribute("data-theme", remote)
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   const setTheme = (nextTheme: ThemeKey) => {
     setThemeState(nextTheme)
     if (typeof window !== "undefined") {

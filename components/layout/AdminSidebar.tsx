@@ -22,8 +22,9 @@ import { useEffect, useState } from "react"
 
 import { AuthUser } from "@/components/auth/auth-user"
 import { Button } from "@/components/ui/button"
+import { SunanoLogo } from "@/components/ui/SunanoLogo"
 import { useSidebar } from "@/components/providers/sidebar-context"
-import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import {
   hasAdminPermission,
@@ -55,8 +56,7 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
 }
 
 export function AdminSidebar() {
-  const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const pathname = usePathname()
   const { adminCollapsed: isCollapsed, isAdminMobileOpen, setAdminMobileOpen } = useSidebar()
 
@@ -65,38 +65,38 @@ export function AdminSidebar() {
 
   const navGroups: NavGroup[] = [
     {
-      label: "Geral",
+      label: t.admin.sidebar.general,
       items: [
         { href: "/admin", label: "Dashboard", icon: Home, permission: "dashboard_read" },
       ],
     },
     {
-      label: isEnglish ? "Peripherals" : "Periféricos",
+      label: t.admin.sidebar.peripherals,
       items: [
-        { href: "/admin/tierlist",    label: "Tierlist",                                    icon: Trophy,     permission: "peripherals_read" },
-        { href: "/admin/perifericos", label: isEnglish ? "Peripherals" : "Periféricos",     icon: Mouse,      permission: "peripherals_read" },
-        { href: "/ranking",           label: "Ranking",                                     icon: BarChart2,  permission: "peripherals_read" },
+        { href: "/admin/tierlist",    label: "Tierlist",                       icon: Trophy,     permission: "peripherals_read" },
+        { href: "/admin/perifericos", label: t.admin.sidebar.peripherals,      icon: Mouse,      permission: "peripherals_read" },
+        { href: "/ranking",           label: "Ranking",                        icon: BarChart2,  permission: "peripherals_read" },
       ],
     },
     {
-      label: isEnglish ? "Content" : "Conteúdo",
+      label: t.admin.sidebar.content,
       items: [
-        { href: "/admin/blog",   label: isEnglish ? "News & Reviews" : "Notícias & Reviews", icon: Newspaper,     permission: "blog_read" },
-        { href: "/admin/forum",  label: isEnglish ? "Forum" : "Fórum",                       icon: MessageSquare, permission: "forum_read" },
+        { href: "/admin/blog",   label: t.admin.sidebar.newsAndReviews, icon: Newspaper,     permission: "blog_read" },
+        { href: "/admin/forum",  label: t.admin.sidebar.forum,          icon: MessageSquare, permission: "forum_read" },
       ],
     },
     {
-      label: isEnglish ? "Shop" : "Loja",
+      label: t.admin.sidebar.shop,
       items: [
-        { href: "/admin/offers", label: isEnglish ? "Offers" : "Ofertas",         icon: Gift,       permission: "offers_read" },
-        { href: "/admin/store",  label: isEnglish ? "Store & Bazar" : "Loja & Bazar", icon: ShoppingBag, permission: "store_read" },
+        { href: "/admin/offers", label: t.admin.sidebar.offers,         icon: Gift,       permission: "offers_read" },
+        { href: "/admin/store",  label: t.admin.sidebar.storeAndBazar,  icon: ShoppingBag, permission: "store_read" },
       ],
     },
     {
-      label: isEnglish ? "System" : "Sistema",
+      label: t.admin.sidebar.system,
       items: [
-        { href: "/admin/users",    label: isEnglish ? "Users" : "Usuários",            icon: Users,    requiresWebMaster: true },
-        { href: "/admin/settings", label: isEnglish ? "Settings" : "Configurações",    icon: Settings, permission: "settings_read" },
+        { href: "/admin/users",    label: t.admin.sidebar.users,    icon: Users,    requiresWebMaster: true },
+        { href: "/admin/settings", label: t.admin.sidebar.settings, icon: Settings, permission: "settings_read" },
       ],
     },
   ]
@@ -157,28 +157,34 @@ export function AdminSidebar() {
         )}
       >
         {/* Brand */}
-        <div className={cn("flex items-center px-3 pt-6 pb-4", isCollapsed ? "justify-center" : "gap-3")}>
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary font-bold text-primary-foreground shadow-lg shadow-black/20">
-            S
-          </div>
-          <div className={cn("flex flex-col", isCollapsed && "hidden")}>
-            <span className="text-sm font-semibold tracking-tight text-foreground">Sunano</span>
-            <span className="text-[9px] font-medium uppercase tracking-widest text-muted-foreground">Admin</span>
-          </div>
+        <div className={cn("flex px-3 pt-6 pb-4", isCollapsed ? "justify-center" : "items-center")}>
+          <SunanoLogo showText={!isCollapsed} subtitle="Admin" />
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4">
           {isLoadingProfile ? (
-            <div className="space-y-1 pt-1">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div
-                  key={i}
-                  className={cn(
-                    "h-10 rounded-lg bg-muted/30 animate-pulse",
-                    isCollapsed ? "w-10 mx-auto" : "w-full"
+            // Espelha: Geral(1), Periféricos(3), Conteúdo(2), Loja(2), Sistema(2), Ações(1)
+            <div className="pt-1">
+              {[1, 3, 2, 2, 2, 1].map((count, gi) => (
+                <div key={gi}>
+                  {isCollapsed ? (
+                    <div className="my-2 h-px bg-muted/20" />
+                  ) : (
+                    <div className="mb-1 mt-4 mx-3 h-2 w-12 rounded bg-muted/30 animate-pulse" />
                   )}
-                />
+                  <div className="space-y-1">
+                    {Array.from({ length: count }).map((_, ii) => (
+                      <div
+                        key={ii}
+                        className={cn(
+                          "h-10 rounded-lg bg-muted/30 animate-pulse",
+                          isCollapsed ? "w-10 mx-auto" : "w-full"
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
@@ -219,7 +225,7 @@ export function AdminSidebar() {
           {/* Ver site */}
           {!isLoadingProfile && (
             <>
-              <SectionLabel label={isEnglish ? "Actions" : "Ações"} collapsed={isCollapsed} />
+              <SectionLabel label={t.admin.sidebar.actions} collapsed={isCollapsed} />
               <Link
                 href="/"
                 onClick={close}
@@ -229,7 +235,7 @@ export function AdminSidebar() {
                 )}
               >
                 <Eye className="size-[18px] shrink-0" />
-                <span className={cn(isCollapsed && "hidden")}>{isEnglish ? "View Site" : "Ver Site"}</span>
+                <span className={cn(isCollapsed && "hidden")}>{t.admin.sidebar.viewSite}</span>
               </Link>
             </>
           )}

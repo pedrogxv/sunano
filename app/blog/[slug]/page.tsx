@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
 import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 
 type BlogPost = {
   id: string
@@ -62,7 +63,7 @@ function getVideoEmbedUrl(url: string | null) {
 
 export default function BlogPostPage() {
   const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
+  const t = useT()
   const { slug } = useParams<{ slug: string }>()
   const [post, setPost] = useState<BlogPost | null>(null)
   const [loading, setLoading] = useState(true)
@@ -111,9 +112,9 @@ export default function BlogPostPage() {
   if (!post) {
     return (
       <div className="min-h-screen bg-background p-8 text-muted-foreground">
-        <p>{isEnglish ? "Article not found." : "Artigo não encontrado."}</p>
+        <p>{t.blog.articleNotFound}</p>
         <Link href="/blog" className="mt-4 inline-block">
-          <Button variant="outline">{isEnglish ? "Back to blog" : "Voltar ao blog"}</Button>
+          <Button variant="outline">{t.blog.backToBlog}</Button>
         </Link>
       </div>
     )
@@ -134,7 +135,7 @@ export default function BlogPostPage() {
           <div className="flex flex-wrap items-center gap-2">
             {post.peripherals ? (
               <Badge variant="secondary" className="bg-primary/15 text-primary">
-                {relatedPeripheral ? `${relatedPeripheral.brand} • ${relatedPeripheral.name}` : (isEnglish ? "No peripheral" : "Sem periférico")}
+                {relatedPeripheral ? `${relatedPeripheral.brand} • ${relatedPeripheral.name}` : t.blog.noPeripheral}
               </Badge>
             ) : null}
             <Badge variant="outline" className="border-border bg-muted/40 text-muted-foreground">
@@ -147,7 +148,7 @@ export default function BlogPostPage() {
               <AvatarFallback>{authorName.slice(0, 1).toUpperCase()}</AvatarFallback>
             </Avatar>
             <p className="text-sm">
-              {isEnglish ? "By" : "Por"} <span className="font-semibold text-foreground">{authorName}</span>
+              {t.blog.by} <span className="font-semibold text-foreground">{authorName}</span>
             </p>
           </div>
           <CardTitle className="text-3xl text-foreground md:text-4xl">{post.title}</CardTitle>
@@ -158,7 +159,7 @@ export default function BlogPostPage() {
           {embedUrl ? (
             <div className="overflow-hidden rounded-xl border border-border bg-muted/30">
               <iframe
-                title={isEnglish ? "Related video" : "Video relacionado"}
+                title={t.blog.relatedVideo}
                 src={embedUrl}
                 className="h-[360px] w-full"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -167,7 +168,7 @@ export default function BlogPostPage() {
             </div>
           ) : post.video_url ? (
             <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-              {isEnglish ? "External video:" : "Video externo:"} <a className="text-primary underline" href={post.video_url} target="_blank" rel="noreferrer">{post.video_url}</a>
+              {t.blog.externalVideo} <a className="text-primary underline" href={post.video_url} target="_blank" rel="noreferrer">{post.video_url}</a>
             </div>
           ) : null}
 
@@ -177,10 +178,10 @@ export default function BlogPostPage() {
 
           <div className="flex flex-wrap gap-3">
             <Link href="/blog">
-              <Button variant="outline">{isEnglish ? "Back to blog" : "Voltar ao blog"}</Button>
+              <Button variant="outline">{t.blog.backToBlog}</Button>
             </Link>
             <Link href="/">
-              <Button>{isEnglish ? "View tier list" : "Ver tierlist"}</Button>
+              <Button>{t.blog.viewTierlist}</Button>
             </Link>
           </div>
         </CardContent>

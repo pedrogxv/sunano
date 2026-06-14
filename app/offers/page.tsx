@@ -9,6 +9,7 @@ import { AlertCircle, ExternalLink, MessageCircle, RefreshCw } from "lucide-reac
 import BoxLoader from "@/components/ui/box-loader"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useLocale } from "@/components/providers/locale-context"
+import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -101,8 +102,8 @@ function LivePill({ label }: { label: string }) {
 
 export default function OffersPage() {
   const { locale } = useLocale()
-  const isEnglish = locale === "en-US"
-  const dateLocale = isEnglish ? enUS : ptBR
+  const t = useT()
+  const dateLocale = locale === "en-US" ? enUS : ptBR
 
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -121,13 +122,13 @@ export default function OffersPage() {
       const res = await fetch("/api/offers")
       const data = (await res.json().catch(() => null)) as OffersApiResponse | null
       if (!res.ok || !data?.offers) {
-        throw new Error(data?.error ?? (isEnglish ? "Failed to load offers" : "Erro ao carregar ofertas"))
+        throw new Error(data?.error ?? t.offers.failedToLoad)
       }
       setOffers(data.offers)
       setWarning(data.warning ?? null)
       if (isRefresh) setPage(1)
     } catch (err) {
-      setError(err instanceof Error ? err.message : (isEnglish ? "Failed to load offers" : "Erro ao carregar ofertas"))
+      setError(err instanceof Error ? err.message : t.offers.failedToLoad)
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false)
     }
@@ -146,12 +147,12 @@ export default function OffersPage() {
         <div className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-sky-500/[0.04] blur-3xl" />
 
         <div className="relative space-y-4">
-          <LivePill label={isEnglish ? "Live · Sunano Telegram" : "Ao vivo · Sunano Telegram"} />
+          <LivePill label={t.offers.livePill} />
 
           <div className="flex items-end justify-between gap-4">
             <div>
               <h1 className="text-3xl font-black tracking-tight text-foreground md:text-4xl">
-                {isEnglish ? "Offers" : "Ofertas"}
+                {t.offers.title}
               </h1>
             </div>
 
@@ -159,7 +160,7 @@ export default function OffersPage() {
               <button
                 onClick={() => void loadOffers(true)}
                 disabled={refreshing || loading}
-                title={isEnglish ? "Refresh" : "Atualizar"}
+                title={t.offers.refresh}
                 className="flex size-9 items-center justify-center rounded-xl border border-border/50 bg-muted/20 text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground disabled:opacity-40"
               >
                 <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
@@ -171,7 +172,7 @@ export default function OffersPage() {
                 className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] px-3 py-2 text-xs font-semibold text-sky-400 transition-all hover:border-sky-500/40 hover:bg-sky-500/[0.12] hover:text-sky-300"
               >
                 <MessageCircle className="size-3.5" />
-                {isEnglish ? "Join" : "Entrar"}
+                {t.offers.join}
                 <ExternalLink className="size-3" />
               </a>
             </div>
@@ -183,9 +184,7 @@ export default function OffersPage() {
       <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/15 bg-amber-500/[0.04] px-4 py-3">
         <span className="mt-px shrink-0 text-base">📌</span>
         <p className="text-xs leading-relaxed text-amber-200/60">
-          {isEnglish
-            ? "Messages are published by third parties and may change at any time. Confirm prices before purchasing."
-            : "Mensagens publicadas por terceiros e podem mudar. Confirme os preços antes de comprar."}
+          {t.offers.disclaimer}
         </p>
       </div>
 
@@ -212,10 +211,10 @@ export default function OffersPage() {
         <div className="rounded-2xl border border-border bg-card/40 py-20 text-center">
           <MessageCircle className="mx-auto mb-3 size-10 text-muted-foreground/20" />
           <p className="text-sm font-medium text-foreground">
-            {isEnglish ? "No messages found" : "Nenhuma mensagem encontrada"}
+            {t.offers.noMessages}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            {isEnglish ? "Try again later." : "Tente novamente mais tarde."}
+            {t.offers.tryLater}
           </p>
         </div>
       ) : (
@@ -226,7 +225,7 @@ export default function OffersPage() {
               const relTime = formatDistanceToNow(new Date(offer.date), { locale: dateLocale, addSuffix: true })
               const fullDate = format(
                 new Date(offer.date),
-                isEnglish ? "MMMM dd, yyyy 'at' HH:mm" : "dd 'de' MMMM 'de' yyyy 'às' HH:mm",
+                t.offers.dateFormat,
                 { locale: dateLocale }
               )
 
@@ -260,7 +259,7 @@ export default function OffersPage() {
                       {/* Author + time */}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-foreground">
-                          {offer.author ?? (isEnglish ? "Telegram Channel" : "Canal Telegram")}
+                          {offer.author ?? t.offers.telegramChannel}
                         </p>
                         <p className="text-[11px] text-muted-foreground" title={fullDate}>
                           {relTime}
@@ -271,7 +270,7 @@ export default function OffersPage() {
                     {/* "Novo" badge */}
                     {isNew && (
                       <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                        {isEnglish ? "New" : "Novo"}
+                        {t.offers.new}
                       </span>
                     )}
                   </div>
@@ -282,7 +281,7 @@ export default function OffersPage() {
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={mediaUrl(offer.image.fileId)}
-                        alt={isEnglish ? "Offer image" : "Imagem da oferta"}
+                        alt={t.offers.offerImage}
                         className="w-full object-cover"
                         loading="lazy"
                       />
@@ -304,7 +303,7 @@ export default function OffersPage() {
                         className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
                       >
                         <MessageCircle className="size-3.5" />
-                        {isEnglish ? "Open in Telegram" : "Abrir no Telegram"}
+                        {t.offers.openInTelegram}
                         <ExternalLink className="size-3" />
                       </a>
                     </div>
@@ -322,7 +321,7 @@ export default function OffersPage() {
                 disabled={safePage === 1}
                 className="flex h-9 items-center gap-1 rounded-lg border border-border/50 bg-muted/20 px-3 text-sm text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
               >
-                ← <span className="hidden sm:inline">{isEnglish ? "Prev" : "Ant."}</span>
+                ← <span className="hidden sm:inline">{t.offers.prev}</span>
               </button>
 
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
@@ -345,7 +344,7 @@ export default function OffersPage() {
                 disabled={safePage === totalPages}
                 className="flex h-9 items-center gap-1 rounded-lg border border-border/50 bg-muted/20 px-3 text-sm text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground disabled:pointer-events-none disabled:opacity-35"
               >
-                <span className="hidden sm:inline">{isEnglish ? "Next" : "Próx."}</span> →
+                <span className="hidden sm:inline">{t.offers.next}</span> →
               </button>
             </div>
           )}

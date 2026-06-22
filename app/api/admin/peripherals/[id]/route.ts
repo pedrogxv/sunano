@@ -5,6 +5,7 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { ALLOWED_PERIPHERAL_CATEGORIES, ALLOWED_PERIPHERAL_TIERS, dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { cascadeRerank, getRankingFromSpecs } from "@/lib/server/peripherals/ranking-cascade"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -83,6 +84,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const db = createSupabaseAdminClient()
+
+  const { data: current } = await (db.from("peripherals") as any)
+    .select("category, specs")
+    .eq("id", id)
+    .single()
+
   const { data, error } = await (db.from("peripherals") as any)
     .update(parsed.data)
     .eq("id", id)
@@ -92,6 +99,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (error) {
     const { body, status } = dbErrorResponse(error, "Erro ao atualizar periférico.")
     return NextResponse.json(body, { status })
+  }
+
+  if (current) {
+    const oldCategory = current.category as string
+    const newCategory = (parsed.data.category ?? oldCategory) as string
+    const oldRanking = getRankingFromSpecs(current.specs as Record<string, unknown>)
+    const newSpecs = parsed.data.specs !== undefined
+      ? (parsed.data.specs as Record<string, unknown>)
+      : (current.specs as Record<string, unknown>)
+    const newRanking = getRankingFromSpecs(newSpecs)
+
+    if (oldCategory === newCategory) {
+      await cascadeRerank(db, newCategory, id, oldRanking, newRanking)
+    } else {
+      if (oldRanking !== null) await cascadeRerank(db, oldCategory, id, oldRanking, null)
+      if (newRanking !== null) await cascadeRerank(db, newCategory, id, null, newRanking)
+    }
   }
 
   return NextResponse.json({ peripheral: data })
@@ -109,11 +133,24 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { id } = await params
 
   const db = createSupabaseAdminClient()
+
+  const { data: current } = await (db.from("peripherals") as any)
+    .select("category, specs")
+    .eq("id", id)
+    .single()
+
   const { error } = await db.from("peripherals").delete().eq("id", id)
 
   if (error) {
     const { body, status } = dbErrorResponse(error, "Erro ao deletar periférico.")
     return NextResponse.json(body, { status })
+  }
+
+  if (current) {
+    const oldRanking = getRankingFromSpecs(current.specs as Record<string, unknown>)
+    if (oldRanking !== null) {
+      await cascadeRerank(db, current.category as string, id, oldRanking, null)
+    }
   }
 
   return NextResponse.json({ ok: true })

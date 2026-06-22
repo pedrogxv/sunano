@@ -5,6 +5,7 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { ALLOWED_PERIPHERAL_CATEGORIES, ALLOWED_PERIPHERAL_TIERS, dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { cascadeRerank, getRankingFromSpecs } from "@/lib/server/peripherals/ranking-cascade"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -87,6 +88,11 @@ export async function POST(request: NextRequest) {
   if (error) {
     const { body, status } = dbErrorResponse(error, "Erro ao criar periférico.")
     return NextResponse.json(body, { status })
+  }
+
+  const newRanking = getRankingFromSpecs((parsed.data.specs ?? {}) as Record<string, unknown>)
+  if (newRanking !== null && data) {
+    await cascadeRerank(db, parsed.data.category, data.id, null, newRanking)
   }
 
   return NextResponse.json({ peripheral: data })

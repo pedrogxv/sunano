@@ -12,10 +12,12 @@ import {
   MessageSquare,
   Mouse,
   Newspaper,
+  PlaySquare,
   Settings,
   ShoppingBag,
   Trophy,
   Users,
+  Wrench,
   X,
 } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -83,6 +85,7 @@ export function AdminSidebar() {
       items: [
         { href: "/admin/blog",   label: t.admin.sidebar.newsAndReviews, icon: Newspaper,     permission: "blog_read" },
         { href: "/admin/forum",  label: t.admin.sidebar.forum,          icon: MessageSquare, permission: "forum_read" },
+        { href: "/videos",       label: "Vídeos",                       icon: PlaySquare },
       ],
     },
     {
@@ -95,8 +98,9 @@ export function AdminSidebar() {
     {
       label: t.admin.sidebar.system,
       items: [
-        { href: "/admin/users",    label: t.admin.sidebar.users,    icon: Users,    requiresWebMaster: true },
-        { href: "/admin/settings", label: t.admin.sidebar.settings, icon: Settings, permission: "settings_read" },
+        { href: "/admin/users",       label: t.admin.sidebar.users,       icon: Users,    requiresWebMaster: true },
+        { href: "/admin/settings",    label: t.admin.sidebar.settings,    icon: Settings, permission: "settings_read" },
+        { href: "/admin/maintenance", label: "Manutenção",                icon: Wrench,   permission: "maintenance_read" },
       ],
     },
   ]

@@ -41,14 +41,12 @@ export default async function VideosPage() {
             <Card className="w-full max-w-sm border-border bg-background">
               <CardContent className="space-y-3 p-4">
                 <div className="flex items-center gap-3">
-                  {channel.thumbnailUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={channel.thumbnailUrl}
-                      alt={channel.title}
-                      className="size-12 rounded-full border border-border object-cover"
-                    />
-                  ) : null}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/images/mascot/sunano-logo.jpg"
+                    alt={channel.title}
+                    className="size-12 rounded-full border border-border object-cover"
+                  />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-foreground">{channel.title}</p>
                     <p className="truncate text-xs text-muted-foreground">{channel.customUrl || "Canal no YouTube"}</p>

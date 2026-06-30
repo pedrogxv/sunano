@@ -169,6 +169,9 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const reviewUrl = details.reviewUrl
   const reviewNote = details.reviewNote
   const notesLong = details.notesLong
+  const summary = details.summary
+  const softwareInfo = details.softwareInfo
+  const teamComments = details.teamComments
 
   const linkedProducts = await listProductsByPeripheral(data.id)
 
@@ -395,6 +398,9 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
                 </div>
 
+                {summary && (
+                  <p className="mt-1 text-sm text-muted-foreground">{summary}</p>
+                )}
 
                 <div className={cn("grid gap-4", showGrip ? "md:grid-cols-2" : "grid-cols-1")}>
                   <Card className="border-border bg-card">
@@ -436,31 +442,47 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                   )}
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card className="border-border bg-card">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Review completa no YouTube</CardTitle>
-                      <CardDescription className="text-xs">Conteudo principal do canal.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-sm text-muted-foreground">
-                      {reviewUrl ? (
-                        <a
-                          href={reviewUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/40"
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <CardTitle className="text-sm">Reviews e analises</CardTitle>
+                    <CardDescription className="text-xs">Artigos e conteudos relacionados.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="max-h-56 overflow-auto space-y-3">
+                    {relatedPosts && relatedPosts.length > 0 ? (
+                      relatedPosts.map((post: any) => (
+                        <Link
+                          key={post.id}
+                          href={`/blog/${post.slug}`}
+                          className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm text-foreground transition hover:bg-muted/40"
                         >
-                          <span>Assistir review</span>
+                          <div className="size-12 overflow-hidden rounded-lg border border-border bg-muted/40">
+                            {post.cover_thumbnail_url || post.cover_image_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                alt={post.title}
+                                className="h-full w-full object-cover"
+                                src={post.cover_thumbnail_url || post.cover_image_url}
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                                Blog
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-foreground">{post.title}</p>
+                            <p className="text-xs text-muted-foreground">Ver review</p>
+                          </div>
                           <span className="text-primary">→</span>
-                        </a>
-                      ) : (
-                        <p>Nenhum review linkado.</p>
-                      )}
-                      {reviewNote && <p className="text-xs text-muted-foreground">{reviewNote}</p>}
-                    </CardContent>
-                  </Card>
-
-                </div>
+                        </Link>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhum review publicado para este periferico.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
 
                 <Card className="border-border bg-card">
                   <CardHeader>
@@ -502,6 +524,28 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                       </div>
                     </CardContent>
                   </Card>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-sm">Software</CardTitle>
+                      <CardDescription className="text-xs">Plataformas, softwares e requisitos.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {softwareInfo || "Informacao de compatibilidade nao cadastrada."}
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-sm">Comentarios</CardTitle>
+                      <CardDescription className="text-xs">Detalhes extras da equipe.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-sm text-muted-foreground whitespace-pre-wrap">
+                      {teamComments || "Sem observacoes adicionais."}
+                    </CardContent>
+                  </Card>
+                </div>
 
                 {(linkedStore || linkedBazaar) && (
                   <Card className="border-border bg-card">
@@ -590,47 +634,6 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                 )}
 
 
-                <Card className="border-border bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-sm">Reviews e analises</CardTitle>
-                    <CardDescription className="text-xs">Artigos e conteudos relacionados.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="max-h-56 overflow-auto space-y-3">
-                    {relatedPosts && relatedPosts.length > 0 ? (
-                      relatedPosts.map((post: any) => (
-                        <Link
-                          key={post.id}
-                          href={`/blog/${post.slug}`}
-                          className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm text-foreground transition hover:bg-muted/40"
-                        >
-                          <div className="size-12 overflow-hidden rounded-lg border border-border bg-muted/40">
-                            {post.cover_thumbnail_url || post.cover_image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                alt={post.title}
-                                className="h-full w-full object-cover"
-                                src={post.cover_thumbnail_url || post.cover_image_url}
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                                Blog
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-foreground">{post.title}</p>
-                            <p className="text-xs text-muted-foreground">Ver review</p>
-                          </div>
-                          <span className="text-primary">→</span>
-                        </Link>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Nenhum review publicado para este periferico.
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
               </div>
       </div>
     </div>

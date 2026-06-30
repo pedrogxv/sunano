@@ -119,6 +119,8 @@ const peripheralSchema = z.object({
   thickness: z.string().optional(),
   surfaceMaterial: z.string().optional(),
   hasBattery: z.boolean().optional(),
+  softwareInfo: z.string().optional(),
+  teamComments: z.string().optional(),
 })
 
 type PeripheralFormData = z.infer<typeof peripheralSchema>
@@ -527,6 +529,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       price: 0,
       rankLabel: "", ranking: undefined, score: undefined, priceRange: "", reviewUrl: "", reviewNote: "", guideUrl: "", wikiUrl: "",
       notesLong: "", summary: "", highlights: "", pros: "", cons: "", gallery: "",
+      softwareInfo: "", teamComments: "",
       buyLinks: "", compatibility: "", notes: "", comparisons: "",
       weight: "", latency: "", switchType: "", coating: "", shape: "",
       gripSmall: "", gripMedium: "", gripLarge: "",
@@ -632,6 +635,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           wikiUrl: data.specs?.details?.wikiUrl ?? "",
           notesLong: data.specs?.details?.notesLong ?? "",
           summary: data.specs?.details?.summary ?? "",
+          softwareInfo: data.specs?.details?.softwareInfo ?? "",
+          teamComments: data.specs?.details?.teamComments ?? "",
           highlights: Array.isArray(data.specs?.details?.highlights) ? data.specs.details.highlights.join("\n") : data.specs?.details?.highlights ?? "",
           pros: Array.isArray(data.specs?.details?.pros) ? data.specs.details.pros.join("\n") : data.specs?.details?.pros ?? "",
           cons: Array.isArray(data.specs?.details?.cons) ? data.specs.details.cons.join("\n") : data.specs?.details?.cons ?? "",
@@ -775,6 +780,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           pros: splitLines(data.pros), cons: splitLines(data.cons), gallery: finalGallery,
           buyLinks: parseBuyLinks(data.buyLinks), compatibility: data.compatibility || undefined,
           notes: data.notes || undefined, comparisons: splitLines(data.comparisons),
+          softwareInfo: data.softwareInfo || undefined,
+          teamComments: data.teamComments || undefined,
           weight: data.weight || undefined, latency: data.latency || undefined,
           deadzone: data.deadzone || undefined, rtMin: data.rtMin || undefined,
           features: data.features || undefined,
@@ -1896,6 +1903,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         {/* SECTION 7: Wiki / Conteúdo */}
         <FormSection title={t.admin.tierlistForm.sectionWikiContent} icon={<FileText className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{"Descrição"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Resumo breve do produto exibido acima das especificações"} rows={2} {...form.register("summary")} />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">{"Pontuação"}</label>
@@ -1915,6 +1927,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Nota do review"}</label>
               <Textarea className="border-border bg-background resize-none" placeholder={"Observação curta sobre o review"} rows={2} {...form.register("reviewNote")} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{"Software"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{"Comentarios da equipe"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Detalhes extras e observações internas da equipe"} rows={3} {...form.register("teamComments")} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

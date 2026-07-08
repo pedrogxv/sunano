@@ -60,7 +60,10 @@ const peripheralSchema = z.object({
     .positive("Preço deve ser maior que zero"),
   rankLabel: z.string().optional(),
   ranking: z.coerce.number().int().positive().optional(),
-  score: z.coerce.number().min(0).optional(),
+  score: z.preprocess(
+    (value) => (value === "" || value === null || Number.isNaN(value) ? undefined : value),
+    z.coerce.number().min(0).optional()
+  ),
   reviewUrl: z.string().optional(),
   reviewNote: z.string().optional(),
   guideUrl: z.string().optional(),
@@ -1969,6 +1972,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Comentarios da equipe"}</label>
               <Textarea className="border-border bg-background resize-none" placeholder={"Detalhes extras e observações internas da equipe"} rows={3} {...form.register("teamComments")} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{"Notas"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Contexto e observações principais exibidas no card \"Notas\""} rows={3} {...form.register("notesLong")} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -39,7 +39,7 @@ const SOCIAL_LINKS = [
 type PageDefaults = { title: string; description?: string }
 
 const PAGE_DEFAULTS: Record<string, PageDefaults> = {
-  "/":                  { title: "Tier List", description: "A tierlist definitiva de periféricos gamers." },
+  "/":                  { title: "Home", description: "Tudo que você precisa saber." },
   "/noticias":          { title: "Notícias", description: "Últimas novidades do mundo dos periféricos." },
   "/perifericos":       { title: "Periféricos", description: "Wiki pesquisável com filtros por categoria, marca e preço." },
   "/blog":              { title: "Reviews", description: "Reviews completos e análises detalhadas." },

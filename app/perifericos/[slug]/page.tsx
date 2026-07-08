@@ -448,7 +448,24 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                     <CardDescription className="text-xs">Artigos e conteudos relacionados.</CardDescription>
                   </CardHeader>
                   <CardContent className="max-h-56 overflow-auto space-y-3">
-                    {relatedPosts && relatedPosts.length > 0 ? (
+                    {reviewUrl && (
+                      <Link
+                        href={reviewUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm text-foreground transition hover:bg-muted/40"
+                      >
+                        <div className="flex size-12 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/40 text-xs text-muted-foreground">
+                          Vídeo
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">{"Review em vídeo"}</p>
+                          <p className="text-xs text-muted-foreground">{reviewNote || "Ver review"}</p>
+                        </div>
+                        <span className="text-primary">→</span>
+                      </Link>
+                    )}
+                    {relatedPosts && relatedPosts.length > 0 &&
                       relatedPosts.map((post: any) => (
                         <Link
                           key={post.id}
@@ -475,8 +492,8 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                           </div>
                           <span className="text-primary">→</span>
                         </Link>
-                      ))
-                    ) : (
+                      ))}
+                    {!reviewUrl && (!relatedPosts || relatedPosts.length === 0) && (
                       <p className="text-sm text-muted-foreground">
                         Nenhum review publicado para este periferico.
                       </p>

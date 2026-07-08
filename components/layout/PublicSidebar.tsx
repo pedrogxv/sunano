@@ -73,7 +73,9 @@ function NavLink({
 
 export function PublicSidebar() {
   const t = useT()
-  const { publicCollapsed: isCollapsed, isMobileOpen, setMobileOpen } = useSidebar()
+  const { isMobileOpen, setMobileOpen } = useSidebar()
+  // A sidebar pública sempre exibe os nomes; no desktop nunca recolhe para só ícones.
+  const isCollapsed = false
   const pathname = usePathname()
   const { count: cartCount, setOpen: openCart } = useCart()
 

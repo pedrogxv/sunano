@@ -102,10 +102,11 @@ export function TopBar() {
   // On desktop this collapses/expands the sidebar; on mobile it opens/closes the
   // drawer. Each action is inert at the other breakpoint, so we fire both.
   const handleSidebarToggle = () => {
-    toggleCollapsed()
     if (isAdmin) {
+      toggleCollapsed()
       setAdminMobileOpen(!isAdminMobileOpen)
     } else {
+      // Na área pública não há recolhimento no desktop; o botão só abre a gaveta no mobile.
       setMobileOpen(!isMobileOpen)
     }
   }
@@ -129,12 +130,15 @@ export function TopBar() {
           <button
             type="button"
             onClick={handleSidebarToggle}
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
+            className={cn(
+              "flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground",
+              !isAdmin && "md:hidden"
+            )}
             aria-label={isCollapsed ? "Expandir sidebar" : "Recolher sidebar"}
           >
             <PanelLeft className="size-[18px]" />
           </button>
-          <div className="h-8 w-px shrink-0 bg-border" />
+          <div className={cn("h-8 w-px shrink-0 bg-border", !isAdmin && "md:hidden")} />
           <div className="min-w-0 flex flex-col justify-center leading-tight">
             <span className="truncate text-sm font-semibold tracking-tight text-foreground">{pageTitle}</span>
             {pageDescription && (

@@ -19,8 +19,7 @@ import {
 } from "lucide-react"
 import { useEffect, useState } from "react"
 
-import { AuthUser } from "@/components/auth/auth-user"
-import { SunanoLogo } from "@/components/ui/SunanoLogo"
+import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { useCart } from "@/components/providers/cart-context"
 import { useT } from "@/lib/use-t"
@@ -134,7 +133,16 @@ export function PublicSidebar() {
               isCollapsed ? "justify-center" : "items-center"
             )}
           >
-            <SunanoLogo showText={!isCollapsed} subtitle="Tierlist" />
+            {isCollapsed ? (
+              <SunanoIcon />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src="/images/mascot/logo-wordmark.png"
+                alt="Sunano Tierlist"
+                className="h-9 w-auto shrink-0 object-contain"
+              />
+            )}
           </Link>
 
           {/* Início */}
@@ -261,11 +269,6 @@ export function PublicSidebar() {
             />
           </div>
         ) : null}
-
-        {/* User */}
-        <div className="border-t border-border px-3 py-2">
-          <AuthUser isCollapsed={isCollapsed} loginHref="/login" variant="public" />
-        </div>
 
         {/* Links legais — ocultos quando colapsado */}
         {!isCollapsed && (

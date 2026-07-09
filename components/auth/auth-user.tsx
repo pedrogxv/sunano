@@ -34,9 +34,12 @@ interface AuthUserProps {
   loginHref?: string
   /** "public" mostra "Meu perfil" (/perfil); "admin" mostra "Configurações" (/admin/settings). */
   variant?: "public" | "admin"
+  /** "sidebar" (padrão) usa o layout de rodapé; "topbar" usa um avatar compacto no canto,
+   *  com o menu abrindo para baixo. */
+  layout?: "sidebar" | "topbar"
 }
 
-export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", variant = "admin" }: AuthUserProps) {
+export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", variant = "admin", layout = "sidebar" }: AuthUserProps) {
   const t = useT()
   const [user, setUser] = useState<UserState | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -86,6 +89,9 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   }, [])
 
   if (!ready) {
+    if (layout === "topbar") {
+      return <div className="size-8 shrink-0 rounded-lg bg-muted/40 animate-pulse" />
+    }
     return (
       <div
         className={cn(
@@ -105,6 +111,17 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   }
 
   if (!user) {
+    if (layout === "topbar") {
+      return (
+        <Link
+          href={loginHref}
+          className="flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40"
+        >
+          <LogIn className="size-[15px] text-primary" />
+          <span>Login</span>
+        </Link>
+      )
+    }
     return (
       <Link
         href={loginHref}
@@ -124,33 +141,48 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "flex w-full items-center rounded-lg px-3 py-2.5 transition-all hover:bg-muted/40",
-            isCollapsed ? "justify-center px-0" : "gap-3"
-          )}
-        >
-          <Avatar className="size-8 shrink-0 rounded-lg">
-            <AvatarImage src={user.avatar} alt={user.name} />
-            <AvatarFallback className="rounded-lg bg-primary/15 text-xs font-semibold text-primary">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
-          {!isCollapsed && (
-            <>
-              <div className="flex min-w-0 flex-1 flex-col text-left">
-                <span className="truncate text-sm font-medium text-foreground">{user.name}</span>
-                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-              </div>
-              <MoreVertical className="size-4 shrink-0 text-muted-foreground" />
-            </>
-          )}
-        </button>
+        {layout === "topbar" ? (
+          <button
+            type="button"
+            aria-label={user.name}
+            className="flex shrink-0 items-center justify-center rounded-lg transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          >
+            <Avatar className="size-8 rounded-lg ring-1 ring-border">
+              <AvatarImage src={user.avatar} alt={user.name} />
+              <AvatarFallback className="rounded-lg bg-primary/15 text-xs font-semibold text-primary">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={cn(
+              "flex w-full items-center rounded-lg px-3 py-2.5 transition-all hover:bg-muted/40",
+              isCollapsed ? "justify-center px-0" : "gap-3"
+            )}
+          >
+            <Avatar className="size-8 shrink-0 rounded-lg">
+              <AvatarImage src={user.avatar} alt={user.name} />
+              <AvatarFallback className="rounded-lg bg-primary/15 text-xs font-semibold text-primary">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            {!isCollapsed && (
+              <>
+                <div className="flex min-w-0 flex-1 flex-col text-left">
+                  <span className="truncate text-sm font-medium text-foreground">{user.name}</span>
+                  <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                </div>
+                <MoreVertical className="size-4 shrink-0 text-muted-foreground" />
+              </>
+            )}
+          </button>
+        )}
       </DropdownMenuTrigger>
 
       <DropdownMenuContent
-        side="top"
+        side={layout === "topbar" ? "bottom" : "top"}
         align="end"
         sideOffset={8}
         className="w-56 border-border bg-popover text-foreground shadow-xl"

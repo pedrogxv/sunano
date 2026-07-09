@@ -1,7 +1,7 @@
 "use client"
 
 import type { SVGProps } from "react"
-import { Check, ChevronDown, Globe, MessageCircleMore, Moon, PanelLeft, Send, Sun, Youtube } from "lucide-react"
+import { Check, ChevronDown, Globe, Moon, PanelLeft, Send, Sun, Youtube } from "lucide-react"
 import { usePathname } from "next/navigation"
 import {
   DropdownMenu,
@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { AuthUser } from "@/components/auth/auth-user"
 import { getLanguageEntry, I18N, LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
 import { useLocale } from "@/components/providers/locale-context"
 import { useTheme } from "@/components/providers/theme-context"
@@ -18,15 +19,25 @@ import { useSidebar } from "@/components/providers/sidebar-context"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
 import { cn } from "@/lib/utils"
 
+/** Ícone do Discord em cor sólida (currentColor) para acompanhar o hover
+ *  invertido dos demais ícones sociais da barra. */
+function DiscordIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>
+      <path d="M20.317 4.369A19.79 19.79 0 0 0 15.432 3c-.21.378-.456.888-.625 1.293a18.27 18.27 0 0 0-5.616 0A12.6 12.6 0 0 0 8.56 3a19.74 19.74 0 0 0-4.886 1.372C.554 9.043-.32 13.58.113 18.057a19.9 19.9 0 0 0 6.073 3.058c.49-.67.927-1.382 1.303-2.13a12.9 12.9 0 0 1-2.05-.984c.172-.126.34-.258.502-.394a14.2 14.2 0 0 0 12.118 0c.164.14.332.272.502.394-.654.388-1.343.718-2.053.985.376.747.812 1.459 1.303 2.129a19.84 19.84 0 0 0 6.075-3.058c.5-5.177-.838-9.673-3.518-13.69ZM8.02 15.331c-1.182 0-2.157-1.085-2.157-2.42 0-1.334.955-2.42 2.157-2.42 1.21 0 2.176 1.095 2.157 2.42 0 1.335-.955 2.42-2.157 2.42Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.42 0-1.334.955-2.42 2.157-2.42 1.21 0 2.176 1.095 2.157 2.42 0 1.335-.946 2.42-2.157 2.42Z" />
+    </svg>
+  )
+}
+
 const SOCIAL_LINKS = [
   {
     label: "YouTube",
     icon: Youtube,
-    href: "https://youtube.com/@sunano",
+    href: "https://youtube.com/@sunano_",
   },
   {
     label: "Discord",
-    icon: MessageCircleMore,
+    icon: DiscordIcon,
     href: "https://discord.gg/kAHbEe5w3D",
   },
   {
@@ -222,6 +233,14 @@ export function TopBar() {
               )
             })}
           </div>
+
+          {/* Conta — sempre visível no canto; no admin fica na própria sidebar. */}
+          {!isAdmin && (
+            <>
+              <div className="h-6 w-px shrink-0 bg-border" />
+              <AuthUser layout="topbar" variant="public" loginHref="/login" />
+            </>
+          )}
         </div>
       </div>
     </div>

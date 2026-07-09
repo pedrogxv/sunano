@@ -43,9 +43,9 @@ export default async function VideosPage() {
                 <div className="flex items-center gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src="/images/mascot/sunano-logo2.jpeg"
+                    src="/images/mascot/Logo-Sunano_calo-contorno.png"
                     alt={channel.title}
-                    className="size-12 rounded-full border border-border object-cover"
+                    className="size-12 shrink-0 object-contain"
                   />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-foreground">{channel.title}</p>

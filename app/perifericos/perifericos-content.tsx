@@ -43,6 +43,7 @@ type Peripheral = {
   tier: Tier | null
   price: number
   ranking?: number
+  score?: number
   tags: Tag[]
   specs: {
     mouseShape?: "symmetrical" | "ergonomic"
@@ -901,8 +902,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           {/* Ranking list */}
           {(() => {
             const ranked = initialData
-              .filter((p) => p.category === selectedCategory && typeof p.ranking === "number")
-              .sort((a, b) => (a.ranking as number) - (b.ranking as number))
+              .filter((p) => p.category === selectedCategory && typeof p.score === "number" && (p.score as number) > 0)
+              .sort((a, b) => (b.score as number) - (a.score as number))
+              .slice(0, 3)
             if (ranked.length === 0) return null
             return (
               <div className="mb-8">
@@ -910,7 +912,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                   {t.peripherals.ranking}
                 </p>
                 <div className="flex flex-col gap-1.5">
-                  {ranked.map((item) => {
+                  {ranked.map((item, index) => {
                     const href = `/perifericos/${buildPeripheralSlug(item.name, item.id)}`
                     return (
                       <Link
@@ -919,7 +921,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                         className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 transition-all hover:bg-muted/40"
                       >
                         <span className="w-7 text-center text-sm font-black tabular-nums text-muted-foreground">
-                          #{item.ranking}
+                          #{index + 1}
                         </span>
                         {item.image_url && (
                           // eslint-disable-next-line @next/next/no-img-element

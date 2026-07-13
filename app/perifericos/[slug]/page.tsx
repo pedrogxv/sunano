@@ -341,7 +341,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                 <Card className="border-border bg-card">
                   <CardHeader className="space-y-1">
                     <CardTitle className="text-sm">Notas gerais</CardTitle>
-                    <CardDescription className="text-xs">Escala de 0 a 6 (GOAT = 6).</CardDescription>
+                    <CardDescription className="text-sm">Escala de 0 a 6 (GOAT = 6)</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <RatingRow label="Geral" rating={ratings.overall} />
@@ -360,6 +360,15 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                   </CardHeader>
                   <CardContent className="max-h-56 overflow-auto text-sm text-muted-foreground whitespace-pre-wrap">
                     {notesLong || "Sem notas cadastradas."}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <CardTitle className="text-sm">Software do Periférico</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground whitespace-pre-wrap">
+                    {softwareInfo ? linkifyText(softwareInfo) : "Informacao de compatibilidade nao cadastrada."}
                   </CardContent>
                 </Card>
               </div>
@@ -383,9 +392,9 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                     {rankBadge && (
                       <Link
                         href="/ranking"
-                        className="flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary transition hover:bg-primary/20"
+                        className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"
                       >
-                        <Trophy className="size-3.5" />
+                        <Trophy className="size-5" />
                         {`#${rankBadge.position} de ${rankBadge.total} no Ranking`}
                       </Link>
                     )}
@@ -497,7 +506,6 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                             allowFullScreen
                           />
                         </div>
-                        {reviewNote && <p className="text-xs text-muted-foreground">{reviewNote}</p>}
                       </div>
                     ) : reviewUrl ? (
                       <Link
@@ -556,12 +564,12 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                 </Card>
 
                 <Card className="border-border bg-card">
-                  <CardContent className="max-h-80 overflow-auto space-y-3 pt-6 text-base text-muted-foreground">
-                      <div className="grid gap-3 md:grid-cols-2">
+                  <CardContent className="max-h-80 overflow-auto pt-0 text-base text-muted-foreground">
+                      <div className="grid gap-6 md:grid-cols-2">
                         <div>
-                          <p className="text-lg font-semibold text-emerald-400">Pontos positivos</p>
+                          <p className="mb-3 text-lg font-bold text-green-500">Pontos positivos</p>
                           {pros.length > 0 ? (
-                            <ul className="list-disc space-y-1 pl-4 text-base">
+                            <ul className="list-disc space-y-2 pl-5 text-base">
                               {pros.map((item: string) => (
                                 <li key={item}>{item}</li>
                               ))}
@@ -571,9 +579,9 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                           )}
                         </div>
                         <div>
-                          <p className="text-lg font-semibold text-rose-400">Pontos negativos</p>
+                          <p className="mb-3 text-lg font-bold text-red-500">Pontos negativos</p>
                           {cons.length > 0 ? (
-                            <ul className="list-disc space-y-1 pl-4 text-base">
+                            <ul className="list-disc space-y-2 pl-5 text-base">
                               {cons.map((item: string) => (
                                 <li key={item}>{item}</li>
                               ))}
@@ -586,26 +594,14 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                     </CardContent>
                   </Card>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Card className="border-border bg-card">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Software do Periférico</CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {softwareInfo ? linkifyText(softwareInfo) : "Informacao de compatibilidade nao cadastrada."}
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-border bg-card">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Comentarios</CardTitle>
-                      <CardDescription className="text-xs">Detalhes extras da equipe.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="text-sm text-muted-foreground whitespace-pre-wrap">
-                      {teamComments || "Sem observacoes adicionais."}
-                    </CardContent>
-                  </Card>
-                </div>
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Comentarios</CardTitle>
+                  </CardHeader>
+                  <CardContent className="max-h-80 overflow-auto text-base text-muted-foreground whitespace-pre-wrap">
+                    {teamComments || "Sem observacoes adicionais."}
+                  </CardContent>
+                </Card>
 
                 {(linkedStore || linkedBazaar) && (
                   <Card className="border-border bg-card">

@@ -1963,7 +1963,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{"Consideracoes sobre o periferico"}</label>
+              <label className="text-sm font-medium text-foreground">{"Sobre as notas"}</label>
               <Textarea className="border-border bg-background resize-none" placeholder={"Detalhes extras e observações internas da equipe"} rows={3} {...form.register("teamComments")} />
             </div>
 

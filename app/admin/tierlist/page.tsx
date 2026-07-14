@@ -60,7 +60,7 @@ interface Peripheral {
   price: number
   image_url: string | null
   tags: Tag[]
-  specs: Record<string, string | number | boolean | undefined>
+  specs: Record<string, string | number | boolean | string[] | undefined>
   created_at: string
 }
 
@@ -147,6 +147,17 @@ function getModeTier(item: Peripheral, tierKey: string | null): TierValue {
   if (tierKey === null) return item.tier
   const value = item.specs?.[tierKey]
   return typeof value === "string" && (TIER_VALUES as string[]).includes(value) ? (value as Tier) : null
+}
+
+// Sem `tierlistCategories` definido (itens legados), o item continua visível em todos os
+// modos, preservando o comportamento anterior à existência deste campo. O modo "geral" tem
+// nomes diferentes entre o board admin (`performance`) e a Tierlist pública (`overall`) —
+// normaliza para o mesmo valor gravado pelo formulário de criação/edição.
+function participatesInMode(item: Peripheral, mode: RatingMode): boolean {
+  const categories = item.specs?.tierlistCategories
+  if (!Array.isArray(categories)) return true
+  const normalizedMode = mode === "performance" ? "overall" : mode
+  return categories.includes(normalizedMode)
 }
 
 function withModeTier(item: Peripheral, tier: TierValue, tierKey: string | null): Peripheral {
@@ -1047,7 +1058,9 @@ export default function AdminPeripheralsPage() {
         selectedKeyboardLayout === "all" ||
         specs.keyboardLayout === selectedKeyboardLayout
 
-      return matchesQuery && matchesBrand && matchesPrice && matchesMouseShape && matchesKeyboardLayout
+      const matchesTierlistMode = participatesInMode(item, ratingMode)
+
+      return matchesQuery && matchesBrand && matchesPrice && matchesMouseShape && matchesKeyboardLayout && matchesTierlistMode
     })
   }, [
     visualPeripherals,
@@ -1056,6 +1069,7 @@ export default function AdminPeripheralsPage() {
     selectedBrand,
     selectedPriceBand,
     selectedMouseShape,
+    ratingMode,
     selectedKeyboardLayout,
   ])
 

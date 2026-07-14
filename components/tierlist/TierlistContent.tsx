@@ -44,6 +44,7 @@ type Peripheral = {
     adminTier_soundTyping?: TierValue
     adminTier_mechanical?: TierValue
     adminTier_pcb?: TierValue
+    tierlistCategories?: string[]
   }
 }
 

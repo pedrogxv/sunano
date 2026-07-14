@@ -48,6 +48,7 @@ interface Peripheral {
     driver?: string
     profile?: string
     panelType?: string
+    tierlistCategories?: string[]
   }
 }
 
@@ -80,6 +81,14 @@ function getModeTier(item: Peripheral, tierKey: string | null): TierValue {
   if (tierKey === null) return item.tier
   const value = item.specs?.[tierKey as keyof Peripheral["specs"]]
   return typeof value === "string" && (TIER_VALUES as string[]).includes(value) ? (value as Tier) : null
+}
+
+// Sem `tierlistCategories` definido (itens legados), o item continua visível em todas as
+// abas, preservando o comportamento anterior à existência deste campo.
+function participatesInMode(item: Peripheral, mode: RatingMode): boolean {
+  const categories = item.specs?.tierlistCategories
+  if (!Array.isArray(categories)) return true
+  return categories.includes(mode)
 }
 
 function getTierOrder(item: Peripheral, orderKey: string, allowLegacyFallback: boolean): number | null {
@@ -315,10 +324,15 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
   const localizedModeDescription = t.tierlist.modeDescriptions[ratingMode]
 
+  const visibleItems = useMemo(
+    () => filtered.filter((item) => participatesInMode(item, ratingMode)),
+    [filtered, ratingMode]
+  )
+
   const itemsByTier = useMemo(
     () =>
       tierRows.map((tier) => {
-        let tierItems = filtered.filter((item) => getModeTier(item, tierKey) === tier.key)
+        let tierItems = visibleItems.filter((item) => getModeTier(item, tierKey) === tier.key)
         if (modeConfig.filterItem) tierItems = tierItems.filter(modeConfig.filterItem)
         return {
           ...tier,
@@ -327,19 +341,19 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
           ),
         }
       }),
-    [filtered, modeConfig, tierRows, orderKey, allowLegacyFallback, tierKey]
+    [visibleItems, modeConfig, tierRows, orderKey, allowLegacyFallback, tierKey]
   )
 
   const untieredItems = useMemo(() => {
-    let items = filtered.filter((item) => getModeTier(item, tierKey) === null)
+    let items = visibleItems.filter((item) => getModeTier(item, tierKey) === null)
     if (modeConfig.filterItem) items = items.filter(modeConfig.filterItem)
     return sortWithTierOrder(items, orderKey, allowLegacyFallback, modeConfig.fallbackSort).map((item) => ({
       ...item,
       tier: null,
     }))
-  }, [filtered, modeConfig, orderKey, allowLegacyFallback, tierKey])
+  }, [visibleItems, modeConfig, orderKey, allowLegacyFallback, tierKey])
 
-  const hasItems = filtered.length > 0
+  const hasItems = visibleItems.length > 0
 
   useEffect(() => {
     if (ratingMode === "oled" && category !== "monitors") setRatingMode("overall")

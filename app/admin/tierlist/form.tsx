@@ -139,6 +139,54 @@ const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
   { key: "dac_amp", label: "DAC/AMP", emoji: "🎚️" },
 ]
 
+// Modos de exibição da Tierlist pública, por categoria de dispositivo. Um periférico só
+// aparece em uma aba da Tierlist (/tierlist) se o modo dela estiver na lista escolhida aqui;
+// sem nenhum modo selecionado, o item continua salvo no banco mas some da Tierlist pública.
+type TierlistMode = "oled" | "overall" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb"
+
+const DEFAULT_TIERLIST_MODE_OPTIONS: { key: TierlistMode; label: string }[] = [
+  { key: "overall", label: "Geral" },
+  { key: "value", label: "Custo Benefício" },
+  { key: "recommended", label: "Recomendado" },
+]
+
+const TIERLIST_MODE_OPTIONS: Record<Category, { key: TierlistMode; label: string }[]> = {
+  keyboard: [
+    { key: "magnetic", label: "Magnético" },
+    { key: "value", label: "Custo Benefício" },
+    { key: "mechanical", label: "Mecânico" },
+    { key: "pcb", label: "PCB" },
+  ],
+  monitors: [
+    { key: "oled", label: "OLED" },
+    { key: "overall", label: "Geral" },
+    { key: "value", label: "Custo Benefício" },
+    { key: "recommended", label: "Recomendado" },
+  ],
+  switches: [
+    { key: "overall", label: "Geral" },
+    { key: "value", label: "Custo Benefício" },
+    { key: "recommended", label: "Recomendado" },
+    { key: "soundTyping", label: "Som e Digitação" },
+  ],
+  mousepad: [
+    { key: "overall", label: "Geral" },
+    { key: "value", label: "Nacional" },
+    { key: "recommended", label: "Recomendado" },
+  ],
+  glasspad: [
+    { key: "overall", label: "Geral" },
+    { key: "value", label: "Nacional" },
+    { key: "recommended", label: "Recomendado" },
+  ],
+  mouse: DEFAULT_TIERLIST_MODE_OPTIONS,
+  iem: DEFAULT_TIERLIST_MODE_OPTIONS,
+  headset: DEFAULT_TIERLIST_MODE_OPTIONS,
+  feet: DEFAULT_TIERLIST_MODE_OPTIONS,
+  chairs: DEFAULT_TIERLIST_MODE_OPTIONS,
+  dac_amp: DEFAULT_TIERLIST_MODE_OPTIONS,
+}
+
 const TIER_OPTIONS: { key: Tier; color: string; textColor: string; bg: string }[] = [
   { key: "GOAT", color: "border-orange-400 bg-orange-500/20 text-orange-300", textColor: "text-orange-300", bg: "bg-orange-500/20" },
   { key: "SS", color: "border-yellow-400 bg-yellow-500/20 text-yellow-300", textColor: "text-yellow-300", bg: "bg-yellow-500/20" },
@@ -508,6 +556,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [bgRemoved, setBgRemoved] = useState(false)
   const [removingBg, setRemovingBg] = useState(false)
   const [selectedTag, setSelectedTag] = useState<Tag[]>([])
+  const [selectedTierlistCategories, setSelectedTierlistCategories] = useState<TierlistMode[]>([])
   const [error, setError] = useState<string | null>(null)
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
   const [originalUsdPrice, setOriginalUsdPrice] = useState<number | null>(null)
@@ -553,6 +602,23 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
   const watchedTier = form.watch("tier")
   const watchedCategory = form.watch("category")
+  const watchedKeyboardType = form.watch("keyboardType")
+
+  useEffect(() => {
+    const validKeys = (TIERLIST_MODE_OPTIONS[watchedCategory] ?? []).map((option) => option.key)
+    setSelectedTierlistCategories((prev) => prev.filter((mode) => validKeys.includes(mode)))
+  }, [watchedCategory])
+
+  // O tipo de switch já diz se o teclado é magnético ou mecânico — usa esse sinal para manter
+  // a categoria da Tierlist coerente sem exigir que o admin marque isso de novo manualmente.
+  useEffect(() => {
+    if (watchedCategory !== "keyboard") return
+    if (watchedKeyboardType === "magnetic") {
+      setSelectedTierlistCategories((prev) => Array.from(new Set([...prev.filter((m) => m !== "mechanical"), "magnetic" as TierlistMode])))
+    } else if (watchedKeyboardType === "mechanical") {
+      setSelectedTierlistCategories((prev) => Array.from(new Set([...prev.filter((m) => m !== "magnetic"), "mechanical" as TierlistMode])))
+    }
+  }, [watchedCategory, watchedKeyboardType])
 
   usePageHeader(
     peripheralId ? t.admin.tierlistForm.headerEdit : t.admin.tierlistForm.headerNew,
@@ -667,6 +733,13 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           ...data.specs,
         })
         setSelectedTag(data.tags ?? [])
+        const validTierlistKeys = (TIERLIST_MODE_OPTIONS[data.category as Category] ?? []).map((option) => option.key)
+        const storedTierlistCategories = Array.isArray(data.specs?.tierlistCategories)
+          ? (data.specs.tierlistCategories as string[])
+          : validTierlistKeys
+        setSelectedTierlistCategories(
+          storedTierlistCategories.filter((mode): mode is TierlistMode => validTierlistKeys.includes(mode as TierlistMode))
+        )
         if (data.image_url) setImagePreview(data.image_url)
         const galleryArr = Array.isArray(data.specs?.details?.gallery) ? data.specs.details.gallery : []
         setExistingGalleryUrls(galleryArr.filter(Boolean))
@@ -767,6 +840,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         hasBattery: data.hasBattery ?? undefined,
         refreshRate: typeof data.refreshRate === "number" && !Number.isNaN(data.refreshRate) ? data.refreshRate : undefined,
         panelType: data.panelType || undefined,
+        tierlistCategories: selectedTierlistCategories,
         details: {
           rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: data.score ?? undefined,
           reviewUrl: data.reviewUrl || undefined,
@@ -955,6 +1029,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const toggleTag = (tag: Tag) =>
     setSelectedTag((prev) => prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag])
 
+  const toggleTierlistCategory = (mode: TierlistMode) =>
+    setSelectedTierlistCategories((prev) => prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode])
+
   const setRating = (field: keyof PeripheralFormData, value: number | undefined) => {
     form.setValue(field as any, value)
   }
@@ -1095,6 +1172,39 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
               {form.formState.errors.category && (
                 <p className="text-xs text-red-400">{form.formState.errors.category.message as string}</p>
+              )}
+            </div>
+
+            {/* Tierlist categories picker */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Categorias na Tierlist
+              </label>
+              <p className="text-xs text-muted-foreground/80">
+                Selecione em quais abas da Tierlist pública este periférico deve aparecer. Se nenhuma for selecionada, ele continua salvo no banco de dados, mas não aparece na Tierlist.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {(TIERLIST_MODE_OPTIONS[watchedCategory] ?? []).map((mode) => {
+                  const active = selectedTierlistCategories.includes(mode.key)
+                  return (
+                    <button
+                      key={mode.key}
+                      type="button"
+                      onClick={() => toggleTierlistCategory(mode.key)}
+                      className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
+                        active
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
+                      }`}
+                    >
+                      {mode.label}
+                      {active && " ✓"}
+                    </button>
+                  )
+                })}
+              </div>
+              {selectedTierlistCategories.length === 0 && (
+                <p className="text-xs text-amber-400">Nenhuma categoria selecionada — este periférico não aparecerá na Tierlist pública.</p>
               )}
             </div>
 

@@ -107,6 +107,7 @@
   
   --font-sans: 'Manrope', 'Manrope Fallback', system-ui, sans-serif;
   --font-display: 'Space Grotesk', 'Space Grotesk Fallback', system-ui, sans-serif;
+  --font-handwritten: 'Caveat', 'Caveat Fallback', cursive;
 }
 
 @layer base {
@@ -126,6 +127,10 @@ h3,
 .font-display {
   font-family: var(--font-space-grotesk), var(--font-manrope), sans-serif;
   letter-spacing: -0.025em;
+}
+
+.font-handwritten {
+  font-family: var(--font-caveat), var(--font-manrope), cursive;
 }
 
 /* Scrollbar styling */

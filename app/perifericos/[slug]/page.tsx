@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Package, ShoppingBag, Trophy } from "lucide-react"
+import { Package, ShoppingBag } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,6 +13,8 @@ import { CARD_TAG_STYLES, CARD_TIER_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } f
 import { BackButton } from "@/components/ui/back-button"
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
+import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
+import { formatBRL, formatCurrencyBRL } from "@/lib/stripe"
 
 interface PerifericoPageProps {
   params: Promise<{ slug: string }>
@@ -29,7 +31,7 @@ function formatLabel(value: string) {
 
 function formatCurrency(value: number) {
   try {
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+    return formatCurrencyBRL(value)
   } catch (error) {
     return `R$${value}`
   }
@@ -207,9 +209,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
   const score = details.score != null ? Number(details.score) : null
   const reviewUrl = details.reviewUrl
-  const reviewNote = details.reviewNote
   const youtubeId = getYoutubeEmbedId(reviewUrl)
-  const notesLong = details.notesLong
   const softwareInfo = details.softwareInfo
   const teamComments = details.teamComments
 
@@ -359,15 +359,6 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
                 <Card className="border-border bg-card">
                   <CardHeader>
-                    <CardTitle className="text-sm">Comentários sobre as notas</CardTitle>
-                  </CardHeader>
-                  <CardContent className="max-h-56 overflow-auto text-sm text-muted-foreground whitespace-pre-wrap">
-                    {notesLong || "Sem notas cadastradas."}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-border bg-card">
-                  <CardHeader>
                     <CardTitle className="text-sm">Software do Periférico</CardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground whitespace-pre-wrap">
@@ -393,13 +384,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                     </div>
 
                     {rankBadge && (
-                      <Link
-                        href="/ranking"
-                        className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2 text-sm font-semibold text-primary transition hover:bg-primary/20"
-                      >
-                        <Trophy className="size-5" />
-                        {`#${rankBadge.position} de ${rankBadge.total} no Ranking`}
-                      </Link>
+                      <RankingCrownBadge position={rankBadge.position} total={rankBadge.total} />
                     )}
                   </div>
 
@@ -541,7 +526,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                         </div>
                         <div className="flex-1">
                           <p className="text-sm font-medium text-foreground">{"Review em vídeo"}</p>
-                          <p className="text-xs text-muted-foreground">{reviewNote || "Ver review"}</p>
+                          <p className="text-xs text-muted-foreground">{"Ver review"}</p>
                         </div>
                         <span className="text-primary">→</span>
                       </Link>
@@ -651,7 +636,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-300">🛒 Loja</p>
                             <p className="truncate text-sm font-medium text-foreground">{linkedStore.name}</p>
                             <p className="text-xs text-emerald-400">
-                              {(linkedStore.price_cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                              {formatBRL(linkedStore.price_cents)}
                               {linkedStore.stock === 0 && <span className="ml-2 text-rose-300">Esgotado</span>}
                             </p>
                           </div>
@@ -677,7 +662,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                             <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">♻️ Bazar</p>
                             <p className="truncate text-sm font-medium text-foreground">{linkedBazaar.name}</p>
                             <p className="text-xs text-emerald-400">
-                              {(linkedBazaar.price_cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                              {formatBRL(linkedBazaar.price_cents)}
                               {linkedBazaar.stock === 0 && <span className="ml-2 text-rose-300">Esgotado</span>}
                             </p>
                           </div>

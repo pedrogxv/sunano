@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Check, ExternalLink, Plus, Search, Trophy, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { formatCurrencyBRL } from "@/lib/stripe"
 import BoxLoader from "@/components/ui/box-loader"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -68,7 +69,7 @@ function formatLabel(value: string) {
 
 function formatCurrency(value: number) {
   try {
-    return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
+    return formatCurrencyBRL(value)
   } catch {
     return `R$${value}`
   }

@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import * as z from "zod"
 
+import { formatBRL } from "@/lib/stripe"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
@@ -65,10 +66,8 @@ const peripheralSchema = z.object({
     z.coerce.number().min(0).optional()
   ),
   reviewUrl: z.string().optional(),
-  reviewNote: z.string().optional(),
   guideUrl: z.string().optional(),
   wikiUrl: z.string().optional(),
-  notesLong: z.string().optional(),
   summary: z.string().optional(),
   highlights: z.string().optional(),
   pros: z.string().optional(),
@@ -421,7 +420,7 @@ function LinkedProductPicker({
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-medium text-foreground">{value.name}</p>
-            <p className="text-xs text-muted-foreground">{(value.price_cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+            <p className="text-xs text-muted-foreground">{formatBRL(value.price_cents)}</p>
           </div>
           <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)} className="text-muted-foreground hover:text-foreground">
             <X className="size-4" />
@@ -472,7 +471,7 @@ function LinkedProductPicker({
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-foreground">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">{(p.price_cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</p>
+                        <p className="text-xs text-muted-foreground">{formatBRL(p.price_cents)}</p>
                       </div>
                     </button>
                   </li>
@@ -528,8 +527,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       category: "mouse",
       tier: "__none__",
       price: 0,
-      rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", reviewNote: "", guideUrl: "", wikiUrl: "",
-      notesLong: "", summary: "", highlights: "", pros: "", cons: "", gallery: "",
+      rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", guideUrl: "", wikiUrl: "",
+      summary: "", highlights: "", pros: "", cons: "", gallery: "",
       softwareInfo: "", teamComments: "",
       buyLinks: "", compatibility: "", comparisons: "",
       weight: "", latency: "", switchType: "", coating: "", shape: "",
@@ -630,10 +629,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           ranking: data.specs?.details?.ranking ? Number(data.specs.details.ranking) : undefined,
           score: data.specs?.details?.score != null ? Number(data.specs.details.score) : undefined,
           reviewUrl: data.specs?.details?.reviewUrl ?? "",
-          reviewNote: data.specs?.details?.reviewNote ?? "",
           guideUrl: data.specs?.details?.guideUrl ?? "",
           wikiUrl: data.specs?.details?.wikiUrl ?? "",
-          notesLong: data.specs?.details?.notesLong ?? "",
           summary: data.specs?.details?.summary ?? "",
           softwareInfo: data.specs?.details?.softwareInfo ?? "",
           teamComments: data.specs?.details?.teamComments ?? "",
@@ -772,9 +769,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         panelType: data.panelType || undefined,
         details: {
           rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: data.score ?? undefined,
-          reviewUrl: data.reviewUrl || undefined, reviewNote: data.reviewNote || undefined,
+          reviewUrl: data.reviewUrl || undefined,
           guideUrl: data.guideUrl || undefined, wikiUrl: data.wikiUrl || undefined,
-          notesLong: data.notesLong || undefined,
           summary: data.summary || undefined, highlights: splitLines(data.highlights),
           pros: splitLines(data.pros), cons: splitLines(data.cons), gallery: finalGallery,
           buyLinks: parseBuyLinks(data.buyLinks), compatibility: data.compatibility || undefined,
@@ -1953,11 +1949,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{"Legenda do review"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={"Observação curta exibida junto ao vídeo do review"} rows={2} {...form.register("reviewNote")} />
-            </div>
-
-            <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Software"}</label>
               <Textarea className="border-border bg-background resize-none" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />
             </div>
@@ -1965,11 +1956,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Sobre as notas"}</label>
               <Textarea className="border-border bg-background resize-none" placeholder={"Detalhes extras e observações internas da equipe"} rows={3} {...form.register("teamComments")} />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{"Comentários sobre as notas"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={"Contexto e observações principais exibidas no card \"Comentários sobre as notas\""} rows={3} {...form.register("notesLong")} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

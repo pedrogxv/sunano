@@ -603,7 +603,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
                 <Card className="border-border bg-card">
                   <CardHeader>
-                    <CardTitle className="text-lg">Comentarios</CardTitle>
+                    <CardTitle className="text-lg">Sobre as notas</CardTitle>
                   </CardHeader>
                   <CardContent className="max-h-80 overflow-auto text-base text-muted-foreground whitespace-pre-wrap">
                     {teamComments || "Sem observacoes adicionais."}

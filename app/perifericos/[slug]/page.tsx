@@ -408,7 +408,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
               <div className="space-y-3">
                 <div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-end justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       {data.category && (
                         <Badge variant="secondary" className="bg-muted/50 text-xs text-muted-foreground">
@@ -427,7 +427,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                     )}
                   </div>
 
-                  <h1 className="mt-3 font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+                  <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                     {data.name}
                   </h1>
                   <p className="text-sm text-muted-foreground">{data.brand}</p>

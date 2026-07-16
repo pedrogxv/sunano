@@ -2,7 +2,6 @@ import Link from "next/link"
 
 interface RankingCrownBadgeProps {
   position: number
-  total: number
 }
 
 /**
@@ -36,22 +35,19 @@ function DoodleCrown({ className }: { className?: string }) {
   )
 }
 
-export function RankingCrownBadge({ position, total }: RankingCrownBadgeProps) {
+export function RankingCrownBadge({ position }: RankingCrownBadgeProps) {
   return (
     <Link
       href="/ranking"
       className="group inline-flex items-center gap-3 rounded-2xl px-2 py-1 transition hover:-translate-y-0.5"
     >
-      <DoodleCrown className="size-16 shrink-0 -rotate-6 text-amber-400 transition group-hover:-rotate-3 md:size-24" />
+      <DoodleCrown className="size-20 shrink-0 -rotate-6 text-amber-400 transition group-hover:-rotate-3 md:size-32" />
       <div className="-rotate-2 leading-none transition group-hover:rotate-0">
-        <p className="font-handwritten text-xl font-semibold tracking-wide text-amber-400/80 md:text-2xl">
+        <p className="font-handwritten text-2xl font-semibold tracking-wide text-amber-400/80 md:text-3xl">
           Ranking
         </p>
-        <p className="font-handwritten -mt-2 text-6xl font-bold text-amber-400 md:text-8xl">
+        <p className="font-handwritten -mt-3 text-7xl font-bold text-amber-400 md:text-9xl">
           #{position}
-          <span className="ml-2 text-2xl font-semibold text-amber-400/70 md:text-3xl">
-            de {total}
-          </span>
         </p>
       </div>
     </Link>

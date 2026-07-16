@@ -1,9 +1,9 @@
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Package, ShoppingBag } from "lucide-react"
+import { Package, ShoppingBag, Trophy } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { getPeripheralByIdOrSlug, listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { listProductsByPeripheral } from "@/lib/server/repositories/store-repository"
 import { listPublishedPostsByPeripheral } from "@/lib/server/repositories/blog-repository"
@@ -423,7 +423,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                     </div>
 
                     {rankBadge && (
-                      <RankingCrownBadge position={rankBadge.position} total={rankBadge.total} />
+                      <RankingCrownBadge position={rankBadge.position} />
                     )}
                   </div>
 
@@ -509,6 +509,17 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                         <CardHeader>
                           <CardTitle className="text-sm">Performance</CardTitle>
                           <CardDescription className="text-xs">Métricas de resposta.</CardDescription>
+                          {rankBadge && (
+                            <CardAction>
+                              <Link
+                                href="/ranking"
+                                className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
+                              >
+                                <Trophy className="size-4" />
+                                {`#${rankBadge.position} de ${rankBadge.total} no Ranking`}
+                              </Link>
+                            </CardAction>
+                          )}
                         </CardHeader>
                         <CardContent className="space-y-2 text-sm text-muted-foreground">
                           {performanceRows.map((row) => (

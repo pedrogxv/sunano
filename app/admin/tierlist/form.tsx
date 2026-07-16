@@ -36,6 +36,7 @@ import { mapTier } from "@/lib/tier-utils"
 import { RATING_LEVEL_COLORS } from "@/lib/tierlist-theme"
 import { useT } from "@/lib/use-t"
 import { removeBackground, fileToDataUrl } from "@/lib/client/remove-background"
+import { SWITCH_PRICE_TIERS } from "@/lib/switch-price-tier"
 
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -58,7 +59,7 @@ const peripheralSchema = z.object({
   tier: z.union([z.enum(["GOAT", "SS", "S", "A", "B", "C", "L"]), z.literal("__none__")]),
   price: z
     .number({ message: "Preço inválido" })
-    .positive("Preço deve ser maior que zero"),
+    .nonnegative("Preço não pode ser negativo"),
   rankLabel: z.string().optional(),
   ranking: z.coerce.number().int().positive().optional(),
   score: z.preprocess(
@@ -66,6 +67,7 @@ const peripheralSchema = z.object({
     z.coerce.number().min(0).optional()
   ),
   reviewUrl: z.string().optional(),
+  soundUrl: z.string().optional(),
   guideUrl: z.string().optional(),
   wikiUrl: z.string().optional(),
   summary: z.string().optional(),
@@ -80,6 +82,11 @@ const peripheralSchema = z.object({
   latency: z.string().optional(),
   switchType: z.string().optional(),
   coating: z.string().optional(),
+  actuationForce: z.string().optional(),
+  totalTravel: z.string().optional(),
+  magneticFlux: z.string().optional(),
+  housing: z.string().optional(),
+  stemType: z.string().optional(),
   shape: z.string().optional(),
   gripSmall: z.string().optional(),
   gripMedium: z.string().optional(),
@@ -121,6 +128,18 @@ const peripheralSchema = z.object({
   hasBattery: z.boolean().optional(),
   softwareInfo: z.string().optional(),
   teamComments: z.string().optional(),
+  switchPeripheralId: z.string().optional(),
+  priceTier: z.string().optional(),
+}).superRefine((data, ctx) => {
+  // Switches usam faixa de preço (priceTier) no lugar de valor exato, então o
+  // preço numérico fica em 0. Nas demais categorias, o preço tem que ser > 0.
+  if (data.category !== "switches" && !(data.price > 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["price"],
+      message: "Preço deve ser maior que zero",
+    })
+  }
 })
 
 type PeripheralFormData = z.infer<typeof peripheralSchema>
@@ -533,6 +552,117 @@ function LinkedProductPicker({
   )
 }
 
+interface LinkedSwitch {
+  id: string
+  name: string
+  image_url: string | null
+}
+
+// Seletor opcional para vincular o campo "Switch" de um teclado/mouse a um
+// periférico da categoria "switches". Espelha o LinkedProductPicker, mas busca
+// periféricos em vez de produtos da loja e guarda apenas o id.
+function LinkedSwitchPicker({
+  value,
+  onChange,
+}: {
+  value: LinkedSwitch | null
+  onChange: (peripheral: LinkedSwitch | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [results, setResults] = useState<LinkedSwitch[]>([])
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    setLoading(true)
+    fetch("/api/admin/peripherals?category=switches&columns=id,name,image_url", { cache: "no-store" })
+      .then((res) => res.json().catch(() => null))
+      .then((json: { peripherals?: LinkedSwitch[] } | null) => {
+        if (!cancelled) setResults(json?.peripherals ?? [])
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [open])
+
+  const filtered = query.trim()
+    ? results.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : results
+
+  return (
+    <div className="space-y-2">
+      {value ? (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-2.5">
+          <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted/40">
+            {value.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={value.image_url} alt={value.name} className="h-full w-full object-contain p-0.5" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">{value.name.slice(0, 2).toUpperCase()}</div>
+            )}
+          </div>
+          <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{value.name}</p>
+          <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)} className="text-muted-foreground hover:text-foreground">
+            <X className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" onClick={() => setOpen(true)} className="w-full justify-start gap-2 text-muted-foreground">
+          <Search className="size-4" />
+          {"Vincular a um Switch cadastrado"}
+        </Button>
+      )}
+
+      {open && (
+        <div className="space-y-2 rounded-lg border border-border bg-card/60 p-3">
+          <div className="flex items-center gap-2">
+            <Input
+              autoFocus
+              placeholder={"Digite para filtrar"}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="border-border bg-background"
+            />
+            <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              {"Fechar"}
+            </Button>
+          </div>
+          <div className="max-h-56 overflow-auto rounded-md border border-border/60 bg-background/40">
+            {loading ? (
+              <p className="p-3 text-xs text-muted-foreground">{"Carregando..."}</p>
+            ) : filtered.length === 0 ? (
+              <p className="p-3 text-xs text-muted-foreground">{"Nenhum switch cadastrado"}</p>
+            ) : (
+              <ul className="divide-y divide-border/60">
+                {filtered.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => { onChange(p); setOpen(false) }}
+                      className="flex w-full items-center gap-3 p-2 text-left transition hover:bg-muted/30"
+                    >
+                      <div className="size-9 shrink-0 overflow-hidden rounded-md bg-muted/40">
+                        {p.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.image_url} alt={p.name} className="h-full w-full object-contain p-0.5" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">{p.name.slice(0, 2).toUpperCase()}</div>
+                        )}
+                      </div>
+                      <p className="min-w-0 flex-1 truncate text-sm text-foreground">{p.name}</p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface PeripheralEditProps {
   peripheralId?: string
 }
@@ -562,6 +692,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [originalUsdPrice, setOriginalUsdPrice] = useState<number | null>(null)
   const [linkedStore, setLinkedStore] = useState<LinkedProduct | null>(null)
   const [linkedBazaar, setLinkedBazaar] = useState<LinkedProduct | null>(null)
+  const [linkedSwitch, setLinkedSwitch] = useState<LinkedSwitch | null>(null)
   const [rankedPeripherals, setRankedPeripherals] = useState<{ id: string; name: string; tier: string; ranking: number; score: number | null }[]>([])
   const [galleryFiles, setGalleryFiles] = useState<File[]>([])
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([])
@@ -576,11 +707,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       category: "mouse",
       tier: "__none__",
       price: 0,
-      rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", guideUrl: "", wikiUrl: "",
+      rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", soundUrl: "", guideUrl: "", wikiUrl: "",
       summary: "", highlights: "", pros: "", cons: "", gallery: "",
-      softwareInfo: "", teamComments: "",
+      softwareInfo: "", teamComments: "", switchPeripheralId: "", priceTier: "",
       buyLinks: "", compatibility: "", comparisons: "",
       weight: "", latency: "", switchType: "", coating: "", shape: "",
+      actuationForce: "", totalTravel: "", magneticFlux: "", housing: "", stemType: "",
       gripSmall: "", gripMedium: "", gripLarge: "",
       ratingOverall: undefined, ratingBuild: undefined, ratingSoftware: undefined,
       ratingBattery: undefined, ratingPerformance: undefined, ratingQc: undefined, ratingValue: undefined, ratingMaintenance: undefined,
@@ -695,11 +827,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           ranking: data.specs?.details?.ranking ? Number(data.specs.details.ranking) : undefined,
           score: data.specs?.details?.score != null ? Number(data.specs.details.score) : undefined,
           reviewUrl: data.specs?.details?.reviewUrl ?? "",
+          soundUrl: data.specs?.details?.soundUrl ?? "",
           guideUrl: data.specs?.details?.guideUrl ?? "",
           wikiUrl: data.specs?.details?.wikiUrl ?? "",
           summary: data.specs?.details?.summary ?? "",
           softwareInfo: data.specs?.details?.softwareInfo ?? "",
           teamComments: data.specs?.details?.teamComments ?? "",
+          switchPeripheralId: data.specs?.details?.switchPeripheralId ?? "",
+          priceTier: data.specs?.details?.priceTier ?? "",
           highlights: Array.isArray(data.specs?.details?.highlights) ? data.specs.details.highlights.join("\n") : data.specs?.details?.highlights ?? "",
           pros: Array.isArray(data.specs?.details?.pros) ? data.specs.details.pros.join("\n") : data.specs?.details?.pros ?? "",
           cons: Array.isArray(data.specs?.details?.cons) ? data.specs.details.cons.join("\n") : data.specs?.details?.cons ?? "",
@@ -716,6 +851,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           features: data.specs?.details?.features ?? "",
           switchType: data.specs?.details?.switchType ?? "",
           coating: data.specs?.details?.coating ?? "",
+          actuationForce: data.specs?.details?.actuationForce ?? "",
+          totalTravel: data.specs?.details?.totalTravel ?? "",
+          magneticFlux: data.specs?.details?.magneticFlux ?? "",
+          housing: data.specs?.details?.housing ?? "",
+          stemType: data.specs?.details?.stemType ?? "",
           shape: data.specs?.details?.shape ?? "",
           gripSmall: data.specs?.details?.gripSmall ?? "",
           gripMedium: data.specs?.details?.gripMedium ?? "",
@@ -743,6 +883,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         if (data.image_url) setImagePreview(data.image_url)
         const galleryArr = Array.isArray(data.specs?.details?.gallery) ? data.specs.details.gallery : []
         setExistingGalleryUrls(galleryArr.filter(Boolean))
+
+        const switchId = data.specs?.details?.switchPeripheralId
+        if (switchId) {
+          setLinkedSwitch({ id: switchId, name: "Switch", image_url: null })
+          try {
+            const swRes = await fetch(`/api/admin/peripherals/${switchId}`, { cache: "no-store" })
+            const swJson = (await swRes.json().catch(() => null)) as { peripheral?: { id: string; name: string; image_url: string | null } } | null
+            if (swRes.ok && swJson?.peripheral) {
+              setLinkedSwitch({ id: swJson.peripheral.id, name: swJson.peripheral.name, image_url: swJson.peripheral.image_url ?? null })
+            }
+          } catch { /* ignore — mantém o placeholder */ }
+        } else {
+          setLinkedSwitch(null)
+        }
       }
 
       try {
@@ -844,6 +998,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         details: {
           rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: data.score ?? undefined,
           reviewUrl: data.reviewUrl || undefined,
+          soundUrl: data.soundUrl || undefined,
           guideUrl: data.guideUrl || undefined, wikiUrl: data.wikiUrl || undefined,
           summary: data.summary || undefined, highlights: splitLines(data.highlights),
           pros: splitLines(data.pros), cons: splitLines(data.cons), gallery: finalGallery,
@@ -851,18 +1006,24 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           comparisons: splitLines(data.comparisons),
           softwareInfo: data.softwareInfo || undefined,
           teamComments: data.teamComments || undefined,
+          switchPeripheralId: data.switchPeripheralId || undefined,
+          priceTier: data.priceTier || undefined,
           weight: data.weight || undefined, latency: data.latency || undefined,
           deadzone: data.deadzone || undefined, rtMin: data.rtMin || undefined,
           features: data.features || undefined,
           switchType: data.switchType || undefined, coating: data.coating || undefined,
+          actuationForce: data.actuationForce || undefined, totalTravel: data.totalTravel || undefined,
+          magneticFlux: data.magneticFlux || undefined, housing: data.housing || undefined,
+          stemType: data.stemType || undefined,
           shape: data.shape || undefined, gripSmall: data.gripSmall || undefined,
           gripMedium: data.gripMedium || undefined, gripLarge: data.gripLarge || undefined,
           ratings: Object.keys(cleanedRatings).length > 0 ? cleanedRatings : undefined,
         },
       }
 
-      let priceToSave = data.price
-      if (locale === "pt-BR" && originalUsdPrice !== null && usdToBrl && usdToBrl > 0) {
+      // Switches usam faixa de preço (priceTier); o valor numérico fica em 0.
+      let priceToSave = data.category === "switches" ? 0 : data.price
+      if (data.category !== "switches" && locale === "pt-BR" && originalUsdPrice !== null && usdToBrl && usdToBrl > 0) {
         priceToSave = Number((data.price / usdToBrl).toFixed(2))
       }
 
@@ -1034,6 +1195,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
   const setRating = (field: keyof PeripheralFormData, value: number | undefined) => {
     form.setValue(field as any, value)
+  }
+
+  const handleLinkedSwitchChange = (peripheral: LinkedSwitch | null) => {
+    setLinkedSwitch(peripheral)
+    form.setValue("switchPeripheralId", peripheral?.id ?? "")
   }
 
   const watchedName = form.watch("name")
@@ -1248,27 +1414,48 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">
-                {t.admin.tierlistForm.priceUsd} <span className="text-red-400">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                <Input
-                  className="border-border bg-background pl-7"
-                  placeholder="159.00"
-                  type="number"
-                  step="0.01"
-                  min={0.01}
-                  aria-invalid={!!form.formState.errors.price}
-                  {...form.register("price", { valueAsNumber: true })}
-                />
+            {watchedCategory === "switches" ? (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  {"Faixa de preço"} <span className="text-red-400">*</span>
+                </label>
+                <Select value={form.watch("priceTier") || ""} onValueChange={(v) => form.setValue("priceTier", v)}>
+                  <SelectTrigger className="border-border bg-background">
+                    <SelectValue placeholder={"Selecione uma faixa"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SWITCH_PRICE_TIERS.map((tier) => (
+                      <SelectItem key={tier.key} value={tier.key}>{tier.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground/60">
+                  {"Switches usam faixa em vez de valor exato."}
+                </p>
               </div>
-              <p className="text-[10px] text-muted-foreground/60">
-                "Use um valor positivo em dólares (ex: 159.00). A conversão é feita automaticamente."
-              </p>
-              {form.formState.errors.price && <p className="text-xs text-red-400">{form.formState.errors.price.message}</p>}
-            </div>
+            ) : (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">
+                  {t.admin.tierlistForm.priceUsd} <span className="text-red-400">*</span>
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                  <Input
+                    className="border-border bg-background pl-7"
+                    placeholder="159.00"
+                    type="number"
+                    step="0.01"
+                    min={0.01}
+                    aria-invalid={!!form.formState.errors.price}
+                    {...form.register("price", { valueAsNumber: true })}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground/60">
+                  "Use um valor positivo em dólares (ex: 159.00). A conversão é feita automaticamente."
+                </p>
+                {form.formState.errors.price && <p className="text-xs text-red-400">{form.formState.errors.price.message}</p>}
+              </div>
+            )}
           </div>
         </FormSection>
 
@@ -1392,7 +1579,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 if (watchedCategory === "switches") {
                   if (field.key === "ratingSoftware") label = "Som"
                   if (field.key === "ratingBattery") label = "Digitação"
-                  if (field.key === "ratingQc" || field.key === "ratingMaintenance") return null
+                  if (field.key === "ratingQc") label = "QC"
+                  if (field.key === "ratingMaintenance") return null
                 }
                 if (watchedCategory === "dac_amp") {
                   if (field.key === "ratingSoftware") label = "Recursos"
@@ -1497,6 +1685,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       <SelectItem value="mechanical">{"Mecânico"}</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Vincular Switch (opcional)"}</label>
+                  <LinkedSwitchPicker value={linkedSwitch} onChange={handleLinkedSwitchChange} />
+                  <p className="text-[10px] text-muted-foreground/60">{"Aponta para um Switch cadastrado — vira link na página. Se vazio, mostra o texto acima."}</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coating</label>
@@ -1630,6 +1823,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
                   <Input className="border-border bg-background" placeholder={"Linear, Tátil, Clicky"} {...form.register("switchType")} />
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Vincular Switch (opcional)"}</label>
+                  <LinkedSwitchPicker value={linkedSwitch} onChange={handleLinkedSwitchChange} />
+                  <p className="text-[10px] text-muted-foreground/60">{"Aponta para um Switch cadastrado — vira link na página. Se vazio, mostra o texto acima."}</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>
@@ -2047,6 +2245,63 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 )}
               </>
             )}
+
+            {watchedCategory === "switches" && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Tipo"}</label>
+                  <Select value={form.watch("keyboardType") || ""} onValueChange={(v) => form.setValue("keyboardType", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="magnetic">{"Magnético"}</SelectItem>
+                      <SelectItem value="mechanical">{"Mecânico"}</SelectItem>
+                      <SelectItem value="optical">{"Óptico"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Força de atuação"}</label>
+                  <Input className="border-border bg-background" placeholder="37gf" {...form.register("actuationForce")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Curso total"}</label>
+                  <Input className="border-border bg-background" placeholder="3.5mm" {...form.register("totalTravel")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Fluxo magnético"}</label>
+                  <Input className="border-border bg-background" placeholder="Ex.: valor / curva magnética" {...form.register("magneticFlux")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Carcaça"}</label>
+                  <Select value={form.watch("housing") || ""} onValueChange={(v) => form.setValue("housing", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Opaca (Nylon)">{"Opaca (Nylon)"}</SelectItem>
+                      <SelectItem value="Transparente (Policarbonato)">{"Transparente (Policarbonato)"}</SelectItem>
+                      <SelectItem value="Mista (Híbrida)">{"Mista (Híbrida)"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Tipo do Stem"}</label>
+                  <Select value={form.watch("stemType") || ""} onValueChange={(v) => form.setValue("stemType", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="POM">{"POM"}</SelectItem>
+                      <SelectItem value="MX">{"MX"}</SelectItem>
+                      <SelectItem value="BOX">{"BOX"}</SelectItem>
+                      <SelectItem value="Dustproof">{"Dustproof"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
           </div>
         </FormSection>
 
@@ -2058,6 +2313,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               <Input className="border-border bg-background" placeholder="https://youtube.com/..." {...form.register("reviewUrl")} />
             </div>
 
+            {watchedCategory === "switches" && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{"Vídeo do Som"}</label>
+                <Input className="border-border bg-background" placeholder="https://youtube.com/... ou https://.../som.mp4" {...form.register("soundUrl")} />
+                <p className="text-[10px] text-muted-foreground">{"Link do YouTube ou arquivo de vídeo direto (.mp4/.webm). Aparece ao lado das especificações na página do switch."}</p>
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Software"}</label>
               <Textarea className="border-border bg-background resize-none" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />
@@ -2065,7 +2328,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Sobre as notas"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={"Detalhes extras e observações internas da equipe"} rows={3} {...form.register("teamComments")} />
+              <Textarea className="border-border bg-background resize-none" placeholder={"Justificativa interna das notas atribuídas (build, performance, etc.)"} rows={3} {...form.register("teamComments")} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{"Comentários"}</label>
+              <Textarea className="border-border bg-background resize-none" placeholder={"Opinião geral e recomendação sobre o produto"} rows={3} {...form.register("summary")} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

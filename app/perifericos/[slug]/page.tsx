@@ -15,6 +15,8 @@ import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
 import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
 import { formatBRL, formatCurrencyBRL } from "@/lib/stripe"
+import { buildPeripheralSlug } from "@/lib/peripheral-slug"
+import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
 
 interface PerifericoPageProps {
   params: Promise<{ slug: string }>
@@ -212,6 +214,19 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const youtubeId = getYoutubeEmbedId(reviewUrl)
   const softwareInfo = details.softwareInfo
   const teamComments = details.teamComments
+  const generalComments = details.summary
+
+  const isSwitch = data.category === "switches"
+  const soundUrl = typeof details.soundUrl === "string" ? details.soundUrl.trim() : ""
+  const soundYoutubeId = getYoutubeEmbedId(soundUrl)
+
+  // Switch vinculado: se o admin apontou este teclado/mouse a um Switch cadastrado,
+  // a linha "Switch" vira um link para a página daquele switch.
+  const linkedSwitch = details.switchPeripheralId
+    ? await getPeripheralByIdOrSlug(String(details.switchPeripheralId))
+    : null
+  const switchHref = linkedSwitch ? `/perifericos/${buildPeripheralSlug(linkedSwitch.name, linkedSwitch.id)}` : undefined
+  const switchLabel = linkedSwitch?.name
 
   const linkedProducts = await listProductsByPeripheral(data.id)
 
@@ -227,15 +242,24 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const formatTrimode = (v?: string) =>
     v === "yes" ? "Sim" : v === "no" ? "Não" : v
 
-  const specsBase = [{ label: "Preco base", value: formatCurrency(data.price), group: "specs" as const }]
+  // Switches usam faixa de preço (priceTier) em vez de valor exato.
+  const specsBase = data.category === "switches"
+    ? [{ label: "Valor médio", value: SWITCH_PRICE_TIER_LABEL[String(details.priceTier)] ?? "—", group: "specs" as const }]
+    : [{ label: "Preco base", value: formatCurrency(data.price), group: "specs" as const }]
 
-  const specsTable: { label: string; value: unknown; group: "specs" | "performance" }[] = (() => {
+  // Linha "Switch": vira link quando há um Switch cadastrado vinculado; senão, texto livre.
+  const switchRow = (group: "specs" | "performance") =>
+    switchLabel
+      ? { label: "Switch", value: switchLabel, href: switchHref, group }
+      : { label: "Switch", value: details.switchType ?? specs.switchType, group }
+
+  const specsTable: { label: string; value: unknown; group: "specs" | "performance"; href?: string }[] = (() => {
     switch (data.category) {
       case "mouse":
         return [...specsBase,
           { label: "Sensor", value: specs.driver ?? details.sensor, group: "specs" },
           { label: "Peso", value: details.weight ?? specs.weight, group: "specs" },
-          { label: "Switch", value: details.switchType ?? specs.switchType, group: "specs" },
+          switchRow("specs"),
           { label: "Shape", value: details.shape ?? specs.mouseShape, group: "specs" },
           { label: "Coating", value: details.coating ?? specs.coating, group: "specs" },
           { label: "Latencia", value: details.latency ?? specs.latency, group: "performance" },
@@ -246,7 +270,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
           { label: "Tipo", value: formatKeyboardType(specs.keyboardType), group: "specs" },
           { label: "Conectividade", value: formatConnectivity(specs.connectivity), group: "specs" },
           { label: "Peso", value: details.weight ?? specs.weight, group: "specs" },
-          { label: "Switch", value: details.switchType ?? specs.switchType, group: "performance" },
+          switchRow("performance"),
           { label: "Latencia", value: details.latency ?? specs.latency, group: "performance" },
           { label: "Deadzone", value: details.deadzone, group: "performance" },
           { label: "RT Minimo", value: details.rtMin, group: "performance" },
@@ -279,7 +303,11 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
       case "switches":
         return [...specsBase,
           { label: "Tipo", value: formatKeyboardType(specs.keyboardType), group: "specs" },
-          { label: "Switch", value: details.switchType ?? specs.switchType, group: "specs" },
+          { label: "Força de atuação", value: details.actuationForce, group: "specs" },
+          { label: "Curso total", value: details.totalTravel, group: "specs" },
+          { label: "Fluxo magnético", value: details.magneticFlux, group: "specs" },
+          { label: "Carcaça", value: details.housing, group: "specs" },
+          { label: "Tipo do Stem", value: details.stemType, group: "specs" },
         ]
       default:
         // feet, chairs — só preço base
@@ -430,7 +458,11 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                           className="rounded-md border border-border bg-muted/30 px-2 py-1"
                         >
                           <span className="font-medium text-foreground/80">{spec.label}:</span>{" "}
-                          <span className="font-semibold text-foreground">{spec.display}</span>
+                          {spec.href ? (
+                            <Link href={spec.href} className="font-semibold text-primary underline-offset-2 hover:underline">{spec.display}</Link>
+                          ) : (
+                            <span className="font-semibold text-foreground">{spec.display}</span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -438,18 +470,24 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
                 </div>
 
-                <div className={cn("grid gap-4", showGrip ? "md:grid-cols-2" : "grid-cols-1")}>
+                <div className={cn("grid gap-4", showGrip || isSwitch ? "md:grid-cols-2" : "grid-cols-1")}>
                   <div className={cn("grid gap-2", performanceRows.length > 0 ? "sm:grid-cols-2" : "grid-cols-1")}>
                     <Card className="border-border bg-card">
                       <CardHeader>
-                        <CardTitle className="text-sm">Especificações</CardTitle>
+                        <CardTitle className="text-sm">{isSwitch ? "Especificações Técnicas" : "Especificações"}</CardTitle>
                         <CardDescription className="text-xs">Principais dados do produto.</CardDescription>
                       </CardHeader>
                       <CardContent className="space-y-2 text-sm text-muted-foreground">
                         {specsRows.map((row) => (
                           <div key={row.label} className="flex items-center justify-between">
                             <span>{row.label}</span>
-                            <span className="font-semibold text-foreground">{formatSpecValue(row.value)}</span>
+                            <span className="font-semibold text-foreground">
+                              {row.href ? (
+                                <Link href={row.href} className="text-primary underline-offset-2 hover:underline">{formatSpecValue(row.value)}</Link>
+                              ) : (
+                                formatSpecValue(row.value)
+                              )}
+                            </span>
                           </div>
                         ))}
                       </CardContent>
@@ -465,7 +503,13 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                           {performanceRows.map((row) => (
                             <div key={row.label} className="flex items-center justify-between">
                               <span>{row.label}</span>
-                              <span className="font-semibold text-foreground">{formatSpecValue(row.value)}</span>
+                              <span className="font-semibold text-foreground">
+                                {row.href ? (
+                                  <Link href={row.href} className="text-primary underline-offset-2 hover:underline">{formatSpecValue(row.value)}</Link>
+                                ) : (
+                                  formatSpecValue(row.value)
+                                )}
+                              </span>
                             </div>
                           ))}
                         </CardContent>
@@ -492,6 +536,36 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                         <div className="pt-3">
                           <GripArchitectureImage />
                         </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {isSwitch && (
+                    <Card className="border-border bg-card">
+                      <CardHeader>
+                        <CardTitle className="text-sm">Som do Switch</CardTitle>
+                        <CardDescription className="text-xs">Veja e ouça o switch em ação.</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {soundYoutubeId ? (
+                          <div className="aspect-video overflow-hidden rounded-xl border border-border bg-muted/40">
+                            <iframe
+                              src={`https://www.youtube-nocookie.com/embed/${soundYoutubeId}`}
+                              title="Som do switch"
+                              className="h-full w-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              allowFullScreen
+                            />
+                          </div>
+                        ) : soundUrl ? (
+                          <div className="aspect-video overflow-hidden rounded-xl border border-border bg-black">
+                            <video src={soundUrl} controls className="h-full w-full" />
+                          </div>
+                        ) : (
+                          <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 p-4 text-center text-xs text-muted-foreground">
+                            Nenhum vídeo de som cadastrado.
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   )}
@@ -601,12 +675,23 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                     </CardContent>
                   </Card>
 
+                {!isSwitch && (
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-lg">Sobre as notas</CardTitle>
+                    </CardHeader>
+                    <CardContent className="max-h-80 overflow-auto text-base text-muted-foreground whitespace-pre-wrap">
+                      {teamComments || "Sem observacoes adicionais."}
+                    </CardContent>
+                  </Card>
+                )}
+
                 <Card className="border-border bg-card">
                   <CardHeader>
-                    <CardTitle className="text-lg">Sobre as notas</CardTitle>
+                    <CardTitle className="text-lg">Comentários</CardTitle>
                   </CardHeader>
                   <CardContent className="max-h-80 overflow-auto text-base text-muted-foreground whitespace-pre-wrap">
-                    {teamComments || "Sem observacoes adicionais."}
+                    {generalComments || "Sem comentarios adicionais."}
                   </CardContent>
                 </Card>
 

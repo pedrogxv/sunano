@@ -1713,7 +1713,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="md:col-span-2 grid grid-cols-3 gap-3">
+                <div className="md:col-span-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {[
                     { field: "gripSmall", label: "Grip · Mão pequena" },
                     { field: "gripMedium", label: "Grip · Mão média" },

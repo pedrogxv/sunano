@@ -139,7 +139,7 @@ export default function AdminBlogPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card className="border-border bg-card">
           <CardContent className="flex items-center gap-3 p-4">
             <div className="flex size-9 items-center justify-center rounded-lg bg-muted">

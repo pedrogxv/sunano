@@ -188,8 +188,8 @@ export default function AdminStorePage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-card">
-          <table className="w-full">
+        <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-card">
+          <table className="w-full min-w-[760px]">
             <thead>
               <tr className="border-b border-white/[0.08]">
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Produto</th>

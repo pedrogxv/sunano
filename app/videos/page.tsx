@@ -23,7 +23,7 @@ export default async function VideosPage() {
   const videos = feed?.videos ?? []
   const channel = feed?.channel ?? null
 
-  const channelAvatar = channel?.thumbnailUrl || "/images/mascot/Logo-Sunano_calo-contorno.png"
+  const channelAvatar = "/images/mascot/sunano-icon.png"
 
   const socialLinks = channel
     ? [
@@ -54,7 +54,7 @@ export default async function VideosPage() {
                 <div className="flex items-center gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src="/images/mascot/Logo-Sunano_calo-contorno.png"
+                    src={channelAvatar}
                     alt={channel.title}
                     className="size-9 shrink-0 object-contain md:size-12"
                   />
@@ -145,7 +145,7 @@ export default async function VideosPage() {
                     <img
                       src={channelAvatar}
                       alt={channel?.title || "Canal"}
-                      className="size-9 shrink-0 rounded-full bg-muted object-cover"
+                      className="size-9 shrink-0 rounded-full bg-background object-contain p-0.5"
                     />
                     <div className="min-w-0 flex-1 space-y-1">
                       <h3 className="line-clamp-2 text-sm font-medium leading-snug text-foreground transition-colors group-hover:text-primary">

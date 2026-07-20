@@ -171,6 +171,18 @@ function linkifyText(text: string) {
   )
 }
 
+const BUY_LINK_STYLES: Record<string, string> = {
+  aliexpress: "border-red-500/30 bg-red-500/10 text-red-200 hover:bg-red-500/20",
+  "mercado livre": "border-yellow-400/30 bg-yellow-400/10 text-yellow-200 hover:bg-yellow-400/20",
+  mercadolivre: "border-yellow-400/30 bg-yellow-400/10 text-yellow-200 hover:bg-yellow-400/20",
+  amazon: "border-blue-500/30 bg-blue-500/10 text-blue-200 hover:bg-blue-500/20",
+  shopee: "border-orange-500/30 bg-orange-500/10 text-orange-200 hover:bg-orange-500/20",
+}
+
+function getBuyLinkStyle(label: string) {
+  return BUY_LINK_STYLES[label.trim().toLowerCase()] ?? "border-border bg-muted/30 text-foreground hover:bg-muted/40"
+}
+
 function formatSpecValue(value: unknown) {
   if (value === null || typeof value === "undefined" || value === "") return "-"
   if (typeof value === "string") {
@@ -788,10 +800,13 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
                           href={link.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs font-medium text-foreground transition hover:bg-muted/40"
+                          className={cn(
+                            "flex items-center justify-between rounded-lg border px-3 py-2 text-xs font-medium transition",
+                            getBuyLinkStyle(link.label)
+                          )}
                         >
                           <span>{link.label}</span>
-                          <span className="text-primary">→</span>
+                          <span>→</span>
                         </a>
                       ))}
                     </CardContent>

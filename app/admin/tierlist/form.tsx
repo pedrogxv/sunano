@@ -75,7 +75,10 @@ const peripheralSchema = z.object({
   pros: z.string().optional(),
   cons: z.string().optional(),
   gallery: z.string().optional(),
-  buyLinks: z.string().optional(),
+  buyLinkAliexpress: z.string().optional(),
+  buyLinkMercadoLivre: z.string().optional(),
+  buyLinkAmazon: z.string().optional(),
+  buyLinkShopee: z.string().optional(),
   compatibility: z.string().optional(),
   comparisons: z.string().optional(),
   weight: z.string().optional(),
@@ -130,6 +133,7 @@ const peripheralSchema = z.object({
   teamComments: z.string().optional(),
   switchPeripheralId: z.string().optional(),
   priceTier: z.string().optional(),
+  needsReview: z.boolean().optional(),
 }).superRefine((data, ctx) => {
   // Switches usam faixa de preço (priceTier) no lugar de valor exato, então o
   // preço numérico fica em 0. Nas demais categorias, o preço tem que ser > 0.
@@ -216,23 +220,23 @@ const TIER_OPTIONS: { key: Tier; color: string; textColor: string; bg: string }[
   { key: "L", color: "border-border bg-muted/40 text-muted-foreground", textColor: "text-muted-foreground", bg: "bg-muted/40" },
 ]
 
-const TAGS_OPTIONS: { key: Tag; en: string; pt: string; color: string }[] = [
-  { key: "competitive", en: "Competitive", pt: "Competitivo", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400" },
-  { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
-  { key: "value", en: "Value", pt: "Custo-Benefício", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400" },
-  { key: "cheap", en: "Cheap", pt: "Barato", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400" },
-  { key: "expensive", en: "Expensive", pt: "Caro", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400" },
-  { key: "light", en: "Light", pt: "Leve", color: "border-sky-400/50 bg-sky-500/10 text-sky-300 data-[active=true]:bg-sky-500/30 data-[active=true]:border-sky-400" },
-  { key: "heavy", en: "Heavy", pt: "Pesado", color: "border-slate-400/50 bg-slate-500/10 text-slate-300 data-[active=true]:bg-slate-500/30 data-[active=true]:border-slate-400" },
+const TAGS_OPTIONS: { key: Tag; en: string; pt: string; color: string; categories?: Category[] }[] = [
+  { key: "competitive", en: "Competitive", pt: "Competitivo", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400", categories: ["keyboard", "mouse"] },
+  { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400", categories: ["keyboard", "mouse"] },
+  { key: "value", en: "Value", pt: "Custo-Benefício", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400", categories: ["keyboard", "mouse"] },
+  { key: "cheap", en: "Cheap", pt: "Barato", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400", categories: ["keyboard", "mouse"] },
+  { key: "expensive", en: "Expensive", pt: "Caro", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400", categories: ["keyboard", "mouse"] },
+  { key: "light", en: "Light", pt: "Leve", color: "border-sky-400/50 bg-sky-500/10 text-sky-300 data-[active=true]:bg-sky-500/30 data-[active=true]:border-sky-400", categories: ["mouse"] },
+  { key: "heavy", en: "Heavy", pt: "Pesado", color: "border-slate-400/50 bg-slate-500/10 text-slate-300 data-[active=true]:bg-slate-500/30 data-[active=true]:border-slate-400", categories: ["mouse"] },
   { key: "unbalanced", en: "Unbalanced weight", pt: "Peso Desbalanceado", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400" },
   { key: "dpi_deviation", en: "DPI Deviation", pt: "DPI Deviation", color: "border-yellow-400/50 bg-yellow-500/10 text-yellow-300 data-[active=true]:bg-yellow-500/30 data-[active=true]:border-yellow-400" },
   { key: "wobble_high", en: "High wobble", pt: "Wooble Alto", color: "border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-300 data-[active=true]:bg-fuchsia-500/30 data-[active=true]:border-fuchsia-400" },
   { key: "wobble_low", en: "Low wobble", pt: "Wooble Baixo", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
-  { key: "scroll_hard", en: "Hard scroll", pt: "Scroll Duro", color: "border-stone-400/50 bg-stone-500/10 text-stone-300 data-[active=true]:bg-stone-500/30 data-[active=true]:border-stone-400" },
-  { key: "scroll_soft", en: "Soft scroll", pt: "Scroll Mole", color: "border-lime-400/50 bg-lime-500/10 text-lime-300 data-[active=true]:bg-lime-500/30 data-[active=true]:border-lime-400" },
+  { key: "scroll_hard", en: "Hard scroll", pt: "Scroll Duro", color: "border-stone-400/50 bg-stone-500/10 text-stone-300 data-[active=true]:bg-stone-500/30 data-[active=true]:border-stone-400", categories: ["mouse"] },
+  { key: "scroll_soft", en: "Soft scroll", pt: "Scroll Mole", color: "border-lime-400/50 bg-lime-500/10 text-lime-300 data-[active=true]:bg-lime-500/30 data-[active=true]:border-lime-400", categories: ["mouse"] },
   { key: "trimode", en: "Trimode", pt: "Trimode", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400" },
-  { key: "stable", en: "Stable", pt: "Estável", color: "border-teal-400/50 bg-teal-500/10 text-teal-300 data-[active=true]:bg-teal-500/30 data-[active=true]:border-teal-400" },
-  { key: "unstable", en: "Unstable", pt: "Instável", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400" },
+  { key: "stable", en: "Stable", pt: "Estável", color: "border-teal-400/50 bg-teal-500/10 text-teal-300 data-[active=true]:bg-teal-500/30 data-[active=true]:border-teal-400", categories: ["keyboard"] },
+  { key: "unstable", en: "Unstable", pt: "Instável", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400", categories: ["keyboard"] },
   { key: "8_80", en: "8 80", pt: "8 80", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400" },
   { key: "poron", en: "Poron", pt: "Poron", color: "border-purple-400/50 bg-purple-500/10 text-purple-300 data-[active=true]:bg-purple-500/30 data-[active=true]:border-purple-400" },
   { key: "borracha", en: "Rubber", pt: "Borracha", color: "border-zinc-400/50 bg-zinc-500/10 text-zinc-300 data-[active=true]:bg-zinc-500/30 data-[active=true]:border-zinc-400" },
@@ -246,8 +250,30 @@ const TAGS_OPTIONS: { key: Tag; en: string; pt: string; color: string }[] = [
   { key: "mug", en: "Mug", pt: "Mug", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400" },
   { key: "macio", en: "Soft", pt: "Macio", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400" },
   { key: "afetado_umidade", en: "Moisture affected", pt: "Afetado por umidade", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400" },
-  { key: "ultrapassado", en: "Outdated", pt: "Ultrapassado", color: "border-gray-400/50 bg-gray-500/10 text-gray-300 data-[active=true]:bg-gray-500/30 data-[active=true]:border-gray-400" },
+  { key: "ultrapassado", en: "Outdated", pt: "Ultrapassado", color: "border-gray-400/50 bg-gray-500/10 text-gray-300 data-[active=true]:bg-gray-500/30 data-[active=true]:border-gray-400", categories: ["keyboard"] },
 ]
+
+const BUY_LINK_PLATFORMS: {
+  field: "buyLinkAliexpress" | "buyLinkMercadoLivre" | "buyLinkAmazon" | "buyLinkShopee"
+  label: string
+  matches: string[]
+  dot: string
+  ring: string
+}[] = [
+  { field: "buyLinkAliexpress", label: "AliExpress", matches: ["aliexpress"], dot: "bg-red-500", ring: "focus-visible:ring-red-400/40" },
+  { field: "buyLinkMercadoLivre", label: "Mercado Livre", matches: ["mercado livre", "mercadolivre"], dot: "bg-yellow-400", ring: "focus-visible:ring-yellow-400/40" },
+  { field: "buyLinkAmazon", label: "Amazon", matches: ["amazon"], dot: "bg-blue-500", ring: "focus-visible:ring-blue-400/40" },
+  { field: "buyLinkShopee", label: "Shopee", matches: ["shopee"], dot: "bg-orange-500", ring: "focus-visible:ring-orange-400/40" },
+]
+
+function findBuyLinkUrl(buyLinks: unknown, needles: string[]): string {
+  if (!Array.isArray(buyLinks)) return ""
+  const found = buyLinks.find((l: { label?: string; url?: string }) => {
+    const label = l?.label?.toLowerCase() ?? ""
+    return needles.some((needle) => label.includes(needle))
+  })
+  return found?.url ?? ""
+}
 
 const BRAND_OPTIONS = [
   "Akko",
@@ -714,10 +740,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       category: "mouse",
       tier: "__none__",
       price: 0,
+      needsReview: false,
       rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", soundUrl: "", guideUrl: "", wikiUrl: "",
       summary: "", highlights: "", pros: "", cons: "", gallery: "",
       softwareInfo: "", teamComments: "", switchPeripheralId: "", priceTier: "",
-      buyLinks: "", compatibility: "", comparisons: "",
+      buyLinkAliexpress: "", buyLinkMercadoLivre: "", buyLinkAmazon: "", buyLinkShopee: "",
+      compatibility: "", comparisons: "",
       weight: "", latency: "", switchType: "", coating: "", shape: "",
       actuationForce: "", totalTravel: "", magneticFlux: "", housing: "", stemType: "",
       gripSmall: "", gripMedium: "", gripLarge: "",
@@ -846,9 +874,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           pros: Array.isArray(data.specs?.details?.pros) ? data.specs.details.pros.join("\n") : data.specs?.details?.pros ?? "",
           cons: Array.isArray(data.specs?.details?.cons) ? data.specs.details.cons.join("\n") : data.specs?.details?.cons ?? "",
           gallery: "",
-          buyLinks: Array.isArray(data.specs?.details?.buyLinks)
-            ? data.specs.details.buyLinks.map((l: { label: string; url: string }) => `${l.label} | ${l.url}`).join("\n")
-            : data.specs?.details?.buyLinks ?? "",
+          ...Object.fromEntries(
+            BUY_LINK_PLATFORMS.map((platform) => [
+              platform.field,
+              findBuyLinkUrl(data.specs?.details?.buyLinks, platform.matches),
+            ])
+          ),
           compatibility: data.specs?.details?.compatibility ?? "",
           comparisons: Array.isArray(data.specs?.details?.comparisons) ? data.specs.details.comparisons.join("\n") : data.specs?.details?.comparisons ?? "",
           weight: data.specs?.details?.weight ?? "",
@@ -877,6 +908,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           ratingMaintenance: data.specs?.details?.ratings?.maintenance,
           hasBattery: data.specs?.hasBattery ?? undefined,
           trimode: data.specs?.trimode ?? "",
+          needsReview: Boolean(data.specs?.needsReview),
           ...data.specs,
         })
         setSelectedTag(data.tags ?? [])
@@ -974,11 +1006,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       const splitLines = (value?: string) =>
         value ? value.split("\n").map((l) => l.trim()).filter(Boolean) : []
 
-      const parseBuyLinks = (value?: string) =>
-        splitLines(value).map((line) => {
-          const [label, url] = line.split("|").map((p) => p.trim())
-          return { label: url ? label || "Comprar" : "Comprar", url: url || label }
-        })
+      const buyLinks = BUY_LINK_PLATFORMS
+        .map((platform) => ({ label: platform.label, url: data[platform.field]?.trim() ?? "" }))
+        .filter((link) => link.url)
 
       const ratings = {
         overall: data.ratingOverall, build: data.ratingBuild, software: data.ratingSoftware,
@@ -1002,6 +1032,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         refreshRate: typeof data.refreshRate === "number" && !Number.isNaN(data.refreshRate) ? data.refreshRate : undefined,
         panelType: data.panelType || undefined,
         tierlistCategories: selectedTierlistCategories,
+        needsReview: data.needsReview ?? false,
         details: {
           rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: data.score ?? undefined,
           reviewUrl: data.reviewUrl || undefined,
@@ -1009,7 +1040,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           guideUrl: data.guideUrl || undefined, wikiUrl: data.wikiUrl || undefined,
           summary: data.summary || undefined, highlights: splitLines(data.highlights),
           pros: splitLines(data.pros), cons: splitLines(data.cons), gallery: finalGallery,
-          buyLinks: parseBuyLinks(data.buyLinks), compatibility: data.compatibility || undefined,
+          buyLinks, compatibility: data.compatibility || undefined,
           comparisons: splitLines(data.comparisons),
           softwareInfo: data.softwareInfo || undefined,
           teamComments: data.teamComments || undefined,
@@ -1318,6 +1349,33 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         {/* SECTION 2: Informações Básicas */}
         <FormSection title={t.admin.tierlistForm.sectionBasicInfo} icon={<Info className="size-4" />} defaultOpen>
           <div className="space-y-4">
+            {/* Needs review flag */}
+            <button
+              type="button"
+              onClick={() => form.setValue("needsReview", !form.watch("needsReview"), { shouldDirty: true })}
+              className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-all ${
+                form.watch("needsReview")
+                  ? "border-amber-400/60 bg-amber-500/10"
+                  : "border-border hover:border-border/80"
+              }`}
+            >
+              <span
+                className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border ${
+                  form.watch("needsReview") ? "border-amber-400 bg-amber-400" : "border-border"
+                }`}
+              >
+                {form.watch("needsReview") && <span className="size-2 rounded-sm bg-[#141925]" />}
+              </span>
+              <span className="space-y-0.5">
+                <span className={`block text-sm font-medium ${form.watch("needsReview") ? "text-amber-300" : "text-foreground"}`}>
+                  {t.admin.tierlistForm.needsReviewLabel}
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {t.admin.tierlistForm.needsReviewHint}
+                </span>
+              </span>
+            </button>
+
             {/* Category picker */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground">
@@ -1505,7 +1563,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               "Obrigatório — selecione ao menos uma tag que descreva este periférico."
             </p>
             <div className="flex flex-wrap gap-2">
-              {TAGS_OPTIONS.map((tag) => {
+              {TAGS_OPTIONS.filter((tag) => !tag.categories || tag.categories.includes(watchedCategory)).map((tag) => {
                 const active = selectedTag.includes(tag.key)
                 return (
                   <button
@@ -2437,16 +2495,25 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
         {/* SECTION 8: Links de compra */}
         <FormSection title={t.admin.tierlistForm.sectionBuyLinks} icon={<ShoppingCart className="size-4" />} defaultOpen={false}>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              "Formato: Label | https://... — um por linha. Exemplo: Amazon | https://amazon.com/..."
+              Preencha o link de cada loja em que o produto está disponível. Lojas sem link não aparecem na página do periférico.
             </p>
-            <Textarea
-              className="border-border bg-background font-mono text-xs resize-none"
-              placeholder={"Amazon | https://amazon.com/...\nMercado Livre | https://mercadolivre.com/..."}
-              rows={5}
-              {...form.register("buyLinks")}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {BUY_LINK_PLATFORMS.map((platform) => (
+                <div key={platform.field} className="space-y-1.5">
+                  <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <span className={`size-2.5 rounded-full ${platform.dot}`} />
+                    {platform.label}
+                  </label>
+                  <Input
+                    className={`border-border bg-background text-sm ${platform.ring}`}
+                    placeholder="https://..."
+                    {...form.register(platform.field)}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </FormSection>
 

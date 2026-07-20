@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, BarChart3, CheckCircle2, NotebookPen, Package, Plus, Sparkles, Trophy, Users } from "lucide-react"
 
@@ -36,6 +37,20 @@ const COLOR_STYLES = {
 
 export default function AdminPage() {
   const t = useT()
+  const [pendingReviewCount, setPendingReviewCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/admin/peripherals?columns=id,specs", { cache: "no-store" })
+      .then((res) => res.json().catch(() => null))
+      .then((json: { peripherals?: { specs?: Record<string, unknown> }[] } | null) => {
+        if (cancelled || !json?.peripherals) return
+        setPendingReviewCount(json.peripherals.filter((p) => Boolean(p.specs?.needsReview)).length)
+      })
+      .catch(() => { if (!cancelled) setPendingReviewCount(null) })
+    return () => { cancelled = true }
+  }, [])
+
   const quickActions = [
     {
       href: "/admin/tierlist/new",
@@ -133,13 +148,19 @@ export default function AdminPage() {
 
         <Card className="border-border bg-card">
           <CardContent className="space-y-4 p-5 md:p-6">
-            <div className="flex items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4">
+            <Link
+              href="/admin/tierlist/revisao"
+              className="group flex items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4 transition-colors hover:border-primary/40 hover:bg-primary/5"
+            >
               <Package className="mt-0.5 size-5 text-primary" />
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-foreground">{t.admin.dashboard.tierListItems}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{t.admin.dashboard.tierListItemsDesc}</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {t.admin.dashboard.tierListItemsDesc(pendingReviewCount ?? 0)}
+                </p>
               </div>
-            </div>
+              <ArrowRight className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-foreground" />
+            </Link>
 
             <div className="flex items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4">
               <NotebookPen className="mt-0.5 size-5 text-amber-300" />

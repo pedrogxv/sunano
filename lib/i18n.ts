@@ -228,7 +228,7 @@ type Translations = {
       writePost: string
       publishUpdates: string
       tierListItems: string
-      tierListItemsDesc: string
+      tierListItemsDesc: (count: number) => string
       contentLabel: string
       contentDesc: string
       visitorExperience: string
@@ -439,6 +439,8 @@ type Translations = {
       priceUsd: string
       tierHint: string
       underReview: string
+      needsReviewLabel: string
+      needsReviewHint: string
       selectAtLeastOneTag: string
       sectionRatings: string
       sectionTechnicalSpecs: string
@@ -493,6 +495,16 @@ type Translations = {
       noUnassigned: string
       itemsCount: (count: number) => string
       modeDescriptions: { performance: string; value: string; recommended: string; oled: string; soundTyping: string; mechanical: string; magnetic: string; pcb: string }
+    }
+    tierlistReview: {
+      pageTitle: string
+      pageDescription: string
+      backToDashboard: string
+      failedToLoad: string
+      empty: string
+      emptyDesc: string
+      editButton: string
+      itemsCount: (count: number) => string
     }
   }
   settings: {
@@ -827,7 +839,10 @@ export const translations: Record<LocaleCode, Translations> = {
         writePost: "Escrever post",
         publishUpdates: "Publique novidades e análises",
         tierListItems: "Itens da Tier List",
-        tierListItemsDesc: "20 itens prontos para revisão e ajustes.",
+        tierListItemsDesc: (count) =>
+          count === 0
+            ? "Nenhum item pendente de revisão."
+            : `${count} ${count === 1 ? "item" : "itens"} marcado${count === 1 ? "" : "s"} para revisão ou complemento.`,
         contentLabel: "Conteúdo",
         contentDesc: "Você pode criar novos posts ou atualizar os existentes.",
         visitorExperience: "Experiência do visitante",
@@ -1059,6 +1074,8 @@ export const translations: Record<LocaleCode, Translations> = {
         priceUsd: "Preço (USD)",
         tierHint: "Selecione o tier que melhor representa a performance deste periférico",
         underReview: "Sob Revisão",
+        needsReviewLabel: "Marcar para revisão",
+        needsReviewHint: "Use quando o cadastro ficou incompleto ou precisa de correções para depois. Ele aparece na lista de revisão do dashboard até você desmarcar.",
         selectAtLeastOneTag: "Selecione pelo menos uma tag.",
         sectionRatings: "Notas (0–6)",
         sectionTechnicalSpecs: "Especificações Técnicas",
@@ -1092,6 +1109,16 @@ export const translations: Record<LocaleCode, Translations> = {
         noUnassigned: "Nenhum periférico Sob Revisão",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "itens"}`,
         modeDescriptions: { performance: "Ordenado por desempenho puro", value: "Ordenado por preço", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", oled: "Apenas painéis OLED", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB" },
+      },
+      tierlistReview: {
+        pageTitle: "Itens Pendentes de Revisão",
+        pageDescription: "Periféricos marcados para revisão — complete as informações ou corrija o que ficou faltando.",
+        backToDashboard: "Dashboard",
+        failedToLoad: "Falha ao carregar os itens pendentes.",
+        empty: "Nenhum item pendente. Tudo revisado!",
+        emptyDesc: "Marque \"Marcar para revisão\" no formulário de um periférico para ele aparecer aqui.",
+        editButton: "Editar",
+        itemsCount: (count: number) => `${count} ${count === 1 ? "pendente" : "pendentes"}`,
       },
     },
     settings: {
@@ -1430,7 +1457,10 @@ export const translations: Record<LocaleCode, Translations> = {
         writePost: "Write post",
         publishUpdates: "Publish updates and analysis",
         tierListItems: "Tier List items",
-        tierListItemsDesc: "20 items ready for review and adjustments.",
+        tierListItemsDesc: (count) =>
+          count === 0
+            ? "No items pending review."
+            : `${count} ${count === 1 ? "item" : "items"} flagged for review or follow-up.`,
         contentLabel: "Content",
         contentDesc: "You can create new posts or update existing ones.",
         visitorExperience: "Visitor experience",
@@ -1641,6 +1671,8 @@ export const translations: Record<LocaleCode, Translations> = {
         priceUsd: "Price (USD)",
         tierHint: "Select the tier that best represents this peripheral's performance",
         underReview: "Under Review",
+        needsReviewLabel: "Flag for review",
+        needsReviewHint: "Use this when the entry is incomplete or needs fixes for later. It shows up in the dashboard's review list until you uncheck it.",
         selectAtLeastOneTag: "Select at least one tag.",
         sectionRatings: "Ratings (0-6)",
         sectionTechnicalSpecs: "Technical Specs",
@@ -1695,6 +1727,16 @@ export const translations: Record<LocaleCode, Translations> = {
         noUnassigned: "No peripherals without tier",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "items"}`,
         modeDescriptions: { performance: "Sorted by pure performance", value: "Sorted by price", recommended: "Suggested picks by Sunano, prioritizing overall balance", oled: "Show only OLED panels", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance" },
+      },
+      tierlistReview: {
+        pageTitle: "Items Pending Review",
+        pageDescription: "Peripherals flagged for review — finish the missing info or fix what was left incomplete.",
+        backToDashboard: "Dashboard",
+        failedToLoad: "Failed to load pending items.",
+        empty: "Nothing pending. All caught up!",
+        emptyDesc: "Check \"Flag for review\" on a peripheral's form for it to show up here.",
+        editButton: "Edit",
+        itemsCount: (count: number) => `${count} pending`,
       },
     },
     settings: {

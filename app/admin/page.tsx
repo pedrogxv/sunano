@@ -45,7 +45,7 @@ export default function AdminPage() {
       .then((res) => res.json().catch(() => null))
       .then((json: { peripherals?: { specs?: Record<string, unknown> }[] } | null) => {
         if (cancelled || !json?.peripherals) return
-        setPendingReviewCount(json.peripherals.filter((p) => Boolean(p.specs?.needsReview)).length)
+        setPendingReviewCount(json.peripherals.filter((p) => Array.isArray(p.specs?.reviewFlags) && (p.specs.reviewFlags as unknown[]).length > 0).length)
       })
       .catch(() => { if (!cancelled) setPendingReviewCount(null) })
     return () => { cancelled = true }

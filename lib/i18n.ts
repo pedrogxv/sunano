@@ -439,8 +439,8 @@ type Translations = {
       priceUsd: string
       tierHint: string
       underReview: string
-      needsReviewLabel: string
-      needsReviewHint: string
+      reviewFlagsLabel: string
+      reviewFlagsHint: string
       selectAtLeastOneTag: string
       sectionRatings: string
       sectionTechnicalSpecs: string
@@ -503,8 +503,11 @@ type Translations = {
       failedToLoad: string
       empty: string
       emptyDesc: string
-      editButton: string
-      itemsCount: (count: number) => string
+      searchPlaceholder: string
+      categoryPerformance: string
+      categoryStore: string
+      categoryVideoReview: string
+      categorySpecsComments: string
     }
   }
   settings: {
@@ -1074,8 +1077,8 @@ export const translations: Record<LocaleCode, Translations> = {
         priceUsd: "Preço (USD)",
         tierHint: "Selecione o tier que melhor representa a performance deste periférico",
         underReview: "Sob Revisão",
-        needsReviewLabel: "Marcar para revisão",
-        needsReviewHint: "Use quando o cadastro ficou incompleto ou precisa de correções para depois. Ele aparece na lista de revisão do dashboard até você desmarcar.",
+        reviewFlagsLabel: "Marcar para revisão",
+        reviewFlagsHint: "Marque as frentes que ainda precisam de atenção. O periférico aparece na lista de revisão do dashboard até todas ficarem desmarcadas.",
         selectAtLeastOneTag: "Selecione pelo menos uma tag.",
         sectionRatings: "Notas (0–6)",
         sectionTechnicalSpecs: "Especificações Técnicas",
@@ -1111,14 +1114,17 @@ export const translations: Record<LocaleCode, Translations> = {
         modeDescriptions: { performance: "Ordenado por desempenho puro", value: "Ordenado por preço", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", oled: "Apenas painéis OLED", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB" },
       },
       tierlistReview: {
-        pageTitle: "Itens Pendentes de Revisão",
-        pageDescription: "Periféricos marcados para revisão — complete as informações ou corrija o que ficou faltando.",
+        pageTitle: "Revisão de Periféricos",
+        pageDescription: "Marque o que falta revisar em cada periférico: Informações Técnicas (Performance), Loja, Vídeo review ou Specs e comentários.",
         backToDashboard: "Dashboard",
-        failedToLoad: "Falha ao carregar os itens pendentes.",
-        empty: "Nenhum item pendente. Tudo revisado!",
-        emptyDesc: "Marque \"Marcar para revisão\" no formulário de um periférico para ele aparecer aqui.",
-        editButton: "Editar",
-        itemsCount: (count: number) => `${count} ${count === 1 ? "pendente" : "pendentes"}`,
+        failedToLoad: "Falha ao carregar os periféricos.",
+        empty: "Nenhum periférico encontrado.",
+        emptyDesc: "Tente ajustar sua busca.",
+        searchPlaceholder: "Buscar por nome ou marca...",
+        categoryPerformance: "Informações Técnicas (Performance)",
+        categoryStore: "Loja",
+        categoryVideoReview: "Vídeo review",
+        categorySpecsComments: "Specs e comentários",
       },
     },
     settings: {
@@ -1671,8 +1677,8 @@ export const translations: Record<LocaleCode, Translations> = {
         priceUsd: "Price (USD)",
         tierHint: "Select the tier that best represents this peripheral's performance",
         underReview: "Under Review",
-        needsReviewLabel: "Flag for review",
-        needsReviewHint: "Use this when the entry is incomplete or needs fixes for later. It shows up in the dashboard's review list until you uncheck it.",
+        reviewFlagsLabel: "Flag for review",
+        reviewFlagsHint: "Flag the areas that still need attention. The peripheral shows up in the dashboard's review list until every flag is cleared.",
         selectAtLeastOneTag: "Select at least one tag.",
         sectionRatings: "Ratings (0-6)",
         sectionTechnicalSpecs: "Technical Specs",
@@ -1729,14 +1735,17 @@ export const translations: Record<LocaleCode, Translations> = {
         modeDescriptions: { performance: "Sorted by pure performance", value: "Sorted by price", recommended: "Suggested picks by Sunano, prioritizing overall balance", oled: "Show only OLED panels", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance" },
       },
       tierlistReview: {
-        pageTitle: "Items Pending Review",
-        pageDescription: "Peripherals flagged for review — finish the missing info or fix what was left incomplete.",
+        pageTitle: "Peripheral Review",
+        pageDescription: "Flag what's missing per peripheral: Technical Info (Performance), Store, Video review, or Specs & comments.",
         backToDashboard: "Dashboard",
-        failedToLoad: "Failed to load pending items.",
-        empty: "Nothing pending. All caught up!",
-        emptyDesc: "Check \"Flag for review\" on a peripheral's form for it to show up here.",
-        editButton: "Edit",
-        itemsCount: (count: number) => `${count} pending`,
+        failedToLoad: "Failed to load peripherals.",
+        empty: "No peripherals found.",
+        emptyDesc: "Try adjusting your search.",
+        searchPlaceholder: "Search by name or brand...",
+        categoryPerformance: "Technical Info (Performance)",
+        categoryStore: "Store",
+        categoryVideoReview: "Video review",
+        categorySpecsComments: "Specs & comments",
       },
     },
     settings: {

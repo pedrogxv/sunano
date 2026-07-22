@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag, Layers, FileText, ShoppingCart, Info, Link2, Search, X, Scissors, RotateCcw, Loader2 } from "lucide-react"
@@ -133,7 +133,7 @@ const peripheralSchema = z.object({
   teamComments: z.string().optional(),
   switchPeripheralId: z.string().optional(),
   priceTier: z.string().optional(),
-  needsReview: z.boolean().optional(),
+  reviewFlags: z.array(z.enum(["performance", "store", "videoReview", "specsComments"])).optional(),
 }).superRefine((data, ctx) => {
   // Switches usam faixa de preço (priceTier) no lugar de valor exato, então o
   // preço numérico fica em 0. Nas demais categorias, o preço tem que ser > 0.
@@ -371,18 +371,34 @@ const RATING_FIELDS: { key: keyof PeripheralFormData; label: string; ptLabel: st
   { key: "ratingMaintenance", label: "Maintenance", ptLabel: "Manutenção" },
 ]
 
+// Mapeia cada flag de revisão para a seção do formulário que deve abrir e
+// receber o scroll quando se chega aqui via /admin/tierlist/{id}?focus=<flag>
+// (link vindo dos chips da lista de revisão em /admin/tierlist/revisao).
+const REVIEW_FOCUS_TARGETS: Record<string, { scrollTo: string; alsoOpen?: string[] }> = {
+  performance: { scrollTo: "section-ratings" },
+  store: { scrollTo: "section-linked-products", alsoOpen: ["section-buy-links"] },
+  videoReview: { scrollTo: "section-wiki-content" },
+  specsComments: { scrollTo: "section-technical-specs", alsoOpen: ["section-wiki-content"] },
+}
+
 interface SectionProps {
   title: string
   icon: React.ReactNode
   children: React.ReactNode
   defaultOpen?: boolean
+  id?: string
+  forceOpen?: boolean
 }
 
-function FormSection({ title, icon, children, defaultOpen = true }: SectionProps) {
-  const [open, setOpen] = useState(defaultOpen)
+function FormSection({ title, icon, children, defaultOpen = true, id, forceOpen }: SectionProps) {
+  const [open, setOpen] = useState(defaultOpen || Boolean(forceOpen))
+
+  useEffect(() => {
+    if (forceOpen) setOpen(true)
+  }, [forceOpen])
 
   return (
-    <Card className="border-border bg-card/50">
+    <Card id={id} className="border-border bg-card/50">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -705,12 +721,28 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const t = useT()
   const router = useRouter()
   const pathname = usePathname()
+  const [focusSection, setFocusSection] = useState<string | null>(null)
+  useEffect(() => {
+    setFocusSection(new URLSearchParams(window.location.search).get("focus"))
+  }, [])
+  const focusTarget = focusSection ? REVIEW_FOCUS_TARGETS[focusSection] : undefined
+  const forceOpenIds = useMemo(
+    () => new Set(focusTarget ? [focusTarget.scrollTo, ...(focusTarget.alsoOpen ?? [])] : []),
+    [focusTarget]
+  )
   const backHref = pathname?.startsWith("/admin/perifericos") ? "/admin/perifericos" : "/admin/tierlist"
   const parentLabel = pathname?.startsWith("/admin/perifericos")
     ? t.admin.tierlistForm.parentPeripherals
     : t.admin.tierlistForm.parentTierlist
   const [uploading, setUploading] = useState(false)
   const [loadingPeripheral, setLoadingPeripheral] = useState(Boolean(peripheralId))
+
+  useEffect(() => {
+    if (loadingPeripheral || !focusTarget) return
+    const el = document.getElementById(focusTarget.scrollTo)
+    el?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [loadingPeripheral, focusTarget])
+
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   // Guarda o original e o recorte para permitir alternar entre eles.
@@ -740,7 +772,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       category: "mouse",
       tier: "__none__",
       price: 0,
-      needsReview: false,
+      reviewFlags: [],
       rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", soundUrl: "", guideUrl: "", wikiUrl: "",
       summary: "", highlights: "", pros: "", cons: "", gallery: "",
       softwareInfo: "", teamComments: "", switchPeripheralId: "", priceTier: "",
@@ -908,7 +940,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           ratingMaintenance: data.specs?.details?.ratings?.maintenance,
           hasBattery: data.specs?.hasBattery ?? undefined,
           trimode: data.specs?.trimode ?? "",
-          needsReview: Boolean(data.specs?.needsReview),
+          reviewFlags: Array.isArray(data.specs?.reviewFlags)
+            ? (data.specs.reviewFlags as ("performance" | "store" | "videoReview" | "specsComments")[])
+            : [],
           ...data.specs,
         })
         setSelectedTag(data.tags ?? [])
@@ -1032,7 +1066,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         refreshRate: typeof data.refreshRate === "number" && !Number.isNaN(data.refreshRate) ? data.refreshRate : undefined,
         panelType: data.panelType || undefined,
         tierlistCategories: selectedTierlistCategories,
-        needsReview: data.needsReview ?? false,
+        reviewFlags: data.reviewFlags ?? [],
         details: {
           rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: data.score ?? undefined,
           reviewUrl: data.reviewUrl || undefined,
@@ -1349,32 +1383,42 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         {/* SECTION 2: Informações Básicas */}
         <FormSection title={t.admin.tierlistForm.sectionBasicInfo} icon={<Info className="size-4" />} defaultOpen>
           <div className="space-y-4">
-            {/* Needs review flag */}
-            <button
-              type="button"
-              onClick={() => form.setValue("needsReview", !form.watch("needsReview"), { shouldDirty: true })}
-              className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-all ${
-                form.watch("needsReview")
-                  ? "border-amber-400/60 bg-amber-500/10"
-                  : "border-border hover:border-border/80"
-              }`}
-            >
-              <span
-                className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border ${
-                  form.watch("needsReview") ? "border-amber-400 bg-amber-400" : "border-border"
-                }`}
-              >
-                {form.watch("needsReview") && <span className="size-2 rounded-sm bg-[#141925]" />}
-              </span>
-              <span className="space-y-0.5">
-                <span className={`block text-sm font-medium ${form.watch("needsReview") ? "text-amber-300" : "text-foreground"}`}>
-                  {t.admin.tierlistForm.needsReviewLabel}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  {t.admin.tierlistForm.needsReviewHint}
-                </span>
-              </span>
-            </button>
+            {/* Review flags */}
+            <div className="space-y-2 rounded-lg border border-border px-3 py-2.5">
+              <p className="text-sm font-medium text-foreground">{t.admin.tierlistForm.reviewFlagsLabel}</p>
+              <p className="text-xs text-muted-foreground">{t.admin.tierlistForm.reviewFlagsHint}</p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {([
+                  ["performance", t.admin.tierlistReview.categoryPerformance],
+                  ["store", t.admin.tierlistReview.categoryStore],
+                  ["videoReview", t.admin.tierlistReview.categoryVideoReview],
+                  ["specsComments", t.admin.tierlistReview.categorySpecsComments],
+                ] as const).map(([flag, label]) => {
+                  const active = (form.watch("reviewFlags") ?? []).includes(flag)
+                  return (
+                    <button
+                      key={flag}
+                      type="button"
+                      onClick={() => {
+                        const current = form.watch("reviewFlags") ?? []
+                        form.setValue(
+                          "reviewFlags",
+                          active ? current.filter((f) => f !== flag) : [...current, flag],
+                          { shouldDirty: true }
+                        )
+                      }}
+                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                        active
+                          ? "border-amber-400/60 bg-amber-500/15 text-amber-300"
+                          : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
             {/* Category picker */}
             <div className="space-y-2">
@@ -1587,6 +1631,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
         {/* SECTION 5: Ratings */}
         <FormSection
+          id="section-ratings"
+          forceOpen={forceOpenIds.has("section-ratings")}
           title={t.admin.tierlistForm.sectionRatings}
           icon={
             <div className="flex items-center gap-1">
@@ -1667,7 +1713,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </FormSection>
 
         {/* SECTION 6: Specs por categoria */}
-        <FormSection title={t.admin.tierlistForm.sectionTechnicalSpecs} icon={<FileText className="size-4" />} defaultOpen>
+        <FormSection id="section-technical-specs" forceOpen={forceOpenIds.has("section-technical-specs")} title={t.admin.tierlistForm.sectionTechnicalSpecs} icon={<FileText className="size-4" />} defaultOpen>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Pontuação"}</label>
@@ -2371,7 +2417,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </FormSection>
 
         {/* SECTION 7: Wiki / Conteúdo */}
-        <FormSection title={t.admin.tierlistForm.sectionWikiContent} icon={<FileText className="size-4" />} defaultOpen={false}>
+        <FormSection id="section-wiki-content" forceOpen={forceOpenIds.has("section-wiki-content")} title={t.admin.tierlistForm.sectionWikiContent} icon={<FileText className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Review Completo"}</label>
@@ -2463,7 +2509,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </FormSection>
 
         {/* SECTION: Produtos vinculados */}
-        <FormSection title={t.admin.tierlistForm.sectionLinkedProducts} icon={<Link2 className="size-4" />} defaultOpen={false}>
+        <FormSection id="section-linked-products" forceOpen={forceOpenIds.has("section-linked-products")} title={t.admin.tierlistForm.sectionLinkedProducts} icon={<Link2 className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
               "Vincule este periférico a um produto da Loja e/ou item do Bazar. O vínculo aparece na página do periférico, e as páginas da Loja e do Bazar mostram o item correspondente do outro lado."
@@ -2494,7 +2540,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </FormSection>
 
         {/* SECTION 8: Links de compra */}
-        <FormSection title={t.admin.tierlistForm.sectionBuyLinks} icon={<ShoppingCart className="size-4" />} defaultOpen={false}>
+        <FormSection id="section-buy-links" forceOpen={forceOpenIds.has("section-buy-links")} title={t.admin.tierlistForm.sectionBuyLinks} icon={<ShoppingCart className="size-4" />} defaultOpen={false}>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
               Preencha o link de cada loja em que o produto está disponível. Lojas sem link não aparecem na página do periférico.

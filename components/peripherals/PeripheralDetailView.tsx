@@ -413,7 +413,12 @@ export function PeripheralDetailView({
     // @container/pdv: permite que este componente seja reaproveitado tanto na página
     // pública (largura cheia) quanto no preview estreito do formulário de admin — o
     // corte de 2 colunas reage à largura do próprio componente, não da viewport.
-    <div className="@container/pdv grid gap-4 @5xl/pdv:grid-cols-[320px_minmax(0,1fr)]">
+    // O container fica num wrapper separado do grid que ele mede: um elemento não
+    // pode aplicar a si mesmo um estilo baseado no próprio container query (a regra
+    // é ignorada pelo browser), então "@container/pdv" e "@5xl/pdv:" não podem estar
+    // na mesma div.
+    <div className="@container/pdv">
+    <div className="grid gap-4 @5xl/pdv:grid-cols-[320px_minmax(0,1fr)]">
             <div className="space-y-3">
               {tierStyle ? (
                 <div className={cn("rounded-2xl bg-gradient-to-br px-4 py-3 text-center", tierStyle.accent, tierStyle.textColor)}>
@@ -864,6 +869,7 @@ export function PeripheralDetailView({
               )}
 
             </div>
+    </div>
     </div>
   )
 }

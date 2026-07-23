@@ -51,9 +51,10 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
           aria-label={item.name}
           className={cn(
             "group relative block cursor-pointer overflow-hidden rounded-lg border bg-card transition-all duration-[220ms] ease-out",
-            "hover:-translate-y-1 hover:brightness-110",
+            "hover:z-10 hover:-translate-y-1 hover:scale-[1.3] hover:brightness-150",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
             tierStyle.border,
+            tierStyle.borderHover,
             tierStyle.glow,
             tierStyle.glowHover,
           )}

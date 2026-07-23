@@ -413,8 +413,8 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
       </div>
 
 
-      <div className="relative overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_rgba(124,58,237,0.07),_transparent_60%)]" />
+      <div className="relative overflow-visible rounded-xl border border-border bg-card shadow-lg">
+        <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_top,_rgba(124,58,237,0.07),_transparent_60%)]" />
 
         <table className="hidden w-full border-collapse md:table">
           <tbody>

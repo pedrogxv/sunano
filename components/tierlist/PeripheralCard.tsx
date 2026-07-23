@@ -91,7 +91,7 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
           <div className="ml-1.5 px-2 pb-2 pt-1.5">
             <p className="line-clamp-2 text-[10px] font-semibold leading-tight text-foreground">{item.name}</p>
             <div className="mt-1 flex items-center justify-between gap-1">
-              <p className="truncate text-[8px] text-gray-300">{item.brand}</p>
+              <p className="truncate text-[8px] text-muted-foreground">{item.brand}</p>
               {/* {tagStyle && (
                 <div className={cn("size-1.5 shrink-0 rounded-full", tagStyle.dot)} />
               )} */}

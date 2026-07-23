@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
@@ -68,11 +69,12 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-violet-500/15 to-transparent" />
             )}
             {item.image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+              <Image
                 alt={item.name}
-                className="h-full w-full object-contain p-0.5 drop-shadow-[0_3px_6px_rgba(0,0,0,0.45)]"
                 src={item.image_url}
+                fill
+                sizes="(max-width: 768px) 30vw, 120px"
+                className="object-contain p-0.5 drop-shadow-[0_3px_6px_rgba(0,0,0,0.45)]"
               />
             ) : (
               <div

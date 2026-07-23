@@ -3,6 +3,7 @@
 import type { SVGProps } from "react"
 import { Check, ChevronDown, Globe, Moon, PanelLeft, Send, Sun, Youtube } from "lucide-react"
 import { usePathname } from "next/navigation"
+import dynamic from "next/dynamic"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +12,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { AuthUser } from "@/components/auth/auth-user"
+
+// Code-split: o AuthUser puxa o cliente Supabase (@supabase/ssr), pesado e
+// desnecessário para a primeira pintura. Carregá-lo sob demanda tira esse
+// peso do bundle crítico de TODAS as páginas públicas. O placeholder abaixo
+// é idêntico ao esqueleto que o próprio AuthUser exibe enquanto checa a sessão,
+// então não há mudança visual nem layout shift.
+const AuthUser = dynamic(
+  () => import("@/components/auth/auth-user").then((m) => m.AuthUser),
+  {
+    ssr: false,
+    loading: () => <div className="size-8 shrink-0 rounded-lg bg-muted/40 animate-pulse md:size-8" />,
+  }
+)
 import { getLanguageEntry, I18N, LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
 import { useLocale } from "@/components/providers/locale-context"
 import { useTheme } from "@/components/providers/theme-context"

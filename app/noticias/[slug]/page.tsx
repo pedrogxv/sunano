@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useParams } from "next/navigation"
 import { ArrowLeft, Clock, MessageCircle, Newspaper } from "lucide-react"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
@@ -144,8 +145,7 @@ function RelatedNews({ posts }: { posts: RelatedPost[] }) {
               className="group flex items-center gap-3 py-2.5"
             >
               <div className="relative h-12 w-16 shrink-0 overflow-hidden rounded-md bg-muted/30">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img} alt={p.title} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                <Image src={img} alt={p.title} fill sizes="64px" className="object-cover transition-transform duration-300 group-hover:scale-105" />
               </div>
               <div className="min-w-0">
                 <span className="block text-[11px] text-muted-foreground/60">
@@ -403,8 +403,14 @@ export default function NoticiasSlugPage() {
 
       {/* Cover image */}
       <div className="relative mb-8 w-full overflow-hidden rounded-2xl bg-muted/30" style={{ aspectRatio: "16/9" }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={coverImg} alt={post.title} className="h-full w-full object-cover" />
+        <Image
+          src={coverImg}
+          alt={post.title}
+          fill
+          priority
+          sizes="(max-width: 768px) 100vw, 768px"
+          className="object-cover"
+        />
       </div>
 
       {/* Brand */}

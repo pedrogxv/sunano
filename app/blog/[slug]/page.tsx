@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useParams } from "next/navigation"
 
 import BoxLoader from "@/components/ui/box-loader"
@@ -124,12 +125,16 @@ export default function BlogPostPage() {
 
     <div className="mx-auto max-w-4xl p-4 md:p-5 lg:p-6">
       <Card className="overflow-hidden border-border bg-card/90 shadow-2xl shadow-black/20">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")}
-          alt={post.title}
-          className="h-72 w-full object-cover"
-        />
+        <div className="relative h-72 w-full">
+          <Image
+            src={getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")}
+            alt={post.title}
+            fill
+            priority
+            sizes="(max-width: 896px) 100vw, 896px"
+            className="object-cover"
+          />
+        </div>
 
         <CardHeader className="space-y-3 border-b border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.04),transparent)] p-6">
           <div className="flex flex-wrap items-center gap-2">

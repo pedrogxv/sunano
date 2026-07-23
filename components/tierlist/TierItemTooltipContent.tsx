@@ -1,5 +1,7 @@
 "use client"
 
+import Image from "next/image"
+
 import { cn } from "@/lib/utils"
 import { CARD_TAG_STYLES, CARD_TIER_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { useLocale } from "@/components/providers/locale-context"
@@ -168,8 +170,7 @@ export function TierItemTooltipContent({
           )}
         >
           {image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={image_url} alt={name} className="h-full w-full object-contain p-0.5" />
+            <Image src={image_url} alt={name} width={56} height={56} className="h-full w-full object-contain p-0.5" />
           ) : (
             brand.slice(0, 2).toUpperCase()
           )}

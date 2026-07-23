@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { ExternalLink, PlayCircle } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -54,10 +55,11 @@ export default async function VideosPage() {
             <Card size="sm" className="w-full border-border bg-background md:max-w-sm">
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src={channelAvatar}
                     alt={channel.title}
+                    width={48}
+                    height={48}
                     className="size-9 shrink-0 object-contain md:size-12"
                   />
                   <div className="min-w-0">
@@ -137,16 +139,22 @@ export default async function VideosPage() {
                     avatar do canal ao lado do título + metadados. */}
                 <article className="flex h-full flex-col gap-3">
                   {video.thumbnailUrl ? (
-                    <div className="aspect-video w-full overflow-hidden rounded-xl bg-muted">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={video.thumbnailUrl} alt={video.title} className="size-full object-cover" />
+                    <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted">
+                      <Image
+                        src={video.thumbnailUrl}
+                        alt={video.title}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 384px"
+                        className="object-cover"
+                      />
                     </div>
                   ) : null}
                   <div className="flex gap-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <Image
                       src={channelAvatar}
                       alt={channel?.title || "Canal"}
+                      width={36}
+                      height={36}
                       className="size-9 shrink-0 rounded-full bg-background object-contain p-0.5"
                     />
                     <div className="min-w-0 flex-1 space-y-1">

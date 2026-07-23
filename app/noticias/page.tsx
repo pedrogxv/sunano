@@ -1,10 +1,14 @@
-"use client"
-
-import { Suspense, useEffect, useState } from "react"
 import Link from "next/link"
-import { Clock, MessageCircle, PenSquare, TrendingUp } from "lucide-react"
+import Image from "next/image"
+import { Clock, MessageCircle, TrendingUp } from "lucide-react"
+
 import { getBlogImageWithFallback } from "@/lib/blog-images"
-import BoxLoader from "@/components/ui/box-loader"
+import { listPublishedPosts } from "@/lib/server/repositories/blog-repository"
+import { NewNewsButton } from "./new-news-button"
+
+// ISR: renderizado no servidor e revalidado em background, sem o fetch
+// client-side que exibia um spinner a cada acesso.
+export const revalidate = 30
 
 type NewsPost = {
   id: string
@@ -17,7 +21,7 @@ type NewsPost = {
   created_at: string
   comment_count?: number
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
-  peripherals?: { id: string; name: string; brand: string }[] | null
+  peripherals?: { id?: string; name: string; brand: string }[] | null
 }
 
 function timeAgo(dateStr: string) {
@@ -46,11 +50,12 @@ function TrendingCard({ post }: { post: NewsPost }) {
       href={`/noticias/${post.slug}`}
       className="group relative flex-shrink-0 w-44 h-28 rounded-xl overflow-hidden border border-border/50 block"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <Image
         src={img}
         alt={post.title}
-        className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        fill
+        sizes="176px"
+        className="object-cover transition-transform duration-300 group-hover:scale-105"
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
       <div className="absolute bottom-0 left-0 right-0 p-2">
@@ -71,11 +76,12 @@ function NewsListItem({ post }: { post: NewsPost }) {
     >
       {/* Thumbnail */}
       <div className="relative flex-shrink-0 w-32 h-20 rounded-lg overflow-hidden bg-muted/30">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={img}
           alt={post.title}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          fill
+          sizes="128px"
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
         />
       </div>
 
@@ -118,26 +124,8 @@ function NewsListItem({ post }: { post: NewsPost }) {
   )
 }
 
-function NoticiasPageContent() {
-  const [posts, setPosts] = useState<NewsPost[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
-
-  useEffect(() => {
-    fetch("/api/blog")
-      .then((r) => r.json())
-      .then((d) => setPosts((d.posts ?? []) as NewsPost[]))
-      .catch(() => setPosts([]))
-      .finally(() => setLoading(false))
-  }, [])
-
-  // Atalho de criação só aparece para quem tem perfil admin.
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => setIsAdmin(Boolean(d?.adminProfile)))
-      .catch(() => setIsAdmin(false))
-  }, [])
+export default async function NoticiasPage() {
+  const posts = (await listPublishedPosts(null)) as NewsPost[]
 
   // "Em Alta": prioriza engajamento (mais comentadas), com a recência como
   // critério de desempate.
@@ -161,22 +149,10 @@ function NoticiasPageContent() {
             Atualizações, anúncios e novidades da Sunano em um só lugar.
           </p>
         </div>
-        {isAdmin && (
-          <Link
-            href="/admin/blog/new"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-          >
-            <PenSquare className="size-4" />
-            <span className="hidden sm:inline">Nova notícia</span>
-          </Link>
-        )}
+        <NewNewsButton />
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <BoxLoader />
-        </div>
-      ) : posts.length === 0 ? (
+      {posts.length === 0 ? (
         <div className="rounded-2xl border border-border bg-card p-10 text-center">
           <p className="text-muted-foreground">Nenhuma notícia encontrada.</p>
         </div>
@@ -216,22 +192,5 @@ function NoticiasPageContent() {
         </>
       )}
     </div>
-  )
-}
-
-export default function NoticiasPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center min-h-[50vh]">
-          <div className="flex items-center gap-3 text-muted-foreground">
-            <div className="size-5 animate-spin rounded-full border-2 border-border border-t-primary" />
-            <span>Carregando notícias...</span>
-          </div>
-        </div>
-      }
-    >
-      <NoticiasPageContent />
-    </Suspense>
   )
 }

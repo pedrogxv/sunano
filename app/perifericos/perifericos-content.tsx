@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowLeftRight, Check, ChevronDown, Edit, Headphones, Keyboard, Layers, LayoutGrid, Monitor, Mouse, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
@@ -933,8 +934,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                           #{index + 1}
                         </span>
                         {item.image_url && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={item.image_url} alt={item.name} className="size-9 rounded-lg object-cover" />
+                          <Image src={item.image_url} alt={item.name} width={36} height={36} className="size-9 rounded-lg object-cover" />
                         )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
@@ -996,13 +996,14 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                   >
                     {/* Image area */}
                     <div className="relative overflow-hidden rounded-t-xl border-b border-border bg-muted/10">
-                      <div className="flex h-36 items-center justify-center">
+                      <div className="relative flex h-36 items-center justify-center">
                         {item.image_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
+                          <Image
                             alt={item.name}
                             src={item.image_url}
-                            className="h-full w-full object-contain p-4 transition-transform duration-300 group-hover:scale-[1.04]"
+                            fill
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 240px"
+                            className="object-contain p-4 transition-transform duration-300 group-hover:scale-[1.04]"
                           />
                         ) : (
                           <span className="select-none text-4xl font-bold text-muted-foreground/20">
@@ -1120,8 +1121,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                 return (
                   <div key={id} className="size-8 overflow-hidden rounded-lg border border-border bg-muted/40">
                     {item.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.image_url} alt={item.name} className="h-full w-full object-contain p-0.5" />
+                      <Image src={item.image_url} alt={item.name} width={32} height={32} className="h-full w-full object-contain p-0.5" />
                     ) : (
                       <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">
                         {item.brand.slice(0, 2).toUpperCase()}

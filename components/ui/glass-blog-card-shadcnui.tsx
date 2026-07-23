@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
@@ -55,10 +56,12 @@ export function GlassBlogCard({
     >
       <Card className="group relative h-full overflow-hidden rounded-2xl border-border/50 bg-card/30 backdrop-blur-md transition-all duration-300 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10">
         <div className="relative aspect-[16/8] overflow-hidden">
-          <motion.img
+          <Image
             src={image}
             alt={title}
-            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 400px"
+            className="object-cover transition-transform duration-500 group-hover:scale-110"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent opacity-60 transition-opacity duration-300 group-hover:opacity-40" />
 

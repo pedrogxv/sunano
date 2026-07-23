@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { VisuallyHidden } from "radix-ui"
 
@@ -42,10 +43,16 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
         <button
           type="button"
           onClick={() => openAt(0)}
-          className="block aspect-[4/3] w-full overflow-hidden rounded-2xl border border-border bg-muted/40"
+          className="relative block aspect-[4/3] w-full overflow-hidden rounded-2xl border border-border bg-muted/40"
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img alt={alt} className="h-full w-full object-cover" src={photos[0]} />
+          <Image
+            alt={alt}
+            src={photos[0]}
+            fill
+            priority
+            sizes="(max-width: 1024px) 100vw, 50vw"
+            className="object-cover"
+          />
         </button>
 
         {thumbs.length > 0 && (
@@ -60,8 +67,13 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
                   onClick={() => openAt(index)}
                   className="relative aspect-square overflow-hidden rounded-xl border border-border bg-muted/30"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt={alt} className="h-full w-full object-cover" src={photo} />
+                  <Image
+                    alt={alt}
+                    src={photo}
+                    fill
+                    sizes="(max-width: 1024px) 25vw, 12vw"
+                    className="object-cover"
+                  />
                   {isLastVisible && (
                     <span className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-semibold text-white">
                       +{remaining} fotos
@@ -83,8 +95,13 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
             <DialogTitle>{alt}</DialogTitle>
           </VisuallyHidden.Root>
           <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-muted/40">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img alt={alt} className="h-full w-full object-contain" src={photos[activeIndex]} />
+            <Image
+              alt={alt}
+              src={photos[activeIndex]}
+              fill
+              sizes="(max-width: 768px) 100vw, 768px"
+              className="object-contain"
+            />
 
             {photos.length > 1 && (
               <>
@@ -120,12 +137,11 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
                     type="button"
                     onClick={() => setActiveIndex(index)}
                     className={cn(
-                      "size-11 shrink-0 overflow-hidden rounded-md border-2 transition",
+                      "relative size-11 shrink-0 overflow-hidden rounded-md border-2 transition",
                       index === activeIndex ? "border-primary" : "border-transparent opacity-60 hover:opacity-100",
                     )}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img alt={alt} className="h-full w-full object-cover" src={photo} />
+                    <Image alt={alt} src={photo} fill sizes="44px" className="object-cover" />
                   </button>
                 ))}
               </div>

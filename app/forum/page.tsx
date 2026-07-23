@@ -50,7 +50,7 @@ function UserAvatar({ name, avatarUrl, size = 8 }: { name: string; avatarUrl?: s
   if (avatarUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={avatarUrl} alt={name} className={`${sizeClass} rounded-full object-cover border border-border`} />
+      <img src={avatarUrl} alt={name} loading="lazy" decoding="async" className={`${sizeClass} rounded-full object-cover border border-border`} />
     )
   }
   return (
@@ -70,7 +70,7 @@ function PeripheralCard({ peripheral }: { peripheral: { id: string; name: string
       <div className="size-9 shrink-0 overflow-hidden rounded-lg bg-muted/50 flex items-center justify-center">
         {peripheral.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={peripheral.image_url} alt={peripheral.name} className="size-9 object-contain p-0.5" />
+          <img src={peripheral.image_url} alt={peripheral.name} loading="lazy" decoding="async" className="size-9 object-contain p-0.5" />
         ) : (
           <span className="text-[11px] font-bold text-muted-foreground">
             {peripheral.brand.slice(0, 2).toUpperCase()}

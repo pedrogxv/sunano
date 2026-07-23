@@ -29,12 +29,22 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	images: {
+		// Formatos modernos servidos automaticamente pelo otimizador do Next.
+		formats: ["image/avif", "image/webp"],
 		remotePatterns: [
 			{
 				protocol: "https",
 				hostname: "pwbkzjknstbqqemqyppm.supabase.co",
 				pathname: "/storage/v1/object/public/**",
 			},
+			// Capas de fallback do blog/notícias.
+			{ protocol: "https", hostname: "images.unsplash.com" },
+			// Thumbnails do YouTube (feed de vídeos).
+			{ protocol: "https", hostname: "i.ytimg.com" },
+			{ protocol: "https", hostname: "img.youtube.com" },
+			// Avatar padrão (github.com/shadcn.png) usado como fallback.
+			{ protocol: "https", hostname: "github.com" },
+			{ protocol: "https", hostname: "avatars.githubusercontent.com" },
 		],
 	},
 	async headers() {

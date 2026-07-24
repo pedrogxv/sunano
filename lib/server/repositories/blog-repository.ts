@@ -149,6 +149,9 @@ export async function listPublishedPosts(peripheralId?: string | null): Promise<
       .select(columns)
       .eq("is_published", true)
       .order("created_at", { ascending: false })
+      // Sem paginação na UI ainda — limita para não trazer o blog inteiro a
+      // cada carregamento de página conforme o volume de posts cresce.
+      .limit(60)
     if (peripheralId) query = query.eq("peripheral_id", peripheralId)
     return query
   }

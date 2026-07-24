@@ -58,14 +58,23 @@ create trigger store_orders_updated_at
   before update on public.store_orders
   for each row execute function public.set_updated_at();
 
--- Stock decrement RPC (called by webhook — runs with service-role, safe)
+-- Stock decrement RPC (called by webhook — runs with service-role, safe).
+-- Atomic: only decrements (and returns true) if enough stock is still
+-- available at the time of the UPDATE, closing a TOCTOU window where two
+-- concurrent checkouts could both pass the pre-payment stock check in
+-- app/api/store/checkout/route.ts and then both get paid in Stripe.
 create or replace function public.decrement_store_stock(p_product_id uuid, p_quantity integer)
-returns void language plpgsql security definer as $$
+returns boolean language plpgsql security definer as $$
+declare
+  v_updated boolean;
 begin
   update public.store_products
-  set stock = greatest(0, stock - p_quantity),
+  set stock = stock - p_quantity,
       updated_at = now()
-  where id = p_product_id;
+  where id = p_product_id and stock >= p_quantity
+  returning true into v_updated;
+
+  return coalesce(v_updated, false);
 end;
 $$;
 

@@ -94,19 +94,37 @@ async function handleCheckoutCompleted(
     })
     .eq("stripe_session_id", session.id)
     .neq("status", "paid")
-    .select("id")
+    .select("id, metadata")
 
   if (!updatedOrders || updatedOrders.length === 0) {
     return
   }
 
-  // Decrement stock for each purchased item
+  // Decrement stock for each purchased item. O RPC é atômico (só decrementa
+  // se `stock >= quantity`) e retorna se conseguiu — como o pagamento já foi
+  // aprovado no Stripe, uma falha aqui não pode ser silenciosa: sinaliza o
+  // pedido para revisão manual (reembolso/reposição) em vez de fingir que
+  // decrementou.
+  const oversoldItems: Array<{ productId: string; quantity: number }> = []
   for (const item of cart) {
-    // Use a transaction-safe RPC or a select-then-update pattern.
-    // PostgreSQL UPDATE with WHERE guard ensures we don't go below 0.
-    await db.rpc("decrement_store_stock", {
+    const { data: decremented } = await db.rpc("decrement_store_stock", {
       p_product_id: item.productId,
       p_quantity: item.quantity,
     })
+    if (!decremented) {
+      oversoldItems.push(item)
+    }
+  }
+
+  if (oversoldItems.length > 0) {
+    const order = updatedOrders[0]
+    console.error("Estoque vendido além do disponível no pedido", order.id, oversoldItems)
+    await db
+      .from("store_orders")
+      .update({
+        metadata: { ...(order.metadata ?? {}), oversold_items: oversoldItems, needs_manual_review: true },
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", order.id)
   }
 }

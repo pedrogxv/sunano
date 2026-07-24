@@ -24,19 +24,22 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
   const details = ((data.specs as Record<string, unknown>)?.details ?? {}) as Record<string, unknown>
 
-  // Switch vinculado: se o admin apontou este teclado/mouse a um Switch cadastrado,
-  // a linha "Switch" vira um link para a página daquele switch.
-  const linkedSwitch = details.switchPeripheralId
-    ? await getPeripheralByIdOrSlug(String(details.switchPeripheralId))
-    : null
+  // As quatro buscas abaixo só dependem de `data`/`details`, não umas das
+  // outras — rodam em paralelo em vez de em série para não empilhar 4
+  // round-trips sequenciais numa página com revalidate=30.
+  const [linkedSwitch, linkedProducts, relatedPosts, allPeripherals] = await Promise.all([
+    // Switch vinculado: se o admin apontou este teclado/mouse a um Switch
+    // cadastrado, a linha "Switch" vira um link para a página daquele switch.
+    details.switchPeripheralId
+      ? getPeripheralByIdOrSlug(String(details.switchPeripheralId))
+      : Promise.resolve(null),
+    listProductsByPeripheral(data.id),
+    listPublishedPostsByPeripheral(data.id),
+    listAllPeripherals(),
+  ])
 
-  const linkedProducts = await listProductsByPeripheral(data.id)
   const linkedStore = linkedProducts.find((p) => p.type === "store") ?? null
   const linkedBazaar = linkedProducts.find((p) => p.type === "bazaar") ?? null
-
-  const relatedPosts = await listPublishedPostsByPeripheral(data.id)
-
-  const allPeripherals = await listAllPeripherals()
   const rankedInCategory = allPeripherals
     .filter((p) => p.category === data.category)
     .map((p) => {

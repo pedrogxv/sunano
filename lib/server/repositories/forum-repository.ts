@@ -142,6 +142,9 @@ export async function listForumPosts(params: {
   query = (query as any).order("is_pinned", { ascending: false })
   if (tab === "hot") query = (query as any).order("vote_score", { ascending: false })
   query = (query as any).order("created_at", { ascending: false })
+  // Sem paginação na UI ainda — limita para não trazer o fórum inteiro a
+  // cada carregamento de página conforme o volume de posts cresce.
+  query = (query as any).limit(50)
 
   const { data: posts, error } = await (query as any)
   if (error) {

@@ -314,7 +314,7 @@ export type Database = {
     Functions: {
       decrement_store_stock: {
         Args: { p_product_id: string; p_quantity: number }
-        Returns: undefined
+        Returns: boolean
       }
       anonymize_user_data: {
         Args: { p_user_id: string }

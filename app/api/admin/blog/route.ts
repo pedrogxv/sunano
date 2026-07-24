@@ -27,6 +27,19 @@ const blogPostSchema = z
         message: "Selecione um periférico",
       })
     }
+
+    // Só http(s) — evita salvar `javascript:`/`data:` etc. que viraria um
+    // link clicável na página pública do post (o form do admin já valida
+    // isso, mas essa validação é só client-side e não protege uma chamada
+    // direta à API).
+    const videoUrl = data.video_url?.trim()
+    if (videoUrl && !/^https?:\/\//i.test(videoUrl)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["video_url"],
+        message: "URL do vídeo inválida (use http:// ou https://)",
+      })
+    }
   })
 
 function slugify(value: string) {

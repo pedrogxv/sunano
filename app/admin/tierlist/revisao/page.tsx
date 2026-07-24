@@ -68,6 +68,7 @@ export default function TierlistReviewPage() {
   const [items, setItems] = useState<ReviewPeripheral[]>([])
   const [search, setSearch] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<ReviewCategoryKey | "all">("all")
+  const [peripheralFilter, setPeripheralFilter] = useState<Category | "all">("all")
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set())
 
   usePageHeader(t.admin.tierlistReview.pageTitle, t.admin.tierlistReview.pageDescription)
@@ -162,9 +163,29 @@ export default function TierlistReviewPage() {
     return searched.filter((item) => getReviewCategory(item.specs) === categoryFilter)
   }, [searched, categoryFilter])
 
+  const peripheralCounts = useMemo(() => {
+    const counts = new Map<Category, number>()
+    for (const item of filtered) {
+      counts.set(item.category, (counts.get(item.category) ?? 0) + 1)
+    }
+    return counts
+  }, [filtered])
+
+  const peripheralOptions = useMemo(() => {
+    const cats = CATEGORY_ORDER.filter((category) => (peripheralCounts.get(category) ?? 0) > 0)
+    // Mantém a categoria selecionada visível mesmo se os outros filtros a esvaziaram.
+    if (peripheralFilter !== "all" && !cats.includes(peripheralFilter)) cats.push(peripheralFilter)
+    return cats
+  }, [peripheralCounts, peripheralFilter])
+
+  const finalFiltered = useMemo(() => {
+    if (peripheralFilter === "all") return filtered
+    return filtered.filter((item) => item.category === peripheralFilter)
+  }, [filtered, peripheralFilter])
+
   const grouped = useMemo(() => {
     const map = new Map<Category, ReviewPeripheral[]>()
-    for (const item of filtered) {
+    for (const item of finalFiltered) {
       const list = map.get(item.category) ?? []
       list.push(item)
       map.set(item.category, list)
@@ -173,7 +194,7 @@ export default function TierlistReviewPage() {
       category,
       items: map.get(category)!,
     }))
-  }, [filtered])
+  }, [finalFiltered])
 
   return (
     <div className="space-y-6">
@@ -185,6 +206,39 @@ export default function TierlistReviewPage() {
           <AlertDescription className="text-xs leading-5 text-red-300">{error}</AlertDescription>
         </Alert>
       )}
+
+      <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
+        <button
+          type="button"
+          onClick={() => setPeripheralFilter("all")}
+          className={`shrink-0 rounded-full border px-3 py-2.5 text-xs font-medium transition-all md:py-1.5 ${
+            peripheralFilter === "all"
+              ? "border-primary/50 bg-primary/15 text-primary"
+              : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/40"
+          }`}
+        >
+          {t.admin.tierlistReview.filterAll}
+          <span className="ml-1.5 opacity-60">{filtered.length}</span>
+        </button>
+        {peripheralOptions.map((category) => {
+          const active = peripheralFilter === category
+          return (
+            <button
+              key={category}
+              type="button"
+              onClick={() => setPeripheralFilter(category)}
+              className={`shrink-0 rounded-full border px-3 py-2.5 text-xs font-medium transition-all md:py-1.5 ${
+                active
+                  ? "border-primary/50 bg-primary/15 text-primary"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/40"
+              }`}
+            >
+              {locale === "en-US" ? CATEGORY_LABELS[category].en : CATEGORY_LABELS[category].pt}
+              <span className="ml-1.5 opacity-60">{peripheralCounts.get(category) ?? 0}</span>
+            </button>
+          )
+        })}
+      </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">

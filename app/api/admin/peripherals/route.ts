@@ -11,6 +11,17 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 const DEFAULT_COLUMNS = "id, name, brand, category, tier, price, image_url, tags, specs, created_at"
+const ALLOWED_COLUMNS = new Set(DEFAULT_COLUMNS.split(",").map((c) => c.trim()))
+
+/** Restringe `columns` a uma allowlist — evita que o parâmetro vindo da query
+ *  string monte uma cláusula `select` arbitrária (colunas fora do schema
+ *  esperado ou embeds de outras tabelas via sintaxe do PostgREST). */
+function sanitizeColumns(raw: string | null): string {
+  if (!raw) return DEFAULT_COLUMNS
+  const requested = raw.split(",").map((c) => c.trim()).filter(Boolean)
+  const safe = requested.filter((c) => ALLOWED_COLUMNS.has(c))
+  return safe.length > 0 ? safe.join(", ") : DEFAULT_COLUMNS
+}
 
 const peripheralPayload = z.object({
   name: z.string().min(1, "Nome é obrigatório.").max(200, "Nome muito longo (máx. 200 caracteres)."),
@@ -37,7 +48,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const category = searchParams.get("category")
   const search = searchParams.get("search")
-  const columns = searchParams.get("columns") || DEFAULT_COLUMNS
+  const columns = sanitizeColumns(searchParams.get("columns"))
 
   const db = createSupabaseAdminClient()
   let query = db.from("peripherals").select(columns).order("created_at", { ascending: false })

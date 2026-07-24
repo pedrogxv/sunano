@@ -13,6 +13,11 @@ export const runtime = "nodejs"
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
+function parseLimit(value: string | null): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : 200
+}
+
 function parseIdList(value: string | null): string[] | undefined {
   const trimmed = value?.trim()
   if (!trimmed) return undefined
@@ -33,7 +38,7 @@ export async function GET(request: NextRequest) {
       ids: parseIdList(searchParams.get("ids")),
       excludeIds: parseIdList(searchParams.get("exclude")),
       category,
-      limit: Number(searchParams.get("limit") || 200),
+      limit: parseLimit(searchParams.get("limit")),
       full: searchParams.get("full") === "1",
     })
     return NextResponse.json({ peripherals })

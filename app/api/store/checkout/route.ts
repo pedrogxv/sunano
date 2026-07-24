@@ -26,10 +26,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Carrinho vazio" }, { status: 400 })
     }
 
+    if (items.some((i) => !Number.isInteger(i.quantity) || i.quantity < 1)) {
+      return NextResponse.json({ error: "Quantidade inválida no carrinho." }, { status: 400 })
+    }
+
+    // Agrupa por produto antes de checar estoque — sem isso, repetir o mesmo
+    // productId em várias entradas do carrinho passava pela checagem de
+    // estoque por linha mesmo pedindo, no total, mais unidades do que existem.
+    const quantityByProduct = new Map<string, number>()
+    for (const item of items) {
+      quantityByProduct.set(item.productId, (quantityByProduct.get(item.productId) ?? 0) + item.quantity)
+    }
+
     const db = createSupabaseAdminClient()
 
     // Fetch products and validate stock
-    const productIds = items.map((i) => i.productId)
+    const productIds = [...quantityByProduct.keys()]
     const { data: products, error: dbError } = await db
       .from("store_products")
       .select("id, name, price_cents, stock, images, type, condition, is_active")
@@ -41,9 +53,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Um ou mais produtos não encontrados" }, { status: 404 })
     }
 
-    // Validate each item
+    // Validate each product (quantities já agregadas por produto)
+    const mergedItems: CheckoutItem[] = [...quantityByProduct.entries()].map(([productId, quantity]) => ({
+      productId,
+      quantity,
+    }))
     const lineItems = []
-    for (const cartItem of items) {
+    for (const cartItem of mergedItems) {
       const product = products.find((p) => p.id === cartItem.productId)
 
       if (!product) {
@@ -95,17 +111,17 @@ export async function POST(request: NextRequest) {
       cancel_url: `${appUrl}/checkout/cancel`,
       locale: "pt-BR",
       metadata: {
-        cart: JSON.stringify(items),
+        cart: JSON.stringify(mergedItems),
       },
       payment_intent_data: {
         metadata: {
-          cart: JSON.stringify(items),
+          cart: JSON.stringify(mergedItems),
         },
       },
     })
 
     // Create a pending order record
-    const orderItems = items.map((cartItem) => {
+    const orderItems = mergedItems.map((cartItem) => {
       const p = products.find((pr) => pr.id === cartItem.productId)!
       return {
         id: p.id,

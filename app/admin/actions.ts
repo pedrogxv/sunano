@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation"
 
-import { hasAdminPermission } from "@/lib/admin-permissions"
+import { hasAnyAdminAccess } from "@/lib/admin-permissions"
 import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
@@ -48,7 +48,7 @@ export async function loginAction(_: AuthState, formData: FormData): Promise<Aut
     return { error: AUTH_ERRORS.noAdminAccess }
   }
 
-  if (!hasAdminPermission(profile, "dashboard_read")) {
+  if (!hasAnyAdminAccess(profile)) {
     await supabase.auth.signOut()
     return { error: AUTH_ERRORS.noAdminAccess }
   }

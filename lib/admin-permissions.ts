@@ -121,6 +121,14 @@ export function hasAnyPermission(
   return permissions.some((permission) => hasAdminPermission(profile, permission))
 }
 
+// Critério para entrar no painel: ter perfil administrativo com pelo menos uma
+// seção liberada. Não usar `dashboard_read` para isso — a grade da tela de
+// usuários não expõe esse toggle, então um moderador legítimo pode não tê-lo.
+export function hasAnyAdminAccess(profile: PermissionProfile | null | undefined) {
+  if (!profile) return false
+  return isWebMaster(profile) || hasAnyPermission(profile, ADMIN_PERMISSION_KEYS)
+}
+
 export function canChangePasswords(profile: PermissionProfile | null | undefined) {
   return isWebMaster(profile)
 }

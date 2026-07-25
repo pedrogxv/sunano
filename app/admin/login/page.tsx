@@ -1,5 +1,7 @@
 "use client"
 
+import { Suspense } from "react"
+
 import { AdminLoginForm } from "@/components/admin/AdminLoginForm"
 import { useT } from "@/lib/use-t"
 
@@ -19,7 +21,11 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="rounded-2xl border border-border bg-card p-8 shadow-xl shadow-black/30">
-          <AdminLoginForm />
+          {/* AdminLoginForm lê a query string (`useSearchParams`) para exibir o
+              erro devolvido pelo login OAuth. */}
+          <Suspense fallback={null}>
+            <AdminLoginForm />
+          </Suspense>
         </div>
       </div>
     </div>

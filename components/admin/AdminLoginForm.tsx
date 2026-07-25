@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
+import { useSearchParams } from "next/navigation"
 
 import { loginAction } from "@/app/admin/actions"
 import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
@@ -143,11 +144,15 @@ export function AdminLoginForm() {
   const t = useT()
   const [mode, setMode] = useState<"login" | "forgot">("login")
   const [state, formAction] = useActionState(loginAction, initialState)
+  // O login por OAuth não passa pela server action: quando ele recusa o acesso
+  // ao painel, o motivo volta na query string.
+  const searchParams = useSearchParams()
 
-  const localizedError = state.error
-    ? LOGIN_ERROR_KEYS[state.error as keyof typeof LOGIN_ERROR_KEYS]
-      ? t.admin.login.errors[LOGIN_ERROR_KEYS[state.error as keyof typeof LOGIN_ERROR_KEYS]]
-      : state.error
+  const rawError = state.error ?? searchParams.get("error")
+  const localizedError = rawError
+    ? LOGIN_ERROR_KEYS[rawError as keyof typeof LOGIN_ERROR_KEYS]
+      ? t.admin.login.errors[LOGIN_ERROR_KEYS[rawError as keyof typeof LOGIN_ERROR_KEYS]]
+      : rawError
     : null
 
   if (mode === "forgot") {

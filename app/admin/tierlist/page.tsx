@@ -1232,7 +1232,7 @@ export default function AdminPeripheralsPage() {
 
           <div
             className={cn(
-              "mt-6 overflow-hidden rounded-xl border bg-[#05070d] shadow-lg transition-colors duration-200",
+              "mt-6 overflow-hidden rounded-xl border bg-card shadow-lg transition-colors duration-200",
               unassignedItems.length > 0 ? "border-amber-500/20" : activeId ? "border-amber-500/20" : "border-border"
             )}
           >

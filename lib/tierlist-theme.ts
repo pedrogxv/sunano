@@ -10,34 +10,38 @@ export const TIER_BASE_COLORS = {
   L: "#6B7280",
 } as const
 
+// Texto das etiquetas de tier: branco no modo claro, preto no modo escuro —
+// mesma cor pra todos os tiers, só invertendo por tema (em vez de por tier).
+const TIER_LABEL_TEXT_COLOR = "text-white dark:text-[#141925]"
+
 export const TIER_THEMES = {
   GOAT: {
     accent: "from-violet-500 to-violet-700",
-    textColor: "text-white",
+    textColor: TIER_LABEL_TEXT_COLOR,
   },
   SS: {
     accent: "from-red-400 to-red-600",
-    textColor: "text-white",
+    textColor: TIER_LABEL_TEXT_COLOR,
   },
   S: {
     accent: "from-orange-400 to-orange-600",
-    textColor: "text-[#141925]",
+    textColor: TIER_LABEL_TEXT_COLOR,
   },
   A: {
     accent: "from-amber-400 to-amber-600",
-    textColor: "text-[#141925]",
+    textColor: TIER_LABEL_TEXT_COLOR,
   },
   B: {
     accent: "from-green-400 to-green-600",
-    textColor: "text-[#141925]",
+    textColor: TIER_LABEL_TEXT_COLOR,
   },
   C: {
     accent: "from-blue-400 to-blue-600",
-    textColor: "text-white",
+    textColor: TIER_LABEL_TEXT_COLOR,
   },
   L: {
     accent: "from-gray-400 to-gray-600",
-    textColor: "text-white",
+    textColor: TIER_LABEL_TEXT_COLOR,
   },
 } as const
 

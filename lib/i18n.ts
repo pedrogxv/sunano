@@ -744,7 +744,7 @@ export const translations: Record<LocaleCode, Translations> = {
       searchNameBrand: "Nome, marca, sensor…",
       productCount: (count: number) => `${count} ${count === 1 ? "produto" : "produtos"}`,
       activeFilters: "filtro(s) ativo(s)",
-      budgetBand: "Budget (até $80)",
+      budgetBand: "Budget (até R$300)",
     },
     tierlist: {
       info: "Informações da Tierlist",
@@ -1373,7 +1373,7 @@ export const translations: Record<LocaleCode, Translations> = {
       searchNameBrand: "Name, brand, sensor…",
       productCount: (count: number) => `${count} ${count === 1 ? "product" : "products"}`,
       activeFilters: "filter(s) active",
-      budgetBand: "Budget (up to $80)",
+      budgetBand: "Budget (up to R$300)",
     },
     tierlist: {
       info: "Tierlist Information",

@@ -188,8 +188,8 @@ export function FilterBar({
                     <SelectContent>
                       <SelectItem value="all">{t.common.all}</SelectItem>
                       <SelectItem value="budget">{t.filters.budgetBand}</SelectItem>
-                      <SelectItem value="mid">Mid ($81 - $160)</SelectItem>
-                      <SelectItem value="premium">Premium ($160+)</SelectItem>
+                      <SelectItem value="mid">Mid (R$300 até R$500)</SelectItem>
+                      <SelectItem value="premium">High End (R$1000+)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -191,10 +191,11 @@ function extractRatings(item: Peripheral): Ratings {
   return ratings
 }
 
-function getPriceBand(price: number): PriceBand {
-  if (price <= 80) return "budget"
-  if (price <= 160) return "mid"
-  return "premium"
+function getPriceBand(price: number): Exclude<PriceBand, "all"> | null {
+  if (price <= 300) return "budget"
+  if (price <= 500) return "mid"
+  if (price >= 1000) return "premium"
+  return null
 }
 
 function getTierScore(tier: TierValue) {

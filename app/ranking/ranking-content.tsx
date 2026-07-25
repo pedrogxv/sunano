@@ -28,8 +28,9 @@ const CATEGORIES: { key: string; label: string }[] = [
 function BarChart({ items }: { items: RankedPeripheral[] }) {
   const sorted = [...items].sort((a, b) => b.score - a.score)
 
-  const maxScore = Math.max(...sorted.map((p) => p.score))
   const total = sorted.length
+  // Evita divisão por zero (todos os scores zerados) — daria `width: NaN%`.
+  const maxScore = Math.max(...sorted.map((p) => p.score), 1)
 
   if (total === 0) {
     return (
@@ -50,12 +51,12 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
           <Link
             key={item.id}
             href={href}
-            className="group flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-muted/30"
+            className="group flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/30 sm:gap-3 sm:px-3"
           >
             {/* Position badge */}
             <span
               className={cn(
-                "w-8 shrink-0 text-right text-xs font-bold tabular-nums",
+                "w-6 shrink-0 text-right text-xs font-bold tabular-nums sm:w-8",
                 index === 0
                   ? "text-yellow-400"
                   : index === 1
@@ -68,31 +69,36 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
               #{index + 1}
             </span>
 
-            {/* Name */}
-            <span className="w-48 shrink-0 truncate text-sm font-medium text-foreground group-hover:text-primary">
-              {item.name}
-            </span>
-
-            {/* Bar */}
-            <div className="flex flex-1 items-center gap-2">
-              <div className="relative h-5 flex-1 overflow-hidden rounded-sm bg-muted/20">
-                <div
-                  className={cn(
-                    "absolute inset-y-0 left-0 rounded-sm bg-gradient-to-r transition-all duration-300",
-                    index === 0
-                      ? "from-yellow-700 via-yellow-300 to-yellow-500"
-                      : index === 1
-                      ? "from-slate-500 via-slate-100 to-slate-400"
-                      : index === 2
-                      ? "from-amber-900 via-amber-400 to-amber-700"
-                      : "from-primary/50 to-primary"
-                  )}
-                  style={{ width: `${barPct}%` }}
-                />
-              </div>
-              <span className="w-12 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground">
-                {displayValue}
+            {/* Nome + barra. No mobile ficam empilhados: lado a lado, a coluna de nome
+                fixa (w-48) somada ao # e à pontuação estourava a largura da tela e
+                espremia a barra a ~15px, tornando a comparação visual inútil. */}
+            <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+              {/* Name */}
+              <span className="truncate text-sm font-medium text-foreground group-hover:text-primary sm:w-48 sm:shrink-0">
+                {item.name}
               </span>
+
+              {/* Bar */}
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <div className="relative h-2.5 min-w-0 flex-1 overflow-hidden rounded-sm bg-muted/20 sm:h-5">
+                  <div
+                    className={cn(
+                      "absolute inset-y-0 left-0 rounded-sm bg-gradient-to-r transition-all duration-300",
+                      index === 0
+                        ? "from-yellow-700 via-yellow-300 to-yellow-500"
+                        : index === 1
+                        ? "from-slate-500 via-slate-100 to-slate-400"
+                        : index === 2
+                        ? "from-amber-900 via-amber-400 to-amber-700"
+                        : "from-primary/50 to-primary"
+                    )}
+                    style={{ width: `${barPct}%` }}
+                  />
+                </div>
+                <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground sm:w-12">
+                  {displayValue}
+                </span>
+              </div>
             </div>
           </Link>
         )
@@ -137,11 +143,12 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
         Quanto maior, melhor
       </p>
 
-      {/* Legend */}
-      <div className="mb-3 flex items-center gap-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
-        <span className="w-8 text-right">#</span>
-        <span className="w-48">Nome</span>
-        <span className="flex-1">Pontuação</span>
+      {/* Legend — acompanha as larguras responsivas das linhas. No mobile a barra
+          fica na segunda linha de cada item, então o rótulo de pontuação sai. */}
+      <div className="mb-3 flex items-center gap-2.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 sm:gap-3 sm:px-3">
+        <span className="w-6 text-right sm:w-8">#</span>
+        <span className="min-w-0 flex-1 sm:w-48 sm:flex-none">Nome</span>
+        <span className="hidden flex-1 sm:block">Pontuação</span>
       </div>
 
       <BarChart items={filtered} />

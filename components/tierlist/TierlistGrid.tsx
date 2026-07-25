@@ -399,13 +399,23 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
               key={mode.key}
               onClick={() => setRatingMode(mode.key)}
               className={cn(
-                "rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
+                // A cor do modo vai no ponto, não no fundo: como classe de `bg`, ela
+                // vencia o `bg-primary/20` no twMerge e deixava o rótulo (text-primary,
+                // branco no tema escuro) ilegível sobre um fundo claro.
+                "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
                 ratingMode === mode.key
-                  ? `bg-primary/20 text-primary ${mode.color}`
+                  ? "bg-primary/20 text-primary"
                   : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
               )}
               type="button"
             >
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  mode.color,
+                  ratingMode === mode.key ? "opacity-100" : "opacity-40",
+                )}
+              />
               {mode.label}
             </button>
           ))}
@@ -480,8 +490,11 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                       </div>
                     </div>
 
-                    <div className="p-4">
-                      <div className="grid grid-cols-3 gap-2.5">
+                    {/* p-3 alinha a grade com a faixa do tier acima (mx-3). auto-fill em vez
+                        de 3 colunas fixas: em telas de 320px os cards caíam para ~72px e o
+                        nome ficava ilegível; agora viram 2 colunas nesse caso. */}
+                    <div className="p-3 pt-4">
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2.5">
                         {tierRow.items.map((item) => (
                           <PeripheralCard key={item.id} {...item} />
                         ))}
@@ -514,7 +527,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
             </div>
 
             <div className="p-4 md:hidden">
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2.5">
                 {untieredItems.map((item) => (
                   <PeripheralCard key={item.id} {...item} />
                 ))}

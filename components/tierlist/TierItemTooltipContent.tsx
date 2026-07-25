@@ -165,9 +165,12 @@ export function TierItemTooltipContent({
         <div
           className={cn(
             "grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl text-sm font-bold shadow-lg",
-            tierStyle.bg,
-            tierStyle.text,
+            // tierStyle.bg é preto fixo: serve de fundo para as iniciais da marca
+            // no fallback, mas com foto virava um quadrado preto no tema claro.
+            !image_url && tierStyle.bg,
+            !image_url && tierStyle.text,
           )}
+          style={image_url ? { background: "var(--card-image-bg)" } : undefined}
         >
           {image_url ? (
             <Image src={image_url} alt={name} width={56} height={56} className="h-full w-full object-contain p-0.5" />

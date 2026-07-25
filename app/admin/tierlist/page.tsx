@@ -379,7 +379,10 @@ function DraggablePeripheralCard({
       </div>
 
       {/* Image area */}
-      <div className="relative ml-[3px] h-12 overflow-hidden bg-black/60">
+      <div
+        className="relative ml-[3px] h-12 overflow-hidden"
+        style={{ background: "var(--card-image-bg)" }}
+      >
         {isGoat && (
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-red-500/10 to-transparent" />
         )}
@@ -460,7 +463,10 @@ function DragOverlayCard({ item }: { item: Peripheral }) {
     <div className="w-[150px] rotate-2 scale-105 cursor-grabbing drop-shadow-2xl">
       <div className="relative overflow-hidden rounded-lg border border-cyan-400/50 bg-card ring-2 ring-cyan-400/20">
         <div className={cn("absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b", tierTheme.accent)} />
-        <div className="relative ml-[3px] h-12 overflow-hidden bg-black/60">
+        <div
+          className="relative ml-[3px] h-12 overflow-hidden"
+          style={{ background: "var(--card-image-bg)" }}
+        >
           {item.image_url ? (
             <Image src={item.image_url} alt={item.name} width={150} height={48} className="h-full w-full object-contain p-0.5" />
           ) : (

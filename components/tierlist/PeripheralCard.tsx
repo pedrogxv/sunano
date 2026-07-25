@@ -64,7 +64,10 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
           <div className={cn("absolute bottom-0 left-0 top-0 w-1.5", tierStyle.accent)} />
 
           {/* Image area */}
-          <div className="relative ml-1.5 h-[53px] overflow-hidden bg-muted">
+          <div
+            className="relative ml-1.5 h-[53px] overflow-hidden"
+            style={{ background: "var(--card-image-bg)" }}
+          >
             {isGoat && (
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-violet-500/15 to-transparent" />
             )}

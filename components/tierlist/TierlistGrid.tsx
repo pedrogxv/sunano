@@ -479,22 +479,22 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
                 return (
                   <div key={tierRow.key}>
-                    <div className={cn("mx-3 mt-3 flex items-center justify-between rounded-[11px] bg-gradient-to-b px-4 py-3", tierRow.gradient)}>
-                      <div className="flex items-center gap-3">
-                        <span className={cn("text-xl font-black", tierRow.textColor)}>{tierRow.label}</span>
+                    <div className={cn("mx-2 mt-2 flex items-center rounded-[11px] bg-gradient-to-b px-3 py-2", tierRow.gradient)}>
+                      <div className="flex min-w-0 items-baseline gap-2.5">
+                        <span className={cn("text-2xl font-black leading-none", tierRow.textColor)}>{tierRow.label}</span>
                         {t.tierlist.tierSubtitles[tierRow.key] && (
-                          <span className={cn("text-xs font-medium opacity-75", tierRow.textColor)}>
+                          <span className={cn("truncate text-sm font-medium opacity-75", tierRow.textColor)}>
                             {t.tierlist.tierSubtitles[tierRow.key]}
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* p-3 alinha a grade com a faixa do tier acima (mx-3). auto-fill em vez
-                        de 3 colunas fixas: em telas de 320px os cards caíam para ~72px e o
-                        nome ficava ilegível; agora viram 2 colunas nesse caso. */}
-                    <div className="p-3 pt-4">
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2.5">
+                    {/* p-2 alinha a grade com a faixa do tier (mx-2) e devolve largura aos
+                        cards: a cadeia de paddings aninhados consumia ~19% da tela. auto-fill
+                        deixa a grade decidir quantas colunas cabem em vez de forçar 3. */}
+                    <div className="p-2">
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(78px,1fr))] gap-2">
                         {tierRow.items.map((item) => (
                           <PeripheralCard key={item.id} {...item} />
                         ))}
@@ -526,8 +526,8 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
               </div>
             </div>
 
-            <div className="p-4 md:hidden">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-2.5">
+            <div className="p-2 md:hidden">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(78px,1fr))] gap-2">
                 {untieredItems.map((item) => (
                   <PeripheralCard key={item.id} {...item} />
                 ))}

@@ -45,6 +45,8 @@ const nextConfig = {
 			// Avatar padrão (github.com/shadcn.png) usado como fallback.
 			{ protocol: "https", hostname: "github.com" },
 			{ protocol: "https", hostname: "avatars.githubusercontent.com" },
+			// Foto de perfil do Google (login via OAuth).
+			{ protocol: "https", hostname: "lh3.googleusercontent.com" },
 		],
 	},
 	async headers() {

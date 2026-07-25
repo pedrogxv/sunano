@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useRef } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -49,8 +50,13 @@ function UserAvatar({ name, avatarUrl, size = 8 }: { name: string; avatarUrl?: s
   const sizeClass = `size-${size}`
   if (avatarUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={avatarUrl} alt={name} loading="lazy" decoding="async" className={`${sizeClass} rounded-full object-cover border border-border`} />
+      <Image
+        src={avatarUrl}
+        alt={name}
+        width={size * 4}
+        height={size * 4}
+        className={`${sizeClass} rounded-full object-cover border border-border`}
+      />
     )
   }
   return (
@@ -67,10 +73,9 @@ function PeripheralCard({ peripheral }: { peripheral: { id: string; name: string
       onClick={(e) => e.stopPropagation()}
       className="group flex items-center gap-2.5 rounded-xl border border-border/50 bg-card px-2.5 py-2 transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm"
     >
-      <div className="size-9 shrink-0 overflow-hidden rounded-lg bg-muted/50 flex items-center justify-center">
+      <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-muted/50 flex items-center justify-center">
         {peripheral.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={peripheral.image_url} alt={peripheral.name} loading="lazy" decoding="async" className="size-9 object-contain p-0.5" />
+          <Image src={peripheral.image_url} alt={peripheral.name} fill sizes="36px" className="object-contain p-0.5" />
         ) : (
           <span className="text-[11px] font-bold text-muted-foreground">
             {peripheral.brand.slice(0, 2).toUpperCase()}

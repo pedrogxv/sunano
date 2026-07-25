@@ -102,8 +102,13 @@ function UserAvatar({ name, avatarUrl, size = 8 }: { name: string; avatarUrl?: s
   const sizeClass = `size-${size}`
   if (avatarUrl) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={avatarUrl} alt={name} className={`${sizeClass} rounded-full object-cover border border-border`} />
+      <Image
+        src={avatarUrl}
+        alt={name}
+        width={size * 4}
+        height={size * 4}
+        className={`${sizeClass} rounded-full object-cover border border-border`}
+      />
     )
   }
   return (

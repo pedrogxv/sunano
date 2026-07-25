@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import { Package, ShoppingBag, Trophy } from "lucide-react"
 import { FaAmazon } from "react-icons/fa"
@@ -498,7 +499,7 @@ export function PeripheralDetailView({
                         >
                           <span className="flex items-center gap-2">
                             {typeof Icon === "string" ? (
-                              <img src={Icon} alt="" className="size-4 shrink-0 object-contain" />
+                              <Image src={Icon} alt="" width={16} height={16} className="size-4 shrink-0 object-contain" />
                             ) : (
                               <Icon className={cn("size-4 shrink-0", style.icon)} />
                             )}
@@ -743,13 +744,14 @@ export function PeripheralDetailView({
                           href={`/blog/${post.slug}`}
                           className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm text-foreground transition hover:bg-muted/40"
                         >
-                          <div className="size-12 overflow-hidden rounded-lg border border-border bg-muted/40">
+                          <div className="relative size-12 overflow-hidden rounded-lg border border-border bg-muted/40">
                             {post.cover_thumbnail_url || post.cover_image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
+                              <Image
                                 alt={post.title}
-                                className="h-full w-full object-cover"
-                                src={post.cover_thumbnail_url || post.cover_image_url || undefined}
+                                fill
+                                sizes="48px"
+                                className="object-cover"
+                                src={post.cover_thumbnail_url || post.cover_image_url || ""}
                               />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
@@ -826,10 +828,9 @@ export function PeripheralDetailView({
                         href={`/loja/${linkedStore.slug}`}
                         className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm text-foreground transition hover:bg-muted/40"
                       >
-                        <div className="size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
+                        <div className="relative size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
                           {linkedStore.images?.[0] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img alt={linkedStore.name} className="h-full w-full object-contain p-0.5" src={linkedStore.images[0]} />
+                            <Image alt={linkedStore.name} fill sizes="48px" className="object-contain p-0.5" src={linkedStore.images[0]} />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                               <ShoppingBag className="size-4" />
@@ -852,10 +853,9 @@ export function PeripheralDetailView({
                         href={`/bazar/${linkedBazaar.slug}`}
                         className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-foreground transition hover:bg-amber-500/10"
                       >
-                        <div className="size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
+                        <div className="relative size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
                           {linkedBazaar.images?.[0] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img alt={linkedBazaar.name} className="h-full w-full object-contain p-0.5" src={linkedBazaar.images[0]} />
+                            <Image alt={linkedBazaar.name} fill sizes="48px" className="object-contain p-0.5" src={linkedBazaar.images[0]} />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                               <Package className="size-4" />

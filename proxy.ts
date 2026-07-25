@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
-import { hasAdminPermission, isWebMaster, type AdminPermissionKey } from "@/lib/admin-permissions"
+import { hasAdminPermission, isWebMaster, type AdminPermissionKey, type AdminProfile } from "@/lib/admin-permissions"
 import { isMfaStepUpRequired, sanitizeNextPath, TWO_FACTOR_PATH } from "@/lib/auth-mfa"
 import { updateSession } from "@/lib/server/supabase/middleware-client"
 
@@ -42,6 +42,10 @@ function copyCookies(source: NextResponse, destination: NextResponse) {
   })
 }
 
+// Página mostrada a quem tem perfil administrativo mas nenhuma seção liberada.
+// Nunca exige permissão, senão vira destino de redirecionamento inalcançável.
+const NO_ACCESS_PATH = "/admin/sem-permissao"
+
 function getRequiredPermission(pathname: string): AdminPermissionKey | null {
   if (pathname === "/admin") return "dashboard_read"
   if (
@@ -58,8 +62,15 @@ function getRequiredPermission(pathname: string): AdminPermissionKey | null {
     return "blog_write"
   }
   if (pathname.startsWith("/admin/blog")) return "blog_read"
+  if (/^\/admin\/forum\/[^/]+\/edit$/.test(pathname)) return "forum_write"
+  if (pathname.startsWith("/admin/forum")) return "forum_read"
   if (pathname.startsWith("/admin/offers/new")) return "offers_write"
   if (pathname.startsWith("/admin/offers")) return "offers_read"
+  if (pathname.startsWith("/admin/store/new") || /^\/admin\/store\/[^/]+$/.test(pathname)) {
+    return "store_write"
+  }
+  if (pathname.startsWith("/admin/store")) return "store_read"
+  if (pathname === NO_ACCESS_PATH) return null
   if (pathname.startsWith("/admin/users")) return null
   if (pathname.startsWith("/admin/settings")) return "settings_read"
   if (pathname.startsWith("/admin/tiers")) return "tiers_read"
@@ -67,16 +78,26 @@ function getRequiredPermission(pathname: string): AdminPermissionKey | null {
   return "dashboard_read"
 }
 
-function requiresWritePermission(pathname: string) {
-  return (
-    pathname.startsWith("/admin/tierlist/new") ||
-    /^\/admin\/tierlist\/[^/]+$/.test(pathname) ||
-    pathname.startsWith("/admin/perifericos/new") ||
-    /^\/admin\/perifericos\/[^/]+$/.test(pathname) ||
-    pathname.startsWith("/admin/blog/new") ||
-    /^\/admin\/blog\/[^/]+$/.test(pathname) ||
-    pathname.startsWith("/admin/offers/new")
-  )
+// Ordem espelha a navegação da sidebar. Cada permissão precisa bater com a que
+// `getRequiredPermission` exige para o mesmo caminho — é isso que garante que o
+// destino escolhido abaixo seja sempre acessível.
+const ADMIN_LANDING_ROUTES: Array<{ path: string; permission: AdminPermissionKey }> = [
+  { path: "/admin", permission: "dashboard_read" },
+  { path: "/admin/tierlist", permission: "peripherals_read" },
+  { path: "/admin/perifericos", permission: "peripherals_read" },
+  { path: "/admin/blog", permission: "blog_read" },
+  { path: "/admin/forum", permission: "forum_read" },
+  { path: "/admin/offers", permission: "offers_read" },
+  { path: "/admin/store", permission: "store_read" },
+  { path: "/admin/settings", permission: "settings_read" },
+  { path: "/admin/maintenance", permission: "maintenance_read" },
+]
+
+// Primeira seção que o perfil consegue abrir. Redirecionar sempre para /admin
+// causava loop infinito em quem não tem `dashboard_read`.
+function resolveLandingPath(profile: AdminProfile | null) {
+  const landing = ADMIN_LANDING_ROUTES.find((route) => hasAdminPermission(profile, route.permission))
+  return landing?.path ?? NO_ACCESS_PATH
 }
 
 export async function proxy(request: NextRequest) {
@@ -181,15 +202,12 @@ export async function proxy(request: NextRequest) {
   if (profile && isAdminRoute && !isLoginRoute) {
     const requiredPermission = getRequiredPermission(pathname)
     const hasAccess = requiredPermission ? hasAdminPermission(profile, requiredPermission) : true
-    const hasWriteAccess = requiredPermission && requiresWritePermission(pathname)
-      ? hasAdminPermission(profile, requiredPermission)
-      : hasAccess
 
-    if (!hasAccess || !hasWriteAccess) {
-      const adminUrl = request.nextUrl.clone()
-      adminUrl.pathname = "/admin"
+    if (!hasAccess) {
+      const landingUrl = request.nextUrl.clone()
+      landingUrl.pathname = resolveLandingPath(profile)
 
-      const redirectResponse = NextResponse.redirect(adminUrl)
+      const redirectResponse = NextResponse.redirect(landingUrl)
       copyCookies(response, redirectResponse)
       return redirectResponse
     }

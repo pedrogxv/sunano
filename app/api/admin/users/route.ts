@@ -7,6 +7,7 @@ import {
   type AdminProfile,
   isWebMaster,
   normalizePermissions,
+  withBaselinePermissions,
 } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -219,9 +220,11 @@ export async function PATCH(request: Request) {
       permissions:
         nextRole === "webmaster"
           ? createFullPermissions()
-          : parsed.data.permissions
-            ? normalizePermissions(parsed.data.permissions)
-            : typedTargetProfile?.permissions ?? createDefaultPermissions(),
+          : withBaselinePermissions(
+              parsed.data.permissions
+                ? normalizePermissions(parsed.data.permissions)
+                : normalizePermissions(typedTargetProfile?.permissions ?? createDefaultPermissions())
+            ),
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -287,9 +290,11 @@ export async function POST(request: Request) {
     }
 
     const role = parsed.data.role ?? "admin"
-    const permissions = parsed.data.permissions
-      ? normalizePermissions(parsed.data.permissions)
-      : createDefaultPermissions()
+    const permissions = withBaselinePermissions(
+      parsed.data.permissions
+        ? normalizePermissions(parsed.data.permissions)
+        : createDefaultPermissions()
+    )
 
     const payload = {
       id: invitedUser.user.id,

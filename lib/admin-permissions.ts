@@ -81,6 +81,14 @@ export function createDefaultPermissions() {
   }, {})
 }
 
+// A grade de permissões da tela de usuários esconde a feature "dashboard": todo
+// perfil administrativo enxerga o dashboard, não é algo que se escolha. Como não
+// há toggle, `dashboard_read` precisa ser garantido na gravação — quem é
+// promovido pela lista parte de um mapa todo-false e nasceria sem acesso.
+export function withBaselinePermissions(permissions: Record<string, boolean>) {
+  return { ...permissions, dashboard_read: true }
+}
+
 export function normalizePermissions(permissions: Record<string, boolean> | null | undefined) {
   return ADMIN_PERMISSION_KEYS.reduce<Record<string, boolean>>((accumulator, key) => {
     accumulator[key] = Boolean(permissions?.[key])

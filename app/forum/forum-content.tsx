@@ -11,6 +11,7 @@ import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { UserAvatar } from "@/components/ui/user-avatar"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 
 export type ForumPost = {
@@ -44,27 +45,6 @@ const CATEGORIES = [
 ]
 
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.value, c.label]))
-
-function UserAvatar({ name, avatarUrl, size = 8 }: { name: string; avatarUrl?: string | null; size?: number }) {
-  const initials = name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-  const sizeClass = `size-${size}`
-  if (avatarUrl) {
-    return (
-      <Image
-        src={avatarUrl}
-        alt={name}
-        width={size * 4}
-        height={size * 4}
-        className={`${sizeClass} rounded-full object-cover border border-border`}
-      />
-    )
-  }
-  return (
-    <div className={`${sizeClass} flex items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary`}>
-      {initials}
-    </div>
-  )
-}
 
 function PeripheralCard({ peripheral }: { peripheral: { id: string; name: string; brand: string; category: string; image_url?: string | null } }) {
   return (

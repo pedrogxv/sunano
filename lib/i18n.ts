@@ -102,6 +102,7 @@ type Translations = {
     labels: Record<CategoryKey, string>
     descriptions: Record<CategoryKey, string>
     others: string
+    othersDescription: string
   }
   filters: {
     searchPeripherals: string
@@ -700,6 +701,7 @@ export const translations: Record<LocaleCode, Translations> = {
         switches: "Switches mecânicos, magnéticos e ópticos para teclados personalizados. Peso de atuação, sensação tátil e durabilidade influenciam na performance e preferência pessoal de cada jogador.",
       },
       others: "Outros",
+      othersDescription: "Confira periféricos de outras categorias, como IEMs, DAC/AMP, glasspads, switches, feet e cadeiras.",
     },
     filters: {
       searchPeripherals: "Buscar periféricos",
@@ -1329,6 +1331,7 @@ export const translations: Record<LocaleCode, Translations> = {
         switches: "Mechanical, magnetic and optical switches for custom keyboards. Actuation force, tactile feel and durability influence performance and each player's personal preference.",
       },
       others: "Others",
+      othersDescription: "Check out peripherals from other categories, such as IEMs, DAC/AMP, glasspads, switches, feet and chairs.",
     },
     filters: {
       searchPeripherals: "Search peripherals",

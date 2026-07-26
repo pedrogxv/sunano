@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { signOutSafely, supabaseAuth } from "@/lib/client/supabase-auth"
 import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
@@ -255,7 +255,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
         <DropdownMenuItem
           className="cursor-pointer text-red-400 focus:bg-red-500/10 focus:text-red-300"
           onSelect={async () => {
-            await supabaseAuth.auth.signOut()
+            await signOutSafely()
             window.location.href = loginHref
           }}
         >

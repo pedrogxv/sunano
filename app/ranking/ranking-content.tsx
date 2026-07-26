@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { ChevronRight } from "lucide-react"
 import { useState } from "react"
 
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
@@ -41,7 +42,7 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       {sorted.map((item, index) => {
         const barPct = Math.round((item.score / maxScore) * 100)
         const displayValue = item.score
@@ -51,12 +52,12 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
           <Link
             key={item.id}
             href={href}
-            className="group flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-muted/30 sm:gap-3 sm:px-3"
+            className="group flex items-center gap-3 rounded-xl border border-transparent px-2.5 py-2.5 transition-all duration-150 hover:border-border/50 hover:bg-muted/40 hover:shadow-sm active:scale-[0.995] sm:gap-4 sm:px-4"
           >
             {/* Position badge */}
             <span
               className={cn(
-                "w-6 shrink-0 text-right text-xs font-bold tabular-nums sm:w-8",
+                "w-6 shrink-0 text-right text-xs font-bold tabular-nums sm:w-8 sm:text-sm",
                 index === 0
                   ? "text-yellow-400"
                   : index === 1
@@ -70,16 +71,16 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
             </span>
 
             {/* Nome + barra. No mobile ficam empilhados: lado a lado, a coluna de nome
-                fixa (w-48) somada ao # e à pontuação estourava a largura da tela e
+                fixa (w-56) somada ao # e à pontuação estourava a largura da tela e
                 espremia a barra a ~15px, tornando a comparação visual inútil. */}
-            <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
               {/* Name */}
-              <span className="truncate text-sm font-medium text-foreground group-hover:text-primary sm:w-48 sm:shrink-0">
+              <span className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary sm:w-56 sm:shrink-0">
                 {item.name}
               </span>
 
               {/* Bar */}
-              <div className="flex min-w-0 flex-1 items-center gap-2">
+              <div className="flex min-w-0 flex-1 items-center gap-2.5">
                 <div className="relative h-2.5 min-w-0 flex-1 overflow-hidden rounded-sm bg-muted/20 sm:h-5">
                   <div
                     className={cn(
@@ -95,11 +96,14 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
                     style={{ width: `${barPct}%` }}
                   />
                 </div>
-                <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground sm:w-12">
+                <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground sm:w-12 sm:text-sm">
                   {displayValue}
                 </span>
               </div>
             </div>
+
+            {/* Nudge de navegação — só some no mobile pra não brigar com o layout empilhado */}
+            <ChevronRight className="hidden size-4 shrink-0 -translate-x-1 text-muted-foreground/60 opacity-0 transition-all duration-150 group-hover:translate-x-0 group-hover:opacity-100 sm:block" />
           </Link>
         )
       })}
@@ -121,18 +125,18 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
   const filtered = peripherals.filter((p) => p.category === selected)
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6">
+    <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
       {/* Category tabs */}
-      <div className="mb-1.5 flex flex-wrap gap-1.5">
+      <div className="mb-2 flex flex-wrap gap-1.5">
         {categoriesWithData.map((cat) => (
           <button
             key={cat.key}
             onClick={() => setSelected(cat.key)}
             className={cn(
-              "rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors",
+              "rounded-lg border px-3.5 py-1.5 text-xs font-semibold transition-colors",
               selected === cat.key
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-transparent bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
             )}
           >
             {cat.label}
@@ -143,15 +147,20 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
         Quanto maior, melhor
       </p>
 
-      {/* Legend — acompanha as larguras responsivas das linhas. No mobile a barra
-          fica na segunda linha de cada item, então o rótulo de pontuação sai. */}
-      <div className="mb-3 flex items-center gap-2.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 sm:gap-3 sm:px-3">
-        <span className="w-6 text-right sm:w-8">#</span>
-        <span className="min-w-0 flex-1 sm:w-48 sm:flex-none">Nome</span>
-        <span className="hidden flex-1 sm:block">Pontuação</span>
-      </div>
+      {/* Card que contém legenda + lista — dá ao ranking um limite visual próprio
+          em telas largas, em vez de flutuar solto num container só um pouco
+          mais estreito que a página inteira. */}
+      <div className="rounded-2xl border border-border/40 bg-card/40 p-2 sm:p-3">
+        {/* Legend — acompanha as larguras responsivas das linhas. No mobile a barra
+            fica na segunda linha de cada item, então o rótulo de pontuação sai. */}
+        <div className="flex items-center gap-3 px-2.5 pb-2 pt-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50 sm:gap-4 sm:px-4">
+          <span className="w-6 text-right sm:w-8">#</span>
+          <span className="min-w-0 flex-1 sm:w-56 sm:flex-none">Nome</span>
+          <span className="hidden flex-1 sm:block">Pontuação</span>
+        </div>
 
-      <BarChart items={filtered} />
+        <BarChart items={filtered} />
+      </div>
     </div>
   )
 }

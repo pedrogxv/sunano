@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { ShieldCheck } from "lucide-react"
 
+import { AuthBackground } from "@/components/auth/AuthBackground"
 import { TwoFactorVerifyForm } from "@/components/auth/TwoFactorVerifyForm"
 import { isMfaStepUpRequired, sanitizeNextPath } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
@@ -32,7 +33,8 @@ export default async function TwoFactorPage({
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-10">
+    <div className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
+      <AuthBackground />
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <div className="mb-4 flex justify-center">

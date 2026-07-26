@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
+import { getAvatarUrl } from "@/lib/avatar"
 import { useLocale } from "@/components/providers/locale-context"
 import { useT } from "@/lib/use-t"
 
@@ -71,7 +72,7 @@ export function BlogPostContent({ post }: { post: BlogPost | null }) {
   const safeVideoUrl = post?.video_url && /^https?:\/\//i.test(post.video_url) ? post.video_url : null
   const relatedPeripheral = Array.isArray(post?.peripherals) ? post.peripherals[0] : null
   const authorName = post?.admin_profiles?.display_name?.trim() || getDefaultAuthorName(post?.admin_profiles?.email)
-  const authorAvatar = post?.admin_profiles?.avatar_url || "https://github.com/shadcn.png"
+  const authorAvatar = getAvatarUrl(post?.admin_profiles?.avatar_url)
 
   if (!post) {
     return (

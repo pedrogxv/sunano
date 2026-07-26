@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { AuthBackground } from "@/components/auth/AuthBackground"
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm"
 
 export default async function ResetPasswordPage() {
@@ -14,7 +15,8 @@ export default async function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4 py-10">
+    <div className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
+      <AuthBackground />
       <div className="w-full max-w-md">
         <div className="mb-8 text-center">
           <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">

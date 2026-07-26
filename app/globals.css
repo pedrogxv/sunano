@@ -262,3 +262,13 @@ button,
   50%  { transform: translate(200%, 100%); }
   100% { transform: translate(100%, 100%); }
 }
+
+@keyframes auth-blob-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(1.5rem, 1rem) scale(1.1); }
+}
+
+@keyframes auth-blob-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-1.5rem, -1rem) scale(1.1); }
+}

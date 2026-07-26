@@ -33,3 +33,33 @@ export const supabaseAuth = createBrowserClient<Database>(supabaseUrl, supabaseA
     lock: <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn(),
   },
 })
+
+function clearSupabaseCookies() {
+  document.cookie.split(";").forEach((entry) => {
+    const name = entry.split("=")[0]?.trim()
+    if (name?.startsWith("sb-")) {
+      document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`
+    }
+  })
+}
+
+/**
+ * `signOut()` do gotrue-js serializa TODA chamada de auth (refresh em
+ * background, checagens de MFA, etc.) atrás de uma flag interna própria do
+ * client — independente do `lock` acima. Se qualquer uma dessas chamadas
+ * travar (ex.: refresh em aba jogada pro background), a flag nunca é
+ * liberada e `signOut()` fica pendurado pra sempre, sem erro. Por isso aqui
+ * ele nunca é a única fonte de verdade: tem timeout e, de qualquer forma,
+ * os cookies de sessão são apagados na mão antes de redirecionar.
+ */
+export async function signOutSafely() {
+  try {
+    await Promise.race([
+      supabaseAuth.auth.signOut(),
+      new Promise((resolve) => setTimeout(resolve, 2500)),
+    ])
+  } catch {
+    // segue para a limpeza manual de qualquer forma
+  }
+  clearSupabaseCookies()
+}

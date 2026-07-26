@@ -6,6 +6,7 @@ import Link from "next/link"
 import { SearchComponent, type SearchItem } from "@/components/ui/search-bar"
 import { GlassBlogCard } from "@/components/ui/glass-blog-card-shadcnui"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
+import { getAvatarUrl } from "@/lib/avatar"
 import { useLocale } from "@/components/providers/locale-context"
 import { useT } from "@/lib/use-t"
 
@@ -47,7 +48,7 @@ function getArticleMeta(
         post.admin_profiles?.display_name?.trim() ||
         getDefaultAuthorName(post.admin_profiles?.email) ||
         "Sunano",
-      avatar: post.admin_profiles?.avatar_url || "https://github.com/shadcn.png",
+      avatar: getAvatarUrl(post.admin_profiles?.avatar_url),
     },
     date: new Date(post.created_at).toLocaleDateString(locale, {
       day: "2-digit",

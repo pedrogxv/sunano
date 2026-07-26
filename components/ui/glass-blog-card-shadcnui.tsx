@@ -4,6 +4,7 @@ import Image from "next/image"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
+import { DEFAULT_AVATAR_URL } from "@/lib/avatar"
 import { cn } from "@/lib/utils"
 import { motion } from "framer-motion"
 import { BookOpen, Clock } from "lucide-react"
@@ -30,7 +31,7 @@ const defaultPost = {
     "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&q=80",
   author: {
     name: "Moumen Soliman",
-    avatar: "https://github.com/shadcn.png",
+    avatar: DEFAULT_AVATAR_URL,
   },
   date: "Dec 2, 2025",
   readTime: "5 min read",

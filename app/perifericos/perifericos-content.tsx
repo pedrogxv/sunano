@@ -25,6 +25,7 @@ import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
 import { cn } from "@/lib/utils"
 
 type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type CategoryFilter = Category | "outros"
 type SortKey = "recent" | "rank" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type MouseShape = "symmetrical" | "ergonomic"
@@ -75,6 +76,10 @@ const CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "mon
 
 const HERO_MAIN_CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors"]
 const HERO_OTHER_CATEGORIES: Category[] = ["iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+
+function categoryMatches(itemCategory: Category, target: CategoryFilter): boolean {
+  return target === "outros" ? HERO_OTHER_CATEGORIES.includes(itemCategory) : itemCategory === target
+}
 
 const HERO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   mouse: Mouse,
@@ -212,7 +217,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   }, [initialDataProp])
 
   const [query, setQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<Category>("mouse")
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("mouse")
   const [selectedBrand, setSelectedBrand] = useState("all")
   const [priceRange, setPriceRange] = useState<[number, number]>([PRICE_MIN, 0])
   const [selectedConnectivity, setSelectedConnectivity] = useState("all")
@@ -249,12 +254,12 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   const showProfileFilter = effectiveCategory === "mousepad" || effectiveCategory === "glasspad"
 
   const availableBrands = useMemo(() => {
-    const base = effectiveCategory ? initialData.filter((i) => i.category === effectiveCategory) : initialData
+    const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
     return ["all", ...Array.from(new Set(base.map((i) => i.brand))).sort((a, b) => a.localeCompare(b))]
   }, [initialData, effectiveCategory])
 
   const maxPrice = useMemo(() => {
-    const base = effectiveCategory ? initialData.filter((i) => i.category === effectiveCategory) : initialData
+    const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
     const max = Math.max(...base.map((i) => i.price), 0)
     return Math.ceil(max / 10) * 10
   }, [initialData, effectiveCategory])
@@ -348,7 +353,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     const q = query.trim().toLowerCase()
     const results = initialData.filter((item) => {
       if (lockedCategory && item.category !== lockedCategory) return false
-      if (item.category !== selectedCategory) return false
+      if (!categoryMatches(item.category, selectedCategory)) return false
       const searchable = [item.name, item.brand, item.specs.driver ?? "", item.specs.profile ?? "", item.specs.keyboardLayout ?? ""]
         .join(" ").toLowerCase()
       return (
@@ -399,8 +404,8 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     }, {})
     const othersCount = HERO_OTHER_CATEGORIES.reduce((sum, cat) => sum + (counts[cat] ?? 0), 0)
     return [
-      ...HERO_MAIN_CATEGORIES.map((cat) => ({ key: cat as Category | "outros", label: categoryLabels[cat], count: counts[cat] ?? 0 })),
-      { key: "outros" as Category | "outros", label: t.categories.others, count: othersCount },
+      ...HERO_MAIN_CATEGORIES.map((cat) => ({ key: cat as CategoryFilter, label: categoryLabels[cat], count: counts[cat] ?? 0 })),
+      { key: "outros" as CategoryFilter, label: t.categories.others, count: othersCount },
     ]
   }, [initialData, categoryLabels])
 
@@ -487,7 +492,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
         </p>
         <Select
           value={selectedCategory}
-          onValueChange={(v) => setSelectedCategory(v as Category)}
+          onValueChange={(v) => setSelectedCategory(v as CategoryFilter)}
           disabled={selectedIds.length > 0 && lockedCategory !== null}
         >
           <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
@@ -503,6 +508,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                 {categoryLabels[cat]}
               </SelectItem>
             ))}
+            <SelectItem value="outros" disabled={selectedIds.length > 0 && lockedCategory !== null}>
+              {t.categories.others}
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -769,31 +777,17 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           <div className="relative mt-8 grid grid-cols-3 gap-2.5 sm:grid-cols-6 md:gap-3">
             {heroCategoryStats.map(({ key, label, count }) => {
               const Icon = HERO_ICONS[key] ?? LayoutGrid
-              const isActive = selectedCategory === key
-              const isOthers = key === "outros"
-
-              if (isOthers) {
-                return (
-                  <div
-                    key="outros"
-                    className="flex flex-col items-center gap-2 rounded-xl border border-border/25 bg-muted/[0.06] px-2 py-5"
-                  >
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-muted/20">
-                      <Icon className="size-5 text-muted-foreground/40" />
-                    </div>
-                    <span className="text-xl font-black leading-none tabular-nums text-foreground/40 md:text-2xl">{count}</span>
-                    <span className="text-[11px] text-muted-foreground/40 md:text-xs">{label}</span>
-                  </div>
-                )
-              }
+              const isActive = key === "outros"
+                ? selectedCategory === "outros" || HERO_OTHER_CATEGORIES.includes(selectedCategory as Category)
+                : selectedCategory === key
 
               return (
                 <button
                   key={key}
                   type="button"
                   onClick={() => {
-                    if (lockedCategory && (key as Category) !== lockedCategory) clearSelection()
-                    setSelectedCategory(key as Category)
+                    if (lockedCategory && key !== lockedCategory) clearSelection()
+                    setSelectedCategory(key)
                   }}
                   className={cn(
                     "group relative flex flex-col items-center gap-2 rounded-xl border px-2 py-5 transition-all duration-200",
@@ -883,10 +877,10 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold tracking-tight text-foreground">
-              {categoryLabels[selectedCategory]}
+              {selectedCategory === "outros" ? t.categories.others : categoryLabels[selectedCategory]}
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-              {categoryDescriptions[selectedCategory]}
+              {selectedCategory === "outros" ? t.categories.othersDescription : categoryDescriptions[selectedCategory]}
             </p>
             <div className="mt-4 flex items-center gap-3">
               <span className="text-sm font-medium text-muted-foreground">
@@ -903,7 +897,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
           {/* Ranking list */}
           {(() => {
             const ranked = initialData
-              .filter((p) => p.category === selectedCategory && typeof p.score === "number" && (p.score as number) > 0)
+              .filter((p) => categoryMatches(p.category, selectedCategory) && typeof p.score === "number" && (p.score as number) > 0)
               .sort((a, b) => (b.score as number) - (a.score as number))
               .slice(0, 3)
             if (ranked.length === 0) return null

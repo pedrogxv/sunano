@@ -2,10 +2,11 @@
 
 import Link from "next/link"
 import { ChevronRight } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { usePageHeader } from "@/components/providers/page-header-context"
+import { AnimatedCounter } from "@/components/animated-counter"
 import { cn } from "@/lib/utils"
 
 export type RankedPeripheral = {
@@ -28,6 +29,14 @@ const CATEGORIES: { key: string; label: string }[] = [
 
 function BarChart({ items }: { items: RankedPeripheral[] }) {
   const sorted = [...items].sort((a, b) => b.score - a.score)
+
+  // Começa em 0% e só assume a largura final depois do mount, pra barra
+  // crescer junto com o número — mesmo efeito e velocidade do contador da home.
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setReady(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
 
   const total = sorted.length
   // Evita divisão por zero (todos os scores zerados) — daria `width: NaN%`.
@@ -84,7 +93,7 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
                 <div className="relative h-2.5 min-w-0 flex-1 overflow-hidden rounded-sm bg-muted/20 sm:h-5">
                   <div
                     className={cn(
-                      "absolute inset-y-0 left-0 rounded-sm bg-gradient-to-r transition-all duration-300",
+                      "absolute inset-y-0 left-0 rounded-sm bg-gradient-to-r transition-[width] duration-[2600ms] ease-[cubic-bezier(0.65,0,0.35,1)]",
                       index === 0
                         ? "from-yellow-700 via-yellow-300 to-yellow-500"
                         : index === 1
@@ -93,11 +102,11 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
                         ? "from-amber-900 via-amber-400 to-amber-700"
                         : "from-primary/50 to-primary"
                     )}
-                    style={{ width: `${barPct}%` }}
+                    style={{ width: ready ? `${barPct}%` : "0%" }}
                   />
                 </div>
                 <span className="w-10 shrink-0 text-right text-xs font-semibold tabular-nums text-muted-foreground sm:w-12 sm:text-sm">
-                  {displayValue}
+                  <AnimatedCounter value={displayValue} />
                 </span>
               </div>
             </div>
@@ -156,7 +165,7 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
           <span className="hidden flex-1 sm:block">Pontuação</span>
         </div>
 
-        <BarChart items={filtered} />
+        <BarChart key={selected} items={filtered} />
       </div>
     </div>
   )

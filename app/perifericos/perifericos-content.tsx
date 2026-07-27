@@ -20,6 +20,7 @@ import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useT } from "@/lib/use-t"
 import { usePageHeader } from "@/components/providers/page-header-context"
+import { AnimatedCounter } from "@/components/animated-counter"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
 import { cn } from "@/lib/utils"
@@ -860,7 +861,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                     "text-xl font-black leading-none tabular-nums transition-colors duration-200 md:text-2xl",
                     isActive ? "text-primary" : "text-foreground group-hover:text-foreground"
                   )}>
-                    {count}
+                    <AnimatedCounter value={count} />
                   </span>
 
                   <span className={cn(

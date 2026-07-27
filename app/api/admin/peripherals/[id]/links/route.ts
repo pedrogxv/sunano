@@ -48,7 +48,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   if (auth.error || !auth.profile) {
     return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
-  if (!hasAdminPermission(auth.profile, "peripherals_write") || !hasAdminPermission(auth.profile, "store_write")) {
+  if (!hasAdminPermission(auth.profile, "peripherals_write")) {
     return NextResponse.json({ error: "Sem permissão para vincular produtos a periféricos." }, { status: 403 })
   }
 

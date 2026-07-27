@@ -13,6 +13,7 @@ import {
   Trophy,
 } from "lucide-react"
 
+import { AnimatedCounter } from "@/components/animated-counter"
 import { getHomeData } from "@/lib/server/repositories/home-repository"
 import { formatBRL } from "@/lib/stripe"
 import { mapTier } from "@/lib/tier-utils"
@@ -154,19 +155,25 @@ export default async function HomePage() {
             {/* Stats */}
             <div className="flex flex-wrap gap-x-8 gap-y-3 border-t border-border pt-6">
               <div>
-                <div className="text-2xl font-bold text-foreground">{counts.peripherals}</div>
+                <div className="text-2xl font-bold text-foreground">
+                  <AnimatedCounter value={counts.peripherals} />
+                </div>
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                   Periféricos
                 </div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{counts.reviews}</div>
+                <div className="text-2xl font-bold text-foreground">
+                  <AnimatedCounter value={counts.reviews} />
+                </div>
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                   Reviews
                 </div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-foreground">{counts.forumPosts}</div>
+                <div className="text-2xl font-bold text-foreground">
+                  <AnimatedCounter value={counts.forumPosts} />
+                </div>
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                   Tópicos
                 </div>

@@ -143,9 +143,6 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
           </button>
         ))}
       </div>
-      <p className="mb-6 px-1 text-xs font-medium text-muted-foreground">
-        Quanto maior, melhor
-      </p>
 
       {/* Card que contém legenda + lista — dá ao ranking um limite visual próprio
           em telas largas, em vez de flutuar solto num container só um pouco

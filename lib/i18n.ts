@@ -148,6 +148,7 @@ type Translations = {
     productCount: (count: number) => string
     activeFilters: string
     budgetBand: string
+    tags: string
   }
   tierlist: {
     info: string
@@ -747,6 +748,7 @@ export const translations: Record<LocaleCode, Translations> = {
       productCount: (count: number) => `${count} ${count === 1 ? "produto" : "produtos"}`,
       activeFilters: "filtro(s) ativo(s)",
       budgetBand: "Budget (até R$300)",
+      tags: "Tags",
     },
     tierlist: {
       info: "Informações da Tierlist",
@@ -1377,6 +1379,7 @@ export const translations: Record<LocaleCode, Translations> = {
       productCount: (count: number) => `${count} ${count === 1 ? "product" : "products"}`,
       activeFilters: "filter(s) active",
       budgetBand: "Budget (up to R$300)",
+      tags: "Tags",
     },
     tierlist: {
       info: "Tierlist Information",

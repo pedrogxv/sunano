@@ -229,6 +229,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   const [selectedPadType, setSelectedPadType] = useState<PadType | "all">("all")
   const [selectedRefreshRate, setSelectedRefreshRate] = useState<string | "all">("all")
   const [selectedPanelType, setSelectedPanelType] = useState<PanelType | "all">("all")
+  const [selectedTags, setSelectedTags] = useState<Tag[]>([])
   const [sortKey, setSortKey] = useState<SortKey>("recent")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
 
@@ -257,6 +258,17 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
     return ["all", ...Array.from(new Set(base.map((i) => i.brand))).sort((a, b) => a.localeCompare(b))]
   }, [initialData, effectiveCategory])
+
+  const availableTags = useMemo(() => {
+    const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
+    const values = new Set<Tag>()
+    base.forEach((item) => item.tags?.forEach((tag) => values.add(tag)))
+    return Array.from(values)
+  }, [initialData, effectiveCategory])
+
+  useEffect(() => {
+    setSelectedTags((prev) => prev.filter((tag) => availableTags.includes(tag)))
+  }, [availableTags])
 
   const maxPrice = useMemo(() => {
     const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
@@ -369,7 +381,8 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
         (!showProfileFilter || selectedProfile === "all" || item.specs.profile === selectedProfile) &&
         (!showMonitorFilters || selectedRefreshRate === "all" || Number(item.specs.refreshRate) === Number(selectedRefreshRate)) &&
         (!showMonitorFilters || selectedPanelType === "all" || item.specs.panelType === selectedPanelType) &&
-        (!isWeightFiltered || item.specs.weightG === undefined || (item.specs.weightG >= weightRange[0] && item.specs.weightG <= weightRange[1]))
+        (!isWeightFiltered || item.specs.weightG === undefined || (item.specs.weightG >= weightRange[0] && item.specs.weightG <= weightRange[1])) &&
+        (selectedTags.length === 0 || selectedTags.some((tag) => item.tags?.includes(tag)))
       )
     })
 
@@ -385,7 +398,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   }, [
     initialData, query, selectedCategory, selectedBrand, selectedConnectivity,
     selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedSurface, selectedProfile,
-    selectedPadType, selectedRefreshRate, selectedPanelType, sortKey, lockedCategory,
+    selectedPadType, selectedRefreshRate, selectedPanelType, selectedTags, sortKey, lockedCategory,
     showConnectivityFilter, showMouseShapeFilter, showKeyboardLayoutFilter, showKeyboardTypeFilter,
     showSurfaceFilter, showProfileFilter, showPadTypeFilter, showMonitorFilters,
     isWeightFiltered, weightRange, isPriceFiltered, priceRange,
@@ -393,8 +406,8 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
   const activeFiltersCount = useMemo(() =>
     [selectedBrand, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType]
-      .filter((v) => v !== "all").length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0) + (isPriceFiltered ? 1 : 0),
-    [query, selectedBrand, selectedCategory, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered, isPriceFiltered]
+      .filter((v) => v !== "all").length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0) + (isPriceFiltered ? 1 : 0) + selectedTags.length,
+    [query, selectedBrand, selectedCategory, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered, isPriceFiltered, selectedTags]
   )
 
   const heroCategoryStats = useMemo(() => {
@@ -423,6 +436,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     setSelectedPadType("all")
     setSelectedRefreshRate("all")
     setSelectedPanelType("all")
+    setSelectedTags([])
     setWeightRange([WEIGHT_MIN_G, WEIGHT_MAX_G])
     setSortKey("recent")
   }
@@ -734,6 +748,38 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </Select>
           </FilterSection>
         </>
+      )}
+
+      {/* Tags */}
+      {availableTags.length > 0 && (
+        <FilterSection title={t.filters.tags}>
+          <div className="flex flex-wrap gap-1.5">
+            {availableTags.map((tag) => {
+              const active = selectedTags.includes(tag)
+              const style = CARD_TAG_STYLES[tag]
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() =>
+                    setSelectedTags((prev) =>
+                      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                    )
+                  }
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                    active
+                      ? cn(style.bg, style.text, style.border)
+                      : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                  )}
+                >
+                  <span className={cn("size-1.5 rounded-full", active ? style.dot : "bg-muted-foreground/40")} />
+                  {formatTagLabel(tag, effectiveCategory ?? undefined)}
+                </button>
+              )
+            })}
+          </div>
+        </FilterSection>
       )}
 
       {/* Clear filters */}

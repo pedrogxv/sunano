@@ -352,6 +352,7 @@ const BRAND_OPTIONS = [
   "Akko",
   "AOC",
   "Angry Miao",
+  "ANTGAMER",
   "Apple",
   "Artisan",
   "Asus",

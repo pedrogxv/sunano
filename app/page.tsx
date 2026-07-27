@@ -127,7 +127,6 @@ export default async function HomePage() {
                   />
                 </svg>
               </span>
-              .
             </h1>
 
             <p className="max-w-xl text-base text-muted-foreground md:text-lg">

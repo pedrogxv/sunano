@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react"
 import { Clock, Info, ListChecks, Star, Tag, Tags } from "lucide-react"
+import { format } from "date-fns"
+import { enUS, ptBR } from "date-fns/locale"
 
+import { useLocale } from "@/components/providers/locale-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 
@@ -14,12 +17,14 @@ type InfoTab = {
 }
 
 type LatestUpdate = {
-  latestUpdateMonth: string
   latestUpdateDescription: string
+  updatedAt: string
 }
 
 export function TierlistInfo({ latestUpdate }: { latestUpdate?: LatestUpdate | null }) {
   const t = useT()
+  const { locale } = useLocale()
+  const dateLocale = locale === "en-US" ? enUS : ptBR
   const [activeTab, setActiveTab] = useState<string>("about")
 
   const tabs = useMemo<InfoTab[]>(() => {
@@ -100,13 +105,17 @@ export function TierlistInfo({ latestUpdate }: { latestUpdate?: LatestUpdate | n
         icon: Clock,
         content: (
             <div className="space-y-2 text-sm text-primary">
-              <p>{latestUpdate?.latestUpdateMonth || t.tierlist.latestUpdate.month}</p>
+              {latestUpdate?.updatedAt && (
+                <p className="font-medium">
+                  {format(new Date(latestUpdate.updatedAt), t.tierlist.latestUpdate.dateFormat, { locale: dateLocale })}
+                </p>
+              )}
               <p>{latestUpdate?.latestUpdateDescription || t.tierlist.latestUpdate.description}</p>
             </div>
         ),
       },
     ]
-  }, [t, latestUpdate])
+  }, [t, latestUpdate, dateLocale])
 
   const activeContent = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]
 

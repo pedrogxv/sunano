@@ -10,34 +10,38 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 const ROW_ID = 1
 
 export type TierlistMeta = {
-  latestUpdateMonth: string
   latestUpdateDescription: string
+  updatedAt: string
 }
 
 export async function getTierlistMeta(): Promise<TierlistMeta | null> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("tierlist_meta")
-    .select("latest_update_month, latest_update_description")
+    .select("latest_update_description, updated_at")
     .eq("id", ROW_ID)
     .maybeSingle()
 
   if (error || !data) return null
 
   return {
-    latestUpdateMonth: data.latest_update_month,
     latestUpdateDescription: data.latest_update_description,
+    updatedAt: data.updated_at,
   }
 }
 
-export async function updateTierlistMeta(input: TierlistMeta): Promise<void> {
+export async function updateTierlistMeta(input: { latestUpdateDescription: string }): Promise<TierlistMeta> {
   const db = createSupabaseAdminClient()
+  const updatedAt = new Date().toISOString()
   const { error } = await db.from("tierlist_meta").upsert({
     id: ROW_ID,
-    latest_update_month: input.latestUpdateMonth,
+    // Coluna legada, não é mais editável manualmente; mantida vazia (updated_at é a fonte da data).
+    latest_update_month: "",
     latest_update_description: input.latestUpdateDescription,
-    updated_at: new Date().toISOString(),
+    updated_at: updatedAt,
   })
 
   if (error) throw error
+
+  return { latestUpdateDescription: input.latestUpdateDescription, updatedAt }
 }

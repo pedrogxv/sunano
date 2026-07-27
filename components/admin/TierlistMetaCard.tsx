@@ -6,19 +6,18 @@ import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 type TierlistMeta = {
-  latestUpdateMonth: string
   latestUpdateDescription: string
+  updatedAt: string
 }
 
 export function TierlistMetaCard() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [month, setMonth] = useState("")
   const [description, setDescription] = useState("")
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -29,8 +28,8 @@ export function TierlistMetaCard() {
         const data = await res.json().catch(() => null) as { error?: string; meta?: TierlistMeta | null } | null
         if (!res.ok) throw new Error(data?.error ?? "Erro ao carregar.")
         if (cancelled) return
-        setMonth(data?.meta?.latestUpdateMonth ?? "")
         setDescription(data?.meta?.latestUpdateDescription ?? "")
+        setUpdatedAt(data?.meta?.updatedAt ?? null)
       } catch (err) {
         if (cancelled) return
         const message = err instanceof Error ? err.message : "Erro ao carregar."
@@ -50,10 +49,11 @@ export function TierlistMetaCard() {
       const res = await fetch("/api/admin/tierlist-meta", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ latestUpdateMonth: month, latestUpdateDescription: description }),
+        body: JSON.stringify({ latestUpdateDescription: description }),
       })
-      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean; meta?: TierlistMeta } | null
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao salvar.")
+      setUpdatedAt(data.meta?.updatedAt ?? new Date().toISOString())
       toast.success("Última Atualização salva")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao salvar."
@@ -71,21 +71,11 @@ export function TierlistMetaCard() {
           Última Atualização
         </CardTitle>
         <CardDescription>
-          Texto exibido na aba &quot;Última Atualização&quot; do painel de informações da tierlist.
+          Texto exibido na aba &quot;Última Atualização&quot; do painel de informações da tierlist. A data é
+          registrada automaticamente ao salvar.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-5">
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Mês</label>
-          <Input
-            value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            placeholder="Abril 2026"
-            maxLength={60}
-            disabled={loading}
-            className="border-border bg-background"
-          />
-        </div>
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Descrição</label>
           <Textarea
@@ -98,7 +88,18 @@ export function TierlistMetaCard() {
             className="border-border bg-background"
           />
         </div>
-        <div className="flex justify-end border-t border-border pt-4">
+        <div className="flex items-center justify-between border-t border-border pt-4">
+          <p className="text-xs text-muted-foreground">
+            {updatedAt
+              ? `Atualizado em ${new Date(updatedAt).toLocaleString("pt-BR", {
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}`
+              : "Ainda não foi salvo."}
+          </p>
           <Button onClick={handleSave} disabled={loading || saving} className="gap-2 min-w-32">
             <Save className="size-4" />
             {saving ? "Salvando..." : "Salvar"}

@@ -168,7 +168,7 @@ type Translations = {
       u: string
     }
     criteria: { title: string; intro: string; item1: string; item2: string; item3: string; item4: string }
-    latestUpdate: { title: string; month: string; description: string }
+    latestUpdate: { title: string; dateFormat: string; description: string }
     viewingBy: string
     comingSoon: string
     comingSoonDesc: string
@@ -790,7 +790,7 @@ export const translations: Record<LocaleCode, Translations> = {
       },
       latestUpdate: {
         title: "Ultima Atualizacao",
-        month: "Abril 2026",
+        dateFormat: "dd 'de' MMMM 'de' yyyy 'às' HH:mm",
         description: "As listas são atualizadas continuamente com novos lançamentos, revisões de firmware e mudanças de preço.",
       },
       viewingBy: "Voce esta vendo a tierlist ordenada por:",
@@ -1421,7 +1421,7 @@ export const translations: Record<LocaleCode, Translations> = {
       },
       latestUpdate: {
         title: "Latest Update",
-        month: "April 2026",
+        dateFormat: "MMMM dd, yyyy 'at' HH:mm",
         description: "Lists are updated continuously based on new releases, firmware revisions, and market price changes.",
       },
       viewingBy: "You are viewing the tierlist sorted by:",

@@ -9,7 +9,6 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 const payloadSchema = z.object({
-  latestUpdateMonth: z.string().trim().min(1, "Informe o mês.").max(60, "Texto muito longo (máx. 60 caracteres)."),
   latestUpdateDescription: z.string().trim().min(1, "Informe a descrição.").max(500, "Texto muito longo (máx. 500 caracteres)."),
 })
 
@@ -42,10 +41,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await updateTierlistMeta(parsed.data)
+    const meta = await updateTierlistMeta(parsed.data)
+    return NextResponse.json({ ok: true, meta })
   } catch {
     return NextResponse.json({ error: "Erro ao salvar." }, { status: 500 })
   }
-
-  return NextResponse.json({ ok: true, meta: parsed.data })
 }

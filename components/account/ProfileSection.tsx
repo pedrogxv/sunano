@@ -403,7 +403,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                   aria-invalid={nameCheck.state === "taken"}
                 />
                 <p className="truncate text-[10px] text-muted-foreground/60">
-                  sunano.gg/perfil/<span className="text-muted-foreground">{slugPreview}</span>
+                  sunano.com.br/perfil/<span className="text-muted-foreground">{slugPreview}</span>
                 </p>
                 {nameCheck.state === "checking" && (
                   <p className="text-[10px] text-muted-foreground/60">Verificando disponibilidade…</p>

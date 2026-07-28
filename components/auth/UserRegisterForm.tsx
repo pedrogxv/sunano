@@ -103,7 +103,7 @@ export function UserRegisterForm() {
             required
           />
           <p className="text-xs text-muted-foreground">
-            É único no site e vira o endereço do seu perfil (ex.: sunano.gg/perfil/seu-nome).
+            É único no site e vira o endereço do seu perfil (ex.: sunano.com.br/perfil/seu-nome).
           </p>
         </div>
         <Field

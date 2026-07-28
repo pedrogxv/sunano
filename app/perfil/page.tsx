@@ -2,20 +2,22 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { KeyRound, Link2, Shield, SlidersHorizontal, User } from "lucide-react"
+import { KeyRound, LayoutGrid, Link2, Shield, SlidersHorizontal, User } from "lucide-react"
 
 import { LinkedAccountsTab } from "@/components/account/LinkedAccountsTab"
 import { PreferencesTab } from "@/components/account/PreferencesTab"
 import { PrivacidadeTab } from "@/components/account/PrivacidadeTab"
 import { ProfileTab, type ProfileData } from "@/components/account/ProfileTab"
 import { SecurityTab } from "@/components/account/SecurityTab"
+import { VitrineTab } from "@/components/account/VitrineTab"
 import BoxLoader from "@/components/ui/box-loader"
 import { cn } from "@/lib/utils"
 
-type TabKey = "profile" | "security" | "linked" | "preferences" | "privacidade"
+type TabKey = "profile" | "vitrine" | "security" | "linked" | "preferences" | "privacidade"
 
 const TABS: { key: TabKey; label: string; Icon: typeof User }[] = [
   { key: "profile", label: "Perfil", Icon: User },
+  { key: "vitrine", label: "Vitrine", Icon: LayoutGrid },
   { key: "security", label: "Segurança", Icon: KeyRound },
   { key: "linked", label: "Contas", Icon: Link2 },
   { key: "preferences", label: "Preferências", Icon: SlidersHorizontal },
@@ -91,6 +93,7 @@ export default function ProfilePage() {
 
         <div className="min-w-0 flex-1">
           {tab === "profile" && <ProfileTab profile={profile} onProfileChange={setProfile} />}
+          {tab === "vitrine" && <VitrineTab accountTier={profile.account_tier} />}
           {tab === "security" && <SecurityTab email={profile.email} />}
           {tab === "linked" && <LinkedAccountsTab />}
           {tab === "preferences" && <PreferencesTab />}

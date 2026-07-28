@@ -48,11 +48,80 @@ export type Database = {
           locale: string | null
           lgpd_consent_at: string | null
           lgpd_consent_version: string | null
+          banner_url: string | null
+          bio: string | null
+          account_tier: "common" | "vip" | "vip_plus"
           created_at: string
           updated_at: string
         }
         Insert: Omit<Database["public"]["Tables"]["user_profiles"]["Row"], "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>
+      }
+      medals: {
+        Relationships: []
+        Row: {
+          id: string
+          slug: string
+          name: string
+          description: string | null
+          icon_url: string | null
+          rarity: "common" | "rare" | "epic" | "legendary"
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["medals"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["medals"]["Insert"]>
+      }
+      user_medals: {
+        Relationships: []
+        Row: {
+          user_id: string
+          medal_id: string
+          awarded_at: string
+          pinned: boolean
+          pinned_order: number | null
+        }
+        Insert: {
+          user_id: string
+          medal_id: string
+          awarded_at?: string
+          pinned?: boolean
+          pinned_order?: number | null
+        }
+        Update: Partial<Database["public"]["Tables"]["user_medals"]["Insert"]>
+      }
+      user_setup_items: {
+        Relationships: []
+        Row: {
+          user_id: string
+          slot: "mouse" | "keyboard" | "headset" | "monitor" | "mousepad"
+          peripheral_id: string | null
+          custom_label: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          slot: "mouse" | "keyboard" | "headset" | "monitor" | "mousepad"
+          peripheral_id?: string | null
+          custom_label?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_setup_items"]["Insert"]>
+      }
+      user_favorite_peripherals: {
+        Relationships: []
+        Row: {
+          user_id: string
+          peripheral_id: string
+          position: number
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          peripheral_id: string
+          position?: number
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_favorite_peripherals"]["Insert"]>
       }
       audit_log: {
         Relationships: []

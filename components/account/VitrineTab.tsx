@@ -1,0 +1,509 @@
+"use client"
+
+import { useEffect, useState } from "react"
+import Image from "next/image"
+import {
+  Award,
+  ChevronDown,
+  ChevronUp,
+  Headphones,
+  Keyboard,
+  Monitor,
+  Mouse,
+  Pencil,
+  Square,
+  Trash2,
+  X,
+} from "lucide-react"
+import { toast } from "sonner"
+
+import { PeripheralPicker } from "./PeripheralPicker"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import BoxLoader from "@/components/ui/box-loader"
+import { useAccountTier } from "@/lib/hooks/use-account-tier"
+import {
+  SETUP_SLOTS,
+  type ProfileShowcase,
+  type SetupItem,
+  type SetupSlot,
+  type ShowcaseMedal,
+  type ShowcasePeripheral,
+} from "@/lib/profile-showcase"
+import { cn } from "@/lib/utils"
+
+/** Categorias do catálogo aceitas por cada slot do setup. */
+const SLOT_META: Record<
+  SetupSlot,
+  { label: string; Icon: typeof Mouse; categories: readonly string[] }
+> = {
+  mouse: { label: "Mouse", Icon: Mouse, categories: ["mouse"] },
+  keyboard: { label: "Teclado", Icon: Keyboard, categories: ["keyboard"] },
+  headset: { label: "Fone / Headset", Icon: Headphones, categories: ["headset", "iem"] },
+  monitor: { label: "Monitor", Icon: Monitor, categories: ["monitors"] },
+  mousepad: { label: "Mousepad", Icon: Square, categories: ["mousepad", "glasspad"] },
+}
+
+interface VitrineTabProps {
+  /** Tier vindo de `/api/profile` — evita um segundo carregamento. */
+  accountTier: string | null | undefined
+}
+
+/**
+ * Edição da vitrine pública: setup, periféricos favoritos e quais medalhas
+ * destacar. Salva via `PATCH /api/profile/showcase`, que reaplica os limites
+ * de tier no servidor.
+ */
+export function VitrineTab({ accountTier }: VitrineTabProps) {
+  const { favoriteLimit, medalLimit, capabilities } = useAccountTier(accountTier)
+
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [setup, setSetup] = useState<SetupItem[]>([])
+  const [favorites, setFavorites] = useState<ShowcasePeripheral[]>([])
+  const [allMedals, setAllMedals] = useState<ShowcaseMedal[]>([])
+  const [pinnedIds, setPinnedIds] = useState<string[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    async function load() {
+      try {
+        const [showcaseRes, medalsRes] = await Promise.all([
+          fetch("/api/profile/showcase", { cache: "no-store" }),
+          fetch("/api/profile/medals", { cache: "no-store" }),
+        ])
+        const showcaseData = (await showcaseRes.json().catch(() => null)) as
+          | { showcase?: ProfileShowcase }
+          | null
+        const medalsData = (await medalsRes.json().catch(() => null)) as
+          | { medals?: ShowcaseMedal[] }
+          | null
+
+        if (!mounted) return
+
+        if (showcaseData?.showcase) {
+          setSetup(showcaseData.showcase.setup)
+          setFavorites(showcaseData.showcase.favorites)
+        }
+
+        const medals = medalsData?.medals ?? []
+        setAllMedals(medals)
+        setPinnedIds(
+          medals
+            .filter((m) => m.pinned)
+            .sort((a, b) => (a.pinned_order ?? 0) - (b.pinned_order ?? 0))
+            .map((m) => m.id)
+        )
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    load()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  function updateSlot(slot: SetupSlot, changes: Partial<SetupItem>) {
+    setSetup((prev) =>
+      prev.map((item) => (item.slot === slot ? { ...item, ...changes } : item))
+    )
+  }
+
+  async function save() {
+    try {
+      setSaving(true)
+      const res = await fetch("/api/profile/showcase", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          setup: setup.map((item) => ({
+            slot: item.slot,
+            peripheral_id: item.peripheral?.id ?? null,
+            custom_label: item.peripheral ? null : item.custom_label,
+          })),
+          favorites: favorites.map((f) => f.id),
+          pinned_medals: pinnedIds,
+        }),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { error?: string; showcase?: ProfileShowcase }
+        | null
+      if (!res.ok || !data?.showcase) throw new Error(data?.error ?? "")
+
+      setSetup(data.showcase.setup)
+      setFavorites(data.showcase.favorites)
+      toast.success("Vitrine salva")
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : "Erro ao salvar vitrine"
+      toast.error("Erro ao salvar vitrine", { description: message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-64 items-center justify-center">
+        <BoxLoader />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <SetupEditor setup={setup} onChange={updateSlot} />
+
+      <FavoritosEditor
+        favorites={favorites}
+        limit={favoriteLimit}
+        tierLabel={capabilities.label}
+        onChange={setFavorites}
+      />
+
+      <MedalhasEditor
+        medals={allMedals}
+        pinnedIds={pinnedIds}
+        limit={medalLimit}
+        onChange={setPinnedIds}
+      />
+
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={saving} className="min-w-32">
+          {saving ? "Salvando..." : "Salvar vitrine"}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────── Setup ─────────────────────────── */
+
+function SetupEditor({
+  setup,
+  onChange,
+}: {
+  setup: SetupItem[]
+  onChange: (slot: SetupSlot, changes: Partial<SetupItem>) => void
+}) {
+  const [editing, setEditing] = useState<SetupSlot | null>(null)
+
+  return (
+    <Card className="border-border bg-card/90">
+      <CardHeader className="border-b border-border">
+        <CardTitle className="text-base">Meu setup</CardTitle>
+        <CardDescription>
+          Escolha um periférico do catálogo em cada slot — ou escreva o nome, se ainda não estiver
+          cadastrado.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-6">
+        {SETUP_SLOTS.map((slot) => {
+          const item = setup.find((i) => i.slot === slot) ?? {
+            slot,
+            peripheral: null,
+            custom_label: null,
+          }
+          const { label, Icon, categories } = SLOT_META[slot]
+          const isEditing = editing === slot
+          const filled = item.peripheral?.name ?? item.custom_label
+
+          return (
+            <div key={slot} className="rounded-lg border border-border p-3">
+              <div className="flex items-center gap-3">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted/40">
+                  {item.peripheral?.image_url ? (
+                    <div className="relative size-7">
+                      <Image
+                        src={item.peripheral.image_url}
+                        alt={item.peripheral.name}
+                        fill
+                        sizes="28px"
+                        className="object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <Icon className="size-4 text-muted-foreground" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    {label}
+                  </p>
+                  <p
+                    className={cn(
+                      "truncate text-sm",
+                      filled ? "font-medium text-foreground" : "text-muted-foreground/50"
+                    )}
+                  >
+                    {filled ?? "Vazio"}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditing(isEditing ? null : slot)}
+                  >
+                    {isEditing ? <X className="size-4" /> : <Pencil className="size-4" />}
+                  </Button>
+                  {filled && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onChange(slot, { peripheral: null, custom_label: null })}
+                    >
+                      <Trash2 className="size-4 text-muted-foreground" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {isEditing && (
+                <div className="mt-3 space-y-2 border-t border-border pt-3">
+                  <PeripheralPicker
+                    categories={categories}
+                    autoFocus
+                    placeholder={`Buscar ${label.toLowerCase()}...`}
+                    onSelect={(peripheral) => {
+                      onChange(slot, { peripheral, custom_label: null })
+                      setEditing(null)
+                    }}
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60">
+                      ou
+                    </span>
+                    <Input
+                      defaultValue={item.custom_label ?? ""}
+                      placeholder="Escrever o nome manualmente"
+                      maxLength={60}
+                      className="border-border bg-background h-9 text-sm"
+                      onBlur={(e) => {
+                        const value = e.target.value.trim()
+                        if (value) onChange(slot, { peripheral: null, custom_label: value })
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ───────────────────────── Favoritos ───────────────────────── */
+
+function FavoritosEditor({
+  favorites,
+  limit,
+  tierLabel,
+  onChange,
+}: {
+  favorites: ShowcasePeripheral[]
+  limit: number
+  tierLabel: string
+  onChange: (favorites: ShowcasePeripheral[]) => void
+}) {
+  const isFull = favorites.length >= limit
+
+  function move(index: number, direction: -1 | 1) {
+    const target = index + direction
+    if (target < 0 || target >= favorites.length) return
+    const next = [...favorites]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    onChange(next)
+  }
+
+  return (
+    <Card className="border-border bg-card/90">
+      <CardHeader className="border-b border-border">
+        <CardTitle className="text-base">Periféricos favoritos</CardTitle>
+        <CardDescription>
+          Seu plano ({tierLabel}) exibe até {limit} favoritos. A ordem aqui é a ordem do perfil.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-6">
+        {favorites.length > 0 && (
+          <ul className="space-y-2">
+            {favorites.map((peripheral, index) => (
+              <li
+                key={peripheral.id}
+                className="flex items-center gap-3 rounded-lg border border-border p-2.5"
+              >
+                <div className="relative size-9 shrink-0">
+                  {peripheral.image_url ? (
+                    <Image
+                      src={peripheral.image_url}
+                      alt={peripheral.name}
+                      fill
+                      sizes="36px"
+                      className="object-contain"
+                    />
+                  ) : (
+                    <div className="size-full rounded bg-muted/40" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{peripheral.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">{peripheral.brand}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={index === 0}
+                    onClick={() => move(index, -1)}
+                  >
+                    <ChevronUp className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={index === favorites.length - 1}
+                    onClick={() => move(index, 1)}
+                  >
+                    <ChevronDown className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onChange(favorites.filter((f) => f.id !== peripheral.id))}
+                  >
+                    <Trash2 className="size-4 text-muted-foreground" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {isFull ? (
+          <p className="rounded-lg border border-dashed border-border/60 p-3 text-center text-xs text-muted-foreground/60">
+            Limite de {limit} favoritos atingido. Remova um para adicionar outro.
+          </p>
+        ) : (
+          <PeripheralPicker
+            excludeIds={favorites.map((f) => f.id)}
+            placeholder="Buscar periférico para favoritar..."
+            onSelect={(peripheral) => onChange([...favorites, peripheral])}
+          />
+        )}
+
+        <p className="text-right text-[11px] text-muted-foreground/60">
+          {favorites.length} de {limit}
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
+/* ───────────────────────── Medalhas ────────────────────────── */
+
+function MedalhasEditor({
+  medals,
+  pinnedIds,
+  limit,
+  onChange,
+}: {
+  medals: ShowcaseMedal[]
+  pinnedIds: string[]
+  limit: number
+  onChange: (ids: string[]) => void
+}) {
+  function toggle(medalId: string) {
+    if (pinnedIds.includes(medalId)) {
+      onChange(pinnedIds.filter((id) => id !== medalId))
+      return
+    }
+    if (pinnedIds.length >= limit) {
+      toast.error(`Você pode destacar no máximo ${limit} medalhas.`)
+      return
+    }
+    onChange([...pinnedIds, medalId])
+  }
+
+  return (
+    <Card className="border-border bg-card/90">
+      <CardHeader className="border-b border-border">
+        <CardTitle className="text-base">Medalhas em destaque</CardTitle>
+        <CardDescription>
+          Escolha até {limit} medalhas para exibir no perfil. Se não escolher nenhuma, as mais
+          recentes aparecem automaticamente.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-6">
+        {medals.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border/60 p-4 text-center text-sm text-muted-foreground/60">
+            Você ainda não conquistou medalhas.
+          </p>
+        ) : (
+          <>
+            <ul className="space-y-2">
+              {medals.map((medal) => {
+                const position = pinnedIds.indexOf(medal.id)
+                const isPinned = position !== -1
+                return (
+                  <li key={medal.id}>
+                    <button
+                      type="button"
+                      onClick={() => toggle(medal.id)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-lg border p-2.5 text-left transition-colors",
+                        isPinned
+                          ? "border-primary/50 bg-primary/5"
+                          : "border-border hover:bg-muted/30"
+                      )}
+                    >
+                      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted/40">
+                        {medal.icon_url ? (
+                          <Image
+                            src={medal.icon_url}
+                            alt={medal.name}
+                            width={28}
+                            height={28}
+                            className="size-7 object-contain"
+                          />
+                        ) : (
+                          <Award className="size-4 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">{medal.name}</p>
+                        {medal.description && (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {medal.description}
+                          </p>
+                        )}
+                      </div>
+                      {isPinned && (
+                        <span className="shrink-0 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+                          {position + 1}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+
+            <p className="text-right text-[11px] text-muted-foreground/60">
+              {pinnedIds.length} de {limit} destacadas · {medals.length} conquistadas
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}

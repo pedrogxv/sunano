@@ -2,15 +2,20 @@
 
 import { useState } from "react"
 import type { ChangeEvent } from "react"
-import { Camera } from "lucide-react"
+import Link from "next/link"
+import { Camera, ExternalLink, ImagePlus } from "lucide-react"
 import { toast } from "sonner"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { coerceAccountTier, canUseAnimatedMedia } from "@/lib/account-tier"
+import { BIO_MAX_LENGTH } from "@/lib/profile-showcase"
 
 export type ProfileData = {
+  id?: string
   email: string | null
   display_name: string
   avatar_url: string | null
@@ -18,6 +23,9 @@ export type ProfileData = {
   locale: string | null
   lgpd_consent_at?: string | null
   lgpd_consent_version?: string | null
+  banner_url?: string | null
+  bio?: string | null
+  account_tier?: string | null
 }
 
 interface ProfileTabProps {
@@ -29,10 +37,19 @@ export function ProfileTab({ profile, onProfileChange }: ProfileTabProps) {
   const [displayName, setDisplayName] = useState(profile.display_name)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatar_url)
+  const [bannerUrl, setBannerUrl] = useState<string | null>(profile.banner_url ?? null)
+  const [bio, setBio] = useState(profile.bio ?? "")
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingBanner, setUploadingBanner] = useState(false)
 
   const previewName = displayName.trim() || (profile.email?.split("@")[0] ?? "Usuário")
+  const tier = coerceAccountTier(profile.account_tier)
+  const allowsGif = canUseAnimatedMedia(tier)
+  // GIF só entra no seletor de arquivos de quem pode usá-lo; a API valida de novo.
+  const imageAccept = allowsGif
+    ? "image/jpeg,image/png,image/webp,image/gif"
+    : "image/jpeg,image/png,image/webp"
 
   async function handleAvatarSelect(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -59,19 +76,46 @@ export function ProfileTab({ profile, onProfileChange }: ProfileTabProps) {
     }
   }
 
+  async function handleBannerSelect(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      setUploadingBanner(true)
+      const body = new FormData()
+      body.append("file", file)
+      const res = await fetch("/api/profile/upload-banner", { method: "POST", body })
+      const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
+      if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
+      setBannerUrl(data.publicUrl)
+      toast.success("Banner enviado")
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : "Erro ao enviar banner"
+      toast.error("Erro ao enviar banner", { description: message })
+    } finally {
+      setUploadingBanner(false)
+    }
+  }
+
   async function save() {
     try {
       setSaving(true)
       const res = await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ display_name: displayName, avatar_url: avatarUrl }),
+        body: JSON.stringify({
+          display_name: displayName,
+          avatar_url: avatarUrl,
+          banner_url: bannerUrl,
+          bio,
+        }),
       })
       const data = (await res.json().catch(() => null)) as { error?: string; profile?: ProfileData } | null
       if (!res.ok || !data?.profile) throw new Error(data?.error ?? "")
       setDisplayName(data.profile.display_name)
       setAvatarUrl(data.profile.avatar_url)
       setAvatarPreview(data.profile.avatar_url)
+      setBannerUrl(data.profile.banner_url ?? null)
+      setBio(data.profile.bio ?? "")
       onProfileChange(data.profile)
       toast.success("Perfil salvo")
     } catch (err) {
@@ -89,6 +133,36 @@ export function ProfileTab({ profile, onProfileChange }: ProfileTabProps) {
         <CardDescription>Seu nome e foto aparecem no fórum e nas suas atividades.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 pt-6">
+        {/* Banner da vitrine pública */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Banner do perfil
+          </label>
+          <label
+            className="relative flex h-28 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/20 transition-colors hover:border-primary/40 sm:h-36"
+            style={bannerUrl ? { backgroundImage: `url(${bannerUrl})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined}
+          >
+            <input
+              type="file"
+              accept={imageAccept}
+              className="hidden"
+              onChange={handleBannerSelect}
+              disabled={uploadingBanner}
+            />
+            <span
+              className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium ${bannerUrl ? "bg-background/80 text-foreground" : "text-muted-foreground"} ${uploadingBanner ? "animate-pulse" : ""}`}
+            >
+              <ImagePlus className="size-4" />
+              {uploadingBanner ? "Enviando..." : bannerUrl ? "Trocar banner" : "Enviar banner"}
+            </span>
+          </label>
+          <p className="text-[10px] text-muted-foreground/60">
+            {allowsGif
+              ? "JPG, PNG, WEBP ou GIF animado até 5MB."
+              : "JPG, PNG ou WEBP até 5MB. GIF animado é exclusivo para membros VIP."}
+          </p>
+        </div>
+
         <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
           <div className="relative shrink-0">
             <Avatar className="size-24 border-2 border-border shadow-lg">
@@ -100,7 +174,7 @@ export function ProfileTab({ profile, onProfileChange }: ProfileTabProps) {
             >
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp"
+                accept={imageAccept}
                 className="hidden"
                 onChange={handleAvatarSelect}
                 disabled={uploading}
@@ -135,8 +209,35 @@ export function ProfileTab({ profile, onProfileChange }: ProfileTabProps) {
           </div>
         </div>
 
-        <div className="flex justify-end border-t border-border pt-4">
-          <Button onClick={save} disabled={saving || uploading} className="min-w-32">
+        <div className="space-y-1.5">
+          <div className="flex items-baseline justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Bio</label>
+            <span className="text-[10px] text-muted-foreground/60">
+              {bio.length}/{BIO_MAX_LENGTH}
+            </span>
+          </div>
+          <Textarea
+            value={bio}
+            onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX_LENGTH))}
+            className="border-border bg-background min-h-20 resize-none"
+            placeholder="Uma linha sobre você — aparece no seu perfil público."
+            maxLength={BIO_MAX_LENGTH}
+          />
+        </div>
+
+        <div className="flex flex-col-reverse gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+          {profile.id ? (
+            <Link
+              href={`/perfil/${profile.id}`}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ExternalLink className="size-3.5" />
+              Ver meu perfil público
+            </Link>
+          ) : (
+            <span />
+          )}
+          <Button onClick={save} disabled={saving || uploading || uploadingBanner} className="min-w-32">
             {saving ? "Salvando..." : "Salvar perfil"}
           </Button>
         </div>

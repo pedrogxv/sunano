@@ -95,6 +95,11 @@ export type UserProfileSettings = {
   locale: string | null
   lgpd_consent_at: string | null
   lgpd_consent_version: string | null
+  /** Campos da vitrine pública (`/perfil/[id]`). */
+  banner_url: string | null
+  bio: string | null
+  /** Somente leitura pelo usuário — definido pela administração. */
+  account_tier: string | null
 }
 
 /** Lê as preferências/identificação do usuário para a página de perfil. */
@@ -104,7 +109,9 @@ export async function getUserProfileSettings(
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("user_profiles")
-    .select("display_name, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version")
+    .select(
+      "display_name, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, bio, account_tier"
+    )
     .eq("id", userId)
     .maybeSingle()
   return (data ?? null) as UserProfileSettings | null
@@ -122,6 +129,8 @@ export async function updateUserProfileSettings(
     avatarUrl?: string | null
     theme?: string | null
     locale?: string | null
+    bannerUrl?: string | null
+    bio?: string | null
   }
 ): Promise<void> {
   const db = createSupabaseAdminClient()
@@ -130,6 +139,8 @@ export async function updateUserProfileSettings(
   if (changes.avatarUrl !== undefined) payload.avatar_url = changes.avatarUrl
   if (changes.theme !== undefined) payload.theme = changes.theme
   if (changes.locale !== undefined) payload.locale = changes.locale
+  if (changes.bannerUrl !== undefined) payload.banner_url = changes.bannerUrl
+  if (changes.bio !== undefined) payload.bio = changes.bio
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
 }

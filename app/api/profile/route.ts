@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import * as z from "zod"
 
+import { coerceAccountTier } from "@/lib/account-tier"
+import { BIO_MAX_LENGTH } from "@/lib/profile-showcase"
 import {
   getUserProfileSettings,
   updateUserProfileSettings,
@@ -17,6 +19,13 @@ const profileSchema = z.object({
   avatar_url: z.string().trim().url("URL da imagem inválida").nullable().optional(),
   theme: z.enum(VALID_THEMES).nullable().optional(),
   locale: z.enum(VALID_LOCALES).nullable().optional(),
+  banner_url: z.string().trim().url("URL do banner inválida").nullable().optional(),
+  bio: z
+    .string()
+    .trim()
+    .max(BIO_MAX_LENGTH, `Bio deve ter no máximo ${BIO_MAX_LENGTH} caracteres`)
+    .nullable()
+    .optional(),
 })
 
 function defaultNameFromEmail(email: string | null | undefined) {
@@ -41,6 +50,7 @@ export async function GET() {
     return NextResponse.json({
       ok: true,
       profile: {
+        id: authData.user.id,
         email,
         display_name: displayName,
         avatar_url: settings?.avatar_url ?? null,
@@ -48,6 +58,9 @@ export async function GET() {
         locale: settings?.locale ?? null,
         lgpd_consent_at: settings?.lgpd_consent_at ?? null,
         lgpd_consent_version: settings?.lgpd_consent_version ?? null,
+        banner_url: settings?.banner_url ?? null,
+        bio: settings?.bio ?? null,
+        account_tier: coerceAccountTier(settings?.account_tier),
       },
     })
   } catch {
@@ -85,6 +98,9 @@ export async function POST(request: Request) {
       avatarUrl: parsed.data.avatar_url,
       theme: parsed.data.theme,
       locale: parsed.data.locale,
+      bannerUrl: parsed.data.banner_url,
+      // Bio vazia é limpeza do campo, não string vazia no banco.
+      bio: parsed.data.bio === undefined ? undefined : parsed.data.bio || null,
     })
 
     const settings = await getUserProfileSettings(authData.user.id)
@@ -92,6 +108,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       profile: {
+        id: authData.user.id,
         email,
         display_name: settings?.display_name?.trim() || defaultNameFromEmail(email),
         avatar_url: settings?.avatar_url ?? null,
@@ -99,6 +116,9 @@ export async function POST(request: Request) {
         locale: settings?.locale ?? null,
         lgpd_consent_at: settings?.lgpd_consent_at ?? null,
         lgpd_consent_version: settings?.lgpd_consent_version ?? null,
+        banner_url: settings?.banner_url ?? null,
+        bio: settings?.bio ?? null,
+        account_tier: coerceAccountTier(settings?.account_tier),
       },
     })
   } catch {

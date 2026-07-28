@@ -11,6 +11,7 @@ import { mapTier } from "@/lib/tier-utils"
 import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
+import { PeripheralLikeToggle } from "@/components/peripherals/PeripheralLikeToggle"
 import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
 import { formatBRL, formatCurrencyBRL } from "@/lib/stripe"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
@@ -533,9 +534,12 @@ export function PeripheralDetailView({
                     )}
                   </div>
 
-                  {rankBadge && (
-                    <RankingCrownBadge position={rankBadge.position} />
-                  )}
+                  <div className="flex shrink-0 items-center gap-2">
+                    {rankBadge && (
+                      <RankingCrownBadge position={rankBadge.position} />
+                    )}
+                    <PeripheralLikeToggle peripheralId={data.id} />
+                  </div>
                 </div>
 
                 <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">

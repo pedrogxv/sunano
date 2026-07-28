@@ -389,6 +389,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      add_favorite_peripheral: {
+        Args: { p_user_id: string; p_peripheral_id: string; p_limit: number }
+        Returns: "liked" | "already_liked" | "limit_reached"
+      }
     }
   }
 }

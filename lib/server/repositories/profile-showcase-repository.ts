@@ -239,6 +239,63 @@ export async function setSetupItem(
   )
 }
 
+/** IDs de todos os periféricos favoritados pelo usuário (sem aplicar limite de tier). */
+export async function getFavoriteIds(userId: string): Promise<string[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_favorite_peripherals")
+    .select("peripheral_id")
+    .eq("user_id", userId)
+
+  if (error) {
+    console.error("[profile-showcase-repository] getFavoriteIds:", error)
+    return []
+  }
+  return (data ?? []).map((r) => (r as { peripheral_id: string }).peripheral_id)
+}
+
+export type AddFavoriteResult = "liked" | "already_liked" | "limit_reached"
+
+/**
+ * Favorita um periférico ao final da lista (coração do card em
+ * `/perifericos`), respeitando o limite do tier.
+ *
+ * A checagem do limite e o insert acontecem dentro da função
+ * `add_favorite_peripheral` porque em duas queries separadas dois likes
+ * simultâneos do mesmo usuário passariam ambos pela verificação e
+ * estourariam o plano (ver `20260728_atomic_favorite_like.sql`). O limite
+ * continua sendo decidido aqui em cima, em `lib/account-tier.ts`.
+ */
+export async function addFavorite(
+  userId: string,
+  peripheralId: string,
+  limit: number
+): Promise<AddFavoriteResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db.rpc("add_favorite_peripheral", {
+    p_user_id: userId,
+    p_peripheral_id: peripheralId,
+    p_limit: limit,
+  })
+
+  if (error) {
+    console.error("[profile-showcase-repository] addFavorite:", error)
+    throw error
+  }
+  return data as AddFavoriteResult
+}
+
+/** Desfavorita um periférico do usuário. Idempotente. */
+export async function removeFavorite(userId: string, peripheralId: string): Promise<void> {
+  const db = createSupabaseAdminClient()
+  await db
+    .from("user_favorite_peripherals")
+    .delete()
+    .eq("user_id", userId)
+    .eq("peripheral_id", peripheralId)
+}
+
 /**
  * Substitui a lista de favoritos do usuário pela informada, na ordem dada.
  * O limite de tier é aplicado pelo chamador (rota `/api`).

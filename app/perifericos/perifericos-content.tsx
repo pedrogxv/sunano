@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowLeftRight, Check, ChevronDown, Edit, Headphones, Keyboard, Layers, LayoutGrid, Monitor, Mouse, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useT } from "@/lib/use-t"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { AnimatedCounter } from "@/components/animated-counter"
+import { LikeButton } from "@/components/peripherals/LikeButton"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
 import { cn } from "@/lib/utils"
@@ -216,6 +217,43 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   useEffect(() => {
     setInitialData(initialDataProp)
   }, [initialDataProp])
+
+  // Favoritos do usuário. O estado vive aqui (e não em cada `LikeButton`)
+  // porque os cards desmontam ao trocar de categoria/filtro — se cada botão
+  // guardasse o próprio estado, voltar à categoria remontaria o coração com
+  // o valor da carga inicial e o like sumiria da tela.
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
+  // A página é ISR (`revalidate = 30`), então o HTML é compartilhado entre
+  // usuários e não pode trazer os favoritos embutidos. Buscá-los no cliente
+  // significa que, por um instante, todo coração apareceria vazio — inclusive
+  // os curtidos. Os botões só entram em cena depois desta resposta.
+  const [likesLoaded, setLikesLoaded] = useState(false)
+  useEffect(() => {
+    let active = true
+    fetch("/api/peripherals/likes", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data: { ids?: string[] }) => {
+        if (active) setLikedIds(new Set(data.ids ?? []))
+      })
+      .catch(() => {
+        // Sem os ids os corações ficam vazios; o clique ainda funciona.
+      })
+      .finally(() => {
+        if (active) setLikesLoaded(true)
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const handleLikedChange = useCallback((peripheralId: string, liked: boolean) => {
+    setLikedIds((prev) => {
+      const next = new Set(prev)
+      if (liked) next.add(peripheralId)
+      else next.delete(peripheralId)
+      return next
+    })
+  }, [])
 
   const [query, setQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("mouse")
@@ -1037,6 +1075,19 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                   >
                     {/* Image area */}
                     <div className="relative overflow-hidden rounded-t-xl border-b border-border bg-muted/10">
+                      {/* A listagem do admin é de gestão do catálogo, não de
+                          consumo — favoritar ali não faz sentido. */}
+                      {!showAdminActions && (
+                        <LikeButton
+                          peripheralId={item.id}
+                          liked={likedIds.has(item.id)}
+                          onLikedChange={handleLikedChange}
+                          className={cn(
+                            "absolute right-2 top-2 transition-opacity duration-200",
+                            likesLoaded ? "opacity-100" : "pointer-events-none opacity-0"
+                          )}
+                        />
+                      )}
                       <div className="relative flex h-36 items-center justify-center">
                         {item.image_url ? (
                           <Image

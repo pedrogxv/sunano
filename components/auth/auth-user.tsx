@@ -32,7 +32,7 @@ interface AuthUserProps {
   isCollapsed?: boolean
   /** Para onde mandar ao logar/deslogar. Sidebar pública usa "/login"; admin, "/admin/login". */
   loginHref?: string
-  /** "public" mostra "Meu perfil" (/perfil); "admin" mostra "Configurações" (/admin/settings). */
+  /** "public" mostra "Configurações da conta" (/perfil); "admin" mostra "Configurações" (/admin/settings). */
   variant?: "public" | "admin"
   /** "sidebar" (padrão) usa o layout de rodapé; "topbar" usa um avatar compacto no canto,
    *  com o menu abrindo para baixo. */

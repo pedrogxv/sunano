@@ -1197,7 +1197,7 @@ export const translations: Record<LocaleCode, Translations> = {
       failedToLoadProfileMsg: "Erro ao carregar perfil",
     },
     auth: {
-      myProfile: "Meu perfil",
+      myProfile: "Configurações da conta",
       adminPanel: "Painel admin",
       signOut: "Sair",
       settings: "Configurações",
@@ -1828,7 +1828,7 @@ export const translations: Record<LocaleCode, Translations> = {
       failedToLoadProfileMsg: "Failed to load profile",
     },
     auth: {
-      myProfile: "My profile",
+      myProfile: "Account settings",
       adminPanel: "Admin panel",
       signOut: "Sign out",
       settings: "Settings",

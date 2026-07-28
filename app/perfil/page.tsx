@@ -60,45 +60,49 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Meu perfil</h1>
-        <p className="text-sm text-muted-foreground">Gerencie sua conta, segurança e preferências.</p>
+    <div className="mx-auto max-w-5xl px-4 py-8 md:px-6">
+      <header className="mb-8">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Configurações da conta</h1>
+        <p className="text-sm text-muted-foreground">Gerencie seu perfil, segurança e preferências.</p>
       </header>
 
-      <div className="mb-6 flex w-fit max-w-full gap-1 overflow-x-auto rounded-lg border border-border bg-muted/40 p-1">
-        {TABS.map(({ key, label, Icon }) => {
-          const active = tab === key
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={cn(
-                "flex shrink-0 items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all",
-                active
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-              )}
-            >
-              <Icon className="size-4" />
-              {label}
-            </button>
-          )
-        })}
-      </div>
+      <div className="flex flex-col gap-6 md:flex-row md:items-start md:gap-10">
+        <nav className="flex gap-1 overflow-x-auto pb-1 md:sticky md:top-6 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:pb-0">
+          {TABS.map(({ key, label, Icon }) => {
+            const active = tab === key
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setTab(key)}
+                className={cn(
+                  "flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all md:shrink",
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                )}
+              >
+                <Icon className="size-[18px] shrink-0" />
+                {label}
+              </button>
+            )
+          })}
+        </nav>
 
-      {tab === "profile" && <ProfileTab profile={profile} onProfileChange={setProfile} />}
-      {tab === "security" && <SecurityTab email={profile.email} />}
-      {tab === "linked" && <LinkedAccountsTab />}
-      {tab === "preferences" && <PreferencesTab />}
-      {tab === "privacidade" && (
-        <PrivacidadeTab
-          email={profile.email}
-          lgpdConsentAt={profile.lgpd_consent_at ?? null}
-          lgpdConsentVersion={profile.lgpd_consent_version ?? null}
-        />
-      )}
+        <div className="min-w-0 flex-1">
+          {tab === "profile" && <ProfileTab profile={profile} onProfileChange={setProfile} />}
+          {tab === "security" && <SecurityTab email={profile.email} />}
+          {tab === "linked" && <LinkedAccountsTab />}
+          {tab === "preferences" && <PreferencesTab />}
+          {tab === "privacidade" && (
+            <PrivacidadeTab
+              email={profile.email}
+              lgpdConsentAt={profile.lgpd_consent_at ?? null}
+              lgpdConsentVersion={profile.lgpd_consent_version ?? null}
+            />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

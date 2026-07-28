@@ -1,21 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { LogOut, Moon, Palette, Sun, Trash2 } from "lucide-react"
+import { LogOut, Moon, Palette, Sun } from "lucide-react"
 import { toast } from "sonner"
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -31,13 +19,11 @@ import { supabaseAuth } from "@/lib/client/supabase-auth"
 import { LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
 
 export function PreferencesTab() {
-  const router = useRouter()
   const { theme, setTheme } = useTheme()
   const isLight = theme === "light"
   const { locale, setLocale } = useLocale()
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
   async function persist(changes: { theme?: string; locale?: string }) {
     try {
@@ -73,22 +59,6 @@ export function PreferencesTab() {
     } catch {
       toast.error("Não foi possível encerrar as sessões.")
       setSigningOut(false)
-    }
-  }
-
-  async function deleteAccount() {
-    try {
-      setDeleting(true)
-      const res = await fetch("/api/profile/delete", { method: "DELETE" })
-      const data = (await res.json().catch(() => null)) as { error?: string; ok?: boolean } | null
-      if (!res.ok || !data?.ok) throw new Error(data?.error ?? "")
-      await supabaseAuth.auth.signOut().catch(() => {})
-      toast.success("Conta excluída")
-      router.replace("/")
-    } catch (err) {
-      const message = err instanceof Error && err.message ? err.message : "Tente novamente."
-      toast.error("Erro ao excluir a conta", { description: message })
-      setDeleting(false)
     }
   }
 
@@ -157,44 +127,6 @@ export function PreferencesTab() {
             <LogOut className="size-4" />
             {signingOut ? "Saindo..." : "Sair de tudo"}
           </Button>
-        </CardContent>
-      </Card>
-
-      {/* ── Zona de perigo ── */}
-      <Card className="border-red-500/30 bg-red-500/5">
-        <CardHeader className="border-b border-red-500/20">
-          <CardTitle className="flex items-center gap-2 text-base text-red-300">
-            <Trash2 className="size-4" />
-            Excluir conta
-          </CardTitle>
-          <CardDescription className="text-red-300/60">
-            Esta ação é permanente e remove seus dados de perfil. Não pode ser desfeita.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-center justify-between gap-3 pt-5">
-          <p className="text-sm text-muted-foreground">Você sairá imediatamente após a exclusão.</p>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" disabled={deleting} className="gap-2 shrink-0 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300" size="sm">
-                <Trash2 className="size-4" />
-                Excluir minha conta
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Excluir sua conta?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Todos os seus dados de perfil serão removidos e você perderá o acesso. Esta ação é permanente.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={deleteAccount} className="bg-red-500 text-white hover:bg-red-600">
-                  Sim, excluir
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </CardContent>
       </Card>
     </div>

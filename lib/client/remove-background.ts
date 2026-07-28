@@ -17,12 +17,15 @@ export interface RemoveBackgroundOptions {
   feather?: number
   /** Maior dimensão (px) da saída; imagens maiores são reduzidas proporcionalmente. */
   maxDimension?: number
+  /** Margem uniforme ao redor do produto após o recorte, em % da maior dimensão do conteúdo. */
+  paddingRatio?: number
 }
 
 const DEFAULTS: Required<RemoveBackgroundOptions> = {
   tolerance: 42,
   feather: 28,
   maxDimension: 2000,
+  paddingRatio: 0.08,
 }
 
 interface RGB {
@@ -39,7 +42,7 @@ export async function removeBackground(
   file: File,
   options: RemoveBackgroundOptions = {}
 ): Promise<File> {
-  const { tolerance, feather, maxDimension } = { ...DEFAULTS, ...options }
+  const { tolerance, feather, maxDimension, paddingRatio } = { ...DEFAULTS, ...options }
 
   const bitmap = await loadBitmap(file)
   // Reduz imagens muito grandes para manter o PNG (com transparência) leve e
@@ -65,9 +68,75 @@ export async function removeBackground(
   applyBackgroundRemoval(image, tolerance, feather)
   ctx.putImageData(image, 0, 0)
 
-  const blob = await canvasToBlob(canvas)
+  // Recorta a área vazia ao redor do produto. Sem isso, o quanto o produto
+  // ocupa da imagem final varia de acordo com a margem da foto original,
+  // fazendo cards do mesmo tamanho exibirem produtos em tamanhos bem diferentes
+  // (ex.: foto com bastante fundo aparece minúscula perto de uma foto "fechada").
+  const finalCanvas = cropToContent(canvas, image, paddingRatio)
+
+  const blob = await canvasToBlob(finalCanvas)
   const name = `${stripExtension(file.name)}.png`
   return new File([blob], name, { type: "image/png" })
+}
+
+/**
+ * Recorta o canvas para o bounding box dos pixels não-transparentes (o
+ * produto em si), com uma margem uniforme ao redor. Devolve o próprio canvas
+ * original se não houver o que recortar (imagem sem fundo removido, ou já
+ * ocupando o quadro inteiro).
+ */
+function cropToContent(
+  canvas: HTMLCanvasElement,
+  image: ImageData,
+  paddingRatio: number
+): HTMLCanvasElement {
+  const bounds = findContentBounds(image)
+  if (!bounds) return canvas
+
+  const contentWidth = bounds.x1 - bounds.x0 + 1
+  const contentHeight = bounds.y1 - bounds.y0 + 1
+  const pad = Math.round(Math.max(contentWidth, contentHeight) * paddingRatio)
+
+  const cropX = Math.max(0, bounds.x0 - pad)
+  const cropY = Math.max(0, bounds.y0 - pad)
+  const cropWidth = Math.min(canvas.width, bounds.x1 + 1 + pad) - cropX
+  const cropHeight = Math.min(canvas.height, bounds.y1 + 1 + pad) - cropY
+
+  // Já ocupa o quadro inteiro (ou quase) — não vale a pena recortar.
+  if (cropWidth >= canvas.width && cropHeight >= canvas.height) return canvas
+
+  const cropped = document.createElement("canvas")
+  cropped.width = cropWidth
+  cropped.height = cropHeight
+  const croppedCtx = cropped.getContext("2d")
+  if (!croppedCtx) return canvas
+
+  croppedCtx.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
+  return cropped
+}
+
+/** Bounding box (inclusivo) dos pixels com alpha acima do ruído do feather das bordas. */
+function findContentBounds(
+  image: ImageData,
+  alphaThreshold = 8
+): { x0: number; y0: number; x1: number; y1: number } | null {
+  const { data, width, height } = image
+  let x0 = width
+  let y0 = height
+  let x1 = -1
+  let y1 = -1
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * 4 + 3] <= alphaThreshold) continue
+      if (x < x0) x0 = x
+      if (x > x1) x1 = x
+      if (y < y0) y0 = y
+      if (y > y1) y1 = y
+    }
+  }
+
+  return x1 < x0 || y1 < y0 ? null : { x0, y0, x1, y1 }
 }
 
 function applyBackgroundRemoval(

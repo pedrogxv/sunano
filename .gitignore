@@ -38,4 +38,7 @@ pnpm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# logs de scripts one-off (ex.: scripts/normalize-peripheral-images.ts)
+/normalize-peripheral-images.*.json
+
 .claude/

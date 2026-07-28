@@ -77,7 +77,10 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
                 src={item.image_url}
                 fill
                 sizes="(max-width: 768px) 30vw, 120px"
-                className="object-contain p-0.5 drop-shadow-[0_3px_6px_rgba(0,0,0,0.45)]"
+                // Contra-filtro pro hover:brightness-150 do card (abaixo). Sem isso,
+                // periféricos claros/brancos estouram pra #fff e "derretem" no hover —
+                // a imagem em si não deve clarear, só o glow/borda ao redor dela.
+                className="object-contain p-0.5 drop-shadow-[0_3px_6px_rgba(0,0,0,0.45)] group-hover:brightness-[.67]"
               />
             ) : (
               <div

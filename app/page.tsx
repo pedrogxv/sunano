@@ -21,6 +21,11 @@ import { cn } from "@/lib/utils"
 
 export const revalidate = 300
 
+// TODO: reativar quando Loja/Bazar estiverem prontos para lançamento.
+// Enquanto false, a seção "Loja & Bazar" fica oculta na Home (o menu lateral
+// e as rotas /loja e /bazar continuam funcionando normalmente).
+const SHOW_STORE_SECTION = false
+
 const CATEGORY_LABELS: Record<string, string> = {
   keyboard: "Teclado",
   mouse: "Mouse",
@@ -222,7 +227,7 @@ export default async function HomePage() {
       )}
 
       {/* ============ LOJA & BAZAR ============ */}
-      {products.length > 0 && (
+      {SHOW_STORE_SECTION && products.length > 0 && (
         <section>
           <SectionHeader
             icon={ShoppingBag}

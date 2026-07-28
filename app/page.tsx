@@ -1,7 +1,6 @@
 import Link from "next/link"
 import {
   ArrowRight,
-  BadgePercent,
   Crown,
   MessageCircle,
   Newspaper,
@@ -9,8 +8,6 @@ import {
   PlayCircle,
   Recycle,
   ShoppingBag,
-  TrendingUp,
-  Trophy,
 } from "lucide-react"
 
 import { AnimatedCounter } from "@/components/animated-counter"
@@ -485,40 +482,6 @@ export default async function HomePage() {
             </div>
           </div>
         )}
-      </section>
-
-      {/* ============ QUICK NAV ============ */}
-      <section>
-        <SectionHeader
-          icon={TrendingUp}
-          title="Explore tudo"
-          subtitle="Atalhos para todas as seções"
-          href="/perifericos"
-          linkLabel="Periféricos"
-        />
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            { href: "/perifericos", icon: Trophy, label: "Periféricos", color: "slate" },
-            { href: "/blog", icon: Newspaper, label: "Reviews", color: "slate" },
-            { href: "/offers", icon: BadgePercent, label: "Ofertas", color: "slate" },
-            { href: "/forum", icon: MessageCircle, label: "Fórum", color: "slate" },
-          ].map((item) => {
-            const Icon = item.icon
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="group flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-accent"
-              >
-                <Icon className="size-5 text-muted-foreground group-hover:text-foreground" />
-                <span className="text-sm font-semibold text-foreground/90 group-hover:text-foreground">
-                  {item.label}
-                </span>
-                <ArrowRight className="ml-auto size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
-              </Link>
-            )
-          })}
-        </div>
       </section>
     </div>
   )

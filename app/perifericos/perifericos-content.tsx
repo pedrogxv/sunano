@@ -975,7 +975,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                           #{index + 1}
                         </span>
                         {item.image_url && (
-                          <Image src={item.image_url} alt={item.name} width={36} height={36} className="size-9 rounded-lg object-cover" />
+                          <Image src={item.image_url} alt={item.name} width={36} height={36} className="size-9 rounded-lg bg-muted/30 object-contain p-0.5" />
                         )}
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>

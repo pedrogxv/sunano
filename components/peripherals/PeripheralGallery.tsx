@@ -51,7 +51,7 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
             fill
             priority
             sizes="(max-width: 1024px) 100vw, 50vw"
-            className="object-cover"
+            className="object-contain p-4"
           />
         </button>
 
@@ -137,11 +137,11 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
                     type="button"
                     onClick={() => setActiveIndex(index)}
                     className={cn(
-                      "relative size-11 shrink-0 overflow-hidden rounded-md border-2 transition",
+                      "relative size-11 shrink-0 overflow-hidden rounded-md border-2 bg-muted/30 transition",
                       index === activeIndex ? "border-primary" : "border-transparent opacity-60 hover:opacity-100",
                     )}
                   >
-                    <Image alt={alt} src={photo} fill sizes="44px" className="object-cover" />
+                    <Image alt={alt} src={photo} fill sizes="44px" className="object-contain p-0.5" />
                   </button>
                 ))}
               </div>

@@ -450,7 +450,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                 <td className="align-middle bg-muted/20">
                   <div className="p-2">
                     {tierRow.items.length > 0 ? (
-                      <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2.5">
+                      <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
                         {tierRow.items.map((item) => (
                           <PeripheralCard key={item.id} {...item} />
                         ))}
@@ -494,7 +494,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                         cards: a cadeia de paddings aninhados consumia ~19% da tela. auto-fill
                         deixa a grade decidir quantas colunas cabem em vez de forçar 3. */}
                     <div className="p-2">
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(78px,1fr))] gap-2">
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
                         {tierRow.items.map((item) => (
                           <PeripheralCard key={item.id} {...item} />
                         ))}
@@ -519,7 +519,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
             </div>
 
             <div className="hidden p-2 md:block">
-              <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2.5">
+              <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
                 {untieredItems.map((item) => (
                   <PeripheralCard key={item.id} {...item} />
                 ))}
@@ -527,7 +527,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
             </div>
 
             <div className="p-2 md:hidden">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(78px,1fr))] gap-2">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
                 {untieredItems.map((item) => (
                   <PeripheralCard key={item.id} {...item} />
                 ))}

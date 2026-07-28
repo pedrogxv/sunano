@@ -25,7 +25,7 @@ const DEFAULTS: Required<RemoveBackgroundOptions> = {
   tolerance: 42,
   feather: 28,
   maxDimension: 2000,
-  paddingRatio: 0.08,
+  paddingRatio: 0.04,
 }
 
 interface RGB {

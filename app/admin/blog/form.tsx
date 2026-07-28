@@ -367,7 +367,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
               <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/30">
                 {selectedPeripheral.image_url
                   // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={selectedPeripheral.image_url} alt={selectedPeripheral.name} className="size-full object-cover" />
+                  ? <img src={selectedPeripheral.image_url} alt={selectedPeripheral.name} className="size-full object-contain p-0.5" />
                   : <span className="text-[10px] font-bold text-muted-foreground">{selectedPeripheral.brand.slice(0, 2).toUpperCase()}</span>}
               </div>
               <div className="min-w-0 flex-1">
@@ -408,7 +408,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
                     <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-muted/30 text-[9px] font-bold text-muted-foreground">
                       {p.image_url
                         // eslint-disable-next-line @next/next/no-img-element
-                        ? <img src={p.image_url} alt={p.name} className="size-full object-cover" />
+                        ? <img src={p.image_url} alt={p.name} className="size-full object-contain p-0.5" />
                         : p.brand.slice(0, 2).toUpperCase()}
                     </div>
                     <div>

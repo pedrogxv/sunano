@@ -25,7 +25,7 @@ import type { Database } from "../lib/database.types"
  */
 
 const BUCKET = "peripherals"
-const PADDING_RATIO = 0.08
+const PADDING_RATIO = 0.04
 const TRIM_THRESHOLD = 10
 // Só reprocessa se o recorte realmente reduzir a área de forma perceptível —
 // evita reupload/troca de URL à toa em fotos que já são bem enquadradas.

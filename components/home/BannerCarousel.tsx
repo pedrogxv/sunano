@@ -1,0 +1,332 @@
+"use client"
+
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import Link from "next/link"
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react"
+
+import { isInternalBannerLink } from "@/lib/banner-link"
+import { cn } from "@/lib/utils"
+
+/**
+ * Carrossel de banners do topo da Home.
+ *
+ * Acessibilidade (o que faz este componente passar em auditoria):
+ * - **Botão de pausa explícito** — WCAG 2.2.2 exige um controle para parar
+ *   conteúdo que se move sozinho por mais de 5s. Hover e foco também pausam,
+ *   mas nenhum dos dois substitui o botão.
+ * - Slides fora de tela ficam `inert`: não recebem foco nem clique.
+ * - Sem rotação automática para quem pediu menos movimento no sistema
+ *   (`prefers-reduced-motion`); a navegação manual continua.
+ * - Setas ←/→ do teclado navegam; troca de slide é anunciada via `aria-live`.
+ *
+ * Cada banner é clicável: caminho interno navega pelo router (`next/link`),
+ * URL externa abre em nova aba.
+ */
+
+export type CarouselBanner = {
+  id: string
+  imageUrl: string
+  imageUrlMobile: string | null
+  linkUrl: string | null
+  altText: string | null
+}
+
+const DEFAULT_INTERVAL_MS = 10_000
+
+/** Deslocamento horizontal mínimo (px) para um arraste virar troca de slide. */
+const SWIPE_THRESHOLD_PX = 40
+
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)"
+
+function subscribeReducedMotion(onChange: () => void) {
+  const query = window.matchMedia(REDUCED_MOTION_QUERY)
+  query.addEventListener("change", onChange)
+  return () => query.removeEventListener("change", onChange)
+}
+
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    subscribeReducedMotion,
+    () => window.matchMedia(REDUCED_MOTION_QUERY).matches,
+    () => false // No servidor não dá para saber; assume movimento permitido.
+  )
+}
+
+/** Imagem do slide + a camada clicável que a envolve (ou não, se não houver link). */
+function BannerSlide({
+  banner,
+  isCurrent,
+  index,
+  total,
+}: {
+  banner: CarouselBanner
+  isCurrent: boolean
+  index: number
+  total: number
+}) {
+  const image = (
+    <picture>
+      {banner.imageUrlMobile && (
+        <source media="(max-width: 767px)" srcSet={banner.imageUrlMobile} />
+      )}
+      <img
+        src={banner.imageUrl}
+        alt={banner.altText ?? ""}
+        // O primeiro banner é o LCP da Home; os demais só carregam quando entram.
+        loading={index === 0 ? "eager" : "lazy"}
+        fetchPriority={index === 0 ? "high" : "auto"}
+        draggable={false}
+        className="size-full object-cover"
+      />
+    </picture>
+  )
+
+  const content = banner.linkUrl ? (
+    isInternalBannerLink(banner.linkUrl) ? (
+      <Link href={banner.linkUrl} className="block size-full" tabIndex={isCurrent ? 0 : -1}>
+        {image}
+      </Link>
+    ) : (
+      <a
+        href={banner.linkUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block size-full"
+        tabIndex={isCurrent ? 0 : -1}
+      >
+        {image}
+      </a>
+    )
+  ) : (
+    image
+  )
+
+  return (
+    <div
+      role="group"
+      aria-roledescription="slide"
+      aria-label={`Banner ${index + 1} de ${total}`}
+      aria-hidden={!isCurrent}
+      inert={!isCurrent}
+      className={cn(
+        "absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none",
+        isCurrent ? "opacity-100" : "pointer-events-none opacity-0"
+      )}
+    >
+      {content}
+    </div>
+  )
+}
+
+/** Seta de navegação lateral. */
+function ArrowButton({
+  side,
+  onClick,
+  label,
+}: {
+  side: "left" | "right"
+  onClick: () => void
+  label: string
+}) {
+  const Icon = side === "left" ? ChevronLeft : ChevronRight
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className={cn(
+        "absolute top-1/2 z-10 hidden -translate-y-1/2 rounded-full bg-black/35 p-2 text-white backdrop-blur-sm transition-all",
+        "hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 sm:block",
+        side === "left" ? "left-3" : "right-3"
+      )}
+    >
+      <Icon className="size-5" />
+    </button>
+  )
+}
+
+export default function BannerCarousel({
+  banners,
+  intervalMs = DEFAULT_INTERVAL_MS,
+  className,
+}: {
+  banners: CarouselBanner[]
+  intervalMs?: number
+  className?: string
+}) {
+  const [current, setCurrent] = useState(0)
+  // Pausa transitória: ponteiro em cima ou foco dentro do carrossel.
+  const [isHoverPaused, setIsHoverPaused] = useState(false)
+  // Pausa deliberada: o visitante apertou o botão. Só ele reverte.
+  const [isStopped, setIsStopped] = useState(false)
+  const prefersReducedMotion = usePrefersReducedMotion()
+
+  const dragStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
+  const suppressClickRef = useRef(false)
+
+  const total = banners.length
+  const shouldAutoRotate =
+    total > 1 && !isHoverPaused && !isStopped && !prefersReducedMotion
+
+  // Se a lista encolher (banner removido no admin), o índice guardado pode
+  // apontar para fora dela — daí o slide exibido ser sempre derivado, não o
+  // estado cru.
+  const currentIndex = current < total ? current : 0
+
+  const goTo = useCallback(
+    (index: number) => {
+      if (total === 0) return
+      setCurrent(((index % total) + total) % total)
+    },
+    [total]
+  )
+
+  useEffect(() => {
+    if (!shouldAutoRotate) return
+
+    const timer = window.setInterval(() => {
+      setCurrent((value) => (value + 1) % total)
+    }, intervalMs)
+
+    return () => window.clearInterval(timer)
+    // `currentIndex` entra na lista de propósito: qualquer navegação manual
+    // reinicia a contagem, em vez de trocar de slide logo em seguida.
+  }, [shouldAutoRotate, total, intervalMs, currentIndex])
+
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      if (total <= 1) return
+      if (event.key === "ArrowRight") {
+        event.preventDefault()
+        goTo(currentIndex + 1)
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault()
+        goTo(currentIndex - 1)
+      }
+    },
+    [currentIndex, goTo, total]
+  )
+
+  // ── Swipe ────────────────────────────────────────────────
+  // O slide inteiro é um link, então um arraste precisa cancelar o clique que
+  // o navegador dispara logo depois — senão deslizar navega sem querer.
+  function onPointerDown(event: React.PointerEvent) {
+    if (event.pointerType === "mouse" && event.button !== 0) return
+    dragStartRef.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
+    suppressClickRef.current = false
+  }
+
+  function onPointerUp(event: React.PointerEvent) {
+    const start = dragStartRef.current
+    dragStartRef.current = null
+    if (!start || start.pointerId !== event.pointerId || total <= 1) return
+
+    const deltaX = event.clientX - start.x
+    const deltaY = event.clientY - start.y
+    // Gesto mais vertical que horizontal é rolagem da página, não swipe.
+    if (Math.abs(deltaX) < SWIPE_THRESHOLD_PX || Math.abs(deltaX) <= Math.abs(deltaY)) return
+
+    suppressClickRef.current = true
+    goTo(currentIndex + (deltaX < 0 ? 1 : -1))
+  }
+
+  function onClickCapture(event: React.MouseEvent) {
+    if (!suppressClickRef.current) return
+    event.preventDefault()
+    event.stopPropagation()
+    suppressClickRef.current = false
+  }
+
+  const dots = useMemo(() => banners.map((banner, index) => ({ id: banner.id, index })), [banners])
+
+  if (total === 0) return null
+
+  const hasControls = total > 1
+
+  return (
+    <section
+      aria-roledescription="carrossel"
+      aria-label="Destaques do Sunano"
+      onMouseEnter={() => setIsHoverPaused(true)}
+      onMouseLeave={() => setIsHoverPaused(false)}
+      onFocusCapture={() => setIsHoverPaused(true)}
+      onBlurCapture={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsHoverPaused(false)
+        }
+      }}
+      onKeyDown={onKeyDown}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={() => {
+        dragStartRef.current = null
+      }}
+      onClickCapture={onClickCapture}
+      className={cn(
+        "relative touch-pan-y overflow-hidden rounded-3xl border border-border bg-card",
+        className
+      )}
+    >
+      {/* Proporção ~3.2:1 no desktop; mais alto no mobile para a arte não virar
+          uma tira fina. A imagem preenche com object-cover nos dois casos. */}
+      <div className="relative aspect-[2/1] w-full sm:aspect-[12/5] md:aspect-[16/5]">
+        {banners.map((banner, index) => (
+          <BannerSlide
+            key={banner.id}
+            banner={banner}
+            index={index}
+            total={total}
+            isCurrent={index === currentIndex}
+          />
+        ))}
+      </div>
+
+      {hasControls && (
+        <>
+          <ArrowButton side="left" label="Banner anterior" onClick={() => goTo(currentIndex - 1)} />
+          <ArrowButton side="right" label="Próximo banner" onClick={() => goTo(currentIndex + 1)} />
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-0">
+            {/* Véu sutil para os controles não sumirem sobre banners claros. */}
+            <div className="h-16 bg-gradient-to-t from-black/45 to-transparent" />
+
+            <div className="pointer-events-auto absolute inset-x-0 bottom-3 flex items-center justify-center gap-2">
+              {dots.map(({ id, index }) => {
+                const isCurrent = index === currentIndex
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => goTo(index)}
+                    aria-label={`Ir para o banner ${index + 1}`}
+                    aria-current={isCurrent}
+                    className={cn(
+                      "h-2 rounded-full transition-all duration-300 motion-reduce:transition-none",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40",
+                      isCurrent ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white/80"
+                    )}
+                  />
+                )
+              })}
+            </div>
+
+            {/* WCAG 2.2.2: controle explícito para parar o movimento. */}
+            <button
+              type="button"
+              onClick={() => setIsStopped((value) => !value)}
+              aria-label={isStopped ? "Retomar rotação dos banners" : "Pausar rotação dos banners"}
+              className="pointer-events-auto absolute bottom-2.5 right-3 rounded-full bg-black/35 p-1.5 text-white backdrop-blur-sm transition-colors hover:bg-black/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+            >
+              {isStopped ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Anúncio de troca de slide para leitores de tela. */}
+      <div aria-live="polite" aria-atomic className="sr-only">
+        {`Banner ${currentIndex + 1} de ${total}`}
+      </div>
+    </section>
+  )
+}

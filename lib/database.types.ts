@@ -378,6 +378,48 @@ export type Database = {
           updated_at?: string
         }
       }
+      home_banners: {
+        Relationships: []
+        Row: {
+          id: string
+          image_url: string
+          image_url_mobile: string | null
+          link_url: string | null
+          alt_text: string | null
+          sort_order: number
+          is_active: boolean
+          starts_at: string | null
+          ends_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          image_url: string
+          image_url_mobile?: string | null
+          link_url?: string | null
+          alt_text?: string | null
+          sort_order?: number
+          is_active?: boolean
+          starts_at?: string | null
+          ends_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          image_url?: string
+          image_url_mobile?: string | null
+          link_url?: string | null
+          alt_text?: string | null
+          sort_order?: number
+          is_active?: boolean
+          starts_at?: string | null
+          ends_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: Record<string, never>
     Functions: {

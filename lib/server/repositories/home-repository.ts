@@ -2,6 +2,7 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getYouTubeChannelFeed } from "@/lib/server/integrations/youtube"
+import { listActiveBanners, type HomeBanner } from "@/lib/server/repositories/banners-repository"
 import { listFeaturedProducts, type FeaturedProduct } from "@/lib/server/repositories/store-repository"
 
 /**
@@ -47,6 +48,7 @@ export type HomeVideo = {
 }
 
 export type HomeData = {
+  banners: HomeBanner[]
   peripherals: HomeTopPeripheral[]
   blog: HomeBlogPost[]
   products: FeaturedProduct[]
@@ -64,6 +66,7 @@ export async function getHomeData(): Promise<HomeData> {
   const db = createSupabaseAdminClient()
 
   const [
+    banners,
     topPeripheralsRes,
     latestBlogRes,
     featuredProducts,
@@ -71,6 +74,9 @@ export async function getHomeData(): Promise<HomeData> {
     ytFeed,
     countsRes,
   ] = await Promise.all([
+    // Banner é conteúdo de vitrine: se a consulta falhar, a Home cai no hero
+    // padrão em vez de derrubar a página inteira.
+    listActiveBanners().catch(() => [] as HomeBanner[]),
     db
       .from("peripherals")
       .select("id, name, brand, image_url, category, tier")
@@ -101,6 +107,7 @@ export async function getHomeData(): Promise<HomeData> {
   ])
 
   return {
+    banners,
     peripherals: (topPeripheralsRes.data ?? []) as unknown as HomeTopPeripheral[],
     blog: (latestBlogRes.data ?? []) as unknown as HomeBlogPost[],
     products: featuredProducts,

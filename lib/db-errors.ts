@@ -59,6 +59,17 @@ const CONSTRAINT_MAP: Record<string, { message: string; field?: string; status?:
     field: "stock",
     status: 400,
   },
+  home_banners_link_url_check: {
+    message:
+      'Link inválido. Use um caminho interno (ex.: "/tierlist") ou uma URL completa começando com http:// ou https://.',
+    field: "link_url",
+    status: 400,
+  },
+  home_banners_schedule_window_check: {
+    message: "A data de fim do agendamento precisa ser posterior à data de início.",
+    field: "ends_at",
+    status: 400,
+  },
 }
 
 const NOT_NULL_FIELD_LABELS: Record<string, string> = {

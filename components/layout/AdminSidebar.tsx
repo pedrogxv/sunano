@@ -6,6 +6,7 @@ import {
   BarChart2,
   BookOpen,
   Eye,
+  GalleryHorizontalEnd,
   Gift,
   Home,
   MessageSquare,
@@ -80,6 +81,7 @@ export function AdminSidebar() {
     {
       label: t.admin.sidebar.content,
       items: [
+        { href: "/admin/banners", label: "Banners da Home",             icon: GalleryHorizontalEnd, permission: "banners_read" },
         { href: "/admin/blog",   label: t.admin.sidebar.newsAndReviews, icon: Newspaper,     permission: "blog_read" },
         { href: "/admin/forum",  label: t.admin.sidebar.forum,          icon: MessageSquare, permission: "forum_read" },
         { href: "/videos",       label: "Vídeos",                       icon: PlaySquare },

@@ -17,10 +17,12 @@ import { useLocale } from "@/components/providers/locale-context"
 import { useTheme } from "@/components/providers/theme-context"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 import { LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
+import { cn } from "@/lib/utils"
+
+const THEME_ICONS = { dark: Moon, light: Sun } as const
 
 export function PreferencesTab() {
-  const { theme, setTheme } = useTheme()
-  const isLight = theme === "light"
+  const { theme, setTheme, themes } = useTheme()
   const { locale, setLocale } = useLocale()
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
@@ -40,8 +42,9 @@ export function PreferencesTab() {
     }
   }
 
-  function onThemeChange(value: string) {
-    setTheme(value as typeof theme)
+  function onThemeChange(value: typeof theme) {
+    if (value === theme) return
+    setTheme(value)
     void persist({ theme: value })
   }
 
@@ -77,19 +80,37 @@ export function PreferencesTab() {
         </CardHeader>
         <CardContent className="grid gap-4 pt-5 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tema</label>
-            <button
-              type="button"
-              onClick={() => onThemeChange(isLight ? "dark" : "light")}
-              className="flex h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40"
-              aria-label={isLight ? "Ativar modo escuro" : "Ativar modo claro"}
+            <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tema</span>
+            {/* Segmentado em vez de um botão isolado: ocupa a mesma largura do
+                select ao lado, então a linha não fica com um vão vazio. */}
+            <div
+              role="radiogroup"
+              aria-label="Tema"
+              className="grid h-8 w-full grid-cols-2 gap-0.5 rounded-lg border border-border bg-muted/30 p-0.5"
             >
-              {isLight ? (
-                <Moon className="size-[15px] text-primary" />
-              ) : (
-                <Sun className="size-[15px] text-primary" />
-              )}
-            </button>
+              {themes.map((option) => {
+                const Icon = THEME_ICONS[option.key]
+                const active = theme === option.key
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => onThemeChange(option.key)}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors",
+                      active
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    <Icon className={cn("size-[15px]", active && "text-primary")} />
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           <div className="space-y-1.5">

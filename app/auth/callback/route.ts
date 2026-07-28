@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
-import { isAdminUser, upsertUserProfileFromAuth } from "@/lib/server/repositories/users-repository"
+import {
+  isAdminUser,
+  resolveAvailableDisplayName,
+  upsertUserProfileFromAuth,
+} from "@/lib/server/repositories/users-repository"
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -57,13 +61,18 @@ export async function GET(request: NextRequest) {
   const { data: authData } = await supabase.auth.getUser()
   if (authData.user) {
     // Garante o perfil do usuário a partir dos metadados do OAuth.
+    // O nome vindo do Google/Discord pode já pertencer a outra conta — e não
+    // dá para parar o login e pedir outro. Entra o primeiro livre derivado
+    // dele ("tried", "tried2"…); o dono ajusta depois em /perfil.
+    const suggestedName =
+      authData.user.user_metadata?.full_name ||
+      authData.user.user_metadata?.name ||
+      authData.user.email?.split("@")[0] ||
+      "User"
+
     await upsertUserProfileFromAuth({
       id: authData.user.id,
-      displayName:
-        authData.user.user_metadata?.full_name ||
-        authData.user.user_metadata?.name ||
-        authData.user.email?.split("@")[0] ||
-        "User",
+      displayName: await resolveAvailableDisplayName(suggestedName, authData.user.id),
       avatarUrl:
         authData.user.user_metadata?.avatar_url ||
         authData.user.user_metadata?.picture ||

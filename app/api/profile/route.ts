@@ -2,9 +2,13 @@ import { NextResponse } from "next/server"
 import * as z from "zod"
 
 import { coerceAccountTier } from "@/lib/account-tier"
+import { dbErrorResponse } from "@/lib/db-errors"
+import { DISPLAY_NAME_MAX_LENGTH, slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { BIO_MAX_LENGTH } from "@/lib/profile-showcase"
 import {
   getUserProfileSettings,
+  isDisplayNameAvailable,
+  resolveAvailableDisplayName,
   updateUserProfileSettings,
 } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
@@ -15,7 +19,11 @@ const VALID_THEMES = ["dark", "light"] as const
 const VALID_LOCALES = ["pt-BR", "en-US"] as const
 
 const profileSchema = z.object({
-  display_name: z.string().trim().max(80, "Nome deve ter no máximo 80 caracteres").optional(),
+  display_name: z
+    .string()
+    .trim()
+    .max(DISPLAY_NAME_MAX_LENGTH, `Nome deve ter no máximo ${DISPLAY_NAME_MAX_LENGTH} caracteres`)
+    .optional(),
   avatar_url: z.string().trim().url("URL da imagem inválida").nullable().optional(),
   theme: z.enum(VALID_THEMES).nullable().optional(),
   locale: z.enum(VALID_LOCALES).nullable().optional(),
@@ -53,6 +61,7 @@ export async function GET() {
         id: authData.user.id,
         email,
         display_name: displayName,
+        display_slug: settings?.display_slug ?? slugifyDisplayName(displayName),
         avatar_url: settings?.avatar_url ?? null,
         theme: settings?.theme ?? null,
         locale: settings?.locale ?? null,
@@ -93,8 +102,32 @@ export async function POST(request: Request) {
         ? parsed.data.display_name.trim() || defaultNameFromEmail(email)
         : undefined
 
+    if (incomingDisplayName !== undefined) {
+      const invalid = validateDisplayName(incomingDisplayName)
+      if (invalid) {
+        return NextResponse.json({ error: invalid, field: "display_name" }, { status: 400 })
+      }
+      // Checagem amigável antes do índice único do banco, que também barra —
+      // aqui a mensagem sai específica em vez de "erro ao salvar".
+      const available = await isDisplayNameAvailable(incomingDisplayName, authData.user.id)
+      if (!available) {
+        return NextResponse.json(
+          { error: "Esse nome já está em uso. Escolha outro.", field: "display_name" },
+          { status: 409 }
+        )
+      }
+    }
+
+    // Perfil que ainda não existe (conta antiga, ou primeira mudança de tema
+    // antes de qualquer edição) nasce com um nome derivado do email em vez do
+    // `user-<id>` que o banco geraria como fallback.
+    const seedName =
+      incomingDisplayName === undefined && !(await getUserProfileSettings(authData.user.id))
+        ? await resolveAvailableDisplayName(defaultNameFromEmail(email), authData.user.id)
+        : undefined
+
     await updateUserProfileSettings(authData.user.id, {
-      displayName: incomingDisplayName,
+      displayName: incomingDisplayName ?? seedName,
       avatarUrl: parsed.data.avatar_url,
       theme: parsed.data.theme,
       locale: parsed.data.locale,
@@ -111,6 +144,7 @@ export async function POST(request: Request) {
         id: authData.user.id,
         email,
         display_name: settings?.display_name?.trim() || defaultNameFromEmail(email),
+        display_slug: settings?.display_slug ?? null,
         avatar_url: settings?.avatar_url ?? null,
         theme: settings?.theme ?? null,
         locale: settings?.locale ?? null,
@@ -121,7 +155,10 @@ export async function POST(request: Request) {
         account_tier: coerceAccountTier(settings?.account_tier),
       },
     })
-  } catch {
-    return NextResponse.json({ error: "Erro ao salvar perfil." }, { status: 500 })
+  } catch (err) {
+    // Corrida entre dois cadastros do mesmo nome: quem perder cai no 23505 do
+    // índice único e recebe 409 com mensagem específica.
+    const { body, status } = dbErrorResponse(err, "Erro ao salvar perfil.")
+    return NextResponse.json(body, { status })
   }
 }

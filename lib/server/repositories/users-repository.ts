@@ -1,5 +1,6 @@
 import "server-only"
 
+import { slugifyDisplayName } from "@/lib/profile-name"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -43,6 +44,66 @@ export async function getUserProfiles(
     map[row.id] = { display_name: row.display_name, avatar_url: row.avatar_url }
   }
   return map
+}
+
+/**
+ * `true` quando o nome ainda está livre. A checagem é pelo slug — é ele que
+ * tem índice único —, então "João Silva" e "joao silva" disputam a mesma vaga.
+ * `exceptUserId` deixa o próprio dono "reservar" o nome que já usa.
+ */
+export async function isDisplayNameAvailable(
+  name: string,
+  exceptUserId?: string
+): Promise<boolean> {
+  const slug = slugifyDisplayName(name)
+  if (!slug) return false
+
+  const db = createSupabaseAdminClient()
+  let query = db.from("user_profiles").select("id").eq("display_slug", slug).limit(1)
+  if (exceptUserId) query = query.neq("id", exceptUserId)
+
+  const { data, error } = await query
+  // Na dúvida (erro de rede/coluna) não liberamos o nome: o índice único do
+  // banco ainda barra a gravação, mas a UI não deve prometer o que não pode.
+  if (error) return false
+  return (data ?? []).length === 0
+}
+
+/**
+ * Primeiro nome livre a partir de `base` — "tried", "tried2", "tried3"…
+ * Usado onde não dá para pedir outro nome ao usuário (login social), nunca
+ * para sobrescrever uma escolha explícita.
+ */
+export async function resolveAvailableDisplayName(
+  base: string,
+  userId: string
+): Promise<string> {
+  const cleaned = base.trim().slice(0, 30)
+  const fallback = `user-${userId.replace(/-/g, "").slice(0, 8)}`
+  const root = slugifyDisplayName(cleaned).length >= 2 ? cleaned : fallback
+
+  if (await isDisplayNameAvailable(root, userId)) return root
+
+  for (let attempt = 2; attempt <= 50; attempt += 1) {
+    const candidate = `${root}${attempt}`
+    if (await isDisplayNameAvailable(candidate, userId)) return candidate
+  }
+  // Improvável: 50 variações ocupadas. O id não colide com nada.
+  return fallback
+}
+
+/** Id do usuário dono de um slug de perfil (`/perfil/<slug>`). */
+export async function findUserIdByDisplaySlug(slug: string): Promise<string | null> {
+  const normalized = slugifyDisplayName(slug)
+  if (!normalized) return null
+
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_profiles")
+    .select("id")
+    .eq("display_slug", normalized)
+    .maybeSingle()
+  return (data as { id: string } | null)?.id ?? null
 }
 
 /** Resumo do perfil administrativo (usado pela sidebar admin). */
@@ -90,12 +151,14 @@ export async function upsertUserProfileFromAuth(params: {
 /** Preferências e identificação editáveis pelo próprio usuário em /perfil. */
 export type UserProfileSettings = {
   display_name: string | null
+  /** Derivado de `display_name` pelo banco — segmento da URL do perfil. */
+  display_slug: string | null
   avatar_url: string | null
   theme: string | null
   locale: string | null
   lgpd_consent_at: string | null
   lgpd_consent_version: string | null
-  /** Campos da vitrine pública (`/perfil/[id]`). */
+  /** Campos da vitrine pública (`/perfil/<slug>`). */
   banner_url: string | null
   bio: string | null
   /** Somente leitura pelo usuário — definido pela administração. */
@@ -110,7 +173,7 @@ export async function getUserProfileSettings(
   const { data } = await db
     .from("user_profiles")
     .select(
-      "display_name, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, bio, account_tier"
+      "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, bio, account_tier"
     )
     .eq("id", userId)
     .maybeSingle()
@@ -121,6 +184,10 @@ export async function getUserProfileSettings(
  * Atualiza (upsert parcial) os campos que o próprio usuário pode editar.
  * Só inclui no payload as chaves informadas, para não sobrescrever colunas
  * existentes com `null`.
+ *
+ * Lança o erro do banco em vez de engoli-lo: o índice único de `display_slug`
+ * é o que impede dois perfis com o mesmo nome, e a rota precisa desse 23505
+ * para responder "nome já em uso" em vez de fingir que salvou.
  */
 export async function updateUserProfileSettings(
   userId: string,
@@ -142,7 +209,8 @@ export async function updateUserProfileSettings(
   if (changes.bannerUrl !== undefined) payload.banner_url = changes.bannerUrl
   if (changes.bio !== undefined) payload.bio = changes.bio
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
+  const { error } = await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
+  if (error) throw error
 }
 
 /**
@@ -232,7 +300,7 @@ export async function upsertUserProfileOnSignup(params: {
   const db = createSupabaseAdminClient()
   const p = params.purchase ?? {}
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (db.from("user_profiles") as any).upsert(
+  const { error } = await (db.from("user_profiles") as any).upsert(
     {
       id: params.id,
       display_name: params.displayName,
@@ -251,6 +319,10 @@ export async function upsertUserProfileOnSignup(params: {
     },
     { onConflict: "id" }
   )
+  // Propaga o 23505 de `display_slug`: o cadastro precisa saber que o nome foi
+  // tomado entre a checagem e a gravação, em vez de criar um usuário no Auth
+  // sem perfil correspondente.
+  if (error) throw error
 }
 
 export type UserDataExport = {

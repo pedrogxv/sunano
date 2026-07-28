@@ -11,12 +11,14 @@ import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { STRONG_PASSWORD_HINT, isLocalhostHost } from "@/lib/password-policy"
+import { DISPLAY_NAME_MAX_LENGTH } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
 
 const REGISTER_ERRORS: Record<string, string> = {
   missing_fields: "Preencha email, senha e nome de exibição.",
   password_mismatch: "As senhas não coincidem.",
   email_in_use: "Já existe uma conta com este email.",
+  display_name_taken: "Esse nome de exibição já está em uso. Escolha outro.",
   signup_failed: "Não foi possível concluir o cadastro. Tente novamente.",
   lgpd_consent_required: "Você precisa aceitar a Política de Privacidade para criar uma conta.",
   too_many_attempts: "Muitas tentativas de cadastro. Aguarde alguns minutos e tente novamente.",
@@ -90,14 +92,20 @@ export function UserRegisterForm() {
       </div>
 
       <form action={action} className="space-y-4">
-        <Field
-          id="display_name"
-          label="Nome de exibição"
-          type="text"
-          autoComplete="nickname"
-          placeholder="Como você quer aparecer"
-          required
-        />
+        <div className="space-y-1.5">
+          <Field
+            id="display_name"
+            label="Nome de exibição"
+            type="text"
+            autoComplete="nickname"
+            placeholder="Como você quer aparecer"
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
+            required
+          />
+          <p className="text-xs text-muted-foreground">
+            É único no site e vira o endereço do seu perfil (ex.: sunano.gg/perfil/seu-nome).
+          </p>
+        </div>
         <Field
           id="email"
           label="Email"

@@ -39,7 +39,7 @@ export function SetupGrid({ setup, isOwner = false }: SetupGridProps) {
 
 function SetupCard({ item, isOwner }: { item: SetupItem; isOwner: boolean }) {
   const { label, Icon } = SLOT_META[item.slot]
-  const title = item.peripheral?.name ?? item.custom_label
+  const title = item.peripheral?.name ?? null
   const isEmpty = !title
 
   const content = (

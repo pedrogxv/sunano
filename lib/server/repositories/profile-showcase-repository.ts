@@ -36,7 +36,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, avatar_url, banner_url, bio, account_tier, created_at"
+  "id, display_name, display_slug, avatar_url, banner_url, bio, account_tier, created_at"
 
 const PERIPHERAL_COLUMNS = "id, name, brand, category, image_url, tier"
 
@@ -68,6 +68,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
   const row = profile as unknown as {
     id: string
     display_name: string | null
+    display_slug: string | null
     avatar_url: string | null
     banner_url: string | null
     bio: string | null
@@ -86,6 +87,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
   return {
     id: row.id,
     display_name: row.display_name?.trim() || defaultNameFrom(row.id),
+    display_slug: row.display_slug,
     avatar_url: row.avatar_url,
     banner_url: row.banner_url,
     bio: row.bio,
@@ -105,17 +107,16 @@ export async function getUserSetup(userId: string): Promise<SetupItem[]> {
 
   const { data, error } = await db
     .from("user_setup_items")
-    .select(`slot, custom_label, peripherals ( ${PERIPHERAL_COLUMNS} )`)
+    .select(`slot, peripherals ( ${PERIPHERAL_COLUMNS} )`)
     .eq("user_id", userId)
 
   if (error) {
     console.error("[profile-showcase-repository] getUserSetup:", error)
-    return SLOTS.map((slot) => ({ slot, peripheral: null, custom_label: null }))
+    return SLOTS.map((slot) => ({ slot, peripheral: null }))
   }
 
   const rows = (data ?? []) as unknown as Array<{
     slot: SetupSlot
-    custom_label: string | null
     peripherals: PeripheralRow | PeripheralRow[] | null
   }>
 
@@ -123,10 +124,10 @@ export async function getUserSetup(userId: string): Promise<SetupItem[]> {
   for (const r of rows) {
     // O join do PostgREST devolve objeto ou array conforme a cardinalidade.
     const peripheral = Array.isArray(r.peripherals) ? (r.peripherals[0] ?? null) : r.peripherals
-    bySlot.set(r.slot, { slot: r.slot, peripheral, custom_label: r.custom_label })
+    bySlot.set(r.slot, { slot: r.slot, peripheral })
   }
 
-  return SLOTS.map((slot) => bySlot.get(slot) ?? { slot, peripheral: null, custom_label: null })
+  return SLOTS.map((slot) => bySlot.get(slot) ?? { slot, peripheral: null })
 }
 
 /** Todas as medalhas conquistadas (sem aplicar limite de tier). */
@@ -211,17 +212,18 @@ export async function getAccountTier(userId: string): Promise<AccountTier> {
   return coerceAccountTier((data as { account_tier?: string } | null)?.account_tier)
 }
 
-/** Define (ou limpa) um slot do setup. */
+/**
+ * Define (ou limpa, com `null`) um slot do setup. Só periférico do catálogo:
+ * o slot guarda uma referência a `peripherals`, nunca um texto do usuário.
+ */
 export async function setSetupItem(
   userId: string,
   slot: SetupSlot,
-  value: { peripheralId?: string | null; customLabel?: string | null }
+  peripheralId: string | null
 ): Promise<void> {
   const db = createSupabaseAdminClient()
-  const peripheralId = value.peripheralId ?? null
-  const customLabel = value.customLabel?.trim() || null
 
-  if (!peripheralId && !customLabel) {
+  if (!peripheralId) {
     await db.from("user_setup_items").delete().eq("user_id", userId).eq("slot", slot)
     return
   }
@@ -232,7 +234,6 @@ export async function setSetupItem(
       user_id: userId,
       slot,
       peripheral_id: peripheralId,
-      custom_label: customLabel,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "user_id,slot" }

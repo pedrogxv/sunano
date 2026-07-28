@@ -92,6 +92,7 @@ const NOT_NULL_FIELD_LABELS: Record<string, string> = {
 const COLUMN_LABELS: Record<string, string> = {
   ...NOT_NULL_FIELD_LABELS,
   display_name: "nome de exibição",
+  display_slug: "nome de exibição",
   cover_image_url: "imagem de capa",
   cover_thumbnail_url: "thumbnail",
   video_url: "URL do vídeo",

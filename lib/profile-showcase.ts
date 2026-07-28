@@ -21,10 +21,13 @@ export type ShowcasePeripheral = {
   tier: string | null
 }
 
+/**
+ * Um slot do setup. Só aceita periférico do catálogo — texto livre foi
+ * removido para o perfil público não virar campo aberto de escrita.
+ */
 export type SetupItem = {
   slot: SetupSlot
   peripheral: ShowcasePeripheral | null
-  custom_label: string | null
 }
 
 export type ShowcaseMedal = {
@@ -42,6 +45,8 @@ export type ShowcaseMedal = {
 export type ProfileShowcase = {
   id: string
   display_name: string
+  /** Slug único do nome — segmento da URL pública (`/perfil/<slug>`). */
+  display_slug: string | null
   avatar_url: string | null
   banner_url: string | null
   bio: string | null

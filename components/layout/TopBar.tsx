@@ -70,6 +70,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/blog":              { title: "Reviews", description: "Reviews completos e análises detalhadas." },
   "/offers":            { title: "Ofertas", description: "Promoções e descontos selecionados do Telegram." },
   "/forum":             { title: "Fórum", description: "Discussões e perguntas da comunidade." },
+  "/perfil":            { title: "Minha conta", description: "Perfil, vitrine, segurança e preferências." },
   "/videos":            { title: "Vídeos", description: "Conteúdo em vídeo do canal." },
   "/changelog":         { title: "Changelog", description: "Histórico de mudanças no site." },
   "/admin":             { title: "Dashboard", description: "Visão geral do painel administrativo." },
@@ -100,6 +101,7 @@ function getPageDefaults(pathname: string): PageDefaults {
   if (pathname.startsWith("/blog/"))             return { title: "Review" }
   if (pathname.startsWith("/forum/"))            return { title: "Fórum" }
   if (pathname.startsWith("/perifericos/"))      return { title: "Periférico" }
+  if (pathname.startsWith("/perfil/"))           return { title: "Perfil", description: "Vitrine pública do membro." }
   return { title: "Sunano" }
 }
 

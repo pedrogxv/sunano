@@ -33,6 +33,8 @@ export type Database = {
         Row: {
           id: string
           display_name: string | null
+          /** Gerado pelo trigger `sync_display_slug` — nunca enviado no Insert. */
+          display_slug: string
           avatar_url: string | null
           full_name: string | null
           cpf: string | null
@@ -54,7 +56,10 @@ export type Database = {
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database["public"]["Tables"]["user_profiles"]["Row"], "created_at" | "updated_at">
+        Insert: Omit<
+          Database["public"]["Tables"]["user_profiles"]["Row"],
+          "created_at" | "updated_at" | "display_slug"
+        >
         Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>
       }
       medals: {
@@ -94,15 +99,13 @@ export type Database = {
         Row: {
           user_id: string
           slot: "mouse" | "keyboard" | "headset" | "monitor" | "mousepad"
-          peripheral_id: string | null
-          custom_label: string | null
+          peripheral_id: string
           updated_at: string
         }
         Insert: {
           user_id: string
           slot: "mouse" | "keyboard" | "headset" | "monitor" | "mousepad"
-          peripheral_id?: string | null
-          custom_label?: string | null
+          peripheral_id: string
           updated_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["user_setup_items"]["Insert"]>

@@ -14,10 +14,11 @@ import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"
 
+// Um slot aponta para um periférico do catálogo ou fica vazio (`null`). Não
+// existe texto livre: o setup é vitrine pública e não campo de escrita aberta.
 const setupItemSchema = z.object({
   slot: z.enum(SETUP_SLOTS),
   peripheral_id: z.string().uuid().nullable().optional(),
-  custom_label: z.string().trim().max(60).nullable().optional(),
 })
 
 // Nome, avatar, banner e bio são editados por `/api/profile`. Aqui ficam
@@ -85,10 +86,7 @@ export async function PATCH(request: Request) {
 
     if (setup) {
       for (const item of setup) {
-        await setSetupItem(userId, item.slot, {
-          peripheralId: item.peripheral_id ?? null,
-          customLabel: item.custom_label ?? null,
-        })
+        await setSetupItem(userId, item.slot, item.peripheral_id ?? null)
       }
     }
 

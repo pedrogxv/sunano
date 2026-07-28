@@ -1,34 +1,44 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { KeyRound, LayoutGrid, Link2, Shield, SlidersHorizontal, User } from "lucide-react"
+import { ExternalLink, ShieldCheck, UserRound } from "lucide-react"
 
-import { LinkedAccountsTab } from "@/components/account/LinkedAccountsTab"
-import { PreferencesTab } from "@/components/account/PreferencesTab"
-import { PrivacidadeTab } from "@/components/account/PrivacidadeTab"
-import { ProfileTab, type ProfileData } from "@/components/account/ProfileTab"
-import { SecurityTab } from "@/components/account/SecurityTab"
-import { VitrineTab } from "@/components/account/VitrineTab"
+import { AccountSection } from "@/components/account/AccountSection"
+import { ProfileSection, type ProfileData } from "@/components/account/ProfileSection"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import BoxLoader from "@/components/ui/box-loader"
+import { getTierCapabilities, coerceAccountTier } from "@/lib/account-tier"
+import { profilePath } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
 
-type TabKey = "profile" | "vitrine" | "security" | "linked" | "preferences" | "privacidade"
+type SectionKey = "perfil" | "conta"
 
-const TABS: { key: TabKey; label: string; Icon: typeof User }[] = [
-  { key: "profile", label: "Perfil", Icon: User },
-  { key: "vitrine", label: "Vitrine", Icon: LayoutGrid },
-  { key: "security", label: "Segurança", Icon: KeyRound },
-  { key: "linked", label: "Contas", Icon: Link2 },
-  { key: "preferences", label: "Preferências", Icon: SlidersHorizontal },
-  { key: "privacidade", label: "Privacidade", Icon: Shield },
+const SECTIONS: { key: SectionKey; label: string; hint: string; Icon: typeof UserRound }[] = [
+  { key: "perfil", label: "Perfil", hint: "Identidade e vitrine pública", Icon: UserRound },
+  {
+    key: "conta",
+    label: "Conta e segurança",
+    hint: "Acesso, preferências e privacidade",
+    Icon: ShieldCheck,
+  },
 ]
+
+function sectionFromHash(): SectionKey {
+  if (typeof window === "undefined") return "perfil"
+  return window.location.hash.replace("#", "").startsWith("conta") ? "conta" : "perfil"
+}
 
 export default function ProfilePage() {
   const router = useRouter()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState<TabKey>("profile")
+  const [section, setSection] = useState<SectionKey>("perfil")
+
+  useEffect(() => {
+    setSection(sectionFromHash())
+  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -53,6 +63,13 @@ export default function ProfilePage() {
     }
   }, [router])
 
+  function selectSection(key: SectionKey) {
+    setSection(key)
+    // Mantém a seção linkável (ex.: /perfil#conta) sem empilhar histórico.
+    window.history.replaceState(null, "", key === "perfil" ? window.location.pathname : `#${key}`)
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
   if (loading || !profile) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -61,50 +78,91 @@ export default function ProfilePage() {
     )
   }
 
+  const name = profile.display_name?.trim() || (profile.email?.split("@")[0] ?? "Usuário")
+  const tierLabel = getTierCapabilities(coerceAccountTier(profile.account_tier)).label
+  // O endereço público é o slug do nome; o UUID fica de reserva para perfis
+  // ainda sem slug (antes da migration rodar).
+  const publicProfileHref = profile.display_slug
+    ? profilePath(profile.display_slug)
+    : profile.id
+      ? `/perfil/${profile.id}`
+      : null
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 md:px-6">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Configurações da conta</h1>
-        <p className="text-sm text-muted-foreground">Gerencie seu perfil, segurança e preferências.</p>
+    <div className="pb-16">
+      {/* Cabeçalho — quem é você, com atalho para o perfil público. */}
+      <header className="mx-auto flex max-w-4xl flex-wrap items-center gap-4 px-4 pt-8 md:px-6">
+        <Avatar className="size-14 border border-border">
+          <AvatarImage src={profile.avatar_url ?? undefined} alt={name} />
+          <AvatarFallback className="text-lg font-bold">
+            {name.slice(0, 1).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="truncate text-xl font-bold tracking-tight text-foreground">{name}</h1>
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {tierLabel}
+            </span>
+          </div>
+          <p className="truncate text-sm text-muted-foreground">{profile.email ?? "-"}</p>
+        </div>
+
+        {publicProfileHref && (
+          <Link
+            href={publicProfileHref}
+            className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          >
+            <ExternalLink className="size-3.5" />
+            Ver perfil público
+          </Link>
+        )}
       </header>
 
-      <div className="flex flex-col gap-6 md:flex-row md:items-start md:gap-10">
-        <nav className="flex gap-1 overflow-x-auto pb-1 md:sticky md:top-6 md:w-56 md:shrink-0 md:flex-col md:overflow-visible md:pb-0">
-          {TABS.map(({ key, label, Icon }) => {
-            const active = tab === key
+      {/* Navegação em abas no topo — sem segunda barra lateral. */}
+      <div className="sticky top-0 z-20 mt-6 border-b border-border bg-card/95 backdrop-blur">
+        <nav className="mx-auto flex max-w-4xl gap-6 overflow-x-auto px-4 md:px-6">
+          {SECTIONS.map(({ key, label, hint, Icon }) => {
+            const active = section === key
             return (
               <button
                 key={key}
                 type="button"
-                onClick={() => setTab(key)}
+                onClick={() => selectSection(key)}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all md:shrink",
-                  active
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                  "group relative flex shrink-0 items-start gap-2.5 py-3 text-left transition-colors",
+                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                <Icon className="size-[18px] shrink-0" />
-                {label}
+                <Icon className="mt-0.5 size-[18px] shrink-0" />
+                <span className="flex flex-col leading-tight">
+                  <span className="text-sm font-semibold">{label}</span>
+                  <span className="hidden text-[11px] text-muted-foreground sm:block">{hint}</span>
+                </span>
+                <span
+                  className={cn(
+                    "absolute inset-x-0 -bottom-px h-0.5 rounded-full transition-opacity",
+                    active ? "bg-foreground opacity-100" : "opacity-0"
+                  )}
+                />
               </button>
             )
           })}
         </nav>
+      </div>
 
-        <div className="min-w-0 flex-1">
-          {tab === "profile" && <ProfileTab profile={profile} onProfileChange={setProfile} />}
-          {tab === "vitrine" && <VitrineTab accountTier={profile.account_tier} />}
-          {tab === "security" && <SecurityTab email={profile.email} />}
-          {tab === "linked" && <LinkedAccountsTab />}
-          {tab === "preferences" && <PreferencesTab />}
-          {tab === "privacidade" && (
-            <PrivacidadeTab
-              email={profile.email}
-              lgpdConsentAt={profile.lgpd_consent_at ?? null}
-              lgpdConsentVersion={profile.lgpd_consent_version ?? null}
-            />
-          )}
-        </div>
+      <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
+        {section === "perfil" ? (
+          <ProfileSection profile={profile} onProfileChange={setProfile} />
+        ) : (
+          <AccountSection
+            email={profile.email}
+            lgpdConsentAt={profile.lgpd_consent_at ?? null}
+            lgpdConsentVersion={profile.lgpd_consent_version ?? null}
+          />
+        )}
       </div>
     </div>
   )

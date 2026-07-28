@@ -5,7 +5,10 @@ import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
 import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
+import { validateDisplayName } from "@/lib/profile-name"
 import {
+  isDisplayNameAvailable,
+  resolveAvailableDisplayName,
   upsertUserProfileOnSignup,
   recordLgpdConsent,
   type PurchaseProfileInput,
@@ -40,6 +43,16 @@ export async function registerUserAction(
 
   if (!email || !password || !displayName) {
     return { error: "missing_fields" }
+  }
+
+  // O nome é único no site (ele vira a URL do perfil). Verificar antes do
+  // signUp evita criar o usuário no Auth e falhar depois, ao gravar o perfil.
+  const invalidName = validateDisplayName(displayName)
+  if (invalidName) {
+    return { error: invalidName }
+  }
+  if (!(await isDisplayNameAvailable(displayName))) {
+    return { error: "display_name_taken" }
   }
 
   const headersList = await headers()
@@ -104,13 +117,26 @@ export async function registerUserAction(
   }
 
   // Cria o perfil com o registro de consentimento LGPD.
-  await upsertUserProfileOnSignup({
-    id: data.user.id,
-    displayName,
-    purchase,
-    lgpdConsentAt: consentAt,
-    lgpdConsentVersion: LGPD_POLICY_VERSION,
-  })
+  try {
+    await upsertUserProfileOnSignup({
+      id: data.user.id,
+      displayName,
+      purchase,
+      lgpdConsentAt: consentAt,
+      lgpdConsentVersion: LGPD_POLICY_VERSION,
+    })
+  } catch {
+    // Alguém tomou o nome entre a checagem e a gravação. O usuário já existe
+    // no Auth: deixá-lo sem perfil quebraria a conta, então entra com um nome
+    // livre derivado do escolhido — dá para trocar depois em /perfil.
+    await upsertUserProfileOnSignup({
+      id: data.user.id,
+      displayName: await resolveAvailableDisplayName(displayName, data.user.id),
+      purchase,
+      lgpdConsentAt: consentAt,
+      lgpdConsentVersion: LGPD_POLICY_VERSION,
+    })
+  }
 
   // Registra o consentimento no audit_log.
   await recordLgpdConsent({

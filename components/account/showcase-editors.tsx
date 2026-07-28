@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Image from "next/image"
 import {
   Award,
@@ -20,12 +20,8 @@ import { toast } from "sonner"
 import { PeripheralPicker } from "./PeripheralPicker"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import BoxLoader from "@/components/ui/box-loader"
-import { useAccountTier } from "@/lib/hooks/use-account-tier"
 import {
   SETUP_SLOTS,
-  type ProfileShowcase,
   type SetupItem,
   type SetupSlot,
   type ShowcaseMedal,
@@ -45,147 +41,14 @@ const SLOT_META: Record<
   mousepad: { label: "Mousepad", Icon: Square, categories: ["mousepad", "glasspad"] },
 }
 
-interface VitrineTabProps {
-  /** Tier vindo de `/api/profile` — evita um segundo carregamento. */
-  accountTier: string | null | undefined
-}
-
-/**
- * Edição da vitrine pública: setup, periféricos favoritos e quais medalhas
- * destacar. Salva via `PATCH /api/profile/showcase`, que reaplica os limites
- * de tier no servidor.
- */
-export function VitrineTab({ accountTier }: VitrineTabProps) {
-  const { favoriteLimit, medalLimit, capabilities } = useAccountTier(accountTier)
-
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [setup, setSetup] = useState<SetupItem[]>([])
-  const [favorites, setFavorites] = useState<ShowcasePeripheral[]>([])
-  const [allMedals, setAllMedals] = useState<ShowcaseMedal[]>([])
-  const [pinnedIds, setPinnedIds] = useState<string[]>([])
-
-  useEffect(() => {
-    let mounted = true
-    async function load() {
-      try {
-        const [showcaseRes, medalsRes] = await Promise.all([
-          fetch("/api/profile/showcase", { cache: "no-store" }),
-          fetch("/api/profile/medals", { cache: "no-store" }),
-        ])
-        const showcaseData = (await showcaseRes.json().catch(() => null)) as
-          | { showcase?: ProfileShowcase }
-          | null
-        const medalsData = (await medalsRes.json().catch(() => null)) as
-          | { medals?: ShowcaseMedal[] }
-          | null
-
-        if (!mounted) return
-
-        if (showcaseData?.showcase) {
-          setSetup(showcaseData.showcase.setup)
-          setFavorites(showcaseData.showcase.favorites)
-        }
-
-        const medals = medalsData?.medals ?? []
-        setAllMedals(medals)
-        setPinnedIds(
-          medals
-            .filter((m) => m.pinned)
-            .sort((a, b) => (a.pinned_order ?? 0) - (b.pinned_order ?? 0))
-            .map((m) => m.id)
-        )
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    }
-    load()
-    return () => {
-      mounted = false
-    }
-  }, [])
-
-  function updateSlot(slot: SetupSlot, changes: Partial<SetupItem>) {
-    setSetup((prev) =>
-      prev.map((item) => (item.slot === slot ? { ...item, ...changes } : item))
-    )
-  }
-
-  async function save() {
-    try {
-      setSaving(true)
-      const res = await fetch("/api/profile/showcase", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          setup: setup.map((item) => ({
-            slot: item.slot,
-            peripheral_id: item.peripheral?.id ?? null,
-            custom_label: item.peripheral ? null : item.custom_label,
-          })),
-          favorites: favorites.map((f) => f.id),
-          pinned_medals: pinnedIds,
-        }),
-      })
-      const data = (await res.json().catch(() => null)) as
-        | { error?: string; showcase?: ProfileShowcase }
-        | null
-      if (!res.ok || !data?.showcase) throw new Error(data?.error ?? "")
-
-      setSetup(data.showcase.setup)
-      setFavorites(data.showcase.favorites)
-      toast.success("Vitrine salva")
-    } catch (err) {
-      const message = err instanceof Error && err.message ? err.message : "Erro ao salvar vitrine"
-      toast.error("Erro ao salvar vitrine", { description: message })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex min-h-64 items-center justify-center">
-        <BoxLoader />
-      </div>
-    )
-  }
-
-  return (
-    <div className="space-y-6">
-      <SetupEditor setup={setup} onChange={updateSlot} />
-
-      <FavoritosEditor
-        favorites={favorites}
-        limit={favoriteLimit}
-        tierLabel={capabilities.label}
-        onChange={setFavorites}
-      />
-
-      <MedalhasEditor
-        medals={allMedals}
-        pinnedIds={pinnedIds}
-        limit={medalLimit}
-        onChange={setPinnedIds}
-      />
-
-      <div className="flex justify-end">
-        <Button onClick={save} disabled={saving} className="min-w-32">
-          {saving ? "Salvando..." : "Salvar vitrine"}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 /* ─────────────────────────── Setup ─────────────────────────── */
 
-function SetupEditor({
+export function SetupEditor({
   setup,
   onChange,
 }: {
   setup: SetupItem[]
-  onChange: (slot: SetupSlot, changes: Partial<SetupItem>) => void
+  onChange: (slot: SetupSlot, peripheral: ShowcasePeripheral | null) => void
 }) {
   const [editing, setEditing] = useState<SetupSlot | null>(null)
 
@@ -194,20 +57,16 @@ function SetupEditor({
       <CardHeader className="border-b border-border">
         <CardTitle className="text-base">Meu setup</CardTitle>
         <CardDescription>
-          Escolha um periférico do catálogo em cada slot — ou escreva o nome, se ainda não estiver
-          cadastrado.
+          Escolha um periférico do catálogo em cada slot. Se o seu ainda não está na wiki, peça o
+          cadastro no fórum.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 pt-6">
         {SETUP_SLOTS.map((slot) => {
-          const item = setup.find((i) => i.slot === slot) ?? {
-            slot,
-            peripheral: null,
-            custom_label: null,
-          }
+          const item = setup.find((i) => i.slot === slot) ?? { slot, peripheral: null }
           const { label, Icon, categories } = SLOT_META[slot]
           const isEditing = editing === slot
-          const filled = item.peripheral?.name ?? item.custom_label
+          const filled = item.peripheral?.name ?? null
 
           return (
             <div key={slot} className="rounded-lg border border-border p-3">
@@ -256,7 +115,7 @@ function SetupEditor({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => onChange(slot, { peripheral: null, custom_label: null })}
+                      onClick={() => onChange(slot, null)}
                     >
                       <Trash2 className="size-4 text-muted-foreground" />
                     </Button>
@@ -271,25 +130,13 @@ function SetupEditor({
                     autoFocus
                     placeholder={`Buscar ${label.toLowerCase()}...`}
                     onSelect={(peripheral) => {
-                      onChange(slot, { peripheral, custom_label: null })
+                      onChange(slot, peripheral)
                       setEditing(null)
                     }}
                   />
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] uppercase tracking-wider text-muted-foreground/60">
-                      ou
-                    </span>
-                    <Input
-                      defaultValue={item.custom_label ?? ""}
-                      placeholder="Escrever o nome manualmente"
-                      maxLength={60}
-                      className="border-border bg-background h-9 text-sm"
-                      onBlur={(e) => {
-                        const value = e.target.value.trim()
-                        if (value) onChange(slot, { peripheral: null, custom_label: value })
-                      }}
-                    />
-                  </div>
+                  <p className="text-[11px] text-muted-foreground/60">
+                    Só periféricos já cadastrados na wiki podem ir para a vitrine.
+                  </p>
                 </div>
               )}
             </div>
@@ -302,7 +149,7 @@ function SetupEditor({
 
 /* ───────────────────────── Favoritos ───────────────────────── */
 
-function FavoritosEditor({
+export function FavoritosEditor({
   favorites,
   limit,
   tierLabel,
@@ -411,7 +258,7 @@ function FavoritosEditor({
 
 /* ───────────────────────── Medalhas ────────────────────────── */
 
-function MedalhasEditor({
+export function MedalhasEditor({
   medals,
   pinnedIds,
   limit,

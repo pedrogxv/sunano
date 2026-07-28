@@ -65,7 +65,7 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
 
           {/* Image area */}
           <div
-            className="relative ml-1.5 h-[68px] overflow-hidden"
+            className="relative ml-1.5 h-[62px] overflow-hidden"
             style={{ background: "var(--card-image-bg)" }}
           >
             {isGoat && (

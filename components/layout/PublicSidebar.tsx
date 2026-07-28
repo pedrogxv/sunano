@@ -125,7 +125,7 @@ export function PublicSidebar() {
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-4">
+        <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-4">
           {/* Brand */}
           <Link
             href="/"

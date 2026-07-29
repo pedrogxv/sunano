@@ -1273,7 +1273,7 @@ export const translations: Record<LocaleCode, Translations> = {
       externalVideo: "Video externo:",
     },
     offers: {
-      title: "Ofertas",
+      title: "Promoções",
       livePill: "Ao vivo · Sunano Telegram",
       disclaimer: "Mensagens publicadas por terceiros e podem mudar. Confirme os preços antes de comprar.",
       refresh: "Atualizar",

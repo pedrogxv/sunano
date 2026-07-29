@@ -24,7 +24,7 @@ const TELEGRAM_URL = "https://t.me/canal_sunano"
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type TelegramOfferImage = {
-  fileId: string
+  url: string
   width: number | null
   height: number | null
 }
@@ -55,10 +55,6 @@ function getInitials(name: string) {
   const first = parts[0]?.[0] ?? ""
   const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : ""
   return `${first}${last}`.toUpperCase()
-}
-
-function mediaUrl(fileId: string) {
-  return `/api/offers/media?fileId=${encodeURIComponent(fileId)}`
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -241,7 +237,7 @@ export default function OffersPage() {
                       <div className="shrink-0">
                         {offer.authorAvatar ? (
                           <Image
-                            src={mediaUrl(offer.authorAvatar.fileId)}
+                            src={offer.authorAvatar.url}
                             alt={offer.author ?? ""}
                             width={44}
                             height={44}
@@ -280,7 +276,7 @@ export default function OffersPage() {
                     <div className="border-y border-border/30 bg-black/20">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={mediaUrl(offer.image.fileId)}
+                        src={offer.image.url}
                         alt={t.offers.offerImage}
                         className="w-full object-cover"
                         loading="lazy"

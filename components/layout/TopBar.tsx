@@ -68,7 +68,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/perifericos":       { title: "Periféricos", description: "Wiki pesquisável com filtros por categoria, marca e preço." },
   "/tierlist":          { title: "Tierlist", description: "Ranking dos melhores periféricos por categoria." },
   "/blog":              { title: "Reviews", description: "Reviews completos e análises detalhadas." },
-  "/offers":            { title: "Ofertas", description: "Promoções e descontos selecionados do Telegram." },
+  "/offers":            { title: "Promoções", description: "Promoções e descontos selecionados do Telegram." },
   "/forum":             { title: "Fórum", description: "Discussões e perguntas da comunidade." },
   "/pessoas":           { title: "Pessoas", description: "Encontre outros membros, veja os destaques e siga quem você curte." },
   "/perfil":            { title: "Meu Perfil", description: "Identidade e vitrine pública." },

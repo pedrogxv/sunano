@@ -2,79 +2,16 @@ import "server-only"
 
 import { unstable_cache } from "next/cache"
 
-type TelegramChat = {
-  id?: number
-  title?: string
-  username?: string
-  type?: string
-}
-
-type TelegramPhotoSize = {
-  file_id?: string
-  width?: number
-  height?: number
-  file_size?: number
-}
-
-type TelegramDocument = {
-  file_id?: string
-  mime_type?: string
-  file_name?: string
-  file_size?: number
-  thumb?: TelegramPhotoSize
-}
-
-type TelegramMessage = {
-  message_id?: number
-  date?: number
-  text?: string
-  caption?: string
-  chat?: TelegramChat
-  photo?: TelegramPhotoSize[]
-  document?: TelegramDocument
-  from?: {
-    id?: number
-    first_name?: string
-    username?: string
-  }
-}
-
-type TelegramUpdate = {
-  update_id?: number
-  message?: TelegramMessage
-  channel_post?: TelegramMessage
-}
-
-type TelegramGetUpdatesResponse = {
-  ok?: boolean
-  result?: TelegramUpdate[]
-  description?: string
-}
-
-type TelegramGetUserProfilePhotosResponse = {
-  ok?: boolean
-  result?: {
-    photos?: TelegramPhotoSize[][]
-  }
-  description?: string
-}
-
-type TelegramGetChatResponse = {
-  ok?: boolean
-  result?: {
-    id?: number
-    title?: string
-    username?: string
-    photo?: {
-      small_file_id?: string
-      big_file_id?: string
-    }
-  }
-  description?: string
-}
+/**
+ * Lê as ofertas direto da página pública de preview do canal (t.me/s/<canal>)
+ * em vez de usar a Bot API (getUpdates). O canal é público e não é operado
+ * por este app — outro serviço já usa esse bot com um webhook próprio, então
+ * getUpdates entra em conflito com ele. Fazer scraping da página pública não
+ * depende de bot nem de token nenhum.
+ */
 
 export type TelegramOfferImage = {
-  fileId: string
+  url: string
   width: number | null
   height: number | null
 }
@@ -97,198 +34,158 @@ export type TelegramOffersResult = {
   warning: string | null
 }
 
-function normalizeChatId(value: string | null | undefined) {
-  if (!value) return null
-  return value.trim()
+type ParsedMessage = {
+  messageId: number
+  date: string
+  text: string
+  image: TelegramOfferImage | null
 }
 
-function buildTelegramMessageUrl(message: TelegramMessage, fallbackUrl: string | null) {
-  const username = message.chat?.username
-  const messageId = message.message_id
-
-  if (!messageId) return fallbackUrl
-  if (username) return `https://t.me/${username}/${messageId}`
-  if (!fallbackUrl) return null
-
-  return `${fallbackUrl.replace(/\/$/, "")}/${messageId}`
+const HTML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
 }
 
-function pickBestPhoto(photos?: TelegramPhotoSize[]) {
-  if (!photos?.length) return null
-
-  return photos.reduce((best, current) => {
-    const bestScore = (best.file_size ?? 0) * 10 + (best.width ?? 0)
-    const currentScore = (current.file_size ?? 0) * 10 + (current.width ?? 0)
-    return currentScore > bestScore ? current : best
-  }, photos[0])
-}
-
-function extractOfferImage(message: TelegramMessage): TelegramOfferImage | null {
-  const bestPhoto = pickBestPhoto(message.photo)
-  if (bestPhoto?.file_id) {
-    return {
-      fileId: bestPhoto.file_id,
-      width: bestPhoto.width ?? null,
-      height: bestPhoto.height ?? null,
+function decodeHtmlEntities(input: string) {
+  return input.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity: string) => {
+    if (entity[0] === "#") {
+      const code = entity[1]?.toLowerCase() === "x" ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10)
+      return Number.isNaN(code) ? match : String.fromCodePoint(code)
     }
-  }
-
-  const document = message.document
-  if (document?.file_id && document.mime_type?.startsWith("image/")) {
-    return {
-      fileId: document.file_id,
-      width: document.thumb?.width ?? null,
-      height: document.thumb?.height ?? null,
-    }
-  }
-
-  return null
+    return HTML_ENTITIES[entity.toLowerCase()] ?? match
+  })
 }
 
-async function fetchChatPhoto(chatId: number, botToken: string): Promise<TelegramOfferImage | null> {
-  const params = new URLSearchParams()
-  params.set("chat_id", String(chatId))
-
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/getChat?${params.toString()}`)
-  const data = (await response.json().catch(() => null)) as TelegramGetChatResponse | null
-
-  if (!response.ok || !data?.ok || !data.result?.photo) {
-    return null
-  }
-
-  const fileId = data.result.photo.big_file_id || data.result.photo.small_file_id
-  if (!fileId) return null
-
-  return { fileId, width: null, height: null }
+function htmlToText(html: string) {
+  return decodeHtmlEntities(html.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "")).trim()
 }
 
-async function fetchUserProfilePhoto(userId: number, botToken: string): Promise<TelegramOfferImage | null> {
-  const params = new URLSearchParams()
-  params.set("user_id", String(userId))
-  params.set("limit", "1")
+function getChannelUsername(): string | null {
+  const configuredChatId = process.env.TELEGRAM_OFFERS_CHAT_ID?.trim()
+  if (configuredChatId?.startsWith("@")) return configuredChatId.slice(1)
 
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/getUserProfilePhotos?${params.toString()}`)
-  const data = (await response.json().catch(() => null)) as TelegramGetUserProfilePhotosResponse | null
+  const publicUrl = process.env.TELEGRAM_OFFERS_PUBLIC_URL?.trim()
+  const match = publicUrl?.match(/t\.me\/(?:s\/)?([a-zA-Z0-9_]+)/)
+  return match?.[1] ?? null
+}
 
-  if (!response.ok || !data?.ok) {
-    return null
-  }
-
-  const firstPhotoSet = data.result?.photos?.[0]
-  const bestPhoto = pickBestPhoto(firstPhotoSet)
-
-  if (!bestPhoto?.file_id) {
-    return null
-  }
-
+function extractChannelMeta(html: string) {
+  const titleMatch = html.match(/<meta property="og:title" content="([^"]*)"/)
+  const imageMatch = html.match(/<meta property="og:image" content="([^"]*)"/)
   return {
-    fileId: bestPhoto.file_id,
-    width: bestPhoto.width ?? null,
-    height: bestPhoto.height ?? null,
+    title: titleMatch ? decodeHtmlEntities(titleMatch[1]) : null,
+    avatarUrl: imageMatch?.[1] ?? null,
   }
+}
+
+function parseChannelPage(html: string, username: string): ParsedMessage[] {
+  const startRe = /<div class="tgme_widget_message[^"]*"\s+data-post="([a-zA-Z0-9_]+)\/(\d+)"/g
+  const starts: { index: number; username: string; messageId: number }[] = []
+
+  let match: RegExpExecArray | null
+  while ((match = startRe.exec(html))) {
+    starts.push({ index: match.index, username: match[1], messageId: Number(match[2]) })
+  }
+
+  const messages: ParsedMessage[] = []
+
+  for (let i = 0; i < starts.length; i++) {
+    const current = starts[i]
+    if (current.username !== username) continue
+
+    const end = i + 1 < starts.length ? starts[i + 1].index : html.length
+    const chunk = html.slice(current.index, end)
+
+    const textMatch = chunk.match(/<div class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/)
+    const text = textMatch ? htmlToText(textMatch[1]) : ""
+    if (!text) continue
+
+    const dateMatch = chunk.match(/<time datetime="([^"]+)"/)
+    const photoMatch = chunk.match(
+      /tgme_widget_message_photo_wrap[^"]*"\s+href="[^"]*"\s+style="width:(\d+)px;background-image:url\('([^']+)'\)"/
+    )
+
+    messages.push({
+      messageId: current.messageId,
+      date: dateMatch ? dateMatch[1] : new Date().toISOString(),
+      text,
+      image: photoMatch ? { url: photoMatch[2], width: Number(photoMatch[1]), height: null } : null,
+    })
+  }
+
+  return messages
+}
+
+async function fetchChannelPage(username: string, before?: number): Promise<string> {
+  const url = new URL(`https://t.me/s/${username}`)
+  if (before) url.searchParams.set("before", String(before))
+
+  const response = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; SunanoOffers/1.0)" },
+    signal: AbortSignal.timeout(8000),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Telegram preview indisponível (HTTP ${response.status}).`)
+  }
+
+  return response.text()
 }
 
 async function fetchTelegramOffers(limit = 30): Promise<TelegramOffersResult> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN?.trim()
-  const configuredChatId = normalizeChatId(process.env.TELEGRAM_OFFERS_CHAT_ID)
-  const fallbackPublicUrl = process.env.TELEGRAM_OFFERS_PUBLIC_URL?.trim() || null
-
-  if (!botToken) {
-    throw new Error("TELEGRAM_BOT_TOKEN não configurado.")
-  }
-
-  if (!configuredChatId) {
-    throw new Error("TELEGRAM_OFFERS_CHAT_ID não configurado.")
-  }
-
-  const params = new URLSearchParams()
-  params.set("limit", "100")
-  params.set("allowed_updates", JSON.stringify(["message", "channel_post"]))
-
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/getUpdates?${params.toString()}`)
-  const data = (await response.json()) as TelegramGetUpdatesResponse
-
-  if (!response.ok || !data.ok) {
-    throw new Error(data.description || `Telegram API error (${response.status})`)
-  }
-
-  const messages = (data.result ?? [])
-    .map((update) => update.message || update.channel_post)
-    .filter((message): message is TelegramMessage => Boolean(message))
-    .filter((message) => {
-      const chat = message.chat
-      if (!chat) return false
-
-      if (configuredChatId.startsWith("@")) {
-        return `@${chat.username || ""}`.toLowerCase() === configuredChatId.toLowerCase()
-      }
-
-      return String(chat.id || "") === configuredChatId
-    })
-    .filter((message) => {
-      const text = (message.text || message.caption || "").trim()
-      return text.length > 0
-    })
-    .sort((a, b) => (b.date || 0) - (a.date || 0))
-
-  const visibleMessages = messages.slice(0, limit)
-
-  const authorIds = Array.from(
-    new Set(
-      visibleMessages
-        .map((message) => message.from?.id)
-        .filter((id): id is number => typeof id === "number")
+  const username = getChannelUsername()
+  if (!username) {
+    throw new Error(
+      "Canal público do Telegram não configurado. Defina TELEGRAM_OFFERS_PUBLIC_URL (ex: https://t.me/seucanal)."
     )
-  )
-  const authorAvatarMap = new Map<number, TelegramOfferImage | null>()
+  }
 
-  const chatIdsWithoutAuthor = Array.from(
-    new Set(
-      visibleMessages
-        .filter((m) => !m.from?.id && typeof m.chat?.id === "number")
-        .map((m) => m.chat!.id!)
-    )
-  )
-  const chatPhotoMap = new Map<number, TelegramOfferImage | null>()
+  const collected: ParsedMessage[] = []
+  let before: number | undefined
+  let channelTitle: string | null = null
+  let channelAvatarUrl: string | null = null
 
-  await Promise.all([
-    ...authorIds.map(async (authorId) => {
-      const avatar = await fetchUserProfilePhoto(authorId, botToken)
-      authorAvatarMap.set(authorId, avatar)
-    }),
-    ...chatIdsWithoutAuthor.map(async (chatId) => {
-      const photo = await fetchChatPhoto(chatId, botToken)
-      chatPhotoMap.set(chatId, photo)
-    }),
-  ])
+  const MAX_PAGES = 4
+  for (let page = 0; page < MAX_PAGES && collected.length < limit; page++) {
+    const html = await fetchChannelPage(username, before)
 
-  const offers = visibleMessages.map((message) => {
-    const text = (message.text || message.caption || "").trim()
-    const date = message.date ? new Date(message.date * 1000).toISOString() : new Date().toISOString()
-    const image = extractOfferImage(message)
-    const authorId = message.from?.id ?? null
-    const chatId = message.chat?.id ?? null
-
-    return {
-      id: `telegram-${message.message_id || Math.random().toString(36).slice(2)}`,
-      messageId: message.message_id || 0,
-      text,
-      date,
-      author: message.from?.first_name || message.from?.username || message.chat?.title || null,
-      authorAvatar: authorId
-        ? (authorAvatarMap.get(authorId) ?? null)
-        : chatId
-          ? (chatPhotoMap.get(chatId) ?? null)
-          : null,
-      chatTitle: message.chat?.title || null,
-      url: buildTelegramMessageUrl(message, fallbackPublicUrl),
-      image,
+    if (page === 0) {
+      const meta = extractChannelMeta(html)
+      channelTitle = meta.title
+      channelAvatarUrl = meta.avatarUrl
     }
-  })
+
+    const pageMessages = parseChannelPage(html, username)
+    if (pageMessages.length === 0) break
+
+    collected.push(...pageMessages)
+    before = pageMessages[0].messageId
+  }
+
+  const sorted = collected.sort((a, b) => b.messageId - a.messageId).slice(0, limit)
+  const authorAvatar: TelegramOfferImage | null = channelAvatarUrl
+    ? { url: channelAvatarUrl, width: null, height: null }
+    : null
+
+  const offers: TelegramOffer[] = sorted.map((message) => ({
+    id: `telegram-${message.messageId}`,
+    messageId: message.messageId,
+    text: message.text,
+    date: message.date,
+    author: channelTitle,
+    authorAvatar,
+    chatTitle: channelTitle,
+    url: `https://t.me/${username}/${message.messageId}`,
+    image: message.image,
+  }))
 
   const warning =
     offers.length === 0
-      ? "Nenhuma mensagem encontrada no grupo configurado. Verifique se o bot está no grupo e com permissões de leitura."
+      ? "Nenhuma mensagem encontrada no canal configurado. Verifique se o nome de usuário está correto."
       : null
 
   return {
@@ -300,7 +197,7 @@ async function fetchTelegramOffers(limit = 30): Promise<TelegramOffersResult> {
 
 const getCachedTelegramOffers = unstable_cache(
   async (limit: number) => fetchTelegramOffers(limit),
-  ["telegram-offers-v1"],
+  ["telegram-offers-v2"],
   { revalidate: 300 }
 )
 

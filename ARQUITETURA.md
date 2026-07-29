@@ -215,3 +215,17 @@ Para saber quem é o usuário ou ler o perfil, use `GET /api/auth/me`.
 - Erros de lint **pré-existentes** (`@typescript-eslint/no-explicit-any` etc.) em
   partes não tocadas do código não foram corrigidos nesta refatoração — não
   introduza novos.
+- **Ofertas (`/offers`) não usa a Bot API do Telegram.** O bot do canal
+  `canal_sunano` não é de uso exclusivo do Sunano — outro serviço externo já
+  registrou um webhook nele (confirmado em 2026-07-29), e a Bot API recusa
+  `getUpdates` (polling) enquanto qualquer webhook estiver ativo nesse token.
+  Por isso `lib/server/integrations/telegram-offers.ts` lê as ofertas fazendo
+  parse da página pública do canal (`https://t.me/s/<canal>`, o mesmo mecanismo
+  usado pelo widget oficial de embed do Telegram), sem precisar de bot/token
+  nenhum — `TELEGRAM_BOT_TOKEN` não é mais usado em lugar algum do projeto.
+  **Convenção:** não reintroduza `getUpdates`/`setWebhook`/`deleteWebhook` nesse
+  arquivo, nem rotacione esse token, sem confirmar antes — pode quebrar a
+  integração de terceiros que já usa esse bot. Se o parsing de HTML quebrar
+  (Telegram mudar o markup do preview), conserte o parser em
+  `telegram-offers.ts`; a alternativa mais robusta a médio prazo, se viável, é
+  um bot dedicado do Sunano como admin do canal (Bot API oficial, sem scraping).

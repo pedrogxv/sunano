@@ -160,7 +160,7 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-primary" />
-              <span><strong className="text-foreground">Correção:</strong> atualize nome, avatar e dados de compra na aba <em>Perfil</em>.</span>
+              <span><strong className="text-foreground">Correção:</strong> atualize nome, avatar e bio na aba <em>Perfil</em>. Para corrigir CPF, telefone ou endereço, envie um e-mail para <a href="mailto:privacidade@sunano.gg" className="text-foreground underline underline-offset-2">privacidade@sunano.gg</a>.</span>
             </li>
             <li className="flex items-start gap-2">
               <span className="mt-0.5 size-1.5 shrink-0 rounded-full bg-primary" />

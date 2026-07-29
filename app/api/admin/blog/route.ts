@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 const blogPostSchema = z
   .object({
-    id: z.string().optional(),
+    id: z.string().uuid().optional(),
     post_type: z.enum(["news", "review"]).default("review"),
     peripheral_id: z.string().nullable().optional(),
     title: z.string().min(5, "Título deve ter no mínimo 5 caracteres"),

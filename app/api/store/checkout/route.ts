@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getStripe } from "@/lib/server/integrations/stripe"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser } from "@/lib/server/auth/current-user"
+import { dbErrorResponse } from "@/lib/db-errors"
 
 interface CheckoutItem {
   productId: string
@@ -47,7 +48,10 @@ export async function POST(request: NextRequest) {
       .select("id, name, price_cents, stock, images, type, condition, is_active")
       .in("id", productIds)
 
-    if (dbError) throw dbError
+    if (dbError) {
+      const { body, status } = dbErrorResponse(dbError, "Não foi possível carregar os produtos do carrinho.")
+      return NextResponse.json(body, { status })
+    }
 
     if (!products || products.length !== productIds.length) {
       return NextResponse.json({ error: "Um ou mais produtos não encontrados" }, { status: 404 })
@@ -142,9 +146,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ url: session.url })
   } catch (err) {
     console.error("Checkout error:", err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erro interno" },
-      { status: 500 }
-    )
+    const { body, status } = dbErrorResponse(err, "Não foi possível finalizar a compra. Tente novamente.")
+    return NextResponse.json(body, { status })
   }
 }

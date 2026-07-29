@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { isMfaStepUpRequired } from "@/lib/auth-mfa"
+import { isMfaStepUpRequired, sanitizeNextPath } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import {
   hasRecordedLgpdConsent,
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code")
   const tokenHash = searchParams.get("token_hash")
   const type = searchParams.get("type")
-  const next = searchParams.get("next") ?? "/forum"
+  const next = sanitizeNextPath(searchParams.get("next"))
 
   const supabase = await createSupabaseServerClient()
 

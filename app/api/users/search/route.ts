@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
+import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import {
   getFollowedIdsAmong,
   searchUserProfiles,
@@ -9,13 +10,26 @@ import {
 export const dynamic = "force-dynamic"
 
 /**
- * Busca de perfis pelo nome de exibição. Como `/api/users/directory`, devolve
- * também quais dos resultados o usuário logado já segue.
+ * Busca de perfis pelo nome de exibição. Pública (usada em /pessoas por
+ * visitantes anônimos), por isso não exige login — só limita a taxa para
+ * não virar um scraping/DoS barato do diretório inteiro. Como
+ * `/api/users/directory`, devolve também quais dos resultados o usuário
+ * logado já segue.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const query = searchParams.get("q") ?? ""
   const limit = Math.min(Number(searchParams.get("limit")) || 10, 24)
+
+  const rateLimit = await checkRateLimit({
+    action: "users_search",
+    identifier: getClientIdentifier(request),
+    maxAttempts: 30,
+    windowSeconds: 60,
+  })
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Muitas buscas seguidas. Aguarde um instante." }, { status: 429 })
+  }
 
   try {
     const profiles = await searchUserProfiles(query, limit)

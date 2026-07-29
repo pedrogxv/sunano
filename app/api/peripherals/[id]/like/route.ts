@@ -7,6 +7,7 @@ import {
   getAccountTier,
   removeFavorite,
 } from "@/lib/server/repositories/profile-showcase-repository"
+import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"
@@ -23,7 +24,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * reaplicado nesta rota porque a fronteira da API não confia no estado
  * otimista do cliente.
  */
-export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ error: "Periférico inválido." }, { status: 400 })
@@ -35,6 +36,16 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "Sessão expirada. Entre novamente." }, { status: 401 })
   }
   const userId = authData.user.id
+
+  const rateLimit = await checkRateLimit({
+    action: "peripheral_like",
+    identifier: getClientIdentifier(request),
+    maxAttempts: 60,
+    windowSeconds: 60,
+  })
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Aguarde um pouco antes de curtir novamente." }, { status: 429 })
+  }
 
   const exists = await peripheralsExist([id])
   if (!exists) {
@@ -56,7 +67,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
   return NextResponse.json({ ok: true, liked: true })
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!UUID_RE.test(id)) {
     return NextResponse.json({ error: "Periférico inválido." }, { status: 400 })
@@ -66,6 +77,16 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   const { data: authData } = await supabase.auth.getUser()
   if (!authData.user) {
     return NextResponse.json({ error: "Sessão expirada. Entre novamente." }, { status: 401 })
+  }
+
+  const rateLimit = await checkRateLimit({
+    action: "peripheral_like",
+    identifier: getClientIdentifier(request),
+    maxAttempts: 60,
+    windowSeconds: 60,
+  })
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Aguarde um pouco antes de tentar novamente." }, { status: 429 })
   }
 
   await removeFavorite(authData.user.id, id)

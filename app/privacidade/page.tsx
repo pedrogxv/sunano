@@ -167,8 +167,8 @@ export default function PrivacidadePage() {
 
           <h3>Telegram (ofertas)</h3>
           <p>
-            O Sunano lê mensagens públicas de um grupo de ofertas via bot do Telegram. Nenhum dado
-            seu é enviado ao Telegram.
+            O Sunano lê as ofertas diretamente da página pública de um canal do Telegram (sem usar
+            bot, token ou qualquer credencial). Nenhum dado seu é enviado ao Telegram.
           </p>
 
           <h3>YouTube (vídeos)</h3>
@@ -205,8 +205,9 @@ export default function PrivacidadePage() {
               rastreabilidade de operações sobre dados pessoais (Art. 37 da LGPD).
             </li>
             <li>
-              <strong>Eventos de limitação de taxa (rate limit):</strong> excluídos automaticamente
-              em até 2 horas.
+              <strong>Eventos de limitação de taxa (rate limit):</strong> tornam-se elegíveis para
+              remoção 2 horas após o registro e são excluídos na rotina de expurgo diária seguinte
+              (ou seja, permanecem no banco por até ~24 horas após completarem as 2 horas).
             </li>
           </ul>
           <p className="text-xs text-muted-foreground">
@@ -239,7 +240,13 @@ export default function PrivacidadePage() {
           <p>Como titular de dados, você tem os seguintes direitos, exercíveis a qualquer momento:</p>
           <ul>
             <li><strong>Confirmação e acesso</strong> — saber se tratamos seus dados e consultá-los.</li>
-            <li><strong>Correção</strong> — atualizar dados incompletos, inexatos ou desatualizados em <Link href="/perfil" className="text-primary hover:underline">/perfil</Link>.</li>
+            <li>
+              <strong>Correção</strong> — atualizar nome, avatar, banner e bio em{" "}
+              <Link href="/perfil" className="text-primary hover:underline">/perfil</Link>. Para corrigir
+              CPF, telefone ou endereço, envie um e-mail para{" "}
+              <a href="mailto:privacidade@sunano.gg" className="text-primary hover:underline">privacidade@sunano.gg</a>
+              {" "}— esses campos ainda não têm edição self-service pela interface.
+            </li>
             <li>
               <strong>Anonimização, bloqueio ou eliminação</strong> — remover dados desnecessários ou
               excessivos. Use a opção de exclusão de conta em{" "}

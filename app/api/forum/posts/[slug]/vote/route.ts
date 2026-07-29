@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
+import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { setForumVote } from "@/lib/server/repositories/forum-repository"
 
 const voteSchema = z.object({
@@ -17,6 +18,16 @@ export async function POST(
   const user = await getRequestUser(request)
   if (!user) {
     return NextResponse.json({ error: "Você precisa estar logado para votar." }, { status: 401 })
+  }
+
+  const rateLimit = await checkRateLimit({
+    action: "forum_vote",
+    identifier: getClientIdentifier(request),
+    maxAttempts: 60,
+    windowSeconds: 60,
+  })
+  if (!rateLimit.allowed) {
+    return NextResponse.json({ error: "Aguarde um pouco antes de votar novamente." }, { status: 429 })
   }
 
   const parsed = voteSchema.safeParse(await request.json().catch(() => null))

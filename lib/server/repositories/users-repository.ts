@@ -644,6 +644,13 @@ export type UserDataExport = {
   profile: {
     display_name: string | null
     avatar_url: string | null
+    banner_url: string | null
+    mini_banner_url: string | null
+    bio: string | null
+    theme: string | null
+    locale: string | null
+    account_tier: string | null
+    profile_views: number | null
     full_name: string | null
     cpf: string | null
     phone: string | null
@@ -683,6 +690,12 @@ export type UserDataExport = {
   following: Array<{ user_id: string; created_at: string }>
   /** Perfis que seguem este usuário. */
   followers: Array<{ user_id: string; created_at: string }>
+  /** Setup exibido no perfil (mouse, teclado, headset, monitor, mousepad). */
+  setup_items: Array<{ slot: string; peripheral_id: string; updated_at: string }>
+  /** Periféricos curtidos/favoritados. */
+  favorite_peripherals: Array<{ peripheral_id: string; position: number; created_at: string }>
+  /** Medalhas conquistadas. */
+  medals: Array<{ medal_id: string; awarded_at: string; pinned: boolean; pinned_order: number | null }>
 }
 
 /**
@@ -694,11 +707,21 @@ export async function getUserDataExport(
 ): Promise<UserDataExport> {
   const db = createSupabaseAdminClient()
 
-  const [profileRes, postsRes, commentsRes, ordersRes, followingRes, followersRes] = await Promise.all([
+  const [
+    profileRes,
+    postsRes,
+    commentsRes,
+    ordersRes,
+    followingRes,
+    followersRes,
+    setupRes,
+    favoritesRes,
+    medalsRes,
+  ] = await Promise.all([
     db
       .from("user_profiles")
       .select(
-        "display_name, avatar_url, full_name, cpf, phone, postal_code, street, number, complement, neighborhood, city, state, lgpd_consent_at, lgpd_consent_version, created_at, updated_at"
+        "display_name, avatar_url, banner_url, mini_banner_url, bio, theme, locale, account_tier, profile_views, full_name, cpf, phone, postal_code, street, number, complement, neighborhood, city, state, lgpd_consent_at, lgpd_consent_version, created_at, updated_at"
       )
       .eq("id", userId)
       .maybeSingle(),
@@ -725,6 +748,20 @@ export async function getUserDataExport(
     (db.from("user_follows") as any)
       .select("follower_id, created_at")
       .eq("following_id", userId),
+    db
+      .from("user_setup_items")
+      .select("slot, peripheral_id, updated_at")
+      .eq("user_id", userId),
+    db
+      .from("user_favorite_peripherals")
+      .select("peripheral_id, position, created_at")
+      .eq("user_id", userId)
+      .order("position", { ascending: true }),
+    db
+      .from("user_medals")
+      .select("medal_id, awarded_at, pinned, pinned_order")
+      .eq("user_id", userId)
+      .order("awarded_at", { ascending: false }),
   ])
 
   // Log da exportação (Art. 37 — rastreabilidade)
@@ -756,5 +793,11 @@ export async function getUserDataExport(
       user_id: r.follower_id as string,
       created_at: r.created_at as string,
     })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setup_items: (setupRes.data as any[]) ?? [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    favorite_peripherals: (favoritesRes.data as any[]) ?? [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    medals: (medalsRes.data as any[]) ?? [],
   }
 }

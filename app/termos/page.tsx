@@ -55,7 +55,10 @@ export default function TermosPage() {
             <li>Você deve fornecer informações verdadeiras e atualizadas no cadastro.</li>
             <li>É responsável pela confidencialidade de sua senha e pelo acesso à sua conta.</li>
             <li>Não é permitido compartilhar, vender ou transferir sua conta a terceiros.</li>
-            <li>Menores de 13 anos não podem criar conta. Entre 13 e 18 anos, é necessário consentimento dos responsáveis.</li>
+            <li>
+              Ao criar uma conta, você declara ter pelo menos 13 anos. Se tiver entre 13 e 18 anos,
+              declara possuir o consentimento de seus responsáveis legais para usar a plataforma.
+            </li>
             <li>
               O Sunano pode suspender ou encerrar contas que violem estes Termos, sem aviso prévio
               em casos de violação grave.

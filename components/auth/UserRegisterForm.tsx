@@ -17,7 +17,6 @@ import { cn } from "@/lib/utils"
 const REGISTER_ERRORS: Record<string, string> = {
   missing_fields: "Preencha email, senha e nome de exibição.",
   password_mismatch: "As senhas não coincidem.",
-  email_in_use: "Já existe uma conta com este email.",
   display_name_taken: "Esse nome de exibição já está em uso. Escolha outro.",
   signup_failed: "Não foi possível concluir o cadastro. Tente novamente.",
   lgpd_consent_required: "Você precisa aceitar a Política de Privacidade para criar uma conta.",

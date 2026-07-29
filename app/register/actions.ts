@@ -106,7 +106,9 @@ export async function registerUserAction(
 
   if (error) {
     if (/already registered|already exists|User already/i.test(error.message)) {
-      return { error: "email_in_use" }
+      // Não revela que o email já está cadastrado (evita enumeração de contas) —
+      // responde com o mesmo estado de um cadastro novo pendente de confirmação.
+      return { error: null, needsConfirmation: true }
     }
     return { error: "signup_failed" }
   }

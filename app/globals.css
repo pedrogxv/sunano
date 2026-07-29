@@ -272,3 +272,30 @@ button,
   0%, 100% { transform: translate(0, 0) scale(1); }
   50%      { transform: translate(-1.5rem, -1rem) scale(1.1); }
 }
+
+/* Item "Promoções" da sidebar — texto em gradiente de fogo + glow no ícone */
+@keyframes fire-text-flow {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+.nav-fire-text {
+  background-image: linear-gradient(90deg, #ff5f1f, #ffb703, #ff3d00, #ff8f00);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: fire-text-flow 3s ease-in-out infinite;
+}
+
+.nav-fire-icon {
+  color: #ff6a1f;
+  filter: drop-shadow(0 0 3px oklch(0.7 0.2 40 / 0.7));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-fire-text {
+    animation: none;
+    background-position: 35% 50%;
+  }
+}

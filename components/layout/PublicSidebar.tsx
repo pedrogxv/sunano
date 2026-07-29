@@ -46,11 +46,13 @@ function NavLink({
   isActive,
   collapsed,
   onClick,
+  fire = false,
 }: {
   item: NavItem
   isActive: boolean
   collapsed: boolean
   onClick: () => void
+  fire?: boolean
 }) {
   const Icon = item.icon
   return (
@@ -65,8 +67,8 @@ function NavLink({
           : "text-foreground/75 hover:bg-muted hover:text-foreground"
       )}
     >
-      <Icon className="size-[18px] shrink-0" />
-      <span className={cn(collapsed && "hidden")}>{item.label}</span>
+      <Icon className={cn("size-[18px] shrink-0", fire && "nav-fire-icon")} />
+      <span className={cn(collapsed && "hidden", fire && "nav-fire-text")}>{item.label}</span>
     </Link>
   )
 }
@@ -249,6 +251,7 @@ export function PublicSidebar() {
               isActive={isActive("/offers")}
               collapsed={isCollapsed}
               onClick={close}
+              fire
             />
           </div>
         </nav>

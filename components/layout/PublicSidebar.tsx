@@ -46,13 +46,11 @@ function NavLink({
   isActive,
   collapsed,
   onClick,
-  fire = false,
 }: {
   item: NavItem
   isActive: boolean
   collapsed: boolean
   onClick: () => void
-  fire?: boolean
 }) {
   const Icon = item.icon
   return (
@@ -67,8 +65,8 @@ function NavLink({
           : "text-foreground/75 hover:bg-muted hover:text-foreground"
       )}
     >
-      <Icon className={cn("size-[18px] shrink-0", fire && "nav-fire-icon")} />
-      <span className={cn(collapsed && "hidden", fire && "nav-fire-text")}>{item.label}</span>
+      <Icon className="size-[18px] shrink-0" />
+      <span className={cn(collapsed && "hidden")}>{item.label}</span>
     </Link>
   )
 }
@@ -245,14 +243,25 @@ export function PublicSidebar() {
               )}
             </Link>
 
-            {/* Ofertas */}
-            <NavLink
-              item={{ href: "/offers", label: t.nav.offers, icon: BadgePercent }}
-              isActive={isActive("/offers")}
-              collapsed={isCollapsed}
+            {/* Promoções */}
+            <Link
+              href="/offers"
               onClick={close}
-              fire
-            />
+              className={cn(
+                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                isCollapsed && "justify-center",
+                isActive("/offers")
+                  ? "bg-orange-600 text-white shadow-sm shadow-orange-900/40"
+                  : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
+              )}
+            >
+              <BadgePercent
+                className={cn("size-[18px] shrink-0", !isActive("/offers") && "nav-fire-icon")}
+              />
+              <span className={cn(isCollapsed && "hidden", !isActive("/offers") && "nav-fire-text")}>
+                {t.nav.offers}
+              </span>
+            </Link>
           </div>
         </nav>
 

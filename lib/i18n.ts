@@ -587,6 +587,7 @@ type Translations = {
   }
   auth: {
     myProfile: string
+    accountSettings: string
     adminPanel: string
     signOut: string
     settings: string
@@ -676,14 +677,14 @@ export const translations: Record<LocaleCode, Translations> = {
     nav: {
       home: "Início",
       peripherals: "Periféricos",
-      content: "Conteúdo",
+      content: "Comunidade",
       shop: "Loja",
-      news: "Notícias",
+      news: "Avisos",
       videos: "Vídeos",
       forum: "Fórum",
       store: "Loja",
       used: "Usado",
-      offers: "Ofertas",
+      offers: "Promoções",
       people: "Pessoas",
     },
     common: {
@@ -1245,7 +1246,8 @@ export const translations: Record<LocaleCode, Translations> = {
       failedToLoadProfileMsg: "Erro ao carregar perfil",
     },
     auth: {
-      myProfile: "Configurações da conta",
+      myProfile: "Meu Perfil",
+      accountSettings: "Configurações da conta",
       adminPanel: "Painel admin",
       signOut: "Sair",
       settings: "Configurações",
@@ -1385,14 +1387,14 @@ export const translations: Record<LocaleCode, Translations> = {
     nav: {
       home: "Home",
       peripherals: "Peripherals",
-      content: "Content",
+      content: "Community",
       shop: "Shop",
-      news: "News",
+      news: "Notices",
       videos: "Videos",
       forum: "Forum",
       store: "Store",
       used: "Used",
-      offers: "Offers",
+      offers: "Deals",
       people: "People",
     },
     common: {
@@ -1954,7 +1956,8 @@ export const translations: Record<LocaleCode, Translations> = {
       failedToLoadProfileMsg: "Failed to load profile",
     },
     auth: {
-      myProfile: "Account settings",
+      myProfile: "My Profile",
+      accountSettings: "Account settings",
       adminPanel: "Admin panel",
       signOut: "Sign out",
       settings: "Settings",

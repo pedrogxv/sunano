@@ -44,7 +44,7 @@ export function LinkedAccountsTab() {
   async function link(provider: ProviderKey) {
     try {
       setBusy(provider)
-      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent("/perfil")}`
+      const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent("/conta#conexoes")}`
       const { error } = await supabaseAuth.auth.linkIdentity({ provider, options: { redirectTo } })
       // Em caso de sucesso o navegador é redirecionado; o código abaixo só roda em falha.
       if (error) throw error

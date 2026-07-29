@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { useEffect, useState } from "react"
 import type { ChangeEvent } from "react"
-import { Camera, Crown, ImagePlus } from "lucide-react"
+import { Camera, Crown } from "lucide-react"
 import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
@@ -99,9 +99,6 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   const imageAccept = animatedMedia
     ? "image/jpeg,image/png,image/webp,image/gif"
     : "image/jpeg,image/png,image/webp"
-  const mediaHint = animatedMedia
-    ? "JPG, PNG, WEBP ou GIF animado até 5MB."
-    : "JPG, PNG ou WEBP até 5MB. GIF animado é exclusivo para membros VIP."
   // O preview passa pelas mesmas regras de tier do perfil público: um GIF de
   // conta comum aparece parado aqui, exatamente como vai aparecer lá.
   const bannerPreview = resolveProfileMedia(bannerUrl, tier)
@@ -340,11 +337,6 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     <div className="space-y-8">
       {/* ── Identidade ── */}
       <section className="space-y-4">
-        <SectionHeading
-          title="Identidade"
-          description="Nome, foto e bio — é assim que você aparece no fórum e no perfil público."
-        />
-
         <Card className="border-border bg-card/90 overflow-hidden">
           <CardContent className="space-y-6 pt-6">
             {/* Banner: preview da página de perfil inteira — a capa aparece no
@@ -365,28 +357,15 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 imageAccept={imageAccept}
                 uploadingAvatar={uploading}
                 onAvatarChange={handleAvatarSelect}
+                uploadingBanner={uploadingBanner}
+                onBannerChange={handleBannerSelect}
               />
-
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <UploadButton
-                  accept={imageAccept}
-                  uploading={uploadingBanner}
-                  onChange={handleBannerSelect}
-                  label={bannerUrl ? "Trocar banner" : "Enviar banner"}
-                />
-                <p className="text-[10px] text-muted-foreground/60">
-                  {mediaHint} A foto de perfil é trocada pela câmera, no preview.
-                </p>
-              </div>
             </div>
 
             {/* Mini banner: preview no formato de card do próprio site — é
                 onde a faixa aparece atrás da foto, em /pessoas. */}
             <div className="space-y-2">
-              <PreviewLabel
-                label="Mini banner"
-                hint="A faixa curta atrás da sua foto no card de /pessoas."
-              />
+              <PreviewLabel label="Foto de Perfil" />
 
               <MiniBannerCardPreview
                 miniBanner={miniBannerPreview}
@@ -394,17 +373,12 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 name={previewName}
                 isVip={isVip}
                 accentHue={accentHue}
+                imageAccept={imageAccept}
+                uploadingAvatar={uploading}
+                onAvatarChange={handleAvatarSelect}
+                uploadingMiniBanner={uploadingMiniBanner}
+                onMiniBannerChange={handleMiniBannerSelect}
               />
-
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <UploadButton
-                  accept={imageAccept}
-                  uploading={uploadingMiniBanner}
-                  onChange={handleMiniBannerSelect}
-                  label={miniBannerUrl ? "Trocar mini banner" : "Enviar mini banner"}
-                />
-                <p className="text-[10px] text-muted-foreground/60">{mediaHint}</p>
-              </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -474,7 +448,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       {/* ── Vitrine ── */}
       <section className="space-y-4">
         <SectionHeading
-          title="Vitrine"
+          title="Meu Espaço"
           description="Setup, favoritos e medalhas em destaque no seu perfil público."
         />
 
@@ -535,39 +509,14 @@ function SectionHeading({ title, description }: { title: string; description: st
   )
 }
 
-function PreviewLabel({ label, hint }: { label: string; hint: string }) {
+function PreviewLabel({ label, hint }: { label: string; hint?: string }) {
   return (
     <div className="space-y-0.5">
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
-      <p className="text-[11px] text-muted-foreground/70">{hint}</p>
+      {hint && <p className="text-[11px] text-muted-foreground/70">{hint}</p>}
     </div>
-  )
-}
-
-function UploadButton({
-  accept,
-  uploading,
-  onChange,
-  label,
-}: {
-  accept: string
-  uploading: boolean
-  onChange: (event: ChangeEvent<HTMLInputElement>) => void
-  label: string
-}) {
-  return (
-    <label
-      className={cn(
-        "inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/40",
-        uploading && "animate-pulse"
-      )}
-    >
-      <input type="file" accept={accept} className="hidden" onChange={onChange} disabled={uploading} />
-      <ImagePlus className="size-3.5" />
-      {uploading ? "Enviando..." : label}
-    </label>
   )
 }
 
@@ -586,6 +535,8 @@ function ProfilePagePreview({
   imageAccept,
   uploadingAvatar,
   onAvatarChange,
+  uploadingBanner,
+  onBannerChange,
 }: {
   banner: ProfileMedia
   miniBanner: ProfileMedia
@@ -596,6 +547,8 @@ function ProfilePagePreview({
   imageAccept: string
   uploadingAvatar: boolean
   onAvatarChange: (event: ChangeEvent<HTMLInputElement>) => void
+  uploadingBanner: boolean
+  onBannerChange: (event: ChangeEvent<HTMLInputElement>) => void
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -616,6 +569,22 @@ function ProfilePagePreview({
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-card/70 to-transparent" />
+        <label
+          className={cn(
+            "absolute bottom-2 right-2 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
+            uploadingBanner ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
+          )}
+          title="Trocar banner"
+        >
+          <input
+            type="file"
+            accept={imageAccept}
+            className="hidden"
+            onChange={onBannerChange}
+            disabled={uploadingBanner}
+          />
+          <Camera className="size-3.5 text-primary-foreground" />
+        </label>
       </div>
 
       <div className="flex flex-col items-center px-4 pb-4">
@@ -712,12 +681,22 @@ function MiniBannerCardPreview({
   name,
   isVip,
   accentHue,
+  imageAccept,
+  uploadingAvatar,
+  onAvatarChange,
+  uploadingMiniBanner,
+  onMiniBannerChange,
 }: {
   miniBanner: ProfileMedia
   avatarSrc: string | null
   name: string
   isVip: boolean
   accentHue: number
+  imageAccept: string
+  uploadingAvatar: boolean
+  onAvatarChange: (event: ChangeEvent<HTMLInputElement>) => void
+  uploadingMiniBanner: boolean
+  onMiniBannerChange: (event: ChangeEvent<HTMLInputElement>) => void
 }) {
   return (
     <div className="flex justify-center rounded-xl border border-border bg-muted/10 p-4">
@@ -743,17 +722,51 @@ function MiniBannerCardPreview({
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
+          <label
+            className={cn(
+              "absolute bottom-2 right-2 flex size-7 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
+              uploadingMiniBanner ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
+            )}
+            title="Trocar mini banner"
+          >
+            <input
+              type="file"
+              accept={imageAccept}
+              className="hidden"
+              onChange={onMiniBannerChange}
+              disabled={uploadingMiniBanner}
+            />
+            <Camera className="size-3 text-primary-foreground" />
+          </label>
         </div>
 
         <div className="-mt-11 flex flex-col items-center px-3 pb-3">
-          <Avatar
-            className={cn("size-[86px] ring-4", isVip ? "ring-amber-400/70" : "ring-background")}
-          >
-            <AvatarImage src={avatarSrc ?? undefined} alt={name} />
-            <AvatarFallback className="text-xl font-bold">
-              {name.slice(0, 1).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative">
+            <Avatar
+              className={cn("size-[86px] ring-4", isVip ? "ring-amber-400/70" : "ring-background")}
+            >
+              <AvatarImage src={avatarSrc ?? undefined} alt={name} />
+              <AvatarFallback className="text-xl font-bold">
+                {name.slice(0, 1).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <label
+              className={cn(
+                "absolute -bottom-1 -right-1 flex size-7 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
+                uploadingAvatar ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
+              )}
+              title="Trocar foto de perfil"
+            >
+              <input
+                type="file"
+                accept={imageAccept}
+                className="hidden"
+                onChange={onAvatarChange}
+                disabled={uploadingAvatar}
+              />
+              <Camera className="size-3 text-primary-foreground" />
+            </label>
+          </div>
 
           <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
             <span className="truncate">{name}</span>

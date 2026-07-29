@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { LayoutDashboard, LogIn, LogOut, MoreVertical, Settings, User } from "lucide-react"
+import { LayoutDashboard, LogIn, LogOut, MoreVertical, Settings, ShieldCheck, User } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -32,7 +32,7 @@ interface AuthUserProps {
   isCollapsed?: boolean
   /** Para onde mandar ao logar/deslogar. Sidebar pública usa "/login"; admin, "/admin/login". */
   loginHref?: string
-  /** "public" mostra "Configurações da conta" (/perfil); "admin" mostra "Configurações" (/admin/settings). */
+  /** "public" mostra "Meu Perfil" (/perfil) e "Configurações da conta" (/conta); "admin" mostra "Configurações" (/admin/settings). */
   variant?: "public" | "admin"
   /** "sidebar" (padrão) usa o layout de rodapé; "topbar" usa um avatar compacto no canto,
    *  com o menu abrindo para baixo. */
@@ -213,6 +213,15 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               >
                 <User className="size-4 text-muted-foreground" />
                 {t.auth.myProfile}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/conta"
+                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
+              >
+                <ShieldCheck className="size-4 text-muted-foreground" />
+                {t.auth.accountSettings}
               </Link>
             </DropdownMenuItem>
             {isAdmin && (

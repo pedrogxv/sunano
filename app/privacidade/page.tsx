@@ -239,11 +239,11 @@ export default function PrivacidadePage() {
             <li>
               <strong>Anonimização, bloqueio ou eliminação</strong> — remover dados desnecessários ou
               excessivos. Use a opção de exclusão de conta em{" "}
-              <Link href="/perfil#conta" className="text-primary hover:underline">/perfil → Conta e segurança → Privacidade e dados</Link>.
+              <Link href="/conta#privacidade" className="text-primary hover:underline">/conta → Privacidade e dados</Link>.
             </li>
             <li>
               <strong>Portabilidade</strong> — exportar seus dados em formato estruturado (JSON) em{" "}
-              <Link href="/perfil#conta" className="text-primary hover:underline">/perfil → Conta e segurança → Exportar meus dados</Link>.
+              <Link href="/conta#privacidade" className="text-primary hover:underline">/conta → Privacidade e dados → Exportar meus dados</Link>.
             </li>
             <li>
               <strong>Informação sobre compartilhamento</strong> — saber com quais entidades seus dados

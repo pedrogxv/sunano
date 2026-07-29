@@ -1,12 +1,12 @@
 "use client"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
-import { ProfileSection } from "@/components/account/ProfileSection"
+import { AccountSection } from "@/components/account/AccountSection"
 import BoxLoader from "@/components/ui/box-loader"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 
-export default function ProfilePage() {
-  const { profile, setProfile, loading } = useOwnProfile()
+export default function ContaPage() {
+  const { profile, loading } = useOwnProfile()
 
   if (loading || !profile) {
     return (
@@ -21,7 +21,11 @@ export default function ProfilePage() {
       <AccountPageHeader profile={profile} />
 
       <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
-        <ProfileSection profile={profile} onProfileChange={setProfile} />
+        <AccountSection
+          email={profile.email}
+          lgpdConsentAt={profile.lgpd_consent_at ?? null}
+          lgpdConsentVersion={profile.lgpd_consent_version ?? null}
+        />
       </div>
     </div>
   )

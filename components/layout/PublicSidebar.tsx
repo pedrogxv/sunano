@@ -103,9 +103,9 @@ export function PublicSidebar() {
 
   const contentItems: NavItem[] = [
     { href: "/noticias", label: t.nav.news,    icon: Newspaper },
-    { href: "/blog",     label: "Reviews",     icon: BookOpen },
-    { href: "/videos",   label: t.nav.videos,  icon: PlaySquare },
+    { href: "/blog",     label: "Guias",       icon: BookOpen },
     { href: "/forum",    label: t.nav.forum,   icon: MessageCircle },
+    { href: "/videos",   label: t.nav.videos,  icon: PlaySquare },
     { href: "/pessoas",  label: t.nav.people,  icon: Users },
   ]
 

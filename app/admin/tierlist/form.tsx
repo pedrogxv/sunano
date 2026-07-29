@@ -2663,6 +2663,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           linkedStore={linkedStore}
           linkedBazaar={linkedBazaar}
           linkedSwitch={linkedSwitch}
+          rankingHref="/admin/ranking"
         />
       </div>
     </aside>

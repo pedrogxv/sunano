@@ -218,27 +218,42 @@ type Translations = {
       signOut: string
     }
     dashboard: {
-      organizationArea: string
-      whatToDo: string
-      description: string
-      quickShortcuts: string
-      quickSummary: string
-      usefulTips: string
-      addTierListItem: string
-      createTierListItem: string
-      viewTierList: string
-      organizeTierList: string
-      writePost: string
-      publishUpdates: string
-      tierListItems: string
-      tierListItemsDesc: (count: number) => string
-      contentLabel: string
-      contentDesc: string
-      visitorExperience: string
-      visitorExperienceDesc: string
-      tipSimple: string
-      tipImages: string
-      tipReview: string
+      title: string
+      subtitle: string
+      greetingMorning: string
+      greetingAfternoon: string
+      greetingEvening: string
+      liveLabel: string
+      overview: string
+      quickActions: string
+      needsAttention: string
+      allCaughtUp: string
+      statPeripherals: string
+      statPeripheralsCaption: (count: number) => string
+      statBlog: string
+      statBlogCaption: (count: number) => string
+      statForum: string
+      statForumCaption: (count: number) => string
+      statStore: string
+      statStoreCaption: (count: number) => string
+      statOffers: string
+      statOffersCaption: string
+      statBanners: string
+      statBannersCaption: (active: number, max: number) => string
+      attentionPendingReview: (count: number) => string
+      attentionDrafts: (count: number) => string
+      attentionOutOfStock: (count: number) => string
+      actionNewPeripheral: string
+      actionOrganizeTierList: string
+      actionWritePost: string
+      actionModerateForum: string
+      actionViewOffers: string
+      actionNewProduct: string
+      actionBanners: string
+      actionRanking: string
+      actionVideos: string
+      actionUsers: string
+      actionSettings: string
     }
     blog: {
       failedToLoad: string
@@ -624,10 +639,29 @@ type Translations = {
   changelog: {
     title: string
     description: string
-    betaDate: string
-    betaTitle: string
-    betaDescription: string
-    betaItems: string[]
+    entries: {
+      version: string
+      date: string
+      title: string
+      description: string
+      items: string[]
+    }[]
+  }
+  errorPages: {
+    notFoundTitle: string
+    notFoundBody: string
+    errorTitle: string
+    errorBody: string
+    errorDigest: (digest: string) => string
+    backHome: string
+    backDashboard: string
+    goBack: string
+    tryAgain: string
+    quickLinks: string
+    linkPeripherals: string
+    linkTierlist: string
+    linkBlog: string
+    linkForum: string
   }
 }
 
@@ -843,30 +877,42 @@ export const translations: Record<LocaleCode, Translations> = {
         signOut: "Sair",
       },
       dashboard: {
-        organizationArea: "Área de organização",
-        whatToDo: "O que você quer fazer hoje?",
-        description: "Escolha uma ação rápida abaixo para atualizar o site, publicar conteúdo ou revisar o que já está no ar.",
-        quickShortcuts: "Atalhos rápidos",
-        quickSummary: "Resumo rápido",
-        usefulTips: "Dicas úteis",
-        addTierListItem: "Adicionar item da Tier List",
-        createTierListItem: "Crie um novo item da tier list",
-        viewTierList: "Ver Tier List",
-        organizeTierList: "Organize o ranking atual",
-        writePost: "Escrever post",
-        publishUpdates: "Publique novidades e análises",
-        tierListItems: "Itens da Tier List",
-        tierListItemsDesc: (count) =>
-          count === 0
-            ? "Nenhum item pendente de revisão."
-            : `${count} ${count === 1 ? "item" : "itens"} marcado${count === 1 ? "" : "s"} para revisão ou complemento.`,
-        contentLabel: "Conteúdo",
-        contentDesc: "Você pode criar novos posts ou atualizar os existentes.",
-        visitorExperience: "Experiência do visitante",
-        visitorExperienceDesc: "Quando terminar, volte ao site para conferir como ficou para o público.",
-        tipSimple: "Mantenha os nomes e descrições simples para facilitar a leitura.",
-        tipImages: "Use imagens e textos curtos para deixar a página mais agradável.",
-        tipReview: "Revise antes de publicar para evitar retrabalho.",
+        title: "Dashboard",
+        subtitle: "Visão geral do site e atalhos para o que você usa com mais frequência.",
+        greetingMorning: "Bom dia",
+        greetingAfternoon: "Boa tarde",
+        greetingEvening: "Boa noite",
+        liveLabel: "Dados em tempo real",
+        overview: "Visão geral",
+        quickActions: "Ações rápidas",
+        needsAttention: "Precisa de atenção",
+        allCaughtUp: "Tudo em dia por aqui.",
+        statPeripherals: "Periféricos",
+        statPeripheralsCaption: (count) => (count === 0 ? "tudo revisado" : `${count} pendente${count === 1 ? "" : "s"}`),
+        statBlog: "Blog",
+        statBlogCaption: (count) => `${count} rascunho${count === 1 ? "" : "s"}`,
+        statForum: "Fórum",
+        statForumCaption: (count) => `${count} oculto${count === 1 ? "" : "s"}`,
+        statStore: "Loja & Bazar",
+        statStoreCaption: (count) => (count === 0 ? "estoque ok" : `${count} sem estoque`),
+        statOffers: "Ofertas",
+        statOffersCaption: "últimos 30 dias",
+        statBanners: "Banners",
+        statBannersCaption: (active, max) => `${active}/${max} ativos`,
+        attentionPendingReview: (count) => `${count} periférico${count === 1 ? "" : "s"} pendente${count === 1 ? "" : "s"} de revisão`,
+        attentionDrafts: (count) => `${count} rascunho${count === 1 ? "" : "s"} de blog aguardando publicação`,
+        attentionOutOfStock: (count) => `${count} produto${count === 1 ? "" : "s"} fora de estoque`,
+        actionNewPeripheral: "Novo periférico",
+        actionOrganizeTierList: "Organizar Tier List",
+        actionWritePost: "Escrever post",
+        actionModerateForum: "Moderar fórum",
+        actionViewOffers: "Ver ofertas",
+        actionNewProduct: "Novo produto",
+        actionBanners: "Banners da home",
+        actionRanking: "Ranking",
+        actionVideos: "Vídeos",
+        actionUsers: "Usuários",
+        actionSettings: "Configurações",
       },
       blog: {
         failedToLoad: "Erro ao carregar artigos",
@@ -1251,16 +1297,81 @@ export const translations: Record<LocaleCode, Translations> = {
     },
     changelog: {
       title: "Changelog",
-      description: "Apenas a versao beta atual em construcao.",
-      betaDate: "Em construção",
-      betaTitle: "Beta em andamento",
-      betaDescription: "Versao beta atual da plataforma, sendo refinada antes do primeiro release estavel.",
-      betaItems: [
-        "Layout beta em refinamento",
-        "Ajustes de tierlist, admin e navegacao em andamento",
-        "Melhorias visuais e de consistencia ainda sendo aplicadas",
-        "Base preparada para evoluir para o primeiro release estavel",
+      description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
+      entries: [
+        {
+          version: "Julho 2026",
+          date: "29 de julho",
+          title: "Perfis sociais, curtidas e mais segurança",
+          description: "O mês com mais mudanças até agora: recursos sociais novos, reforço de segurança e otimizações de performance em várias páginas.",
+          items: [
+            "Diretório de Pessoas com sistema de seguir outros membros",
+            "Curtir/descurtir periféricos, com limite e persistência",
+            "Vitrine de perfil público com medalhas e setup",
+            "Banners configuráveis na Home",
+            "Auditoria de segurança: políticas de acesso (RLS), rate limiting e proteção de uploads",
+            "Nova página de acesso negado e permissões por seção no admin",
+            "Home redesenhada com contadores animados",
+            "Otimização do uso de transformação de imagens",
+          ],
+        },
+        {
+          version: "Junho 2026",
+          date: "30 de junho",
+          title: "Login social, 2FA e conformidade com a LGPD",
+          description: "Mês focado em conta e segurança do usuário, além do lançamento da página de Ranking.",
+          items: [
+            "Login com Google e Discord",
+            "Autenticação em duas etapas (2FA)",
+            "Conformidade com a LGPD, incluindo exportação e anonimização de dados",
+            "Recuperação e redefinição de senha",
+            "Nova página de Ranking com pontuação por periférico",
+            'Modo "Mecânico" na tierlist de teclados',
+          ],
+        },
+        {
+          version: "Maio 2026",
+          date: "31 de maio",
+          title: "Fórum, Loja & Bazar e reformulação visual",
+          description: "O mês que trouxe as bases de várias seções que hoje sustentam o site.",
+          items: [
+            "Fórum da comunidade com posts e comentários",
+            "Loja e Bazar de periféricos usados",
+            "Sistema de tiers reformulado (GOAT, SS, S, A, B, C, L)",
+            "Integração com Telegram para ofertas",
+            "Tema escuro",
+            "Reformulação completa da estrutura visual do site",
+          ],
+        },
+        {
+          version: "Abril 2026",
+          date: "10 de abril",
+          title: "O início do Sunano",
+          description: "Primeira versão do site: uma tierlist de periféricos gamers com painel administrativo próprio.",
+          items: [
+            "Lançamento da tierlist de periféricos",
+            "Painel administrativo",
+            "Suporte a Português e Inglês",
+            "Seção de vídeos do YouTube",
+          ],
+        },
       ],
+    },
+    errorPages: {
+      notFoundTitle: "Essa página saiu voando do ninho",
+      notFoundBody: "Cavamos em todo canto do site e não encontramos essa página. Talvez o link esteja errado ou ela tenha sido movida.",
+      errorTitle: "Ops, alguma coisa quebrou",
+      errorBody: "Nosso passarinho já tá correndo pra consertar. Tente de novo em alguns instantes.",
+      errorDigest: (digest) => `Código do erro: ${digest}`,
+      backHome: "Voltar para a Home",
+      backDashboard: "Voltar ao Dashboard",
+      goBack: "Voltar",
+      tryAgain: "Tentar novamente",
+      quickLinks: "Ou dá uma olhada em:",
+      linkPeripherals: "Periféricos",
+      linkTierlist: "Tierlist",
+      linkBlog: "Blog & Reviews",
+      linkForum: "Fórum",
     },
   },
 
@@ -1475,30 +1586,42 @@ export const translations: Record<LocaleCode, Translations> = {
         signOut: "Sign out",
       },
       dashboard: {
-        organizationArea: "Organization area",
-        whatToDo: "What do you want to do today?",
-        description: "Choose a quick action below to update the site, publish content, or review what is already live.",
-        quickShortcuts: "Quick shortcuts",
-        quickSummary: "Quick summary",
-        usefulTips: "Useful tips",
-        addTierListItem: "Add Tier List item",
-        createTierListItem: "Create a new tier list item",
-        viewTierList: "View Tier List",
-        organizeTierList: "Organize the current ranking",
-        writePost: "Write post",
-        publishUpdates: "Publish updates and analysis",
-        tierListItems: "Tier List items",
-        tierListItemsDesc: (count) =>
-          count === 0
-            ? "No items pending review."
-            : `${count} ${count === 1 ? "item" : "items"} flagged for review or follow-up.`,
-        contentLabel: "Content",
-        contentDesc: "You can create new posts or update existing ones.",
-        visitorExperience: "Visitor experience",
-        visitorExperienceDesc: "When done, return to the site to review the public experience.",
-        tipSimple: "Keep names and descriptions simple for better readability.",
-        tipImages: "Use images and short text to keep pages cleaner.",
-        tipReview: "Review before publishing to avoid rework.",
+        title: "Dashboard",
+        subtitle: "Site overview and shortcuts to what you use most.",
+        greetingMorning: "Good morning",
+        greetingAfternoon: "Good afternoon",
+        greetingEvening: "Good evening",
+        liveLabel: "Live data",
+        overview: "Overview",
+        quickActions: "Quick actions",
+        needsAttention: "Needs attention",
+        allCaughtUp: "All caught up here.",
+        statPeripherals: "Peripherals",
+        statPeripheralsCaption: (count) => (count === 0 ? "all reviewed" : `${count} pending`),
+        statBlog: "Blog",
+        statBlogCaption: (count) => `${count} draft${count === 1 ? "" : "s"}`,
+        statForum: "Forum",
+        statForumCaption: (count) => `${count} hidden`,
+        statStore: "Store & Bazaar",
+        statStoreCaption: (count) => (count === 0 ? "stock ok" : `${count} out of stock`),
+        statOffers: "Offers",
+        statOffersCaption: "last 30 days",
+        statBanners: "Banners",
+        statBannersCaption: (active, max) => `${active}/${max} active`,
+        attentionPendingReview: (count) => `${count} peripheral${count === 1 ? "" : "s"} pending review`,
+        attentionDrafts: (count) => `${count} blog draft${count === 1 ? "" : "s"} awaiting publish`,
+        attentionOutOfStock: (count) => `${count} product${count === 1 ? "" : "s"} out of stock`,
+        actionNewPeripheral: "New peripheral",
+        actionOrganizeTierList: "Organize Tier List",
+        actionWritePost: "Write post",
+        actionModerateForum: "Moderate forum",
+        actionViewOffers: "View offers",
+        actionNewProduct: "New product",
+        actionBanners: "Home banners",
+        actionRanking: "Ranking",
+        actionVideos: "Videos",
+        actionUsers: "Users",
+        actionSettings: "Settings",
       },
       blog: {
         failedToLoad: "Failed to load articles",
@@ -1883,16 +2006,81 @@ export const translations: Record<LocaleCode, Translations> = {
     },
     changelog: {
       title: "Changelog",
-      description: "Only the current beta version is under construction.",
-      betaDate: "In progress",
-      betaTitle: "Beta ongoing",
-      betaDescription: "Current beta version of the platform, being refined before the first stable release.",
-      betaItems: [
-        "Beta layout under refinement",
-        "Tierlist, admin, and navigation improvements in progress",
-        "Visual and consistency improvements still being applied",
-        "Foundation ready to evolve into the first stable release",
+      description: "The real history of everything we've built, fixed, and improved on Sunano.",
+      entries: [
+        {
+          version: "July 2026",
+          date: "July 29",
+          title: "Social profiles, likes, and more security",
+          description: "The biggest month yet: new social features, tighter security, and performance work across several pages.",
+          items: [
+            "People directory with a follow system",
+            "Like/unlike peripherals, with a limit and persistence",
+            "Public profile showcase with medals and setup",
+            "Configurable Home banners",
+            "Security audit: access policies (RLS), rate limiting, and upload protection",
+            "New access-denied page and per-section admin permissions",
+            "Redesigned Home page with animated counters",
+            "Optimized image transformation usage",
+          ],
+        },
+        {
+          version: "June 2026",
+          date: "June 30",
+          title: "Social login, 2FA, and LGPD compliance",
+          description: "A month focused on account security, plus the launch of the Ranking page.",
+          items: [
+            "Sign in with Google and Discord",
+            "Two-factor authentication (2FA)",
+            "LGPD compliance, including data export and anonymization",
+            "Password recovery and reset",
+            "New Ranking page with a score per peripheral",
+            '"Mechanical" mode for the keyboard tier list',
+          ],
+        },
+        {
+          version: "May 2026",
+          date: "May 31",
+          title: "Forum, Store & Bazaar, and a visual overhaul",
+          description: "The month that laid the groundwork for several sections the site still runs on today.",
+          items: [
+            "Community forum with posts and comments",
+            "Store and Bazaar for used peripherals",
+            "Reworked tier system (GOAT, SS, S, A, B, C, L)",
+            "Telegram integration for offers",
+            "Dark theme",
+            "Complete visual restructuring of the site",
+          ],
+        },
+        {
+          version: "April 2026",
+          date: "April 10",
+          title: "The start of Sunano",
+          description: "The first version of the site: a gaming peripherals tier list with its own admin panel.",
+          items: [
+            "Launch of the peripherals tier list",
+            "Admin panel",
+            "Portuguese and English support",
+            "YouTube videos section",
+          ],
+        },
       ],
+    },
+    errorPages: {
+      notFoundTitle: "This page flew the coop",
+      notFoundBody: "We dug through every corner of the site and couldn't find this page. The link might be wrong, or it may have moved.",
+      errorTitle: "Oops, something broke",
+      errorBody: "Our bird is already working on a fix. Please try again in a moment.",
+      errorDigest: (digest) => `Error code: ${digest}`,
+      backHome: "Back to Home",
+      backDashboard: "Back to Dashboard",
+      goBack: "Go back",
+      tryAgain: "Try again",
+      quickLinks: "Or take a look at:",
+      linkPeripherals: "Peripherals",
+      linkTierlist: "Tierlist",
+      linkBlog: "Blog & Reviews",
+      linkForum: "Forum",
     },
   },
 }

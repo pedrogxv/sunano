@@ -1,7 +1,10 @@
-import { ArrowUpRight } from "lucide-react";
+import type { ElementType } from "react";
+import { Sparkles } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+export type ChangelogColor = "emerald" | "violet" | "amber" | "cyan";
 
 export type ChangelogEntry = {
   version: string;
@@ -9,11 +12,8 @@ export type ChangelogEntry = {
   title: string;
   description: string;
   items?: string[];
-  image?: string;
-  button?: {
-    url: string;
-    text: string;
-  };
+  icon?: ElementType;
+  color?: ChangelogColor;
 };
 
 export interface Changelog1Props {
@@ -23,76 +23,38 @@ export interface Changelog1Props {
   className?: string;
 }
 
-export const defaultEntries: ChangelogEntry[] = [
-  {
-    version: "v0.4.0",
-    date: "15 April 2026",
-    title: "Enhanced Analytics Dashboard",
-    description:
-      "We've completely redesigned our analytics dashboard to provide deeper insights and improved visualizations of your data.",
-    items: [
-      "Interactive data visualizations with real-time updates",
-      "Customizable dashboard widgets",
-      "Export analytics in multiple formats (CSV, PDF, Excel)",
-      "New reporting templates for common use cases",
-      "Improved data filtering and segmentation options",
-    ],
-    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&q=80",
-    button: {
-      url: "#",
-      text: "Learn more",
-    },
+const COLOR_STYLES: Record<ChangelogColor, { dot: string; badge: string }> = {
+  emerald: {
+    dot: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+    badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   },
-  {
-    version: "v0.3.0",
-    date: "14 April 2026",
-    title: "Mobile App Launch",
-    description:
-      "We're excited to announce the launch of our mobile application, available now on iOS and Android platforms.",
-    items: [
-      "Native mobile experience for on-the-go productivity",
-      "Offline mode support for working without internet connection",
-      "Push notifications for important updates",
-      "Biometric authentication for enhanced security",
-    ],
+  violet: {
+    dot: "bg-violet-500/15 text-violet-300 ring-violet-500/30",
+    badge: "border-violet-500/30 bg-violet-500/10 text-violet-300",
   },
-  {
-    version: "v0.2.0",
-    date: "10 April 2026",
-    title: "New features and improvements",
-    description:
-      "Here are the latest updates and improvements to our platform. We are always working to improve our platform and your experience.",
-    items: [
-      "Added new feature to export data",
-      "Improved performance and speed",
-      "Fixed minor bugs and issues",
-      "Added new feature to import data",
-    ],
-    image: "https://images.unsplash.com/photo-1633356122544-f134324ef6db?w=800&q=80",
+  amber: {
+    dot: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+    badge: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   },
-  {
-    version: "v0.1.0",
-    date: "1 April 2026",
-    title: "First version of our platform",
-    description:
-      "Introducing a new platform to help you manage your projects and tasks. We are excited to launch our platform and help you get started. We are always working to improve our platform and your experience.",
-    image: "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=800&q=80",
-    button: {
-      url: "#",
-      text: "Learn more",
-    },
+  cyan: {
+    dot: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
+    badge: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
   },
-];
+};
 
 export const Changelog1 = ({
   title = "Changelog",
   description = "Get the latest updates and improvements to our platform.",
-  entries = defaultEntries,
+  entries = [],
 }: Changelog1Props) => {
   return (
-    <section className="py-16">
+    <section className="py-12 md:py-16">
       <div className="container">
         <div className="mx-auto max-w-3xl">
+          <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+            <Sparkles className="size-3.5" />
+            Changelog
+          </p>
           <h1 className="mb-4 text-3xl font-bold tracking-tight md:text-5xl">
             {title}
           </h1>
@@ -100,53 +62,73 @@ export const Changelog1 = ({
             {description}
           </p>
         </div>
-        <div className="mx-auto mt-16 max-w-3xl space-y-16 md:mt-24 md:space-y-24">
-          {entries.map((entry, index) => (
-            <div
-              key={index}
-              className="relative flex flex-col gap-4 md:flex-row md:gap-16"
-            >
-              <div className="top-8 flex h-min w-64 shrink-0 items-center gap-4 md:sticky">
-                <Badge variant="secondary" className="text-xs">
-                  {entry.version}
-                </Badge>
-                <span className="text-xs font-medium text-muted-foreground">
-                  {entry.date}
-                </span>
-              </div>
-              <div className="flex flex-col">
-                <h2 className="mb-3 text-lg leading-tight font-bold text-foreground/90 md:text-2xl">
-                  {entry.title}
-                </h2>
-                <p className="text-sm text-muted-foreground md:text-base">
-                  {entry.description}
-                </p>
-                {entry.items && entry.items.length > 0 && (
-                  <ul className="mt-4 ml-4 space-y-1.5 text-sm text-muted-foreground md:text-base">
-                    {entry.items.map((item, itemIndex) => (
-                      <li key={itemIndex} className="list-disc">
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {entry.image && (
-                  <img
-                    src={entry.image}
-                    alt={`${entry.version} visual`}
-                    className="mt-8 w-full rounded-lg object-cover"
+
+        <div className="relative mx-auto mt-16 max-w-3xl md:mt-20">
+          {/* Linha da timeline — só no desktop, onde o marcador fica ao lado do texto */}
+          <div className="absolute top-2 bottom-2 left-[7px] hidden w-px bg-border md:block" />
+
+          <div className="space-y-12 md:space-y-16">
+            {entries.map((entry, index) => {
+              const styles = COLOR_STYLES[entry.color ?? "cyan"];
+              const Icon = entry.icon;
+              return (
+                <div key={entry.version} className="relative flex flex-col gap-4 md:flex-row md:gap-10">
+                  <span
+                    className={cn(
+                      "relative z-10 hidden size-4 shrink-0 rounded-full ring-4 ring-background md:absolute md:top-1 md:left-0 md:block",
+                      index === 0 ? "bg-primary" : "bg-muted-foreground/40"
+                    )}
                   />
-                )}
-                {entry.button && (
-                  <Button variant="link" className="mt-4 self-end" asChild>
-                    <a href={entry.button.url} target="_blank">
-                      {entry.button.text} <ArrowUpRight className="h-4 w-4" />
-                    </a>
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+
+                  <div className="flex flex-col md:pl-10">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className={cn("text-xs font-semibold", styles.badge)}>
+                        {entry.version}
+                      </Badge>
+                      <span className="text-xs font-medium text-muted-foreground">{entry.date}</span>
+                      {index === 0 && (
+                        <span className="text-[10px] font-semibold uppercase tracking-widest text-primary">
+                          Mais recente
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      {Icon && (
+                        <div
+                          className={cn(
+                            "hidden size-9 shrink-0 items-center justify-center rounded-xl ring-1 sm:flex",
+                            styles.dot
+                          )}
+                        >
+                          <Icon className="size-4" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <h2 className="text-lg leading-tight font-bold text-foreground md:text-2xl">
+                          {entry.title}
+                        </h2>
+                        <p className="mt-1.5 text-sm text-muted-foreground md:text-base">
+                          {entry.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    {entry.items && entry.items.length > 0 && (
+                      <ul className="mt-4 space-y-1.5 sm:pl-12">
+                        {entry.items.map((item) => (
+                          <li key={item} className="flex items-start gap-2 text-sm text-muted-foreground md:text-base">
+                            <span className={cn("mt-2 size-1 shrink-0 rounded-full", styles.dot.split(" ")[0])} />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>

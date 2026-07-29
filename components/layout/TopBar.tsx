@@ -78,6 +78,8 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/tierlist":    { title: "Admin Tierlist", description: "Arraste e solte para reorganizar. Clique para editar." },
   "/admin/perifericos": { title: "Periféricos", description: "Gerencie a wiki de periféricos." },
   "/admin/blog":        { title: "Blog & Reviews", description: "Gerencie reviews e artigos relacionados aos periféricos." },
+  "/admin/videos":      { title: "Vídeos", description: "Últimos vídeos e redes sociais do canal." },
+  "/admin/ranking":     { title: "Ranking", description: "Pontuação (Performance e Estabilidade)." },
   "/admin/offers":      { title: "Ofertas", description: "Ofertas sincronizadas das mensagens do Telegram." },
   "/admin/users":       { title: "Usuários e permissões", description: "Controle quem pode ler ou editar cada seção." },
   "/admin/settings":    { title: "Configurações", description: "Gerencie seu perfil e preferências do sistema." },

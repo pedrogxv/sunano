@@ -75,7 +75,7 @@ export function AdminSidebar() {
       items: [
         { href: "/admin/tierlist",    label: "Tierlist",                       icon: Trophy,     permission: "peripherals_read" },
         { href: "/admin/perifericos", label: t.admin.sidebar.peripherals,      icon: Mouse,      permission: "peripherals_read" },
-        { href: "/ranking",           label: "Ranking",                        icon: BarChart2,  permission: "peripherals_read" },
+        { href: "/admin/ranking",     label: "Ranking",                        icon: BarChart2,  permission: "peripherals_read" },
       ],
     },
     {
@@ -84,7 +84,7 @@ export function AdminSidebar() {
         { href: "/admin/banners", label: "Banners da Home",             icon: GalleryHorizontalEnd, permission: "banners_read" },
         { href: "/admin/blog",   label: t.admin.sidebar.newsAndReviews, icon: Newspaper,     permission: "blog_read" },
         { href: "/admin/forum",  label: t.admin.sidebar.forum,          icon: MessageSquare, permission: "forum_read" },
-        { href: "/videos",       label: "Vídeos",                       icon: PlaySquare },
+        { href: "/admin/videos", label: "Vídeos",                       icon: PlaySquare },
       ],
     },
     {
@@ -99,7 +99,6 @@ export function AdminSidebar() {
       items: [
         { href: "/admin/users",       label: t.admin.sidebar.users,       icon: Users,    requiresWebMaster: true },
         { href: "/admin/settings",    label: t.admin.sidebar.settings,    icon: Settings, permission: "settings_read" },
-        { href: "/admin/maintenance", label: "Manutenção",                icon: Wrench,   permission: "maintenance_read" },
       ],
     },
   ]

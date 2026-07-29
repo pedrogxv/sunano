@@ -58,6 +58,9 @@ interface PeripheralDetailViewProps {
   linkedStore?: PeripheralDetailViewLinkedProduct | null
   linkedBazaar?: PeripheralDetailViewLinkedProduct | null
   linkedSwitch?: PeripheralDetailViewLinkedSwitch | null
+  /** Destino do badge/link de ranking. Passe "/admin/ranking" ao renderizar
+   *  dentro do painel admin, senão o clique sai para o site público. */
+  rankingHref?: string
 }
 
 function formatLabel(value: string) {
@@ -276,6 +279,7 @@ export function PeripheralDetailView({
   linkedStore = null,
   linkedBazaar = null,
   linkedSwitch = null,
+  rankingHref = "/ranking",
 }: PeripheralDetailViewProps) {
   const specs = (data.specs ?? {}) as Record<string, any>
   const details = (specs.details ?? {}) as Record<string, any>
@@ -536,7 +540,7 @@ export function PeripheralDetailView({
 
                   <div className="flex shrink-0 items-center gap-2">
                     {rankBadge && (
-                      <RankingCrownBadge position={rankBadge.position} />
+                      <RankingCrownBadge position={rankBadge.position} href={rankingHref} />
                     )}
                     <PeripheralLikeToggle peripheralId={data.id} />
                   </div>
@@ -626,7 +630,7 @@ export function PeripheralDetailView({
                       {rankBadge && (
                         <CardAction>
                           <Link
-                            href="/ranking"
+                            href={rankingHref}
                             className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-primary transition hover:bg-primary/20"
                           >
                             <Trophy className="size-4 shrink-0" />

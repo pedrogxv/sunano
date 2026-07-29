@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 
 interface RankingCrownBadgeProps {
   position: number
+  href?: string
 }
 
 function CrownIcon({ gradientId }: { gradientId: string }) {
@@ -69,13 +70,13 @@ const DEFAULT_STYLE = {
   number: "text-white",
 }
 
-export function RankingCrownBadge({ position }: RankingCrownBadgeProps) {
+export function RankingCrownBadge({ position, href = "/ranking" }: RankingCrownBadgeProps) {
   const style = POSITION_STYLES[position] ?? DEFAULT_STYLE
   const gradientId = useId()
 
   return (
     <Link
-      href="/ranking"
+      href={href}
       className="group inline-flex items-center gap-3 rounded-2xl px-2 py-1 transition hover:-translate-y-0.5"
     >
       <div className="-rotate-2 leading-none transition group-hover:rotate-0">

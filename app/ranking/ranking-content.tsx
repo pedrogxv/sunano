@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { ChevronRight } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -27,7 +28,7 @@ const CATEGORIES: { key: string; label: string }[] = [
   { key: "monitors", label: "Monitor" },
 ]
 
-function BarChart({ items }: { items: RankedPeripheral[] }) {
+function BarChart({ items, isAdmin }: { items: RankedPeripheral[]; isAdmin: boolean }) {
   const sorted = [...items].sort((a, b) => b.score - a.score)
 
   // Começa em 0% e só assume a largura final depois do mount, pra barra
@@ -55,7 +56,11 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
       {sorted.map((item, index) => {
         const barPct = Math.round((item.score / maxScore) * 100)
         const displayValue = item.score
-        const href = `/perifericos/${buildPeripheralSlug(item.name, item.id)}`
+        // Em modo admin, o clique leva para a edição do periférico, não para a
+        // página pública — senão a navegação "vaza" para o site público.
+        const href = isAdmin
+          ? `/admin/perifericos/${item.id}`
+          : `/perifericos/${buildPeripheralSlug(item.name, item.id)}`
 
         return (
           <Link
@@ -122,6 +127,7 @@ function BarChart({ items }: { items: RankedPeripheral[] }) {
 
 export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[] }) {
   usePageHeader("Ranking", "Pontuação (Performance e Estabilidade)")
+  const isAdmin = usePathname()?.startsWith("/admin") ?? false
 
   const categoriesWithData = CATEGORIES.filter((cat) =>
     peripherals.some((p) => p.category === cat.key)
@@ -165,7 +171,7 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
           <span className="hidden flex-1 sm:block">Pontuação</span>
         </div>
 
-        <BarChart key={selected} items={filtered} />
+        <BarChart key={selected} items={filtered} isAdmin={isAdmin} />
       </div>
     </div>
   )

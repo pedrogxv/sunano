@@ -218,8 +218,8 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
         </CardHeader>
         <CardContent className="pt-5">
           <p className="mb-4 text-sm text-muted-foreground">
-            O arquivo incluirá: perfil, dados de compra, posts e comentários do fórum, e histórico
-            de pedidos.
+            O arquivo incluirá: e-mail, perfil, dados de compra, posts e comentários do fórum,
+            histórico de pedidos e sua rede de seguidores.
           </p>
           <Button onClick={exportData} disabled={exporting} variant="outline" className="gap-2">
             <Download className="size-4" />

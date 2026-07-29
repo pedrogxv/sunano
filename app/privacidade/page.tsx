@@ -206,9 +206,13 @@ export default function PrivacidadePage() {
             </li>
             <li>
               <strong>Eventos de limitação de taxa (rate limit):</strong> excluídos automaticamente
-              após 5 minutos.
+              em até 2 horas.
             </li>
           </ul>
+          <p className="text-xs text-muted-foreground">
+            Os prazos de log de auditoria e de eventos de rate limit são aplicados por uma rotina
+            de expurgo automática executada diariamente.
+          </p>
         </section>
 
         <section>

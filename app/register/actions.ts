@@ -4,6 +4,7 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
+import { LGPD_POLICY_VERSION } from "@/lib/lgpd"
 import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 import { validateDisplayName } from "@/lib/profile-name"
 import {
@@ -15,8 +16,6 @@ import {
 } from "@/lib/server/repositories/users-repository"
 
 export type RegisterState = { error: string | null; needsConfirmation?: boolean }
-
-const LGPD_POLICY_VERSION = "2026-06"
 
 function clean(value: FormDataEntryValue | null): string {
   return String(value ?? "").trim()

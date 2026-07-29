@@ -213,7 +213,6 @@ export type Database = {
           title: string
           body: string
           author_name: string
-          author_email: string | null
           user_id: string | null
           peripheral_refs: string[]
           is_hidden: boolean
@@ -231,7 +230,6 @@ export type Database = {
           post_id: string
           body: string
           author_name: string
-          author_email: string | null
           user_id: string | null
           peripheral_refs: string[]
           is_hidden: boolean

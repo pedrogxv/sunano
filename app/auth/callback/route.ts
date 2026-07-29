@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import {
+  hasRecordedLgpdConsent,
   isAdminUser,
   resolveAvailableDisplayName,
   upsertUserProfileFromAuth,
@@ -98,11 +99,21 @@ export async function GET(request: NextRequest) {
     // 2FA ativo: a sessão OAuth também nasce em aal1. Exige o segundo fator
     // antes de seguir para o destino.
     const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-    if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
-      return NextResponse.redirect(`${origin}/2fa?next=${encodeURIComponent(destination)}`)
+    const postMfaDestination = isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })
+      ? `/2fa?next=${encodeURIComponent(destination)}`
+      : destination
+
+    // Cadastro por e-mail/senha exige o checkbox de consentimento LGPD antes
+    // de criar a conta (app/register/actions.ts). O login social não passa
+    // por ali — a conta já nasce no exchangeCodeForSession acima —, então
+    // este é o único ponto onde dá pra cobrar o consentimento sem deixar a
+    // pessoa usar a plataforma sem ele.
+    const hasConsent = await hasRecordedLgpdConsent(authData.user.id)
+    if (!hasConsent) {
+      return NextResponse.redirect(`${origin}/consentimento?next=${encodeURIComponent(postMfaDestination)}`)
     }
 
-    return NextResponse.redirect(`${origin}${destination}`)
+    return NextResponse.redirect(`${origin}${postMfaDestination}`)
   }
 
   return NextResponse.redirect(`${origin}${next}`)

@@ -510,6 +510,23 @@ export async function updateUserProfileSettings(
 }
 
 /**
+ * Indica se o usuário já tem consentimento LGPD registrado. Usado pelo gate
+ * de consentimento do OAuth (app/auth/callback/route.ts) — o cadastro por
+ * e-mail/senha exige o checkbox antes de criar a conta, mas o login social
+ * cria a conta direto no `exchangeCodeForSession`, sem ponto nenhum para
+ * bloquear a criação; o gate pós-login é o único lugar onde dá pra cobrar isso.
+ */
+export async function hasRecordedLgpdConsent(userId: string): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_profiles")
+    .select("lgpd_consent_at")
+    .eq("id", userId)
+    .maybeSingle()
+  return Boolean((data as { lgpd_consent_at: string | null } | null)?.lgpd_consent_at)
+}
+
+/**
  * Registra o consentimento LGPD do usuário (Art. 7 e Art. 8 da Lei 13.709/2018).
  * Deve ser chamado no momento do cadastro ou quando o usuário aceita a política.
  */
@@ -623,6 +640,7 @@ export async function upsertUserProfileOnSignup(params: {
 
 export type UserDataExport = {
   exported_at: string
+  email: string | null
   profile: {
     display_name: string | null
     avatar_url: string | null
@@ -661,6 +679,10 @@ export type UserDataExport = {
     items: Record<string, unknown>[]
     created_at: string
   }>
+  /** Perfis que este usuário segue. */
+  following: Array<{ user_id: string; created_at: string }>
+  /** Perfis que seguem este usuário. */
+  followers: Array<{ user_id: string; created_at: string }>
 }
 
 /**
@@ -672,7 +694,7 @@ export async function getUserDataExport(
 ): Promise<UserDataExport> {
   const db = createSupabaseAdminClient()
 
-  const [profileRes, postsRes, commentsRes, ordersRes] = await Promise.all([
+  const [profileRes, postsRes, commentsRes, ordersRes, followingRes, followersRes] = await Promise.all([
     db
       .from("user_profiles")
       .select(
@@ -695,6 +717,14 @@ export async function getUserDataExport(
       .select("id, total_cents, status, payment_method, items, created_at")
       .contains("metadata", { user_id: userId })
       .order("created_at", { ascending: false }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db.from("user_follows") as any)
+      .select("following_id, created_at")
+      .eq("follower_id", userId),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (db.from("user_follows") as any)
+      .select("follower_id, created_at")
+      .eq("following_id", userId),
   ])
 
   // Log da exportação (Art. 37 — rastreabilidade)
@@ -707,6 +737,7 @@ export async function getUserDataExport(
 
   return {
     exported_at: new Date().toISOString(),
+    email: userEmail,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     profile: (profileRes.data as any) ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -715,5 +746,15 @@ export async function getUserDataExport(
     forum_comments: (commentsRes.data as any[]) ?? [],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     orders: (ordersRes.data as any[]) ?? [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    following: ((followingRes.data as any[]) ?? []).map((r) => ({
+      user_id: r.following_id as string,
+      created_at: r.created_at as string,
+    })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    followers: ((followersRes.data as any[]) ?? []).map((r) => ({
+      user_id: r.follower_id as string,
+      created_at: r.created_at as string,
+    })),
   }
 }

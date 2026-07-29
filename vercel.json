@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/lgpd-cleanup",
+      "schedule": "0 3 * * *"
+    }
+  ]
+}

@@ -29,8 +29,12 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	images: {
-		// Formatos modernos servidos automaticamente pelo otimizador do Next.
-		formats: ["image/avif", "image/webp"],
+		// Só webp: usar avif+webp dobra as transformações cobradas (cada imagem
+		// é gerada nos dois formatos). Ver vercel.com/docs/image-optimization/managing-image-optimization-costs.
+		formats: ["image/webp"],
+		// Imagens (peripherals, capas de blog/notícias) não mudam de conteúdo na mesma URL,
+		// então cache longo evita retransformar a mesma imagem repetidamente.
+		minimumCacheTTL: 2678400, // 31 dias
 		remotePatterns: [
 			{
 				protocol: "https",

@@ -19,6 +19,7 @@ export function UserAvatar({
         alt={name}
         width={size * 4}
         height={size * 4}
+        unoptimized
         className={`${sizeClass} shrink-0 rounded-full object-cover border border-border`}
       />
     )

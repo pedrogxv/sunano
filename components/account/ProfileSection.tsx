@@ -1,12 +1,14 @@
 "use client"
 
+import Image from "next/image"
 import { useEffect, useState } from "react"
 import type { ChangeEvent } from "react"
-import { Camera, ImagePlus } from "lucide-react"
+import { Camera, Crown, ImagePlus } from "lucide-react"
 import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { resolveProfileMedia, type ProfileMedia } from "@/lib/account-tier"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,6 +28,7 @@ import {
   type ShowcaseMedal,
   type ShowcasePeripheral,
 } from "@/lib/profile-showcase"
+import { profileAccentHue } from "@/lib/user-directory"
 import { cn } from "@/lib/utils"
 
 export type ProfileData = {
@@ -40,6 +43,7 @@ export type ProfileData = {
   lgpd_consent_at?: string | null
   lgpd_consent_version?: string | null
   banner_url?: string | null
+  mini_banner_url?: string | null
   bio?: string | null
   account_tier?: string | null
 }
@@ -55,7 +59,7 @@ interface ProfileSectionProps {
  * batem em endpoints diferentes, mas são salvos pelo mesmo botão.
  */
 export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps) {
-  const { favoriteLimit, medalLimit, capabilities, animatedMedia } = useAccountTier(
+  const { tier, favoriteLimit, medalLimit, capabilities, animatedMedia, isVip } = useAccountTier(
     profile.account_tier
   )
 
@@ -64,9 +68,13 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile.avatar_url)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatar_url)
   const [bannerUrl, setBannerUrl] = useState<string | null>(profile.banner_url ?? null)
+  const [miniBannerUrl, setMiniBannerUrl] = useState<string | null>(
+    profile.mini_banner_url ?? null
+  )
   const [bio, setBio] = useState(profile.bio ?? "")
   const [uploading, setUploading] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
+  const [uploadingMiniBanner, setUploadingMiniBanner] = useState(false)
 
   // ── Vitrine ──
   const [loadingShowcase, setLoadingShowcase] = useState(true)
@@ -91,6 +99,15 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   const imageAccept = animatedMedia
     ? "image/jpeg,image/png,image/webp,image/gif"
     : "image/jpeg,image/png,image/webp"
+  const mediaHint = animatedMedia
+    ? "JPG, PNG, WEBP ou GIF animado até 5MB."
+    : "JPG, PNG ou WEBP até 5MB. GIF animado é exclusivo para membros VIP."
+  // O preview passa pelas mesmas regras de tier do perfil público: um GIF de
+  // conta comum aparece parado aqui, exatamente como vai aparecer lá.
+  const bannerPreview = resolveProfileMedia(bannerUrl, tier)
+  const miniBannerPreview = resolveProfileMedia(miniBannerUrl, tier)
+  // Mesma cor de fallback que o card de /pessoas usa quando falta mini banner.
+  const accentHue = profile.id ? profileAccentHue(profile.id) : 210
 
   useEffect(() => {
     let mounted = true
@@ -221,6 +238,26 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     }
   }
 
+  async function handleMiniBannerSelect(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      setUploadingMiniBanner(true)
+      const body = new FormData()
+      body.append("file", file)
+      const res = await fetch("/api/profile/upload-banner", { method: "POST", body })
+      const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
+      if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
+      setMiniBannerUrl(data.publicUrl)
+      toast.success("Mini banner enviado")
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : "Erro ao enviar mini banner"
+      toast.error("Erro ao enviar mini banner", { description: message })
+    } finally {
+      setUploadingMiniBanner(false)
+    }
+  }
+
   /** Retorna a mensagem de erro, ou `null` em caso de sucesso. */
   async function persistIdentity(): Promise<string | null> {
     try {
@@ -231,6 +268,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
           display_name: displayName,
           avatar_url: avatarUrl,
           banner_url: bannerUrl,
+          mini_banner_url: miniBannerUrl,
           bio,
         }),
       })
@@ -243,6 +281,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       setAvatarUrl(data.profile.avatar_url)
       setAvatarPreview(data.profile.avatar_url)
       setBannerUrl(data.profile.banner_url ?? null)
+      setMiniBannerUrl(data.profile.mini_banner_url ?? null)
       setBio(data.profile.bio ?? "")
       onProfileChange(data.profile)
       return null
@@ -308,69 +347,63 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
 
         <Card className="border-border bg-card/90 overflow-hidden">
           <CardContent className="space-y-6 pt-6">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Banner do perfil
-              </label>
-              <label
-                className="relative flex h-28 cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-muted/20 transition-colors hover:border-primary/40 sm:h-36"
-                style={
-                  bannerUrl
-                    ? {
-                        backgroundImage: `url(${bannerUrl})`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }
-                    : undefined
-                }
-              >
-                <input
-                  type="file"
+            {/* Banner: preview da página de perfil inteira — a capa aparece no
+                contexto real, com a foto e o mini banner sobrepostos. */}
+            <div className="space-y-2">
+              <PreviewLabel
+                label="Banner do perfil"
+                hint="Aparece no topo do seu perfil público."
+              />
+
+              <ProfilePagePreview
+                banner={bannerPreview}
+                miniBanner={miniBannerPreview}
+                avatarSrc={avatarPreview}
+                name={previewName}
+                tierLabel={capabilities.label}
+                isVip={isVip}
+                imageAccept={imageAccept}
+                uploadingAvatar={uploading}
+                onAvatarChange={handleAvatarSelect}
+              />
+
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <UploadButton
                   accept={imageAccept}
-                  className="hidden"
+                  uploading={uploadingBanner}
                   onChange={handleBannerSelect}
-                  disabled={uploadingBanner}
+                  label={bannerUrl ? "Trocar banner" : "Enviar banner"}
                 />
-                <span
-                  className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium ${bannerUrl ? "bg-background/80 text-foreground" : "text-muted-foreground"} ${uploadingBanner ? "animate-pulse" : ""}`}
-                >
-                  <ImagePlus className="size-4" />
-                  {uploadingBanner ? "Enviando..." : bannerUrl ? "Trocar banner" : "Enviar banner"}
-                </span>
-              </label>
-              <p className="text-[10px] text-muted-foreground/60">
-                {animatedMedia
-                  ? "JPG, PNG, WEBP ou GIF animado até 5MB."
-                  : "JPG, PNG ou WEBP até 5MB. GIF animado é exclusivo para membros VIP."}
-              </p>
+                <p className="text-[10px] text-muted-foreground/60">
+                  {mediaHint} A foto de perfil é trocada pela câmera, no preview.
+                </p>
+              </div>
             </div>
 
-            <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
-              <div className="relative shrink-0">
-                <Avatar className="size-24 border-2 border-border shadow-lg">
-                  <AvatarImage src={avatarPreview ?? undefined} alt={previewName} />
-                  <AvatarFallback className="text-2xl font-bold">
-                    {previewName.slice(0, 1).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <label
-                  className={`absolute -bottom-1 -right-1 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors ${uploading ? "bg-muted animate-pulse" : "bg-primary hover:bg-primary/90"}`}
-                >
-                  <input
-                    type="file"
-                    accept={imageAccept}
-                    className="hidden"
-                    onChange={handleAvatarSelect}
-                    disabled={uploading}
-                  />
-                  <Camera className="size-3.5 text-primary-foreground" />
-                </label>
-              </div>
+            {/* Mini banner: preview no formato de card do próprio site — é
+                onde a faixa aparece atrás da foto, em /pessoas. */}
+            <div className="space-y-2">
+              <PreviewLabel
+                label="Mini banner"
+                hint="A faixa curta atrás da sua foto no card de /pessoas."
+              />
 
-              <div className="flex-1 space-y-1 text-center sm:text-left">
-                <p className="text-lg font-semibold text-foreground">{previewName}</p>
-                <p className="text-sm text-muted-foreground">{profile.email ?? "-"}</p>
-                <p className="text-xs text-muted-foreground/60">JPG, PNG ou WEBP até 3MB.</p>
+              <MiniBannerCardPreview
+                miniBanner={miniBannerPreview}
+                avatarSrc={avatarPreview}
+                name={previewName}
+                isVip={isVip}
+                accentHue={accentHue}
+              />
+
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <UploadButton
+                  accept={imageAccept}
+                  uploading={uploadingMiniBanner}
+                  onChange={handleMiniBannerSelect}
+                  label={miniBannerUrl ? "Trocar mini banner" : "Enviar mini banner"}
+                />
+                <p className="text-[10px] text-muted-foreground/60">{mediaHint}</p>
               </div>
             </div>
 
@@ -479,6 +512,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
             saving ||
             uploading ||
             uploadingBanner ||
+            uploadingMiniBanner ||
             loadingShowcase ||
             nameCheck.state === "taken" ||
             nameCheck.state === "checking"
@@ -497,6 +531,241 @@ function SectionHeading({ title, description }: { title: string; description: st
     <div className="space-y-1">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">{title}</h2>
       <p className="text-xs text-muted-foreground">{description}</p>
+    </div>
+  )
+}
+
+function PreviewLabel({ label, hint }: { label: string; hint: string }) {
+  return (
+    <div className="space-y-0.5">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className="text-[11px] text-muted-foreground/70">{hint}</p>
+    </div>
+  )
+}
+
+function UploadButton({
+  accept,
+  uploading,
+  onChange,
+  label,
+}: {
+  accept: string
+  uploading: boolean
+  onChange: (event: ChangeEvent<HTMLInputElement>) => void
+  label: string
+}) {
+  return (
+    <label
+      className={cn(
+        "inline-flex cursor-pointer items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted/40",
+        uploading && "animate-pulse"
+      )}
+    >
+      <input type="file" accept={accept} className="hidden" onChange={onChange} disabled={uploading} />
+      <ImagePlus className="size-3.5" />
+      {uploading ? "Enviando..." : label}
+    </label>
+  )
+}
+
+/**
+ * Miniatura da página de perfil: capa, foto sobreposta (com o mini banner
+ * atrás) e o resto do perfil em cinza. Espelha `components/profile/
+ * ProfileShowcase` — mexer lá pede ajustar aqui, senão o preview mente.
+ */
+function ProfilePagePreview({
+  banner,
+  miniBanner,
+  avatarSrc,
+  name,
+  tierLabel,
+  isVip,
+  imageAccept,
+  uploadingAvatar,
+  onAvatarChange,
+}: {
+  banner: ProfileMedia
+  miniBanner: ProfileMedia
+  avatarSrc: string | null
+  name: string
+  tierLabel: string
+  isVip: boolean
+  imageAccept: string
+  uploadingAvatar: boolean
+  onAvatarChange: (event: ChangeEvent<HTMLInputElement>) => void
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <div
+        className={cn(
+          "relative h-28 w-full overflow-hidden sm:h-36",
+          !banner.src && "bg-gradient-to-br from-primary/20 via-muted/40 to-background"
+        )}
+      >
+        {banner.src && (
+          <Image
+            src={banner.src}
+            alt=""
+            fill
+            unoptimized={banner.animated}
+            sizes="(max-width: 768px) 100vw, 640px"
+            className="object-cover"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-card/70 to-transparent" />
+      </div>
+
+      <div className="flex flex-col items-center px-4 pb-4">
+        <div className="relative -mt-10 sm:-mt-12">
+          {miniBanner.src && (
+            <div className="absolute inset-x-[-2.5rem] top-1/2 h-14 -translate-y-1/2 overflow-hidden rounded-xl opacity-70">
+              <Image
+                src={miniBanner.src}
+                alt=""
+                fill
+                unoptimized={miniBanner.animated}
+                sizes="320px"
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-card via-transparent to-card" />
+            </div>
+          )}
+
+          <div className="relative">
+            <Avatar className="size-20 border-4 border-background shadow-xl sm:size-24">
+              <AvatarImage src={avatarSrc ?? undefined} alt={name} />
+              <AvatarFallback className="text-2xl font-bold">
+                {name.slice(0, 1).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <label
+              className={cn(
+                "absolute -bottom-1 -right-1 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
+                uploadingAvatar ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
+              )}
+              title="Trocar foto de perfil"
+            >
+              <input
+                type="file"
+                accept={imageAccept}
+                className="hidden"
+                onChange={onAvatarChange}
+                disabled={uploadingAvatar}
+              />
+              <Camera className="size-3.5 text-primary-foreground" />
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-2.5 flex items-center gap-2">
+          <p className="text-base font-bold text-foreground">{name}</p>
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+              isVip
+                ? "border-amber-400/40 bg-amber-400/10 text-amber-300"
+                : "border-border bg-muted/40 text-muted-foreground"
+            )}
+          >
+            {isVip && <Crown className="size-2.5" />}
+            {tierLabel}
+          </span>
+        </div>
+
+        {/* Setup, medalhas e favoritos entram em cinza: aqui eles só situam a
+            capa — quem edita esses blocos é a seção Vitrine, mais abaixo. */}
+        <div className="mt-4 w-full space-y-3 opacity-40" aria-hidden>
+          <PreviewSkeletonRow columns={5} />
+          <PreviewSkeletonRow columns={4} />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PreviewSkeletonRow({ columns }: { columns: number }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="h-1.5 w-14 rounded-full bg-muted-foreground/30" />
+      <div
+        className="grid gap-1.5"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      >
+        {Array.from({ length: columns }).map((_, index) => (
+          <div key={index} className="h-9 rounded-lg border border-border bg-muted/30" />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Réplica estática do card de `/pessoas` (`components/people/ProfileCard`),
+ * sem link nem botão de seguir: é onde o mini banner aparece de verdade.
+ */
+function MiniBannerCardPreview({
+  miniBanner,
+  avatarSrc,
+  name,
+  isVip,
+  accentHue,
+}: {
+  miniBanner: ProfileMedia
+  avatarSrc: string | null
+  name: string
+  isVip: boolean
+  accentHue: number
+}) {
+  return (
+    <div className="flex justify-center rounded-xl border border-border bg-muted/10 p-4">
+      <div className="w-52 overflow-hidden rounded-2xl border border-border bg-card">
+        <div
+          className="relative h-20 w-full overflow-hidden"
+          style={
+            miniBanner.src
+              ? undefined
+              : {
+                  backgroundImage: `linear-gradient(135deg, hsl(${accentHue} 65% 45% / 0.85), hsl(${(accentHue + 45) % 360} 60% 30% / 0.55))`,
+                }
+          }
+        >
+          {miniBanner.src && (
+            <Image
+              src={miniBanner.src}
+              alt=""
+              fill
+              unoptimized={miniBanner.animated}
+              sizes="240px"
+              className="object-cover"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
+        </div>
+
+        <div className="-mt-11 flex flex-col items-center px-3 pb-3">
+          <Avatar
+            className={cn("size-[86px] ring-4", isVip ? "ring-amber-400/70" : "ring-background")}
+          >
+            <AvatarImage src={avatarSrc ?? undefined} alt={name} />
+            <AvatarFallback className="text-xl font-bold">
+              {name.slice(0, 1).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+
+          <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
+            <span className="truncate">{name}</span>
+            {isVip && <Crown className="size-3.5 shrink-0 text-amber-400" />}
+          </p>
+
+          {/* Visitas e botão de seguir viram cinza: no editor eles não têm
+              número real nem ação — o que importa é a faixa. */}
+          <div className="mt-2 h-1.5 w-16 rounded-full bg-muted-foreground/25" aria-hidden />
+          <div className="mt-3 h-7 w-full rounded-lg border border-border bg-muted/20" aria-hidden />
+        </div>
+      </div>
     </div>
   )
 }

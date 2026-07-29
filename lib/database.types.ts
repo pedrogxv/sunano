@@ -51,16 +51,33 @@ export type Database = {
           lgpd_consent_at: string | null
           lgpd_consent_version: string | null
           banner_url: string | null
+          /** Faixa curta atrás do avatar no card do diretório e no mini perfil. */
+          mini_banner_url: string | null
           bio: string | null
           account_tier: "common" | "vip" | "vip_plus"
+          /** Incrementado só via RPC `increment_profile_views` — nunca escrito direto. */
+          profile_views: number
           created_at: string
           updated_at: string
         }
         Insert: Omit<
           Database["public"]["Tables"]["user_profiles"]["Row"],
-          "created_at" | "updated_at" | "display_slug"
+          "created_at" | "updated_at" | "display_slug" | "profile_views"
         >
         Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>
+      }
+      user_follows: {
+        Relationships: []
+        Row: {
+          follower_id: string
+          following_id: string
+          created_at: string
+        }
+        Insert: Omit<
+          Database["public"]["Tables"]["user_follows"]["Row"],
+          "created_at"
+        >
+        Update: Partial<Database["public"]["Tables"]["user_follows"]["Insert"]>
       }
       medals: {
         Relationships: []
@@ -437,6 +454,10 @@ export type Database = {
       add_favorite_peripheral: {
         Args: { p_user_id: string; p_peripheral_id: string; p_limit: number }
         Returns: "liked" | "already_liked" | "limit_reached"
+      }
+      increment_profile_views: {
+        Args: { p_user_id: string }
+        Returns: undefined
       }
     }
   }

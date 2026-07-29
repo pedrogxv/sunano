@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Trophy,
+  Users,
 } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -105,6 +106,7 @@ export function PublicSidebar() {
     { href: "/blog",     label: "Reviews",     icon: BookOpen },
     { href: "/videos",   label: t.nav.videos,  icon: PlaySquare },
     { href: "/forum",    label: t.nav.forum,   icon: MessageCircle },
+    { href: "/pessoas",  label: t.nav.people,  icon: Users },
   ]
 
   return (

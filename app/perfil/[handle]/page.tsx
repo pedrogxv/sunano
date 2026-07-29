@@ -4,7 +4,11 @@ import type { Metadata } from "next"
 import { ProfileShowcase } from "@/components/profile/ProfileShowcase"
 import { profilePath } from "@/lib/profile-name"
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
-import { findUserIdByDisplaySlug } from "@/lib/server/repositories/users-repository"
+import {
+  findUserIdByDisplaySlug,
+  incrementProfileViews,
+  isFollowing,
+} from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 // Server Component: chama o repositório direto (ARQUITETURA.md §1), sem
@@ -67,5 +71,12 @@ export default async function PerfilPublicoPage({
   const { data: authData } = await supabase.auth.getUser()
   const isOwner = authData.user?.id === profile.id
 
-  return <ProfileShowcase profile={profile} isOwner={isOwner} />
+  // Não conta visita do próprio dono revisitando o próprio perfil.
+  if (!isOwner) void incrementProfileViews(profile.id)
+
+  const viewerId = authData.user?.id
+  const following =
+    viewerId && !isOwner ? await isFollowing(viewerId, profile.id) : false
+
+  return <ProfileShowcase profile={profile} isOwner={isOwner} isFollowing={following} />
 }

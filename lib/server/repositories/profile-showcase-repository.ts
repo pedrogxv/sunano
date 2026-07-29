@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { countFollowers } from "@/lib/server/repositories/users-repository"
 import {
   coerceAccountTier,
   selectVisibleFavorites,
@@ -36,7 +37,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, bio, account_tier, created_at"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, created_at"
 
 const PERIPHERAL_COLUMNS = "id, name, brand, category, image_url, tier"
 
@@ -71,6 +72,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     display_slug: string | null
     avatar_url: string | null
     banner_url: string | null
+    mini_banner_url: string | null
     bio: string | null
     account_tier: string | null
     created_at: string
@@ -78,10 +80,11 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
 
   const tier = coerceAccountTier(row.account_tier)
 
-  const [setup, medals, favorites] = await Promise.all([
+  const [setup, medals, favorites, followers] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
     getUserFavorites(userId),
+    countFollowers(userId),
   ])
 
   return {
@@ -90,9 +93,11 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     display_slug: row.display_slug,
     avatar_url: row.avatar_url,
     banner_url: row.banner_url,
+    mini_banner_url: row.mini_banner_url,
     bio: row.bio,
     account_tier: tier,
     member_since: row.created_at,
+    followers,
     setup,
     medals: selectVisibleMedals(medals, tier),
     medals_total: medals.length,

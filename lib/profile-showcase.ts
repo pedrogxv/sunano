@@ -49,9 +49,13 @@ export type ProfileShowcase = {
   display_slug: string | null
   avatar_url: string | null
   banner_url: string | null
+  /** Faixa curta atrás do avatar — o "mini perfil" do card do diretório. */
+  mini_banner_url: string | null
   bio: string | null
   account_tier: import("./account-tier").AccountTier
   member_since: string
+  /** Quantas pessoas seguem este perfil. */
+  followers: number
   setup: SetupItem[]
   /** Medalhas já filtradas pelo limite do tier. */
   medals: ShowcaseMedal[]

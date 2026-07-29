@@ -73,6 +73,7 @@ type Translations = {
     store: string
     used: string
     offers: string
+    people: string
   }
   common: {
     all: string
@@ -649,6 +650,7 @@ export const translations: Record<LocaleCode, Translations> = {
       store: "Loja",
       used: "Usado",
       offers: "Ofertas",
+      people: "Pessoas",
     },
     common: {
       all: "Todos",
@@ -1280,6 +1282,7 @@ export const translations: Record<LocaleCode, Translations> = {
       store: "Store",
       used: "Used",
       offers: "Offers",
+      people: "People",
     },
     common: {
       all: "All",

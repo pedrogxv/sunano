@@ -6,6 +6,7 @@ import { dbErrorResponse } from "@/lib/db-errors"
 import { DISPLAY_NAME_MAX_LENGTH, slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { BIO_MAX_LENGTH } from "@/lib/profile-showcase"
 import {
+  getAdminProfileSummary,
   getUserProfileSettings,
   isDisplayNameAvailable,
   resolveAvailableDisplayName,
@@ -28,6 +29,7 @@ const profileSchema = z.object({
   theme: z.enum(VALID_THEMES).nullable().optional(),
   locale: z.enum(VALID_LOCALES).nullable().optional(),
   banner_url: z.string().trim().url("URL do banner inválida").nullable().optional(),
+  mini_banner_url: z.string().trim().url("URL do mini banner inválida").nullable().optional(),
   bio: z
     .string()
     .trim()
@@ -42,6 +44,25 @@ function defaultNameFromEmail(email: string | null | undefined) {
   return localPart || "Usuário"
 }
 
+/**
+ * Foto que a página de perfil exibe.
+ *
+ * A de `user_profiles` manda — é a que o próprio usuário envia aqui. Quando
+ * ela ainda não existe, cai nas mesmas fontes que a sidebar já usa (perfil
+ * admin e metadados do login social): sem isso o editor jura que a pessoa
+ * não tem foto enquanto o resto do site exibe uma.
+ */
+function resolveAvatarUrl(
+  settingsAvatar: string | null | undefined,
+  adminAvatar: string | null | undefined,
+  metadata: Record<string, unknown> | null | undefined
+): string | null {
+  if (settingsAvatar) return settingsAvatar
+  if (adminAvatar) return adminAvatar
+  const fromLogin = metadata?.avatar_url ?? metadata?.picture
+  return typeof fromLogin === "string" && fromLogin ? fromLogin : null
+}
+
 export async function GET() {
   try {
     const supabase = await createSupabaseServerClient()
@@ -51,7 +72,10 @@ export async function GET() {
       return NextResponse.json({ error: "Sessão expirada. Entre novamente." }, { status: 401 })
     }
 
-    const settings = await getUserProfileSettings(authData.user.id)
+    const [settings, adminProfile] = await Promise.all([
+      getUserProfileSettings(authData.user.id),
+      getAdminProfileSummary(authData.user.id),
+    ])
     const email = authData.user.email ?? null
     const displayName = settings?.display_name?.trim() || defaultNameFromEmail(email)
 
@@ -62,12 +86,17 @@ export async function GET() {
         email,
         display_name: displayName,
         display_slug: settings?.display_slug ?? slugifyDisplayName(displayName),
-        avatar_url: settings?.avatar_url ?? null,
+        avatar_url: resolveAvatarUrl(
+          settings?.avatar_url,
+          adminProfile?.avatar_url,
+          authData.user.user_metadata
+        ),
         theme: settings?.theme ?? null,
         locale: settings?.locale ?? null,
         lgpd_consent_at: settings?.lgpd_consent_at ?? null,
         lgpd_consent_version: settings?.lgpd_consent_version ?? null,
         banner_url: settings?.banner_url ?? null,
+        mini_banner_url: settings?.mini_banner_url ?? null,
         bio: settings?.bio ?? null,
         account_tier: coerceAccountTier(settings?.account_tier),
       },
@@ -132,11 +161,15 @@ export async function POST(request: Request) {
       theme: parsed.data.theme,
       locale: parsed.data.locale,
       bannerUrl: parsed.data.banner_url,
+      miniBannerUrl: parsed.data.mini_banner_url,
       // Bio vazia é limpeza do campo, não string vazia no banco.
       bio: parsed.data.bio === undefined ? undefined : parsed.data.bio || null,
     })
 
-    const settings = await getUserProfileSettings(authData.user.id)
+    const [settings, adminProfile] = await Promise.all([
+      getUserProfileSettings(authData.user.id),
+      getAdminProfileSummary(authData.user.id),
+    ])
 
     return NextResponse.json({
       ok: true,
@@ -145,12 +178,17 @@ export async function POST(request: Request) {
         email,
         display_name: settings?.display_name?.trim() || defaultNameFromEmail(email),
         display_slug: settings?.display_slug ?? null,
-        avatar_url: settings?.avatar_url ?? null,
+        avatar_url: resolveAvatarUrl(
+          settings?.avatar_url,
+          adminProfile?.avatar_url,
+          authData.user.user_metadata
+        ),
         theme: settings?.theme ?? null,
         locale: settings?.locale ?? null,
         lgpd_consent_at: settings?.lgpd_consent_at ?? null,
         lgpd_consent_version: settings?.lgpd_consent_version ?? null,
         banner_url: settings?.banner_url ?? null,
+        mini_banner_url: settings?.mini_banner_url ?? null,
         bio: settings?.bio ?? null,
         account_tier: coerceAccountTier(settings?.account_tier),
       },

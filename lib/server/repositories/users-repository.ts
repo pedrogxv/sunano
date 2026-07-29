@@ -1,7 +1,11 @@
 import "server-only"
 
+import { coerceAccountTier } from "@/lib/account-tier"
 import { slugifyDisplayName } from "@/lib/profile-name"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import type { PublicProfileSummary } from "@/lib/user-directory"
+
+export type { PublicProfileSummary } from "@/lib/user-directory"
 
 /**
  * Repositório de Perfis — acesso às tabelas `user_profiles` e `admin_profiles`.
@@ -44,6 +48,295 @@ export async function getUserProfiles(
     map[row.id] = { display_name: row.display_name, avatar_url: row.avatar_url }
   }
   return map
+}
+
+const DIRECTORY_COLUMNS =
+  "id, display_name, display_slug, avatar_url, mini_banner_url, account_tier, profile_views, created_at"
+
+type DirectoryRow = {
+  id: string
+  display_name: string | null
+  display_slug: string
+  avatar_url: string | null
+  mini_banner_url: string | null
+  account_tier: string | null
+  profile_views: number | null
+  created_at: string
+}
+
+function toProfileSummary(row: DirectoryRow, followers = 0): PublicProfileSummary {
+  return {
+    id: row.id,
+    display_name: row.display_name?.trim() || `Membro ${row.id.slice(0, 6)}`,
+    display_slug: row.display_slug,
+    avatar_url: row.avatar_url,
+    mini_banner_url: row.mini_banner_url,
+    account_tier: coerceAccountTier(row.account_tier),
+    profile_views: row.profile_views ?? 0,
+    followers,
+    created_at: row.created_at,
+  }
+}
+
+/**
+ * Quantos seguidores cada usuário tem, indexado por id.
+ *
+ * Uma query só para o lote inteiro: pedir o contador perfil a perfil faria
+ * a grade de `/pessoas` disparar uma consulta por card.
+ */
+async function countFollowersByUser(userIds: string[]): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {}
+  if (userIds.length === 0) return counts
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_follows")
+    .select("following_id")
+    .in("following_id", userIds)
+
+  if (error) {
+    console.error("[users-repository] countFollowersByUser:", error)
+    return counts
+  }
+  for (const row of (data ?? []) as Array<{ following_id: string }>) {
+    counts[row.following_id] = (counts[row.following_id] ?? 0) + 1
+  }
+  return counts
+}
+
+/** Anexa o contador de seguidores a um lote de linhas do diretório. */
+async function withFollowers(rows: DirectoryRow[]): Promise<PublicProfileSummary[]> {
+  const counts = await countFollowersByUser(rows.map((r) => r.id))
+  return rows.map((row) => toProfileSummary(row, counts[row.id] ?? 0))
+}
+
+/**
+ * Busca perfis pelo nome de exibição. Termos com menos de 2 caracteres não
+ * buscam — evita varrer a tabela a cada tecla antes de o usuário terminar
+ * de escrever.
+ */
+export async function searchUserProfiles(
+  query: string,
+  limit = 10
+): Promise<PublicProfileSummary[]> {
+  const trimmed = query.trim()
+  if (trimmed.length < 2) return []
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_profiles")
+    .select(DIRECTORY_COLUMNS)
+    .ilike("display_name", `%${trimmed}%`)
+    .order("profile_views", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("[users-repository] searchUserProfiles:", error)
+    return []
+  }
+  return withFollowers((data ?? []) as DirectoryRow[])
+}
+
+/** Perfis com mais visitas. */
+export async function getMostVisitedProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_profiles")
+    .select(DIRECTORY_COLUMNS)
+    .order("profile_views", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("[users-repository] getMostVisitedProfiles:", error)
+    return []
+  }
+  return withFollowers((data ?? []) as DirectoryRow[])
+}
+
+/** Perfis criados mais recentemente. */
+export async function getNewestProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_profiles")
+    .select(DIRECTORY_COLUMNS)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("[users-repository] getNewestProfiles:", error)
+    return []
+  }
+  return withFollowers((data ?? []) as DirectoryRow[])
+}
+
+/** Perfis que `userId` segue, do mais recente para o mais antigo. */
+export async function getFollowingProfiles(
+  userId: string,
+  limit = 48
+): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+  const { data: follows, error } = await db
+    .from("user_follows")
+    .select("following_id, created_at")
+    .eq("follower_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("[users-repository] getFollowingProfiles:", error)
+    return []
+  }
+
+  const ids = (follows ?? []).map((r) => (r as { following_id: string }).following_id)
+  if (ids.length === 0) return []
+
+  const { data, error: profilesError } = await db
+    .from("user_profiles")
+    .select(DIRECTORY_COLUMNS)
+    .in("id", ids)
+
+  if (profilesError) {
+    console.error("[users-repository] getFollowingProfiles:", profilesError)
+    return []
+  }
+
+  // O `in` volta em ordem arbitrária — restaura a ordem de quando seguiu.
+  const rank = new Map(ids.map((id, index) => [id, index]))
+  const profiles = await withFollowers((data ?? []) as DirectoryRow[])
+  return profiles.sort(
+    (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+  )
+}
+
+/**
+ * Perfis com mais seguidores.
+ *
+ * A ordenação acontece aqui e não no banco porque o contador não é uma
+ * coluna: agregar `user_follows` e ordenar exigiria uma view/função. Enquanto
+ * a base de membros for pequena isso não compensa — o dia em que compensar,
+ * a troca fica contida nesta função.
+ */
+export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+  const { data: followRows, error } = await db.from("user_follows").select("following_id")
+
+  if (error) {
+    console.error("[users-repository] getMostFollowedProfiles:", error)
+    return []
+  }
+
+  const counts: Record<string, number> = {}
+  for (const row of (followRows ?? []) as Array<{ following_id: string }>) {
+    counts[row.following_id] = (counts[row.following_id] ?? 0) + 1
+  }
+
+  const topIds = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id)
+
+  if (topIds.length === 0) return []
+
+  const { data, error: profilesError } = await db
+    .from("user_profiles")
+    .select(DIRECTORY_COLUMNS)
+    .in("id", topIds)
+
+  if (profilesError) {
+    console.error("[users-repository] getMostFollowedProfiles:", profilesError)
+    return []
+  }
+
+  // O `in` volta em ordem arbitrária — reordena pelo ranking de seguidores.
+  return ((data ?? []) as DirectoryRow[])
+    .map((row) => toProfileSummary(row, counts[row.id] ?? 0))
+    .sort((a, b) => b.followers - a.followers)
+}
+
+/**
+ * Registra uma visita ao perfil público. Via RPC (`increment_profile_views`)
+ * para o incremento ser atômico — ver `20260730_people_directory.sql`.
+ */
+export async function incrementProfileViews(userId: string): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const { error } = await db.rpc("increment_profile_views", { p_user_id: userId })
+  if (error) console.error("[users-repository] incrementProfileViews:", error)
+}
+
+/** Quantas pessoas seguem este perfil. */
+export async function countFollowers(userId: string): Promise<number> {
+  const db = createSupabaseAdminClient()
+  const { count, error } = await db
+    .from("user_follows")
+    .select("follower_id", { count: "exact", head: true })
+    .eq("following_id", userId)
+
+  if (error) {
+    console.error("[users-repository] countFollowers:", error)
+    return 0
+  }
+  return count ?? 0
+}
+
+/** `true` quando `followerId` já segue `followingId`. */
+export async function isFollowing(followerId: string, followingId: string): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_follows")
+    .select("follower_id")
+    .eq("follower_id", followerId)
+    .eq("following_id", followingId)
+    .maybeSingle()
+  return Boolean(data)
+}
+
+/**
+ * Passa a seguir um perfil. Idempotente: a PK composta transforma o segundo
+ * "seguir" num conflito, que é ignorado em vez de virar erro na UI.
+ */
+export async function followUser(followerId: string, followingId: string): Promise<void> {
+  if (followerId === followingId) return
+  const db = createSupabaseAdminClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (db.from("user_follows") as any).upsert(
+    { follower_id: followerId, following_id: followingId },
+    { onConflict: "follower_id,following_id", ignoreDuplicates: true }
+  )
+  if (error) throw error
+}
+
+/** Deixa de seguir. Idempotente. */
+export async function unfollowUser(followerId: string, followingId: string): Promise<void> {
+  const db = createSupabaseAdminClient()
+  await db
+    .from("user_follows")
+    .delete()
+    .eq("follower_id", followerId)
+    .eq("following_id", followingId)
+}
+
+/**
+ * Dentre `userIds`, quais o usuário já segue. Serve para a grade de
+ * `/pessoas` renderizar o estado certo de cada botão sem uma chamada por card.
+ */
+export async function getFollowedIdsAmong(
+  followerId: string,
+  userIds: string[]
+): Promise<string[]> {
+  if (userIds.length === 0) return []
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_follows")
+    .select("following_id")
+    .eq("follower_id", followerId)
+    .in("following_id", userIds)
+
+  if (error) {
+    console.error("[users-repository] getFollowedIdsAmong:", error)
+    return []
+  }
+  return (data ?? []).map((r) => (r as { following_id: string }).following_id)
 }
 
 /**
@@ -160,6 +453,7 @@ export type UserProfileSettings = {
   lgpd_consent_version: string | null
   /** Campos da vitrine pública (`/perfil/<slug>`). */
   banner_url: string | null
+  mini_banner_url: string | null
   bio: string | null
   /** Somente leitura pelo usuário — definido pela administração. */
   account_tier: string | null
@@ -173,7 +467,7 @@ export async function getUserProfileSettings(
   const { data } = await db
     .from("user_profiles")
     .select(
-      "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, bio, account_tier"
+      "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier"
     )
     .eq("id", userId)
     .maybeSingle()
@@ -197,6 +491,7 @@ export async function updateUserProfileSettings(
     theme?: string | null
     locale?: string | null
     bannerUrl?: string | null
+    miniBannerUrl?: string | null
     bio?: string | null
   }
 ): Promise<void> {
@@ -207,6 +502,7 @@ export async function updateUserProfileSettings(
   if (changes.theme !== undefined) payload.theme = changes.theme
   if (changes.locale !== undefined) payload.locale = changes.locale
   if (changes.bannerUrl !== undefined) payload.banner_url = changes.bannerUrl
+  if (changes.miniBannerUrl !== undefined) payload.mini_banner_url = changes.miniBannerUrl
   if (changes.bio !== undefined) payload.bio = changes.bio
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })

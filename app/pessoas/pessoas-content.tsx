@@ -1,0 +1,246 @@
+"use client"
+
+import Link from "next/link"
+import { Eye, Heart, Search, UserPlus, Users, X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+
+import { ProfileCard } from "@/components/people/ProfileCard"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
+import type { DirectorySort, PublicProfileSummary } from "@/lib/user-directory"
+
+const TABS: { key: DirectorySort; label: string; icon: React.ElementType }[] = [
+  { key: "visited", label: "Mais visitados", icon: Eye },
+  { key: "followed", label: "Mais seguidos", icon: Users },
+  { key: "following", label: "Seguindo", icon: Heart },
+]
+
+/** As duas primeiras abas são rankings; "Seguindo" é uma lista pessoal. */
+const RANKED_TABS: DirectorySort[] = ["visited", "followed"]
+
+export function PessoasContent({
+  initialProfiles,
+  followedIds,
+  currentUserId,
+}: {
+  initialProfiles: PublicProfileSummary[]
+  followedIds: string[]
+  currentUserId: string | null
+}) {
+  const [tab, setTab] = useState<DirectorySort>("visited")
+  const [profiles, setProfiles] = useState(initialProfiles)
+  const [loading, setLoading] = useState(false)
+  const [requiresAuth, setRequiresAuth] = useState(false)
+  const [query, setQuery] = useState("")
+  const [results, setResults] = useState<PublicProfileSummary[]>([])
+  const [searching, setSearching] = useState(false)
+  // Acumula o que já se sabe: cada aba/busca traz o estado dos seus perfis,
+  // e o conjunto cresce em vez de descartar o que veio antes.
+  const [following, setFollowing] = useState(() => new Set(followedIds))
+  // A primeira aba já veio renderizada pelo servidor — não refaz o fetch dela.
+  const hydrated = useRef(true)
+
+  useEffect(() => {
+    if (hydrated.current) {
+      hydrated.current = false
+      return
+    }
+    let active = true
+    // Mesmo padrão (e mesmo aviso pré-existente) de SidebarRankingSection.tsx.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true)
+    fetch(`/api/users/directory?sort=${tab}&limit=48`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!active) return
+        setProfiles(data.profiles ?? [])
+        setRequiresAuth(Boolean(data.requiresAuth))
+        setFollowing((prev) => new Set([...prev, ...((data.followedIds ?? []) as string[])]))
+      })
+      .catch(() => {
+        if (active) setProfiles([])
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [tab])
+
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (trimmed.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setResults([])
+      setSearching(false)
+      return
+    }
+
+    let active = true
+    setSearching(true)
+    const timer = setTimeout(() => {
+      fetch(`/api/users/search?q=${encodeURIComponent(trimmed)}&limit=24`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (!active) return
+          setResults(data.profiles ?? [])
+          setFollowing((prev) => new Set([...prev, ...((data.followedIds ?? []) as string[])]))
+        })
+        .catch(() => {
+          if (active) setResults([])
+        })
+        .finally(() => {
+          if (active) setSearching(false)
+        })
+    }, 300)
+
+    return () => {
+      active = false
+      clearTimeout(timer)
+    }
+  }, [query])
+
+  const isSearching = query.trim().length >= 2
+  const shown = isSearching ? results : profiles
+  const isRanked = !isSearching && RANKED_TABS.includes(tab)
+  const metric: "views" | "followers" = tab === "visited" && !isSearching ? "views" : "followers"
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
+      {/* Busca — o título da página fica a cargo da TopBar. */}
+      <div className="flex flex-col items-center">
+        <div className="relative w-full max-w-md">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar perfil pelo nome..."
+            className={cn(
+              "h-11 rounded-xl border-border bg-card pl-10 text-foreground shadow-sm",
+              query && "pr-10"
+            )}
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Limpar busca"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {!isSearching && (
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
+          {TABS.map((item) => {
+            const Icon = item.icon
+            const active = tab === item.key
+            return (
+              <button
+                key={item.key}
+                onClick={() => setTab(item.key)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-semibold transition-all",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                    : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
+                )}
+              >
+                <Icon className="size-3.5" />
+                {item.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      <div className="mt-6">
+        {loading || searching ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[232px] animate-pulse rounded-2xl border border-border bg-muted/20"
+              />
+            ))}
+          </div>
+        ) : requiresAuth ? (
+          <EmptyState
+            icon={UserPlus}
+            title="Entre para ver quem você segue"
+            description="Sua lista de perfis seguidos aparece aqui depois do login."
+            action={{ href: "/login", label: "Entrar" }}
+          />
+        ) : shown.length === 0 ? (
+          <EmptyState
+            icon={isSearching ? Search : tab === "following" ? Heart : Users}
+            title={
+              isSearching
+                ? "Nenhum perfil encontrado"
+                : tab === "following"
+                  ? "Você ainda não segue ninguém"
+                  : "Nenhum membro por aqui ainda"
+            }
+            description={
+              isSearching
+                ? "Tente outro nome — a busca é pelo nome de exibição."
+                : tab === "following"
+                  ? "Encontre pessoas nas outras abas e toque em Seguir."
+                  : undefined
+            }
+          />
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {shown.map((profile, index) => (
+              <ProfileCard
+                key={profile.id}
+                profile={profile}
+                metric={metric}
+                rank={isRanked ? index + 1 : undefined}
+                isFollowing={following.has(profile.id)}
+                isSelf={profile.id === currentUserId}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  description,
+  action,
+}: {
+  icon: React.ElementType
+  title: string
+  description?: string
+  action?: { href: string; label: string }
+}) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-dashed border-border py-16 text-center">
+      <span className="flex size-12 items-center justify-center rounded-full bg-muted/40 text-muted-foreground">
+        <Icon className="size-5" />
+      </span>
+      <p className="mt-3 text-sm font-semibold text-foreground">{title}</p>
+      {description && (
+        <p className="mt-1 max-w-xs text-xs text-muted-foreground">{description}</p>
+      )}
+      {action && (
+        <Link
+          href={action.href}
+          className="mt-4 rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          {action.label}
+        </Link>
+      )}
+    </div>
+  )
+}

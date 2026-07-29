@@ -70,6 +70,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/blog":              { title: "Reviews", description: "Reviews completos e análises detalhadas." },
   "/offers":            { title: "Ofertas", description: "Promoções e descontos selecionados do Telegram." },
   "/forum":             { title: "Fórum", description: "Discussões e perguntas da comunidade." },
+  "/pessoas":           { title: "Pessoas", description: "Encontre outros membros, veja os destaques e siga quem você curte." },
   "/perfil":            { title: "Minha conta", description: "Perfil, vitrine, segurança e preferências." },
   "/videos":            { title: "Vídeos", description: "Conteúdo em vídeo do canal." },
   "/changelog":         { title: "Changelog", description: "Histórico de mudanças no site." },

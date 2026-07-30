@@ -231,11 +231,11 @@ const NON_KEYBOARD_MOUSE_CATEGORIES = CATEGORIES.map((c) => c.key).filter(
 )
 
 const TAGS_OPTIONS: { key: Tag; en: string; pt: string; color: string; categories?: Category[] }[] = [
-  { key: "competitive", en: "Competitive", pt: "Competitivo", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400", categories: ["keyboard", "mouse"] },
-  { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400", categories: ["keyboard", "mouse"] },
-  { key: "value", en: "Value", pt: "Custo-Benefício", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400", categories: ["keyboard", "mouse"] },
-  { key: "cheap", en: "Cheap", pt: "Barato", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400", categories: ["keyboard", "mouse"] },
-  { key: "expensive", en: "Expensive", pt: "Caro", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400", categories: ["keyboard", "mouse"] },
+  { key: "competitive", en: "Competitive", pt: "Competitivo", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400", categories: ["keyboard", "pcb", "mouse"] },
+  { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400", categories: ["keyboard", "pcb", "mouse"] },
+  { key: "value", en: "Value", pt: "Custo-Benefício", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400", categories: ["keyboard", "pcb", "mouse"] },
+  { key: "cheap", en: "Cheap", pt: "Barato", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400", categories: ["keyboard", "pcb", "mouse"] },
+  { key: "expensive", en: "Expensive", pt: "Caro", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400", categories: ["keyboard", "pcb", "mouse"] },
   { key: "light", en: "Light", pt: "Leve", color: "border-sky-400/50 bg-sky-500/10 text-sky-300 data-[active=true]:bg-sky-500/30 data-[active=true]:border-sky-400", categories: ["mouse"] },
   { key: "heavy", en: "Heavy", pt: "Pesado", color: "border-slate-400/50 bg-slate-500/10 text-slate-300 data-[active=true]:bg-slate-500/30 data-[active=true]:border-slate-400", categories: ["mouse"] },
   { key: "unbalanced", en: "Unbalanced weight", pt: "Peso Desbalanceado", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
@@ -245,8 +245,8 @@ const TAGS_OPTIONS: { key: Tag; en: string; pt: string; color: string; categorie
   { key: "scroll_hard", en: "Hard scroll", pt: "Scroll Duro", color: "border-stone-400/50 bg-stone-500/10 text-stone-300 data-[active=true]:bg-stone-500/30 data-[active=true]:border-stone-400", categories: ["mouse"] },
   { key: "scroll_soft", en: "Soft scroll", pt: "Scroll Mole", color: "border-lime-400/50 bg-lime-500/10 text-lime-300 data-[active=true]:bg-lime-500/30 data-[active=true]:border-lime-400", categories: ["mouse"] },
   { key: "trimode", en: "Trimode", pt: "Trimode", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
-  { key: "stable", en: "Stable", pt: "Estável", color: "border-teal-400/50 bg-teal-500/10 text-teal-300 data-[active=true]:bg-teal-500/30 data-[active=true]:border-teal-400", categories: ["keyboard"] },
-  { key: "unstable", en: "Unstable", pt: "Instável", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400", categories: ["keyboard"] },
+  { key: "stable", en: "Stable", pt: "Estável", color: "border-teal-400/50 bg-teal-500/10 text-teal-300 data-[active=true]:bg-teal-500/30 data-[active=true]:border-teal-400", categories: ["keyboard", "pcb"] },
+  { key: "unstable", en: "Unstable", pt: "Instável", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400", categories: ["keyboard", "pcb"] },
   { key: "8_80", en: "8 80", pt: "8 80", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
   { key: "poron", en: "Poron", pt: "Poron", color: "border-purple-400/50 bg-purple-500/10 text-purple-300 data-[active=true]:bg-purple-500/30 data-[active=true]:border-purple-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
   { key: "borracha", en: "Rubber", pt: "Borracha", color: "border-zinc-400/50 bg-zinc-500/10 text-zinc-300 data-[active=true]:bg-zinc-500/30 data-[active=true]:border-zinc-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
@@ -260,7 +260,7 @@ const TAGS_OPTIONS: { key: Tag; en: string; pt: string; color: string; categorie
   { key: "mug", en: "Mug", pt: "Mug", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
   { key: "macio", en: "Soft", pt: "Macio", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
   { key: "afetado_umidade", en: "Moisture affected", pt: "Afetado por umidade", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
-  { key: "ultrapassado", en: "Outdated", pt: "Ultrapassado", color: "border-gray-400/50 bg-gray-500/10 text-gray-300 data-[active=true]:bg-gray-500/30 data-[active=true]:border-gray-400", categories: ["keyboard"] },
+  { key: "ultrapassado", en: "Outdated", pt: "Ultrapassado", color: "border-gray-400/50 bg-gray-500/10 text-gray-300 data-[active=true]:bg-gray-500/30 data-[active=true]:border-gray-400", categories: ["keyboard", "pcb"] },
 ]
 
 const BUY_LINK_PLATFORMS: {

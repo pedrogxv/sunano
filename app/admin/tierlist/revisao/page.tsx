@@ -19,7 +19,7 @@ import { useT } from "@/lib/use-t"
 import { CARD_TIER_STYLES } from "@/lib/tierlist-theme"
 import { mapTier } from "@/lib/tier-utils"
 
-type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type ReviewCategoryKey = "performance" | "store" | "videoReview" | "specsComments"
 
@@ -33,10 +33,11 @@ interface ReviewPeripheral {
   specs: Record<string, unknown> | null
 }
 
-const CATEGORY_ORDER: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+const CATEGORY_ORDER: Category[] = ["mouse", "keyboard", "pcb", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
 
 const CATEGORY_LABELS: Record<Category, { pt: string; en: string }> = {
   keyboard: { pt: "Teclado", en: "Keyboard" },
+  pcb: { pt: "PCB", en: "PCB" },
   mouse: { pt: "Mouse", en: "Mouse" },
   mousepad: { pt: "Mousepad", en: "Mousepad" },
   glasspad: { pt: "Glasspad", en: "Glasspad" },

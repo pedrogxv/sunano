@@ -39,7 +39,7 @@ import { removeBackground, fileToDataUrl } from "@/lib/client/remove-background"
 import { SWITCH_PRICE_TIERS } from "@/lib/switch-price-tier"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
 
-type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
 type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado"
@@ -54,7 +54,7 @@ const peripheralSchema = z.object({
     .min(1, "Selecione a marca")
     .max(120, "Marca muito longa (máx. 120 caracteres)"),
   category: z.enum(
-    ["keyboard", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp"],
+    ["keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp"],
     { message: "Selecione uma das categorias disponíveis" }
   ),
   tier: z.union([z.enum(["GOAT", "SS", "S", "A", "B", "C", "L"]), z.literal("__none__")]),
@@ -153,6 +153,7 @@ type PeripheralFormData = z.infer<typeof peripheralSchema>
 const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
   { key: "mouse", label: "Mouse", emoji: "🖱️" },
   { key: "keyboard", label: "Teclado", emoji: "⌨️" },
+  { key: "pcb", label: "PCB", emoji: "🟩" },
   { key: "mousepad", label: "Mousepad", emoji: "🟦" },
   { key: "glasspad", label: "Glasspad", emoji: "🪟" },
   { key: "iem", label: "IEM", emoji: "🎧" },
@@ -204,6 +205,7 @@ const TIERLIST_MODE_OPTIONS: Record<Category, { key: TierlistMode; label: string
     { key: "value", label: "Nacional" },
     { key: "recommended", label: "Recomendado" },
   ],
+  pcb: DEFAULT_TIERLIST_MODE_OPTIONS,
   mouse: DEFAULT_TIERLIST_MODE_OPTIONS,
   iem: DEFAULT_TIERLIST_MODE_OPTIONS,
   headset: DEFAULT_TIERLIST_MODE_OPTIONS,
@@ -1726,6 +1728,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 if (field.key === "ratingBattery" && watchedCategory === "keyboard") {
                   label = "Digitação"
                 }
+                // PCB avulsa: quem monta o teclado define construção e digitação depois,
+                // então essas duas notas não fazem sentido aqui.
+                if (watchedCategory === "pcb" && (field.key === "ratingBuild" || field.key === "ratingBattery")) {
+                  return null
+                }
                 if (watchedCategory === "mousepad") {
                   if (field.key === "ratingSoftware") label = "Base"
                   if (field.key === "ratingBuild") label = "Superfície"
@@ -2009,6 +2016,163 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Vincular Switch (opcional)"}</label>
                   <LinkedSwitchPicker value={linkedSwitch} onChange={handleLinkedSwitchChange} />
                   <p className="text-[10px] text-muted-foreground/60">{"Aponta para um Switch cadastrado — vira link na página. Se vazio, mostra o texto acima."}</p>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>
+                  <Input className="border-border bg-background" placeholder="0.5ms" {...form.register("latency")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deadzone</label>
+                  <Input className="border-border bg-background" placeholder="0.1mm" {...form.register("deadzone")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">RT Mínimo</label>
+                  <Input className="border-border bg-background" placeholder="0.1mm" {...form.register("rtMin")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Plate</label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" type="button" className="w-full justify-between border-border bg-background h-9 px-3 font-normal">
+                        <span className="line-clamp-1 text-sm">
+                          {form.watch("keyboardPlate") || "Selecione"}
+                        </span>
+                        <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-48">
+                      {(["FR4", "Carbono", "Alumínio", "Polipropileno", "PC"]).map((opt) => {
+                        const current = form.watch("keyboardPlate") || ""
+                        const selected = current.split("/").map((s) => s.trim()).includes(opt)
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={opt}
+                            checked={selected}
+                            onCheckedChange={(checked) => {
+                              const currArr = current.split("/").map((s) => s.trim()).filter(Boolean)
+                              const next = checked
+                                ? Array.from(new Set([...currArr, opt]))
+                                : currArr.filter((c) => c !== opt)
+                              form.setValue("keyboardPlate", next.join(" / "))
+                            }}
+                          >
+                            {opt}
+                          </DropdownMenuCheckboxItem>
+                        )
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hot Swap</label>
+                  <Select value={form.watch("hotSwap") || ""} onValueChange={(v) => form.setValue("hotSwap", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Case</label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm" type="button" className="w-full justify-between border-border bg-background h-9 px-3 font-normal">
+                        <span className="line-clamp-1 text-sm">
+                          {form.watch("keyboardCase") || "Selecione"}
+                        </span>
+                        <ChevronDown className="size-4 text-muted-foreground shrink-0" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-48">
+                      {(["Plástico", "Fibra de Carbono", "Alumínio", "Magnésio", "Acrílico", "Madeira"]).map((opt) => {
+                        const current = form.watch("keyboardCase") || ""
+                        const selected = current.split("/").map((s) => s.trim()).includes(opt)
+                        return (
+                          <DropdownMenuCheckboxItem
+                            key={opt}
+                            checked={selected}
+                            onCheckedChange={(checked) => {
+                              const currArr = current.split("/").map((s) => s.trim()).filter(Boolean)
+                              const next = checked
+                                ? Array.from(new Set([...currArr, opt]))
+                                : currArr.filter((c) => c !== opt)
+                              form.setValue("keyboardCase", next.join(" / "))
+                            }}
+                          >
+                            {opt}
+                          </DropdownMenuCheckboxItem>
+                        )
+                      })}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Features</label>
+                  <Input className="border-border bg-background" placeholder="Rapid Trigger, Hall Effect, RGB..." {...form.register("features")} />
+                </div>
+              </>
+            )}
+
+            {watchedCategory === "pcb" && (
+              <>
+                {/* PCB avulsa: mesmas specs do Teclado, exceto Switch — quem monta o
+                    teclado depois escolhe e instala o switch. */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</label>
+                  <Select value={form.watch("keyboardLayout") || ""} onValueChange={(v) => form.setValue("keyboardLayout", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["60%", "65%", "75%", "TKL", "Full-size"].map((l) => (
+                        <SelectItem key={l} value={l}>{l}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
+                  <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wired">{"Com fio"}</SelectItem>
+                      <SelectItem value="wireless">{"Sem fio"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
+                  <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Peso"}</label>
+                  <Input className="border-border bg-background" placeholder="800g" {...form.register("weight")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Type</label>
+                  <Select value={form.watch("keyboardType") || ""} onValueChange={(v) => form.setValue("keyboardType", v)}>
+                    <SelectTrigger className="border-border bg-background">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mechanical">{"Mecânico"}</SelectItem>
+                      <SelectItem value="optical">{"Óptico"}</SelectItem>
+                      <SelectItem value="magnetic">{"Magnético"}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>

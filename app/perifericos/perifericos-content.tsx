@@ -26,7 +26,7 @@ import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
 import { cn } from "@/lib/utils"
 
-type Category = "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type CategoryFilter = Category | "outros"
 type SortKey = "recent" | "rank" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -74,10 +74,10 @@ interface PerifericosContentProps {
   showAdminActions?: boolean
 }
 
-const CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+const CATEGORIES: Category[] = ["mouse", "keyboard", "pcb", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
 
 const HERO_MAIN_CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors"]
-const HERO_OTHER_CATEGORIES: Category[] = ["iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+const HERO_OTHER_CATEGORIES: Category[] = ["pcb", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
 
 function categoryMatches(itemCategory: Category, target: CategoryFilter): boolean {
   return target === "outros" ? HERO_OTHER_CATEGORIES.includes(itemCategory) : itemCategory === target

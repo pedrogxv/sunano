@@ -15,7 +15,7 @@ export type HumanizedDbError = {
 }
 
 const PERIPHERAL_CATEGORIES = [
-  "mouse", "keyboard", "mousepad", "glasspad", "iem", "headset",
+  "mouse", "keyboard", "pcb", "mousepad", "glasspad", "iem", "headset",
   "feet", "chairs", "monitors", "switches", "dac_amp",
 ] as const
 

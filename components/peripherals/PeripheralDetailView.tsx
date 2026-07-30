@@ -357,6 +357,19 @@ export function PeripheralDetailView({
           { label: "RT Minimo", value: details.rtMin, group: "performance" },
           { label: "Features", value: details.features, group: "performance" },
         ]
+      case "pcb":
+        // PCB avulsa: mesmas specs do teclado, sem a linha de Switch — a PCB é vendida
+        // sem switches, quem monta o teclado escolhe e instala depois.
+        return [...specsBase,
+          { label: "Layout", value: specs.keyboardLayout, group: "specs" },
+          { label: "Tipo", value: formatKeyboardType(specs.keyboardType), group: "specs" },
+          { label: "Conectividade", value: formatConnectivity(specs.connectivity), group: "specs" },
+          { label: "Peso", value: details.weight ?? specs.weight, group: "specs" },
+          { label: "Latencia", value: details.latency ?? specs.latency, group: "performance" },
+          { label: "Deadzone", value: details.deadzone, group: "performance" },
+          { label: "RT Minimo", value: details.rtMin, group: "performance" },
+          { label: "Features", value: details.features, group: "performance" },
+        ]
       case "mousepad":
       case "glasspad":
         return [...specsBase,
@@ -452,9 +465,15 @@ export function PeripheralDetailView({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <RatingRow label="Geral" rating={ratings.overall} />
-                  <RatingRow label={data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />
+                  {/* PCB avulsa: construção e digitação dependem do plate/case/switch que
+                      quem monta escolhe depois, então essas notas não se aplicam aqui. */}
+                  {data.category !== "pcb" && (
+                    <RatingRow label={data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />
+                  )}
                   <RatingRow label={data.category === "mousepad" ? "Base" : "Software"} rating={ratings.software} />
-                  <RatingRow label={data.category === "keyboard" ? "Digitação" : data.category === "mousepad" ? "Costura" : "Bateria"} rating={ratings.battery} />
+                  {data.category !== "pcb" && (
+                    <RatingRow label={data.category === "keyboard" ? "Digitação" : data.category === "mousepad" ? "Costura" : "Bateria"} rating={ratings.battery} />
+                  )}
                   <RatingRow label="Performance" rating={ratings.performance} />
                   <RatingRow label="QC" rating={ratings.qc} />
                   <RatingRow label="Custo-beneficio" rating={ratings.value} />

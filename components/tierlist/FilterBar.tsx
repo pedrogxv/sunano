@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils"
 type MouseShape = "symmetrical" | "ergonomic"
 type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
 type PriceBand = "all" | "budget" | "mid" | "premium"
-type Category = "all" | "keyboard" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 
 const KEYBOARD_LAYOUTS: KeyboardLayout[] = ["60%", "75%", "tkl", "full-size"]
 function formatLabel(value: string) {
@@ -66,6 +66,7 @@ export function FilterBar({
   const t = useT()
   const categoryOptions: { key: Category; label: string }[] = [
     { key: "keyboard", label: t.categories.labels.keyboard },
+    { key: "pcb",      label: t.categories.labels.pcb },
     { key: "mouse",    label: t.categories.labels.mouse },
     { key: "mousepad", label: t.categories.labels.mousepad },
     { key: "glasspad", label: t.categories.labels.glasspad },

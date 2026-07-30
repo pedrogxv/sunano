@@ -44,6 +44,7 @@ export function getLanguageEntry(locale: LocaleCode) {
 
 export type CategoryKey =
   | "keyboard"
+  | "pcb"
   | "mouse"
   | "mousepad"
   | "glasspad"
@@ -714,6 +715,7 @@ export const translations: Record<LocaleCode, Translations> = {
     categories: {
       labels: {
         keyboard: "Teclados",
+        pcb: "PCBs",
         mouse: "Mouses",
         mousepad: "Mousepads",
         glasspad: "Glasspads",
@@ -728,6 +730,7 @@ export const translations: Record<LocaleCode, Translations> = {
       descriptions: {
         mouse: "Navegue e compare os melhores mouses gamer para encontrar o ideal para o seu estilo de jogo. Formato, tamanho e peso impactam diretamente no conforto e precisão, enquanto métricas como sensor, DPI e polling rate determinam a acurácia em cada movimento.",
         keyboard: "Explore e compare teclados mecânicos, magnéticos e ópticos. O tipo de switch, layout e conectividade influenciam diretamente na experiência de digitação e performance em jogos competitivos.",
+        pcb: "Compare PCBs avulsas para montar seu próprio teclado customizado. Layout, hot-swap e conectividade definem a base sobre a qual você escolhe plate, case e switches depois.",
         mousepad: "Compare mousepads de diferentes superfícies e tamanhos. A escolha da superfície, perfil e dimensões do pad afetam diretamente a velocidade, controle e precisão do seu mouse durante o jogo.",
         glasspad: "Explore glasspads superfícies de vidro de alto desempenho que oferecem deslizamento extremamente suave e durabilidade superior comparado aos mousepads convencionais.",
         headset: "Encontre o headset ideal para gaming e comunicação. Conectividade, qualidade de áudio e conforto são essenciais para longas sessões de jogo com máxima imersão sonora.",
@@ -1424,6 +1427,7 @@ export const translations: Record<LocaleCode, Translations> = {
     categories: {
       labels: {
         keyboard: "Keyboards",
+        pcb: "PCBs",
         mouse: "Mice",
         mousepad: "Mousepads",
         glasspad: "Glasspads",
@@ -1438,6 +1442,7 @@ export const translations: Record<LocaleCode, Translations> = {
       descriptions: {
         mouse: "Browse and compare the best gaming mice to find the ideal match for your play style. Shape, size, and weight directly impact comfort and precision, while performance metrics such as sensor, DPI and polling rate determine accuracy.",
         keyboard: "Explore and compare mechanical, magnetic and optical keyboards. Switch type, layout and connectivity directly influence your typing experience and performance in competitive gaming.",
+        pcb: "Compare standalone PCBs for building your own custom keyboard. Layout, hot-swap and connectivity define the base you'll later pair with a plate, case and switches.",
         mousepad: "Compare mousepads with different surfaces and sizes. The choice of surface, profile and dimensions directly affect the speed, control and precision of your mouse during play.",
         glasspad: "Explore glasspads — high-performance glass surfaces that offer extremely smooth glide and superior durability compared to conventional mousepads.",
         headset: "Find the ideal headset for gaming and communication. Connectivity, audio quality and comfort are essential for long gaming sessions with maximum immersion.",

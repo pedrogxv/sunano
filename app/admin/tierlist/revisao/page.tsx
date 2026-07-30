@@ -33,7 +33,7 @@ interface ReviewPeripheral {
   specs: Record<string, unknown> | null
 }
 
-const CATEGORY_ORDER: Category[] = ["mouse", "keyboard", "pcb", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+const CATEGORY_ORDER: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs"]
 
 const CATEGORY_LABELS: Record<Category, { pt: string; en: string }> = {
   keyboard: { pt: "Teclado", en: "Keyboard" },

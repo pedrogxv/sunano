@@ -153,7 +153,6 @@ type PeripheralFormData = z.infer<typeof peripheralSchema>
 const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
   { key: "mouse", label: "Mouse", emoji: "🖱️" },
   { key: "keyboard", label: "Teclado", emoji: "⌨️" },
-  { key: "pcb", label: "PCB", emoji: "🟩" },
   { key: "mousepad", label: "Mousepad", emoji: "🟦" },
   { key: "glasspad", label: "Glasspad", emoji: "🪟" },
   { key: "iem", label: "IEM", emoji: "🎧" },
@@ -162,6 +161,7 @@ const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
   { key: "chairs", label: "Cadeiras", emoji: "🪑" },
   { key: "monitors", label: "Monitores", emoji: "🖥️" },
   { key: "switches", label: "Switches", emoji: "⌨️" },
+  { key: "pcb", label: "PCB", emoji: "🟩" },
   { key: "dac_amp", label: "DAC/AMP", emoji: "🎚️" },
 ]
 

@@ -66,7 +66,6 @@ export function FilterBar({
   const t = useT()
   const categoryOptions: { key: Category; label: string }[] = [
     { key: "keyboard", label: t.categories.labels.keyboard },
-    { key: "pcb",      label: t.categories.labels.pcb },
     { key: "mouse",    label: t.categories.labels.mouse },
     { key: "mousepad", label: t.categories.labels.mousepad },
     { key: "glasspad", label: t.categories.labels.glasspad },
@@ -76,6 +75,7 @@ export function FilterBar({
     { key: "chairs",   label: t.categories.labels.chairs },
     { key: "monitors", label: t.categories.labels.monitors },
     { key: "switches", label: t.categories.labels.switches },
+    { key: "pcb",      label: t.categories.labels.pcb },
     { key: "dac_amp",  label: t.categories.labels.dac_amp },
   ]
 

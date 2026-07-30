@@ -232,17 +232,9 @@ interface TierlistGridProps {
   category: string
 }
 
-const COMING_SOON_CATEGORIES = ["iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp"]
+const COMING_SOON_CATEGORIES: string[] = []
 
-const MASCOT_IMAGES: Record<string, string> = {
-  iem: "/images/mascot/mascot-working.png",
-  headset: "/images/mascot/mascot-digging.png",
-  feet: "/images/mascot/mascot-warning.png",
-  chairs: "/images/mascot/coming-soon.png",
-  monitors: "/images/mascot/mascot-working.png",
-  switches: "/images/mascot/mascot-digging.png",
-  dac_amp: "/images/mascot/mascot-warning.png",
-}
+const MASCOT_IMAGES: Record<string, string> = {}
 
 export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   const t = useT()

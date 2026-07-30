@@ -74,10 +74,10 @@ interface PerifericosContentProps {
   showAdminActions?: boolean
 }
 
-const CATEGORIES: Category[] = ["mouse", "keyboard", "pcb", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+const CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs"]
 
 const HERO_MAIN_CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors"]
-const HERO_OTHER_CATEGORIES: Category[] = ["pcb", "iem", "dac_amp", "glasspad", "switches", "feet", "chairs"]
+const HERO_OTHER_CATEGORIES: Category[] = ["iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs"]
 
 function categoryMatches(itemCategory: Category, target: CategoryFilter): boolean {
   return target === "outros" ? HERO_OTHER_CATEGORIES.includes(itemCategory) : itemCategory === target

@@ -67,7 +67,6 @@ interface Peripheral {
 
 const CATEGORY_META = [
   { key: "keyboard" as Category, en: "Keyboard", pt: "Teclado" },
-  { key: "pcb" as Category, en: "PCB", pt: "PCB" },
   { key: "mouse" as Category, en: "Mouse", pt: "Mouse" },
   { key: "mousepad" as Category, en: "Mousepad", pt: "Mousepad" },
   { key: "glasspad" as Category, en: "Glasspad", pt: "Glasspad" },
@@ -77,6 +76,7 @@ const CATEGORY_META = [
   { key: "chairs" as Category, en: "Chairs", pt: "Cadeiras" },
   { key: "monitors" as Category, en: "Monitors", pt: "Monitores" },
   { key: "switches" as Category, en: "Switches", pt: "Switches" },
+  { key: "pcb" as Category, en: "PCB", pt: "PCB" },
   { key: "dac_amp" as Category, en: "DAC/AMP", pt: "DAC/AMP" },
 ]
 

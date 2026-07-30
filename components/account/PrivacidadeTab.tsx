@@ -38,7 +38,7 @@ interface PrivacidadeTabProps {
 export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: PrivacidadeTabProps) {
   const [exporting, setExporting] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [confirmEmail, setConfirmEmail] = useState("")
+  const [confirmText, setConfirmText] = useState("")
 
   async function exportData() {
     try {
@@ -67,7 +67,7 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
   }
 
   async function deleteAccount() {
-    if (confirmEmail.trim().toLowerCase() !== (email ?? "").toLowerCase()) {
+    if (confirmText.trim().toLowerCase() !== (email ?? "").toLowerCase()) {
       toast.error("E-mail não confere", {
         description: "Digite seu e-mail exatamente como cadastrado.",
       })
@@ -259,7 +259,7 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
             <AlertDialogTrigger asChild>
               <Button variant="destructive" size="sm" className="gap-2" disabled={deleting}>
                 <Trash2 className="size-4" />
-                Solicitar exclusão de conta
+                Excluir minha conta
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -271,7 +271,8 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
                 <AlertDialogDescription className="space-y-3">
                   <span className="block">
                     Esta ação é <strong>irreversível</strong>. Todos os seus dados pessoais serão
-                    excluídos imediatamente.
+                    excluídos imediatamente ao confirmar — nenhum e-mail de confirmação é
+                    enviado.
                   </span>
                   <span className="block">
                     Para confirmar, digite seu e-mail:{" "}
@@ -279,8 +280,8 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
                   </span>
                   <Input
                     type="email"
-                    value={confirmEmail}
-                    onChange={(e) => setConfirmEmail(e.target.value)}
+                    value={confirmText}
+                    onChange={(e) => setConfirmText(e.target.value)}
                     placeholder={email ?? "seu@email.com"}
                     className="mt-2 border-border bg-background"
                     autoComplete="off"
@@ -288,12 +289,12 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setConfirmEmail("")}>Cancelar</AlertDialogCancel>
+                <AlertDialogCancel onClick={() => setConfirmText("")}>Cancelar</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={deleteAccount}
                   disabled={
                     deleting ||
-                    confirmEmail.trim().toLowerCase() !== (email ?? "").toLowerCase()
+                    confirmText.trim().toLowerCase() !== (email ?? "").toLowerCase()
                   }
                   className="bg-red-600 text-white hover:bg-red-700"
                 >

@@ -4,11 +4,12 @@ import { UserLoginForm } from "@/components/auth/UserLoginForm"
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ password_updated?: string; error?: string }>
+  searchParams: Promise<{ password_updated?: string; error?: string; deleted?: string }>
 }) {
   const params = await searchParams
   const passwordUpdated = params.password_updated === "1"
   const isRecoveryError = params.error === "recovery_error"
+  const accountDeleted = params.deleted === "1"
 
   return (
     <div className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
@@ -22,6 +23,13 @@ export default async function LoginPage({
             Acesse o fórum, salve preferências e participe da comunidade.
           </p>
         </div>
+
+        {accountDeleted && (
+          <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+            Sua conta foi excluída com sucesso. Nenhum e-mail de confirmação é enviado — a
+            exclusão é imediata.
+          </div>
+        )}
 
         {passwordUpdated && (
           <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">

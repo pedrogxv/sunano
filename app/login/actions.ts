@@ -4,7 +4,11 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
-import { isAdminUser, upsertUserProfileFromAuth } from "@/lib/server/repositories/users-repository"
+import {
+  isAdminUser,
+  resolveAvailableDisplayName,
+  upsertUserProfileFromAuth,
+} from "@/lib/server/repositories/users-repository"
 import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 
 type AuthState = { error: string | null }
@@ -40,11 +44,14 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
     return { error: "invalid_credentials" }
   }
 
-  // Garante o perfil do usuário para login por e-mail/senha.
+  // Garante o perfil do usuário para login por e-mail/senha. Mesmo cuidado do
+  // OAuth (auth/callback/route.ts): o nome sugerido pode já pertencer a outra
+  // conta, então resolve o primeiro slug livre antes de gravar.
+  const suggestedName =
+    authData.user.user_metadata?.full_name || authData.user.email?.split("@")[0] || "User"
   await upsertUserProfileFromAuth({
     id: authData.user.id,
-    displayName:
-      authData.user.user_metadata?.full_name || authData.user.email?.split("@")[0] || "User",
+    displayName: await resolveAvailableDisplayName(suggestedName, authData.user.id),
     avatarUrl: authData.user.user_metadata?.avatar_url || null,
   })
 

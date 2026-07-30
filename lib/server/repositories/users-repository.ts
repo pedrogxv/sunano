@@ -431,7 +431,7 @@ export async function upsertUserProfileFromAuth(params: {
 }): Promise<void> {
   const db = createSupabaseAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (db.from("user_profiles") as any).upsert(
+  const { error } = await (db.from("user_profiles") as any).upsert(
     {
       id: params.id,
       display_name: params.displayName,
@@ -439,6 +439,13 @@ export async function upsertUserProfileFromAuth(params: {
     },
     { onConflict: "id", ignoreDuplicates: true }
   )
+  // `ignoreDuplicates` só cobre conflito de `id`; qualquer outro erro (ex.:
+  // colisão residual de display_slug) ficava mudo aqui e a conta seguia
+  // logada sem perfil, sumida do /pessoas para sempre. Não propaga para não
+  // travar o login por causa do diretório público — só loga para dar pra achar.
+  if (error) {
+    console.error("[users-repository] upsertUserProfileFromAuth:", error)
+  }
 }
 
 /** Preferências e identificação editáveis pelo próprio usuário em /perfil. */

@@ -68,13 +68,18 @@ export async function POST(request: Request) {
       .upload(fileName, validated.bytes, { upsert: false, contentType: validated.mime })
 
     if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 400 })
+      console.error("[upload-banner] falha no storage:", uploadError.message)
+      return NextResponse.json(
+        { error: "Não foi possível salvar a imagem. Tente novamente em instantes." },
+        { status: 500 }
+      )
     }
 
     const { data: publicData } = supabase.storage.from("peripherals").getPublicUrl(fileName)
 
     return NextResponse.json({ ok: true, publicUrl: publicData.publicUrl })
-  } catch {
+  } catch (err) {
+    console.error("[upload-banner] falha inesperada:", err)
     return NextResponse.json({ error: "Erro ao enviar banner." }, { status: 500 })
   }
 }

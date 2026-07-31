@@ -464,6 +464,8 @@ export type UserProfileSettings = {
   bio: string | null
   /** Somente leitura pelo usuário — definido pela administração. */
   account_tier: string | null
+  youtube_handle: string | null
+  tiktok_handle: string | null
 }
 
 /** Lê as preferências/identificação do usuário para a página de perfil. */
@@ -474,7 +476,7 @@ export async function getUserProfileSettings(
   const { data } = await db
     .from("user_profiles")
     .select(
-      "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier"
+      "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle"
     )
     .eq("id", userId)
     .maybeSingle()
@@ -500,6 +502,8 @@ export async function updateUserProfileSettings(
     bannerUrl?: string | null
     miniBannerUrl?: string | null
     bio?: string | null
+    youtubeHandle?: string | null
+    tiktokHandle?: string | null
   }
 ): Promise<void> {
   const db = createSupabaseAdminClient()
@@ -511,6 +515,8 @@ export async function updateUserProfileSettings(
   if (changes.bannerUrl !== undefined) payload.banner_url = changes.bannerUrl
   if (changes.miniBannerUrl !== undefined) payload.mini_banner_url = changes.miniBannerUrl
   if (changes.bio !== undefined) payload.bio = changes.bio
+  if (changes.youtubeHandle !== undefined) payload.youtube_handle = changes.youtubeHandle
+  if (changes.tiktokHandle !== undefined) payload.tiktok_handle = changes.tiktokHandle
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
   if (error) throw error

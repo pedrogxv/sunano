@@ -64,7 +64,9 @@ export function SetupEditor({
       <CardContent className="space-y-3 pt-6">
         {SETUP_SLOTS.map((slot) => {
           const item = setup.find((i) => i.slot === slot) ?? { slot, peripheral: null }
-          const { label, Icon, categories } = SLOT_META[slot]
+          const { label: slotLabel, Icon, categories } = SLOT_META[slot]
+          // O slot "mousepad" aceita mousepad e glasspad — o rótulo reflete o que foi escolhido.
+          const label = slot === "mousepad" && item.peripheral?.category === "glasspad" ? "Glasspad" : slotLabel
           const isEditing = editing === slot
           const filled = item.peripheral?.name ?? null
 

@@ -64,7 +64,28 @@ export type ProfileShowcase = {
   /** Favoritos já filtrados pelo limite do tier. */
   favorites: ShowcasePeripheral[]
   favorites_total: number
+  /** Handle sem "@" — link exibido como ícone clicável no perfil público. */
+  youtube_handle: string | null
+  tiktok_handle: string | null
 }
 
 /** Limite de caracteres da bio (espelha o CHECK constraint da tabela). */
 export const BIO_MAX_LENGTH = 160
+
+/** Limite de caracteres dos handles de redes sociais (espelha o CHECK constraint da tabela). */
+export const SOCIAL_HANDLE_MAX_LENGTH = 30
+
+/** Formato aceito para um handle já normalizado (espelha o CHECK constraint da tabela). */
+export const SOCIAL_HANDLE_PATTERN = /^[A-Za-z0-9._-]{1,30}$/
+
+/**
+ * Normaliza um handle de rede social digitado ou colado como URL —
+ * "@usuario", "usuario" ou "https://tiktok.com/@usuario" viram só "usuario".
+ * Módulo puro: mesma função valida no client (preview) e no servidor (defesa em profundidade).
+ */
+export function normalizeSocialHandle(input: string): string {
+  const trimmed = input.trim()
+  if (!trimmed) return ""
+  const lastSegment = trimmed.split(/[/?]/).filter(Boolean).pop() ?? trimmed
+  return lastSegment.replace(/^@/, "").trim().slice(0, SOCIAL_HANDLE_MAX_LENGTH)
+}

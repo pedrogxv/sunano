@@ -37,7 +37,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, created_at"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle, created_at"
 
 const PERIPHERAL_COLUMNS = "id, name, brand, category, image_url, tier"
 
@@ -75,6 +75,8 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     mini_banner_url: string | null
     bio: string | null
     account_tier: string | null
+    youtube_handle: string | null
+    tiktok_handle: string | null
     created_at: string
   }
 
@@ -96,6 +98,8 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     mini_banner_url: row.mini_banner_url,
     bio: row.bio,
     account_tier: tier,
+    youtube_handle: row.youtube_handle,
+    tiktok_handle: row.tiktok_handle,
     member_since: row.created_at,
     followers,
     setup,

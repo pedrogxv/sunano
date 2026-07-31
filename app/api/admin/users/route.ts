@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import * as z from "zod"
 
+import { ACCOUNT_TIERS, coerceAccountTier } from "@/lib/account-tier"
 import {
   createDefaultPermissions,
   createFullPermissions,
@@ -25,6 +26,7 @@ const userUpdateSchema = z.object({
   // "user" representa um usuário comum (sem linha em admin_profiles).
   role: z.enum(["user", "admin", "moderator", "webmaster"]).optional(),
   permissions: z.record(z.string(), z.boolean()).optional(),
+  account_tier: z.enum(ACCOUNT_TIERS).optional(),
 })
 
 const userCreateSchema = z.object({
@@ -81,14 +83,14 @@ export async function GET() {
 
     const [{ data: adminRows }, { data: profileRows }] = await Promise.all([
       admin.from("admin_profiles").select("id, email, display_name, avatar_url, role, permissions, updated_at"),
-      admin.from("user_profiles").select("id, display_name, avatar_url"),
+      admin.from("user_profiles").select("id, display_name, avatar_url, account_tier"),
     ])
 
     const adminMap = new Map<string, AdminProfileRow>()
     for (const row of (adminRows ?? []) as AdminProfileRow[]) adminMap.set(row.id, row)
-    const profileMap = new Map<string, { display_name: string | null; avatar_url: string | null }>()
-    for (const row of (profileRows ?? []) as { id: string; display_name: string | null; avatar_url: string | null }[]) {
-      profileMap.set(row.id, { display_name: row.display_name, avatar_url: row.avatar_url })
+    const profileMap = new Map<string, { display_name: string | null; avatar_url: string | null; account_tier: string | null }>()
+    for (const row of (profileRows ?? []) as { id: string; display_name: string | null; avatar_url: string | null; account_tier: string | null }[]) {
+      profileMap.set(row.id, { display_name: row.display_name, avatar_url: row.avatar_url, account_tier: row.account_tier })
     }
 
     const users = authUsers
@@ -102,6 +104,7 @@ export async function GET() {
           email,
           display_name: ap?.display_name?.trim() || up?.display_name?.trim() || defaultNameFromEmail(email),
           avatar_url: ap?.avatar_url ?? up?.avatar_url ?? null,
+          account_tier: coerceAccountTier(up?.account_tier),
           role,
           permissions:
             role === "webmaster"
@@ -171,6 +174,20 @@ export async function PATCH(request: Request) {
         { error: "As permissões do WEB Master não podem ser alteradas." },
         { status: 403 }
       )
+    }
+
+    // Tier de conta (VIP) mora em `user_profiles`, não em `admin_profiles` — não
+    // tem relação com cargo/permissões, então é independente da trava acima e
+    // pode ser alterado até para o WEB Master ou para o próprio usuário logado.
+    if (parsed.data.account_tier !== undefined) {
+      const { error: tierError } = await admin
+        .from("user_profiles")
+        .update({ account_tier: parsed.data.account_tier })
+        .eq("id", parsed.data.id)
+      if (tierError) {
+        const { body, status } = dbErrorResponse(tierError, "Erro ao atualizar tier do usuário.")
+        return NextResponse.json(body, { status })
+      }
     }
 
     // Rebaixar para usuário comum: remove a linha de admin_profiles.

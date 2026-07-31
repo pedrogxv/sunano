@@ -14,6 +14,12 @@ const SLOT_META: Record<SetupSlot, { label: string; Icon: typeof Mouse }> = {
   mousepad: { label: "Mousepad", Icon: Square },
 }
 
+/** O slot "mousepad" aceita tanto mousepad quanto glasspad — o rótulo reflete o que foi escolhido. */
+function getSlotLabel(item: SetupItem): string {
+  if (item.slot === "mousepad" && item.peripheral?.category === "glasspad") return "Glasspad"
+  return SLOT_META[item.slot].label
+}
+
 interface SetupGridProps {
   setup: SetupItem[]
   /** Dono do perfil vê os slots vazios como convite para configurar. */
@@ -38,7 +44,8 @@ export function SetupGrid({ setup, isOwner = false }: SetupGridProps) {
 }
 
 function SetupCard({ item, isOwner }: { item: SetupItem; isOwner: boolean }) {
-  const { label, Icon } = SLOT_META[item.slot]
+  const { Icon } = SLOT_META[item.slot]
+  const label = getSlotLabel(item)
   const title = item.peripheral?.name ?? null
   const isEmpty = !title
 

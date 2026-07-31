@@ -55,6 +55,9 @@ export type Database = {
           mini_banner_url: string | null
           bio: string | null
           account_tier: "common" | "vip" | "vip_plus"
+          /** Handle sem "@" — exibido como ícone clicável no perfil público. */
+          youtube_handle: string | null
+          tiktok_handle: string | null
           /** Incrementado só via RPC `increment_profile_views` — nunca escrito direto. */
           profile_views: number
           created_at: string

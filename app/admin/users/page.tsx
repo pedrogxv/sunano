@@ -1,11 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ShieldCheck, Users as UsersIcon, UserPlus, Lock, Save, ChevronDown, ChevronUp, KeyRound } from "lucide-react"
+import { ShieldCheck, Users as UsersIcon, UserPlus, Lock, Save, ChevronDown, ChevronUp, KeyRound, Crown } from "lucide-react"
 import { toast } from "sonner"
 
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
+import { ACCOUNT_TIERS, getTierCapabilities, type AccountTier } from "@/lib/account-tier"
 import { ADMIN_FEATURES, createDefaultPermissions, normalizePermissions, type AdminProfile } from "@/lib/admin-permissions"
 import {
   AlertDialog,
@@ -31,6 +32,7 @@ type AdminUser = Omit<AdminProfile, "role"> & {
   role: UserRole
   /** Cargo persistido no servidor (não muda com a edição local do select). */
   originalRole: UserRole
+  account_tier: AccountTier
   created_at: string
   updated_at: string
 }
@@ -123,6 +125,18 @@ function RoleBadge({ role }: { role: string }) {
   return <Badge variant="outline" className="border-border text-muted-foreground">{t.admin.users.user}</Badge>
 }
 
+/* ── Tier badge ──────────────────────────────────────────── */
+function TierBadge({ tier }: { tier: AccountTier }) {
+  if (tier === "common") return null
+  const { label } = getTierCapabilities(tier)
+  return (
+    <Badge className={tier === "vip_plus" ? "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30 hover:bg-fuchsia-500/20" : "bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/20"}>
+      <Crown className="mr-1 size-3" />
+      {label}
+    </Badge>
+  )
+}
+
 /* ── User card ───────────────────────────────────────────── */
 function UserCard({
   user,
@@ -132,6 +146,7 @@ function UserCard({
   onRoleChange,
   onPermissionChange,
   onSave,
+  onTierSave,
 }: {
   user: AdminUser
   isCurrentUser: boolean
@@ -140,12 +155,14 @@ function UserCard({
   onRoleChange: (id: string, role: UserRole) => void
   onPermissionChange: (id: string, key: string, value: boolean) => void
   onSave: (user: AdminUser) => void
+  onTierSave: (userId: string, tier: AccountTier) => Promise<void>
 }) {
   const t = useT()
   const [expanded, setExpanded] = useState(false)
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [newPassword, setNewPassword] = useState("")
   const [savingPassword, setSavingPassword] = useState(false)
+  const [savingTier, setSavingTier] = useState(false)
   // A trava usa o cargo PERSISTIDO (não o que está sendo editado no select),
   // senão escolher "WEB Master" travaria a própria linha antes de salvar.
   const isPersistedWebMaster = user.originalRole === "webmaster"
@@ -180,6 +197,15 @@ function UserCard({
     }
   }
 
+  async function handleTierChange(nextTier: AccountTier) {
+    try {
+      setSavingTier(true)
+      await onTierSave(user.id, nextTier)
+    } finally {
+      setSavingTier(false)
+    }
+  }
+
   return (
     <div className={`rounded-2xl border transition-colors ${expanded ? "border-border bg-card/80" : "border-border/60 bg-card/40"}`}>
       {/* Header row */}
@@ -197,6 +223,7 @@ function UserCard({
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-foreground truncate">{user.display_name || user.email}</p>
             <RoleBadge role={user.role} />
+            <TierBadge tier={user.account_tier} />
             {isCurrentUser && <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">Você</Badge>}
           </div>
           <p className="text-xs text-muted-foreground truncate">{user.email}</p>
@@ -290,6 +317,30 @@ function UserCard({
               </Select>
             </div>
           )}
+
+          {/* Tier de conta (VIP) — independente de cargo/permissões. */}
+          <div className="flex items-center gap-3">
+            <label className="min-w-16 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {t.admin.users.tier}
+            </label>
+            <Select
+              value={user.account_tier}
+              onValueChange={(v) => handleTierChange(v as AccountTier)}
+              disabled={savingTier}
+            >
+              <SelectTrigger className="w-44 border-border bg-card/50 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACCOUNT_TIERS.map((tierOption) => (
+                  <SelectItem key={tierOption} value={tierOption}>
+                    {getTierCapabilities(tierOption).label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {savingTier && <span className="text-xs text-muted-foreground">{t.admin.users.saving}</span>}
+          </div>
 
           {isRegularUser && (
             <p className="text-xs text-muted-foreground">
@@ -398,6 +449,23 @@ export default function AdminUsersPage() {
     setUsers((prev) => prev.map((u) =>
       u.id === userId ? { ...u, permissions: { ...normalizePermissions(u.permissions), [key]: value } } : u
     ))
+  }
+
+  async function saveTier(userId: string, tier: AccountTier) {
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: userId, account_tier: tier }),
+      })
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToSave)
+      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, account_tier: tier } : u))
+      toast.success(t.admin.users.tierUpdated, { description: getTierCapabilities(tier).label })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.users.failedToSave
+      toast.error(t.admin.users.failedToSaveUser, { description: message })
+    }
   }
 
   async function saveUser(user: AdminUser) {
@@ -570,6 +638,7 @@ export default function AdminUsersPage() {
               onRoleChange={updateUserRole}
               onPermissionChange={updateUserPermission}
               onSave={saveUser}
+              onTierSave={saveTier}
             />
           ))}
         </CardContent>

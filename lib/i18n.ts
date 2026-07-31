@@ -395,6 +395,8 @@ type Translations = {
       failedToChangePassword: string
       passwordChanged: string
       failedToCreateUser: string
+      tier: string
+      tierUpdated: string
     }
     offers: {
       failedToLoad: string
@@ -1057,6 +1059,8 @@ export const translations: Record<LocaleCode, Translations> = {
         failedToChangePassword: "Erro ao alterar senha",
         passwordChanged: "Senha alterada",
         failedToCreateUser: "Erro ao criar usuário",
+        tier: "Tier",
+        tierUpdated: "Tier atualizado",
       },
       offers: {
         failedToLoad: "Erro ao carregar ofertas",
@@ -1769,6 +1773,8 @@ export const translations: Record<LocaleCode, Translations> = {
         failedToChangePassword: "Failed to change password",
         passwordChanged: "Password changed",
         failedToCreateUser: "Failed to create user",
+        tier: "Tier",
+        tierUpdated: "Tier updated",
       },
       offers: {
         failedToLoad: "Failed to load offers",

@@ -10,6 +10,7 @@ import { FavoritosGrid } from "./FavoritosGrid"
 import { InfoBasica } from "./InfoBasica"
 import { MedalhasGrid } from "./MedalhasGrid"
 import { SetupGrid } from "./SetupGrid"
+import { SocialLinks } from "./SocialLinks"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
 
 interface ProfileShowcaseProps {
@@ -22,7 +23,7 @@ interface ProfileShowcaseProps {
 
 /**
  * Vitrine pública do perfil, na ordem do wireframe:
- * banner → foto → nome/bio → setup → medalhas → favoritos.
+ * banner → foto → nome/bio → medalhas → setup → favoritos.
  */
 export function ProfileShowcase({
   profile,
@@ -77,6 +78,8 @@ export function ProfileShowcase({
             {profile.followers === 1 ? "seguidor" : "seguidores"}
           </p>
 
+          <SocialLinks youtubeHandle={profile.youtube_handle} tiktokHandle={profile.tiktok_handle} />
+
           {isOwner ? (
             <Link
               href="/perfil"
@@ -97,14 +100,14 @@ export function ProfileShowcase({
       </div>
 
       <div className="mt-6 space-y-8">
-        <SetupGrid setup={profile.setup} isOwner={isOwner} />
-
         <MedalhasGrid
           medals={profile.medals}
           total={profile.medals_total}
           tier={profile.account_tier}
           isOwner={isOwner}
         />
+
+        <SetupGrid setup={profile.setup} isOwner={isOwner} />
 
         <FavoritosGrid
           favorites={profile.favorites}

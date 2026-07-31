@@ -3,11 +3,12 @@
 import Image from "next/image"
 import { useEffect, useState } from "react"
 import type { ChangeEvent } from "react"
-import { Camera, Crown } from "lucide-react"
+import { Camera, Crown, Youtube } from "lucide-react"
 import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { TikTokIcon } from "@/components/icons/social-icons"
 import { resolveProfileMedia, type ProfileMedia } from "@/lib/account-tier"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -22,6 +23,7 @@ import {
 } from "@/lib/profile-name"
 import {
   BIO_MAX_LENGTH,
+  normalizeSocialHandle,
   type ProfileShowcase,
   type SetupItem,
   type SetupSlot,
@@ -46,6 +48,8 @@ export type ProfileData = {
   mini_banner_url?: string | null
   bio?: string | null
   account_tier?: string | null
+  youtube_handle?: string | null
+  tiktok_handle?: string | null
 }
 
 interface ProfileSectionProps {
@@ -72,6 +76,8 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     profile.mini_banner_url ?? null
   )
   const [bio, setBio] = useState(profile.bio ?? "")
+  const [youtubeHandle, setYoutubeHandle] = useState(profile.youtube_handle ?? "")
+  const [tiktokHandle, setTiktokHandle] = useState(profile.tiktok_handle ?? "")
   const [uploading, setUploading] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [uploadingMiniBanner, setUploadingMiniBanner] = useState(false)
@@ -267,6 +273,8 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
           banner_url: bannerUrl,
           mini_banner_url: miniBannerUrl,
           bio,
+          youtube_handle: youtubeHandle,
+          tiktok_handle: tiktokHandle,
         }),
       })
       const data = (await res.json().catch(() => null)) as
@@ -280,6 +288,8 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       setBannerUrl(data.profile.banner_url ?? null)
       setMiniBannerUrl(data.profile.mini_banner_url ?? null)
       setBio(data.profile.bio ?? "")
+      setYoutubeHandle(data.profile.youtube_handle ?? "")
+      setTiktokHandle(data.profile.tiktok_handle ?? "")
       onProfileChange(data.profile)
       return null
     } catch {
@@ -440,6 +450,33 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 placeholder="Uma linha sobre você — aparece no seu perfil público."
                 maxLength={BIO_MAX_LENGTH}
               />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <Youtube className="size-3.5" />
+                  YouTube
+                </label>
+                <Input
+                  value={youtubeHandle}
+                  onChange={(e) => setYoutubeHandle(normalizeSocialHandle(e.target.value))}
+                  className="border-border bg-background"
+                  placeholder="@seucanal"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <TikTokIcon className="size-3.5" />
+                  TikTok
+                </label>
+                <Input
+                  value={tiktokHandle}
+                  onChange={(e) => setTiktokHandle(normalizeSocialHandle(e.target.value))}
+                  className="border-border bg-background"
+                  placeholder="@seuusuario"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>

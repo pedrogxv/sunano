@@ -4,7 +4,7 @@ import * as z from "zod"
 import { coerceAccountTier } from "@/lib/account-tier"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { DISPLAY_NAME_MAX_LENGTH, slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
-import { BIO_MAX_LENGTH } from "@/lib/profile-showcase"
+import { BIO_MAX_LENGTH, normalizeSocialHandle, SOCIAL_HANDLE_PATTERN } from "@/lib/profile-showcase"
 import {
   getAdminProfileSummary,
   getUserProfileSettings,
@@ -36,7 +36,23 @@ const profileSchema = z.object({
     .max(BIO_MAX_LENGTH, `Bio deve ter no máximo ${BIO_MAX_LENGTH} caracteres`)
     .nullable()
     .optional(),
+  // Aceita handle solto ("@user") ou URL colada — normalizado abaixo antes de salvar.
+  youtube_handle: z.string().trim().max(200).nullable().optional(),
+  tiktok_handle: z.string().trim().max(200).nullable().optional(),
 })
+
+/** Normaliza e valida um handle de rede social. Retorna `undefined` (sem mudança), `null` (limpar) ou o handle válido. */
+function parseSocialHandle(
+  raw: string | null | undefined
+): { value: string | null | undefined; error: string | null } {
+  if (raw === undefined) return { value: undefined, error: null }
+  if (raw === null || raw.trim() === "") return { value: null, error: null }
+  const normalized = normalizeSocialHandle(raw)
+  if (!SOCIAL_HANDLE_PATTERN.test(normalized)) {
+    return { value: undefined, error: "Use apenas letras, números, ponto, hífen ou underscore." }
+  }
+  return { value: normalized, error: null }
+}
 
 function defaultNameFromEmail(email: string | null | undefined) {
   if (!email) return "Usuário"
@@ -99,6 +115,8 @@ export async function GET() {
         mini_banner_url: settings?.mini_banner_url ?? null,
         bio: settings?.bio ?? null,
         account_tier: coerceAccountTier(settings?.account_tier),
+        youtube_handle: settings?.youtube_handle ?? null,
+        tiktok_handle: settings?.tiktok_handle ?? null,
       },
     })
   } catch {
@@ -147,6 +165,15 @@ export async function POST(request: Request) {
       }
     }
 
+    const youtubeHandle = parseSocialHandle(parsed.data.youtube_handle)
+    if (youtubeHandle.error) {
+      return NextResponse.json({ error: youtubeHandle.error, field: "youtube_handle" }, { status: 400 })
+    }
+    const tiktokHandle = parseSocialHandle(parsed.data.tiktok_handle)
+    if (tiktokHandle.error) {
+      return NextResponse.json({ error: tiktokHandle.error, field: "tiktok_handle" }, { status: 400 })
+    }
+
     // Perfil que ainda não existe (conta antiga, ou primeira mudança de tema
     // antes de qualquer edição) nasce com um nome derivado do email em vez do
     // `user-<id>` que o banco geraria como fallback.
@@ -164,6 +191,8 @@ export async function POST(request: Request) {
       miniBannerUrl: parsed.data.mini_banner_url,
       // Bio vazia é limpeza do campo, não string vazia no banco.
       bio: parsed.data.bio === undefined ? undefined : parsed.data.bio || null,
+      youtubeHandle: youtubeHandle.value,
+      tiktokHandle: tiktokHandle.value,
     })
 
     const [settings, adminProfile] = await Promise.all([
@@ -191,6 +220,8 @@ export async function POST(request: Request) {
         mini_banner_url: settings?.mini_banner_url ?? null,
         bio: settings?.bio ?? null,
         account_tier: coerceAccountTier(settings?.account_tier),
+        youtube_handle: settings?.youtube_handle ?? null,
+        tiktok_handle: settings?.tiktok_handle ?? null,
       },
     })
   } catch (err) {

@@ -133,7 +133,9 @@ export default function AdminEventsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-xs text-muted-foreground">Primeiros N cadastros</span>
+                    <span className="text-xs text-muted-foreground">
+                      Primeiros {e.maxParticipants.toLocaleString("pt-BR")} cadastros
+                    </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-sm font-medium text-foreground">

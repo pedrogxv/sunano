@@ -438,7 +438,7 @@ const BRAND_OPTIONS = [
   "Morkblade",
   "Msi",
   "Nexus",
-  "NINJUSTO",
+  "NINJUTSO",
   "Nollie",
   "Nuphy",
   "NZXT",

@@ -8,6 +8,7 @@ import { useEffect, useState } from "react"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { AnimatedCounter } from "@/components/animated-counter"
+import { RankingInfo } from "@/components/ranking/RankingInfo"
 import { cn } from "@/lib/utils"
 
 export type RankedPeripheral = {
@@ -172,6 +173,10 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
         </div>
 
         <BarChart key={selected} items={filtered} isAdmin={isAdmin} />
+      </div>
+
+      <div className="mt-4">
+        <RankingInfo />
       </div>
     </div>
   )

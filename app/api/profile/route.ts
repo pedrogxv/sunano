@@ -155,8 +155,20 @@ export async function POST(request: Request) {
     // travava o salvamento de bio/avatar/etc. sempre que o nome já gravado
     // colidisse com essas regras — ex.: uma conta cujo nome já é o próprio
     // slug reservado. Só revalida quando o slug realmente muda.
+    //
+    // Perfil que ainda não existe (primeiro save) reenvia o nome default
+    // derivado do e-mail — a pessoa nunca escolheu esse nome, só o formulário
+    // ecoou o que a própria API sugeriu no GET. Se esse default colidir com
+    // uma palavra reservada (ex.: conta "sunano@..." recebendo o default
+    // "sunano", que é reservado), não faz sentido travar a gravação inteira
+    // (avatar, banner, bio) por causa de um nome que ninguém digitou; esse
+    // caso cai no mesmo `seedName` que já resolve um nome livre abaixo.
+    const isUnclaimedDefaultName =
+      !existingSettings && incomingDisplayName === defaultNameFromEmail(email)
+
     const nameSlugChanging =
       incomingDisplayName !== undefined &&
+      !isUnclaimedDefaultName &&
       slugifyDisplayName(incomingDisplayName) !== existingSettings?.display_slug
 
     if (nameSlugChanging) {
@@ -186,14 +198,15 @@ export async function POST(request: Request) {
 
     // Perfil que ainda não existe (conta antiga, ou primeira mudança de tema
     // antes de qualquer edição) nasce com um nome derivado do email em vez do
-    // `user-<id>` que o banco geraria como fallback.
+    // `user-<id>` que o banco geraria como fallback. Mesma resolução quando o
+    // default é o próprio nome reenviado sem ter sido escolhido (ver acima).
     const seedName =
-      incomingDisplayName === undefined && !existingSettings
+      (incomingDisplayName === undefined || isUnclaimedDefaultName) && !existingSettings
         ? await resolveAvailableDisplayName(defaultNameFromEmail(email), authData.user.id)
         : undefined
 
     await updateUserProfileSettings(authData.user.id, {
-      displayName: incomingDisplayName ?? seedName,
+      displayName: isUnclaimedDefaultName ? seedName : (incomingDisplayName ?? seedName),
       avatarUrl: parsed.data.avatar_url,
       theme: parsed.data.theme,
       locale: parsed.data.locale,

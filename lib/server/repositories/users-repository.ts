@@ -1,7 +1,7 @@
 import "server-only"
 
 import { coerceAccountTier } from "@/lib/account-tier"
-import { slugifyDisplayName } from "@/lib/profile-name"
+import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
@@ -364,8 +364,12 @@ export async function isDisplayNameAvailable(
 
 /**
  * Primeiro nome livre a partir de `base` — "tried", "tried2", "tried3"…
- * Usado onde não dá para pedir outro nome ao usuário (login social), nunca
- * para sobrescrever uma escolha explícita.
+ * Usado onde não dá para pedir outro nome ao usuário (login social, e-mail
+ * derivado no primeiro save de perfil), nunca para sobrescrever uma escolha
+ * explícita. Pula tanto colisão de unicidade quanto nomes reservados
+ * (`validateDisplayName`) — sem isso, uma conta cujo nome/e-mail sugerido bate
+ * com uma palavra reservada (ex.: e-mail "sunano@...") ficava com um nome
+ * jamais gravável por essa via, mesmo sem ter escolhido esse nome.
  */
 export async function resolveAvailableDisplayName(
   base: string,
@@ -375,13 +379,16 @@ export async function resolveAvailableDisplayName(
   const fallback = `user-${userId.replace(/-/g, "").slice(0, 8)}`
   const root = slugifyDisplayName(cleaned).length >= 2 ? cleaned : fallback
 
-  if (await isDisplayNameAvailable(root, userId)) return root
+  const usable = async (candidate: string) =>
+    !validateDisplayName(candidate) && (await isDisplayNameAvailable(candidate, userId))
+
+  if (await usable(root)) return root
 
   for (let attempt = 2; attempt <= 50; attempt += 1) {
     const candidate = `${root}${attempt}`
-    if (await isDisplayNameAvailable(candidate, userId)) return candidate
+    if (await usable(candidate)) return candidate
   }
-  // Improvável: 50 variações ocupadas. O id não colide com nada.
+  // Improvável: 50 variações ocupadas/reservadas. O id não colide com nada.
   return fallback
 }
 

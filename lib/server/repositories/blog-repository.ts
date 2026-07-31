@@ -1,5 +1,6 @@
 import "server-only"
 
+import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 
@@ -16,6 +17,17 @@ export type BlogAuthor = {
   display_name: string | null
   avatar_url: string | null
   email: string | null
+  role: "admin" | "moderator" | "webmaster" | null
+} | null
+
+/**
+ * Avatar/tier "real" do autor, puxado do perfil público (`user_profiles`)
+ * quando o admin também tem uma conta de membro — é de lá que vem o GIF
+ * animado de VIP, já que `admin_profiles` não tem conceito de tier.
+ */
+export type AuthorPublicProfile = {
+  avatar_url: string | null
+  account_tier: AccountTier
 } | null
 
 export type BlogPeripheralRef = {
@@ -33,13 +45,16 @@ export type BlogListPost = {
   slug: string
   post_type: BlogPostType
   author_id: string | null
+  is_featured: boolean
   excerpt: string | null
   cover_image_url: string | null
   cover_thumbnail_url: string | null
+  video_url: string | null
   read_time_minutes: number | null
   created_at: string
   comment_count: number
   admin_profiles: BlogAuthor
+  author_profile: AuthorPublicProfile
   peripherals: BlogPeripheralRef[] | null
 }
 
@@ -82,10 +97,10 @@ export type BlogComment = {
 }
 
 const LIST_COLUMNS =
-  "id, title, slug, post_type, author_id, excerpt, cover_image_url, cover_thumbnail_url, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email), peripherals(id, name, brand, category)"
+  "id, title, slug, post_type, author_id, is_featured, excerpt, cover_image_url, cover_thumbnail_url, video_url, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
 
 const DETAIL_COLUMNS =
-  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email), peripherals(id, name, brand, category)"
+  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
 
 // Variantes sem `post_type`, usadas como fallback caso a migração
 // `blog_post_type.sql` ainda não tenha sido aplicada.
@@ -95,6 +110,16 @@ const DETAIL_COLUMNS_LEGACY = DETAIL_COLUMNS.replace("post_type, ", "")
 /** Indica que o erro veio de a coluna `post_type` ainda não existir. */
 function isMissingPostType(message: string | null | undefined) {
   return Boolean(message && message.includes("post_type"))
+}
+
+/** Indica que o erro veio de uma coluna opcional específica ainda não existir. */
+function isMissingColumn(message: string | null | undefined, column: string) {
+  return Boolean(message && message.includes(column))
+}
+
+/** Remove `coluna, ` de uma lista de colunas — usado para retry gradual. */
+function withoutColumn(columns: string, column: string) {
+  return columns.replace(`${column}, `, "")
 }
 
 /**
@@ -140,6 +165,31 @@ async function countCommentsByPost(postIds: string[]): Promise<Record<string, nu
   return counts
 }
 
+/**
+ * Perfis públicos (`user_profiles`) dos autores, indexados por id. É de lá
+ * que vem o `account_tier` usado para decidir se o avatar do autor anima
+ * como GIF — `admin_profiles` não tem esse conceito.
+ */
+async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, AuthorPublicProfile>> {
+  const map: Record<string, AuthorPublicProfile> = {}
+  const ids = [...new Set(authorIds.filter(Boolean))]
+  if (ids.length === 0) return map
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_profiles")
+    .select("id, avatar_url, account_tier")
+    .in("id", ids)
+  if (error) {
+    console.error("[blog-repository] getAuthorProfiles:", error.message)
+    return map
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const row of (data ?? []) as any[]) {
+    map[row.id] = { avatar_url: row.avatar_url ?? null, account_tier: coerceAccountTier(row.account_tier) }
+  }
+  return map
+}
+
 /** Lista posts publicados, opcionalmente filtrando por periférico. */
 export async function listPublishedPosts(peripheralId?: string | null): Promise<BlogListPost[]> {
   const db = createSupabaseAdminClient()
@@ -156,9 +206,16 @@ export async function listPublishedPosts(peripheralId?: string | null): Promise<
     return query
   }
 
-  let { data, error } = await runQuery(LIST_COLUMNS)
+  let columns = LIST_COLUMNS
+  let { data, error } = await runQuery(columns)
   if (error && isMissingPostType(error.message)) {
-    ({ data, error } = await runQuery(LIST_COLUMNS_LEGACY))
+    columns = LIST_COLUMNS_LEGACY
+    ;({ data, error } = await runQuery(columns))
+  }
+  // Fallback: migração `20260803_blog_featured_posts.sql` ainda não aplicada.
+  if (error && isMissingColumn(error.message, "is_featured")) {
+    columns = withoutColumn(columns, "is_featured")
+    ;({ data, error } = await runQuery(columns))
   }
   if (error) {
     console.error("[blog-repository] listPublishedPosts:", error)
@@ -166,9 +223,18 @@ export async function listPublishedPosts(peripheralId?: string | null): Promise<
   }
 
   const rows = (data ?? []) as unknown as BlogListPost[]
-  const counts = await countCommentsByPost(rows.map((p) => p.id))
+  const [counts, authorProfiles] = await Promise.all([
+    countCommentsByPost(rows.map((p) => p.id)),
+    getAuthorProfiles(rows.map((p) => p.author_id).filter((id): id is string => Boolean(id))),
+  ])
   return rows.map((p) =>
-    stripAuthorEmail({ ...p, post_type: p.post_type ?? "review", comment_count: counts[p.id] ?? 0 })
+    stripAuthorEmail({
+      ...p,
+      post_type: p.post_type ?? "review",
+      is_featured: p.is_featured ?? false,
+      comment_count: counts[p.id] ?? 0,
+      author_profile: (p.author_id && authorProfiles[p.author_id]) || null,
+    })
   )
 }
 

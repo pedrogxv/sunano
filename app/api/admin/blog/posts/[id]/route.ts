@@ -20,18 +20,22 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   const { id } = await params
 
   const db = createSupabaseAdminClient()
-  const select = (withType: boolean) =>
+  const select = (withType: boolean, withFeatured: boolean) =>
     db
       .from("blog_posts")
       .select(
-        `id, title, slug, ${withType ? "post_type, " : ""}peripheral_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, is_published`
+        `id, title, slug, ${withType ? "post_type, " : ""}peripheral_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, is_published${withFeatured ? ", is_featured" : ""}`
       )
       .eq("id", id)
       .maybeSingle()
 
-  let { data, error } = await select(true)
+  let { data, error } = await select(true, true)
   if (error && error.message.includes("post_type")) {
-    ({ data, error } = await select(false))
+    ({ data, error } = await select(false, true))
+  }
+  // Fallback: migração `20260803_blog_featured_posts.sql` ainda não aplicada.
+  if (error && error.message.includes("is_featured")) {
+    ({ data, error } = await select(false, false))
   }
 
   if (error) {

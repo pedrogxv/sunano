@@ -302,6 +302,10 @@ type Translations = {
         chars: string
         summaryLabel: string
         summaryPlaceholder: string
+        featuredLabel: string
+        featuredDesc: string
+        featuredOn: string
+        featuredOff: string
         relatedPeripheral: string
         change: string
         searchBrandOrName: string
@@ -968,6 +972,10 @@ export const translations: Record<LocaleCode, Translations> = {
           chars: "caracteres",
           summaryLabel: "Resumo / excerpt",
           summaryPlaceholder: "Descrição curta exibida na listagem de artigos...",
+          featuredLabel: "Destacar no header",
+          featuredDesc: "Aparece como manchete grande no topo de /noticias (até 3 notícias)",
+          featuredOn: "Destacada",
+          featuredOff: "Não destacada",
           relatedPeripheral: "Periférico relacionado",
           change: "Trocar",
           searchBrandOrName: "Buscar por marca ou nome...",
@@ -1684,6 +1692,10 @@ export const translations: Record<LocaleCode, Translations> = {
           chars: "chars",
           summaryLabel: "Summary / excerpt",
           summaryPlaceholder: "Short description shown in article listings...",
+          featuredLabel: "Feature in header",
+          featuredDesc: "Shows as a large headline at the top of /noticias (up to 3 news items)",
+          featuredOn: "Featured",
+          featuredOff: "Not featured",
           relatedPeripheral: "Related peripheral",
           change: "Change",
           searchBrandOrName: "Search by brand or name...",

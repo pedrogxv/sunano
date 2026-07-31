@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { RoleBadge } from "@/components/people/RoleBadge"
 import { useT } from "@/lib/use-t"
 
 type UserRole = AdminProfile["role"] | "user"
@@ -114,15 +115,6 @@ function PermissionGrid({
       })}
     </div>
   )
-}
-
-/* ── Role badge ──────────────────────────────────────────── */
-function RoleBadge({ role }: { role: string }) {
-  const t = useT()
-  if (role === "webmaster") return <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/20">WEB Master</Badge>
-  if (role === "admin") return <Badge className="bg-primary/20 text-primary border-primary/30 hover:bg-primary/20">Admin</Badge>
-  if (role === "moderator") return <Badge variant="secondary">{t.admin.users.moderator}</Badge>
-  return <Badge variant="outline" className="border-border text-muted-foreground">{t.admin.users.user}</Badge>
 }
 
 /* ── Tier badge ──────────────────────────────────────────── */

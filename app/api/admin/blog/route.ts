@@ -17,6 +17,7 @@ const blogPostSchema = z
     video_url: z.string().nullable().optional(),
     content: z.string().min(20, "Conteúdo deve ter no mínimo 20 caracteres"),
     is_published: z.boolean(),
+    is_featured: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
     // Reviews exigem periférico; notícias não.
@@ -153,6 +154,7 @@ export async function POST(request: Request) {
       video_url: parsed.data.video_url?.trim() || null,
       content: parsed.data.content,
       is_published: parsed.data.is_published,
+      is_featured: parsed.data.is_featured,
     }
 
     const payloadWithAuthor = {
@@ -220,6 +222,19 @@ export async function POST(request: Request) {
         ? await (supabase.from("blog_posts") as any).update(payloadNoType as any).eq("id", parsed.data.id)
         : await (supabase.from("blog_posts") as any).insert([
             { ...payloadWithAuthorNoType, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+          ])
+    }
+
+    // Fallback: migração `20260803_blog_featured_posts.sql` ainda não aplicada.
+    if (isMissingColumnError(result.error?.message, "is_featured")) {
+      const payloadNoFeatured = { ...payload } as Record<string, unknown>
+      delete payloadNoFeatured.is_featured
+      const payloadWithAuthorNoFeatured = { ...payloadWithAuthor } as Record<string, unknown>
+      delete payloadWithAuthorNoFeatured.is_featured
+      result = parsed.data.id
+        ? await (supabase.from("blog_posts") as any).update(payloadNoFeatured as any).eq("id", parsed.data.id)
+        : await (supabase.from("blog_posts") as any).insert([
+            { ...payloadWithAuthorNoFeatured, slug: await generateUniqueSlug(supabase, parsed.data.title) },
           ])
     }
 

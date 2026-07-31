@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Upload, ImageIcon, FileText, Link2, Eye, EyeOff, Search, CheckCircle2, Circle, Youtube, Newspaper, Mouse } from "lucide-react"
+import { Upload, ImageIcon, FileText, Link2, Eye, EyeOff, Search, CheckCircle2, Circle, Youtube, Newspaper, Mouse, Star } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -37,6 +37,7 @@ const postSchema = z
     video_url: z.string().url("URL do vídeo inválida (use http:// ou https://)").optional().or(z.literal("")),
     content: z.string().min(20, "Conteúdo deve ter no mínimo 20 caracteres"),
     status: z.enum(["published", "draft"]),
+    is_featured: z.boolean(),
   })
   .superRefine((data, ctx) => {
     // Só reviews precisam de periférico vinculado.
@@ -83,12 +84,14 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
       video_url: "",
       content: "",
       status: "published",
+      is_featured: false,
     },
   })
 
   const watchedStatus = form.watch("status")
   const watchedPostType = form.watch("post_type")
   const watchedPeripheralId = form.watch("peripheral_id")
+  const watchedIsFeatured = form.watch("is_featured")
   const isReview = watchedPostType === "review"
   const watchedContent = form.watch("content")
   const watchedTitle = form.watch("title")
@@ -147,6 +150,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
       video_url: data.video_url ?? "",
       content: data.content,
       status: data.is_published ? "published" : "draft",
+      is_featured: Boolean(data.is_featured),
     })
     setHeaderPreview(data.cover_image_url ?? null)
     setThumbnailPreview(data.cover_thumbnail_url ?? null)
@@ -210,6 +214,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
           video_url: values.video_url?.trim() || null,
           content: values.content,
           is_published: values.status === "published",
+          is_featured: values.is_featured,
         }),
       })
 
@@ -353,6 +358,26 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             placeholder={t.admin.blog.form.summaryPlaceholder}
             {...form.register("excerpt")}
           />
+        </div>
+
+        {/* Featured — entra no header de manchetes de /noticias */}
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card/40 p-3.5">
+          <div>
+            <p className="text-sm font-medium text-foreground">{t.admin.blog.form.featuredLabel}</p>
+            <p className="text-[11px] text-muted-foreground">{t.admin.blog.form.featuredDesc}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => form.setValue("is_featured", !watchedIsFeatured, { shouldValidate: true })}
+            className={`flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-all ${
+              watchedIsFeatured
+                ? "border-primary/40 bg-primary/10 text-primary"
+                : "border-border bg-muted text-muted-foreground"
+            }`}
+          >
+            <Star className={`size-3.5 ${watchedIsFeatured ? "fill-primary" : ""}`} />
+            {watchedIsFeatured ? t.admin.blog.form.featuredOn : t.admin.blog.form.featuredOff}
+          </button>
         </div>
 
         {/* Peripheral picker — só para reviews */}

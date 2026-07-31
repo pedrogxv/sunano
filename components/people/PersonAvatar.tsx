@@ -6,12 +6,14 @@ import { cn } from "@/lib/utils"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
 const SIZE_CLASSES = {
+  xs: "size-5 text-[8px]",
   sm: "size-8 text-[10px]",
   md: "size-10 text-xs",
   lg: "size-14 text-base",
 } as const
 
 const CROWN_SIZE = {
+  xs: "size-2",
   sm: "size-2.5",
   md: "size-3",
   lg: "size-3.5",

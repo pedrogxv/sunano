@@ -1,28 +1,22 @@
 import Link from "next/link"
 import Image from "next/image"
-import { Clock, MessageCircle, TrendingUp } from "lucide-react"
+import { Clock, MessageCircle, Newspaper } from "lucide-react"
 
 import { getBlogImageWithFallback } from "@/lib/blog-images"
-import { listPublishedPosts } from "@/lib/server/repositories/blog-repository"
+import { extractFirstUrl } from "@/lib/extract-link"
+import { getVideoEmbedUrl } from "@/lib/video-embed"
+import { listPublishedPosts, type BlogListPost } from "@/lib/server/repositories/blog-repository"
+import { PersonAvatar } from "@/components/people/PersonAvatar"
+import { RoleBadge } from "@/components/people/RoleBadge"
 import { NewNewsButton } from "./new-news-button"
 
 // ISR: renderizado no servidor e revalidado em background, sem o fetch
 // client-side que exibia um spinner a cada acesso.
 export const revalidate = 30
 
-type NewsPost = {
-  id: string
-  title: string
-  slug: string
-  excerpt: string | null
-  cover_image_url: string | null
-  cover_thumbnail_url: string | null
-  read_time_minutes: number | null
-  created_at: string
-  comment_count?: number
-  admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
-  peripherals?: { id?: string; name: string; brand: string }[] | null
-}
+// Quantas notícias entram no header de manchetes — controlado manualmente
+// pelo toggle "Destacar no header" em /admin/blog.
+const MAX_HEADLINES = 3
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -35,7 +29,7 @@ function timeAgo(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
 }
 
-function getAuthorName(post: NewsPost) {
+function getAuthorName(post: BlogListPost) {
   const name = post.admin_profiles?.display_name?.trim()
   if (name) return name
   const email = post.admin_profiles?.email
@@ -43,29 +37,122 @@ function getAuthorName(post: NewsPost) {
   return "Sunano"
 }
 
-function TrendingCard({ post }: { post: NewsPost }) {
-  const img = getBlogImageWithFallback(post.cover_thumbnail_url, post.cover_image_url, "header")
+/** Para onde o clique no card deve levar: o link citado no texto, se houver, senão a própria notícia. */
+function getHeadlineHref(post: BlogListPost) {
+  const linkInText = extractFirstUrl(post.excerpt)
+  if (linkInText) return { href: linkInText, external: true as const }
+  return { href: `/noticias/${post.slug}`, external: false as const }
+}
+
+/**
+ * Autor com foto de perfil real. O avatar/GIF VIP vem do perfil público
+ * (`author_profile`, ligado a `user_profiles`) quando existe; o cargo
+ * (Admin/Moderador/WEB Master) vem sempre de `admin_profiles.role`.
+ */
+function AuthorByline({ post, size = "sm" }: { post: BlogListPost; size?: "xs" | "sm" | "md" }) {
+  const name = getAuthorName(post)
+  const avatarProfile = {
+    display_name: name,
+    avatar_url: post.author_profile?.avatar_url ?? post.admin_profiles?.avatar_url ?? null,
+    account_tier: post.author_profile?.account_tier ?? ("common" as const),
+  }
+  const role = post.admin_profiles?.role
+
   return (
-    <Link
-      href={`/noticias/${post.slug}`}
-      className="group relative flex-shrink-0 w-44 h-28 rounded-xl overflow-hidden border border-border/50 block"
-    >
+    <div className="flex items-center gap-2 min-w-0">
+      <PersonAvatar profile={avatarProfile} size={size} />
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
+        <span className="text-xs font-medium text-foreground truncate">{name}</span>
+        {role && <RoleBadge role={role} className="h-4 px-1.5 text-[9px]" />}
+      </div>
+    </div>
+  )
+}
+
+function HeadlineCard({ post }: { post: BlogListPost }) {
+  const img = getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")
+  const embedUrl = getVideoEmbedUrl(post.video_url)
+  const { href, external } = getHeadlineHref(post)
+
+  const media = embedUrl ? (
+    <div className="relative aspect-video w-full overflow-hidden bg-black">
+      <iframe
+        src={embedUrl}
+        title={post.title}
+        className="size-full"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+      />
+    </div>
+  ) : (
+    <div className="relative aspect-video w-full overflow-hidden bg-muted/30">
       <Image
         src={img}
         alt={post.title}
         fill
-        sizes="176px"
-        className="object-cover transition-transform duration-300 group-hover:scale-105"
+        sizes="(min-width: 768px) 768px, 100vw"
+        priority
+        className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-      <div className="absolute bottom-0 left-0 right-0 p-2">
-        <p className="text-white text-[11px] font-semibold leading-tight line-clamp-2">{post.title}</p>
+    </div>
+  )
+
+  const body = (
+    <div className="space-y-3 p-4 sm:p-5">
+      <h2 className="font-display text-xl font-bold leading-tight text-foreground transition-colors group-hover:text-primary sm:text-2xl">
+        {post.title}
+      </h2>
+      {post.excerpt && (
+        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{post.excerpt}</p>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <AuthorByline post={post} size="md" />
+        <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground/70">
+          <span>{timeAgo(post.created_at)}</span>
+          <span className="flex items-center gap-1">
+            <MessageCircle className="size-3" />
+            {post.comment_count ?? 0}
+          </span>
+        </div>
       </div>
+    </div>
+  )
+
+  const cardClass =
+    "group overflow-hidden rounded-2xl border border-border/50 bg-card/50 transition-colors hover:border-primary/30 hover:bg-card"
+
+  if (embedUrl) {
+    // O player de vídeo é interativo — só o texto/rodapé navega, o embed fica livre pra tocar.
+    return (
+      <div className={cardClass}>
+        {media}
+        {external ? (
+          <a href={href} target="_blank" rel="noopener noreferrer" className="block">
+            {body}
+          </a>
+        ) : (
+          <Link href={href} className="block">
+            {body}
+          </Link>
+        )}
+      </div>
+    )
+  }
+
+  return external ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={`block ${cardClass}`}>
+      {media}
+      {body}
+    </a>
+  ) : (
+    <Link href={href} className={`block ${cardClass}`}>
+      {media}
+      {body}
     </Link>
   )
 }
 
-function NewsListItem({ post }: { post: NewsPost }) {
+function NewsListItem({ post }: { post: BlogListPost }) {
   const img = getBlogImageWithFallback(post.cover_thumbnail_url, post.cover_image_url, "thumbnail")
   const tag = post.peripherals?.[0]?.brand ?? null
 
@@ -101,7 +188,7 @@ function NewsListItem({ post }: { post: NewsPost }) {
           )}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/70">
-          <span>{getAuthorName(post)}</span>
+          <AuthorByline post={post} size="xs" />
           <span>•</span>
           <span>{timeAgo(post.created_at)}</span>
           {post.read_time_minutes && (
@@ -125,17 +212,14 @@ function NewsListItem({ post }: { post: NewsPost }) {
 }
 
 export default async function NoticiasPage() {
-  const posts = (await listPublishedPosts(null)) as NewsPost[]
+  const posts = await listPublishedPosts(null)
 
-  // "Em Alta": prioriza engajamento (mais comentadas), com a recência como
-  // critério de desempate.
-  const trending = [...posts]
-    .sort((a, b) => {
-      const byComments = (b.comment_count ?? 0) - (a.comment_count ?? 0)
-      if (byComments !== 0) return byComments
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
-    .slice(0, 5)
+  // Manchetes: escolhidas manualmente no admin (toggle "Destacar no
+  // header"), limitadas a 3 — as mais recentes primeiro em caso de empate.
+  const headlines = posts.filter((p) => p.is_featured).slice(0, MAX_HEADLINES)
+  const headlineIds = new Set(headlines.map((p) => p.id))
+  // Evita repetir na lista de baixo a mesma notícia já exibida como manchete.
+  const rest = posts.filter((p) => !headlineIds.has(p.id))
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 md:px-6 space-y-8">
@@ -158,37 +242,31 @@ export default async function NoticiasPage() {
         </div>
       ) : (
         <>
-          {/* Em Alta */}
-          {trending.length > 0 && (
+          {/* Manchetes */}
+          {headlines.length > 0 && (
+            <section className="space-y-4">
+              {headlines.map((post) => (
+                <HeadlineCard key={post.id} post={post} />
+              ))}
+            </section>
+          )}
+
+          {/* Notícias */}
+          {rest.length > 0 && (
             <section>
               <div className="flex items-center gap-2 mb-3">
-                <TrendingUp className="size-4 text-primary" />
+                <Newspaper className="size-4 text-muted-foreground" />
                 <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                  Em Alta
+                  Notícias
                 </h2>
               </div>
-              <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-thin">
-                {trending.map((post) => (
-                  <TrendingCard key={post.id} post={post} />
+              <div className="flex flex-col gap-2">
+                {rest.map((post) => (
+                  <NewsListItem key={post.id} post={post} />
                 ))}
               </div>
             </section>
           )}
-
-          {/* News feed */}
-          <section>
-            <div className="flex items-center gap-2 mb-3">
-              <MessageCircle className="size-4 text-muted-foreground" />
-              <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                Notícias
-              </h2>
-            </div>
-            <div className="flex flex-col gap-2">
-              {posts.map((post) => (
-                <NewsListItem key={post.id} post={post} />
-              ))}
-            </div>
-          </section>
         </>
       )}
     </div>

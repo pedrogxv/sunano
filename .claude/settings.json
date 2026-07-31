@@ -31,7 +31,15 @@
       "Bash(sort -u -t/ -k2 -n)",
       "Bash(curl -sS -m 20 \"http://localhost:3000/api/offers\")",
       "Bash(python3 -c ' *)",
-      "Bash(node check_offers.mjs http://localhost:3000/offers)"
+      "Bash(node check_offers.mjs http://localhost:3000/offers)",
+      "Bash(node run-comparison.cjs)",
+      "Bash(node build-artifact.cjs)",
+      "Bash(grep -iE \"\\\\.\\(png|jpe?g|webp\\)$\")",
+      "Bash(cp '/Users/gustavonakamura/Documents/GitHub/sunano/public/images/WhatsApp Image 2026-07-30 at 18.49.35.jpeg' /private/tmp/claude-501/-Users-gustavonakamura-Documents-GitHub-sunano/41d02033-479b-4887-8c37-3291525b4377/scratchpad/samples/mousepad1_color.jpeg)",
+      "Bash(cp '/Users/gustavonakamura/Documents/GitHub/sunano/public/images/WhatsApp Image 2026-07-30 at 18.49.43.jpeg' /private/tmp/claude-501/-Users-gustavonakamura-Documents-GitHub-sunano/41d02033-479b-4887-8c37-3291525b4377/scratchpad/samples/mousepad1_mono.jpeg)",
+      "Bash(cp '/Users/gustavonakamura/Documents/GitHub/sunano/public/images/WhatsApp Image 2026-07-30 at 21.46.35.jpeg' /private/tmp/claude-501/-Users-gustavonakamura-Documents-GitHub-sunano/41d02033-479b-4887-8c37-3291525b4377/scratchpad/samples/mousepad2_pastel.jpeg)",
+      "Bash(rm -f out/*.png)",
+      "Bash(node build-artifact-real.cjs)"
     ],
     "additionalDirectories": [
       "/Users/gustavonakamura/Documents/GitHub/sunano/lib"

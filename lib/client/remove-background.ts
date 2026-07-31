@@ -19,6 +19,22 @@ export interface RemoveBackgroundOptions {
   maxDimension?: number
   /** Margem uniforme ao redor do produto após o recorte, em % da maior dimensão do conteúdo. */
   paddingRatio?: number
+  /**
+   * Magnitude de gradiente local (Sobel) acima da qual um pixel nunca é
+   * admitido como fundo, mesmo dentro do `tolerance` de cor. Opcional -- sem
+   * isso o comportamento é idêntico ao modo padrão. Ajuda a preservar traços
+   * finos de baixo contraste (ex.: linework claro sobre fundo branco).
+   */
+  edgeThreshold?: number
+  /** 'chroma' enxerga bordas de matiz (mais caro); 'luma' só de luminância. */
+  edgeMode?: "luma" | "chroma"
+  /**
+   * Dilata a "parede" de borda em N pixels antes do flood-fill. Fecha
+   * vazamentos causados por contornos de ~1px (um flood-fill 4-conectado
+   * sempre consegue atravessar uma parede diagonal de 1px). Só tem efeito
+   * junto com `edgeThreshold`.
+   */
+  wallDilate?: number
 }
 
 const DEFAULTS: Required<RemoveBackgroundOptions> = {
@@ -26,6 +42,22 @@ const DEFAULTS: Required<RemoveBackgroundOptions> = {
   feather: 28,
   maxDimension: 2000,
   paddingRatio: 0.04,
+  edgeThreshold: 0,
+  edgeMode: "chroma",
+  wallDilate: 0,
+}
+
+/**
+ * Preset "remoção mais forte": pra fotos com arte de baixo contraste sobre
+ * fundo bem liso (ex.: linework claro em papel branco) onde o modo padrão
+ * come partes do desenho. Mais agressivo -- pode sub-remover fundos com
+ * textura própria (ex.: papel com riscos/sombreado visível), por isso não é
+ * o padrão.
+ */
+export const STRONG_REMOVAL_OPTIONS: RemoveBackgroundOptions = {
+  edgeThreshold: 30,
+  edgeMode: "chroma",
+  wallDilate: 16,
 }
 
 interface RGB {
@@ -42,7 +74,10 @@ export async function removeBackground(
   file: File,
   options: RemoveBackgroundOptions = {}
 ): Promise<File> {
-  const { tolerance, feather, maxDimension, paddingRatio } = { ...DEFAULTS, ...options }
+  const { tolerance, feather, maxDimension, paddingRatio, edgeThreshold, edgeMode, wallDilate } = {
+    ...DEFAULTS,
+    ...options,
+  }
 
   const bitmap = await loadBitmap(file)
   // Reduz imagens muito grandes para manter o PNG (com transparência) leve e
@@ -65,7 +100,7 @@ export async function removeBackground(
   bitmap.close?.()
 
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
-  applyBackgroundRemoval(image, tolerance, feather)
+  applyBackgroundRemoval(image, tolerance, feather, edgeThreshold, edgeMode, wallDilate)
   ctx.putImageData(image, 0, 0)
 
   // Recorta a área vazia ao redor do produto. Sem isso, o quanto o produto
@@ -139,14 +174,111 @@ function findContentBounds(
   return x1 < x0 || y1 < y0 ? null : { x0, y0, x1, y1 }
 }
 
+/**
+ * Magnitude de gradiente (Sobel), usada como sinal de "isso aqui é
+ * detalhe/traço" independente da distância de cor até o fundo. 'chroma' roda
+ * o Sobel em R, G e B separadamente e pega o maior dos três por pixel --
+ * enxerga bordas de matiz (ex.: rosa claro sobre branco) que 'luma' perde por
+ * terem luminância quase igual.
+ */
+function computeEdgeMagnitude(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  mode: "luma" | "chroma"
+): Float32Array {
+  const channels: Float32Array[] = []
+  if (mode === "chroma") {
+    const r = new Float32Array(width * height)
+    const g = new Float32Array(width * height)
+    const b = new Float32Array(width * height)
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+      r[p] = data[i]
+      g[p] = data[i + 1]
+      b[p] = data[i + 2]
+    }
+    channels.push(r, g, b)
+  } else {
+    const lum = new Float32Array(width * height)
+    for (let i = 0, p = 0; i < data.length; i += 4, p++) {
+      lum[p] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+    }
+    channels.push(lum)
+  }
+
+  const mag = new Float32Array(width * height)
+  for (const chan of channels) {
+    const at = (x: number, y: number) => chan[y * width + x]
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const gx =
+          -at(x - 1, y - 1) + at(x + 1, y - 1) +
+          -2 * at(x - 1, y) + 2 * at(x + 1, y) +
+          -at(x - 1, y + 1) + at(x + 1, y + 1)
+        const gy =
+          -at(x - 1, y - 1) - 2 * at(x, y - 1) - at(x + 1, y - 1) +
+          at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1)
+        const m = Math.sqrt(gx * gx + gy * gy)
+        const idx = y * width + x
+        if (m > mag[idx]) mag[idx] = m
+      }
+    }
+  }
+  return mag
+}
+
+/**
+ * Dilatação morfológica (kernel "+") de uma máscara binária. Fecha
+ * vazamentos de 1px: um flood-fill 4-conectado sempre consegue atravessar
+ * uma parede diagonal de 1px de espessura (geometria de raster, não falta de
+ * contraste) -- engordar a parede pra >=2px em qualquer ponto elimina esse
+ * tipo de vazamento.
+ */
+function dilateMask(mask: Uint8Array, width: number, height: number, radius: number): Uint8Array {
+  let current = mask
+  for (let step = 0; step < radius; step++) {
+    const next = new Uint8Array(current.length)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x
+        if (
+          current[idx] ||
+          (x > 0 && current[idx - 1]) ||
+          (x < width - 1 && current[idx + 1]) ||
+          (y > 0 && current[idx - width]) ||
+          (y < height - 1 && current[idx + width])
+        ) {
+          next[idx] = 1
+        }
+      }
+    }
+    current = next
+  }
+  return current
+}
+
 function applyBackgroundRemoval(
   image: ImageData,
   tolerance: number,
-  feather: number
+  feather: number,
+  edgeThreshold: number,
+  edgeMode: "luma" | "chroma",
+  wallDilate: number
 ) {
   const { data, width, height } = image
   const bg = estimateBackgroundColor(data, width, height)
   const total = width * height
+
+  // "Parede" opcional: pixels com gradiente local acima do threshold nunca
+  // são admitidos como fundo, mesmo dentro do tolerance de cor. Desligado
+  // por padrão (edgeThreshold 0) -- comportamento idêntico ao modo padrão.
+  let wall: Uint8Array | null = null
+  if (edgeThreshold > 0) {
+    const edgeMag = computeEdgeMagnitude(data, width, height, edgeMode)
+    wall = new Uint8Array(total)
+    for (let i = 0; i < total; i++) if (edgeMag[i] > edgeThreshold) wall[i] = 1
+    if (wallDilate > 0) wall = dilateMask(wall, width, height, wallDilate)
+  }
 
   // 1 = pixel de fundo (conectado às bordas)
   const mask = new Uint8Array(total)
@@ -162,7 +294,7 @@ function applyBackgroundRemoval(
 
   const seed = (x: number, y: number) => {
     const idx = y * width + x
-    if (!mask[idx] && distance(idx) <= tolerance) {
+    if (!mask[idx] && distance(idx) <= tolerance && !(wall && wall[idx])) {
       mask[idx] = 1
       stack.push(idx)
     }

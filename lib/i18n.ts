@@ -448,6 +448,8 @@ type Translations = {
       removingBg: string
       restoreOriginalBg: string
       removeBg: string
+      removeBgStrong: string
+      bgStrongHint: string
       bgRemovedAuto: string
       bgBestWithSolid: string
       sectionBasicInfo: string
@@ -1133,6 +1135,8 @@ export const translations: Record<LocaleCode, Translations> = {
         removingBg: "Removendo fundo...",
         restoreOriginalBg: "Restaurar fundo original",
         removeBg: "Remover fundo",
+        removeBgStrong: "Remoção mais forte",
+        bgStrongHint: "Tenta preservar mais detalhe em fundos claros com pouco contraste (ex.: traços finos sobre fundo branco). Pode demorar um pouco mais.",
         bgRemovedAuto: "Fundo removido automaticamente.",
         bgBestWithSolid: "Funciona melhor com fundo sólido/branco.",
         sectionBasicInfo: "Informações Básicas",
@@ -1826,6 +1830,8 @@ export const translations: Record<LocaleCode, Translations> = {
         removingBg: "Removing background...",
         restoreOriginalBg: "Restore original background",
         removeBg: "Remove background",
+        removeBgStrong: "Stronger removal",
+        bgStrongHint: "Tries to preserve more detail on light, low-contrast backgrounds (e.g. thin strokes on white). May take a bit longer.",
         bgRemovedAuto: "Background removed automatically.",
         bgBestWithSolid: "Works best with solid/white backgrounds.",
         sectionBasicInfo: "Basic Info",

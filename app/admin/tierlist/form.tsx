@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag, Layers, FileText, ShoppingCart, Info, Link2, Search, X, Scissors, RotateCcw, Loader2, Eye } from "lucide-react"
+import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag, Layers, FileText, ShoppingCart, Info, Link2, Search, X, Scissors, RotateCcw, Loader2, Eye, Wand2 } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -35,7 +35,7 @@ import { usePageHeader } from "@/components/providers/page-header-context"
 import { mapTier } from "@/lib/tier-utils"
 import { RATING_LEVEL_COLORS } from "@/lib/tierlist-theme"
 import { useT } from "@/lib/use-t"
-import { removeBackground, fileToDataUrl } from "@/lib/client/remove-background"
+import { removeBackground, fileToDataUrl, STRONG_REMOVAL_OPTIONS } from "@/lib/client/remove-background"
 import { SWITCH_PRICE_TIERS } from "@/lib/switch-price-tier"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
 
@@ -1294,6 +1294,29 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     }
   }
 
+  // Passe alternativo, mais agressivo, pra fotos de baixo contraste (ex.:
+  // linework claro sobre fundo branco) onde a remoção padrão come parte do
+  // desenho. Não é o padrão porque pode sub-remover fundos com textura
+  // própria -- por isso fica atrás de um botão separado, pro admin comparar.
+  const tryStrongBackgroundRemoval = async () => {
+    if (!originalImage || removingBg) return
+
+    setRemovingBg(true)
+    try {
+      const result = await removeBackground(originalImage.file, STRONG_REMOVAL_OPTIONS)
+      const resultPreview = await fileToDataUrl(result)
+      setProcessedImage({ file: result, preview: resultPreview })
+      setImageFile(result)
+      setImagePreview(resultPreview)
+      setBgRemoved(true)
+    } catch (err) {
+      console.error("Falha ao remover o fundo (modo forte):", err)
+      toast.error(t.admin.tierlistForm.failedRemoveBg)
+    } finally {
+      setRemovingBg(false)
+    }
+  }
+
   const handleGallerySelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     e.target.value = ""
@@ -1410,33 +1433,51 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             </div>
 
             {originalImage && (
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={removingBg}
-                  onClick={toggleBackground}
-                  className="gap-1.5"
-                >
-                  {removingBg ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : bgRemoved ? (
-                    <RotateCcw className="size-3.5" />
-                  ) : (
-                    <Scissors className="size-3.5" />
+              <div className="flex flex-col gap-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={removingBg}
+                    onClick={toggleBackground}
+                    className="gap-1.5"
+                  >
+                    {removingBg ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : bgRemoved ? (
+                      <RotateCcw className="size-3.5" />
+                    ) : (
+                      <Scissors className="size-3.5" />
+                    )}
+                    {removingBg
+                      ? t.admin.tierlistForm.removingBg
+                      : bgRemoved
+                        ? t.admin.tierlistForm.restoreOriginalBg
+                        : t.admin.tierlistForm.removeBg}
+                  </Button>
+                  {bgRemoved && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={removingBg}
+                      onClick={tryStrongBackgroundRemoval}
+                      className="gap-1.5"
+                    >
+                      <Wand2 className="size-3.5" />
+                      {t.admin.tierlistForm.removeBgStrong}
+                    </Button>
                   )}
-                  {removingBg
-                    ? t.admin.tierlistForm.removingBg
-                    : bgRemoved
-                      ? t.admin.tierlistForm.restoreOriginalBg
-                      : t.admin.tierlistForm.removeBg}
-                </Button>
+                </div>
                 <p className="text-xs text-muted-foreground/70">
                   {bgRemoved
                     ? t.admin.tierlistForm.bgRemovedAuto
                     : t.admin.tierlistForm.bgBestWithSolid}
                 </p>
+                {bgRemoved && (
+                  <p className="text-xs text-muted-foreground/70">{t.admin.tierlistForm.bgStrongHint}</p>
+                )}
               </div>
             )}
           </div>

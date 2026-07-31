@@ -14,6 +14,8 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 type RateLimitResult = {
   allowed: boolean
   retryAfterSeconds?: number
+  /** Id da tentativa registrada, para `refundRateLimitAttempt`. */
+  attemptId?: string | null
 }
 
 type RateLimitParams = {
@@ -64,8 +66,28 @@ export async function checkRateLimit({
     return { allowed: false, retryAfterSeconds: windowSeconds }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase.from("rate_limit_events").insert({ action, identifier } as any) as any)
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const { data: attempt } = await (supabase
+    .from("rate_limit_events")
+    .insert({ action, identifier } as any)
+    .select("id")
+    .maybeSingle() as any)
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
-  return { allowed: true }
+  return { allowed: true, attemptId: (attempt as { id: string } | null)?.id ?? null }
+}
+
+/**
+ * Descarta uma tentativa registrada por `checkRateLimit`.
+ *
+ * Serve para o caso em que a operação falhou por culpa do servidor (provedor
+ * de e-mail sem cota, banco fora do ar): quem tentou não fez nada errado, então
+ * a tentativa não pode consumir a cota da pessoa. Sem isso, algumas tentativas
+ * durante uma indisponibilidade trocam o erro real por "muitas tentativas" e
+ * ainda trancam a pessoa por uma hora.
+ */
+export async function refundRateLimitAttempt(attemptId: string | null | undefined): Promise<void> {
+  if (!attemptId) return
+  const supabase = createSupabaseAdminClient()
+  await supabase.from("rate_limit_events").delete().eq("id", attemptId)
 }

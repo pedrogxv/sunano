@@ -5,7 +5,11 @@ import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
 import { LGPD_POLICY_VERSION } from "@/lib/lgpd"
-import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
+import {
+  checkRateLimit,
+  getClientIdentifierFromHeaders,
+  refundRateLimitAttempt,
+} from "@/lib/server/rate-limit"
 import { validateDisplayName } from "@/lib/profile-name"
 import {
   isDisplayNameAvailable,
@@ -17,6 +21,50 @@ import {
 import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
 
 export type RegisterState = { error: string | null; needsConfirmation?: boolean }
+
+/** Erro do `auth.signUp`, na forma em que o supabase-js devolve. */
+type SignUpError = { message: string; code?: string; status?: number }
+
+/**
+ * Traduz a falha do `auth.signUp` num código que o formulário sabe exibir, e
+ * diz se a culpa é do servidor.
+ *
+ * Antes tudo virava `signup_failed` ("Não foi possível concluir o cadastro"),
+ * o que mandava a pessoa tentar de novo sem dizer o que houve — inclusive
+ * quando tentar de novo não ia adiantar. O caso real mais comum é
+ * `over_email_send_rate_limit`: o Supabase recusa o cadastro porque a cota de
+ * e-mails do projeto acabou, e o e-mail de confirmação não sai. Não tem
+ * relação nenhuma com o que foi digitado, e o cadastro por Google/Discord
+ * continua funcionando (não manda e-mail).
+ *
+ * `serverFault` marca as falhas que não são culpa de quem se cadastrou: elas
+ * são logadas como erro e devolvem a tentativa ao rate limit.
+ */
+function mapSignUpError(error: SignUpError): { state: string; serverFault: boolean } {
+  const code = error.code ?? ""
+  const message = error.message ?? ""
+
+  if (code === "over_email_send_rate_limit" || /email rate limit/i.test(message)) {
+    return { state: "email_send_limit", serverFault: true }
+  }
+  if (code === "over_request_rate_limit" || error.status === 429) {
+    return { state: "too_many_attempts", serverFault: true }
+  }
+  if (code === "weak_password") {
+    return { state: "weak_password", serverFault: false }
+  }
+  if (code === "email_address_invalid" || code === "validation_failed") {
+    return { state: "invalid_email", serverFault: false }
+  }
+  if (code === "signup_disabled" || code === "email_provider_disabled") {
+    return { state: "signup_disabled", serverFault: true }
+  }
+  // 5xx do Auth/banco: indisponibilidade, não erro de preenchimento.
+  if ((error.status ?? 0) >= 500) {
+    return { state: "signup_unavailable", serverFault: true }
+  }
+  return { state: "signup_failed", serverFault: true }
+}
 
 function clean(value: FormDataEntryValue | null): string {
   return String(value ?? "").trim()
@@ -111,11 +159,24 @@ export async function registerUserAction(
       // responde com o mesmo estado de um cadastro novo pendente de confirmação.
       return { error: null, needsConfirmation: true }
     }
-    return { error: "signup_failed" }
+
+    const { state, serverFault } = mapSignUpError(error)
+    // O erro real só existia aqui dentro: sem este log, uma indisponibilidade do
+    // provedor de e-mail chegava ao suporte como "erro genérico ao cadastrar".
+    console.error(
+      "[register] auth.signUp falhou:",
+      JSON.stringify({ status: error.status, code: error.code, message: error.message, state })
+    )
+    if (serverFault) {
+      await refundRateLimitAttempt(rateLimit.attemptId)
+    }
+    return { error: state }
   }
 
   if (!data.user) {
-    return { error: "signup_failed" }
+    console.error("[register] auth.signUp retornou sem usuário e sem erro.")
+    await refundRateLimitAttempt(rateLimit.attemptId)
+    return { error: "signup_unavailable" }
   }
 
   // Cria o perfil com o registro de consentimento LGPD.

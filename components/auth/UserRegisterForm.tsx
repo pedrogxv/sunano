@@ -21,6 +21,15 @@ const REGISTER_ERRORS: Record<string, string> = {
   signup_failed: "Não foi possível concluir o cadastro. Tente novamente.",
   lgpd_consent_required: "Você precisa aceitar a Política de Privacidade para criar uma conta.",
   too_many_attempts: "Muitas tentativas de cadastro. Aguarde alguns minutos e tente novamente.",
+  // Falhas de servidor: dizem que o problema não é o preenchimento e apontam o
+  // cadastro social, que não depende do envio de e-mail e segue funcionando.
+  email_send_limit:
+    "Não conseguimos enviar o email de confirmação agora — o limite de envios do nosso provedor foi atingido. Tente de novo em alguns minutos, ou cadastre-se com Google/Discord (não precisa de email de confirmação).",
+  signup_unavailable:
+    "O cadastro está temporariamente indisponível. Tente de novo em alguns minutos, ou cadastre-se com Google/Discord.",
+  signup_disabled: "O cadastro por email está desativado no momento. Use Google ou Discord.",
+  weak_password: "Senha muito fraca. Escolha uma senha mais forte.",
+  invalid_email: "Esse endereço de email não é válido. Confira e tente novamente.",
 }
 
 const initialState: RegisterState = { error: null }

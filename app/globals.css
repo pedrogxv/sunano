@@ -369,3 +369,39 @@ button,
     opacity: 0.6;
   }
 }
+
+/* Badge "VIP+" no perfil público (InfoBasica.tsx) — shimmer no texto + leve
+   respiração de escala na coroa. Mesma técnica de .nav-fire-text/.nav-fire-icon. */
+@keyframes vip-plus-badge-text-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+@keyframes vip-plus-badge-crown-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.14); }
+}
+
+.vip-plus-badge-text {
+  background-image: linear-gradient(90deg, oklch(0.75 0.19 320), oklch(0.83 0.12 320), oklch(0.68 0.24 320), oklch(0.83 0.12 320));
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: vip-plus-badge-text-shimmer 3.4s ease-in-out infinite;
+}
+
+.vip-plus-badge-crown {
+  animation: vip-plus-badge-crown-breathe 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vip-plus-badge-text {
+    animation: none;
+    background-position: 35% 50%;
+  }
+  .vip-plus-badge-crown {
+    animation: none;
+    transform: scale(1);
+  }
+}

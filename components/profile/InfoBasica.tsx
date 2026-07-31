@@ -20,6 +20,7 @@ const TIER_BADGE_STYLES: Record<AccountTier, string> = {
 export function InfoBasica({ name, bio, tier, memberSince }: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
   const isVip = tier !== "common"
+  const isVipPlus = tier === "vip_plus"
 
   const joinedLabel = memberSince
     ? new Date(memberSince).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
@@ -35,8 +36,8 @@ export function InfoBasica({ name, bio, tier, memberSince }: InfoBasicaProps) {
             TIER_BADGE_STYLES[tier]
           )}
         >
-          {isVip && <Crown className="size-3" />}
-          {label}
+          {isVip && <Crown className={cn("size-3", isVipPlus && "vip-plus-badge-crown")} />}
+          <span className={cn(isVipPlus && "vip-plus-badge-text")}>{label}</span>
         </span>
       </div>
 

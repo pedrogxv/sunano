@@ -17,7 +17,7 @@ export function DeletePostButton({
   function handleClick() {
     if (
       !confirm(
-        `Excluir definitivamente o tópico "${postTitle}"? Todos os comentários e votos também serão apagados. Essa ação não pode ser desfeita.`
+        `Excluir definitivamente este tópico ("${postTitle}")? Todos os comentários e aura também serão apagados. Essa ação não pode ser desfeita.`
       )
     ) {
       return

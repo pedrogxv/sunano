@@ -34,7 +34,7 @@ export type HomeBlogPost = {
 export type HomeForumPost = {
   id: string
   slug: string
-  title: string
+  body_preview: string
   author_name: string
   created_at: string
 }
@@ -94,7 +94,7 @@ export async function getHomeData(): Promise<HomeData> {
     listFeaturedProducts(6),
     db
       .from("forum_posts")
-      .select("id, slug, title, author_name, created_at")
+      .select("id, slug, body_preview, author_name, created_at")
       .eq("is_hidden", false)
       .order("created_at", { ascending: false })
       .limit(4),

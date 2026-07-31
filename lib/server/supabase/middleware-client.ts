@@ -58,10 +58,26 @@ export async function updateSession(
           .maybeSingle()
       : { data: null }
 
+  // Consentimento LGPD: só se aplica a quem já tem um `user_profiles` (perfil
+  // público) — uma conta puramente administrativa, sem esse registro, nunca
+  // passou pelo fluxo de cadastro/OAuth público e não deve ficar presa aqui.
+  // Usa o mesmo client autenticado da sessão (RLS: "auth.uid() = id" cobre a
+  // leitura do próprio registro), sem precisar do client de service-role.
+  let needsLgpdConsent = false
+  if (data.user) {
+    const { data: userProfile } = await supabase
+      .from("user_profiles")
+      .select("lgpd_consent_at")
+      .eq("id", data.user.id)
+      .maybeSingle()
+    needsLgpdConsent = userProfile !== null && !userProfile.lgpd_consent_at
+  }
+
   return {
     response,
     user: data.user,
     profile: (profile as AdminProfile | null) ?? null,
     aal,
+    needsLgpdConsent,
   }
 }

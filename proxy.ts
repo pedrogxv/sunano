@@ -29,6 +29,14 @@ function isMfaPendingAllowedPath(pathname: string) {
   return pathname === TWO_FACTOR_PATH || pathname.startsWith("/auth/")
 }
 
+// Caminhos que um usuário com consentimento LGPD pendente PODE acessar —
+// aceitar (fica) ou recusar (a própria ação faz logout). Tudo o mais fica
+// bloqueado até o aceite ser registrado.
+const LGPD_CONSENT_PATH = "/consentimento"
+function isLgpdConsentPendingAllowedPath(pathname: string) {
+  return pathname === LGPD_CONSENT_PATH || pathname.startsWith("/auth/")
+}
+
 // Detecta a presença de cookies de sessão do Supabase (`sb-<ref>-auth-token`)
 // sem chamada de rede. Permite pular toda a verificação para visitantes
 // anônimos em rotas públicas.
@@ -121,7 +129,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  const { response, user, profile, aal } = await updateSession(request, {
+  const { response, user, profile, aal, needsLgpdConsent } = await updateSession(request, {
     needProfile: isAdminRoute || maintenanceMode,
   })
 
@@ -131,7 +139,9 @@ export async function proxy(request: NextRequest) {
   // step-up, exceto a própria página de verificação e as rotas de auth.
   if (user && isMfaStepUpRequired(aal) && !isMfaPendingAllowedPath(pathname)) {
     if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "mfa_required" }, { status: 403 })
+      const apiResponse = NextResponse.json({ error: "mfa_required" }, { status: 403 })
+      copyCookies(response, apiResponse)
+      return apiResponse
     }
 
     const verifyUrl = request.nextUrl.clone()
@@ -157,13 +167,38 @@ export async function proxy(request: NextRequest) {
     return redirectResponse
   }
 
+  // ── Aplicação do consentimento LGPD (vale para QUALQUER usuário autenticado) ──
+  // Antes, o único gate era um redirect avulso no callback do OAuth — uma vez
+  // alcançada `/consentimento`, nada impedia navegar direto para outra URL, e
+  // o login por e-mail/senha nem passava por ali. Agora é checado a cada
+  // requisição, como o 2FA acima: só aceitar (grava o consentimento) ou
+  // recusar (a ação de recusa desloga) liberam o restante do site.
+  if (user && needsLgpdConsent && !isLgpdConsentPendingAllowedPath(pathname)) {
+    if (pathname.startsWith("/api")) {
+      const apiResponse = NextResponse.json({ error: "lgpd_consent_required" }, { status: 403 })
+      copyCookies(response, apiResponse)
+      return apiResponse
+    }
+
+    const consentUrl = request.nextUrl.clone()
+    consentUrl.pathname = LGPD_CONSENT_PATH
+    consentUrl.search = ""
+    consentUrl.searchParams.set("next", sanitizeNextPath(pathname + request.nextUrl.search))
+
+    const redirectResponse = NextResponse.redirect(consentUrl)
+    copyCookies(response, redirectResponse)
+    return redirectResponse
+  }
+
   if (maintenanceMode && !profile) {
     if (isLoginRoute || isPublicAuthRoute(pathname)) {
       return response
     }
 
     if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Site em manutenção." }, { status: 503 })
+      const apiResponse = NextResponse.json({ error: "Site em manutenção." }, { status: 503 })
+      copyCookies(response, apiResponse)
+      return apiResponse
     }
 
     const loginUrl = request.nextUrl.clone()

@@ -338,7 +338,7 @@ export default async function HomePage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-1 text-sm font-semibold text-foreground/90 group-hover:text-foreground">
-                        {post.title}
+                        {post.body_preview}
                       </p>
                       <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
                         <span>{post.author_name}</span>

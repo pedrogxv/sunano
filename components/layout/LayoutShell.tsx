@@ -14,7 +14,8 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     pathname === "/register" ||
     pathname === "/forgot-password" ||
     pathname === "/reset-password" ||
-    pathname === "/2fa"
+    pathname === "/2fa" ||
+    pathname === "/consentimento"
 
   // Admin pages that self-manage their own padding/max-width (like PerifericosContent)
   const isSelfPaddedAdminPage = pathname === "/admin/perifericos"

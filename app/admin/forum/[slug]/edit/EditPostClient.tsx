@@ -7,30 +7,29 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import {
   Check, Eye, EyeOff, ExternalLink,
-  Lock, LockOpen, Pin, PinOff, Trash2, X,
+  Lock, LockOpen, Pin, PinOff, Trash2,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
+import { CategoryPicker } from "@/components/forum/CategoryPicker"
+import { PostMediaField } from "@/components/forum/PostMediaField"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-
-type Peripheral = { id: string; name: string; brand: string; category: string }
 
 type Post = {
   id: string
   slug: string
-  title: string
   body: string
   author_name: string
-  peripheral_refs: string[]
-  peripherals: Peripheral[]
+  category_id: string
+  media_image_url: string | null
+  media_video_url: string | null
   is_hidden: boolean
   is_locked: boolean
   is_pinned: boolean
-  vote_score: number
+  aura_count: number
   created_at: string
 }
 
@@ -45,11 +44,10 @@ export default function EditPostClient({
 }) {
   const router = useRouter()
 
-  const [title, setTitle] = useState(initialPost.title)
   const [body, setBody] = useState(initialPost.body)
-  const [peripherals, setPeripherals] = useState<Peripheral[]>(initialPost.peripherals)
-  const [peripheralSearch, setPeripheralSearch] = useState("")
-  const [peripheralResults, setPeripheralResults] = useState<Peripheral[]>([])
+  const [categoryId, setCategoryId] = useState(initialPost.category_id)
+  const [mediaImageUrl, setMediaImageUrl] = useState(initialPost.media_image_url)
+  const [mediaVideoUrl, setMediaVideoUrl] = useState(initialPost.media_video_url)
 
   const [flags, setFlags] = useState({
     is_hidden: initialPost.is_hidden,
@@ -71,37 +69,6 @@ export default function EditPostClient({
     }
   }, [saveStatus])
 
-  // Peripheral search
-  useEffect(() => {
-    if (peripheralSearch.trim().length < 2) { setPeripheralResults([]); return }
-    const controller = new AbortController()
-    const timer = setTimeout(async () => {
-      try {
-        const url = `/api/peripherals?search=${encodeURIComponent(peripheralSearch.trim())}&limit=8`
-        const res = await fetch(url, { signal: controller.signal, cache: "no-store" })
-        const json = (await res.json().catch(() => null)) as { peripherals?: Peripheral[]; error?: string } | null
-        if (!res.ok || !json?.peripherals) return
-        const existing = new Set(peripherals.map((p) => p.id))
-        setPeripheralResults(json.peripherals.filter((p) => !existing.has(p.id)))
-      } catch { /* aborted or network error — ignore */ }
-    }, 300)
-    return () => {
-      controller.abort()
-      clearTimeout(timer)
-    }
-  }, [peripheralSearch, peripherals])
-
-  function addPeripheral(p: Peripheral) {
-    if (peripherals.length >= 3) return
-    setPeripherals((prev) => [...prev, p])
-    setPeripheralSearch("")
-    setPeripheralResults([])
-  }
-
-  function removePeripheral(id: string) {
-    setPeripherals((prev) => prev.filter((p) => p.id !== id))
-  }
-
   async function handleSave() {
     if (!canWrite) return
     try {
@@ -111,15 +78,16 @@ export default function EditPostClient({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: title.trim(),
           body: body.trim(),
-          peripheral_refs: peripherals.map((p) => p.id),
+          category_id: categoryId,
+          media_image_url: mediaImageUrl,
+          media_video_url: mediaVideoUrl,
         }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao salvar")
       setSaveStatus("saved")
-      toast.success("Post atualizado", { description: title.trim() })
+      toast.success("Post atualizado")
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao salvar"
       setError(message)
@@ -163,7 +131,7 @@ export default function EditPostClient({
     if (!canWrite) return
     if (
       !confirm(
-        `Excluir definitivamente o tópico "${initialPost.title}"? Todos os comentários e votos também serão apagados. Essa ação não pode ser desfeita.`
+        "Excluir definitivamente este tópico? Todos os comentários e aura também serão apagados. Essa ação não pode ser desfeita."
       )
     ) {
       return
@@ -185,12 +153,12 @@ export default function EditPostClient({
   }
 
   const isDirty =
-    title.trim() !== initialPost.title ||
     body.trim() !== initialPost.body ||
-    JSON.stringify(peripherals.map((p) => p.id).sort()) !==
-    JSON.stringify([...initialPost.peripheral_refs].sort())
+    categoryId !== initialPost.category_id ||
+    mediaImageUrl !== initialPost.media_image_url ||
+    mediaVideoUrl !== initialPost.media_video_url
 
-  const canSave = canWrite && isDirty && title.trim().length >= 4 && body.trim().length >= 20
+  const canSave = canWrite && isDirty && body.trim().length >= 20 && categoryId.length > 0
 
   return (
     <div className="space-y-6 w-full">
@@ -199,7 +167,7 @@ export default function EditPostClient({
         <BackBreadcrumb
           href="/admin/forum"
           parentLabel="Moderação"
-          currentLabel={initialPost.title}
+          currentLabel={initialPost.author_name}
         />
         <Link
           href={`/forum/${initialPost.slug}`}
@@ -242,7 +210,7 @@ export default function EditPostClient({
                   {flags.is_locked ? "Bloqueado" : "Aberto"}
                 </Badge>
                 <Badge variant="secondary" className="bg-muted/40 text-muted-foreground text-[10px]">
-                  {initialPost.vote_score > 0 ? "+" : ""}{initialPost.vote_score} votos
+                  {initialPost.aura_count} aura
                 </Badge>
               </div>
             </div>
@@ -309,18 +277,6 @@ export default function EditPostClient({
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Título</label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={!canWrite}
-              className="border-border bg-muted/20"
-              maxLength={120}
-            />
-            <p className="text-right text-[10px] text-muted-foreground">{title.length}/120</p>
-          </div>
-
-          <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Corpo</label>
             <Textarea
               value={body}
@@ -334,60 +290,22 @@ export default function EditPostClient({
             </p>
           </div>
 
-          {/* Peripheral selector */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categoria</label>
+            <CategoryPicker value={categoryId} onChange={setCategoryId} disabled={!canWrite} />
+          </div>
+
+          <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Periféricos relacionados <span className="normal-case font-normal">(até 3)</span>
+              Mídia <span className="normal-case font-normal">(opcional)</span>
             </label>
-            <div className="flex flex-wrap gap-2">
-              {peripherals.map((p) => (
-                <span
-                  key={p.id}
-                  className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs text-primary"
-                >
-                  <span className="font-medium">{p.brand} {p.name}</span>
-                  <span className="text-primary/60">· {p.category}</span>
-                  {canWrite && (
-                    <button
-                      type="button"
-                      onClick={() => removePeripheral(p.id)}
-                      className="ml-0.5 hover:text-destructive transition-colors"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  )}
-                </span>
-              ))}
-              {peripherals.length === 0 && (
-                <span className="text-xs text-muted-foreground">Nenhum periférico vinculado</span>
-              )}
-            </div>
-            {canWrite && peripherals.length < 3 && (
-              <div className="relative">
-                <Input
-                  value={peripheralSearch}
-                  onChange={(e) => setPeripheralSearch(e.target.value)}
-                  className="border-border bg-muted/20 text-sm"
-                  placeholder="Buscar periférico para vincular…"
-                />
-                {peripheralResults.length > 0 && (
-                  <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-card shadow-xl">
-                    {peripheralResults.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => addPeripheral(p)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/40"
-                      >
-                        <span className="font-medium text-foreground">{p.name}</span>
-                        <span className="text-muted-foreground">{p.brand}</span>
-                        <span className="ml-auto text-xs text-muted-foreground/60">{p.category}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <PostMediaField
+              imageUrl={mediaImageUrl}
+              videoUrl={mediaVideoUrl}
+              onImageChange={setMediaImageUrl}
+              onVideoChange={setMediaVideoUrl}
+              disabled={!canWrite}
+            />
           </div>
 
           {canWrite && (

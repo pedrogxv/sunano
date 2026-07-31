@@ -1,6 +1,6 @@
 import { revalidatePath } from "next/cache"
 import Link from "next/link"
-import { Eye, EyeOff, Lock, LockOpen, MessageSquare, Pencil, Pin, PinOff, Search } from "lucide-react"
+import { Eye, EyeOff, FolderTree, Lock, LockOpen, MessageSquare, Pencil, Pin, PinOff, Search } from "lucide-react"
 
 import {
   deleteForumPost,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/repositories/forum-repository"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DeletePostButton } from "./DeletePostButton"
@@ -111,11 +112,19 @@ export default async function AdminForumPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Moderação do Fórum</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Gerencie posts e comentários. Posts ocultos não aparecem para o público.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Moderação do Fórum</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Gerencie posts e comentários. Posts ocultos não aparecem para o público.
+          </p>
+        </div>
+        <Link href="/admin/forum/categories">
+          <Button size="sm" variant="outline" className="shrink-0 gap-2 border-border text-xs">
+            <FolderTree className="size-3.5" />
+            Categorias
+          </Button>
+        </Link>
       </div>
 
       {/* Filter bar */}
@@ -187,7 +196,7 @@ export default async function AdminForumPage({
               <div className="flex items-start gap-4 p-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <span className="font-semibold text-foreground truncate">{post.title}</span>
+                    <CategoryBadge category={post.category} />
                     {post.is_pinned && (
                       <Badge variant="secondary" className="bg-primary/15 text-primary text-[10px]">
                         Fixado
@@ -256,7 +265,7 @@ export default async function AdminForumPage({
                         {post.is_locked ? "Desbloquear" : "Bloquear"}
                       </Button>
                     </form>
-                    <DeletePostButton action={deletePost.bind(null, post.id)} postTitle={post.title} />
+                    <DeletePostButton action={deletePost.bind(null, post.id)} postTitle={post.body_preview} />
                   </>
                 )}
                 </div>

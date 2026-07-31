@@ -1,83 +1,33 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ArrowLeft, ChevronDown, ChevronUp, Lock, MessageCircle, Pin, X } from "lucide-react"
+import { ArrowLeft, Lock, MessageCircle } from "lucide-react"
+import { toast } from "sonner"
 
+import { AuraButton } from "@/components/forum/AuraButton"
+import { PostCard, type PostCardData } from "@/components/forum/PostCard"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 
-type PeripheralRef = { id: string; name: string; brand: string; category: string; image_url: string | null }
-
-type ForumPost = {
-  id: string
-  slug: string
-  title: string
-  body: string
-  author_name: string
-  author_display_name: string
-  author_avatar_url: string | null
-  peripheral_refs: string[]
-  peripherals: PeripheralRef[]
-  created_at: string
-  is_locked: boolean
-  is_pinned: boolean
-  vote_score: number
-}
+type ForumPost = PostCardData
 
 type ForumComment = {
   id: string
   body: string
-  author_name: string
   author_display_name: string
   author_avatar_url: string | null
-  peripheral_refs: string[]
-  peripherals: PeripheralRef[]
   created_at: string
+  aura_count: number
 }
 
 type AuthUser = { id: string; display_name: string; avatar_url: string | null } | null
-type Peripheral = { id: string; name: string; brand: string; category: string; image_url?: string | null }
-
-const CATEGORY_LABEL: Record<string, string> = {
-  mouse: "Mouse", keyboard: "Teclado", mousepad: "Mousepad",
-  glasspad: "Glasspad", iem: "IEM", headset: "Headset",
-}
-
-function PeripheralCard({ p }: { p: PeripheralRef }) {
-  return (
-    <Link
-      href={`/perifericos/${p.id}`}
-      className="group flex items-center gap-2.5 rounded-xl border border-border/50 bg-card px-2.5 py-2 transition-all hover:border-primary/40 hover:bg-primary/5 hover:shadow-sm"
-    >
-      <div className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-muted/50 flex items-center justify-center">
-        {p.image_url ? (
-          <Image src={p.image_url} alt={p.name} fill sizes="36px" className="object-contain p-0.5" />
-        ) : (
-          <span className="text-[11px] font-bold text-muted-foreground">
-            {p.brand.slice(0, 2).toUpperCase()}
-          </span>
-        )}
-      </div>
-      <div className="min-w-0">
-        <p className="text-xs font-semibold leading-tight text-foreground group-hover:text-primary transition-colors truncate max-w-[180px]">
-          {p.brand} {p.name}
-        </p>
-        <p className="mt-0.5 text-[10px] font-medium text-primary/60 leading-none">
-          {CATEGORY_LABEL[p.category] ?? p.category}
-        </p>
-      </div>
-    </Link>
-  )
-}
 
 export default function ForumPostPage() {
   const params = useParams<{ slug: string }>()
@@ -88,13 +38,11 @@ export default function ForumPostPage() {
   const [comments, setComments] = useState<ForumComment[]>([])
   const [authUser, setAuthUser] = useState<AuthUser>(null)
   const [authLoading, setAuthLoading] = useState(true)
-  const [userVote, setUserVote] = useState(0)
+  const [postAuraGiven, setPostAuraGiven] = useState(false)
+  const [commentAuraGiven, setCommentAuraGiven] = useState<Set<string>>(new Set())
 
   // Comment form
   const [body, setBody] = useState("")
-  const [selectedPeripherals, setSelectedPeripherals] = useState<Peripheral[]>([])
-  const [peripheralSearch, setPeripheralSearch] = useState("")
-  const [peripheralResults, setPeripheralResults] = useState<Peripheral[]>([])
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -102,7 +50,7 @@ export default function ForumPostPage() {
     // A sessão vem do cliente de autenticação; o perfil vem de /api/auth/me.
     // Em alguns navegadores mobile (webviews como o do Telegram) o evento
     // inicial do onAuthStateChange pode nunca disparar, travando a UI de
-    // votos/comentários num skeleton eterno. Depois de alguns segundos,
+    // aura/comentários num skeleton eterno. Depois de alguns segundos,
     // assume-se deslogado — se o evento chegar depois, o estado é atualizado.
     const timeout = setTimeout(() => setAuthLoading(false), 4000)
 
@@ -124,7 +72,8 @@ export default function ForumPostPage() {
         setAuthUser({ id: session.user.id, display_name: displayName, avatar_url: avatarUrl })
       } else {
         setAuthUser(null)
-        setUserVote(0)
+        setPostAuraGiven(false)
+        setCommentAuraGiven(new Set())
       }
       setAuthLoading(false)
     })
@@ -153,63 +102,80 @@ export default function ForumPostPage() {
 
   useEffect(() => { loadPost() }, [loadPost])
 
-  // Voto do usuário neste post — obtido via endpoint /api/forum/votes.
+  // Aura dada pelo usuário atual neste post + comentários.
   useEffect(() => {
     if (!authUser || !post) return
-    const postId = post.id
-    fetch(`/api/forum/votes?postIds=${postId}`)
+    const commentIds = comments.map((c) => c.id)
+    const query = new URLSearchParams({ postIds: post.id })
+    if (commentIds.length > 0) query.set("commentIds", commentIds.join(","))
+    fetch(`/api/forum/aura?${query}`)
       .then((res) => res.json())
-      .then((data) => setUserVote(data?.votes?.[postId] ?? 0))
-      .catch(() => setUserVote(0))
-  }, [authUser, post])
+      .then((data) => {
+        setPostAuraGiven((data?.postsGiven ?? []).includes(post.id))
+        setCommentAuraGiven(new Set(data?.commentsGiven ?? []))
+      })
+      .catch(() => {
+        setPostAuraGiven(false)
+        setCommentAuraGiven(new Set())
+      })
+  }, [authUser, post, comments.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function handleVote(value: 1 | -1 | 0) {
+  async function handleTogglePostAura() {
     if (!authUser || !post) return
-    const prevVote = userVote
-    const prevScore = post.vote_score
-    const delta = value - prevVote
+    const wasGiven = postAuraGiven
+    const prevCount = post.aura_count
 
-    setUserVote(value)
-    setPost((p) => p ? { ...p, vote_score: p.vote_score + delta } : p)
+    setPostAuraGiven(!wasGiven)
+    setPost((p) => (p ? { ...p, aura_count: p.aura_count + (wasGiven ? -10 : 10) } : p))
 
-    const res = await fetch(`/api/forum/posts/${post.slug}/vote`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ value }),
-    })
+    const res = await fetch(`/api/forum/posts/${post.slug}/aura`, { method: "POST" })
 
     if (!res.ok) {
-      setUserVote(prevVote)
-      setPost((p) => p ? { ...p, vote_score: prevScore } : p)
+      setPostAuraGiven(wasGiven)
+      setPost((p) => (p ? { ...p, aura_count: prevCount } : p))
+      const data = await res.json().catch(() => null)
+      toast.error(data?.error ?? "Erro ao dar aura")
     } else {
       const data = await res.json().catch(() => null)
-      if (data?.vote_score !== undefined) {
-        setPost((p) => p ? { ...p, vote_score: data.vote_score } : p)
+      if (data?.aura_count !== undefined) {
+        setPost((p) => (p ? { ...p, aura_count: data.aura_count } : p))
       }
     }
   }
 
-  useEffect(() => {
-    if (peripheralSearch.trim().length < 2) { setPeripheralResults([]); return }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `/api/peripherals?search=${encodeURIComponent(peripheralSearch.trim())}&limit=8`
-        )
-        const data = await res.json().catch(() => null)
-        setPeripheralResults((data?.peripherals ?? []) as Peripheral[])
-      } catch {
-        setPeripheralResults([])
-      }
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [peripheralSearch])
+  async function handleToggleCommentAura(comment: ForumComment) {
+    if (!authUser || !post) return
+    const wasGiven = commentAuraGiven.has(comment.id)
+    const prevCount = comment.aura_count
 
-  function addPeripheral(p: Peripheral) {
-    if (selectedPeripherals.length >= 3 || selectedPeripherals.find((s) => s.id === p.id)) return
-    setSelectedPeripherals((prev) => [...prev, p])
-    setPeripheralSearch("")
-    setPeripheralResults([])
+    setCommentAuraGiven((prev) => {
+      const next = new Set(prev)
+      if (wasGiven) next.delete(comment.id)
+      else next.add(comment.id)
+      return next
+    })
+    setComments((prev) =>
+      prev.map((c) => (c.id === comment.id ? { ...c, aura_count: c.aura_count + (wasGiven ? -10 : 10) } : c))
+    )
+
+    const res = await fetch(`/api/forum/posts/${post.slug}/comments/${comment.id}/aura`, { method: "POST" })
+
+    if (!res.ok) {
+      setCommentAuraGiven((prev) => {
+        const next = new Set(prev)
+        if (wasGiven) next.add(comment.id)
+        else next.delete(comment.id)
+        return next
+      })
+      setComments((prev) => prev.map((c) => (c.id === comment.id ? { ...c, aura_count: prevCount } : c)))
+      const data = await res.json().catch(() => null)
+      toast.error(data?.error ?? "Erro ao dar aura")
+    } else {
+      const data = await res.json().catch(() => null)
+      if (data?.aura_count !== undefined) {
+        setComments((prev) => prev.map((c) => (c.id === comment.id ? { ...c, aura_count: data.aura_count } : c)))
+      }
+    }
   }
 
   async function submitComment() {
@@ -220,12 +186,11 @@ export default function ForumPostPage() {
       const res = await fetch(`/api/forum/posts/${post.slug}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body, peripheral_refs: selectedPeripherals.map((p) => p.id) }),
+        body: JSON.stringify({ body }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar comentário")
       setBody("")
-      setSelectedPeripherals([])
       await loadPost()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao enviar comentário")
@@ -256,89 +221,14 @@ export default function ForumPostPage() {
         </div>
       ) : post ? (
         <>
-          {/* Post card */}
-          <div className={`rounded-xl border bg-card ${post.is_pinned ? "border-primary/30 bg-primary/[0.03]" : "border-border"}`}>
-            {post.is_pinned && (
-              <div className="h-px rounded-t-xl bg-gradient-to-r from-primary/60 via-primary/30 to-transparent" />
-            )}
-
-            <div className="flex gap-4 p-6">
-              {/* Vertical vote column */}
-              <div className="flex flex-col items-center gap-0.5 shrink-0 w-8 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleVote(userVote === 1 ? 0 : 1)}
-                  disabled={!authUser}
-                  title={!authUser ? "Entre para votar" : userVote === 1 ? "Remover voto" : "Voto positivo"}
-                  className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-                    userVote === 1
-                      ? "text-primary bg-primary/15 hover:bg-primary/20"
-                      : "text-muted-foreground hover:text-primary hover:bg-primary/10"
-                  } disabled:cursor-not-allowed disabled:opacity-40`}
-                >
-                  <ChevronUp className="size-5" />
-                </button>
-                <span className={`text-sm font-bold tabular-nums leading-none ${
-                  (post.vote_score ?? 0) > 0 ? "text-primary" : (post.vote_score ?? 0) < 0 ? "text-destructive" : "text-muted-foreground"
-                }`}>
-                  {post.vote_score ?? 0}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleVote(userVote === -1 ? 0 : -1)}
-                  disabled={!authUser}
-                  title={!authUser ? "Entre para votar" : userVote === -1 ? "Remover voto" : "Voto negativo"}
-                  className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-                    userVote === -1
-                      ? "text-destructive bg-destructive/15 hover:bg-destructive/20"
-                      : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  } disabled:cursor-not-allowed disabled:opacity-40`}
-                >
-                  <ChevronDown className="size-5" />
-                </button>
-              </div>
-
-              {/* Post content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start gap-3">
-                  <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        {post.is_pinned && (
-                          <span className="mb-1 inline-flex items-center gap-1 rounded-sm bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                            <Pin className="size-2.5" />
-                            Fixado
-                          </span>
-                        )}
-                        <h1 className="font-display text-xl font-bold tracking-tight text-foreground md:text-2xl">
-                          {post.title}
-                        </h1>
-                      </div>
-                      {post.is_locked && (
-                        <div className="flex shrink-0 items-center gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-400">
-                          <Lock className="size-3" />
-                          Bloqueado
-                        </div>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {post.author_display_name} · {format(new Date(post.created_at), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
-                    </p>
-                  </div>
-                </div>
-
-                <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-foreground">{post.body}</p>
-
-                {post.peripherals.length > 0 && (
-                  <div className="mt-4 flex flex-wrap gap-1.5">
-                    <span className="text-xs text-muted-foreground">Referências:</span>
-                    {post.peripherals.map((p) => <PeripheralCard key={p.id} p={p} />)}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <PostCard
+            post={post}
+            auraGiven={postAuraGiven}
+            auraDisabled={!authUser}
+            onToggleAura={handleTogglePostAura}
+            clickable={false}
+            compact={false}
+          />
 
           {/* Comments */}
           <div>
@@ -365,11 +255,14 @@ export default function ForumPostPage() {
                       <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
                         {comment.body}
                       </p>
-                      {comment.peripherals.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {comment.peripherals.map((p) => <PeripheralCard key={p.id} p={p} />)}
-                        </div>
-                      )}
+                      <div className="mt-2">
+                        <AuraButton
+                          auraCount={comment.aura_count}
+                          given={commentAuraGiven.has(comment.id)}
+                          disabled={!authUser}
+                          onToggle={() => handleToggleCommentAura(comment)}
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -408,44 +301,6 @@ export default function ForumPostPage() {
                     className="min-h-[100px] border-border bg-muted/20"
                     placeholder="Escreva seu comentário..."
                   />
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Periféricos relacionados <span className="normal-case font-normal">(até 3)</span>
-                    </label>
-                    {selectedPeripherals.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {selectedPeripherals.map((p) => (
-                          <span key={p.id} className="inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2 py-1 text-xs text-primary">
-                            {p.brand} {p.name}
-                            <button type="button" onClick={() => setSelectedPeripherals((prev) => prev.filter((s) => s.id !== p.id))}>
-                              <X className="size-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    {selectedPeripherals.length < 3 && (
-                      <div className="relative">
-                        <Input
-                          value={peripheralSearch}
-                          onChange={(e) => setPeripheralSearch(e.target.value)}
-                          className="border-border bg-muted/20 text-sm"
-                          placeholder="Buscar periférico..."
-                        />
-                        {peripheralResults.length > 0 && (
-                          <div className="absolute z-20 mt-1 w-full rounded-lg border border-border bg-card shadow-xl">
-                            {peripheralResults.map((p) => (
-                              <button key={p.id} type="button" onClick={() => addPeripheral(p)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/40">
-                                <span className="font-medium text-foreground">{p.name}</span>
-                                <span className="text-xs text-muted-foreground">{p.brand}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
 
                   <div className="flex justify-end">
                     <Button size="sm" onClick={submitComment} disabled={saving || body.trim().length < 4}>

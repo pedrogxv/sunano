@@ -1,45 +1,36 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import type { Database } from "@/lib/database.types"
 
 /**
- * Repositório do Fórum — única porta de acesso às tabelas `forum_posts`,
- * `forum_comments` e `forum_votes`.
- *
- * Observação: `forum_votes`, `vote_score`, `body_preview` e `is_pinned` não
- * estão no tipo gerado `Database`; por isso há `as any` pontuais (mantém-se o
- * mesmo comportamento das rotas originais, apenas centralizado aqui).
+ * Repositório do Fórum — única porta de acesso às tabelas `forum_posts` e
+ * `forum_comments`. Categorias vivem em `forum-categories-repository.ts` e
+ * aura em `aura-repository.ts`.
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-type PeripheralCategory = Database["public"]["Tables"]["peripherals"]["Row"]["category"]
-
-export type ForumPeripheralRef = {
+export type ForumCategoryInfo = {
   id: string
+  slug: string
   name: string
-  brand: string
-  category: string
-  image_url: string | null
+  parent: { id: string; slug: string; name: string } | null
 }
 
 export type ForumListPost = {
   id: string
   slug: string
-  title: string
   body: string
   author_name: string
   user_id: string | null
-  peripheral_refs: string[]
+  category: ForumCategoryInfo | null
+  media_image_url: string | null
+  media_video_url: string | null
   created_at: string
   is_locked: boolean
   is_pinned: boolean
-  vote_score: number
+  aura_count: number
   comment_count: number
   author_display_name: string
   author_avatar_url: string | null
-  peripherals: ForumPeripheralRef[]
 }
 
 export type ForumPostDetail = ForumListPost
@@ -48,59 +39,61 @@ export type ForumCommentDetail = {
   body: string
   author_name: string
   user_id: string | null
-  peripheral_refs: string[]
   created_at: string
+  aura_count: number
   author_display_name: string
   author_avatar_url: string | null
-  peripherals: ForumPeripheralRef[]
 }
 
-export type ForumTab = "recent" | "hot" | "peripheral"
+export type ForumTab = "recent" | "hot" | "category"
 
 // ── Helpers de enriquecimento ────────────────────────────────────────────────
 
-async function buildProfileMap(userIds: string[]) {
+async function buildProfileMap(userIds: (string | null)[]) {
   const map: Record<string, { display_name: string | null; avatar_url: string | null }> = {}
-  const ids = [...new Set(userIds.filter(Boolean))]
+  const ids = [...new Set(userIds.filter((id): id is string => Boolean(id)))]
   if (ids.length === 0) return map
   const db = createSupabaseAdminClient()
-  const { data } = await (db.from("user_profiles") as any)
-    .select("id, display_name, avatar_url")
-    .in("id", ids)
-  for (const row of (data ?? []) as any[]) {
+  const { data } = await db.from("user_profiles").select("id, display_name, avatar_url").in("id", ids)
+  for (const row of data ?? []) {
     map[row.id] = { display_name: row.display_name, avatar_url: row.avatar_url }
   }
   return map
 }
 
-async function buildPeripheralMap(refs: string[]) {
-  const map: Record<string, ForumPeripheralRef> = {}
-  const ids = [...new Set(refs.filter(Boolean))]
-  if (ids.length === 0) return map
+type CategoryRow = { id: string; slug: string; name: string; parent_id: string | null }
+
+/** Carrega todas as categorias (tabela pequena) para resolver nome/pai em memória. */
+async function buildCategoryMap(): Promise<Map<string, CategoryRow>> {
   const db = createSupabaseAdminClient()
-  const { data } = await db
-    .from("peripherals")
-    .select("id, name, brand, category, image_url")
-    .in("id", ids)
-  for (const row of (data ?? []) as any[]) {
-    map[row.id] = {
-      id: row.id,
-      name: row.name,
-      brand: row.brand,
-      category: row.category,
-      image_url: row.image_url ?? null,
-    }
-  }
+  const { data } = await db.from("forum_categories").select("id, slug, name, parent_id")
+  const map = new Map<string, CategoryRow>()
+  for (const row of data ?? []) map.set(row.id, row)
   return map
 }
 
-function resolvePeripherals(
-  refs: string[] | null | undefined,
-  map: Record<string, ForumPeripheralRef>
-): ForumPeripheralRef[] {
-  return (refs ?? [])
-    .map((id) => map[id])
-    .filter((p): p is ForumPeripheralRef => Boolean(p?.name))
+function resolveCategoryInfo(
+  categoryId: string | null,
+  categoryMap: Map<string, CategoryRow>
+): ForumCategoryInfo | null {
+  if (!categoryId) return null
+  const category = categoryMap.get(categoryId)
+  if (!category) return null
+  const parent = category.parent_id ? categoryMap.get(category.parent_id) ?? null : null
+  return {
+    id: category.id,
+    slug: category.slug,
+    name: category.name,
+    parent: parent ? { id: parent.id, slug: parent.slug, name: parent.name } : null,
+  }
+}
+
+/** IDs de uma categoria + suas subcategorias (para filtrar posts por categoria-raiz). */
+async function resolveCategoryIdsForFilter(categoryId: string): Promise<string[]> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db.from("forum_categories").select("id").eq("parent_id", categoryId)
+  const childIds = (data ?? []).map((row) => row.id)
+  return [categoryId, ...childIds]
 }
 
 // ── Leitura pública ──────────────────────────────────────────────────────────
@@ -108,51 +101,42 @@ function resolvePeripherals(
 /** Lista posts visíveis do fórum, conforme a aba selecionada. */
 export async function listForumPosts(params: {
   tab: ForumTab
-  category?: string
+  categoryId?: string
 }): Promise<ForumListPost[]> {
   const db = createSupabaseAdminClient()
-  const { tab, category } = params
+  const { tab, categoryId } = params
 
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, title, body_preview, author_name, user_id, peripheral_refs, created_at, is_locked, is_pinned, vote_score"
+      "id, slug, body_preview, author_name, user_id, category_id, media_image_url, media_video_url, created_at, is_locked, is_pinned, aura_count"
     )
     .eq("is_hidden", false)
 
-  if (tab === "peripheral") {
-    if (category) {
-      const { data: perifs } = await db
-        .from("peripherals")
-        .select("id")
-        .eq("category", category as PeripheralCategory)
-      const perifIds = ((perifs ?? []) as any[]).map((p) => p.id)
-      if (perifIds.length === 0) return []
-      query = (query as any).overlaps("peripheral_refs", perifIds)
-    } else {
-      query = (query as any).not("peripheral_refs", "eq", "{}")
-    }
+  if (tab === "category" && categoryId) {
+    const ids = await resolveCategoryIdsForFilter(categoryId)
+    query = query.in("category_id", ids)
   }
 
   if (tab === "hot") {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-    query = (query as any).gte("created_at", since)
+    query = query.gte("created_at", since)
   }
 
-  query = (query as any).order("is_pinned", { ascending: false })
-  if (tab === "hot") query = (query as any).order("vote_score", { ascending: false })
-  query = (query as any).order("created_at", { ascending: false })
+  query = query.order("is_pinned", { ascending: false })
+  if (tab === "hot") query = query.order("aura_count", { ascending: false })
+  query = query.order("created_at", { ascending: false })
   // Sem paginação na UI ainda — limita para não trazer o fórum inteiro a
   // cada carregamento de página conforme o volume de posts cresce.
-  query = (query as any).limit(50)
+  query = query.limit(50)
 
-  const { data: posts, error } = await (query as any)
+  const { data: posts, error } = await query
   if (error) {
     console.error("[forum-repository] listForumPosts:", error)
     throw error
   }
 
-  const rows = (posts ?? []) as any[]
+  const rows = posts ?? []
   const postIds = rows.map((p) => p.id)
 
   const commentCounts: Record<string, number> = {}
@@ -162,32 +146,30 @@ export async function listForumPosts(params: {
       .select("post_id")
       .in("post_id", postIds)
       .eq("is_hidden", false)
-    for (const c of (comments ?? []) as any[]) {
+    for (const c of comments ?? []) {
       commentCounts[c.post_id] = (commentCounts[c.post_id] ?? 0) + 1
     }
   }
 
   const profileMap = await buildProfileMap(rows.map((p) => p.user_id))
-  const peripheralMap = await buildPeripheralMap(rows.flatMap((p) => p.peripheral_refs ?? []))
+  const categoryMap = await buildCategoryMap()
 
   return rows.map((p) => ({
     id: p.id,
     slug: p.slug,
-    title: p.title,
-    body: p.body_preview ?? "",
+    body: p.body_preview,
     author_name: p.author_name,
     user_id: p.user_id,
-    peripheral_refs: p.peripheral_refs ?? [],
+    category: resolveCategoryInfo(p.category_id, categoryMap),
+    media_image_url: p.media_image_url,
+    media_video_url: p.media_video_url,
     created_at: p.created_at,
     is_locked: p.is_locked,
-    is_pinned: p.is_pinned ?? false,
-    vote_score: p.vote_score ?? 0,
+    is_pinned: p.is_pinned,
+    aura_count: p.aura_count,
     comment_count: commentCounts[p.id] ?? 0,
-    author_display_name: p.user_id
-      ? profileMap[p.user_id]?.display_name ?? p.author_name
-      : p.author_name,
+    author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
-    peripherals: resolvePeripherals(p.peripheral_refs, peripheralMap),
   }))
 }
 
@@ -201,7 +183,7 @@ export async function getForumPostBySlug(slug: string): Promise<{
   const { data: post, error } = await db
     .from("forum_posts")
     .select(
-      "id, slug, title, body, author_name, user_id, peripheral_refs, created_at, is_locked, is_pinned, vote_score"
+      "id, slug, body, author_name, user_id, category_id, media_image_url, media_video_url, created_at, is_locked, is_pinned, aura_count"
     )
     .eq("slug", slug)
     .eq("is_hidden", false)
@@ -213,44 +195,36 @@ export async function getForumPostBySlug(slug: string): Promise<{
   }
   if (!post) return null
 
-  const p = post as any
-
   const { data: commentRows } = await db
     .from("forum_comments")
-    .select("id, body, author_name, user_id, peripheral_refs, created_at")
-    .eq("post_id", p.id)
+    .select("id, body, author_name, user_id, created_at, aura_count")
+    .eq("post_id", post.id)
     .eq("is_hidden", false)
     .order("created_at", { ascending: true })
 
-  const comments = (commentRows ?? []) as any[]
+  const comments = commentRows ?? []
 
-  const profileMap = await buildProfileMap([
-    p.user_id,
-    ...comments.map((c) => c.user_id),
-  ])
-  const peripheralMap = await buildPeripheralMap([
-    ...(p.peripheral_refs ?? []),
-    ...comments.flatMap((c) => c.peripheral_refs ?? []),
-  ])
+  const profileMap = await buildProfileMap([post.user_id, ...comments.map((c) => c.user_id)])
+  const categoryMap = await buildCategoryMap()
 
   const enrichedPost: ForumPostDetail = {
-    id: p.id,
-    slug: p.slug,
-    title: p.title,
-    body: p.body,
-    author_name: p.author_name,
-    user_id: p.user_id,
-    peripheral_refs: p.peripheral_refs ?? [],
-    created_at: p.created_at,
-    is_locked: p.is_locked,
-    is_pinned: p.is_pinned ?? false,
-    vote_score: p.vote_score ?? 0,
+    id: post.id,
+    slug: post.slug,
+    body: post.body,
+    author_name: post.author_name,
+    user_id: post.user_id,
+    category: resolveCategoryInfo(post.category_id, categoryMap),
+    media_image_url: post.media_image_url,
+    media_video_url: post.media_video_url,
+    created_at: post.created_at,
+    is_locked: post.is_locked,
+    is_pinned: post.is_pinned,
+    aura_count: post.aura_count,
     comment_count: comments.length,
-    author_display_name: p.user_id
-      ? profileMap[p.user_id]?.display_name ?? p.author_name
-      : p.author_name,
-    author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
-    peripherals: resolvePeripherals(p.peripheral_refs, peripheralMap),
+    author_display_name: post.user_id
+      ? profileMap[post.user_id]?.display_name ?? post.author_name
+      : post.author_name,
+    author_avatar_url: post.user_id ? profileMap[post.user_id]?.avatar_url ?? null : null,
   }
 
   const enrichedComments: ForumCommentDetail[] = comments.map((c) => ({
@@ -258,34 +232,13 @@ export async function getForumPostBySlug(slug: string): Promise<{
     body: c.body,
     author_name: c.author_name,
     user_id: c.user_id,
-    peripheral_refs: c.peripheral_refs ?? [],
     created_at: c.created_at,
-    author_display_name: c.user_id
-      ? profileMap[c.user_id]?.display_name ?? c.author_name
-      : c.author_name,
+    aura_count: c.aura_count,
+    author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
-    peripherals: resolvePeripherals(c.peripheral_refs, peripheralMap),
   }))
 
   return { post: enrichedPost, comments: enrichedComments }
-}
-
-/** Retorna os votos do usuário atual para um conjunto de posts. */
-export async function getUserForumVotes(
-  userId: string,
-  postIds: string[]
-): Promise<Record<string, number>> {
-  const map: Record<string, number> = {}
-  if (postIds.length === 0) return map
-  const db = createSupabaseAdminClient()
-  const { data } = await (db.from("forum_votes") as any)
-    .select("post_id, value")
-    .eq("user_id", userId)
-    .in("post_id", postIds)
-  for (const v of (data ?? []) as any[]) {
-    map[v.post_id] = v.value
-  }
-  return map
 }
 
 // ── Escrita pública ──────────────────────────────────────────────────────────
@@ -303,10 +256,16 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "")
 }
 
+/** Sem título separado — deriva a semente do slug das primeiras palavras do corpo. */
+function slugSeedFromBody(body: string) {
+  const firstLine = body.trim().split("\n")[0] ?? ""
+  return firstLine.trim().split(/\s+/).slice(0, 8).join(" ")
+}
+
 async function createUniqueSlug(baseSlug: string) {
   const db = createSupabaseAdminClient()
   const { data } = await db.from("forum_posts").select("slug").ilike("slug", `${baseSlug}%`)
-  const taken = new Set(((data ?? []) as any[]).map((r) => r.slug))
+  const taken = new Set((data ?? []).map((r) => r.slug))
   let slug = baseSlug
   let i = 2
   while (taken.has(slug)) {
@@ -316,42 +275,60 @@ async function createUniqueSlug(baseSlug: string) {
   return slug
 }
 
-export type RepositoryResult =
-  | { ok: true }
-  | { ok: false; error: string; status: number }
+export type RepositoryResult = { ok: true } | { ok: false; error: string; status: number }
+
+async function validateCategoryId(categoryId: string): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("forum_categories")
+    .select("id")
+    .eq("id", categoryId)
+    .eq("is_active", true)
+    .maybeSingle()
+  return Boolean(data)
+}
+
+function validateMedia(mediaImageUrl?: string | null, mediaVideoUrl?: string | null) {
+  if (mediaImageUrl && mediaVideoUrl) {
+    return "Escolha apenas um tipo de mídia: imagem ou vídeo."
+  }
+  return null
+}
 
 /** Cria um novo post de fórum. Retorna o slug gerado. */
 export async function createForumPost(params: {
   userId: string
   authorName: string
-  title: string
   body: string
-  peripheralRefs: string[]
+  categoryId: string
+  mediaImageUrl?: string | null
+  mediaVideoUrl?: string | null
 }): Promise<{ ok: true; slug: string } | { ok: false; error: string; status: number }> {
   const db = createSupabaseAdminClient()
 
-  if (params.peripheralRefs.length > 0) {
-    const { data: perifs } = await db
-      .from("peripherals")
-      .select("id")
-      .in("id", params.peripheralRefs)
-    if ((perifs ?? []).length !== params.peripheralRefs.length) {
-      return { ok: false, error: "Um ou mais periféricos referenciados não existem.", status: 400 }
-    }
+  const mediaError = validateMedia(params.mediaImageUrl, params.mediaVideoUrl)
+  if (mediaError) return { ok: false, error: mediaError, status: 400 }
+
+  if (!(await validateCategoryId(params.categoryId))) {
+    return { ok: false, error: "Categoria inválida ou inativa.", status: 400 }
   }
 
-  const slug = await createUniqueSlug(slugify(params.title) || `post-${Date.now()}`)
+  const seed = slugSeedFromBody(params.body)
+  const slug = await createUniqueSlug(slugify(seed) || `post-${Date.now()}`)
 
   const { error } = await db.from("forum_posts").insert({
     slug,
-    title: params.title.trim(),
     body: params.body.trim(),
     author_name: params.authorName,
     user_id: params.userId,
-    peripheral_refs: params.peripheralRefs,
+    category_id: params.categoryId,
+    media_image_url: params.mediaImageUrl ?? null,
+    media_video_url: params.mediaVideoUrl ?? null,
     is_hidden: false,
     is_locked: false,
-  } as any)
+    is_pinned: false,
+    aura_count: 0,
+  })
 
   if (error) {
     console.error("[forum-repository] createForumPost:", error)
@@ -366,19 +343,8 @@ export async function addForumComment(params: {
   userId: string
   authorName: string
   body: string
-  peripheralRefs: string[]
 }): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
-
-  if (params.peripheralRefs.length > 0) {
-    const { data: perifs } = await db
-      .from("peripherals")
-      .select("id")
-      .in("id", params.peripheralRefs)
-    if ((perifs ?? []).length !== params.peripheralRefs.length) {
-      return { ok: false, error: "Um ou mais periféricos referenciados não existem.", status: 400 }
-    }
-  }
 
   const { data: post } = await db
     .from("forum_posts")
@@ -387,65 +353,24 @@ export async function addForumComment(params: {
     .maybeSingle()
 
   if (!post) return { ok: false, error: "Post não encontrado.", status: 404 }
-  if ((post as any).is_locked) {
+  if (post.is_locked) {
     return { ok: false, error: "Este post está fechado para comentários.", status: 403 }
   }
 
   const { error } = await db.from("forum_comments").insert({
-    post_id: (post as any).id,
+    post_id: post.id,
     body: params.body.trim(),
     author_name: params.authorName,
     user_id: params.userId,
-    peripheral_refs: params.peripheralRefs,
     is_hidden: false,
-  } as any)
+    aura_count: 0,
+  })
 
   if (error) {
     console.error("[forum-repository] addForumComment:", error)
     return { ok: false, error: error.message, status: 400 }
   }
   return { ok: true }
-}
-
-/** Define/remove o voto do usuário num post e devolve o novo placar. */
-export async function setForumVote(params: {
-  userId: string
-  postSlug: string
-  value: -1 | 0 | 1
-}): Promise<{ ok: true; voteScore: number } | { ok: false; error: string; status: number }> {
-  const db = createSupabaseAdminClient()
-
-  const { data: post } = await db
-    .from("forum_posts")
-    .select("id, is_hidden")
-    .eq("slug", params.postSlug)
-    .maybeSingle()
-
-  if (!post || (post as any).is_hidden) {
-    return { ok: false, error: "Post não encontrado.", status: 404 }
-  }
-
-  const postId = (post as any).id
-
-  if (params.value === 0) {
-    await (db.from("forum_votes") as any)
-      .delete()
-      .eq("user_id", params.userId)
-      .eq("post_id", postId)
-  } else {
-    await (db.from("forum_votes") as any).upsert(
-      { user_id: params.userId, post_id: postId, value: params.value },
-      { onConflict: "user_id,post_id" }
-    )
-  }
-
-  const { data: updated } = await db
-    .from("forum_posts")
-    .select("vote_score")
-    .eq("id", postId)
-    .maybeSingle()
-
-  return { ok: true, voteScore: (updated as any)?.vote_score ?? 0 }
 }
 
 // ── Moderação (admin) ────────────────────────────────────────────────────────
@@ -455,12 +380,13 @@ export type ModerationFilter = "all" | "visible" | "hidden" | "locked" | "pinned
 export type ModerationPost = {
   id: string
   slug: string
-  title: string
   body_preview: string
   author_name: string
+  category: ForumCategoryInfo | null
   is_hidden: boolean
   is_locked: boolean
   is_pinned: boolean
+  aura_count: number
   created_at: string
   comment_count: number
 }
@@ -492,29 +418,29 @@ export async function listForumPostsForModeration(params: {
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, title, body_preview, author_name, is_hidden, is_locked, is_pinned, created_at",
+      "id, slug, body_preview, author_name, category_id, is_hidden, is_locked, is_pinned, aura_count, created_at",
       { count: "exact" }
     )
 
-  if (params.filter === "visible") query = (query as any).eq("is_hidden", false)
-  else if (params.filter === "hidden") query = (query as any).eq("is_hidden", true)
-  else if (params.filter === "locked") query = (query as any).eq("is_locked", true)
-  else if (params.filter === "pinned") query = (query as any).eq("is_pinned", true)
+  if (params.filter === "visible") query = query.eq("is_hidden", false)
+  else if (params.filter === "hidden") query = query.eq("is_hidden", true)
+  else if (params.filter === "locked") query = query.eq("is_locked", true)
+  else if (params.filter === "pinned") query = query.eq("is_pinned", true)
 
   if (params.q) {
     // Escapa aspas/backslash e envolve em aspas duplas — sintaxe do PostgREST
     // para valores de filtro que podem conter vírgula/ponto (delimitadores
     // do `.or()`), evitando que `q` injete condições extras no filtro.
     const escapedQ = params.q.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
-    query = (query as any).or(`title.ilike."%${escapedQ}%",author_name.ilike."%${escapedQ}%"`)
+    query = query.or(`body.ilike."%${escapedQ}%",author_name.ilike."%${escapedQ}%"`)
   }
 
-  const { data: posts, count } = await (query as any)
+  const { data: posts, count } = await query
     .order("is_pinned", { ascending: false })
     .order("created_at", { ascending: false })
     .range(start, end)
 
-  const rows = (posts ?? []) as any[]
+  const rows = posts ?? []
   const postIds = rows.map((p) => p.id)
   const commentsByPost: Record<string, ModerationComment[]> = {}
 
@@ -524,20 +450,23 @@ export async function listForumPostsForModeration(params: {
       .select("id, post_id, body, author_name, is_hidden, created_at")
       .in("post_id", postIds)
       .order("created_at", { ascending: true })
-    for (const c of (comments ?? []) as ModerationComment[]) {
+    for (const c of comments ?? []) {
       ;(commentsByPost[c.post_id] ??= []).push(c)
     }
   }
 
+  const categoryMap = await buildCategoryMap()
+
   const moderationPosts: ModerationPost[] = rows.map((p) => ({
     id: p.id,
     slug: p.slug,
-    title: p.title,
-    body_preview: p.body_preview ?? p.body ?? "",
+    body_preview: p.body_preview ?? "",
     author_name: p.author_name,
+    category: resolveCategoryInfo(p.category_id, categoryMap),
     is_hidden: p.is_hidden,
     is_locked: p.is_locked,
-    is_pinned: p.is_pinned ?? false,
+    is_pinned: p.is_pinned,
+    aura_count: p.aura_count,
     created_at: p.created_at,
     comment_count: commentsByPost[p.id]?.length ?? 0,
   }))
@@ -545,38 +474,43 @@ export async function listForumPostsForModeration(params: {
   return { posts: moderationPosts, commentsByPost, total: count ?? 0 }
 }
 
-/** Carrega um post (com periféricos resolvidos) para edição no admin. */
-export async function getForumPostForEdit(slug: string): Promise<any> {
+export type ForumPostForEdit = {
+  id: string
+  slug: string
+  body: string
+  author_name: string
+  category_id: string
+  media_image_url: string | null
+  media_video_url: string | null
+  is_hidden: boolean
+  is_locked: boolean
+  is_pinned: boolean
+  aura_count: number
+  created_at: string
+}
+
+/** Carrega um post para edição no admin. */
+export async function getForumPostForEdit(slug: string): Promise<ForumPostForEdit | null> {
   const db = createSupabaseAdminClient()
-  const { data: post } = await (db
+  const { data: post } = await db
     .from("forum_posts")
     .select(
-      "id, slug, title, body, author_name, peripheral_refs, is_hidden, is_locked, is_pinned, vote_score, created_at"
-    ) as any)
+      "id, slug, body, author_name, category_id, media_image_url, media_video_url, is_hidden, is_locked, is_pinned, aura_count, created_at"
+    )
     .eq("slug", slug)
     .maybeSingle()
 
-  if (!post) return null
-
-  const refs: string[] = (post as any).peripheral_refs ?? []
-  let peripherals: { id: string; name: string; brand: string; category: string }[] = []
-  if (refs.length > 0) {
-    const { data } = await db
-      .from("peripherals")
-      .select("id, name, brand, category")
-      .in("id", refs)
-    peripherals = (data ?? []) as typeof peripherals
-  }
-  return { ...(post as Record<string, unknown>), peripherals }
+  return post ?? null
 }
 
 /** Atualiza campos de um post do fórum (admin). */
 export async function updateForumPost(
   slug: string,
   updates: Partial<{
-    title: string
     body: string
-    peripheral_refs: string[]
+    category_id: string
+    media_image_url: string | null
+    media_video_url: string | null
     is_hidden: boolean
     is_locked: boolean
     is_pinned: boolean
@@ -584,26 +518,17 @@ export async function updateForumPost(
 ): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
-  const { data: existing } = await db
-    .from("forum_posts")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle()
+  const { data: existing } = await db.from("forum_posts").select("id").eq("slug", slug).maybeSingle()
   if (!existing) return { ok: false, error: "Post não encontrado.", status: 404 }
 
-  if (updates.peripheral_refs && updates.peripheral_refs.length > 0) {
-    const { data: perifs } = await db
-      .from("peripherals")
-      .select("id")
-      .in("id", updates.peripheral_refs)
-    if ((perifs ?? []).length !== updates.peripheral_refs.length) {
-      return { ok: false, error: "Um ou mais periféricos referenciados não existem.", status: 400 }
-    }
+  if (updates.category_id && !(await validateCategoryId(updates.category_id))) {
+    return { ok: false, error: "Categoria inválida ou inativa.", status: 400 }
   }
 
-  const { error } = await (db.from("forum_posts") as any)
-    .update(updates)
-    .eq("id", (existing as any).id)
+  const mediaError = validateMedia(updates.media_image_url, updates.media_video_url)
+  if (mediaError) return { ok: false, error: mediaError, status: 400 }
+
+  const { error } = await db.from("forum_posts").update(updates).eq("id", existing.id)
 
   if (error) {
     console.error("[forum-repository] updateForumPost:", error)
@@ -619,16 +544,18 @@ export async function setForumPostFlag(
   value: boolean
 ): Promise<void> {
   const db = createSupabaseAdminClient()
-  await (db.from("forum_posts") as any).update({ [flag]: value }).eq("id", postId)
+  if (flag === "is_hidden") await db.from("forum_posts").update({ is_hidden: value }).eq("id", postId)
+  else if (flag === "is_locked") await db.from("forum_posts").update({ is_locked: value }).eq("id", postId)
+  else await db.from("forum_posts").update({ is_pinned: value }).eq("id", postId)
 }
 
 /** Oculta/exibe um comentário (moderação). */
 export async function setForumCommentHidden(commentId: string, hidden: boolean): Promise<void> {
   const db = createSupabaseAdminClient()
-  await (db.from("forum_comments") as any).update({ is_hidden: hidden }).eq("id", commentId)
+  await db.from("forum_comments").update({ is_hidden: hidden }).eq("id", commentId)
 }
 
-/** Exclui definitivamente um post do fórum (comentários e votos são removidos em cascata). */
+/** Exclui definitivamente um post do fórum (comentários e aura são removidos em cascata). */
 export async function deleteForumPost(postId: string): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
   const { error } = await db.from("forum_posts").delete().eq("id", postId)
@@ -642,11 +569,7 @@ export async function deleteForumPost(postId: string): Promise<RepositoryResult>
 /** Exclui definitivamente um post do fórum a partir do slug. */
 export async function deleteForumPostBySlug(slug: string): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
-  const { data: existing } = await db
-    .from("forum_posts")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle()
+  const { data: existing } = await db.from("forum_posts").select("id").eq("slug", slug).maybeSingle()
   if (!existing) return { ok: false, error: "Post não encontrado.", status: 404 }
-  return deleteForumPost((existing as any).id)
+  return deleteForumPost(existing.id)
 }

@@ -234,17 +234,25 @@ export type Database = {
         Row: {
           id: string
           slug: string
-          title: string
           body: string
+          /** Coluna gerada (`left(body, 280)`) — nunca enviada no Insert/Update. */
+          body_preview: string
           author_name: string
           user_id: string | null
-          peripheral_refs: string[]
+          category_id: string
+          media_image_url: string | null
+          media_video_url: string | null
           is_hidden: boolean
           is_locked: boolean
+          is_pinned: boolean
+          aura_count: number
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database["public"]["Tables"]["forum_posts"]["Row"], "id" | "created_at" | "updated_at">
+        Insert: Omit<
+          Database["public"]["Tables"]["forum_posts"]["Row"],
+          "id" | "body_preview" | "created_at" | "updated_at"
+        >
         Update: Partial<Database["public"]["Tables"]["forum_posts"]["Insert"]>
       }
       forum_comments: {
@@ -253,15 +261,76 @@ export type Database = {
           id: string
           post_id: string
           body: string
+          /** Coluna gerada (`left(body, 200)`) — nunca enviada no Insert/Update. */
+          body_preview: string
           author_name: string
           user_id: string | null
-          peripheral_refs: string[]
           is_hidden: boolean
+          aura_count: number
           created_at: string
           updated_at: string
         }
-        Insert: Omit<Database["public"]["Tables"]["forum_comments"]["Row"], "id" | "created_at" | "updated_at">
+        Insert: Omit<
+          Database["public"]["Tables"]["forum_comments"]["Row"],
+          "id" | "body_preview" | "created_at" | "updated_at"
+        >
         Update: Partial<Database["public"]["Tables"]["forum_comments"]["Insert"]>
+      }
+      forum_categories: {
+        Relationships: []
+        Row: {
+          id: string
+          parent_id: string | null
+          slug: string
+          name: string
+          sort_order: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<
+          Database["public"]["Tables"]["forum_categories"]["Row"],
+          "id" | "sort_order" | "is_active" | "created_at" | "updated_at"
+        > &
+          Partial<Pick<Database["public"]["Tables"]["forum_categories"]["Row"], "sort_order" | "is_active">>
+        Update: Partial<Database["public"]["Tables"]["forum_categories"]["Insert"]>
+      }
+      forum_aura: {
+        Relationships: []
+        Row: {
+          id: string
+          giver_id: string
+          post_id: string | null
+          comment_id: string | null
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["forum_aura"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["forum_aura"]["Insert"]>
+      }
+      user_aura_wallet: {
+        Relationships: []
+        Row: {
+          user_id: string
+          balance: number
+          updated_at: string
+        }
+        Insert: Database["public"]["Tables"]["user_aura_wallet"]["Row"]
+        Update: Partial<Database["public"]["Tables"]["user_aura_wallet"]["Insert"]>
+      }
+      aura_ledger: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          delta: number
+          reason: "post_aura_received" | "post_aura_removed" | "comment_aura_received" | "comment_aura_removed"
+          source_post_id: string | null
+          source_comment_id: string | null
+          giver_id: string | null
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["aura_ledger"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["aura_ledger"]["Insert"]>
       }
       rate_limit_events: {
         Relationships: []
@@ -484,6 +553,10 @@ export type Database = {
       claim_event_medal: {
         Args: { p_event_id: string; p_user_id: string }
         Returns: boolean
+      }
+      toggle_forum_aura: {
+        Args: { p_giver_id: string; p_target_type: "post" | "comment"; p_target_id: string }
+        Returns: { given: boolean; aura_count: number }[]
       }
     }
   }

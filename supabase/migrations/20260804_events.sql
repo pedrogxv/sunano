@@ -1,7 +1,7 @@
 -- Seção "Eventos" — campanhas que concedem medalhas automaticamente.
 --
 -- Reaproveita o catálogo de medalhas já existente (`medals`/`user_medals`,
--- ver 20260728_public_profile_showcase.sql) em vez de duplicar
+-- ver 20260728000001_public_profile_showcase.sql) em vez de duplicar
 -- nome/descrição/imagem: `events` só guarda os campos da campanha
 -- (critério, contadores, datas) e referencia a medalha concedida.
 --
@@ -43,7 +43,7 @@ create policy "Events are publicly readable"
 -- ────────────────────────────────────────────
 -- Concessão atômica da medalha do evento
 --
--- Diferente de add_favorite_peripheral (20260728_atomic_favorite_like.sql),
+-- Diferente de add_favorite_peripheral (20260728000003_atomic_favorite_like.sql),
 -- que precisou de advisory lock por não ter uma linha única pra travar (era
 -- um count(*) sobre várias linhas), aqui já existe a própria linha do evento:
 -- um `select ... for update` nela serializa concorrência entre cadastros

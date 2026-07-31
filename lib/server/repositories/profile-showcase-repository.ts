@@ -273,7 +273,7 @@ export type AddFavoriteResult = "liked" | "already_liked" | "limit_reached"
  * A checagem do limite e o insert acontecem dentro da função
  * `add_favorite_peripheral` porque em duas queries separadas dois likes
  * simultâneos do mesmo usuário passariam ambos pela verificação e
- * estourariam o plano (ver `20260728_atomic_favorite_like.sql`). O limite
+ * estourariam o plano (ver `20260728000003_atomic_favorite_like.sql`). O limite
  * continua sendo decidido aqui em cima, em `lib/account-tier.ts`.
  */
 export async function addFavorite(

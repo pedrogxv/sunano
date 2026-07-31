@@ -5,7 +5,7 @@
 -- como descobrir outros membros nem acompanhar alguém. Esta migration cria o
 -- suporte de dados para a página de descoberta e para o botão "Seguir".
 --
--- Como em 20260728_public_profile_showcase.sql, as leituras acontecem nos
+-- Como em 20260728000001_public_profile_showcase.sql, as leituras acontecem nos
 -- repositórios de `lib/server/**` via cliente service-role (bypassa RLS). As
 -- policies abaixo são defesa em profundidade caso alguém acesse via SDK.
 
@@ -22,7 +22,7 @@ comment on column public.user_profiles.profile_views is
   'Contador de visitas ao perfil público, incrementado via increment_profile_views(). Não conta visitas do próprio dono.';
 
 -- SECURITY DEFINER + grant só para service_role: mesma postura de
--- add_favorite_peripheral em 20260728_atomic_favorite_like.sql. Exposta a
+-- add_favorite_peripheral em 20260728000003_atomic_favorite_like.sql. Exposta a
 -- `authenticated`, a função viraria uma forma de inflar a contagem de
 -- qualquer perfil via RPC direto.
 create or replace function public.increment_profile_views(p_user_id uuid)

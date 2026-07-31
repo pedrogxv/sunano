@@ -405,3 +405,152 @@ button,
     transform: scale(1);
   }
 }
+
+/* Botão de Aura do fórum (components/forum/AuraButton.tsx). Três camadas de
+   efeito, todas CSS puro (sem lib nova):
+   1. `.aura-icon-holder[data-given]::before` — halo giratório multicolorido
+      (conic-gradient) atrás do ícone enquanto o post/comentário tem aura
+      dada, como uma "auréola" viva em vez de um brilho estático.
+   2. `.aura-ring` — onda de choque (shockwave) que expande e some no
+      instante do clique, dando o "soco" que faltava na interação.
+   3. `.aura-particle` — 8 partículas em cores/tamanhos variados que voam
+      pra fora e desaparecem, disparadas junto com o ring.
+   Mesma técnica de halo de .nav-fire-holder::before / .event-card-glow::before,
+   levada mais longe pelo pedido de deixar o ícone "mais vivo". */
+@keyframes aura-halo-spin {
+  0%   { transform: rotate(0deg) scale(1); opacity: 0.55; }
+  50%  { opacity: 0.85; }
+  100% { transform: rotate(360deg) scale(1); opacity: 0.55; }
+}
+
+@keyframes aura-icon-pop {
+  0%   { transform: scale(1) rotate(0deg); }
+  30%  { transform: scale(1.5) rotate(-12deg); }
+  60%  { transform: scale(1.15) rotate(8deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+@keyframes aura-ring-expand {
+  0%   { transform: scale(0.5); opacity: 0.9; border-width: 2px; }
+  100% { transform: scale(2.4); opacity: 0; border-width: 0.5px; }
+}
+
+@keyframes aura-particle-fly {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--aura-particle-x), var(--aura-particle-y)) scale(0) rotate(140deg); opacity: 0; }
+}
+
+@keyframes aura-count-bump {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.35); color: oklch(0.75 0.19 300); }
+  100% { transform: scale(1); }
+}
+
+/* "+10" que sobe e some por cima do ícone ao dar aura — reforça que a ação
+   credita pontos de verdade (toggle_forum_aura), não é só um like mudo. */
+@keyframes aura-plus-ten-float {
+  0%   { opacity: 0; transform: translate(-50%, 2px) scale(0.7); }
+  25%  { opacity: 1; transform: translate(-50%, -2px) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -16px) scale(1); }
+}
+
+.aura-icon-holder {
+  isolation: isolate;
+  transition: transform 0.2s ease;
+}
+
+button:not(:disabled):hover .aura-icon-holder {
+  transform: scale(1.12);
+}
+
+.aura-icon-holder[data-given="true"]::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  z-index: -1;
+  border-radius: 9999px;
+  background: conic-gradient(
+    from 0deg,
+    oklch(0.78 0.19 300),
+    oklch(0.8 0.17 250),
+    oklch(0.82 0.2 20),
+    oklch(0.8 0.19 330),
+    oklch(0.78 0.19 300)
+  );
+  filter: blur(3px);
+  pointer-events: none;
+  animation: aura-halo-spin 3.5s linear infinite;
+}
+
+.aura-icon-holder[data-burst="true"] .aura-icon {
+  animation: aura-icon-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.aura-ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 9999px;
+  border: 2px solid oklch(0.78 0.19 300);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.aura-icon-holder[data-burst="true"] .aura-ring {
+  animation: aura-ring-expand 0.6s ease-out;
+}
+
+.aura-particle {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: var(--aura-particle-size, 4px);
+  height: var(--aura-particle-size, 4px);
+  border-radius: 9999px;
+  background: var(--aura-particle-color, oklch(0.75 0.19 300));
+  pointer-events: none;
+  animation: aura-particle-fly 0.65s ease-out forwards;
+}
+
+.aura-count[data-bump="true"] {
+  animation: aura-count-bump 0.5s ease-out;
+}
+
+.aura-plus-ten {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 1;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: oklch(0.82 0.2 70);
+  text-shadow: 0 1px 4px oklch(0.82 0.2 70 / 40%);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: aura-plus-ten-float 0.65s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:not(:disabled):hover .aura-icon-holder {
+    transform: none;
+  }
+  .aura-icon-holder[data-given="true"]::before {
+    animation: none;
+    opacity: 0.6;
+  }
+  .aura-icon-holder[data-burst="true"] .aura-icon {
+    animation: none;
+  }
+  .aura-icon-holder[data-burst="true"] .aura-ring {
+    animation: none;
+  }
+  .aura-particle {
+    display: none;
+  }
+  .aura-count[data-bump="true"] {
+    animation: none;
+  }
+  .aura-plus-ten {
+    animation: none;
+    opacity: 0;
+  }
+}

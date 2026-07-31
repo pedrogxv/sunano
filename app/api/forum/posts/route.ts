@@ -15,13 +15,26 @@ import { getUserProfile } from "@/lib/server/repositories/users-repository"
  * esta rota apenas valida a entrada, autentica e formata a resposta.
  */
 
-const postSchema = z.object({
-  title: z.string().trim().min(4).max(120),
-  body: z.string().trim().min(20).max(5000),
-  peripheral_refs: z.array(z.string().uuid()).max(3).optional().default([]),
-})
+const YOUTUBE_HOST_RE = /^(www\.)?(youtube\.com|youtu\.be)$/i
 
-const VALID_TABS: ForumTab[] = ["recent", "hot", "peripheral"]
+const postSchema = z
+  .object({
+    body: z.string().trim().min(20).max(5000),
+    category_id: z.string().uuid(),
+    media_image_url: z.string().url().optional(),
+    media_video_url: z
+      .string()
+      .url()
+      .refine((url) => YOUTUBE_HOST_RE.test(new URL(url).hostname), {
+        message: "O link de vídeo precisa ser do YouTube.",
+      })
+      .optional(),
+  })
+  .refine((data) => !(data.media_image_url && data.media_video_url), {
+    message: "Escolha apenas um tipo de mídia: imagem ou vídeo.",
+  })
+
+const VALID_TABS: ForumTab[] = ["recent", "hot", "category"]
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,9 +43,9 @@ export async function GET(request: NextRequest) {
     const tab: ForumTab = VALID_TABS.includes(tabParam as ForumTab)
       ? (tabParam as ForumTab)
       : "recent"
-    const category = url.searchParams.get("category") ?? ""
+    const categoryId = url.searchParams.get("categoryId") ?? undefined
 
-    const posts = await listForumPosts({ tab, category })
+    const posts = await listForumPosts({ tab, categoryId })
     return NextResponse.json({ ok: true, posts })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar posts do forum." }, { status: 500 })
@@ -73,9 +86,10 @@ export async function POST(request: NextRequest) {
     const result = await createForumPost({
       userId: user.id,
       authorName,
-      title: parsed.data.title,
       body: parsed.data.body,
-      peripheralRefs: parsed.data.peripheral_refs ?? [],
+      categoryId: parsed.data.category_id,
+      mediaImageUrl: parsed.data.media_image_url ?? null,
+      mediaVideoUrl: parsed.data.media_video_url ?? null,
     })
 
     if (!result.ok) {

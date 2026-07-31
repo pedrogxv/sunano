@@ -9,14 +9,19 @@ import {
   updateForumPost,
 } from "@/lib/server/repositories/forum-repository"
 
-const patchSchema = z.object({
-  title: z.string().trim().min(4).max(120).optional(),
-  body: z.string().trim().min(20).max(5000).optional(),
-  peripheral_refs: z.array(z.string().uuid()).max(3).optional(),
-  is_hidden: z.boolean().optional(),
-  is_locked: z.boolean().optional(),
-  is_pinned: z.boolean().optional(),
-})
+const patchSchema = z
+  .object({
+    body: z.string().trim().min(20).max(5000).optional(),
+    category_id: z.string().uuid().optional(),
+    media_image_url: z.string().url().nullable().optional(),
+    media_video_url: z.string().url().nullable().optional(),
+    is_hidden: z.boolean().optional(),
+    is_locked: z.boolean().optional(),
+    is_pinned: z.boolean().optional(),
+  })
+  .refine((data) => !(data.media_image_url && data.media_video_url), {
+    message: "Escolha apenas um tipo de mídia: imagem ou vídeo.",
+  })
 
 export async function GET(
   _request: Request,

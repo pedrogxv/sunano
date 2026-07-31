@@ -14,6 +14,7 @@ import {
   recordLgpdConsent,
   type PurchaseProfileInput,
 } from "@/lib/server/repositories/users-repository"
+import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
 
 export type RegisterState = { error: string | null; needsConfirmation?: boolean }
 
@@ -145,6 +146,10 @@ export async function registerUserAction(
     version: LGPD_POLICY_VERSION,
     ipAddress,
   })
+
+  // `auth.signUp` sempre cria um id novo: este é sempre um cadastro genuíno,
+  // então concede a medalha de qualquer evento ativo (ex: "Pioneiro").
+  await awardEligibleEventMedals(data.user.id)
 
   if (!data.session) {
     return { error: null, needsConfirmation: true }

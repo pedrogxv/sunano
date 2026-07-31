@@ -12,6 +12,30 @@ export type SetupSlot = (typeof SETUP_SLOTS)[number]
 
 export type MedalRarity = "common" | "rare" | "epic" | "legendary"
 
+/** Classes de borda/fundo/texto por raridade — usado no grid de medalhas do perfil e nos cards de evento. */
+export const MEDAL_RARITY_STYLES: Record<MedalRarity, string> = {
+  common: "border-border bg-muted/30 text-muted-foreground",
+  rare: "border-sky-400/40 bg-sky-400/10 text-sky-300",
+  epic: "border-violet-400/40 bg-violet-400/10 text-violet-300",
+  legendary: "border-amber-400/50 bg-amber-400/10 text-amber-300",
+}
+
+/** Cor do halo/glow por raridade (oklch), para o efeito pulsante do card de evento. */
+export const MEDAL_RARITY_GLOW: Record<MedalRarity, string> = {
+  common: "oklch(0.7 0.02 260 / 0.4)",
+  rare: "oklch(0.75 0.15 230 / 0.5)",
+  epic: "oklch(0.7 0.2 300 / 0.5)",
+  legendary: "oklch(0.8 0.18 85 / 0.6)",
+}
+
+/** Cor sólida do preenchimento da barra de progresso por raridade. */
+export const MEDAL_RARITY_BAR: Record<MedalRarity, string> = {
+  common: "bg-muted-foreground/40",
+  rare: "bg-sky-400",
+  epic: "bg-violet-400",
+  legendary: "bg-amber-400",
+}
+
 export type ShowcasePeripheral = {
   id: string
   name: string

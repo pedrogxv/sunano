@@ -2,16 +2,9 @@ import Image from "next/image"
 import { Award, Lock } from "lucide-react"
 
 import { countHiddenByTier, getMedalLimit, type AccountTier } from "@/lib/account-tier"
-import type { MedalRarity, ShowcaseMedal } from "@/lib/profile-showcase"
+import { MEDAL_RARITY_STYLES, type ShowcaseMedal } from "@/lib/profile-showcase"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
-
-const RARITY_STYLES: Record<MedalRarity, string> = {
-  common: "border-border bg-muted/30 text-muted-foreground",
-  rare: "border-sky-400/40 bg-sky-400/10 text-sky-300",
-  epic: "border-violet-400/40 bg-violet-400/10 text-violet-300",
-  legendary: "border-amber-400/50 bg-amber-400/10 text-amber-300",
-}
 
 interface MedalhasGridProps {
   /** Já filtradas pelo limite do tier (ver `selectVisibleMedals`). */
@@ -49,7 +42,7 @@ export function MedalhasGrid({ medals, total, tier, isOwner = false }: MedalhasG
               <div
                 className={cn(
                   "flex size-16 shrink-0 items-center justify-center rounded-xl border transition-transform hover:-translate-y-0.5",
-                  RARITY_STYLES[medal.rarity]
+                  MEDAL_RARITY_STYLES[medal.rarity]
                 )}
               >
                 {medal.icon_url ? (

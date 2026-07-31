@@ -8,6 +8,7 @@ import {
   resolveAvailableDisplayName,
   upsertUserProfileFromAuth,
 } from "@/lib/server/repositories/users-repository"
+import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
       authData.user.email?.split("@")[0] ||
       "User"
 
-    await upsertUserProfileFromAuth({
+    const { isNew } = await upsertUserProfileFromAuth({
       id: authData.user.id,
       displayName: await resolveAvailableDisplayName(suggestedName, authData.user.id),
       avatarUrl:
@@ -79,6 +80,10 @@ export async function GET(request: NextRequest) {
         authData.user.user_metadata?.picture ||
         null,
     })
+    // Primeiro login OAuth = cadastro genuíno: concede a medalha de evento ativo.
+    if (isNew) {
+      await awardEligibleEventMedals(authData.user.id)
+    }
 
     // O destino do OAuth vem da query (`next`) e é controlável pelo cliente —
     // o botão do /admin/login manda "/admin". Quem não tem perfil

@@ -423,13 +423,27 @@ export async function isAdminUser(userId: string): Promise<boolean> {
   return Boolean(data)
 }
 
-/** Cria/atualiza o perfil de um usuário a partir dos metadados de autenticação. */
+/**
+ * Cria/atualiza o perfil de um usuário a partir dos metadados de autenticação.
+ *
+ * Retorna `isNew: true` quando essa chamada criou o perfil pela primeira vez
+ * (primeiro login OAuth, ou fallback de login por senha sem perfil ainda) —
+ * usado para conceder medalhas de evento só a cadastros genuínos, nunca a
+ * cada login de quem já tem conta.
+ */
 export async function upsertUserProfileFromAuth(params: {
   id: string
   displayName: string
   avatarUrl: string | null
-}): Promise<void> {
+}): Promise<{ isNew: boolean }> {
   const db = createSupabaseAdminClient()
+
+  const { data: existing } = await db
+    .from("user_profiles")
+    .select("id")
+    .eq("id", params.id)
+    .maybeSingle()
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (db.from("user_profiles") as any).upsert(
     {
@@ -445,7 +459,9 @@ export async function upsertUserProfileFromAuth(params: {
   // travar o login por causa do diretório público — só loga para dar pra achar.
   if (error) {
     console.error("[users-repository] upsertUserProfileFromAuth:", error)
+    return { isNew: false }
   }
+  return { isNew: !existing }
 }
 
 /** Preferências e identificação editáveis pelo próprio usuário em /perfil. */

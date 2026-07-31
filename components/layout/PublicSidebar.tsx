@@ -8,6 +8,7 @@ import {
   BookOpen,
   Clock3,
   Home,
+  Medal,
   MessageCircle,
   Mouse,
   Newspaper,
@@ -107,6 +108,7 @@ export function PublicSidebar() {
     { href: "/forum",    label: t.nav.forum,   icon: MessageCircle },
     { href: "/videos",   label: t.nav.videos,  icon: PlaySquare },
     { href: "/pessoas",  label: t.nav.people,  icon: Users },
+    { href: "/eventos",  label: t.nav.events,  icon: Medal },
   ]
 
   return (

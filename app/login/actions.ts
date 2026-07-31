@@ -9,6 +9,7 @@ import {
   resolveAvailableDisplayName,
   upsertUserProfileFromAuth,
 } from "@/lib/server/repositories/users-repository"
+import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
 import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 
 type AuthState = { error: string | null }
@@ -49,11 +50,15 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
   // conta, então resolve o primeiro slug livre antes de gravar.
   const suggestedName =
     authData.user.user_metadata?.full_name || authData.user.email?.split("@")[0] || "User"
-  await upsertUserProfileFromAuth({
+  const { isNew } = await upsertUserProfileFromAuth({
     id: authData.user.id,
     displayName: await resolveAvailableDisplayName(suggestedName, authData.user.id),
     avatarUrl: authData.user.user_metadata?.avatar_url || null,
   })
+  // Caso raro: login sem perfil ainda criado conta como cadastro genuíno.
+  if (isNew) {
+    await awardEligibleEventMedals(authData.user.id)
+  }
 
   // Admins vão para o painel; demais usuários para o fórum.
   const destination = (await isAdminUser(authData.user.id)) ? "/admin" : "/forum"

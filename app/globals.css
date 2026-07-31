@@ -338,3 +338,34 @@ button,
     opacity: 0.55;
   }
 }
+
+/* Card de evento (/eventos) — halo pulsante atrás da moldura, cor definida
+   pela raridade da medalha via --glow-color (ver MEDAL_RARITY_GLOW em
+   lib/profile-showcase.ts). Mesma técnica de .nav-fire-holder::before. */
+@keyframes event-card-glow-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.98); }
+  50%      { opacity: 0.9; transform: scale(1.04); }
+}
+
+.event-card-glow {
+  isolation: isolate;
+}
+
+.event-card-glow::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at center, var(--glow-color, transparent), transparent 70%);
+  filter: blur(10px);
+  pointer-events: none;
+  animation: event-card-glow-pulse 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .event-card-glow::before {
+    animation: none;
+    opacity: 0.6;
+  }
+}

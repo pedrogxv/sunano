@@ -71,6 +71,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/offers":            { title: "Promoções", description: "Promoções e descontos selecionados do Telegram." },
   "/forum":             { title: "Fórum", description: "Discussões e perguntas da comunidade." },
   "/pessoas":           { title: "Pessoas", description: "Encontre outros membros, veja os destaques e siga quem você curte." },
+  "/eventos":           { title: "Eventos Ativos", description: "Medalhas e conquistas por tempo limitado." },
   "/perfil":            { title: "Meu Perfil", description: "Identidade e vitrine pública." },
   "/conta":             { title: "Conta e segurança", description: "Acesso, preferências e privacidade." },
   "/videos":            { title: "Vídeos", description: "Conteúdo em vídeo do canal." },
@@ -86,6 +87,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/settings":    { title: "Configurações", description: "Gerencie seu perfil e preferências do sistema." },
   "/admin/store":       { title: "Loja & Bazar", description: "Gerencie os produtos da loja e os itens do bazar." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
+  "/admin/eventos":     { title: "Eventos", description: "Gerencie os eventos que concedem medalhas automaticamente." },
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
   "/admin/login":       { title: "Login" },
 }
@@ -101,6 +103,8 @@ function getPageDefaults(pathname: string): PageDefaults {
   if (pathname.startsWith("/admin/tierlist/new"))    return { title: "Novo periférico", description: "Adicione um novo periférico à tierlist." }
   if (pathname.startsWith("/admin/tierlist/"))       return { title: "Editar periférico", description: "Atualize as informações do periférico." }
   if (pathname.startsWith("/admin/forum/"))      return { title: "Moderar post", description: "Edite, oculte ou bloqueie um post do fórum." }
+  if (pathname.startsWith("/admin/eventos/new")) return { title: "Novo evento", description: "Crie um evento e a medalha concedida por ele." }
+  if (pathname.startsWith("/admin/eventos/"))    return { title: "Editar evento", description: "Atualize os dados do evento e da medalha." }
   if (pathname.startsWith("/admin/"))            return { title: "Admin" }
   if (pathname.startsWith("/blog/"))             return { title: "Review" }
   if (pathname.startsWith("/forum/"))            return { title: "Fórum" }

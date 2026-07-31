@@ -9,6 +9,7 @@ import {
   GalleryHorizontalEnd,
   Gift,
   Home,
+  Medal,
   MessageSquare,
   Mouse,
   Newspaper,
@@ -85,6 +86,7 @@ export function AdminSidebar() {
         { href: "/admin/blog",   label: t.admin.sidebar.newsAndReviews, icon: Newspaper,     permission: "blog_read" },
         { href: "/admin/forum",  label: t.admin.sidebar.forum,          icon: MessageSquare, permission: "forum_read" },
         { href: "/admin/videos", label: "Vídeos",                       icon: PlaySquare },
+        { href: "/admin/eventos", label: "Eventos",                    icon: Medal,          permission: "events_read" },
       ],
     },
     {

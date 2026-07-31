@@ -114,6 +114,27 @@ export type Database = {
         }
         Update: Partial<Database["public"]["Tables"]["user_medals"]["Insert"]>
       }
+      events: {
+        Relationships: []
+        Row: {
+          id: string
+          slug: string
+          medal_id: string
+          criteria_type: "first_n_signups"
+          max_participants: number
+          current_count: number
+          active: boolean
+          start_date: string
+          end_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<
+          Database["public"]["Tables"]["events"]["Row"],
+          "id" | "current_count" | "created_at" | "updated_at"
+        > & { current_count?: number }
+        Update: Partial<Database["public"]["Tables"]["events"]["Insert"]>
+      }
       user_setup_items: {
         Relationships: []
         Row: {
@@ -459,6 +480,10 @@ export type Database = {
       increment_profile_views: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      claim_event_medal: {
+        Args: { p_event_id: string; p_user_id: string }
+        Returns: boolean
       }
     }
   }

@@ -115,6 +115,9 @@ export async function PATCH(request: Request) {
     }
 
     const showcase = await getProfileShowcase(userId)
+    if (!showcase) {
+      return NextResponse.json({ error: "Perfil não encontrado." }, { status: 404 })
+    }
     return NextResponse.json({ ok: true, showcase })
   } catch {
     return NextResponse.json({ error: "Erro ao salvar perfil." }, { status: 500 })

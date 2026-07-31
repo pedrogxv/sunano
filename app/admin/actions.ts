@@ -5,6 +5,10 @@ import { redirect } from "next/navigation"
 import { hasAnyAdminAccess } from "@/lib/admin-permissions"
 import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import {
+  resolveAvailableDisplayName,
+  upsertUserProfileFromAuth,
+} from "@/lib/server/repositories/users-repository"
 
 type AuthState = {
   error: string | null
@@ -35,13 +39,16 @@ export async function loginAction(_: AuthState, formData: FormData): Promise<Aut
   }
 
   const { data: authData } = await supabase.auth.getUser()
-  const { data: profile } = authData.user
-    ? await supabase
-        .from("admin_profiles")
-        .select("id, role, permissions")
-        .eq("id", authData.user.id)
-        .maybeSingle()
-    : { data: null }
+  if (!authData.user) {
+    await supabase.auth.signOut()
+    return { error: AUTH_ERRORS.noAdminAccess }
+  }
+
+  const { data: profile } = await supabase
+    .from("admin_profiles")
+    .select("id, role, permissions")
+    .eq("id", authData.user.id)
+    .maybeSingle()
 
   if (!profile) {
     await supabase.auth.signOut()
@@ -52,6 +59,19 @@ export async function loginAction(_: AuthState, formData: FormData): Promise<Aut
     await supabase.auth.signOut()
     return { error: AUTH_ERRORS.noAdminAccess }
   }
+
+  // Admin também é membro comum (fórum, perfil público, "Meu Setup"): sem
+  // isto a conta nunca ganha linha em `user_profiles` (só `admin_profiles`),
+  // e a tela de /perfil fica travada no nome-fallback derivado do e-mail,
+  // sem conseguir salvar nada — ver app/login/actions.ts, que já faz isto.
+  await upsertUserProfileFromAuth({
+    id: authData.user.id,
+    displayName: await resolveAvailableDisplayName(
+      authData.user.user_metadata?.full_name || authData.user.email?.split("@")[0] || "User",
+      authData.user.id
+    ),
+    avatarUrl: authData.user.user_metadata?.avatar_url || null,
+  })
 
   // 2FA ativo: conclui o segundo fator antes de liberar o painel.
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()

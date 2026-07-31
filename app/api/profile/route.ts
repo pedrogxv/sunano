@@ -144,19 +144,29 @@ export async function POST(request: Request) {
     }
 
     const email = authData.user.email ?? null
+    const existingSettings = await getUserProfileSettings(authData.user.id)
     const incomingDisplayName =
       parsed.data.display_name !== undefined
         ? parsed.data.display_name.trim() || defaultNameFromEmail(email)
         : undefined
 
-    if (incomingDisplayName !== undefined) {
-      const invalid = validateDisplayName(incomingDisplayName)
+    // A tela de perfil salva identidade e vitrine juntas e sempre reenvia o
+    // nome atual, mudando ele ou não. Validar (reservado/unicidade) toda vez
+    // travava o salvamento de bio/avatar/etc. sempre que o nome já gravado
+    // colidisse com essas regras — ex.: uma conta cujo nome já é o próprio
+    // slug reservado. Só revalida quando o slug realmente muda.
+    const nameSlugChanging =
+      incomingDisplayName !== undefined &&
+      slugifyDisplayName(incomingDisplayName) !== existingSettings?.display_slug
+
+    if (nameSlugChanging) {
+      const invalid = validateDisplayName(incomingDisplayName!)
       if (invalid) {
         return NextResponse.json({ error: invalid, field: "display_name" }, { status: 400 })
       }
       // Checagem amigável antes do índice único do banco, que também barra —
       // aqui a mensagem sai específica em vez de "erro ao salvar".
-      const available = await isDisplayNameAvailable(incomingDisplayName, authData.user.id)
+      const available = await isDisplayNameAvailable(incomingDisplayName!, authData.user.id)
       if (!available) {
         return NextResponse.json(
           { error: "Esse nome já está em uso. Escolha outro.", field: "display_name" },
@@ -178,7 +188,7 @@ export async function POST(request: Request) {
     // antes de qualquer edição) nasce com um nome derivado do email em vez do
     // `user-<id>` que o banco geraria como fallback.
     const seedName =
-      incomingDisplayName === undefined && !(await getUserProfileSettings(authData.user.id))
+      incomingDisplayName === undefined && !existingSettings
         ? await resolveAvailableDisplayName(defaultNameFromEmail(email), authData.user.id)
         : undefined
 

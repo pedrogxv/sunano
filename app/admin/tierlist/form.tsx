@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Combobox } from "@/components/ui/combobox"
 import {
   Select,
   SelectContent,
@@ -181,7 +182,6 @@ const TIERLIST_MODE_OPTIONS: Record<Category, { key: TierlistMode; label: string
     { key: "magnetic", label: "Magnético" },
     { key: "value", label: "Custo Benefício" },
     { key: "mechanical", label: "Mecânico" },
-    { key: "pcb", label: "PCB" },
   ],
   monitors: [
     { key: "oled", label: "OLED" },
@@ -440,6 +440,8 @@ const BRAND_OPTIONS = [
   "Zowie",
   "WLMouse",
 ]
+
+const BRAND_COMBOBOX_OPTIONS = BRAND_OPTIONS.map((brand) => ({ value: brand, label: brand }))
 
 const COATING_OPTIONS = [
   "Emborrachado",
@@ -1617,18 +1619,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <label className="text-sm font-medium text-foreground">
                   {t.admin.tierlistForm.brand} <span className="text-red-400">*</span>
                 </label>
-                <Select value={form.watch("brand")} onValueChange={(value) => form.setValue("brand", value, { shouldValidate: true })}>
-                  <SelectTrigger className="border-border bg-background" aria-invalid={!!form.formState.errors.brand}>
-                    <SelectValue placeholder={t.admin.tierlistForm.selectBrand} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BRAND_OPTIONS.map((brand) => (
-                      <SelectItem key={brand} value={brand}>
-                        {brand}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Combobox
+                  options={BRAND_COMBOBOX_OPTIONS}
+                  value={form.watch("brand")}
+                  onValueChange={(value) => form.setValue("brand", value, { shouldValidate: true })}
+                  placeholder={t.admin.tierlistForm.selectBrand}
+                  searchPlaceholder={t.admin.tierlistForm.searchBrand}
+                  className="border-border bg-background"
+                  aria-invalid={!!form.formState.errors.brand}
+                />
                 <p className="text-[10px] text-muted-foreground/60">
                   {t.admin.tierlistForm.brandHint}
                 </p>

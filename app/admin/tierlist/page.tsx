@@ -815,7 +815,8 @@ export default function AdminPeripheralsPage() {
   useEffect(() => {
     if (ratingMode === "oled" && selectedCategory !== "monitors") setRatingMode("performance")
     if (ratingMode === "soundTyping" && selectedCategory !== "switches") setRatingMode("performance")
-    if ((ratingMode === "mechanical" || ratingMode === "magnetic" || ratingMode === "pcb") && selectedCategory !== "keyboard") setRatingMode("performance")
+    if (ratingMode === "pcb") setRatingMode("performance")
+    if ((ratingMode === "mechanical" || ratingMode === "magnetic") && selectedCategory !== "keyboard") setRatingMode("performance")
     if ((ratingMode === "performance" || ratingMode === "recommended") && selectedCategory === "keyboard") setRatingMode("magnetic")
   }, [ratingMode, selectedCategory])
 
@@ -1173,9 +1174,10 @@ export default function AdminPeripheralsPage() {
         </div>
         <div className="flex rounded-lg border border-border bg-muted/30 p-1">
           {RATING_MODES.filter((m) => {
+            if (m.key === "pcb") return false
             if (m.key === "oled" && selectedCategory !== "monitors") return false
             if (m.key === "soundTyping" && selectedCategory !== "switches") return false
-            if ((m.key === "mechanical" || m.key === "magnetic" || m.key === "pcb") && selectedCategory !== "keyboard") return false
+            if ((m.key === "mechanical" || m.key === "magnetic") && selectedCategory !== "keyboard") return false
             if ((m.key === "performance" || m.key === "recommended") && selectedCategory === "keyboard") return false
             return true
           }).map((mode) => (

@@ -302,7 +302,6 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
         { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
         { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
         { key: "mechanical" as const, label: getRatingModeLabel("mechanical", category), color: "bg-purple-400" },
-        { key: "pcb" as const, label: getRatingModeLabel("pcb", category), color: "bg-orange-400" },
       ]
     : [
         ...(category === "monitors" ? [{ key: "oled" as const, label: getRatingModeLabel("oled", category), color: "bg-amber-400" }] : []),
@@ -350,7 +349,8 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   useEffect(() => {
     if (ratingMode === "oled" && category !== "monitors") setRatingMode("overall")
     if (ratingMode === "soundTyping" && category !== "switches") setRatingMode("overall")
-    if ((ratingMode === "mechanical" || ratingMode === "magnetic" || ratingMode === "pcb") && category !== "keyboard") setRatingMode("overall")
+    if (ratingMode === "pcb") setRatingMode("overall")
+    if ((ratingMode === "mechanical" || ratingMode === "magnetic") && category !== "keyboard") setRatingMode("overall")
     if ((ratingMode === "overall" || ratingMode === "recommended") && category === "keyboard") setRatingMode("magnetic")
   }, [category, ratingMode])
 

@@ -119,6 +119,7 @@ type Translations = {
     itemCount: (count: number) => string
     searchBadge: string
     allBrands: string
+    searchBrand: string
     sortBy: string
     recentlyAdded: string
     bestRanked: string
@@ -462,6 +463,7 @@ type Translations = {
       charsHint: string
       brand: string
       selectBrand: string
+      searchBrand: string
       brandHint: string
       priceUsd: string
       tierHint: string
@@ -765,6 +767,7 @@ export const translations: Record<LocaleCode, Translations> = {
       itemCount: (count: number) => `${count} ${count === 1 ? "item" : "itens"} encontrados`,
       searchBadge: "Busca",
       allBrands: "Todas",
+      searchBrand: "Buscar marca...",
       sortBy: "Ordenar por",
       recentlyAdded: "Recentes",
       bestRanked: "Melhor rankeado",
@@ -1153,6 +1156,7 @@ export const translations: Record<LocaleCode, Translations> = {
         charsHint: "Entre 1 e 200 caracteres",
         brand: "Marca",
         selectBrand: "Selecione uma marca",
+        searchBrand: "Buscar marca...",
         brandHint: "Escolha uma das marcas da lista",
         priceUsd: "Preço (USD)",
         tierHint: "Selecione o tier que melhor representa a performance deste periférico",
@@ -1485,6 +1489,7 @@ export const translations: Record<LocaleCode, Translations> = {
       itemCount: (count: number) => `${count} ${count === 1 ? "item" : "items"} found`,
       searchBadge: "Search",
       allBrands: "All brands",
+      searchBrand: "Search brand...",
       sortBy: "Sort by",
       recentlyAdded: "Recently added",
       bestRanked: "Best ranked",
@@ -1852,6 +1857,7 @@ export const translations: Record<LocaleCode, Translations> = {
         charsHint: "1-200 characters",
         brand: "Brand",
         selectBrand: "Select a brand",
+        searchBrand: "Search brand...",
         brandHint: "Pick from the list above",
         priceUsd: "Price (USD)",
         tierHint: "Select the tier that best represents this peripheral's performance",

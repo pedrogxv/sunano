@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Combobox } from "@/components/ui/combobox"
 import { useT } from "@/lib/use-t"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { AnimatedCounter } from "@/components/animated-counter"
@@ -297,6 +298,11 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
     return ["all", ...Array.from(new Set(base.map((i) => i.brand))).sort((a, b) => a.localeCompare(b))]
   }, [initialData, effectiveCategory])
+
+  const brandOptions = useMemo(
+    () => availableBrands.map((brand) => ({ value: brand, label: brand === "all" ? t.filters.allBrands : brand })),
+    [availableBrands, t.filters.allBrands]
+  )
 
   const availableTags = useMemo(() => {
     const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
@@ -604,18 +610,14 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Brand */}
       <FilterSection title={t.common.brand}>
-        <Select value={selectedBrand} onValueChange={setSelectedBrand}>
-          <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-            <SelectValue placeholder={t.common.brand} />
-          </SelectTrigger>
-          <SelectContent>
-            {availableBrands.map((brand) => (
-              <SelectItem key={brand} value={brand}>
-                {brand === "all" ? (t.filters.allBrands) : brand}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Combobox
+          options={brandOptions}
+          value={selectedBrand}
+          onValueChange={setSelectedBrand}
+          placeholder={t.common.brand}
+          searchPlaceholder={t.filters.searchBrand}
+          className="h-9 w-full border-border bg-muted/20 text-sm"
+        />
       </FilterSection>
 
       {/* Price */}

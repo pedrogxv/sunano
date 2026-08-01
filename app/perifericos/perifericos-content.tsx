@@ -18,7 +18,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Slider } from "@/components/ui/slider"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Combobox } from "@/components/ui/combobox"
+import { MultiCombobox } from "@/components/ui/combobox"
 import { useT } from "@/lib/use-t"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { AnimatedCounter } from "@/components/animated-counter"
@@ -264,7 +264,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
   const [query, setQuery] = useState("")
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("mouse")
-  const [selectedBrand, setSelectedBrand] = useState("all")
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
   const [priceRange, setPriceRange] = useState<[number, number]>([PRICE_MIN, 0])
   const [selectedConnectivity, setSelectedConnectivity] = useState("all")
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
@@ -302,13 +302,17 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
   const availableBrands = useMemo(() => {
     const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
-    return ["all", ...Array.from(new Set(base.map((i) => i.brand))).sort((a, b) => a.localeCompare(b))]
+    return Array.from(new Set(base.map((i) => i.brand))).sort((a, b) => a.localeCompare(b))
   }, [initialData, effectiveCategory])
 
   const brandOptions = useMemo(
-    () => availableBrands.map((brand) => ({ value: brand, label: brand === "all" ? t.filters.allBrands : brand })),
-    [availableBrands, t.filters.allBrands]
+    () => availableBrands.map((brand) => ({ value: brand, label: brand })),
+    [availableBrands]
   )
+
+  useEffect(() => {
+    setSelectedBrands((prev) => prev.filter((brand) => availableBrands.includes(brand)))
+  }, [availableBrands])
 
   const availableTags = useMemo(() => {
     const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
@@ -421,7 +425,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
         .join(" ").toLowerCase()
       return (
         (q === "" || searchable.includes(q)) &&
-        (selectedBrand === "all" || item.brand === selectedBrand) &&
+        (selectedBrands.length === 0 || selectedBrands.includes(item.brand)) &&
         (!isPriceFiltered || (item.price >= priceRange[0] && item.price <= priceRange[1])) &&
         (!showConnectivityFilter || selectedConnectivity === "all" || item.specs.connectivity === selectedConnectivity) &&
         (!showMouseShapeFilter || selectedMouseShape === "all" || item.specs.mouseShape === selectedMouseShape) &&
@@ -447,7 +451,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     }
     return sorted
   }, [
-    initialData, query, selectedCategory, selectedBrand, selectedConnectivity,
+    initialData, query, selectedCategory, selectedBrands, selectedConnectivity,
     selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedSurface, selectedProfile,
     selectedPadType, selectedRefreshRate, selectedPanelType, selectedTags, sortKey, lockedCategory,
     showConnectivityFilter, showMouseShapeFilter, showKeyboardLayoutFilter, showKeyboardTypeFilter,
@@ -456,9 +460,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   ])
 
   const activeFiltersCount = useMemo(() =>
-    [selectedBrand, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType]
-      .filter((v) => v !== "all").length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0) + (isPriceFiltered ? 1 : 0) + selectedTags.length,
-    [query, selectedBrand, selectedCategory, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered, isPriceFiltered, selectedTags]
+    [selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType]
+      .filter((v) => v !== "all").length + selectedBrands.length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0) + (isPriceFiltered ? 1 : 0) + selectedTags.length,
+    [query, selectedBrands, selectedCategory, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered, isPriceFiltered, selectedTags]
   )
 
   const heroCategoryStats = useMemo(() => {
@@ -476,7 +480,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   const resetFilters = () => {
     setQuery("")
     setSelectedCategory("mouse")
-    setSelectedBrand("all")
+    setSelectedBrands([])
     setPriceRange([PRICE_MIN, maxPrice])
     setSelectedConnectivity("all")
     setSelectedMouseShape("all")
@@ -616,12 +620,13 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
 
       {/* Brand */}
       <FilterSection title={t.common.brand}>
-        <Combobox
+        <MultiCombobox
           options={brandOptions}
-          value={selectedBrand}
-          onValueChange={setSelectedBrand}
-          placeholder={t.common.brand}
+          values={selectedBrands}
+          onValuesChange={setSelectedBrands}
+          placeholder={t.filters.allBrands}
           searchPlaceholder={t.filters.searchBrand}
+          allLabel={t.filters.allBrands}
           className="h-9 w-full border-border bg-muted/20 text-sm"
         />
       </FilterSection>

@@ -56,7 +56,7 @@ const SOCIAL_LINKS = [
   {
     label: "Telegram",
     icon: Send,
-    href: "https://t.me/sumano",
+    href: "https://t.me/canal_sunano",
   },
 ]
 

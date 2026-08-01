@@ -43,7 +43,7 @@ import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailV
 type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia"
 
 const peripheralSchema = z.object({
   name: z
@@ -290,11 +290,33 @@ const MOUSEPAD_TAGS_OPTIONS: TagOption[] = [
   { key: "afetado_umidade", en: "Moisture affected", pt: "Afetado por umidade", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400" },
 ]
 
+// Lista de tags exclusiva da categoria Glasspad — substitui completamente a lista genérica
+// acima quando a categoria selecionada no formulário for "glasspad".
+const GLASSPAD_TAGS_OPTIONS: TagOption[] = [
+  { key: "raro", en: "Rare", pt: "Raro", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400" },
+  { key: "competitive", en: "Competitive", pt: "Competitivo", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400" },
+  { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
+  { key: "expensive", en: "Expensive", pt: "Caro", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400" },
+  { key: "cheap", en: "Cheap", pt: "Barato", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400" },
+  { key: "silicone", en: "Silicone", pt: "Silicone", color: "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 data-[active=true]:bg-cyan-500/30 data-[active=true]:border-cyan-400" },
+  { key: "borracha", en: "Rubber", pt: "Borracha", color: "border-zinc-400/50 bg-zinc-500/10 text-zinc-300 data-[active=true]:bg-zinc-500/30 data-[active=true]:border-zinc-400" },
+  { key: "fibra_carbono", en: "Carbon fiber", pt: "Fibra de Carbono", color: "border-neutral-400/50 bg-neutral-500/10 text-neutral-300 data-[active=true]:bg-neutral-500/30 data-[active=true]:border-neutral-400" },
+  { key: "control", en: "Control", pt: "Control", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400" },
+  { key: "speed", en: "Speed", pt: "Speed", color: "border-yellow-400/50 bg-yellow-500/10 text-yellow-300 data-[active=true]:bg-yellow-500/30 data-[active=true]:border-yellow-400" },
+  { key: "hibrido", en: "Hybrid", pt: "Híbrido", color: "border-teal-400/50 bg-teal-500/10 text-teal-300 data-[active=true]:bg-teal-500/30 data-[active=true]:border-teal-400" },
+  { key: "aspero", en: "Rough", pt: "Áspero", color: "border-stone-400/50 bg-stone-500/10 text-stone-300 data-[active=true]:bg-stone-500/30 data-[active=true]:border-stone-400" },
+  { key: "liso", en: "Smooth", pt: "Liso", color: "border-sky-400/50 bg-sky-500/10 text-sky-300 data-[active=true]:bg-sky-500/30 data-[active=true]:border-sky-400" },
+  { key: "mug", en: "Mug", pt: "Mug", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400" },
+  { key: "macio", en: "Soft", pt: "Macio", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400" },
+  { key: "ia", en: "AI", pt: "IA", color: "border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-300 data-[active=true]:bg-fuchsia-500/30 data-[active=true]:border-fuchsia-400" },
+]
+
 // Ponto único de extensão: para dar a uma categoria sua própria lista de tags (em vez de herdar
 // a lista genérica acima), basta declarar um novo array de TagOption (como MOUSEPAD_TAGS_OPTIONS)
 // e adicionar a entrada correspondente aqui — nenhum outro trecho do formulário precisa mudar.
 const CATEGORY_TAGS_OVERRIDE: Partial<Record<Category, TagOption[]>> = {
   mousepad: MOUSEPAD_TAGS_OPTIONS,
+  glasspad: GLASSPAD_TAGS_OPTIONS,
 }
 
 function getTagOptionsForCategory(category: Category): TagOption[] {

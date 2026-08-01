@@ -115,6 +115,8 @@ export const CARD_TAG_STYLES = {
   fibra_carbono:   { bg: "bg-neutral-500/15", text: "text-neutral-300", border: "border-neutral-500/30", dot: "bg-neutral-400" },
   control:         { bg: "bg-blue-500/15",    text: "text-blue-300",    border: "border-blue-500/30",    dot: "bg-blue-400" },
   speed:           { bg: "bg-yellow-500/15",  text: "text-yellow-300",  border: "border-yellow-500/30",  dot: "bg-yellow-400" },
+  silicone:        { bg: "bg-cyan-500/15",    text: "text-cyan-300",    border: "border-cyan-500/30",    dot: "bg-cyan-400" },
+  ia:              { bg: "bg-fuchsia-500/15", text: "text-fuchsia-300", border: "border-fuchsia-500/30", dot: "bg-fuchsia-400" },
 } as const
 
 // Rating scale colors (0–6) — single source of truth shared by the peripheral

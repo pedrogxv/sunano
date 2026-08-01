@@ -111,6 +111,10 @@ export const CARD_TAG_STYLES = {
   afetado_umidade: { bg: "bg-cyan-500/15",    text: "text-cyan-300",    border: "border-cyan-500/30",    dot: "bg-cyan-400" },
   ultrapassado:    { bg: "bg-stone-500/15",   text: "text-stone-300",   border: "border-stone-500/30",   dot: "bg-stone-400" },
   magnetico:       { bg: "bg-violet-500/15",  text: "text-violet-300",  border: "border-violet-500/30",  dot: "bg-violet-400" },
+  raro:            { bg: "bg-amber-500/15",   text: "text-amber-300",   border: "border-amber-500/30",   dot: "bg-amber-400" },
+  fibra_carbono:   { bg: "bg-neutral-500/15", text: "text-neutral-300", border: "border-neutral-500/30", dot: "bg-neutral-400" },
+  control:         { bg: "bg-blue-500/15",    text: "text-blue-300",    border: "border-blue-500/30",    dot: "bg-blue-400" },
+  speed:           { bg: "bg-yellow-500/15",  text: "text-yellow-300",  border: "border-yellow-500/30",  dot: "bg-yellow-400" },
 } as const
 
 // Rating scale colors (0–6) — single source of truth shared by the peripheral

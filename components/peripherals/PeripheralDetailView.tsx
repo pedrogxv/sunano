@@ -78,7 +78,7 @@ function formatCurrency(value: number) {
   }
 }
 
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "magnetico"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "magnetico" | "raro" | "fibra_carbono" | "control" | "speed"
 
 const TAG_LABELS: Record<Tag, string> = {
   competitive: "Competitivo",
@@ -112,6 +112,10 @@ const TAG_LABELS: Record<Tag, string> = {
   afetado_umidade: "Afetado por Umidade",
   ultrapassado: "Ultrapassado",
   magnetico: "Magnético",
+  raro: "Raro",
+  fibra_carbono: "Fibra de Carbono",
+  control: "Control",
+  speed: "Speed",
 }
 
 function formatTagLabel(tag: string, category?: string) {

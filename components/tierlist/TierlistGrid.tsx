@@ -10,7 +10,7 @@ import { TIER_THEMES } from "@/lib/tierlist-theme"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
 type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed"
-type RatingMode = "oled" | "overall" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb"
+type RatingMode = "oled" | "overall" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb" | "ips_va" | "competitive"
 type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
 type Ratings = Partial<Record<RatingKey, number>>
 
@@ -34,12 +34,16 @@ interface Peripheral {
     adminTierOrder_mechanical?: number
     adminTierOrder_magnetic?: number
     adminTierOrder_pcb?: number
+    adminTierOrder_ips_va?: number
+    adminTierOrder_competitive?: number
     adminTier_value?: TierValue
     adminTier_recommended?: TierValue
     adminTier_oled?: TierValue
     adminTier_soundTyping?: TierValue
     adminTier_mechanical?: TierValue
     adminTier_pcb?: TierValue
+    adminTier_ips_va?: TierValue
+    adminTier_competitive?: TierValue
     mouseShape?: "symmetrical" | "ergonomic"
     keyboardLayout?: string
     connectivity?: "wired" | "wireless"
@@ -61,6 +65,8 @@ const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
   mechanical: "adminTierOrder_mechanical",
   magnetic: "adminTierOrder_magnetic",
   pcb: "adminTierOrder_pcb",
+  ips_va: "adminTierOrder_ips_va",
+  competitive: "adminTierOrder_competitive",
 }
 
 // Modes not listed here share the `tier` column directly (the "default" mode for their
@@ -73,6 +79,8 @@ const TIER_KEY_BY_MODE: Partial<Record<RatingMode, string>> = {
   soundTyping: "adminTier_soundTyping",
   mechanical: "adminTier_mechanical",
   pcb: "adminTier_pcb",
+  ips_va: "adminTier_ips_va",
+  competitive: "adminTier_competitive",
 }
 
 const TIER_VALUES: Tier[] = ["GOAT", "SS", "S", "A", "B", "C", "L"]
@@ -141,6 +149,8 @@ function getRatingModeLabel(mode: RatingMode, category: string): string {
     mechanical: "Mecânico",
     magnetic: "Magnético",
     pcb: "PCB",
+    ips_va: "IPS / VA",
+    competitive: "Competitivo",
   }
   return modeMap[mode]
 }
@@ -212,6 +222,12 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   pcb: {
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  ips_va: {
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  competitive: {
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
 }
@@ -303,8 +319,14 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
         { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
         { key: "mechanical" as const, label: getRatingModeLabel("mechanical", category), color: "bg-purple-400" },
       ]
+    : category === "monitors"
+    ? [
+        { key: "oled" as const, label: getRatingModeLabel("oled", category), color: "bg-amber-400" },
+        { key: "ips_va" as const, label: getRatingModeLabel("ips_va", category), color: "bg-sky-400" },
+        { key: "competitive" as const, label: getRatingModeLabel("competitive", category), color: "bg-purple-400" },
+        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+      ]
     : [
-        ...(category === "monitors" ? [{ key: "oled" as const, label: getRatingModeLabel("oled", category), color: "bg-amber-400" }] : []),
         { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
         { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
         { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
@@ -348,10 +370,12 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
   useEffect(() => {
     if (ratingMode === "oled" && category !== "monitors") setRatingMode("overall")
+    if ((ratingMode === "ips_va" || ratingMode === "competitive") && category !== "monitors") setRatingMode("overall")
     if (ratingMode === "soundTyping" && category !== "switches") setRatingMode("overall")
     if (ratingMode === "pcb") setRatingMode("overall")
     if ((ratingMode === "mechanical" || ratingMode === "magnetic") && category !== "keyboard") setRatingMode("overall")
     if ((ratingMode === "overall" || ratingMode === "recommended") && category === "keyboard") setRatingMode("magnetic")
+    if ((ratingMode === "overall" || ratingMode === "recommended") && category === "monitors") setRatingMode("oled")
   }, [category, ratingMode])
 
   if (isComingSoon) {

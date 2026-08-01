@@ -43,7 +43,7 @@ import { TierItemTooltipContent, type Ratings, type RatingKey } from "@/componen
 import { FilterBar } from "@/components/tierlist/FilterBar"
 import { TierlistMetaCard } from "@/components/admin/TierlistMetaCard"
 
-type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb"
+type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb" | "ips_va" | "competitive"
 
 type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -99,6 +99,8 @@ const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
   { key: "mechanical", en: "Mechanical", pt: "Mecânico" },
   { key: "magnetic", en: "Magnetic", pt: "Magnético" },
   { key: "pcb", en: "PCB", pt: "PCB" },
+  { key: "ips_va", en: "IPS / VA", pt: "IPS / VA" },
+  { key: "competitive", en: "Competitive", pt: "Competitivo" },
 ]
 
 // Labels específicos por categoria para MOUSEPAD e GLASSPAD
@@ -128,6 +130,8 @@ const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
   mechanical: "adminTierOrder_mechanical",
   magnetic: "adminTierOrder_magnetic",
   pcb: "adminTierOrder_pcb",
+  ips_va: "adminTierOrder_ips_va",
+  competitive: "adminTierOrder_competitive",
 }
 
 // Modes not listed here share the `tier` column directly (the "default" mode for their
@@ -141,6 +145,8 @@ const TIER_KEY_BY_MODE: Partial<Record<RatingMode, string>> = {
   soundTyping: "adminTier_soundTyping",
   mechanical: "adminTier_mechanical",
   pcb: "adminTier_pcb",
+  ips_va: "adminTier_ips_va",
+  competitive: "adminTier_competitive",
 }
 
 const TIER_VALUES: Tier[] = ["GOAT", "SS", "S", "A", "B", "C", "L"]
@@ -314,6 +320,12 @@ const MODE_CONFIGS: Record<RatingMode, ModeConfig> = {
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
   pcb: {
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  ips_va: {
+    fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
+  },
+  competitive: {
     fallbackSort: (items) => [...items].sort((left, right) => left.name.localeCompare(right.name)),
   },
 }
@@ -814,10 +826,12 @@ export default function AdminPeripheralsPage() {
 
   useEffect(() => {
     if (ratingMode === "oled" && selectedCategory !== "monitors") setRatingMode("performance")
+    if ((ratingMode === "ips_va" || ratingMode === "competitive") && selectedCategory !== "monitors") setRatingMode("performance")
     if (ratingMode === "soundTyping" && selectedCategory !== "switches") setRatingMode("performance")
     if (ratingMode === "pcb") setRatingMode("performance")
     if ((ratingMode === "mechanical" || ratingMode === "magnetic") && selectedCategory !== "keyboard") setRatingMode("performance")
     if ((ratingMode === "performance" || ratingMode === "recommended") && selectedCategory === "keyboard") setRatingMode("magnetic")
+    if ((ratingMode === "performance" || ratingMode === "recommended") && selectedCategory === "monitors") setRatingMode("oled")
   }, [ratingMode, selectedCategory])
 
   function handleDragStart(event: DragStartEvent) {
@@ -1176,9 +1190,11 @@ export default function AdminPeripheralsPage() {
           {RATING_MODES.filter((m) => {
             if (m.key === "pcb") return false
             if (m.key === "oled" && selectedCategory !== "monitors") return false
+            if ((m.key === "ips_va" || m.key === "competitive") && selectedCategory !== "monitors") return false
             if (m.key === "soundTyping" && selectedCategory !== "switches") return false
             if ((m.key === "mechanical" || m.key === "magnetic") && selectedCategory !== "keyboard") return false
             if ((m.key === "performance" || m.key === "recommended") && selectedCategory === "keyboard") return false
+            if ((m.key === "performance" || m.key === "recommended") && selectedCategory === "monitors") return false
             return true
           }).map((mode) => (
             <button

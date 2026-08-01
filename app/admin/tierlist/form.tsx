@@ -169,7 +169,7 @@ const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
 // Modos de exibição da Tierlist pública, por categoria de dispositivo. Um periférico só
 // aparece em uma aba da Tierlist (/tierlist) se o modo dela estiver na lista escolhida aqui;
 // sem nenhum modo selecionado, o item continua salvo no banco mas some da Tierlist pública.
-type TierlistMode = "oled" | "overall" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb"
+type TierlistMode = "oled" | "overall" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb" | "ips_va" | "competitive"
 
 const DEFAULT_TIERLIST_MODE_OPTIONS: { key: TierlistMode; label: string }[] = [
   { key: "overall", label: "Geral" },
@@ -185,9 +185,9 @@ const TIERLIST_MODE_OPTIONS: Record<Category, { key: TierlistMode; label: string
   ],
   monitors: [
     { key: "oled", label: "OLED" },
-    { key: "overall", label: "Geral" },
+    { key: "ips_va", label: "IPS / VA" },
+    { key: "competitive", label: "Competitivo" },
     { key: "value", label: "Custo Benefício" },
-    { key: "recommended", label: "Recomendado" },
   ],
   switches: [
     { key: "overall", label: "Geral" },

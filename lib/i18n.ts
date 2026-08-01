@@ -180,7 +180,7 @@ type Translations = {
     underReview: string
     tierDescriptions: { GOAT: string; SS: string; S: string; A: string; B: string; C: string; L: string }
     tierSubtitles: { GOAT: string; SS: string; S: string; A: string; B: string; C: string; L: string }
-    modeDescriptions: { oled: string; overall: string; value: string; soundTyping: string; mechanical: string; magnetic: string; pcb: string; recommended: string }
+    modeDescriptions: { oled: string; overall: string; value: string; soundTyping: string; mechanical: string; magnetic: string; pcb: string; recommended: string; ips_va: string; competitive: string }
   }
   peripherals: {
     title: string
@@ -526,7 +526,7 @@ type Translations = {
       dropHereRemove: string
       noUnassigned: string
       itemsCount: (count: number) => string
-      modeDescriptions: { performance: string; value: string; recommended: string; oled: string; soundTyping: string; mechanical: string; magnetic: string; pcb: string }
+      modeDescriptions: { performance: string; value: string; recommended: string; oled: string; soundTyping: string; mechanical: string; magnetic: string; pcb: string; ips_va: string; competitive: string }
     }
     tierlistReview: {
       pageTitle: string
@@ -853,7 +853,7 @@ export const translations: Record<LocaleCode, Translations> = {
       underReview: "Sob Revisão",
       tierDescriptions: { GOAT: "Elite - Referencia absoluta", SS: "Extremo - Quase perfeito", S: "Top - Otima escolha", A: "Muito bom - Consistente e forte", B: "Bom - Opção sólida", C: "Ok - Funciona bem com limites", L: "Inferior - Apenas para casos específicos" },
       tierSubtitles: { GOAT: "Apelão", SS: "Excepcional", S: "Muito bom", A: "Bom", B: "Decente", C: "Usável", L: "Veio Podi" },
-      modeDescriptions: { oled: "Mostrando painéis OLED", overall: "Ordenado por desempenho geral", value: "Ordenado por preço", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral" },
+      modeDescriptions: { oled: "Mostrando painéis OLED", overall: "Ordenado por desempenho geral", value: "Ordenado por preço", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", ips_va: "Mostrando painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
     },
     peripherals: {
       title: "Periféricos",
@@ -1199,7 +1199,7 @@ export const translations: Record<LocaleCode, Translations> = {
         dropHereRemove: "Solte aqui para remover o tier",
         noUnassigned: "Nenhum periférico Sob Revisão",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "itens"}`,
-        modeDescriptions: { performance: "Ordenado por desempenho puro", value: "Ordenado por preço", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", oled: "Apenas painéis OLED", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB" },
+        modeDescriptions: { performance: "Ordenado por desempenho puro", value: "Ordenado por preço", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", oled: "Apenas painéis OLED", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", ips_va: "Apenas painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
       },
       tierlistReview: {
         pageTitle: "Revisão de Periféricos",
@@ -1576,7 +1576,7 @@ export const translations: Record<LocaleCode, Translations> = {
       underReview: "Under Review",
       tierDescriptions: { GOAT: "Elite - Absolute reference", SS: "Extreme - Almost perfect", S: "Top - Great choice", A: "Very good - Strong and consistent", B: "Good - Solid option", C: "Okay - Works well with tradeoffs", L: "Lower - Only for niche cases" },
       tierSubtitles: { GOAT: "", SS: "", S: "", A: "", B: "", C: "", L: "" },
-      modeDescriptions: { oled: "Showing OLED panels", overall: "Sorted by overall performance", value: "Sorted by price", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", recommended: "Suggested picks by Sunano, prioritizing overall balance" },
+      modeDescriptions: { oled: "Showing OLED panels", overall: "Sorted by overall performance", value: "Sorted by price", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", recommended: "Suggested picks by Sunano, prioritizing overall balance", ips_va: "Showing IPS and VA panels", competitive: "Sorted by competitive performance" },
     },
     peripherals: {
       title: "Peripherals",
@@ -1922,7 +1922,7 @@ export const translations: Record<LocaleCode, Translations> = {
         dropHereRemove: "Drop here to remove tier",
         noUnassigned: "No peripherals without tier",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "items"}`,
-        modeDescriptions: { performance: "Sorted by pure performance", value: "Sorted by price", recommended: "Suggested picks by Sunano, prioritizing overall balance", oled: "Show only OLED panels", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance" },
+        modeDescriptions: { performance: "Sorted by pure performance", value: "Sorted by price", recommended: "Suggested picks by Sunano, prioritizing overall balance", oled: "Show only OLED panels", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", ips_va: "Show only IPS and VA panels", competitive: "Sorted by competitive performance" },
       },
       tierlistReview: {
         pageTitle: "Peripheral Review",

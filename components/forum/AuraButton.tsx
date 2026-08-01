@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type CSSProperties } from "react"
-import { Sparkles } from "lucide-react"
+import { Flame } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -13,8 +13,8 @@ type ParticleStyle = CSSProperties & {
 }
 
 const PARTICLE_COUNT = 8
-// Alterna entre o roxo/rosa da aura e um dourado, pra explosão não ficar monocromática.
-const PARTICLE_COLORS = ["oklch(0.75 0.19 300)", "oklch(0.8 0.17 250)", "oklch(0.82 0.2 70)"]
+// Tons de fogo (vermelho/laranja/âmbar), pra explosão não ficar monocromática.
+const PARTICLE_COLORS = ["oklch(0.7 0.2 40)", "oklch(0.75 0.19 55)", "oklch(0.63 0.24 25)"]
 
 /**
  * Botão de dar/remover Aura (like único, sem downvote) de um post ou
@@ -74,7 +74,7 @@ export function AuraButton({
           +10
         </span>
       )}
-      <Sparkles
+      <Flame
         className={`aura-icon relative ${iconSize}`}
         fill={given ? "currentColor" : "none"}
         strokeWidth={given ? 1.5 : 2}

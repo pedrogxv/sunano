@@ -265,6 +265,8 @@ export type Database = {
           body_preview: string
           author_name: string
           user_id: string | null
+          /** Aponta sempre para um comentário raiz (nunca outra resposta) — thread de 1 nível. */
+          parent_comment_id: string | null
           is_hidden: boolean
           aura_count: number
           created_at: string

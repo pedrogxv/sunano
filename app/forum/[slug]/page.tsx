@@ -9,12 +9,13 @@ import { ArrowLeft, Lock, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { AuraButton } from "@/components/forum/AuraButton"
-import { PostCard, type PostCardData } from "@/components/forum/PostCard"
+import { AuthorTierBadge, PostCard, type PostCardData } from "@/components/forum/PostCard"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
+import type { AccountTier } from "@/lib/account-tier"
 
 type ForumPost = PostCardData
 
@@ -23,6 +24,8 @@ type ForumComment = {
   body: string
   author_display_name: string
   author_avatar_url: string | null
+  author_account_tier: AccountTier
+  parent_comment_id: string | null
   created_at: string
   aura_count: number
 }
@@ -45,6 +48,12 @@ export default function ForumPostPage() {
   const [body, setBody] = useState("")
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  // Reply form (responde a um comentário raiz específico)
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyBody, setReplyBody] = useState("")
+  const [replySaving, setReplySaving] = useState(false)
+  const [replyError, setReplyError] = useState<string | null>(null)
 
   useEffect(() => {
     // A sessão vem do cliente de autenticação; o perfil vem de /api/auth/me.
@@ -83,10 +92,12 @@ export default function ForumPostPage() {
     }
   }, [])
 
-  const loadPost = useCallback(async () => {
+  const loadPost = useCallback(async (opts?: { silent?: boolean }) => {
     if (!params.slug) return
     try {
-      setLoading(true)
+      // Refetch "silencioso" (após comentar) não troca a tela pelo loader —
+      // só atualiza os dados por baixo, pra não parecer que a página recarregou.
+      if (!opts?.silent) setLoading(true)
       setError(null)
       const res = await fetch(`/api/forum/posts/${params.slug}`)
       const data = await res.json().catch(() => null)
@@ -96,7 +107,7 @@ export default function ForumPostPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar post")
     } finally {
-      setLoading(false)
+      if (!opts?.silent) setLoading(false)
     }
   }, [params.slug])
 
@@ -191,12 +202,40 @@ export default function ForumPostPage() {
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar comentário")
       setBody("")
-      await loadPost()
+      await loadPost({ silent: true })
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao enviar comentário")
     } finally {
       setSaving(false)
     }
+  }
+
+  async function submitReply(parentCommentId: string) {
+    if (!post || !authUser) return
+    try {
+      setReplySaving(true)
+      setReplyError(null)
+      const res = await fetch(`/api/forum/posts/${post.slug}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: replyBody, parentCommentId }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar resposta")
+      setReplyBody("")
+      setReplyingTo(null)
+      await loadPost({ silent: true })
+    } catch (err) {
+      setReplyError(err instanceof Error ? err.message : "Erro ao enviar resposta")
+    } finally {
+      setReplySaving(false)
+    }
+  }
+
+  function startReply(commentId: string) {
+    setReplyingTo((current) => (current === commentId ? null : commentId))
+    setReplyBody("")
+    setReplyError(null)
   }
 
   return (
@@ -220,7 +259,7 @@ export default function ForumPostPage() {
           <BoxLoader />
         </div>
       ) : post ? (
-        <>
+        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
           <PostCard
             post={post}
             auraGiven={postAuraGiven}
@@ -231,41 +270,63 @@ export default function ForumPostPage() {
           />
 
           {/* Comments */}
-          <div>
+          <div id="comments" className="scroll-mt-20">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
               <MessageCircle className="size-4 text-primary" />
               {comments.length} comentário{comments.length !== 1 ? "s" : ""}
             </div>
 
             {comments.length > 0 ? (
-              <div className="space-y-3">
-                {comments.map((comment, idx) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <div className="flex flex-col items-center">
-                      <UserAvatar name={comment.author_display_name} avatarUrl={comment.author_avatar_url} size={8} />
-                      {idx < comments.length - 1 && (
-                        <div className="mt-2 w-px flex-1 bg-border/40" />
-                      )}
-                    </div>
-                    <div className="flex-1 pb-3">
-                      <p className="text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">{comment.author_display_name}</span>
-                        {" · "}{format(new Date(comment.created_at), "dd MMM yyyy", { locale: ptBR })}
-                      </p>
-                      <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                        {comment.body}
-                      </p>
-                      <div className="mt-2">
-                        <AuraButton
-                          auraCount={comment.aura_count}
-                          given={commentAuraGiven.has(comment.id)}
-                          disabled={!authUser}
-                          onToggle={() => handleToggleCommentAura(comment)}
+              <div className="space-y-4">
+                {comments
+                  .filter((comment) => !comment.parent_comment_id)
+                  .map((comment) => {
+                    const replies = comments.filter((c) => c.parent_comment_id === comment.id)
+                    return (
+                      <div key={comment.id} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+                        <CommentRow
+                          comment={comment}
+                          auraGiven={commentAuraGiven.has(comment.id)}
+                          authDisabled={!authUser}
+                          onToggleAura={() => handleToggleCommentAura(comment)}
+                          onReply={() => startReply(comment.id)}
+                          replying={replyingTo === comment.id}
                         />
+
+                        {replies.length > 0 && (
+                          <div className="ml-11 mt-3 space-y-3 border-l-2 border-border/40 pl-4">
+                            {replies.map((reply) => (
+                              <div key={reply.id} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+                                <CommentRow
+                                  comment={reply}
+                                  auraGiven={commentAuraGiven.has(reply.id)}
+                                  authDisabled={!authUser}
+                                  onToggleAura={() => handleToggleCommentAura(reply)}
+                                  onReply={() => startReply(comment.id)}
+                                  replying={replyingTo === comment.id}
+                                  compactAvatar
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {replyingTo === comment.id && (
+                          <div className="ml-11 mt-3">
+                            <ReplyForm
+                              authUser={authUser}
+                              value={replyBody}
+                              onChange={setReplyBody}
+                              onCancel={() => setReplyingTo(null)}
+                              onSubmit={() => submitReply(comment.id)}
+                              saving={replySaving}
+                              error={replyError}
+                            />
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    )
+                  })}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">Ainda não há comentários.</p>
@@ -318,8 +379,114 @@ export default function ForumPostPage() {
               Este tópico está bloqueado para novos comentários.
             </div>
           )}
-        </>
+        </div>
       ) : null}
+    </div>
+  )
+}
+
+/** Uma linha de comentário (raiz ou resposta) com avatar, autor, corpo e ações. */
+function CommentRow({
+  comment,
+  auraGiven,
+  authDisabled,
+  onToggleAura,
+  onReply,
+  replying,
+  compactAvatar = false,
+}: {
+  comment: ForumComment
+  auraGiven: boolean
+  authDisabled: boolean
+  onToggleAura: () => void
+  onReply: () => void
+  replying: boolean
+  compactAvatar?: boolean
+}) {
+  return (
+    <div className="flex gap-3">
+      <UserAvatar name={comment.author_display_name} avatarUrl={comment.author_avatar_url} size={compactAvatar ? 7 : 8} />
+      <div className="flex-1">
+        <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{comment.author_display_name}</span>
+          <AuthorTierBadge tier={comment.author_account_tier} />
+          <span>·</span>
+          <span>{format(new Date(comment.created_at), "dd MMM yyyy", { locale: ptBR })}</span>
+        </p>
+        <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {comment.body}
+        </p>
+        <div className="mt-2 flex items-center gap-3">
+          <AuraButton
+            auraCount={comment.aura_count}
+            given={auraGiven}
+            disabled={authDisabled}
+            onToggle={onToggleAura}
+          />
+          <button
+            type="button"
+            onClick={onReply}
+            className={`text-xs font-medium transition-colors ${
+              replying ? "text-primary" : "text-muted-foreground hover:text-primary"
+            }`}
+          >
+            Responder
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Formulário inline de resposta a um comentário raiz, aberto sob o comentário. */
+function ReplyForm({
+  authUser,
+  value,
+  onChange,
+  onCancel,
+  onSubmit,
+  saving,
+  error,
+}: {
+  authUser: { display_name: string; avatar_url: string | null } | null
+  value: string
+  onChange: (value: string) => void
+  onCancel: () => void
+  onSubmit: () => void
+  saving: boolean
+  error: string | null
+}) {
+  if (!authUser) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        <Link href="/login" className="font-medium text-primary hover:underline">Entre na sua conta</Link>
+        {" "}para responder.
+      </p>
+    )
+  }
+
+  return (
+    <div className="animate-in fade-in slide-in-from-top-1 duration-200 space-y-2 rounded-lg border border-border bg-muted/10 p-3">
+      {error && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+      <Textarea
+        autoFocus
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="min-h-[72px] border-border bg-background text-sm"
+        placeholder="Escreva sua resposta..."
+      />
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button size="sm" onClick={onSubmit} disabled={saving || value.trim().length < 4}>
+          {saving ? "Enviando…" : "Responder"}
+        </Button>
+      </div>
     </div>
   )
 }

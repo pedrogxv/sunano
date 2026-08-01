@@ -4,11 +4,12 @@ import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Lock, MessageCircle, Pin, Share2 } from "lucide-react"
+import { Crown, Lock, MessageCircle, Pin, Share2 } from "lucide-react"
 
 import { AuraButton } from "@/components/forum/AuraButton"
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
 import type { ForumCategoryInfo } from "@/lib/server/repositories/forum-repository"
 
 export type PostCardData = {
@@ -17,6 +18,7 @@ export type PostCardData = {
   body: string
   author_display_name: string
   author_avatar_url: string | null
+  author_account_tier: AccountTier
   category: ForumCategoryInfo | null
   media_image_url: string | null
   media_video_url: string | null
@@ -25,6 +27,21 @@ export type PostCardData = {
   is_pinned: boolean
   aura_count: number
   comment_count: number
+}
+
+/** Selo de VIP/VIP+ ao lado do nome do autor — mesmo rótulo do tier usado no perfil. */
+export function AuthorTierBadge({ tier }: { tier: AccountTier }) {
+  if (tier === "common") return null
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${
+        tier === "vip_plus" ? "bg-fuchsia-400/15 text-fuchsia-400" : "bg-amber-400/15 text-amber-400"
+      }`}
+    >
+      <Crown className="size-2.5" />
+      {TIER_CAPABILITIES[tier].label}
+    </span>
+  )
 }
 
 function extractYoutubeId(url: string): string | null {
@@ -92,21 +109,11 @@ export function PostCard({
       )}
 
       <div className={`relative z-10 flex items-start gap-3 p-4 ${clickable ? "pointer-events-none" : ""}`}>
-        {/* Coluna de Aura — lateralizada à esquerda, no lugar da antiga coluna de voto */}
-        <div className="relative z-10 pointer-events-auto">
-          <AuraButton
-            auraCount={post.aura_count}
-            given={auraGiven}
-            disabled={auraDisabled}
-            onToggle={onToggleAura}
-            orientation="vertical"
-          />
-        </div>
-
         <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">{post.author_display_name}</span>
+            <AuthorTierBadge tier={post.author_account_tier} />
             <span>·</span>
             <span>{format(new Date(post.created_at), "dd MMM yyyy", { locale: ptBR })}</span>
             {post.is_pinned && (
@@ -153,10 +160,21 @@ export function PostCard({
           )}
 
           <div className="relative z-10 mt-3 flex items-center gap-2 pointer-events-auto">
-            <span className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
+            <AuraButton
+              auraCount={post.aura_count}
+              given={auraGiven}
+              disabled={auraDisabled}
+              onToggle={onToggleAura}
+              orientation="horizontal"
+            />
+            <Link
+              href={clickable ? `/forum/${post.slug}#comments` : "#comments"}
+              onClick={(event) => event.stopPropagation()}
+              className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            >
               <MessageCircle className="size-3.5" />
               {post.comment_count}
-            </span>
+            </Link>
             <button
               type="button"
               onClick={(event) => {

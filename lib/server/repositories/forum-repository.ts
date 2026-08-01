@@ -1,5 +1,6 @@
 import "server-only"
 
+import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -31,6 +32,7 @@ export type ForumListPost = {
   comment_count: number
   author_display_name: string
   author_avatar_url: string | null
+  author_account_tier: AccountTier
 }
 
 export type ForumPostDetail = ForumListPost
@@ -39,10 +41,12 @@ export type ForumCommentDetail = {
   body: string
   author_name: string
   user_id: string | null
+  parent_comment_id: string | null
   created_at: string
   aura_count: number
   author_display_name: string
   author_avatar_url: string | null
+  author_account_tier: AccountTier
 }
 
 export type ForumTab = "recent" | "hot" | "category"
@@ -50,13 +54,17 @@ export type ForumTab = "recent" | "hot" | "category"
 // ── Helpers de enriquecimento ────────────────────────────────────────────────
 
 async function buildProfileMap(userIds: (string | null)[]) {
-  const map: Record<string, { display_name: string | null; avatar_url: string | null }> = {}
+  const map: Record<string, { display_name: string | null; avatar_url: string | null; account_tier: AccountTier }> = {}
   const ids = [...new Set(userIds.filter((id): id is string => Boolean(id)))]
   if (ids.length === 0) return map
   const db = createSupabaseAdminClient()
-  const { data } = await db.from("user_profiles").select("id, display_name, avatar_url").in("id", ids)
+  const { data } = await db.from("user_profiles").select("id, display_name, avatar_url, account_tier").in("id", ids)
   for (const row of data ?? []) {
-    map[row.id] = { display_name: row.display_name, avatar_url: row.avatar_url }
+    map[row.id] = {
+      display_name: row.display_name,
+      avatar_url: row.avatar_url,
+      account_tier: coerceAccountTier(row.account_tier),
+    }
   }
   return map
 }
@@ -170,6 +178,7 @@ export async function listForumPosts(params: {
     comment_count: commentCounts[p.id] ?? 0,
     author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
+    author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
   }))
 }
 
@@ -197,7 +206,7 @@ export async function getForumPostBySlug(slug: string): Promise<{
 
   const { data: commentRows } = await db
     .from("forum_comments")
-    .select("id, body, author_name, user_id, created_at, aura_count")
+    .select("id, body, author_name, user_id, parent_comment_id, created_at, aura_count")
     .eq("post_id", post.id)
     .eq("is_hidden", false)
     .order("created_at", { ascending: true })
@@ -225,6 +234,7 @@ export async function getForumPostBySlug(slug: string): Promise<{
       ? profileMap[post.user_id]?.display_name ?? post.author_name
       : post.author_name,
     author_avatar_url: post.user_id ? profileMap[post.user_id]?.avatar_url ?? null : null,
+    author_account_tier: post.user_id ? profileMap[post.user_id]?.account_tier ?? "common" : "common",
   }
 
   const enrichedComments: ForumCommentDetail[] = comments.map((c) => ({
@@ -232,10 +242,12 @@ export async function getForumPostBySlug(slug: string): Promise<{
     body: c.body,
     author_name: c.author_name,
     user_id: c.user_id,
+    parent_comment_id: c.parent_comment_id,
     created_at: c.created_at,
     aura_count: c.aura_count,
     author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
+    author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
   }))
 
   return { post: enrichedPost, comments: enrichedComments }
@@ -343,6 +355,7 @@ export async function addForumComment(params: {
   userId: string
   authorName: string
   body: string
+  parentCommentId?: string | null
 }): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -357,11 +370,27 @@ export async function addForumComment(params: {
     return { ok: false, error: "Este post está fechado para comentários.", status: 403 }
   }
 
+  let parentCommentId: string | null = null
+  if (params.parentCommentId) {
+    // Só permite responder a um comentário raiz (sem parent) do mesmo post —
+    // mantém a thread em 1 nível, como no restante do fórum.
+    const { data: parent } = await db
+      .from("forum_comments")
+      .select("id, post_id, parent_comment_id")
+      .eq("id", params.parentCommentId)
+      .maybeSingle()
+    if (!parent || parent.post_id !== post.id) {
+      return { ok: false, error: "Comentário original não encontrado.", status: 404 }
+    }
+    parentCommentId = parent.parent_comment_id ? parent.parent_comment_id : parent.id
+  }
+
   const { error } = await db.from("forum_comments").insert({
     post_id: post.id,
     body: params.body.trim(),
     author_name: params.authorName,
     user_id: params.userId,
+    parent_comment_id: parentCommentId,
     is_hidden: false,
     aura_count: 0,
   })

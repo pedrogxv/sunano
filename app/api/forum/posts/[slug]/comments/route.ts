@@ -8,6 +8,7 @@ import { getUserProfile } from "@/lib/server/repositories/users-repository"
 
 const commentSchema = z.object({
   body: z.string().trim().min(4).max(2000),
+  parentCommentId: z.string().uuid().nullable().optional(),
 })
 
 export async function POST(
@@ -51,6 +52,7 @@ export async function POST(
       userId: user.id,
       authorName,
       body: parsed.data.body,
+      parentCommentId: parsed.data.parentCommentId ?? null,
     })
 
     if (!result.ok) {

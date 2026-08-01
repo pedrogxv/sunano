@@ -37,7 +37,7 @@ type KeyboardType = "mechanical" | "magnetic" | "optical"
 type PadType = "speed" | "control" | "hybrid"
 type Surface = PadType | "glass" | "cloth"
 type PanelType = "ips" | "tn" | "va" | "oled" | "other"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k"
 
 type Peripheral = {
   id: string
@@ -136,6 +136,15 @@ const TAG_LABELS: Record<Tag, string> = {
   speed: "Speed",
   silicone: "Silicone",
   ia: "IA",
+  white_label: "White Label",
+  ips: "IPS",
+  va: "VA",
+  tn: "TN",
+  oled: "OLED",
+  miniled: "MINILED",
+  fhd: "FHD",
+  qhd: "QHD",
+  "4k": "4K",
 }
 
 function formatTagLabel(tag: Tag, category?: string) {

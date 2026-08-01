@@ -58,6 +58,9 @@ const TAG_LABEL: Record<string, string> = {
   competitive: "Competitivo", versatile: "Bomba",
   value: "Custo-benefício",
   raro: "Raro", fibra_carbono: "Fibra de Carbono", control: "Control", speed: "Speed",
+  cheap: "Barato", expensive: "Caro",
+  white_label: "White Label", ips: "IPS", va: "VA", tn: "TN", oled: "OLED",
+  miniled: "MINILED", fhd: "FHD", qhd: "QHD", "4k": "4K",
 }
 
 const MAX_ITEMS = 4

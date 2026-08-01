@@ -7,7 +7,7 @@ import { CARD_TAG_STYLES, CARD_TIER_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } f
 import { useLocale } from "@/components/providers/locale-context"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k"
 
 export type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
 export type Ratings = Partial<Record<RatingKey, number>>
@@ -71,6 +71,15 @@ const TAG_LABELS: Record<Tag, { en: string; pt: string }> = {
   speed: { en: "Speed", pt: "Speed" },
   silicone: { en: "Silicone", pt: "Silicone" },
   ia: { en: "AI", pt: "IA" },
+  white_label: { en: "White Label", pt: "White Label" },
+  ips: { en: "IPS", pt: "IPS" },
+  va: { en: "VA", pt: "VA" },
+  tn: { en: "TN", pt: "TN" },
+  oled: { en: "OLED", pt: "OLED" },
+  miniled: { en: "MiniLED", pt: "MINILED" },
+  fhd: { en: "FHD", pt: "FHD" },
+  qhd: { en: "QHD", pt: "QHD" },
+  "4k": { en: "4K", pt: "4K" },
 }
 
 export interface TierItemTooltipContentProps {

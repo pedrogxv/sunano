@@ -117,6 +117,15 @@ export const CARD_TAG_STYLES = {
   speed:           { bg: "bg-yellow-500/15",  text: "text-yellow-300",  border: "border-yellow-500/30",  dot: "bg-yellow-400" },
   silicone:        { bg: "bg-cyan-500/15",    text: "text-cyan-300",    border: "border-cyan-500/30",    dot: "bg-cyan-400" },
   ia:              { bg: "bg-fuchsia-500/15", text: "text-fuchsia-300", border: "border-fuchsia-500/30", dot: "bg-fuchsia-400" },
+  white_label:     { bg: "bg-gray-500/15",    text: "text-gray-300",    border: "border-gray-500/30",    dot: "bg-gray-400" },
+  ips:             { bg: "bg-blue-500/15",    text: "text-blue-300",    border: "border-blue-500/30",    dot: "bg-blue-400" },
+  va:              { bg: "bg-indigo-500/15",  text: "text-indigo-300",  border: "border-indigo-500/30",  dot: "bg-indigo-400" },
+  tn:              { bg: "bg-orange-500/15",  text: "text-orange-300",  border: "border-orange-500/30",  dot: "bg-orange-400" },
+  oled:            { bg: "bg-fuchsia-500/15", text: "text-fuchsia-300", border: "border-fuchsia-500/30", dot: "bg-fuchsia-400" },
+  miniled:         { bg: "bg-yellow-500/15",  text: "text-yellow-300",  border: "border-yellow-500/30",  dot: "bg-yellow-400" },
+  fhd:             { bg: "bg-slate-500/15",   text: "text-slate-300",   border: "border-slate-500/30",   dot: "bg-slate-400" },
+  qhd:             { bg: "bg-cyan-500/15",    text: "text-cyan-300",    border: "border-cyan-500/30",    dot: "bg-cyan-400" },
+  "4k":            { bg: "bg-purple-500/15",  text: "text-purple-300",  border: "border-purple-500/30",  dot: "bg-purple-400" },
 } as const
 
 // Rating scale colors (0–6) — single source of truth shared by the peripheral

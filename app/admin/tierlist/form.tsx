@@ -43,7 +43,7 @@ import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailV
 type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k"
 
 const peripheralSchema = z.object({
   name: z
@@ -321,12 +321,32 @@ const GLASSPAD_TAGS_OPTIONS: TagOption[] = [
   { key: "ia", en: "AI", pt: "IA", color: "border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-300 data-[active=true]:bg-fuchsia-500/30 data-[active=true]:border-fuchsia-400" },
 ]
 
+// Lista de tags exclusiva da categoria Monitores — substitui completamente a lista genérica
+// acima quando a categoria selecionada no formulário for "monitors".
+const MONITORS_TAGS_OPTIONS: TagOption[] = [
+  { key: "competitive", en: "Competitive", pt: "Competitivo", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
+  { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400" },
+  { key: "expensive", en: "Expensive", pt: "Caro", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400" },
+  { key: "cheap", en: "Cheap", pt: "Barato", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400" },
+  { key: "value", en: "Value", pt: "Custo Benefício", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400" },
+  { key: "white_label", en: "White Label", pt: "White Label", color: "border-gray-400/50 bg-gray-500/10 text-gray-300 data-[active=true]:bg-gray-500/30 data-[active=true]:border-gray-400" },
+  { key: "ips", en: "IPS", pt: "IPS", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400" },
+  { key: "va", en: "VA", pt: "VA", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400" },
+  { key: "tn", en: "TN", pt: "TN", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400" },
+  { key: "oled", en: "OLED", pt: "OLED", color: "border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-300 data-[active=true]:bg-fuchsia-500/30 data-[active=true]:border-fuchsia-400" },
+  { key: "miniled", en: "MiniLED", pt: "MINILED", color: "border-yellow-400/50 bg-yellow-500/10 text-yellow-300 data-[active=true]:bg-yellow-500/30 data-[active=true]:border-yellow-400" },
+  { key: "fhd", en: "FHD", pt: "FHD", color: "border-slate-400/50 bg-slate-500/10 text-slate-300 data-[active=true]:bg-slate-500/30 data-[active=true]:border-slate-400" },
+  { key: "qhd", en: "QHD", pt: "QHD", color: "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 data-[active=true]:bg-cyan-500/30 data-[active=true]:border-cyan-400" },
+  { key: "4k", en: "4K", pt: "4K", color: "border-purple-400/50 bg-purple-500/10 text-purple-300 data-[active=true]:bg-purple-500/30 data-[active=true]:border-purple-400" },
+]
+
 // Ponto único de extensão: para dar a uma categoria sua própria lista de tags (em vez de herdar
 // a lista genérica acima), basta declarar um novo array de TagOption (como MOUSEPAD_TAGS_OPTIONS)
 // e adicionar a entrada correspondente aqui — nenhum outro trecho do formulário precisa mudar.
 const CATEGORY_TAGS_OVERRIDE: Partial<Record<Category, TagOption[]>> = {
   mousepad: MOUSEPAD_TAGS_OPTIONS,
   glasspad: GLASSPAD_TAGS_OPTIONS,
+  monitors: MONITORS_TAGS_OPTIONS,
 }
 
 function getTagOptionsForCategory(category: Category): TagOption[] {
@@ -425,8 +445,8 @@ function buildSpecsPayload(
 const BRAND_OPTIONS = [
   "Aeperion",
   "AIM1",
-  "Alienware",
   "Aimstar",
+  "Alienware",
   "Ajazz",
   "Akko",
   "Amicis",

@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Link from "next/link"
 import { LayoutDashboard, LogIn, LogOut, MoreVertical, Settings, ShieldCheck, User } from "lucide-react"
 
@@ -13,16 +12,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { signOutSafely, supabaseAuth } from "@/lib/client/supabase-auth"
-import { isMfaStepUpRequired } from "@/lib/auth-mfa"
+import { signOutSafely } from "@/lib/client/supabase-auth"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
-
-type UserState = {
-  name: string
-  email: string
-  avatar: string
-}
 
 function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -41,64 +34,10 @@ interface AuthUserProps {
 
 export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", variant = "admin", layout = "sidebar" }: AuthUserProps) {
   const t = useT()
-  const [user, setUser] = useState<UserState | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [ready, setReady] = useState(false)
-
-  useEffect(() => {
-    // A sessão (login/logout) é observada pelo cliente de autenticação; os
-    // dados do perfil vêm do endpoint /api/auth/me — nunca de uma query direta
-    // ao Supabase a partir do navegador.
-    //
-    // O evento inicial do onAuthStateChange normalmente chega na hora, mas na
-    // pior das hipóteses (lock órfão do gotrue-js sendo recuperado via
-    // `steal`, ver lib/client/supabase-auth.ts) pode levar até uns 5s. Depois
-    // de 6s assume-se deslogado para não deixar o ícone girando pra sempre —
-    // se o evento chegar depois, o estado é corrigido.
-    const timeout = setTimeout(() => setReady(true), 6000)
-
-    const {
-      data: { subscription },
-    } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
-      clearTimeout(timeout)
-      if (session?.user) {
-        // Sessão aal1 com 2FA pendente: o usuário ainda não se autenticou
-        // completamente — tratar como anônimo até concluir o segundo fator.
-        const { data: aal } = await supabaseAuth.auth.mfa.getAuthenticatorAssuranceLevel()
-        if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
-          setUser(null)
-          setIsAdmin(false)
-          setReady(true)
-          return
-        }
-
-        const fallbackName = session.user.email?.split("@")[0] || "User"
-        try {
-          const res = await fetch("/api/auth/me")
-          const data = await res.json()
-          const adminProfile = data?.adminProfile
-          const userProfile = data?.userProfile
-          setIsAdmin(Boolean(adminProfile))
-          setUser({
-            name: adminProfile?.display_name || userProfile?.display_name || fallbackName,
-            email: adminProfile?.email || session.user.email || "",
-            avatar: adminProfile?.avatar_url || userProfile?.avatar_url || "",
-          })
-        } catch {
-          setUser({ name: fallbackName, email: session.user.email || "", avatar: "" })
-        }
-      } else {
-        setUser(null)
-        setIsAdmin(false)
-      }
-      setReady(true)
-    })
-
-    return () => {
-      clearTimeout(timeout)
-      subscription.unsubscribe()
-    }
-  }, [])
+  const { user: authUser, loading } = useAuthUser()
+  const ready = !loading
+  const isAdmin = authUser?.isAdmin ?? false
+  const user = authUser ? { name: authUser.displayName, email: authUser.email, avatar: authUser.avatarUrl || "" } : null
 
   if (!ready) {
     if (layout === "topbar") {

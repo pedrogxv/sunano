@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
 import { Clock, Flame, Plus, Tag, X } from "lucide-react"
 import { toast } from "sonner"
@@ -12,7 +12,7 @@ import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { useAuthUser } from "@/components/providers/auth-context"
 
 export type ForumPost = PostCardData
 
@@ -33,8 +33,14 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [posts, setPosts] = useState<ForumPost[]>(initialPosts)
-  const [authUser, setAuthUser] = useState<AuthUser>(null)
-  const [authLoading, setAuthLoading] = useState(true)
+  const { user: contextUser, loading: authLoading } = useAuthUser()
+  const authUser: AuthUser = useMemo(
+    () =>
+      contextUser
+        ? { id: contextUser.id, display_name: contextUser.displayName, avatar_url: contextUser.avatarUrl }
+        : null,
+    [contextUser]
+  )
   const [auraGiven, setAuraGiven] = useState<Set<string>>(new Set())
 
   const [activeTab, setActiveTab] = useState<Tab>("recent")
@@ -59,40 +65,8 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
   }, [])
 
   useEffect(() => {
-    // A sessão vem do cliente de autenticação; o perfil vem de /api/auth/me.
-    // Em alguns navegadores mobile (webviews como o do Telegram) o evento
-    // inicial do onAuthStateChange pode nunca disparar, travando a UI de
-    // aura/comentários num skeleton eterno. Depois de alguns segundos,
-    // assume-se deslogado — se o evento chegar depois, o estado é atualizado.
-    const timeout = setTimeout(() => setAuthLoading(false), 6000)
-
-    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
-      clearTimeout(timeout)
-      if (session?.user) {
-        let displayName = session.user.email?.split("@")[0] || "Usuário"
-        let avatarUrl: string | null = null
-        try {
-          const res = await fetch("/api/auth/me")
-          const data = await res.json()
-          if (data?.userProfile) {
-            displayName = data.userProfile.display_name || displayName
-            avatarUrl = data.userProfile.avatar_url || null
-          }
-        } catch {
-          // mantém os fallbacks derivados do e-mail
-        }
-        setAuthUser({ id: session.user.id, display_name: displayName, avatar_url: avatarUrl })
-      } else {
-        setAuthUser(null)
-        setAuraGiven(new Set())
-      }
-      setAuthLoading(false)
-    })
-    return () => {
-      clearTimeout(timeout)
-      subscription.unsubscribe()
-    }
-  }, [])
+    if (!authUser) setAuraGiven(new Set())
+  }, [authUser])
 
   const loadAuraGiven = useCallback(async (postIds: string[]) => {
     if (!postIds.length) return

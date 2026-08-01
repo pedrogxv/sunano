@@ -1,9 +1,11 @@
 "use server"
 
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
-import { sanitizeNextPath } from "@/lib/auth-mfa"
+import { sanitizeNextPath, TRUSTED_DEVICE_COOKIE_NAME, TRUSTED_DEVICE_MAX_AGE_SECONDS } from "@/lib/auth-mfa"
 import { checkRateLimit } from "@/lib/server/rate-limit"
+import { createTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export type TwoFactorState = { error: string | null }
@@ -19,6 +21,7 @@ export async function verifyTotpAction(
 ): Promise<TwoFactorState> {
   const code = String(formData.get("code") || "").replace(/\D/g, "")
   const next = sanitizeNextPath(String(formData.get("next") || ""))
+  const rememberDevice = formData.get("remember_device") === "on"
 
   if (code.length !== 6) {
     return { error: "Informe o código de 6 dígitos." }
@@ -70,6 +73,22 @@ export async function verifyTotpAction(
   })
   if (verifyError) {
     return { error: "Código incorreto. Verifique o app autenticador e tente novamente." }
+  }
+
+  // "Lembrar este dispositivo" (opt-in, ver TwoFactorVerifyForm): grava um
+  // cookie httpOnly de vida curta que dispensa o desafio TOTP neste navegador
+  // pelos próximos 30 dias — revogável a qualquer momento em Conta > Segurança.
+  if (rememberDevice) {
+    const { token, expiresAt } = await createTrustedDevice(user.id, (await headers()).get("user-agent"))
+    const cookieStore = await cookies()
+    cookieStore.set(TRUSTED_DEVICE_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      expires: expiresAt,
+      maxAge: TRUSTED_DEVICE_MAX_AGE_SECONDS,
+    })
   }
 
   redirect(next)

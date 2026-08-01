@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { KeyRound, Mail, ShieldCheck, ShieldOff, Smartphone } from "lucide-react"
+import { KeyRound, Laptop, Mail, ShieldCheck, ShieldOff, Smartphone } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -67,9 +67,41 @@ export function SecurityTab({ email }: SecurityTabProps) {
   const [otp, setOtp] = useState("")
   const [busyMfa, setBusyMfa] = useState(false)
 
+  // ── Dispositivos confiáveis (2FA "lembrar por 30 dias") ──
+  const [trustedDeviceCount, setTrustedDeviceCount] = useState<number | null>(null)
+  const [busyTrustedDevices, setBusyTrustedDevices] = useState(false)
+
   useEffect(() => {
     refreshFactors()
+    refreshTrustedDeviceCount()
   }, [])
+
+  async function refreshTrustedDeviceCount() {
+    try {
+      const res = await fetch("/api/account/mfa-trusted-devices")
+      if (!res.ok) return
+      const data = (await res.json().catch(() => null)) as { count?: number } | null
+      setTrustedDeviceCount(data?.count ?? 0)
+    } catch {
+      setTrustedDeviceCount(null)
+    }
+  }
+
+  async function forgetTrustedDevices() {
+    try {
+      setBusyTrustedDevices(true)
+      const res = await fetch("/api/account/mfa-trusted-devices", { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      setTrustedDeviceCount(0)
+      toast.success("Dispositivos confiáveis esquecidos", {
+        description: "O código do autenticador será pedido novamente em todos eles.",
+      })
+    } catch {
+      toast.error("Não foi possível esquecer os dispositivos. Tente novamente.")
+    } finally {
+      setBusyTrustedDevices(false)
+    }
+  }
 
   async function refreshFactors() {
     try {
@@ -184,6 +216,9 @@ export function SecurityTab({ email }: SecurityTabProps) {
       setBusyMfa(true)
       const { error } = await supabaseAuth.auth.mfa.unenroll({ factorId: verifiedFactorId })
       if (error) throw error
+      // Sem 2FA, "dispositivo confiável" não tem mais sentido — revoga junto.
+      await fetch("/api/account/mfa-trusted-devices", { method: "DELETE" }).catch(() => {})
+      setTrustedDeviceCount(0)
       toast.success("2FA desativado")
       await refreshFactors()
     } catch (err) {
@@ -315,36 +350,64 @@ export function SecurityTab({ email }: SecurityTabProps) {
               </div>
             </div>
           ) : verifiedFactorId ? (
-            <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="size-5 text-emerald-400" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">2FA está ativo</p>
-                  <p className="text-xs text-muted-foreground">Sua conta exige um código do autenticador.</p>
+            <div className="space-y-3">
+              <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-4 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-3">
+                  <ShieldCheck className="size-5 text-emerald-400" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">2FA está ativo</p>
+                    <p className="text-xs text-muted-foreground">Sua conta exige um código do autenticador.</p>
+                  </div>
                 </div>
-              </div>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={busyMfa} className="gap-2 text-red-400 hover:text-red-300">
-                    <ShieldOff className="size-4" />
-                    Desativar
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Desativar 2FA?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Sua conta deixará de exigir o código do autenticador. Você pode reativar a qualquer momento.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={disable2fa} className="bg-red-500 text-white hover:bg-red-600">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={busyMfa} className="gap-2 text-red-400 hover:text-red-300">
+                      <ShieldOff className="size-4" />
                       Desativar
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Desativar 2FA?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Sua conta deixará de exigir o código do autenticador. Você pode reativar a qualquer momento.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={disable2fa} className="bg-red-500 text-white hover:bg-red-600">
+                        Desativar
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+
+              <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-border bg-muted/10 p-4 sm:flex-row sm:items-center">
+                <div className="flex items-center gap-3">
+                  <Laptop className="size-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Dispositivos confiáveis</p>
+                    <p className="text-xs text-muted-foreground">
+                      {trustedDeviceCount === null
+                        ? "Carregando…"
+                        : trustedDeviceCount > 0
+                          ? `${trustedDeviceCount} dispositivo(s) dispensam o código por até 30 dias.`
+                          : "Nenhum dispositivo confiável no momento."}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busyTrustedDevices || !trustedDeviceCount}
+                  onClick={forgetTrustedDevices}
+                  className="gap-2"
+                >
+                  <ShieldOff className="size-4" />
+                  {busyTrustedDevices ? "Esquecendo..." : "Esquecer todos"}
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-start justify-between gap-3 rounded-lg border border-border bg-muted/10 p-4 sm:flex-row sm:items-center">

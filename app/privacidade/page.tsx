@@ -209,6 +209,12 @@ export default function PrivacidadePage() {
               remoção 2 horas após o registro e são excluídos na rotina de expurgo diária seguinte
               (ou seja, permanecem no banco por até ~24 horas após completarem as 2 horas).
             </li>
+            <li>
+              <strong>Dispositivo confiável (2FA):</strong> se você optar por &ldquo;confiar neste
+              dispositivo&rdquo; ao validar o código do autenticador, guardamos apenas um identificador
+              aleatório (hash) por até <strong>30 dias</strong>, removido automaticamente ao expirar.
+              Pode ser revogado a qualquer momento em Conta &gt; Segurança.
+            </li>
           </ul>
           <p className="text-xs text-muted-foreground">
             Os prazos de log de auditoria e de eventos de rate limit são aplicados por uma rotina
@@ -227,6 +233,11 @@ export default function PrivacidadePage() {
             <li>
               <strong>Cookie de preferências (localStorage):</strong> tema visual e idioma,
               armazenados localmente no seu navegador.
+            </li>
+            <li>
+              <strong>Cookie de dispositivo confiável (HTTPOnly, Secure, opcional):</strong> gravado
+              só se você marcar &ldquo;confiar neste dispositivo&rdquo; na verificação em duas etapas;
+              dispensa o código do autenticador nesse navegador por até 30 dias (ver Seção 5).
             </li>
           </ul>
           <p>

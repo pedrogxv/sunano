@@ -6,6 +6,7 @@ import { ShieldCheck } from "lucide-react"
 
 import { cancelTwoFactorAction, verifyTotpAction } from "@/app/2fa/actions"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 
 function VerifySubmitButton({ disabled }: { disabled: boolean }) {
@@ -34,6 +35,7 @@ function SignOutButton() {
 export function TwoFactorVerifyForm({ next }: { next: string }) {
   const [state, action] = useActionState(verifyTotpAction, { error: null })
   const [code, setCode] = useState("")
+  const [rememberDevice, setRememberDevice] = useState(false)
 
   return (
     <div className="space-y-5">
@@ -59,6 +61,20 @@ export function TwoFactorVerifyForm({ next }: { next: string }) {
             Abra seu app autenticador (Google Authenticator, Authy, 1Password) e digite o código de 6 dígitos.
           </p>
         </div>
+
+        <label className="flex items-start gap-2.5 rounded-lg border border-border bg-muted/10 px-3 py-2.5">
+          <Checkbox
+            name="remember_device"
+            checked={rememberDevice}
+            onCheckedChange={(value) => setRememberDevice(value === true)}
+            className="mt-0.5"
+          />
+          <span className="text-xs text-muted-foreground">
+            Confiar neste dispositivo por 30 dias e não pedir o código novamente.
+            Use apenas em aparelhos pessoais — você pode revogar a qualquer momento em
+            Conta &gt; Segurança.
+          </span>
+        </label>
 
         {state.error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

@@ -19,6 +19,19 @@
 /** Caminho da página de verificação do segundo fator. */
 export const TWO_FACTOR_PATH = "/2fa"
 
+/**
+ * Cookie que marca um navegador como "dispositivo confiável" — permite
+ * pular o desafio TOTP por até `TRUSTED_DEVICE_MAX_AGE_SECONDS` depois de um
+ * primeiro 2FA bem-sucedido (opt-in, ver TwoFactorVerifyForm). O valor é um
+ * token opaco; o hash dele é o que fica em `mfa_trusted_devices` — a
+ * validação em si (server-only) mora em
+ * `lib/server/repositories/mfa-trusted-devices-repository.ts`.
+ */
+export const TRUSTED_DEVICE_COOKIE_NAME = "sunano_mfa_trusted"
+
+/** 30 dias — prazo padrão de mercado para "lembrar este dispositivo" (NIST 800-63B). */
+export const TRUSTED_DEVICE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+
 export type AssuranceLevel = {
   current: "aal1" | "aal2" | string | null
   next: "aal1" | "aal2" | string | null

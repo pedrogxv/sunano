@@ -357,6 +357,19 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["offers_votes"]["Row"], "id" | "created_at">
         Update: Partial<Database["public"]["Tables"]["offers_votes"]["Insert"]>
       }
+      mfa_trusted_devices: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          token_hash: string
+          user_agent: string | null
+          created_at: string
+          expires_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["mfa_trusted_devices"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["mfa_trusted_devices"]["Insert"]>
+      }
       youtube_cache_snapshots: {
         Relationships: []
         Row: {

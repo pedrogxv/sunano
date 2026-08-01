@@ -23,6 +23,7 @@ export type LgpdPurgeResult = {
   rate_limit_events_deleted: number
   audit_log_deleted: number
   store_orders_deleted: number
+  mfa_trusted_devices_deleted: number
 }
 
 export async function purgeExpiredLgpdData(): Promise<LgpdPurgeResult> {
@@ -31,16 +32,21 @@ export async function purgeExpiredLgpdData(): Promise<LgpdPurgeResult> {
   const rateLimitCutoff = new Date(Date.now() - RATE_LIMIT_EVENTS_MAX_AGE_MS).toISOString()
   const auditLogCutoff = new Date(Date.now() - AUDIT_LOG_MAX_AGE_MS).toISOString()
   const storeOrdersCutoff = new Date(Date.now() - STORE_ORDERS_MAX_AGE_MS).toISOString()
+  const now = new Date().toISOString()
 
-  const [rateLimitResult, auditLogResult, storeOrdersResult] = await Promise.all([
+  const [rateLimitResult, auditLogResult, storeOrdersResult, mfaTrustedDevicesResult] = await Promise.all([
     db.from("rate_limit_events").delete({ count: "exact" }).lt("created_at", rateLimitCutoff),
     db.from("audit_log").delete({ count: "exact" }).lt("created_at", auditLogCutoff),
     db.from("store_orders").delete({ count: "exact" }).lt("created_at", storeOrdersCutoff),
+    // "Lembrar dispositivo" (lib/server/repositories/mfa-trusted-devices-repository.ts):
+    // token já vencido não serve pra mais nada — minimização de dados (LGPD Art. 6, III).
+    db.from("mfa_trusted_devices").delete({ count: "exact" }).lt("expires_at", now),
   ])
 
   return {
     rate_limit_events_deleted: rateLimitResult.count ?? 0,
     audit_log_deleted: auditLogResult.count ?? 0,
     store_orders_deleted: storeOrdersResult.count ?? 0,
+    mfa_trusted_devices_deleted: mfaTrustedDevicesResult.count ?? 0,
   }
 }

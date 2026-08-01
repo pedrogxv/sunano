@@ -58,9 +58,14 @@ export async function updateSession(
           .maybeSingle()
       : { data: null }
 
-  // Consentimento LGPD: só se aplica a quem já tem um `user_profiles` (perfil
-  // público) — uma conta puramente administrativa, sem esse registro, nunca
-  // passou pelo fluxo de cadastro/OAuth público e não deve ficar presa aqui.
+  // Consentimento LGPD: só se aplica a contas puramente públicas. A ideia
+  // original era usar a ausência de `user_profiles` como sinal de "é só
+  // admin" — mas as login actions (app/admin/actions.ts, app/login/actions.ts)
+  // fazem upsert desse registro para QUALQUER login (admin também usa
+  // fórum/perfil), então hoje todo mundo tem a linha e esse sinal sozinho não
+  // basta. Sem a checagem de admin_profiles abaixo, um admin cujo
+  // `lgpd_consent_at` nunca foi preenchido ficava trancado fora do próprio
+  // painel ao navegar para o site público ("Ver Site" virava beco sem saída).
   // Usa o mesmo client autenticado da sessão (RLS: "auth.uid() = id" cobre a
   // leitura do próprio registro), sem precisar do client de service-role.
   let needsLgpdConsent = false
@@ -70,7 +75,22 @@ export async function updateSession(
       .select("lgpd_consent_at")
       .eq("id", data.user.id)
       .maybeSingle()
-    needsLgpdConsent = userProfile !== null && !userProfile.lgpd_consent_at
+    const pendingConsent = userProfile !== null && !userProfile.lgpd_consent_at
+
+    if (pendingConsent) {
+      const isAdminAccount = needProfile
+        ? profile !== null
+        : Boolean(
+            (
+              await supabase
+                .from("admin_profiles")
+                .select("id")
+                .eq("id", data.user.id)
+                .maybeSingle()
+            ).data
+          )
+      needsLgpdConsent = !isAdminAccount
+    }
   }
 
   return {

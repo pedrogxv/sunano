@@ -1,9 +1,11 @@
 "use server"
 
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { hasAnyAdminAccess } from "@/lib/admin-permissions"
-import { isMfaStepUpRequired } from "@/lib/auth-mfa"
+import { isMfaStepUpRequired, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/auth-mfa"
+import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import {
   resolveAvailableDisplayName,
@@ -73,10 +75,14 @@ export async function loginAction(_: AuthState, formData: FormData): Promise<Aut
     avatarUrl: authData.user.user_metadata?.avatar_url || null,
   })
 
-  // 2FA ativo: conclui o segundo fator antes de liberar o painel.
+  // 2FA ativo: conclui o segundo fator antes de liberar o painel — a menos
+  // que este navegador já tenha sido marcado como confiável (ver /2fa/actions.ts).
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
   if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
-    redirect("/2fa?next=%2Fadmin")
+    const trustedToken = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value
+    if (!(await isTrustedDevice(authData.user.id, trustedToken))) {
+      redirect("/2fa?next=%2Fadmin")
+    }
   }
 
   redirect("/admin")

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { format } from "date-fns"
@@ -14,7 +14,7 @@ import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { useAuthUser } from "@/components/providers/auth-context"
 import type { AccountTier } from "@/lib/account-tier"
 
 type ForumPost = PostCardData
@@ -39,12 +39,19 @@ export default function ForumPostPage() {
   const [error, setError] = useState<string | null>(null)
   const [post, setPost] = useState<ForumPost | null>(null)
   const [comments, setComments] = useState<ForumComment[]>([])
-  const [authUser, setAuthUser] = useState<AuthUser>(null)
-  const [authLoading, setAuthLoading] = useState(true)
+  const { user: contextUser, loading: authLoading } = useAuthUser()
+  const authUser: AuthUser = useMemo(
+    () =>
+      contextUser
+        ? { id: contextUser.id, display_name: contextUser.displayName, avatar_url: contextUser.avatarUrl }
+        : null,
+    [contextUser]
+  )
   const [postAuraGiven, setPostAuraGiven] = useState(false)
   const [commentAuraGiven, setCommentAuraGiven] = useState<Set<string>>(new Set())
 
   // Comment form
+  const [formExpanded, setFormExpanded] = useState(false)
   const [body, setBody] = useState("")
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -56,41 +63,11 @@ export default function ForumPostPage() {
   const [replyError, setReplyError] = useState<string | null>(null)
 
   useEffect(() => {
-    // A sessão vem do cliente de autenticação; o perfil vem de /api/auth/me.
-    // Em alguns navegadores mobile (webviews como o do Telegram) o evento
-    // inicial do onAuthStateChange pode nunca disparar, travando a UI de
-    // aura/comentários num skeleton eterno. Depois de alguns segundos,
-    // assume-se deslogado — se o evento chegar depois, o estado é atualizado.
-    const timeout = setTimeout(() => setAuthLoading(false), 6000)
-
-    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
-      clearTimeout(timeout)
-      if (session?.user) {
-        let displayName = session.user.email?.split("@")[0] || "Usuário"
-        let avatarUrl: string | null = null
-        try {
-          const res = await fetch("/api/auth/me")
-          const data = await res.json()
-          if (data?.userProfile) {
-            displayName = data.userProfile.display_name || displayName
-            avatarUrl = data.userProfile.avatar_url || null
-          }
-        } catch {
-          // mantém os fallbacks derivados do e-mail
-        }
-        setAuthUser({ id: session.user.id, display_name: displayName, avatar_url: avatarUrl })
-      } else {
-        setAuthUser(null)
-        setPostAuraGiven(false)
-        setCommentAuraGiven(new Set())
-      }
-      setAuthLoading(false)
-    })
-    return () => {
-      clearTimeout(timeout)
-      subscription.unsubscribe()
+    if (!authUser) {
+      setPostAuraGiven(false)
+      setCommentAuraGiven(new Set())
     }
-  }, [])
+  }, [authUser])
 
   const loadPost = useCallback(async (opts?: { silent?: boolean }) => {
     if (!params.slug) return
@@ -202,6 +179,7 @@ export default function ForumPostPage() {
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar comentário")
       setBody("")
+      setFormExpanded(false)
       await loadPost({ silent: true })
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao enviar comentário")
@@ -269,6 +247,69 @@ export default function ForumPostPage() {
             compact={false}
           />
 
+          {/* Comment form */}
+          {!post.is_locked && (
+            <div>
+              {!authLoading && !authUser ? (
+                <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    <Link href="/login" className="font-medium text-primary hover:underline">Entre na sua conta</Link>
+                    {" "}para deixar um comentário.
+                  </p>
+                </div>
+              ) : authUser ? formExpanded ? (
+                <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+                  {formError && (
+                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                      {formError}
+                    </div>
+                  )}
+
+                  <Textarea
+                    autoFocus
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    className="min-h-[100px] border-border bg-muted/20"
+                    placeholder="Escreva seu comentário..."
+                  />
+
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFormExpanded(false)
+                        setBody("")
+                        setFormError(null)
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                    <Button size="sm" onClick={submitComment} disabled={saving || body.trim().length < 4}>
+                      {saving ? "Enviando…" : "Comentar"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setFormExpanded(true)}
+                  className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-card/80"
+                >
+                  <UserAvatar name={authUser.display_name} avatarUrl={authUser.avatar_url} size={6} />
+                  Escreva um comentário...
+                </button>
+              ) : null}
+            </div>
+          )}
+
+          {post.is_locked && (
+            <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
+              <Lock className="size-4 shrink-0" />
+              Este tópico está bloqueado para novos comentários.
+            </div>
+          )}
+
           {/* Comments */}
           <div id="comments" className="scroll-mt-20">
             <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
@@ -332,53 +373,6 @@ export default function ForumPostPage() {
               <p className="text-sm text-muted-foreground">Ainda não há comentários.</p>
             )}
           </div>
-
-          {/* Comment form */}
-          {!post.is_locked && (
-            <div>
-              {!authLoading && !authUser ? (
-                <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    <Link href="/login" className="font-medium text-primary hover:underline">Entre na sua conta</Link>
-                    {" "}para deixar um comentário.
-                  </p>
-                </div>
-              ) : authUser ? (
-                <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <UserAvatar name={authUser.display_name} avatarUrl={authUser.avatar_url} size={6} />
-                    Comentando como <span className="font-medium text-foreground">{authUser.display_name}</span>
-                  </div>
-
-                  {formError && (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                      {formError}
-                    </div>
-                  )}
-
-                  <Textarea
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    className="min-h-[100px] border-border bg-muted/20"
-                    placeholder="Escreva seu comentário..."
-                  />
-
-                  <div className="flex justify-end">
-                    <Button size="sm" onClick={submitComment} disabled={saving || body.trim().length < 4}>
-                      {saving ? "Enviando…" : "Comentar"}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          {post.is_locked && (
-            <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
-              <Lock className="size-4 shrink-0" />
-              Este tópico está bloqueado para novos comentários.
-            </div>
-          )}
         </div>
       ) : null}
     </div>

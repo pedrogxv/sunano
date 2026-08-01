@@ -2,7 +2,8 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
 import { hasAdminPermission, isWebMaster, type AdminPermissionKey, type AdminProfile } from "@/lib/admin-permissions"
-import { isMfaStepUpRequired, sanitizeNextPath, TWO_FACTOR_PATH } from "@/lib/auth-mfa"
+import { isMfaStepUpRequired, sanitizeNextPath, TRUSTED_DEVICE_COOKIE_NAME, TWO_FACTOR_PATH } from "@/lib/auth-mfa"
+import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { updateSession } from "@/lib/server/supabase/middleware-client"
 
 function isMaintenanceEnabled() {
@@ -137,7 +138,12 @@ export async function proxy(request: NextRequest) {
   // Sessão em aal1 com fator verificado pendente: a sessão existe mas ainda
   // não vale como autenticada para fins de acesso. Bloqueia tudo até o
   // step-up, exceto a própria página de verificação e as rotas de auth.
-  if (user && isMfaStepUpRequired(aal) && !isMfaPendingAllowedPath(pathname)) {
+  const trustedDevice =
+    user && isMfaStepUpRequired(aal)
+      ? await isTrustedDevice(user.id, request.cookies.get(TRUSTED_DEVICE_COOKIE_NAME)?.value)
+      : false
+
+  if (user && isMfaStepUpRequired(aal) && !trustedDevice && !isMfaPendingAllowedPath(pathname)) {
     if (pathname.startsWith("/api")) {
       const apiResponse = NextResponse.json({ error: "mfa_required" }, { status: 403 })
       copyCookies(response, apiResponse)
@@ -154,9 +160,10 @@ export async function proxy(request: NextRequest) {
     return redirectResponse
   }
 
-  // Já concluiu o 2FA (ou não tem) mas está na página de verificação: manda
-  // para o destino para não ficar preso numa etapa desnecessária.
-  if (user && pathname === TWO_FACTOR_PATH && !isMfaStepUpRequired(aal)) {
+  // Já concluiu o 2FA (ou não tem, ou o dispositivo é confiável) mas está na
+  // página de verificação: manda para o destino para não ficar preso numa
+  // etapa desnecessária.
+  if (user && pathname === TWO_FACTOR_PATH && (!isMfaStepUpRequired(aal) || trustedDevice)) {
     const nextParam = request.nextUrl.searchParams.get("next")
     const destination = request.nextUrl.clone()
     destination.pathname = sanitizeNextPath(nextParam)

@@ -556,6 +556,7 @@ const BRAND_OPTIONS = [
   "Scyrox",
   "Sennheiser",
   "SensoryBoost",
+  "SkyPad",
   "Souleels",
   "SteelSeries",
   "Superbeings Lab",

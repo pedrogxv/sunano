@@ -1,9 +1,11 @@
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import { ShieldCheck } from "lucide-react"
 
 import { AuthBackground } from "@/components/auth/AuthBackground"
 import { TwoFactorVerifyForm } from "@/components/auth/TwoFactorVerifyForm"
-import { isMfaStepUpRequired, sanitizeNextPath } from "@/lib/auth-mfa"
+import { isMfaStepUpRequired, sanitizeNextPath, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/auth-mfa"
+import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"
@@ -27,8 +29,17 @@ export default async function TwoFactorPage({
   }
 
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  const stepUpRequired = isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })
+
   // Sessão já está em aal2 (ou não há 2FA): nada a fazer aqui.
-  if (!isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
+  if (!stepUpRequired) {
+    redirect(next)
+  }
+
+  // Dispositivo marcado como confiável (ver TwoFactorVerifyForm): dispensa o
+  // código mesmo com a sessão ainda em aal1.
+  const trustedToken = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value
+  if (await isTrustedDevice(user.id, trustedToken)) {
     redirect(next)
   }
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowLeftRight, Check, ChevronDown, Edit, Headphones, Keyboard, Layers, LayoutGrid, Monitor, Mouse, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react"
+import { ArrowLeftRight, Check, ChevronDown, Edit, Gem, Keyboard, Layers, LayoutGrid, Monitor, Mouse, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -77,8 +77,8 @@ interface PerifericosContentProps {
 
 const CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs"]
 
-const HERO_MAIN_CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors"]
-const HERO_OTHER_CATEGORIES: Category[] = ["iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs"]
+const HERO_MAIN_CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "glasspad", "monitors"]
+const HERO_OTHER_CATEGORIES: Category[] = ["iem", "dac_amp", "headset", "switches", "pcb", "feet", "chairs"]
 
 function categoryMatches(itemCategory: Category, target: CategoryFilter): boolean {
   return target === "outros" ? HERO_OTHER_CATEGORIES.includes(itemCategory) : itemCategory === target
@@ -88,7 +88,7 @@ const HERO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
   mouse: Mouse,
   keyboard: Keyboard,
   mousepad: Layers,
-  headset: Headphones,
+  glasspad: Gem,
   monitors: Monitor,
   outros: LayoutGrid,
 }

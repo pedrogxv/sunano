@@ -1,9 +1,10 @@
 "use server"
 
-import { headers } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
-import { isMfaStepUpRequired } from "@/lib/auth-mfa"
+import { isMfaStepUpRequired, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import {
   isAdminUser,
   resolveAvailableDisplayName,
@@ -64,10 +65,14 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
   const destination = (await isAdminUser(authData.user.id)) ? "/admin" : "/forum"
 
   // 2FA ativo: a sessão nasce em aal1 e precisa concluir o segundo fator
-  // antes de acessar qualquer coisa. Manda direto para a verificação.
+  // antes de acessar qualquer coisa — a menos que este navegador já tenha
+  // sido marcado como confiável (ver /2fa/actions.ts).
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
   if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
-    redirect(`/2fa?next=${encodeURIComponent(destination)}`)
+    const trustedToken = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value
+    if (!(await isTrustedDevice(authData.user.id, trustedToken))) {
+      redirect(`/2fa?next=${encodeURIComponent(destination)}`)
+    }
   }
 
   redirect(destination)

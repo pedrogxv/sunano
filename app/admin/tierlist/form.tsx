@@ -174,7 +174,6 @@ type TierlistMode = "oled" | "overall" | "value" | "recommended" | "soundTyping"
 const DEFAULT_TIERLIST_MODE_OPTIONS: { key: TierlistMode; label: string }[] = [
   { key: "overall", label: "Geral" },
   { key: "value", label: "Custo Benefício" },
-  { key: "recommended", label: "Recomendado" },
 ]
 
 const TIERLIST_MODE_OPTIONS: Record<Category, { key: TierlistMode; label: string }[]> = {
@@ -189,26 +188,37 @@ const TIERLIST_MODE_OPTIONS: Record<Category, { key: TierlistMode; label: string
     { key: "competitive", label: "Competitivo" },
     { key: "value", label: "Custo Benefício" },
   ],
+  mouse: [
+    { key: "overall", label: "Geral" },
+    { key: "magnetic", label: "Magnético" },
+    { key: "value", label: "Custo Benefício" },
+  ],
   switches: [
     { key: "overall", label: "Geral" },
     { key: "value", label: "Custo Benefício" },
-    { key: "recommended", label: "Recomendado" },
     { key: "soundTyping", label: "Som e Digitação" },
   ],
   mousepad: [
     { key: "overall", label: "Geral" },
     { key: "value", label: "Nacional" },
-    { key: "recommended", label: "Recomendado" },
+    { key: "recommended", label: "Custo Benefício" },
   ],
   glasspad: [
     { key: "overall", label: "Geral" },
     { key: "value", label: "Nacional" },
-    { key: "recommended", label: "Recomendado" },
+    { key: "recommended", label: "Custo Benefício" },
+  ],
+  iem: [
+    { key: "overall", label: "Geral" },
+    { key: "value", label: "Custo Benefício" },
+    { key: "recommended", label: "Gamer" },
+  ],
+  headset: [
+    { key: "overall", label: "Geral" },
+    { key: "value", label: "Custo Benefício" },
+    { key: "recommended", label: "Nacionais" },
   ],
   pcb: DEFAULT_TIERLIST_MODE_OPTIONS,
-  mouse: DEFAULT_TIERLIST_MODE_OPTIONS,
-  iem: DEFAULT_TIERLIST_MODE_OPTIONS,
-  headset: DEFAULT_TIERLIST_MODE_OPTIONS,
   feet: DEFAULT_TIERLIST_MODE_OPTIONS,
   chairs: DEFAULT_TIERLIST_MODE_OPTIONS,
   dac_amp: DEFAULT_TIERLIST_MODE_OPTIONS,

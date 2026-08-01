@@ -125,13 +125,20 @@ interface ModeConfig {
   fallbackSort: (items: Peripheral[]) => Peripheral[]
 }
 
-// Labels específicos por categoria para MOUSEPAD e GLASSPAD
+// Categorias que ainda oferecem a aba "recommended" (com rótulo próprio) — nas demais
+// categorias essa opção foi removida do formulário e não deve aparecer como aba pública.
+const RECOMMENDED_TAB_CATEGORIES = ["mousepad", "glasspad", "iem", "headset"]
+
+// Labels específicos por categoria para MOUSEPAD, GLASSPAD, IEM e HEADSET
 function getRatingModeLabel(mode: RatingMode, category: string): string {
   if (category === "mousepad" || category === "glasspad") {
     if (mode === "overall") return "Geral"
     if (mode === "value") return "Nacional"
-    if (mode === "recommended") return "Recomendado"
+    if (mode === "recommended") return "Custo Benefício"
   }
+
+  if (category === "iem" && mode === "recommended") return "Gamer"
+  if (category === "headset" && mode === "recommended") return "Nacionais"
 
   if (category === "keyboard") {
     if (mode === "magnetic") return "Magnético"
@@ -326,10 +333,18 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
         { key: "competitive" as const, label: getRatingModeLabel("competitive", category), color: "bg-purple-400" },
         { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
       ]
+    : category === "mouse"
+    ? [
+        { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
+        { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
+        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+      ]
     : [
         { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
         { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
-        { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
+        ...(RECOMMENDED_TAB_CATEGORIES.includes(category) ? [
+          { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
+        ] : []),
         ...(category === "switches" ? [
           { key: "soundTyping" as const, label: "Som e Digitação", color: "bg-cyan-500" },
         ] : []),
@@ -373,7 +388,9 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     if ((ratingMode === "ips_va" || ratingMode === "competitive") && category !== "monitors") setRatingMode("overall")
     if (ratingMode === "soundTyping" && category !== "switches") setRatingMode("overall")
     if (ratingMode === "pcb") setRatingMode("overall")
-    if ((ratingMode === "mechanical" || ratingMode === "magnetic") && category !== "keyboard") setRatingMode("overall")
+    if (ratingMode === "mechanical" && category !== "keyboard") setRatingMode("overall")
+    if (ratingMode === "magnetic" && category !== "keyboard" && category !== "mouse") setRatingMode("overall")
+    if (ratingMode === "recommended" && !RECOMMENDED_TAB_CATEGORIES.includes(category)) setRatingMode("overall")
     if ((ratingMode === "overall" || ratingMode === "recommended") && category === "keyboard") setRatingMode("magnetic")
     if ((ratingMode === "overall" || ratingMode === "recommended") && category === "monitors") setRatingMode("oled")
   }, [category, ratingMode])

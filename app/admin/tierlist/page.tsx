@@ -103,13 +103,20 @@ const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
   { key: "competitive", en: "Competitive", pt: "Competitivo" },
 ]
 
-// Labels específicos por categoria para MOUSEPAD e GLASSPAD
+// Categorias que ainda oferecem a aba "recommended" (com rótulo próprio) — nas demais
+// categorias essa opção foi removida do formulário e não deve aparecer como aba no board.
+const RECOMMENDED_TAB_CATEGORIES = ["mousepad", "glasspad", "iem", "headset"]
+
+// Labels específicos por categoria para MOUSEPAD, GLASSPAD, IEM e HEADSET
 function getRatingModeLabel(mode: RatingMode, category: string, locale: string): string {
   if (category === "mousepad" || category === "glasspad") {
     if (mode === "performance") return "Geral"
     if (mode === "value") return "Nacional"
-    if (mode === "recommended") return "Recomendado"
+    if (mode === "recommended") return "Custo Benefício"
   }
+
+  if (category === "iem" && mode === "recommended") return "Gamer"
+  if (category === "headset" && mode === "recommended") return "Nacionais"
 
   if (category !== "switches" && mode === "soundTyping") {
     return ""
@@ -829,7 +836,9 @@ export default function AdminPeripheralsPage() {
     if ((ratingMode === "ips_va" || ratingMode === "competitive") && selectedCategory !== "monitors") setRatingMode("performance")
     if (ratingMode === "soundTyping" && selectedCategory !== "switches") setRatingMode("performance")
     if (ratingMode === "pcb") setRatingMode("performance")
-    if ((ratingMode === "mechanical" || ratingMode === "magnetic") && selectedCategory !== "keyboard") setRatingMode("performance")
+    if (ratingMode === "mechanical" && selectedCategory !== "keyboard") setRatingMode("performance")
+    if (ratingMode === "magnetic" && selectedCategory !== "keyboard" && selectedCategory !== "mouse") setRatingMode("performance")
+    if (ratingMode === "recommended" && !RECOMMENDED_TAB_CATEGORIES.includes(selectedCategory)) setRatingMode("performance")
     if ((ratingMode === "performance" || ratingMode === "recommended") && selectedCategory === "keyboard") setRatingMode("magnetic")
     if ((ratingMode === "performance" || ratingMode === "recommended") && selectedCategory === "monitors") setRatingMode("oled")
   }, [ratingMode, selectedCategory])
@@ -1192,9 +1201,10 @@ export default function AdminPeripheralsPage() {
             if (m.key === "oled" && selectedCategory !== "monitors") return false
             if ((m.key === "ips_va" || m.key === "competitive") && selectedCategory !== "monitors") return false
             if (m.key === "soundTyping" && selectedCategory !== "switches") return false
-            if ((m.key === "mechanical" || m.key === "magnetic") && selectedCategory !== "keyboard") return false
-            if ((m.key === "performance" || m.key === "recommended") && selectedCategory === "keyboard") return false
-            if ((m.key === "performance" || m.key === "recommended") && selectedCategory === "monitors") return false
+            if (m.key === "mechanical" && selectedCategory !== "keyboard") return false
+            if (m.key === "magnetic" && selectedCategory !== "keyboard" && selectedCategory !== "mouse") return false
+            if (m.key === "performance" && (selectedCategory === "keyboard" || selectedCategory === "monitors")) return false
+            if (m.key === "recommended" && !RECOMMENDED_TAB_CATEGORIES.includes(selectedCategory)) return false
             return true
           }).map((mode) => (
             <button

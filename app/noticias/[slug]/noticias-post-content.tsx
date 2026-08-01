@@ -291,7 +291,7 @@ export function NoticiasPostContent({
     // inicial do onAuthStateChange pode nunca disparar, travando a caixa de
     // comentário num skeleton eterno. Depois de alguns segundos, assume-se
     // deslogado — se o evento chegar depois, o estado ainda é atualizado.
-    const timeout = setTimeout(() => setAuthLoading(false), 4000)
+    const timeout = setTimeout(() => setAuthLoading(false), 6000)
 
     const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
       clearTimeout(timeout)

@@ -1,8 +1,8 @@
 "use server"
 
 import { headers } from "next/headers"
-import { redirect } from "next/navigation"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
 import { LGPD_POLICY_VERSION } from "@/lib/lgpd"
 import {
@@ -20,22 +20,34 @@ import {
 } from "@/lib/server/repositories/users-repository"
 import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
 
-export type RegisterState = { error: string | null; needsConfirmation?: boolean }
+export type RegisterState = {
+  error: string | null
+  needsConfirmation?: boolean
+  /**
+   * Ecoa de volta os campos não sensíveis que a pessoa preencheu, para o form
+   * poder repopulá-los depois de um erro. `<form action={fn}>` (React 19)
+   * reseta os campos não controlados assim que a action termina — mesmo em
+   * erro — então sem isso o usuário perdia tudo e tinha que digitar de novo.
+   * Senha nunca entra aqui: nem por LGPD (minimização, Art. 6, VI) nem por
+   * segurança faz sentido ela voltar do servidor pro client.
+   */
+  values?: { displayName: string; email: string }
+}
 
 /** Erro do `auth.signUp`, na forma em que o supabase-js devolve. */
 type SignUpError = { message: string; code?: string; status?: number }
 
 /**
- * Traduz a falha do `auth.signUp` num código que o formulário sabe exibir, e
- * diz se a culpa é do servidor.
+ * Traduz a falha do `auth.admin.createUser` num código que o formulário sabe
+ * exibir, e diz se a culpa é do servidor.
  *
  * Antes tudo virava `signup_failed` ("Não foi possível concluir o cadastro"),
  * o que mandava a pessoa tentar de novo sem dizer o que houve — inclusive
- * quando tentar de novo não ia adiantar. O caso real mais comum é
- * `over_email_send_rate_limit`: o Supabase recusa o cadastro porque a cota de
- * e-mails do projeto acabou, e o e-mail de confirmação não sai. Não tem
- * relação nenhuma com o que foi digitado, e o cadastro por Google/Discord
- * continua funcionando (não manda e-mail).
+ * quando tentar de novo não ia adiantar. `over_email_send_rate_limit` não é
+ * mais alcançável aqui porque a criação da conta (admin API) não depende do
+ * envio de e-mail — fica só como salvaguarda caso o Supabase mude esse
+ * comportamento. O envio do e-mail de confirmação agora é best-effort,
+ * separado da criação da conta (ver `registerUserAction`).
  *
  * `serverFault` marca as falhas que não são culpa de quem se cadastrou: elas
  * são logadas como erro e devolvem a tentativa ao rate limit.
@@ -84,23 +96,24 @@ export async function registerUserAction(
   const confirmPassword = String(formData.get("confirm_password") || "")
   const displayName = clean(formData.get("display_name"))
   const lgpdConsent = formData.get("lgpd_consent") === "on"
+  const values = { displayName, email }
 
   if (!lgpdConsent) {
-    return { error: "lgpd_consent_required" }
+    return { error: "lgpd_consent_required", values }
   }
 
   if (!email || !password || !displayName) {
-    return { error: "missing_fields" }
+    return { error: "missing_fields", values }
   }
 
   // O nome é único no site (ele vira a URL do perfil). Verificar antes do
   // signUp evita criar o usuário no Auth e falhar depois, ao gravar o perfil.
   const invalidName = validateDisplayName(displayName)
   if (invalidName) {
-    return { error: invalidName }
+    return { error: invalidName, values }
   }
   if (!(await isDisplayNameAvailable(displayName))) {
-    return { error: "display_name_taken" }
+    return { error: "display_name_taken", values }
   }
 
   const headersList = await headers()
@@ -113,16 +126,16 @@ export async function registerUserAction(
     windowSeconds: 3600,
   })
   if (!rateLimit.allowed) {
-    return { error: "too_many_attempts" }
+    return { error: "too_many_attempts", values }
   }
 
   const relaxed = isLocalhostHost(headersList.get("host"))
   const passwordError = validatePassword(password, relaxed)
   if (passwordError) {
-    return { error: passwordError }
+    return { error: passwordError, values }
   }
   if (password !== confirmPassword) {
-    return { error: "password_mismatch" }
+    return { error: "password_mismatch", values }
   }
 
   // Dados de compra (cadastro completo) — todos opcionais.
@@ -147,36 +160,55 @@ export async function registerUserAction(
   const consentAt = new Date().toISOString()
 
   const supabase = await createSupabaseServerClient()
-  const { data, error } = await supabase.auth.signUp({
+  const adminClient = createSupabaseAdminClient()
+
+  // Cria a conta via admin API: ao contrário de `auth.signUp`, isso nunca
+  // dispara e-mail — a criação da conta deixa de depender da cota de envio
+  // do provedor. O e-mail de confirmação é enviado à parte, logo abaixo,
+  // como tentativa best-effort que não bloqueia o cadastro.
+  const { data, error } = await adminClient.auth.admin.createUser({
     email,
     password,
-    options: { data: { full_name: purchase.fullName || displayName } },
+    email_confirm: false,
+    user_metadata: { full_name: purchase.fullName || displayName },
   })
 
   if (error) {
-    if (/already registered|already exists|User already/i.test(error.message)) {
+    if (error.code === "email_exists" || /already registered|already exists|User already/i.test(error.message)) {
       // Não revela que o email já está cadastrado (evita enumeração de contas) —
       // responde com o mesmo estado de um cadastro novo pendente de confirmação.
-      return { error: null, needsConfirmation: true }
+      return { error: null, needsConfirmation: true, values }
     }
 
     const { state, serverFault } = mapSignUpError(error)
     // O erro real só existia aqui dentro: sem este log, uma indisponibilidade do
     // provedor de e-mail chegava ao suporte como "erro genérico ao cadastrar".
     console.error(
-      "[register] auth.signUp falhou:",
+      "[register] auth.admin.createUser falhou:",
       JSON.stringify({ status: error.status, code: error.code, message: error.message, state })
     )
     if (serverFault) {
       await refundRateLimitAttempt(rateLimit.attemptId)
     }
-    return { error: state }
+    return { error: state, values }
   }
 
   if (!data.user) {
-    console.error("[register] auth.signUp retornou sem usuário e sem erro.")
+    console.error("[register] auth.admin.createUser retornou sem usuário e sem erro.")
     await refundRateLimitAttempt(rateLimit.attemptId)
-    return { error: "signup_unavailable" }
+    return { error: "signup_unavailable", values }
+  }
+
+  // Envia o e-mail de confirmação. Best-effort: se o provedor estiver sem
+  // cota, a conta já foi criada mesmo assim — a tela de "conta criada" tem
+  // um botão de reenvio (`resendConfirmationAction`) para esse caso.
+  try {
+    const { error: resendError } = await supabase.auth.resend({ type: "signup", email })
+    if (resendError) {
+      console.error("[register] resend do e-mail de confirmação falhou:", resendError.message)
+    }
+  } catch (resendException) {
+    console.error("[register] resend do e-mail de confirmação lançou exceção:", resendException)
   }
 
   // Cria o perfil com o registro de consentimento LGPD.
@@ -208,13 +240,50 @@ export async function registerUserAction(
     ipAddress,
   })
 
-  // `auth.signUp` sempre cria um id novo: este é sempre um cadastro genuíno,
+  // A admin API sempre cria um id novo: este é sempre um cadastro genuíno,
   // então concede a medalha de qualquer evento ativo (ex: "Pioneiro").
   await awardEligibleEventMedals(data.user.id)
 
-  if (!data.session) {
-    return { error: null, needsConfirmation: true }
+  // O Supabase não permite sessão para email não confirmado (verificado por
+  // completo: `signInWithPassword` recusa com "Email not confirmed" mesmo com
+  // "Confirm email" desativado no projeto — a checagem é sobre o
+  // `confirmed_at` do próprio usuário, não sobre a configuração do projeto).
+  // A pessoa entra depois de clicar no link; aqui só confirmamos que a conta
+  // foi criada com sucesso.
+  return { error: null, needsConfirmation: true, values }
+}
+
+export type ResendConfirmationState = { error: string | null; success: boolean }
+
+/**
+ * Reenvia o e-mail de confirmação a partir da tela de "conta criada".
+ *
+ * Não exige sessão (a pessoa ainda não confirmou, então não tem uma) — o
+ * rate limit é o próprio `auth.resend` do Supabase, do mesmo jeito que
+ * `forgotPasswordAction` (app/forgot-password/actions.ts) já faz para o
+ * link de recuperação de senha. Sempre responde de forma genérica quando o
+ * Supabase aceita a chamada, sem revelar se a conta existe ou já foi
+ * confirmada (evita enumeração de contas).
+ */
+export async function resendConfirmationAction(
+  _: ResendConfirmationState,
+  formData: FormData
+): Promise<ResendConfirmationState> {
+  const email = clean(formData.get("email")).toLowerCase()
+  if (!email) {
+    return { error: "missing_fields", success: false }
   }
 
-  redirect("/forum")
+  const supabase = await createSupabaseServerClient()
+  const { error } = await supabase.auth.resend({ type: "signup", email })
+
+  if (error) {
+    console.error("[resend-confirmation] auth.resend falhou:", error.status, error.message)
+    if (error.status === 429 || /rate limit|too many/i.test(error.message)) {
+      return { error: "email_send_limit", success: false }
+    }
+    return { error: "resend_failed", success: false }
+  }
+
+  return { error: null, success: true }
 }

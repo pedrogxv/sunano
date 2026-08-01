@@ -26,12 +26,22 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ""
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
 
 export const supabaseAuth = createBrowserClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    // O lock padrão (Web Locks) causa travas de 5s em refresh rápido quando
-    // uma navegação anterior deixa um lock órfão. Como o site não depende de
-    // coordenação de refresh entre abas, um lock no-op é seguro.
-    lock: <R>(_name: string, _acquireTimeout: number, fn: () => Promise<R>) => fn(),
-  },
+  // NÃO sobrescrever `auth.lock`: o `navigatorLock` padrão (Web Locks API) é
+  // quem dá a esse client sua ÚNICA forma de recuperação quando uma
+  // navegação anterior deixa a flag interna `lockAcquired` do gotrue-js
+  // travada (ex.: componente desmontado no meio de um refresh). Ele detecta
+  // o lock órfão após `lockAcquireTimeout` (5s) e o "rouba" (`steal: true`)
+  // — ver node_modules/@supabase/auth-js/src/lib/locks.ts, supabase/supabase#42505.
+  //
+  // Uma versão anterior deste client usava um lock no-op pra evitar a espera
+  // de 5s nesse cenário, mas isso removia o `steal` junto: sem ele, a flag
+  // `lockAcquired` fica travada PARA SEMPRE, e como o client é um singleton
+  // do módulo, toda chamada de auth futura no app inteiro (inclusive o
+  // `onAuthStateChange` de um `AuthUser` remontado ao voltar do /admin para
+  // uma rota pública) fica pendurada atrás dela — o ícone da topbar nunca
+  // sai do skeleton e páginas como o fórum, que têm um timeout de segurança,
+  // chegam a mostrar "entrar" para quem já está logado. Preferível a espera
+  // de até 5s (rara, e que se autocorrige) a um travamento permanente.
 })
 
 function clearSupabaseCookies() {

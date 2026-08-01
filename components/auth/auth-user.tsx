@@ -49,9 +49,18 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
     // A sessão (login/logout) é observada pelo cliente de autenticação; os
     // dados do perfil vêm do endpoint /api/auth/me — nunca de uma query direta
     // ao Supabase a partir do navegador.
+    //
+    // O evento inicial do onAuthStateChange normalmente chega na hora, mas na
+    // pior das hipóteses (lock órfão do gotrue-js sendo recuperado via
+    // `steal`, ver lib/client/supabase-auth.ts) pode levar até uns 5s. Depois
+    // de 6s assume-se deslogado para não deixar o ícone girando pra sempre —
+    // se o evento chegar depois, o estado é corrigido.
+    const timeout = setTimeout(() => setReady(true), 6000)
+
     const {
       data: { subscription },
     } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
+      clearTimeout(timeout)
       if (session?.user) {
         // Sessão aal1 com 2FA pendente: o usuário ainda não se autenticou
         // completamente — tratar como anônimo até concluir o segundo fator.
@@ -85,7 +94,10 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
       setReady(true)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      clearTimeout(timeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   if (!ready) {

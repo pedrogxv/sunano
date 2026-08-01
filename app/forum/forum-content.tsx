@@ -64,7 +64,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
     // inicial do onAuthStateChange pode nunca disparar, travando a UI de
     // aura/comentários num skeleton eterno. Depois de alguns segundos,
     // assume-se deslogado — se o evento chegar depois, o estado é atualizado.
-    const timeout = setTimeout(() => setAuthLoading(false), 4000)
+    const timeout = setTimeout(() => setAuthLoading(false), 6000)
 
     const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
       clearTimeout(timeout)

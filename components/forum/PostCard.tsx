@@ -91,9 +91,9 @@ export function PostCard({
         <Link href={`/forum/${post.slug}`} aria-label="Ver post" className="absolute inset-0 z-0 rounded-xl" />
       )}
 
-      <div className="relative z-10 flex items-start gap-3 p-4">
+      <div className={`relative z-10 flex items-start gap-3 p-4 ${clickable ? "pointer-events-none" : ""}`}>
         {/* Coluna de Aura — lateralizada à esquerda, no lugar da antiga coluna de voto */}
-        <div className="relative z-10">
+        <div className="relative z-10 pointer-events-auto">
           <AuraButton
             auraCount={post.aura_count}
             given={auraGiven}
@@ -141,7 +141,7 @@ export function PostCard({
           )}
 
           {youtubeId && (
-            <div className="relative z-10 mt-3 aspect-video overflow-hidden rounded-lg border border-border/50">
+            <div className="relative z-10 mt-3 aspect-video overflow-hidden rounded-lg border border-border/50 pointer-events-auto">
               <iframe
                 src={`https://www.youtube.com/embed/${youtubeId}`}
                 title="Vídeo do post"
@@ -152,7 +152,7 @@ export function PostCard({
             </div>
           )}
 
-          <div className="relative z-10 mt-3 flex items-center gap-2">
+          <div className="relative z-10 mt-3 flex items-center gap-2 pointer-events-auto">
             <span className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground">
               <MessageCircle className="size-3.5" />
               {post.comment_count}

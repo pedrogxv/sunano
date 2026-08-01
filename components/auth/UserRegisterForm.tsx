@@ -1,11 +1,16 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import Link from "next/link"
 
-import { registerUserAction, type RegisterState } from "@/app/register/actions"
+import {
+  registerUserAction,
+  resendConfirmationAction,
+  type RegisterState,
+  type ResendConfirmationState,
+} from "@/app/register/actions"
 import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { Button } from "@/components/ui/button"
@@ -32,7 +37,16 @@ const REGISTER_ERRORS: Record<string, string> = {
   invalid_email: "Esse endereço de email não é válido. Confira e tente novamente.",
 }
 
+const RESEND_ERRORS: Record<string, string> = {
+  missing_fields: "Não foi possível identificar o email. Recarregue a página e tente de novo.",
+  email_send_limit: "O limite de envios do nosso provedor de email foi atingido. Tente de novo em alguns minutos.",
+  resend_failed: "Não foi possível reenviar agora. Tente de novo em instantes.",
+}
+
+const RESEND_COOLDOWN_SECONDS = 60
+
 const initialState: RegisterState = { error: null }
+const initialResendState: ResendConfirmationState = { error: null, success: false }
 
 function RegisterSubmitButton() {
   const { pending } = useFormStatus()
@@ -40,6 +54,47 @@ function RegisterSubmitButton() {
     <Button className="w-full" disabled={pending} type="submit">
       {pending ? "Criando conta…" : "Criar conta"}
     </Button>
+  )
+}
+
+function ResendConfirmationForm({ email }: { email: string }) {
+  const [state, action, pending] = useActionState(resendConfirmationAction, initialResendState)
+  const [cooldown, setCooldown] = useState(0)
+
+  useEffect(() => {
+    if (state.success || state.error) {
+      setCooldown(RESEND_COOLDOWN_SECONDS)
+    }
+  }, [state])
+
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const timer = setInterval(() => setCooldown((c) => Math.max(0, c - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [cooldown])
+
+  return (
+    <form action={action} className="space-y-2">
+      <input type="hidden" name="email" value={email} />
+      <Button
+        type="submit"
+        variant="outline"
+        className="w-full"
+        disabled={pending || cooldown > 0}
+      >
+        {cooldown > 0 ? `Aguarde ${cooldown}s` : pending ? "Enviando…" : "Reenviar email de confirmação"}
+      </Button>
+      {state.success && (
+        <p className="text-center text-xs text-green-600 dark:text-green-400">
+          Email reenviado! Verifique sua caixa de entrada.
+        </p>
+      )}
+      {state.error && (
+        <p className="text-center text-xs text-destructive">
+          {RESEND_ERRORS[state.error] ?? RESEND_ERRORS.resend_failed}
+        </p>
+      )}
+    </form>
   )
 }
 
@@ -65,6 +120,22 @@ export function UserRegisterForm() {
   const [lgpdConsent, setLgpdConsent] = useState(false)
   const [relaxed, setRelaxed] = useState(false)
 
+  // `<form action={fn}>` reseta os campos não controlados assim que a action
+  // termina, mesmo em erro (comportamento do React, não um bug do form). Para
+  // repopular nome/email depois de um erro é preciso remontar os inputs com
+  // `defaultValue` atualizado — daí o `key`, que só muda a cada resposta nova
+  // da action (não no mount inicial, por isso o `isFirstRender`).
+  const [formKey, setFormKey] = useState(0)
+  const isFirstRender = useRef(true)
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    setFormKey((key) => key + 1)
+  }, [state])
+
   useEffect(() => {
     setRelaxed(isLocalhostHost(window.location.host))
   }, [])
@@ -78,6 +149,7 @@ export function UserRegisterForm() {
         <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-4 text-sm text-green-600 dark:text-green-400">
           Conta criada! Enviamos um email de confirmação — confirme seu endereço e depois faça login.
         </div>
+        {state.values?.email && <ResendConfirmationForm email={state.values.email} />}
         <Link href="/login" className="block text-center text-sm text-primary hover:underline">
           Ir para o login
         </Link>
@@ -99,7 +171,7 @@ export function UserRegisterForm() {
         </div>
       </div>
 
-      <form action={action} className="space-y-4">
+      <form key={formKey} action={action} className="space-y-4">
         <div className="space-y-1.5">
           <Field
             id="display_name"
@@ -108,6 +180,7 @@ export function UserRegisterForm() {
             autoComplete="nickname"
             placeholder="Como você quer aparecer"
             maxLength={DISPLAY_NAME_MAX_LENGTH}
+            defaultValue={state.values?.displayName}
             required
           />
           <p className="text-xs text-muted-foreground">
@@ -120,6 +193,7 @@ export function UserRegisterForm() {
           type="email"
           autoComplete="email"
           placeholder="voce@exemplo.com"
+          defaultValue={state.values?.email}
           required
         />
         <div className="space-y-1.5">

@@ -134,7 +134,9 @@ export default function AdminEventsPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground">
-                      Primeiros {e.maxParticipants.toLocaleString("pt-BR")} cadastros
+                      {e.criteriaType === "manual_opt_in"
+                        ? "Resgate manual"
+                        : `Primeiros ${e.maxParticipants.toLocaleString("pt-BR")} cadastros`}
                     </span>
                   </td>
                   <td className="px-4 py-3">

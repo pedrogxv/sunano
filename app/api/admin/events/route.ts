@@ -10,6 +10,7 @@ const createEventSchema = z.object({
   imageUrl: z.string().url().optional().nullable(),
   rarity: z.enum(["common", "rare", "epic", "legendary"]).optional().default("legendary"),
   maxParticipants: z.number().int().positive(),
+  criteriaType: z.enum(["first_n_signups", "manual_opt_in"]).optional().default("first_n_signups"),
 })
 
 export async function GET() {
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
       imageUrl: parsed.data.imageUrl ?? null,
       rarity: parsed.data.rarity,
       maxParticipants: parsed.data.maxParticipants,
+      criteriaType: parsed.data.criteriaType,
     })
     return NextResponse.json({ event })
   } catch {

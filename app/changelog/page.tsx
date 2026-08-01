@@ -6,7 +6,9 @@ import { Changelog1, type ChangelogColor, type ChangelogEntry } from "@/componen
 import { useT } from "@/lib/use-t"
 
 // Um ícone + cor por período, na mesma ordem (mais recente primeiro) das
-// entradas em lib/i18n.ts — julho, junho, maio, abril.
+// entradas em lib/i18n.ts — agosto, julho, junho, maio, abril. Cicla a cada
+// 4 entradas (index % length), então a mais nova sempre herda o estilo da
+// que antes era a mais recente.
 const PERIOD_STYLE: { icon: ChangelogEntry["icon"]; color: ChangelogColor }[] = [
   { icon: Rocket, color: "emerald" },
   { icon: ShieldCheck, color: "violet" },

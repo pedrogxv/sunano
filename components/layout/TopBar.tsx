@@ -3,6 +3,7 @@
 import type { SVGProps } from "react"
 import { Check, ChevronDown, Globe, Moon, PanelLeft, Send, Sun, Youtube } from "lucide-react"
 import { usePathname } from "next/navigation"
+import Link from "next/link"
 import dynamic from "next/dynamic"
 import {
   DropdownMenu,
@@ -12,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Code-split: o AuthUser puxa o cliente Supabase (@supabase/ssr), pesado e
 // desnecessário para a primeira pintura. Carregá-lo sob demanda tira esse
@@ -71,7 +73,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/offers":            { title: "Promoções", description: "Promoções e descontos selecionados do Telegram." },
   "/forum":             { title: "Fórum", description: "Discussões e perguntas da comunidade." },
   "/pessoas":           { title: "Pessoas", description: "Encontre outros membros, veja os destaques e siga quem você curte." },
-  "/eventos":           { title: "Eventos Ativos", description: "Medalhas e conquistas por tempo limitado." },
+  "/eventos":           { title: "Eventos", description: "Medalhas e conquistas por tempo limitado." },
   "/perfil":            { title: "Meu Perfil", description: "Identidade e vitrine pública." },
   "/conta":             { title: "Conta e segurança", description: "Acesso, preferências e privacidade." },
   "/videos":            { title: "Vídeos", description: "Conteúdo em vídeo do canal." },
@@ -90,6 +92,36 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/eventos":     { title: "Eventos", description: "Gerencie os eventos que concedem medalhas automaticamente." },
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
   "/admin/login":       { title: "Login" },
+}
+
+/**
+ * Selo permanente de fase Alpha — visível em toda página (via `TopBar`,
+ * renderizado globalmente pelo `LayoutShell`), independente do título da
+ * rota. Leva pro changelog: é o lugar que explica o que "alpha" significa
+ * e o que já mudou.
+ */
+function AlphaBadge() {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Link
+          href="/changelog"
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-violet-400/40 bg-gradient-to-r from-violet-500/15 to-fuchsia-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-violet-300 transition-colors hover:from-violet-500/25 hover:to-fuchsia-500/25"
+        >
+          <span className="relative flex size-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+            <span className="relative inline-flex size-1.5 rounded-full bg-violet-400" />
+          </span>
+          Alpha
+        </Link>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p className="max-w-[220px] text-xs">
+          O Sunano está em fase Alpha: em construção ativa. Clique pra ver o changelog.
+        </p>
+      </TooltipContent>
+    </Tooltip>
+  )
 }
 
 function getPageDefaults(pathname: string): PageDefaults {
@@ -170,7 +202,10 @@ export function TopBar() {
           </button>
           <div className={cn("h-8 w-px shrink-0 bg-border", !isAdmin && "md:hidden")} />
           <div className="min-w-0 flex flex-col justify-center leading-tight">
-            <span className="truncate text-sm font-semibold tracking-tight text-foreground">{pageTitle}</span>
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-semibold tracking-tight text-foreground">{pageTitle}</span>
+              <AlphaBadge />
+            </div>
             {pageDescription && (
               <span className="truncate text-xs text-muted-foreground">{pageDescription}</span>
             )}

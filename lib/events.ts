@@ -8,7 +8,7 @@
 
 import type { MedalRarity } from "@/lib/profile-showcase"
 
-export type EventCriteriaType = "first_n_signups"
+export type EventCriteriaType = "first_n_signups" | "manual_opt_in"
 
 /**
  * Evento com os dados da medalha já resolvidos (join com `medals`) — é o que
@@ -31,7 +31,8 @@ export type EventDisplay = {
   endDate: string | null
 }
 
-/** Rótulo curto do critério — só existe um tipo hoje, mas mantém o mapa pronto para o próximo. */
+/** Rótulo curto do critério, usado no admin e na página pública. */
 export const EVENT_CRITERIA_LABEL: Record<EventCriteriaType, string> = {
   first_n_signups: "Primeiros N usuários cadastrados no site",
+  manual_opt_in: "Resgate manual (usuário clica em Resgatar)",
 }

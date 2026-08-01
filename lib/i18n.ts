@@ -1327,6 +1327,23 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "Agosto 2026",
+          date: "1º de agosto",
+          title: "Sunano entra em fase Alpha",
+          description: "Hoje marca o lançamento oficial da fase Alpha do Sunano — o site ganha uma tag permanente no topo pra deixar isso claro, junto com um mês inteiro de novidades em eventos, fórum, conta e segurança.",
+          items: [
+            'Lançamento da fase Alpha, com tag permanente no topo do site',
+            'Eventos com resgate manual: além da concessão automática, agora dá pra clicar em "Resgatar" enquanto houver vagas',
+            "Sistema de auras (reações) no fórum",
+            "Consentimento LGPD com registro e verificação, além de auditoria de conformidade",
+            "Exclusão de conta com confirmação por e-mail",
+            'Badge animado "VIP+" no perfil público e suporte a handles de YouTube/TikTok',
+            'Nova categoria PCB e modos de classificação "IPS/VA" e "competitivo" para periféricos',
+            "Ofertas do Telegram lidas direto do canal público, sem depender da Bot API",
+            "Correções de cadastro, login e uploads com mensagens de erro mais claras",
+          ],
+        },
+        {
           version: "Julho 2026",
           date: "29 de julho",
           title: "Perfis sociais, curtidas e mais segurança",
@@ -2049,6 +2066,23 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "August 2026",
+          date: "August 1",
+          title: "Sunano enters Alpha",
+          description: "Today marks the official Alpha launch of Sunano — the site now carries a permanent tag up top to make that clear, alongside a full month of updates to events, forum, account, and security.",
+          items: [
+            "Alpha launch, with a permanent tag at the top of the site",
+            'Manual event claims: besides automatic awards, you can now click "Claim" while spots remain',
+            "Forum aura (reactions) system",
+            "LGPD consent flow with logging and verification, plus a compliance audit",
+            "Account deletion with email confirmation",
+            'Animated "VIP+" badge on public profiles and YouTube/TikTok handle support',
+            'New PCB category and "IPS/VA" and "competitive" rating modes for peripherals',
+            "Telegram offers now read straight from the public channel, no more Bot API dependency",
+            "Clearer error messages for signup, login, and uploads",
+          ],
+        },
         {
           version: "July 2026",
           date: "July 29",

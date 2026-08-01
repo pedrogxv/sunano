@@ -113,6 +113,7 @@ export type EventInput = {
   imageUrl: string | null
   rarity: MedalRarity
   maxParticipants: number
+  criteriaType: EventCriteriaType
 }
 
 /** Cria a medalha do evento e o evento em si (nessa ordem, por causa da FK). */
@@ -142,7 +143,7 @@ export async function createEvent(input: EventInput): Promise<EventDisplay> {
     .insert({
       slug: eventSlug,
       medal_id: medal.id,
-      criteria_type: "first_n_signups" satisfies EventCriteriaType,
+      criteria_type: input.criteriaType,
       max_participants: input.maxParticipants,
       active: true,
     })
@@ -213,6 +214,53 @@ export async function deleteEvent(id: string): Promise<void> {
  *
  * Nunca lança: um erro aqui não pode derrubar o cadastro/login do usuário.
  */
+/** IDs das medalhas que o usuário já possui — usado em `/eventos` para marcar quais já foram resgatadas. */
+export async function getClaimedMedalIds(userId: string): Promise<string[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.from("user_medals").select("medal_id").eq("user_id", userId)
+  if (error || !data) return []
+  return data.map((row) => row.medal_id)
+}
+
+export type ClaimEventResult =
+  | { ok: true; event: EventDisplay }
+  | { ok: false; reason: "not_found" | "not_manual" | "unavailable" }
+
+/**
+ * Resgate manual, disparado pelo clique do usuário em `/eventos`
+ * (`POST /api/eventos/[id]/claim`). Só eventos `manual_opt_in` podem ser
+ * resgatados assim — `first_n_signups` continua exclusivo de
+ * `awardEligibleEventMedals`, chamado no login/cadastro.
+ *
+ * A concessão em si reaproveita `claim_event_medal`: a função já é atômica
+ * (trava a linha do evento) e idempotente (clique duplicado não conta vaga
+ * duas vezes), então não precisa de uma variante nova no banco — só o
+ * gate de critério abaixo, decidido na aplicação.
+ */
+export async function claimEventManually(userId: string, eventId: string): Promise<ClaimEventResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: row, error } = await db
+    .from("events")
+    .select("criteria_type")
+    .eq("id", eventId)
+    .maybeSingle()
+
+  if (error || !row) return { ok: false, reason: "not_found" }
+  if (row.criteria_type !== "manual_opt_in") return { ok: false, reason: "not_manual" }
+
+  const { data: claimed, error: rpcError } = await db.rpc("claim_event_medal", {
+    p_event_id: eventId,
+    p_user_id: userId,
+  })
+  if (rpcError) throw rpcError
+  if (!claimed) return { ok: false, reason: "unavailable" }
+
+  const event = await getEventForAdmin(eventId)
+  if (!event) return { ok: false, reason: "not_found" }
+  return { ok: true, event }
+}
+
 export async function awardEligibleEventMedals(userId: string): Promise<void> {
   try {
     const db = createSupabaseAdminClient()

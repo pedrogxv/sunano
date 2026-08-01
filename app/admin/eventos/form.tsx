@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import type { EventDisplay } from "@/lib/events"
+import type { EventCriteriaType, EventDisplay } from "@/lib/events"
 import type { MedalRarity } from "@/lib/profile-showcase"
 
 interface EventFormProps {
@@ -31,6 +31,19 @@ const RARITY_OPTIONS: Array<{ value: MedalRarity; label: string }> = [
   { value: "legendary", label: "Lendário (dourado)" },
 ]
 
+const CRITERIA_OPTIONS: Array<{ value: EventCriteriaType; label: string; hint: string }> = [
+  {
+    value: "first_n_signups",
+    label: "Automático — primeiros N cadastros",
+    hint: "A medalha é concedida sozinha no cadastro/login enquanto houver vagas. Ninguém precisa clicar em nada.",
+  },
+  {
+    value: "manual_opt_in",
+    label: "Manual — usuário clica em Resgatar",
+    hint: "A medalha só é concedida quando o usuário logado clica em \"Resgatar\" em /eventos, enquanto houver vagas.",
+  },
+]
+
 export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -42,6 +55,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
     rarity: event?.rarity ?? ("legendary" as MedalRarity),
     maxParticipants: event?.maxParticipants?.toString() ?? "1000",
     active: event?.active !== false,
+    criteriaType: event?.criteriaType ?? ("first_n_signups" as EventCriteriaType),
   })
 
   const [imageUrl, setImageUrl] = useState<string | null>(event?.imageUrl ?? null)
@@ -95,7 +109,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         imageUrl,
         rarity: formData.rarity,
         maxParticipants,
-        ...(event ? { active: formData.active } : {}),
+        ...(event ? { active: formData.active } : { criteriaType: formData.criteriaType }),
       }
 
       const url = event ? `/api/admin/events/${event.id}` : "/api/admin/events"
@@ -135,14 +149,36 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         </Alert>
       )}
 
-      <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
-        <p className="text-xs font-semibold text-muted-foreground">
-          Critério: Primeiros N usuários cadastrados no site
-        </p>
-        <p className="mt-1 text-[10px] text-muted-foreground/70">
-          A medalha é concedida automaticamente no cadastro enquanto o evento estiver ativo e o número de vagas não tiver sido preenchido.
-        </p>
-      </div>
+      {event ? (
+        <div className="rounded-xl border border-border bg-muted/20 px-4 py-3">
+          <p className="text-xs font-semibold text-muted-foreground">
+            Critério: {CRITERIA_OPTIONS.find((c) => c.value === event.criteriaType)?.label}
+          </p>
+          <p className="mt-1 text-[10px] text-muted-foreground/70">
+            O critério não pode ser alterado depois de criado.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label>Como a medalha é concedida *</Label>
+          <Select
+            value={formData.criteriaType}
+            onValueChange={(v) => set("criteriaType", v as EventCriteriaType)}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CRITERIA_OPTIONS.map((c) => (
+                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground/60">
+            {CRITERIA_OPTIONS.find((c) => c.value === formData.criteriaType)?.hint}
+          </p>
+        </div>
+      )}
 
       {/* Nome + Raridade */}
       <div className="grid gap-4 md:grid-cols-2">

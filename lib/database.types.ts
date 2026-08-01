@@ -120,7 +120,7 @@ export type Database = {
           id: string
           slug: string
           medal_id: string
-          criteria_type: "first_n_signups"
+          criteria_type: "first_n_signups" | "manual_opt_in"
           max_participants: number
           current_count: number
           active: boolean

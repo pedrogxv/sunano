@@ -46,8 +46,8 @@ export const TIER_THEMES = {
 } as const
 
 export const TAG_COLUMN_COLORS = {
-  competitive: "text-red-300",
-  versatile: "text-cyan-300",
+  competitive: "text-violet-300",
+  versatile: "text-red-300",
   value: "text-emerald-300",
   comfort: "text-amber-300",
   cheap: "text-green-300",
@@ -79,8 +79,8 @@ export const RECOMMENDED_COLUMN_COLORS = {
 } as const
 
 export const CARD_TAG_STYLES = {
-  competitive: { bg: "bg-red-500/15", text: "text-red-300", border: "border-red-500/30", dot: "bg-red-400" },
-  versatile:  { bg: "bg-cyan-500/15",  text: "text-cyan-300",    border: "border-cyan-500/30",    dot: "bg-cyan-400" },
+  competitive: { bg: "bg-violet-500/15", text: "text-violet-300", border: "border-violet-500/30", dot: "bg-violet-400" },
+  versatile:  { bg: "bg-red-500/15",   text: "text-red-300",     border: "border-red-500/30",     dot: "bg-red-400" },
   value:      { bg: "bg-emerald-500/15", text: "text-emerald-300", border: "border-emerald-500/30", dot: "bg-emerald-400" },
   comfort:    { bg: "bg-amber-500/15",  text: "text-amber-300",   border: "border-amber-500/30",   dot: "bg-amber-400" },
   cheap:      { bg: "bg-green-500/15",  text: "text-green-300",   border: "border-green-500/30",   dot: "bg-green-400" },

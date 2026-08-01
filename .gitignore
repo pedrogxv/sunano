@@ -31,9 +31,6 @@ pnpm-debug.log*
 # env files
 .env*.local
 
-# local Claude settings
-.claude/settings.json
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -41,4 +38,6 @@ next-env.d.ts
 # logs de scripts one-off (ex.: scripts/normalize-peripheral-images.ts)
 /normalize-peripheral-images.*.json
 
+# Config local do Claude Code (permissões aprovadas caminho a caminho, paths
+# absolutos desta máquina). Repo público: nada aqui deve ser publicado.
 .claude/

@@ -64,9 +64,15 @@ export type ProfileMedia = {
    * `true` só quando o arquivo é animado E o tier libera animação.
    *
    * Os componentes repassam este valor para `unoptimized` do `next/image`:
-   * o otimizador do Next serve apenas o primeiro quadro de um GIF, então
-   * um GIF de conta comum é renderizado estático sem trabalho extra —
-   * enquanto o de um VIP passa direto e anima.
+   * o GIF de um VIP pula o redimensionamento e chega exatamente como foi
+   * enviado, sem perder quadros na reamostragem.
+   *
+   * Atenção: isto não é mais o que *impede* um GIF de animar. O
+   * redimensionamento agora é feito pelo Supabase Storage (ver
+   * `lib/image-loader.ts`), que preserva a animação — diferente do otimizador
+   * da Vercel, que servia só o primeiro quadro. Quem garante a regra de
+   * "animado só para VIP" é o upload (`app/api/profile/upload-avatar`), que
+   * recusa GIF de conta comum.
    */
   animated: boolean
 }

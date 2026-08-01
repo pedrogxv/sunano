@@ -1,10 +1,10 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
 import { Crown, Eye, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
+import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
 import { profilePath } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
@@ -56,6 +56,7 @@ export function ProfileCard({
   /** Esconde o botão: ninguém segue a si mesmo. */
   isSelf?: boolean
 }) {
+
   const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier)
   const miniBanner = resolveProfileMedia(profile.mini_banner_url, profile.account_tier)
   const initials =
@@ -86,27 +87,24 @@ export function ProfileCard({
       )}
     >
       <Link href={profilePath(profile.display_slug)} className="flex flex-col items-center">
-        {/* Faixa: mini banner quando existe, senão a cor do próprio perfil. */}
+        {/* Faixa: mini banner por cima da cor do próprio perfil. A cor fica
+            sempre no fundo para que uma imagem ausente — ou que falhe ao
+            carregar — descubra o gradiente em vez de um vazio. */}
         <div
           className="relative h-20 w-full overflow-hidden"
-          style={
-            miniBanner.src
-              ? undefined
-              : {
-                  backgroundImage: `linear-gradient(135deg, hsl(${hue} 65% 45% / 0.85), hsl(${(hue + 45) % 360} 60% 30% / 0.55))`,
-                }
-          }
+          style={{
+            backgroundImage: `linear-gradient(135deg, hsl(${hue} 65% 45% / 0.85), hsl(${(hue + 45) % 360} 60% 30% / 0.55))`,
+          }}
         >
-          {miniBanner.src && (
-            <Image
-              src={miniBanner.src}
-              alt=""
-              fill
-              unoptimized={miniBanner.animated}
-              sizes="(max-width: 640px) 50vw, 240px"
-              className="object-cover transition-transform duration-300 group-hover:scale-110"
-            />
-          )}
+          <ImageWithFallback
+            src={miniBanner.src}
+            alt=""
+            fill
+            unoptimized={miniBanner.animated}
+            sizes="(max-width: 640px) 50vw, 240px"
+            className="object-cover transition-transform duration-300 group-hover:scale-110"
+            fallback={null}
+          />
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
         </div>
 
@@ -128,25 +126,24 @@ export function ProfileCard({
               TIER_RING[profile.account_tier]
             )}
           >
-            {avatar.src ? (
-              <Image
-                src={avatar.src}
-                alt={profile.display_name}
-                fill
-                unoptimized={avatar.animated}
-                sizes="86px"
-                className="object-cover"
-              />
-            ) : (
-              <div
-                className="flex size-full items-center justify-center text-2xl font-bold text-white/90"
-                style={{
-                  backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
-                }}
-              >
-                {initials}
-              </div>
-            )}
+            <ImageWithFallback
+              src={avatar.src}
+              alt={profile.display_name}
+              fill
+              unoptimized={avatar.animated}
+              sizes="86px"
+              className="object-cover"
+              fallback={
+                <div
+                  className="flex size-full items-center justify-center text-2xl font-bold text-white/90"
+                  style={{
+                    backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
+                  }}
+                >
+                  {initials}
+                </div>
+              }
+            />
           </div>
 
           <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">

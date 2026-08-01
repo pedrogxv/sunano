@@ -29,11 +29,17 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
 	images: {
-		// Só webp: usar avif+webp dobra as transformações cobradas (cada imagem
-		// é gerada nos dois formatos). Ver vercel.com/docs/image-optimization/managing-image-optimization-costs.
+		// Redimensionamento sai do otimizador da Vercel e passa a ser feito pelo
+		// Supabase Storage — ver lib/image-loader.ts. A cota de transformações da
+		// Vercel estourou e `/_next/image` passou a responder 402, quebrando toda
+		// imagem ainda não cacheada (o cache de 31 dias disfarçava, porque só o
+		// que era enviado depois quebrava).
+		loader: "custom",
+		loaderFile: "./lib/image-loader.ts",
+		// `formats`, `minimumCacheTTL` e `remotePatterns` só valem para o
+		// otimizador nativo, que deixou de ser usado. Ficam registrados para o
+		// caso de o loader ser revertido.
 		formats: ["image/webp"],
-		// Imagens (peripherals, capas de blog/notícias) não mudam de conteúdo na mesma URL,
-		// então cache longo evita retransformar a mesma imagem repetidamente.
 		minimumCacheTTL: 2678400, // 31 dias
 		remotePatterns: [
 			{

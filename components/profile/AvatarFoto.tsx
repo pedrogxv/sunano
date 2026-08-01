@@ -1,5 +1,4 @@
-import Image from "next/image"
-
+import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
 import { cn } from "@/lib/utils"
 
@@ -26,21 +25,20 @@ export function AvatarFoto({ avatarUrl, name, tier, className }: AvatarFotoProps
         className
       )}
     >
-      {src ? (
-        <Image
-          src={src}
-          alt={name}
-          fill
-          priority
-          unoptimized={animated}
-          sizes="128px"
-          className="object-cover"
-        />
-      ) : (
-        <div className="flex size-full items-center justify-center bg-primary/15 text-2xl font-bold text-primary">
-          {initials || "?"}
-        </div>
-      )}
+      <ImageWithFallback
+        src={src}
+        alt={name}
+        fill
+        priority
+        unoptimized={animated}
+        sizes="128px"
+        className="object-cover"
+        fallback={
+          <div className="flex size-full items-center justify-center bg-primary/15 text-2xl font-bold text-primary">
+            {initials || "?"}
+          </div>
+        }
+      />
     </div>
   )
 }

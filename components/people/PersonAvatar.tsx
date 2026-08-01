@@ -1,6 +1,6 @@
-import Image from "next/image"
 import { Crown } from "lucide-react"
 
+import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
 import { cn } from "@/lib/utils"
 import type { PublicProfileSummary } from "@/lib/user-directory"
@@ -37,20 +37,19 @@ export function PersonAvatar({
   return (
     <div className={cn("relative shrink-0", SIZE_CLASSES[size], className)}>
       <div className="relative size-full overflow-hidden rounded-full border border-border bg-primary/15">
-        {src ? (
-          <Image
-            src={src}
-            alt={profile.display_name}
-            fill
-            unoptimized={animated}
-            sizes="56px"
-            className="object-cover"
-          />
-        ) : (
-          <div className="flex size-full items-center justify-center font-bold text-primary">
-            {initials}
-          </div>
-        )}
+        <ImageWithFallback
+          src={src}
+          alt={profile.display_name}
+          fill
+          unoptimized={animated}
+          sizes="56px"
+          className="object-cover"
+          fallback={
+            <div className="flex size-full items-center justify-center font-bold text-primary">
+              {initials}
+            </div>
+          }
+        />
       </div>
       {isVip && (
         <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full border border-background bg-amber-400 p-[3px]">

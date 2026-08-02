@@ -33,6 +33,13 @@ type ForumComment = {
 
 type AuthUser = { id: string; display_name: string; avatar_url: string | null } | null
 
+// Atraso crescente pra comentários entrarem em sequência (stagger) em vez de
+// todos de uma vez só; a partir do 5º comentário, satura no maior atraso.
+const COMMENT_STAGGER_DELAYS = ["", "delay-75", "delay-150", "delay-200", "delay-300"] as const
+function commentStaggerDelay(index: number) {
+  return COMMENT_STAGGER_DELAYS[Math.min(index, COMMENT_STAGGER_DELAYS.length - 1)]
+}
+
 export default function ForumPostPage() {
   const params = useParams<{ slug: string }>()
 
@@ -238,81 +245,87 @@ export default function ForumPostPage() {
           <BoxLoader />
         </div>
       ) : post ? (
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-6">
-          <PostCard
-            post={post}
-            auraGiven={postAuraGiven}
-            auraDisabled={!authUser}
-            onToggleAura={handleTogglePostAura}
-            clickable={false}
-            compact={false}
-          />
+        <div className="space-y-6">
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 motion-reduce:animate-none space-y-6">
+            <PostCard
+              post={post}
+              auraGiven={postAuraGiven}
+              auraDisabled={!authUser}
+              onToggleAura={handleTogglePostAura}
+              clickable={false}
+              compact={false}
+            />
 
-          {/* Comment form */}
-          {!post.is_locked && (
-            <div>
-              {!authLoading && !authUser ? (
-                <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    <Link href="/login" className="font-medium text-primary hover:underline">Entre na sua conta</Link>
-                    {" "}para deixar um comentário.
-                  </p>
-                </div>
-              ) : authUser ? formExpanded ? (
-                <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-                  {formError && (
-                    <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                      {formError}
-                    </div>
-                  )}
-
-                  <Textarea
-                    autoFocus
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    className="min-h-[100px] border-border bg-muted/20"
-                    placeholder="Escreva seu comentário..."
-                  />
-
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setFormExpanded(false)
-                        setBody("")
-                        setFormError(null)
-                      }}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button size="sm" onClick={submitComment} disabled={saving || body.trim().length < 4}>
-                      {saving ? "Enviando…" : "Comentar"}
-                    </Button>
+            {/* Comment form */}
+            {!post.is_locked && (
+              <div>
+                {!authLoading && !authUser ? (
+                  <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      <Link href="/login" className="font-medium text-primary hover:underline">Entre na sua conta</Link>
+                      {" "}para deixar um comentário.
+                    </p>
                   </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setFormExpanded(true)}
-                  className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-card/80"
-                >
-                  <UserAvatar name={authUser.display_name} avatarUrl={authUser.avatar_url} size={6} />
-                  Escreva um comentário...
-                </button>
-              ) : null}
-            </div>
-          )}
+                ) : authUser ? formExpanded ? (
+                  <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+                    {formError && (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        {formError}
+                      </div>
+                    )}
 
-          {post.is_locked && (
-            <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
-              <Lock className="size-4 shrink-0" />
-              Este tópico está bloqueado para novos comentários.
-            </div>
-          )}
+                    <Textarea
+                      autoFocus
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      className="min-h-[100px] border-border bg-muted/20"
+                      placeholder="Escreva seu comentário..."
+                    />
 
-          {/* Comments */}
-          <div id="comments" className="scroll-mt-20">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setFormExpanded(false)
+                          setBody("")
+                          setFormError(null)
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button size="sm" onClick={submitComment} disabled={saving || body.trim().length < 4}>
+                        {saving ? "Enviando…" : "Comentar"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setFormExpanded(true)}
+                    className="flex w-full items-center gap-2.5 rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-card/80"
+                  >
+                    <UserAvatar name={authUser.display_name} avatarUrl={authUser.avatar_url} size={6} />
+                    Escreva um comentário...
+                  </button>
+                ) : null}
+              </div>
+            )}
+
+            {post.is_locked && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
+                <Lock className="size-4 shrink-0" />
+                Este tópico está bloqueado para novos comentários.
+              </div>
+            )}
+          </div>
+
+          {/* Comments — surge logo depois do post, com um leve atraso pra
+              sensação de sequência (não uma seção à parte, "carregada"). */}
+          <div
+            id="comments"
+            className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-2 duration-300 delay-150 motion-reduce:animate-none"
+          >
             <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
               <MessageCircle className="size-4 text-primary" />
               {comments.length} comentário{comments.length !== 1 ? "s" : ""}
@@ -322,10 +335,13 @@ export default function ForumPostPage() {
               <div className="space-y-4">
                 {comments
                   .filter((comment) => !comment.parent_comment_id)
-                  .map((comment) => {
+                  .map((comment, index) => {
                     const replies = comments.filter((c) => c.parent_comment_id === comment.id)
                     return (
-                      <div key={comment.id} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+                      <div
+                        key={comment.id}
+                        className={`animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none ${commentStaggerDelay(index)}`}
+                      >
                         <CommentRow
                           comment={comment}
                           auraGiven={commentAuraGiven.has(comment.id)}
@@ -337,8 +353,11 @@ export default function ForumPostPage() {
 
                         {replies.length > 0 && (
                           <div className="ml-11 mt-3 space-y-3 border-l-2 border-border/40 pl-4">
-                            {replies.map((reply) => (
-                              <div key={reply.id} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+                            {replies.map((reply, replyIndex) => (
+                              <div
+                                key={reply.id}
+                                className={`animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none ${commentStaggerDelay(index + replyIndex + 1)}`}
+                              >
                                 <CommentRow
                                   comment={reply}
                                   auraGiven={commentAuraGiven.has(reply.id)}

@@ -4,10 +4,11 @@ import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Crown, Lock, MessageCircle, Pin, Share2, Sparkles } from "lucide-react"
+import { Crown, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
 
 import { AuraButton } from "@/components/forum/AuraButton"
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
+import { ShareMenu } from "@/components/forum/ShareMenu"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -65,19 +66,6 @@ function extractYoutubeId(url: string): string | null {
     return parsed.searchParams.get("v")
   } catch {
     return null
-  }
-}
-
-async function shareLink(slug: string) {
-  const url = `${window.location.origin}/forum/${slug}`
-  if (navigator.share) {
-    try {
-      await navigator.share({ url })
-    } catch {
-      // usuário cancelou o compartilhamento — nada a fazer
-    }
-  } else {
-    await navigator.clipboard.writeText(url)
   }
 }
 
@@ -190,18 +178,7 @@ export function PostCard({
               <MessageCircle className="size-3.5" />
               {post.comment_count}
             </Link>
-            <button
-              type="button"
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                shareLink(post.slug)
-              }}
-              className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-            >
-              <Share2 className="size-3.5" />
-              Compartilhar
-            </button>
+            <ShareMenu slug={post.slug} body={post.body} />
           </div>
         </div>
       </div>

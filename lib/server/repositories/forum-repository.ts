@@ -141,7 +141,9 @@ export async function listForumPosts(params: {
     query = query.gte("created_at", since)
   }
 
-  query = query.order("is_pinned", { ascending: false })
+  // Post fixado só sobe ao topo na aba "Recente" — em "Em Alta" e "Categoria"
+  // a ordenação continua só por engajamento/data, sem o pin sobrepor o critério.
+  if (tab === "recent") query = query.order("is_pinned", { ascending: false })
   if (tab === "hot") query = query.order("aura_count", { ascending: false })
   query = query.order("created_at", { ascending: false })
   // Sem paginação na UI ainda — limita para não trazer o fórum inteiro a
@@ -570,6 +572,11 @@ export async function updateForumPost(
   const mediaError = validateMedia(updates.media_image_url, updates.media_video_url)
   if (mediaError) return { ok: false, error: mediaError, status: 400 }
 
+  // Só 1 post fixado por vez: fixar este desfixa qualquer outro que já estivesse.
+  if (updates.is_pinned) {
+    await db.from("forum_posts").update({ is_pinned: false }).eq("is_pinned", true).neq("id", existing.id)
+  }
+
   const { error } = await db.from("forum_posts").update(updates).eq("id", existing.id)
 
   if (error) {
@@ -588,7 +595,11 @@ export async function setForumPostFlag(
   const db = createSupabaseAdminClient()
   if (flag === "is_hidden") await db.from("forum_posts").update({ is_hidden: value }).eq("id", postId)
   else if (flag === "is_locked") await db.from("forum_posts").update({ is_locked: value }).eq("id", postId)
-  else await db.from("forum_posts").update({ is_pinned: value }).eq("id", postId)
+  else {
+    // Só 1 post fixado por vez: fixar este desfixa qualquer outro que já estivesse.
+    if (value) await db.from("forum_posts").update({ is_pinned: false }).eq("is_pinned", true).neq("id", postId)
+    await db.from("forum_posts").update({ is_pinned: value }).eq("id", postId)
+  }
 }
 
 /** Oculta/exibe um comentário (moderação). */

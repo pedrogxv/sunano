@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
+import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
 import { profilePath } from "@/lib/profile-name"
@@ -216,31 +217,35 @@ export function ProfileCard({
         )}
 
         <div className="-mt-11 flex flex-col items-center px-3">
-          <div
-            className={cn(
-              "relative size-[86px] overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 group-hover:scale-105",
-              TIER_RING[profile.account_tier]
-            )}
-          >
-            <ImageWithFallback
-              src={avatar.src}
-              alt={profile.display_name}
-              fill
-              unoptimized={avatar.animated}
-              sizes="86px"
-              className="object-cover"
-              fallback={
-                <div
-                  className="flex size-full items-center justify-center text-2xl font-bold text-white/90"
-                  style={{
-                    backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
-                  }}
-                >
-                  {initials}
-                </div>
-              }
-            />
-          </div>
+          {/* Passar o cursor sobre a foto abre o Mini Perfil — o cartão com o
+              fundo próprio da pessoa (ver `MiniProfileCard`). */}
+          <MiniProfileHoverCard slug={profile.display_slug}>
+            <div
+              className={cn(
+                "relative size-[86px] overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 group-hover:scale-105",
+                TIER_RING[profile.account_tier]
+              )}
+            >
+              <ImageWithFallback
+                src={avatar.src}
+                alt={profile.display_name}
+                fill
+                unoptimized={avatar.animated}
+                sizes="86px"
+                className="object-cover"
+                fallback={
+                  <div
+                    className="flex size-full items-center justify-center text-2xl font-bold text-white/90"
+                    style={{
+                      backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
+                    }}
+                  >
+                    {initials}
+                  </div>
+                }
+              />
+            </div>
+          </MiniProfileHoverCard>
 
           <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
             <span className="truncate">{profile.display_name}</span>

@@ -28,18 +28,26 @@ export function Banner({ bannerUrl, tier, className }: BannerProps) {
         className
       )}
     >
+      {/* `object-cover` + `object-center` faz a capa preencher os 100% da
+          largura em qualquer proporção enviada: o excedente é cortado em vez
+          de deixar barra vazia nas laterais. `sizes="100vw"` porque o card
+          ocupa a largura toda do container em todos os breakpoints — declarar
+          1024px fazia o navegador pedir um arquivo estreito demais em telas
+          grandes. */}
       <ImageWithFallback
         src={src}
         alt=""
         fill
         priority
         unoptimized={animated}
-        sizes="(max-width: 768px) 100vw, 1024px"
-        className="object-cover"
+        sizes="100vw"
+        className="h-full w-full object-cover object-center"
         fallback={null}
       />
-      {/* Escurece a base para o avatar e o nome manterem contraste. */}
-      <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent" />
+      {/* Escurece só a faixa de baixo — onde o avatar e o nome se apoiam.
+          Cobrindo o `inset-0` inteiro, o degradê apagava metade da capa e ela
+          parecia meio preta. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-background/70 to-transparent" />
     </div>
   )
 }

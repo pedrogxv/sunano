@@ -3,9 +3,11 @@ import "server-only"
 import { coerceAccountTier } from "@/lib/account-tier"
 import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import type { MiniProfile } from "@/lib/mini-profile"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
 export type { PublicProfileSummary } from "@/lib/user-directory"
+export type { MiniProfile } from "@/lib/mini-profile"
 
 /**
  * Repositório de Perfis — acesso às tabelas `user_profiles` e `admin_profiles`.
@@ -518,6 +520,39 @@ export async function findUserIdByDisplaySlug(slug: string): Promise<string | nu
     .eq("display_slug", normalized)
     .maybeSingle()
   return (data as { id: string } | null)?.id ?? null
+}
+
+/**
+ * Dados do cartão de preview rápido ("Mini Perfil"), resolvidos por slug.
+ *
+ * Existe separado de `getProfileShowcase` porque o cartão é carregado sob
+ * demanda no hover: ele não precisa de setup, medalhas nem favoritos, e
+ * puxar tudo isso a cada passada de mouse sairia caro.
+ */
+export async function getMiniProfileBySlug(slug: string): Promise<MiniProfile | null> {
+  const normalized = slugifyDisplayName(slug)
+  if (!normalized) return null
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_profiles")
+    .select(`${DIRECTORY_COLUMNS}, bio`)
+    .eq("display_slug", normalized)
+    .maybeSingle()
+
+  if (error || !data) {
+    if (error) console.error("[users-repository] getMiniProfileBySlug:", error)
+    return null
+  }
+
+  const row = data as DirectoryRow & { bio: string | null }
+  const [followers, aura] = await Promise.all([
+    countFollowersByUser([row.id]),
+    getAuraByUser([row.id]),
+  ])
+  const summary = toProfileSummary(row, followers[row.id] ?? 0, aura[row.id] ?? 0)
+
+  return { ...summary, bio: row.bio }
 }
 
 /** Resumo do perfil administrativo (usado pela sidebar admin). */

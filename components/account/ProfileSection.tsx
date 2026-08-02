@@ -250,14 +250,17 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       setUploadingMiniBanner(true)
       const body = new FormData()
       body.append("file", file)
-      const res = await fetch("/api/profile/upload-banner", { method: "POST", body })
+      // Rota própria: o fundo do Mini Perfil é uma imagem independente da capa
+      // grande, e trocar uma não pode sobrescrever a outra no bucket.
+      const res = await fetch("/api/profile/upload-mini-banner", { method: "POST", body })
       const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
       if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
       setMiniBannerUrl(data.publicUrl)
-      toast.success("Mini banner enviado")
+      toast.success("Fundo do Mini Perfil enviado")
     } catch (err) {
-      const message = err instanceof Error && err.message ? err.message : "Erro ao enviar mini banner"
-      toast.error("Erro ao enviar mini banner", { description: message })
+      const message =
+        err instanceof Error && err.message ? err.message : "Erro ao enviar o fundo do Mini Perfil"
+      toast.error("Erro ao enviar o fundo do Mini Perfil", { description: message })
     } finally {
       setUploadingMiniBanner(false)
     }
@@ -351,17 +354,16 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       <section className="space-y-4">
         <Card className="border-border bg-card/90 overflow-hidden">
           <CardContent className="space-y-6 pt-6">
-            {/* Banner: preview da página de perfil inteira — a capa aparece no
-                contexto real, com a foto e o mini banner sobrepostos. */}
+            {/* Banner grande: preview da página de perfil inteira — a capa
+                aparece no contexto real, com a foto sobreposta. */}
             <div className="space-y-2">
               <PreviewLabel
                 label="Banner do perfil"
-                hint="Aparece no topo do seu perfil público."
+                hint="Capa do topo do seu perfil público."
               />
 
               <ProfilePagePreview
                 banner={bannerPreview}
-                miniBanner={miniBannerPreview}
                 avatarSrc={avatarPreview}
                 name={previewName}
                 tierLabel={capabilities.label}
@@ -375,10 +377,14 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
               />
             </div>
 
-            {/* Mini banner: preview no formato de card do próprio site — é
-                onde a faixa aparece atrás da foto, em /pessoas. */}
+            {/* Fundo do Mini Perfil: imagem separada da capa, usada só no
+                cartão de preview rápido (hover na foto em /pessoas e no autor
+                de um post do fórum). */}
             <div className="space-y-2">
-              <PreviewLabel label="Foto de Perfil" />
+              <PreviewLabel
+                label="Fundo do Mini Perfil"
+                hint="Aparece no cartão que abre ao passar o mouse na sua foto, em /pessoas e no fórum."
+              />
 
               <MiniBannerCardPreview
                 miniBanner={miniBannerPreview}
@@ -562,13 +568,13 @@ function PreviewLabel({ label, hint }: { label: string; hint?: string }) {
 }
 
 /**
- * Miniatura da página de perfil: capa, foto sobreposta (com o mini banner
- * atrás) e o resto do perfil em cinza. Espelha `components/profile/
- * ProfileShowcase` — mexer lá pede ajustar aqui, senão o preview mente.
+ * Miniatura da página de perfil: capa, foto sobreposta e o resto do perfil em
+ * cinza. Espelha `components/profile/ProfileShowcase` — mexer lá pede ajustar
+ * aqui, senão o preview mente. Sem o fundo do Mini Perfil: ele é outra
+ * feature, e não aparece na página completa.
  */
 function ProfilePagePreview({
   banner,
-  miniBanner,
   avatarSrc,
   name,
   tierLabel,
@@ -581,7 +587,6 @@ function ProfilePagePreview({
   onBannerChange,
 }: {
   banner: ProfileMedia
-  miniBanner: ProfileMedia
   avatarSrc: string | null
   name: string
   tierLabel: string
@@ -608,10 +613,11 @@ function ProfilePagePreview({
             fill
             unoptimized={banner.animated}
             sizes="(max-width: 768px) 100vw, 640px"
-            className="object-cover"
+            className="h-full w-full object-cover object-center"
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-card/70 to-transparent" />
+        {/* Só a base escurece — igual ao `Banner` de verdade. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-card/70 to-transparent" />
         <label
           className={cn(
             "absolute bottom-2 right-2 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
@@ -632,20 +638,6 @@ function ProfilePagePreview({
 
       <div className="flex flex-col items-center px-4 pb-4">
         <div className="relative -mt-10 sm:-mt-12">
-          {miniBanner.src && (
-            <div className="absolute inset-x-[-2.5rem] top-1/2 h-14 -translate-y-1/2 overflow-hidden rounded-xl opacity-70">
-              <Image
-                src={miniBanner.src}
-                alt=""
-                fill
-                unoptimized={miniBanner.animated}
-                sizes="320px"
-                className="object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-card via-transparent to-card" />
-            </div>
-          )}
-
           <div className="relative">
             <Avatar className="size-20 border-4 border-background shadow-xl sm:size-24">
               <AvatarImage src={avatarSrc ?? undefined} alt={name} />

@@ -1,9 +1,7 @@
-import Image from "next/image"
 import Link from "next/link"
 import { Settings, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
-import { resolveProfileMedia } from "@/lib/account-tier"
 import { AvatarFoto } from "./AvatarFoto"
 import { Banner } from "./Banner"
 import { FavoritosGrid } from "./FavoritosGrid"
@@ -30,8 +28,6 @@ export function ProfileShowcase({
   isOwner = false,
   isFollowing = false,
 }: ProfileShowcaseProps) {
-  const miniBanner = resolveProfileMedia(profile.mini_banner_url, profile.account_tier)
-
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
       <div className="overflow-hidden rounded-2xl border border-border bg-card/60">
@@ -39,23 +35,11 @@ export function ProfileShowcase({
 
         {/* Avatar sobreposto: metade dentro, metade fora do banner. */}
         <div className="flex flex-col items-center px-4 pb-6">
+          {/* Só a foto. O fundo do mini perfil (`mini_banner_url`) é outra
+              feature: ele pertence ao cartão de preview rápido
+              (`MiniProfileCard`) e não deve vazar para o perfil completo, que
+              já tem a capa grande logo acima. */}
           <div className="relative -mt-12 sm:-mt-14 md:-mt-16">
-            {/* Mini banner: a mesma faixa do card de /pessoas, atrás do avatar.
-                Sem z-index negativo — assim a faixa não some atrás do fundo do
-                card; quem a cobre é a foto, que vem depois na ordem do DOM. */}
-            {miniBanner.src && (
-              <div className="absolute inset-x-[-2.5rem] top-1/2 h-16 -translate-y-1/2 overflow-hidden rounded-xl opacity-70">
-                <Image
-                  src={miniBanner.src}
-                  alt=""
-                  fill
-                  unoptimized={miniBanner.animated}
-                  sizes="320px"
-                  className="object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-card via-transparent to-card" />
-              </div>
-            )}
             <AvatarFoto
               avatarUrl={profile.avatar_url}
               name={profile.display_name}

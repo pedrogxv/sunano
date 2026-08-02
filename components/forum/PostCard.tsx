@@ -9,6 +9,7 @@ import { Crown, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
 import { AuraButton } from "@/components/forum/AuraButton"
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { ShareMenu } from "@/components/forum/ShareMenu"
+import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -111,7 +112,15 @@ export function PostCard({
       )}
 
       <div className={`relative z-10 flex items-start gap-3 p-4 ${clickable ? "pointer-events-none" : ""}`}>
-        <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
+        {/* `pointer-events-auto` reabre o hover: quando o card inteiro é
+            clicável, a camada acima o desliga para o link de fundo receber o
+            clique — mas a foto do autor precisa continuar reagindo ao cursor
+            para abrir o Mini Perfil. */}
+        <MiniProfileHoverCard slug={post.author_display_slug} side="right" align="start">
+          <span className="pointer-events-auto shrink-0">
+            <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
+          </span>
+        </MiniProfileHoverCard>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">{post.author_display_name}</span>

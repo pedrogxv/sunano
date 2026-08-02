@@ -4,50 +4,43 @@ import Link from "next/link"
 import { Crown, Sparkles } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
-import { formatCount } from "@/components/people/ProfileCard"
+import { ProfileMetrics } from "@/components/people/ProfileCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
-import { profileAccentHue, type PublicProfileSummary } from "@/lib/user-directory"
+import {
+  profileAccentHue,
+  type DirectoryMetric,
+  type PublicProfileSummary,
+} from "@/lib/user-directory"
 
 type Place = 1 | 2 | 3
 
-const PODIUM_STYLE: Record<Place, {
-  ring: string
-  badge: string
-  glow: string
-  order: string
-  pedestal: string
-}> = {
-  1: {
-    ring: "ring-amber-400",
-    badge: "bg-amber-400 text-amber-950",
-    glow: "shadow-[0_0_32px_-8px_rgba(251,191,36,0.6)]",
-    order: "order-2",
-    pedestal: "h-14",
-  },
-  2: {
-    ring: "ring-zinc-300",
-    badge: "bg-zinc-300 text-zinc-800",
-    glow: "shadow-[0_0_20px_-8px_rgba(212,212,216,0.5)]",
-    order: "order-1 sm:mb-6",
-    pedestal: "h-9",
-  },
-  3: {
-    ring: "ring-orange-400",
-    badge: "bg-orange-400/90 text-orange-950",
-    glow: "shadow-[0_0_20px_-8px_rgba(251,146,60,0.5)]",
-    order: "order-3 sm:mb-9",
-    pedestal: "h-6",
-  },
+/**
+ * O que muda de um lugar para o outro no layout. A *cor* de cada metal não
+ * está aqui: vive no CSS (`[data-place]` em globals.css), porque não é uma
+ * cor só — é um gradiente animado que o anel, o pedestal e o halo compartilham.
+ */
+const PODIUM_LAYOUT: Record<Place, { order: string; pedestal: string }> = {
+  1: { order: "order-2", pedestal: "h-16" },
+  2: { order: "order-1 sm:mb-6", pedestal: "h-10" },
+  3: { order: "order-3 sm:mb-9", pedestal: "h-7" },
 }
 
+/** Faíscas do 1º lugar: posição/tamanho/atraso fixos, sem Math.random no render. */
+const SPARKLES = [
+  { className: "-left-1 top-3 size-3", delay: "0ms" },
+  { className: "-right-0.5 top-8 size-2.5", delay: "600ms" },
+  { className: "left-4 -top-1 size-2", delay: "1200ms" },
+  { className: "right-5 top-1 size-2.5", delay: "1800ms" },
+]
+
 /**
- * Pódio das listas ranqueadas (aba "Mais visitados" / "Mais seguidos"):
- * os 3 primeiros ganham destaque visual próprio em vez de disputar espaço
- * com um badge numérico igual ao dos demais cards da grade.
+ * Pódio das listas ranqueadas (aba "Mais Aura" / "Mais seguidos"): os 3
+ * primeiros ganham destaque visual próprio em vez de disputar espaço com um
+ * badge numérico igual ao dos demais cards da grade.
  */
 export function PodiumSection({
   profiles,
@@ -57,7 +50,7 @@ export function PodiumSection({
 }: {
   /** Exatamente os 3 primeiros colocados, em ordem (1º, 2º, 3º). */
   profiles: PublicProfileSummary[]
-  metric: "views" | "followers"
+  metric: DirectoryMetric
   following: Set<string>
   currentUserId: string | null
 }) {
@@ -86,11 +79,11 @@ function PodiumCard({
 }: {
   profile: PublicProfileSummary
   place: Place
-  metric: "views" | "followers"
+  metric: DirectoryMetric
   isFollowing: boolean
   isSelf: boolean
 }) {
-  const style = PODIUM_STYLE[place]
+  const layout = PODIUM_LAYOUT[place]
   const isFirst = place === 1
   const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier)
   const initials =
@@ -99,47 +92,68 @@ function PodiumCard({
   const isVip = profile.account_tier !== "common"
   const specialTag = getSpecialTag(profile.display_slug)
   const hue = profileAccentHue(profile.id)
-  const value = metric === "views" ? profile.profile_views : profile.followers
 
   return (
-    <div className={cn("flex w-full max-w-[168px] flex-col items-center", style.order)}>
+    // `data-place` é o que liga este card ao metal certo: dele descem as
+    // variáveis --metal-* que anel, pedestal e halo leem lá embaixo.
+    <div
+      data-place={place}
+      className={cn(
+        "podium-halo relative flex w-full max-w-[168px] flex-col items-center",
+        layout.order
+      )}
+    >
       <div
         className={cn(
-          "relative flex w-full flex-col items-center overflow-hidden rounded-t-2xl border border-b-0 border-border bg-card pb-4 transition-transform duration-200 hover:-translate-y-1",
-          style.glow,
+          "relative flex w-full flex-col items-center rounded-t-2xl border border-b-0 border-border bg-card pb-4 transition-transform duration-200 hover:-translate-y-1",
           isFirst ? "pt-9" : "pt-7"
         )}
       >
         {isFirst && (
-          <Crown className="absolute top-1.5 size-6 text-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.7)]" />
+          <>
+            <Crown className="podium-crown absolute top-1.5 size-6" fill="currentColor" strokeWidth={1.25} />
+            {SPARKLES.map((sparkle) => (
+              <Sparkles
+                key={sparkle.className}
+                aria-hidden
+                style={{ animationDelay: sparkle.delay }}
+                className={cn("podium-sparkle", sparkle.className)}
+                fill="currentColor"
+                strokeWidth={0}
+              />
+            ))}
+          </>
         )}
 
         <Link href={profilePath(profile.display_slug)} className="flex flex-col items-center px-2">
-          <div
-            className={cn(
-              "relative overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 hover:scale-105",
-              style.ring,
-              isFirst ? "size-20" : "size-16"
-            )}
-          >
-            <ImageWithFallback
-              src={avatar.src}
-              alt={profile.display_name}
-              fill
-              unoptimized={avatar.animated}
-              sizes={isFirst ? "80px" : "64px"}
-              className="object-cover"
-              fallback={
-                <div
-                  className="flex size-full items-center justify-center text-lg font-bold text-white/90"
-                  style={{
-                    backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
-                  }}
-                >
-                  {initials}
-                </div>
-              }
+          {/* O anel metálico é um elemento atrás do avatar, não um `ring`:
+              gradiente animado não cabe numa borda, e mantê-lo por baixo
+              impede que o lustro do metal passe por cima da foto. */}
+          <div className={cn("group relative", isFirst ? "size-20" : "size-16")}>
+            <span
+              aria-hidden
+              className="podium-metal absolute -inset-[5px] rounded-full transition-transform duration-200 group-hover:scale-105"
             />
+            <div className="relative size-full overflow-hidden rounded-full bg-muted transition-transform duration-200 group-hover:scale-105">
+              <ImageWithFallback
+                src={avatar.src}
+                alt={profile.display_name}
+                fill
+                unoptimized={avatar.animated}
+                sizes={isFirst ? "80px" : "64px"}
+                className="object-cover"
+                fallback={
+                  <div
+                    className="flex size-full items-center justify-center text-lg font-bold text-white/90"
+                    style={{
+                      backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
+                    }}
+                  >
+                    {initials}
+                  </div>
+                }
+              />
+            </div>
           </div>
 
           <p className="mt-2 flex w-full items-center justify-center gap-1 text-[13px] font-bold leading-tight text-foreground">
@@ -148,16 +162,7 @@ function PodiumCard({
             {specialTag && <Sparkles className="size-3 shrink-0 text-cyan-400" />}
           </p>
 
-          <p className="mt-0.5 text-[10.5px] text-muted-foreground">
-            <span className="font-semibold text-foreground/70">{formatCount(value)}</span>{" "}
-            {metric === "views"
-              ? value === 1
-                ? "visita"
-                : "visitas"
-              : value === 1
-                ? "seguidor"
-                : "seguidores"}
-          </p>
+          <ProfileMetrics profile={profile} metric={metric} compact />
         </Link>
 
         <div className="mt-2 w-full px-2">
@@ -173,12 +178,11 @@ function PodiumCard({
 
       <div
         className={cn(
-          "flex w-full items-center justify-center rounded-b-lg text-lg font-black",
-          style.badge,
-          style.pedestal
+          "podium-metal flex w-full items-center justify-center rounded-b-lg text-lg font-black",
+          layout.pedestal
         )}
       >
-        {place}
+        <span className="podium-number">{place}</span>
       </div>
     </div>
   )

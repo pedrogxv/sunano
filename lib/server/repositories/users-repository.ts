@@ -64,7 +64,11 @@ type DirectoryRow = {
   created_at: string
 }
 
-function toProfileSummary(row: DirectoryRow, followers = 0): PublicProfileSummary {
+function toProfileSummary(
+  row: DirectoryRow,
+  followers = 0,
+  aura = 0
+): PublicProfileSummary {
   return {
     id: row.id,
     display_name: row.display_name?.trim() || `Membro ${row.id.slice(0, 6)}`,
@@ -74,6 +78,7 @@ function toProfileSummary(row: DirectoryRow, followers = 0): PublicProfileSummar
     account_tier: coerceAccountTier(row.account_tier),
     profile_views: row.profile_views ?? 0,
     followers,
+    aura,
     created_at: row.created_at,
   }
 }
@@ -104,10 +109,43 @@ async function countFollowersByUser(userIds: string[]): Promise<Record<string, n
   return counts
 }
 
-/** Anexa o contador de seguidores a um lote de linhas do diretório. */
-async function withFollowers(rows: DirectoryRow[]): Promise<PublicProfileSummary[]> {
-  const counts = await countFollowersByUser(rows.map((r) => r.id))
-  return rows.map((row) => toProfileSummary(row, counts[row.id] ?? 0))
+/**
+ * Saldo de Aura de cada usuário, indexado por id. Mesma carteira que o fórum
+ * credita (`user_aura_wallet`, ver 20260806_forum_aura.sql) — quem nunca
+ * recebeu aura não tem linha, e fica de fora do mapa (lido como 0).
+ */
+async function getAuraByUser(userIds: string[]): Promise<Record<string, number>> {
+  const balances: Record<string, number> = {}
+  if (userIds.length === 0) return balances
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_aura_wallet")
+    .select("user_id, balance")
+    .in("user_id", userIds)
+
+  if (error) {
+    console.error("[users-repository] getAuraByUser:", error)
+    return balances
+  }
+  for (const row of (data ?? []) as Array<{ user_id: string; balance: number }>) {
+    balances[row.user_id] = row.balance
+  }
+  return balances
+}
+
+/**
+ * Anexa seguidores e saldo de Aura a um lote de linhas do diretório. Os dois
+ * contadores vêm em paralelo e num lote só cada — o card mostra ambos, e pedir
+ * perfil a perfil faria a grade disparar uma consulta por card.
+ */
+async function withCounters(rows: DirectoryRow[]): Promise<PublicProfileSummary[]> {
+  const ids = rows.map((r) => r.id)
+  const [followers, aura] = await Promise.all([
+    countFollowersByUser(ids),
+    getAuraByUser(ids),
+  ])
+  return rows.map((row) => toProfileSummary(row, followers[row.id] ?? 0, aura[row.id] ?? 0))
 }
 
 /**
@@ -134,7 +172,7 @@ export async function searchUserProfiles(
     console.error("[users-repository] searchUserProfiles:", error)
     return []
   }
-  return withFollowers((data ?? []) as DirectoryRow[])
+  return withCounters((data ?? []) as DirectoryRow[])
 }
 
 /** Perfis com mais visitas. */
@@ -151,7 +189,79 @@ export async function getMostVisitedProfiles(limit = 12): Promise<PublicProfileS
     console.error("[users-repository] getMostVisitedProfiles:", error)
     return []
   }
-  return withFollowers((data ?? []) as DirectoryRow[])
+  return withCounters((data ?? []) as DirectoryRow[])
+}
+
+/**
+ * Perfis com mais Aura acumulada (`user_aura_wallet.balance`, a carteira que o
+ * fórum credita).
+ *
+ * O ranking sai da carteira, não de `user_profiles`: só quem já recebeu aura
+ * tem linha lá, então a consulta pesada já vem limitada a esse grupo. Como
+ * quase ninguém tem aura no começo, o resto da página é preenchido com os
+ * demais membros — todos empatados em 0 —, ordenados por visitas, que é a
+ * ordem que esta aba tinha antes e continua visível no card. Sem isso o
+ * diretório inteiro encolheria para meia dúzia de cards.
+ */
+export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+
+  const { data: wallets, error: walletsError } = await db
+    .from("user_aura_wallet")
+    .select("user_id, balance")
+    .gt("balance", 0)
+    .order("balance", { ascending: false })
+    .limit(limit)
+
+  if (walletsError) {
+    console.error("[users-repository] getTopAuraProfiles:", walletsError)
+  }
+
+  const balances = new Map(
+    ((wallets ?? []) as Array<{ user_id: string; balance: number }>).map((r) => [
+      r.user_id,
+      r.balance,
+    ])
+  )
+  const rankedIds = [...balances.keys()]
+
+  const { data: rankedRows, error: rankedError } = rankedIds.length
+    ? await db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
+    : { data: [], error: null }
+
+  if (rankedError) {
+    console.error("[users-repository] getTopAuraProfiles ranked:", rankedError)
+  }
+
+  // A carteira pode apontar para uma conta sem perfil (perfil excluído): o
+  // ranking é o que voltou de user_profiles, não o que voltou da carteira.
+  const ranked = ((rankedRows ?? []) as DirectoryRow[]).sort(
+    (a, b) => (balances.get(b.id) ?? 0) - (balances.get(a.id) ?? 0)
+  )
+
+  const remaining = limit - ranked.length
+  let fillers: DirectoryRow[] = []
+  if (remaining > 0) {
+    let query = db
+      .from("user_profiles")
+      .select(DIRECTORY_COLUMNS)
+      .order("profile_views", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(remaining)
+    if (ranked.length > 0) {
+      query = query.not("id", "in", `(${ranked.map((r) => r.id).join(",")})`)
+    }
+
+    const { data, error } = await query
+    if (error) {
+      console.error("[users-repository] getTopAuraProfiles fillers:", error)
+    }
+    fillers = (data ?? []) as DirectoryRow[]
+  }
+
+  // `withCounters` preserva a ordem que chega — ranqueados por aura, depois o
+  // preenchimento — e é ele quem carimba o saldo em cada card.
+  return withCounters([...ranked, ...fillers])
 }
 
 /** Perfis criados mais recentemente. */
@@ -167,7 +277,7 @@ export async function getNewestProfiles(limit = 12): Promise<PublicProfileSummar
     console.error("[users-repository] getNewestProfiles:", error)
     return []
   }
-  return withFollowers((data ?? []) as DirectoryRow[])
+  return withCounters((data ?? []) as DirectoryRow[])
 }
 
 /** Perfis que `userId` segue, do mais recente para o mais antigo. */
@@ -203,7 +313,7 @@ export async function getFollowingProfiles(
 
   // O `in` volta em ordem arbitrária — restaura a ordem de quando seguiu.
   const rank = new Map(ids.map((id, index) => [id, index]))
-  const profiles = await withFollowers((data ?? []) as DirectoryRow[])
+  const profiles = await withCounters((data ?? []) as DirectoryRow[])
   return profiles.sort(
     (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
   )
@@ -248,9 +358,13 @@ export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfile
     return []
   }
 
+  // Os seguidores já foram contados aqui; só o saldo de aura falta buscar.
+  const rows = (data ?? []) as DirectoryRow[]
+  const aura = await getAuraByUser(rows.map((r) => r.id))
+
   // O `in` volta em ordem arbitrária — reordena pelo ranking de seguidores.
-  return ((data ?? []) as DirectoryRow[])
-    .map((row) => toProfileSummary(row, counts[row.id] ?? 0))
+  return rows
+    .map((row) => toProfileSummary(row, counts[row.id] ?? 0, aura[row.id] ?? 0))
     .sort((a, b) => b.followers - a.followers)
 }
 

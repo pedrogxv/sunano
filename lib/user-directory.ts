@@ -14,16 +14,21 @@ export type PublicProfileSummary = {
   account_tier: AccountTier
   profile_views: number
   followers: number
+  /** Saldo acumulado em `user_aura_wallet` — a mesma Aura que o fórum credita. */
+  aura: number
   created_at: string
 }
 
 /** Ordenações aceitas por `/api/users/directory`. */
-export const DIRECTORY_SORTS = ["visited", "followed", "following"] as const
+export const DIRECTORY_SORTS = ["aura", "visited", "followed", "following"] as const
 export type DirectorySort = (typeof DIRECTORY_SORTS)[number]
 
 export function coerceDirectorySort(value: unknown): DirectorySort {
-  return DIRECTORY_SORTS.includes(value as DirectorySort) ? (value as DirectorySort) : "visited"
+  return DIRECTORY_SORTS.includes(value as DirectorySort) ? (value as DirectorySort) : "aura"
 }
+
+/** Número que o card do diretório destaca — acompanha a aba selecionada. */
+export type DirectoryMetric = "aura" | "views" | "followers"
 
 /**
  * Cor de fundo do card quando a pessoa não subiu mini banner.

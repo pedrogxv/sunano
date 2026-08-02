@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Crown, Eye, Sparkles, Users } from "lucide-react"
+import { Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
@@ -9,7 +9,11 @@ import { resolveProfileMedia } from "@/lib/account-tier"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
-import { profileAccentHue, type PublicProfileSummary } from "@/lib/user-directory"
+import {
+  profileAccentHue,
+  type DirectoryMetric,
+  type PublicProfileSummary,
+} from "@/lib/user-directory"
 
 const TIER_RING = {
   common: "ring-background",
@@ -24,16 +28,104 @@ const TIER_RING = {
  */
 const TIER_GLOW_HUE: Record<string, number> = { vip: 45, vip_plus: 300 }
 
-/** Ouro, prata e bronze para o pódio das listas ranqueadas. */
-const RANK_STYLES: Record<number, string> = {
-  1: "bg-amber-400 text-amber-950",
-  2: "bg-zinc-300 text-zinc-800",
-  3: "bg-orange-400/90 text-orange-950",
-}
+/**
+ * Ouro, prata e bronze do badge de posição. Só aparecem quando a lista é curta
+ * demais para montar o pódio (< 3 perfis); acima disso o top 3 sai da grade e
+ * vira PodiumSection. `podium-metal` é o mesmo metal animado do pódio
+ * (globals.css), então as duas formas de mostrar o top 3 combinam.
+ */
+const TOP_RANKS = [1, 2, 3]
 
 export function formatCount(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
   return String(value)
+}
+
+const METRIC_META: Record<
+  DirectoryMetric,
+  { icon: React.ElementType; filled?: true; tone?: string; label: (n: number) => string }
+> = {
+  // Laranja de fogo (o mesmo tom das partículas do AuraButton) em vez de
+  // `text-primary`: no tema escuro `primary` é branco, e uma chama branca não
+  // diz "aura" nenhuma.
+  aura: { icon: Flame, filled: true, tone: "text-orange-500", label: () => "aura" },
+  views: { icon: Eye, label: (n) => (n === 1 ? "visita" : "visitas") },
+  followers: { icon: Users, label: (n) => (n === 1 ? "seguidor" : "seguidores") },
+}
+
+/**
+ * Qual métrica desce para a linha secundária. Aura e visitas se revezam: as
+ * duas têm aba própria, e a que não está em destaque continua visível embaixo
+ * em vez de sumir do card. "Mais seguidos" mostra só o próprio contador.
+ */
+const SECONDARY_METRIC: Partial<Record<DirectoryMetric, DirectoryMetric>> = {
+  aura: "views",
+  views: "aura",
+}
+
+function metricValue(profile: PublicProfileSummary, metric: DirectoryMetric): number {
+  if (metric === "aura") return profile.aura
+  if (metric === "views") return profile.profile_views
+  return profile.followers
+}
+
+/**
+ * As linhas de número sob o nick: a métrica da aba em destaque e, quando há,
+ * a outra métrica de ranking logo abaixo, apagada. `compact` é a variação do
+ * pódio, onde os cards são menores.
+ */
+export function ProfileMetrics({
+  profile,
+  metric,
+  compact = false,
+}: {
+  profile: PublicProfileSummary
+  metric: DirectoryMetric
+  compact?: boolean
+}) {
+  const meta = METRIC_META[metric]
+  const Icon = meta.icon
+  const value = metricValue(profile, metric)
+
+  const secondary = SECONDARY_METRIC[metric]
+  const secondaryMeta = secondary ? METRIC_META[secondary] : null
+  const SecondaryIcon = secondaryMeta?.icon
+  const secondaryValue = secondary ? metricValue(profile, secondary) : 0
+
+  return (
+    <>
+      <p
+        className={cn(
+          "mt-0.5 flex items-center gap-1 text-muted-foreground",
+          compact ? "text-[10.5px]" : "text-[11px]"
+        )}
+      >
+        <Icon
+          className={cn(compact ? "size-2.5" : "size-3", meta.tone)}
+          {...(meta.filled ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
+        />
+        <span className={cn("font-semibold", meta.tone ?? "text-foreground/70")}>
+          {formatCount(value)}
+        </span>
+        {meta.label(value)}
+      </p>
+
+      {secondaryMeta && SecondaryIcon && (
+        <p
+          className={cn(
+            "mt-0.5 flex items-center gap-1 text-muted-foreground/70",
+            compact ? "text-[9.5px]" : "text-[10px]"
+          )}
+        >
+          <SecondaryIcon
+            className={cn("size-2.5", secondaryMeta.tone && "opacity-80", secondaryMeta.tone)}
+            {...(secondaryMeta.filled ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
+          />
+          {formatCount(secondaryValue)} {secondaryMeta.label(secondaryValue)}
+        </p>
+      )}
+    </>
+  )
 }
 
 /**
@@ -50,7 +142,7 @@ export function ProfileCard({
 }: {
   profile: PublicProfileSummary
   /** Qual número aparece sob o nick — acompanha a aba selecionada. */
-  metric: "views" | "followers"
+  metric: DirectoryMetric
   /** Posição na lista ranqueada. Ausente em listas sem ordem de mérito. */
   rank?: number
   isFollowing?: boolean
@@ -67,7 +159,6 @@ export function ProfileCard({
   const specialTag = getSpecialTag(profile.display_slug)
   const hue = profileAccentHue(profile.id)
   const glowHue = TIER_GLOW_HUE[profile.account_tier] ?? hue
-  const value = metric === "views" ? profile.profile_views : profile.followers
 
   // A cor do neon é dinâmica (vem do perfil), então o Tailwind não consegue
   // gerar a classe no build: as intensidades ficam em classes estáticas que
@@ -112,12 +203,15 @@ export function ProfileCard({
 
         {rank !== undefined && (
           <span
+            data-place={TOP_RANKS.includes(rank) ? rank : undefined}
             className={cn(
               "absolute left-2.5 top-2.5 flex min-w-6 items-center justify-center rounded-md px-1.5 py-0.5 text-[11px] font-bold shadow-sm",
-              RANK_STYLES[rank] ?? "bg-background/80 text-muted-foreground backdrop-blur-sm"
+              TOP_RANKS.includes(rank)
+                ? "podium-metal"
+                : "bg-background/80 text-muted-foreground backdrop-blur-sm"
             )}
           >
-            {rank}
+            <span className={cn(TOP_RANKS.includes(rank) && "podium-number")}>{rank}</span>
           </span>
         )}
 
@@ -154,17 +248,7 @@ export function ProfileCard({
             {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
           </p>
 
-          <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-            {metric === "views" ? <Eye className="size-3" /> : <Users className="size-3" />}
-            <span className="font-semibold text-foreground/70">{formatCount(value)}</span>
-            {metric === "views"
-              ? value === 1
-                ? "visita"
-                : "visitas"
-              : value === 1
-                ? "seguidor"
-                : "seguidores"}
-          </p>
+          <ProfileMetrics profile={profile} metric={metric} />
         </div>
       </Link>
 

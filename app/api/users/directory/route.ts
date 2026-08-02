@@ -7,13 +7,14 @@ import {
   getFollowingProfiles,
   getMostFollowedProfiles,
   getMostVisitedProfiles,
+  getTopAuraProfiles,
 } from "@/lib/server/repositories/users-repository"
 
 export const dynamic = "force-dynamic"
 
 /**
- * Listas do diretório de pessoas: `?sort=visited` (padrão), `followed` ou
- * `following`. Quando há sessão, devolve também quais desses perfis o usuário
+ * Listas do diretório de pessoas: `?sort=aura` (padrão), `visited`, `followed`
+ * ou `following`. Quando há sessão, devolve também quais desses perfis o usuário
  * já segue — assim a grade renderiza o botão certo sem uma chamada por card.
  */
 export async function GET(request: NextRequest) {
@@ -40,8 +41,10 @@ export async function GET(request: NextRequest) {
       profiles = await getFollowingProfiles(user.id, limit)
     } else if (sort === "followed") {
       profiles = await getMostFollowedProfiles(limit)
-    } else {
+    } else if (sort === "visited") {
       profiles = await getMostVisitedProfiles(limit)
+    } else {
+      profiles = await getTopAuraProfiles(limit)
     }
 
     const followedIds = user

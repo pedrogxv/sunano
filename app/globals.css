@@ -554,3 +554,147 @@ button:not(:disabled):hover .aura-icon-holder {
     opacity: 0;
   }
 }
+
+/* ════════════════════════════════════════════
+   Pódio do diretório de pessoas (components/people/PodiumSection.tsx) —
+   ouro, prata e bronze de verdade.
+
+   O que faz metal parecer metal não é a cor, é a reflexão: uma superfície
+   polida alterna faixas escuras e claras conforme a luz bate. Duas camadas:
+
+   1. `--metal-*` — a paleta de cada lugar (escuro / meio / brilho), definida
+      no `[data-place]` e herdada por tudo que for metálico dentro do card.
+   2. `.podium-metal` — o gradiente com as faixas escuro→brilho→escuro, e os
+      `inset` box-shadow do bisel (luz em cima, sombra embaixo) que separam
+      uma chapa de metal de um retângulo colorido.
+
+   O gradiente é estático de propósito. Uma versão anterior deslizava as
+   faixas e passava um lustro branco pela peça; o resultado era idêntico a um
+   skeleton de carregamento, que é exatamente o que uma medalha não deve
+   parecer. O movimento aqui está só no halo, que respira em volta do card sem
+   atravessar nada.
+
+   Ninguém no pódio usa cor chapada: o mesmo metal veste o anel do avatar, o
+   pedestal e o halo, então as três peças reagem como se fossem a mesma liga.
+   ════════════════════════════════════════════ */
+[data-place="1"] {
+  --metal-dark: oklch(0.55 0.14 80);
+  --metal-mid: oklch(0.78 0.16 88);
+  --metal-light: oklch(0.97 0.05 100);
+  --metal-glow: oklch(0.8 0.17 88);
+  --metal-ink: oklch(0.3 0.08 70);
+}
+
+[data-place="2"] {
+  --metal-dark: oklch(0.6 0.012 255);
+  --metal-mid: oklch(0.84 0.008 255);
+  --metal-light: oklch(0.99 0.003 255);
+  --metal-glow: oklch(0.88 0.01 255);
+  --metal-ink: oklch(0.33 0.012 255);
+}
+
+[data-place="3"] {
+  --metal-dark: oklch(0.45 0.1 45);
+  --metal-mid: oklch(0.66 0.13 55);
+  --metal-light: oklch(0.88 0.08 70);
+  --metal-glow: oklch(0.68 0.14 55);
+  --metal-ink: oklch(0.28 0.08 45);
+}
+
+@keyframes podium-halo-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(0.97); }
+  50%      { opacity: 0.9; transform: scale(1.06); }
+}
+
+@keyframes podium-crown-hover {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50%      { transform: translateY(-2.5px) rotate(4deg); }
+}
+
+@keyframes podium-sparkle-twinkle {
+  0%, 100%  { opacity: 0; transform: scale(0.3) rotate(0deg); }
+  15%, 40%  { opacity: 1; transform: scale(1) rotate(45deg); }
+  70%       { opacity: 0; transform: scale(0.4) rotate(90deg); }
+}
+
+/* Não define `position`: o anel do avatar e o badge de posição se posicionam
+   com `absolute` do Tailwind, que vive em `@layer utilities` e perderia para
+   esta regra (fora de camada) — o anel ficaria com 0×0. */
+.podium-metal {
+  overflow: hidden;
+  background-image: linear-gradient(
+    115deg,
+    var(--metal-dark) 0%,
+    var(--metal-mid) 15%,
+    var(--metal-light) 30%,
+    var(--metal-mid) 45%,
+    var(--metal-dark) 60%,
+    var(--metal-mid) 78%,
+    var(--metal-light) 92%,
+    var(--metal-mid) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    inset 0 -2px 4px rgb(0 0 0 / 0.32);
+}
+
+/* Número do pedestal, gravado no metal: tinta escura da própria liga e um fio
+   de luz embaixo, como um baixo-relevo. */
+.podium-number {
+  color: var(--metal-ink);
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.45);
+}
+
+/* Halo da cor do metal atrás do card, respirando. Mesma técnica de
+   .event-card-glow::before, com a cor vindo do lugar no pódio. */
+.podium-halo {
+  isolation: isolate;
+}
+
+.podium-halo::before {
+  content: "";
+  position: absolute;
+  inset: -14px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at center, var(--metal-glow), transparent 72%);
+  filter: blur(16px);
+  pointer-events: none;
+  animation: podium-halo-breathe 3.2s ease-in-out infinite;
+}
+
+[data-place="2"] .podium-halo::before { animation-delay: 0.5s; }
+[data-place="3"] .podium-halo::before { animation-delay: 1s; }
+
+/* Coroa e faíscas usam o tom médio, não o brilho: `--metal-light` é quase
+   branco e sumia no tema claro. O drop-shadow na cor do metal é que faz o
+   ouro "acender" no escuro. */
+.podium-crown {
+  color: var(--metal-mid);
+  filter: drop-shadow(0 0 5px var(--metal-glow)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.4));
+  animation: podium-crown-hover 2.6s ease-in-out infinite;
+}
+
+/* Faíscas ao redor do 1º lugar — quatro estrelinhas piscando fora de fase,
+   o "brilho" que sobra de uma peça recém-polida. */
+.podium-sparkle {
+  position: absolute;
+  color: var(--metal-mid);
+  filter: drop-shadow(0 0 3px var(--metal-glow));
+  pointer-events: none;
+  animation: podium-sparkle-twinkle 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .podium-halo::before {
+    animation: none;
+    opacity: 0.55;
+  }
+  .podium-crown {
+    animation: none;
+  }
+  .podium-sparkle {
+    animation: none;
+    opacity: 0.7;
+  }
+}

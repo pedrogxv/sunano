@@ -1,23 +1,39 @@
 "use client"
 
 import Link from "next/link"
-import { Eye, Heart, Search, UserPlus, Users, X } from "lucide-react"
+import { Eye, Flame, Heart, Search, UserPlus, Users, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { PodiumSection } from "@/components/people/PodiumSection"
 import { ProfileCard } from "@/components/people/ProfileCard"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import type { DirectorySort, PublicProfileSummary } from "@/lib/user-directory"
+import type {
+  DirectoryMetric,
+  DirectorySort,
+  PublicProfileSummary,
+} from "@/lib/user-directory"
 
 const TABS: { key: DirectorySort; label: string; icon: React.ElementType }[] = [
+  { key: "aura", label: "Mais Aura", icon: Flame },
   { key: "visited", label: "Mais visitados", icon: Eye },
   { key: "followed", label: "Mais seguidos", icon: Users },
   { key: "following", label: "Seguindo", icon: Heart },
 ]
 
-/** As duas primeiras abas são rankings; "Seguindo" é uma lista pessoal. */
-const RANKED_TABS: DirectorySort[] = ["visited", "followed"]
+/** As três primeiras abas são rankings; "Seguindo" é uma lista pessoal. */
+const RANKED_TABS: DirectorySort[] = ["aura", "visited", "followed"]
+
+/**
+ * Número que cada aba destaca no card. A busca e "Seguindo" não são rankings,
+ * então caem em seguidores — o contador que faz sentido fora de uma disputa.
+ */
+const TAB_METRIC: Record<DirectorySort, DirectoryMetric> = {
+  aura: "aura",
+  visited: "views",
+  followed: "followers",
+  following: "followers",
+}
 
 export function PessoasContent({
   initialProfiles,
@@ -28,7 +44,7 @@ export function PessoasContent({
   followedIds: string[]
   currentUserId: string | null
 }) {
-  const [tab, setTab] = useState<DirectorySort>("visited")
+  const [tab, setTab] = useState<DirectorySort>("aura")
   const [profiles, setProfiles] = useState(initialProfiles)
   const [loading, setLoading] = useState(false)
   const [requiresAuth, setRequiresAuth] = useState(false)
@@ -105,7 +121,7 @@ export function PessoasContent({
   const isSearching = query.trim().length >= 2
   const shown = isSearching ? results : profiles
   const isRanked = !isSearching && RANKED_TABS.includes(tab)
-  const metric: "views" | "followers" = tab === "visited" && !isSearching ? "views" : "followers"
+  const metric: DirectoryMetric = isSearching ? "followers" : TAB_METRIC[tab]
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">

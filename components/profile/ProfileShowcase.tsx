@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Settings, Users } from "lucide-react"
+import { Flame, Settings, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { AvatarFoto } from "./AvatarFoto"
@@ -10,6 +10,11 @@ import { MedalhasGrid } from "./MedalhasGrid"
 import { SetupGrid } from "./SetupGrid"
 import { SocialLinks } from "./SocialLinks"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
+
+function formatCount(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
+  return String(value)
+}
 
 interface ProfileShowcaseProps {
   profile: ProfileShowcaseData
@@ -57,10 +62,17 @@ export function ProfileShowcase({
             />
           </div>
 
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Users className="size-3.5" />
-            <span className="font-semibold text-foreground">{profile.followers}</span>
-            {profile.followers === 1 ? "seguidor" : "seguidores"}
+          <p className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Users className="size-3.5" />
+              <span className="font-semibold text-foreground">{profile.followers}</span>
+              {profile.followers === 1 ? "seguidor" : "seguidores"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Flame className="size-3.5 text-orange-500" fill="currentColor" strokeWidth={1.5} />
+              <span className="font-semibold text-orange-500">{formatCount(profile.aura)}</span>
+              aura
+            </span>
           </p>
 
           <SocialLinks youtubeHandle={profile.youtube_handle} tiktokHandle={profile.tiktok_handle} />

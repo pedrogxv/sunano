@@ -1,9 +1,26 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { ShieldCheck, Users as UsersIcon, UserPlus, Lock, Save, ChevronDown, ChevronUp, KeyRound, Crown, Sparkles } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import {
+  ShieldCheck,
+  Users as UsersIcon,
+  UserPlus,
+  Lock,
+  Save,
+  ChevronDown,
+  ChevronUp,
+  KeyRound,
+  Crown,
+  Sparkles,
+  Search,
+  Trash2,
+  ShieldAlert,
+  UserCog,
+  User as UserIcon,
+} from "lucide-react"
 import { toast } from "sonner"
 
+import { AnimatedCounter } from "@/components/animated-counter"
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { ACCOUNT_TIERS, getTierCapabilities, type AccountTier } from "@/lib/account-tier"
@@ -26,6 +43,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RoleBadge } from "@/components/people/RoleBadge"
+import { cn } from "@/lib/utils"
 import { useT } from "@/lib/use-t"
 
 type UserRole = AdminProfile["role"] | "user"
@@ -52,6 +70,15 @@ type NewUserForm = {
   displayName: string
   role: "admin" | "moderator"
   permissions: Record<string, boolean>
+}
+
+type RoleFilter = "all" | UserRole
+
+const ROLE_RING: Record<UserRole, string> = {
+  webmaster: "ring-2 ring-amber-400/40",
+  admin: "ring-2 ring-cyan-400/30",
+  moderator: "ring-2 ring-violet-400/30",
+  user: "ring-1 ring-border",
 }
 
 /* ── Toggle switch component ─────────────────────────────── */
@@ -149,19 +176,23 @@ function UserCard({
   isCurrentUser,
   isCurrentUserWebMaster,
   savingId,
+  deletingId,
   onRoleChange,
   onPermissionChange,
   onSave,
   onTierSave,
+  onDelete,
 }: {
   user: AdminUser
   isCurrentUser: boolean
   isCurrentUserWebMaster: boolean
   savingId: string | null
+  deletingId: string | null
   onRoleChange: (id: string, role: UserRole) => void
   onPermissionChange: (id: string, key: string, value: boolean) => void
   onSave: (user: AdminUser) => void
   onTierSave: (userId: string, tier: AccountTier) => Promise<void>
+  onDelete: (user: AdminUser) => Promise<void>
 }) {
   const t = useT()
   const [expanded, setExpanded] = useState(false)
@@ -169,6 +200,8 @@ function UserCard({
   const [newPassword, setNewPassword] = useState("")
   const [savingPassword, setSavingPassword] = useState(false)
   const [savingTier, setSavingTier] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
   // A trava usa o cargo PERSISTIDO (não o que está sendo editado no select),
   // senão escolher "WEB Master" travaria a própria linha antes de salvar.
   const isPersistedWebMaster = user.originalRole === "webmaster"
@@ -179,7 +212,12 @@ function UserCard({
   // Promoção a WEB Master (a partir de um cargo menor) exige confirmação.
   const isPromotingToWebmaster = user.role === "webmaster" && user.originalRole !== "webmaster"
   const canChangeThisPassword = isCurrentUserWebMaster && (!isPersistedWebMaster || isCurrentUser)
+  // Excluir é exclusivo do WEB Master, nunca a própria conta nem outro WEB Master.
+  const canDeleteThisUser = isCurrentUserWebMaster && !isCurrentUser && !isPersistedWebMaster
   const initials = (user.display_name ?? user.email ?? "?").slice(0, 2).toUpperCase()
+  const isDeleting = deletingId === user.id
+  const deleteConfirmMatches =
+    !!user.email && deleteConfirmText.trim().toLowerCase() === user.email.trim().toLowerCase()
 
   async function handlePasswordSave() {
     if (!newPassword || newPassword.length < 8) return
@@ -212,12 +250,24 @@ function UserCard({
     }
   }
 
+  async function handleDeleteConfirm() {
+    if (!deleteConfirmMatches) return
+    await onDelete(user)
+    setDeleteDialogOpen(false)
+    setDeleteConfirmText("")
+  }
+
   return (
-    <div className={`rounded-2xl border transition-colors ${expanded ? "border-border bg-card/80" : "border-border/60 bg-card/40"}`}>
+    <div
+      className={cn(
+        "rounded-2xl border transition-colors",
+        expanded ? "border-border bg-card/80" : "border-border/60 bg-card/40"
+      )}
+    >
       {/* Header row */}
       <div className="flex items-center gap-3 p-4">
         {/* Avatar */}
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-sm font-bold text-muted-foreground">
+        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-muted-foreground", ROLE_RING[user.role])}>
           {user.avatar_url
             // eslint-disable-next-line @next/next/no-img-element
             ? <img src={user.avatar_url} alt={initials} className="size-full rounded-full object-cover" />
@@ -287,6 +337,62 @@ function UserCard({
               <KeyRound className="size-3.5" />
               <span className="hidden sm:inline">{t.admin.users.password}</span>
             </Button>
+          )}
+          {canDeleteThisUser && (
+            <AlertDialog
+              open={deleteDialogOpen}
+              onOpenChange={(open) => {
+                setDeleteDialogOpen(open)
+                if (!open) setDeleteConfirmText("")
+              }}
+            >
+              <AlertDialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isDeleting}
+                  className="gap-1.5 border-red-500/30 text-xs text-red-400 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300"
+                >
+                  <Trash2 className="size-3.5" />
+                  {isDeleting ? t.common.deleting : <span className="hidden sm:inline">{t.common.delete}</span>}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2 text-red-400">
+                    <ShieldAlert className="size-4.5" />
+                    {t.admin.users.deleteUserTitle(user.display_name || user.email || "")}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>{t.admin.users.deleteUserDesc}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    {t.admin.users.deleteConfirmLabel(user.email ?? "")}
+                  </label>
+                  <Input
+                    value={deleteConfirmText}
+                    onChange={(e) => setDeleteConfirmText(e.target.value)}
+                    placeholder={user.email ?? ""}
+                    autoComplete="off"
+                    className="border-border bg-background"
+                  />
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{t.admin.users.cancel}</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault()
+                      void handleDeleteConfirm()
+                    }}
+                    disabled={!deleteConfirmMatches || isDeleting}
+                    className="bg-red-600 text-white hover:bg-red-500 disabled:opacity-40"
+                  >
+                    <Trash2 className="mr-1.5 size-3.5" />
+                    {isDeleting ? t.common.deleting : t.admin.users.confirmDelete}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
           {locked && !isCurrentUser && (
             <div className="flex items-center gap-1 text-xs text-amber-400/80">
@@ -408,11 +514,53 @@ function UserCard({
   )
 }
 
+/* ── Stat chip — também funciona como atalho de filtro por cargo ─ */
+function StatChip({
+  icon: Icon,
+  value,
+  label,
+  colorClass,
+  active,
+  hoverClass,
+  onClick,
+}: {
+  icon: React.ElementType
+  value: number
+  label: string
+  colorClass: string
+  active: boolean
+  hoverClass: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-xl border p-3 text-left transition-all duration-200",
+        "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5",
+        active ? "border-primary/50 bg-primary/10" : "border-border bg-card/60",
+        hoverClass
+      )}
+    >
+      <div className={cn("flex size-7 items-center justify-center rounded-lg", colorClass)}>
+        <Icon className="size-3.5" />
+      </div>
+      <p className="mt-2 text-xl font-bold tabular-nums text-foreground">
+        <AnimatedCounter value={value} duration={800} />
+      </p>
+      <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+    </button>
+  )
+}
+
 /* ── Main page ───────────────────────────────────────────── */
 export default function AdminUsersPage() {
   const t = useT()
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -420,6 +568,8 @@ export default function AdminUsersPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [search, setSearch] = useState("")
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all")
   const isCurrentUserWebMaster = users.find((u) => u.id === currentUserId)?.role === "webmaster"
   const [newUser, setNewUser] = useState<NewUserForm>({
     email: "",
@@ -447,6 +597,23 @@ export default function AdminUsersPage() {
       setLoading(false)
     }
   }
+
+  const stats = useMemo(() => ({
+    total: users.length,
+    webmasters: users.filter((u) => u.role === "webmaster").length,
+    admins: users.filter((u) => u.role === "admin").length,
+    moderators: users.filter((u) => u.role === "moderator").length,
+    regular: users.filter((u) => u.role === "user").length,
+  }), [users])
+
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return users.filter((u) => {
+      if (roleFilter !== "all" && u.role !== roleFilter) return false
+      if (!q) return true
+      return (u.display_name ?? "").toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q)
+    })
+  }, [users, search, roleFilter])
 
   function updateUserRole(userId: string, nextRole: UserRole) {
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: nextRole } : u))
@@ -499,6 +666,22 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function deleteUser(user: AdminUser) {
+    try {
+      setDeletingId(user.id)
+      const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" })
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToDelete)
+      setUsers((prev) => prev.filter((u) => u.id !== user.id))
+      toast.success(t.admin.users.userDeleted, { description: user.display_name || user.email || undefined })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.users.failedToDelete
+      toast.error(t.admin.users.failedToDelete, { description: message })
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   async function createUser() {
     try {
       setCreating(true)
@@ -535,16 +718,63 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Actions */}
-      <div className="flex items-center justify-between gap-4">
-        <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
-          <ShieldCheck className="size-3.5" />
-          {t.admin.users.webMasterOnly}
-        </p>
-        <Button onClick={() => { setShowCreateForm((v) => !v); setCreateError(null) }} className="shrink-0 gap-2">
-          <UserPlus className="size-4" />
-          {t.admin.users.newUser}
-        </Button>
+      {/* Hero — identidade visual consistente com o dashboard (gradiente sutil) */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-5">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(245,158,11,0.10),transparent_45%),radial-gradient(circle_at_bottom_left,rgba(34,211,238,0.08),transparent_40%)]" />
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-primary">
+              <ShieldCheck className="size-3.5" />
+              {t.admin.users.webMasterOnly}
+            </p>
+            <h1 className="mt-2 text-xl font-bold tracking-tight text-foreground md:text-2xl">{t.admin.users.pageTitle}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{t.admin.users.pageDescription}</p>
+          </div>
+          <Button onClick={() => { setShowCreateForm((v) => !v); setCreateError(null) }} className="shrink-0 gap-2">
+            <UserPlus className="size-4" />
+            {t.admin.users.newUser}
+          </Button>
+        </div>
+
+        {/* Stats — visão rápida da composição do time */}
+        <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <StatChip
+            icon={UsersIcon}
+            value={stats.total}
+            label={t.admin.users.statTotal}
+            colorClass="bg-primary/15 text-primary"
+            active={roleFilter === "all"}
+            hoverClass="hover:border-primary/40 hover:bg-primary/5"
+            onClick={() => setRoleFilter("all")}
+          />
+          <StatChip
+            icon={Crown}
+            value={stats.webmasters}
+            label={t.admin.users.statWebMasters}
+            colorClass="bg-amber-500/15 text-amber-300"
+            active={roleFilter === "webmaster"}
+            hoverClass="hover:border-amber-400/40 hover:bg-amber-500/5"
+            onClick={() => setRoleFilter((prev) => (prev === "webmaster" ? "all" : "webmaster"))}
+          />
+          <StatChip
+            icon={ShieldCheck}
+            value={stats.admins}
+            label={t.admin.users.statAdmins}
+            colorClass="bg-cyan-500/15 text-cyan-300"
+            active={roleFilter === "admin"}
+            hoverClass="hover:border-cyan-400/40 hover:bg-cyan-500/5"
+            onClick={() => setRoleFilter((prev) => (prev === "admin" ? "all" : "admin"))}
+          />
+          <StatChip
+            icon={UserCog}
+            value={stats.moderators}
+            label={t.admin.users.statModerators}
+            colorClass="bg-violet-500/15 text-violet-300"
+            active={roleFilter === "moderator"}
+            hoverClass="hover:border-violet-400/40 hover:bg-violet-500/5"
+            onClick={() => setRoleFilter((prev) => (prev === "moderator" ? "all" : "moderator"))}
+          />
+        </div>
       </div>
 
       {/* Errors */}
@@ -553,7 +783,7 @@ export default function AdminUsersPage() {
 
       {/* Create user form */}
       {showCreateForm && (
-        <Card className="border-border bg-card/90">
+        <Card className="animate-in fade-in slide-in-from-top-2 border-border bg-card/90 duration-200">
           <CardHeader className="border-b border-border pb-4">
             <CardTitle className="flex items-center gap-2 text-base">
               <UserPlus className="size-4 text-primary" />
@@ -619,13 +849,38 @@ export default function AdminUsersPage() {
         </Card>
       )}
 
+      {/* Toolbar — busca + filtro por cargo */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t.admin.users.searchPlaceholder}
+            className="border-border bg-card/50 pl-9"
+          />
+        </div>
+        <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as RoleFilter)}>
+          <SelectTrigger className="w-full border-border bg-card/50 sm:w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t.common.all}</SelectItem>
+            <SelectItem value="webmaster">WEB Master</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="moderator">{t.admin.users.moderator}</SelectItem>
+            <SelectItem value="user">{t.admin.users.user}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Users list */}
       <Card className="border-border bg-card/90">
         <CardHeader className="border-b border-border pb-4">
           <CardTitle className="flex items-center gap-2 text-base">
             <UsersIcon className="size-4 text-primary" />
             {t.common.users}
-            {!loading && <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{users.length}</span>}
+            {!loading && <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{filteredUsers.length}</span>}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 pt-4">
@@ -635,18 +890,30 @@ export default function AdminUsersPage() {
             </div>
           ) : users.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">{t.admin.users.noUsersFound}</p>
-          ) : users.map((user) => (
-            <UserCard
+          ) : filteredUsers.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <UserIcon className="size-6 text-muted-foreground/50" />
+              <p className="text-sm text-muted-foreground">{t.admin.users.noResultsFiltered}</p>
+            </div>
+          ) : filteredUsers.map((user, index) => (
+            <div
               key={user.id}
-              user={user}
-              isCurrentUser={user.id === currentUserId}
-              isCurrentUserWebMaster={isCurrentUserWebMaster}
-              savingId={savingId}
-              onRoleChange={updateUserRole}
-              onPermissionChange={updateUserPermission}
-              onSave={saveUser}
-              onTierSave={saveTier}
-            />
+              className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+              style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
+            >
+              <UserCard
+                user={user}
+                isCurrentUser={user.id === currentUserId}
+                isCurrentUserWebMaster={isCurrentUserWebMaster}
+                savingId={savingId}
+                deletingId={deletingId}
+                onRoleChange={updateUserRole}
+                onPermissionChange={updateUserPermission}
+                onSave={saveUser}
+                onTierSave={saveTier}
+                onDelete={deleteUser}
+              />
+            </div>
           ))}
         </CardContent>
       </Card>

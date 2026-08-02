@@ -1,6 +1,7 @@
 import "./globals.css"
 
 import type { Metadata, Viewport } from "next"
+import Script from "next/script"
 import { Manrope, Space_Grotesk, Caveat } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/toaster"
@@ -69,7 +70,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className="bg-background" data-theme="dark" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <Script id="theme-init" strategy="beforeInteractive">
+          {THEME_INIT_SCRIPT}
+        </Script>
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} ${caveat.variable} font-sans`}>
         <ThemeProvider>

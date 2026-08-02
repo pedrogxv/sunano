@@ -16,6 +16,7 @@ export type RankedPeripheral = {
   name: string
   category: string
   score: number
+  image_url: string | null
 }
 
 const CATEGORIES: { key: string; label: string }[] = [
@@ -90,8 +91,21 @@ function BarChart({ items, isAdmin }: { items: RankedPeripheral[]; isAdmin: bool
                 espremia a barra a ~15px, tornando a comparação visual inútil. */}
             <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
               {/* Name */}
-              <span className="truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary sm:w-56 sm:shrink-0">
-                {item.name}
+              <span className="flex min-w-0 items-center gap-2 truncate text-sm font-medium text-foreground transition-colors group-hover:text-primary sm:w-56 sm:shrink-0">
+                {item.image_url && (
+                  // <img> puro de propósito: <Image> passa pelo loader custom
+                  // (lib/image-loader.ts), que redimensiona via Supabase Storage —
+                  // desnecessário pra um ícone de 20px, é só peso de transform.
+                  <img
+                    src={item.image_url}
+                    alt=""
+                    width={20}
+                    height={20}
+                    loading="eager"
+                    className="size-5 shrink-0 rounded-md bg-muted/30 object-contain p-0.5"
+                  />
+                )}
+                <span className="truncate">{item.name}</span>
               </span>
 
               {/* Bar */}

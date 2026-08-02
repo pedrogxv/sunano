@@ -51,7 +51,13 @@ export async function listAllPeripherals(): Promise<PeripheralRecord[]> {
   return (data ?? []) as unknown as PeripheralRecord[]
 }
 
-export type RankedPeripheral = { id: string; name: string; category: string; score: number }
+export type RankedPeripheral = {
+  id: string
+  name: string
+  category: string
+  score: number
+  image_url: string | null
+}
 
 /** Periféricos com score > 0, para a página de ranking (pública e admin). */
 export async function getRankedPeripherals(): Promise<RankedPeripheral[]> {
@@ -61,7 +67,7 @@ export async function getRankedPeripherals(): Promise<RankedPeripheral[]> {
     .map((p) => {
       const details = ((p.specs as Record<string, unknown>)?.details ?? {}) as Record<string, unknown>
       const score = details.score != null ? Number(details.score) : null
-      return { id: p.id, name: p.name, category: p.category, score }
+      return { id: p.id, name: p.name, category: p.category, score, image_url: p.image_url }
     })
     .filter((p): p is RankedPeripheral => typeof p.score === "number" && p.score > 0)
 }

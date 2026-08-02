@@ -403,6 +403,22 @@ type Translations = {
       failedToCreateUser: string
       tier: string
       tierUpdated: string
+      searchPlaceholder: string
+      noResultsFiltered: string
+      statTotal: string
+      statWebMasters: string
+      statAdmins: string
+      statModerators: string
+      statRegular: string
+      deleteUser: string
+      deleteUserTitle: (name: string) => string
+      deleteUserDesc: string
+      deleteConfirmLabel: (email: string) => string
+      confirmDelete: string
+      userDeleted: string
+      failedToDelete: string
+      cannotDeleteSelf: string
+      cannotDeleteWebMaster: string
     }
     offers: {
       failedToLoad: string
@@ -1076,6 +1092,22 @@ export const translations: Record<LocaleCode, Translations> = {
         failedToCreateUser: "Erro ao criar usuário",
         tier: "Tier",
         tierUpdated: "Tier atualizado",
+        searchPlaceholder: "Buscar por nome ou email...",
+        noResultsFiltered: "Nenhum usuário corresponde à busca.",
+        statTotal: "Total",
+        statWebMasters: "WEB Masters",
+        statAdmins: "Admins",
+        statModerators: "Moderadores",
+        statRegular: "Comuns",
+        deleteUser: "Excluir usuário",
+        deleteUserTitle: (name: string) => `Excluir ${name} permanentemente?`,
+        deleteUserDesc: "Esta ação é irreversível. A conta será removida do login, o perfil apagado e o histórico no fórum/loja anonimizado. A exclusão fica registrada no log de auditoria com o seu usuário como responsável.",
+        deleteConfirmLabel: (email: string) => `Para confirmar, digite ${email} abaixo:`,
+        confirmDelete: "Sim, excluir permanentemente",
+        userDeleted: "Usuário excluído",
+        failedToDelete: "Erro ao excluir usuário",
+        cannotDeleteSelf: "Você não pode excluir a própria conta.",
+        cannotDeleteWebMaster: "Uma conta WEB Master não pode ser excluída por este painel.",
       },
       offers: {
         failedToLoad: "Erro ao carregar ofertas",
@@ -1816,6 +1848,22 @@ export const translations: Record<LocaleCode, Translations> = {
         failedToCreateUser: "Failed to create user",
         tier: "Tier",
         tierUpdated: "Tier updated",
+        searchPlaceholder: "Search by name or email...",
+        noResultsFiltered: "No users match your search.",
+        statTotal: "Total",
+        statWebMasters: "WEB Masters",
+        statAdmins: "Admins",
+        statModerators: "Moderators",
+        statRegular: "Regular",
+        deleteUser: "Delete user",
+        deleteUserTitle: (name: string) => `Permanently delete ${name}?`,
+        deleteUserDesc: "This action cannot be undone. The account will be removed from login, the profile deleted, and forum/store history anonymized. The deletion is logged in the audit trail with your user as the actor.",
+        deleteConfirmLabel: (email: string) => `To confirm, type ${email} below:`,
+        confirmDelete: "Yes, delete permanently",
+        userDeleted: "User deleted",
+        failedToDelete: "Failed to delete user",
+        cannotDeleteSelf: "You cannot delete your own account.",
+        cannotDeleteWebMaster: "A WEB Master account cannot be deleted from this panel.",
       },
       offers: {
         failedToLoad: "Failed to load offers",

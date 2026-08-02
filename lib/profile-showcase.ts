@@ -94,6 +94,8 @@ export type ProfileShowcase = {
   member_since: string
   /** Quantas pessoas seguem este perfil. */
   followers: number
+  /** Saldo de aura acumulado (0 se o usuário nunca recebeu). */
+  aura: number
   setup: SetupItem[]
   /** Medalhas já filtradas pelo limite do tier. */
   medals: ShowcaseMedal[]

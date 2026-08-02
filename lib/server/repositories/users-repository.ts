@@ -769,6 +769,37 @@ export async function deleteUserAccountData(
   })
 }
 
+/**
+ * Exclusão administrativa de uma conta, iniciada por um WEB Master a partir do
+ * painel. Remove o perfil administrativo (se houver), anonimiza fórum/pedidos
+ * e remove o perfil público, registrando no audit_log com o WEB Master como
+ * autor da ação — distinto de `deleteUserAccountData`, que registra a própria
+ * pessoa como autora (autoexclusão via LGPD).
+ *
+ * Não remove a conta em si (Supabase Auth): isso é feito separadamente pela
+ * rota, com `auth.admin.deleteUser`, no mesmo padrão de `app/api/profile/delete`.
+ */
+export async function deleteUserAsAdmin(
+  targetId: string,
+  options: { actorId: string; targetEmail?: string | null; ipAddress?: string | null }
+): Promise<void> {
+  const db = createSupabaseAdminClient()
+
+  await db.from("admin_profiles").delete().eq("id", targetId)
+  await db.rpc("anonymize_user_data", { p_user_id: targetId })
+  await db.from("user_profiles").delete().eq("id", targetId)
+
+  await db.from("audit_log").insert({
+    user_id: targetId,
+    actor_id: options.actorId,
+    action: "admin_user_deleted",
+    table_name: "user_profiles",
+    record_id: targetId,
+    metadata: { email: options.targetEmail ?? null },
+    ip_address: options.ipAddress ?? null,
+  })
+}
+
 /** Dados de compra do cadastro completo (todos opcionais). */
 export type PurchaseProfileInput = {
   fullName?: string | null

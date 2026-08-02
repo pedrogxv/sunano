@@ -2,6 +2,7 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { countFollowers } from "@/lib/server/repositories/users-repository"
+import { getUserAuraBalance } from "@/lib/server/repositories/aura-repository"
 import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 import {
   coerceAccountTier,
@@ -108,11 +109,12 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
 
   const tier = coerceAccountTier(row.account_tier)
 
-  const [setup, medals, favorites, followers] = await Promise.all([
+  const [setup, medals, favorites, followers, aura] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
     getUserFavorites(userId),
     countFollowers(userId),
+    getUserAuraBalance(userId),
   ])
 
   return {
@@ -128,6 +130,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     tiktok_handle: row.tiktok_handle,
     member_since: row.created_at,
     followers,
+    aura,
     setup,
     medals: selectVisibleMedals(medals, tier),
     medals_total: medals.length,

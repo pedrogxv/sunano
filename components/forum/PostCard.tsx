@@ -4,12 +4,13 @@ import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Crown, Lock, MessageCircle, Pin, Share2 } from "lucide-react"
+import { Crown, Lock, MessageCircle, Pin, Share2, Sparkles } from "lucide-react"
 
 import { AuraButton } from "@/components/forum/AuraButton"
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
+import { getSpecialTag } from "@/lib/special-tag"
 import type { ForumCategoryInfo } from "@/lib/server/repositories/forum-repository"
 
 export type PostCardData = {
@@ -19,6 +20,7 @@ export type PostCardData = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_display_slug: string | null
   category: ForumCategoryInfo | null
   media_image_url: string | null
   media_video_url: string | null
@@ -40,6 +42,18 @@ export function AuthorTierBadge({ tier }: { tier: AccountTier }) {
     >
       <Crown className="size-2.5" />
       {TIER_CAPABILITIES[tier].label}
+    </span>
+  )
+}
+
+/** Selo de tag especial (ex: SUNANO) — aglutina com `AuthorTierBadge` ao lado do nome. */
+export function AuthorSpecialTagBadge({ slug }: { slug: string | null }) {
+  const tag = getSpecialTag(slug)
+  if (!tag) return null
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium bg-cyan-400/15 text-cyan-400`}>
+      <Sparkles className="size-2.5" />
+      {tag.label}
     </span>
   )
 }
@@ -114,6 +128,7 @@ export function PostCard({
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">{post.author_display_name}</span>
             <AuthorTierBadge tier={post.author_account_tier} />
+            <AuthorSpecialTagBadge slug={post.author_display_slug} />
             <span>·</span>
             <span>{format(new Date(post.created_at), "dd MMM yyyy", { locale: ptBR })}</span>
             {post.is_pinned && (

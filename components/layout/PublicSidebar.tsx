@@ -31,6 +31,8 @@ type NavItem = {
   href: string
   label: string
   icon: React.ElementType
+  /** Contador exibido como tag ao lado do label — hoje só "Eventos" usa (conquistas resgatáveis). */
+  badge?: number
 }
 
 function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean }) {
@@ -67,7 +69,17 @@ function NavLink({
       )}
     >
       <Icon className="size-[18px] shrink-0" />
-      <span className={cn(collapsed && "hidden")}>{item.label}</span>
+      <span className={cn("flex-1", collapsed && "hidden")}>{item.label}</span>
+      {!collapsed && !!item.badge && item.badge > 0 && (
+        <span
+          className={cn(
+            "flex min-w-[18px] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+            isActive ? "bg-primary-foreground/25 text-primary-foreground" : "bg-primary text-primary-foreground"
+          )}
+        >
+          {item.badge > 9 ? "9+" : item.badge}
+        </span>
+      )}
     </Link>
   )
 }
@@ -82,6 +94,7 @@ export function PublicSidebar() {
 
   const [isAdmin, setIsAdmin] = useState(false)
   const [isAdminLoading, setIsAdminLoading] = useState(true)
+  const [claimableEvents, setClaimableEvents] = useState(0)
 
   useEffect(() => {
     let mounted = true
@@ -89,6 +102,15 @@ export function PublicSidebar() {
       .then((res) => { if (mounted) setIsAdmin(res.ok) })
       .catch(() => { if (mounted) setIsAdmin(false) })
       .finally(() => { if (mounted) setIsAdminLoading(false) })
+    return () => { mounted = false }
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    fetch("/api/eventos/resgataveis")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { count?: number } | null) => { if (mounted) setClaimableEvents(data?.count ?? 0) })
+      .catch(() => { if (mounted) setClaimableEvents(0) })
     return () => { mounted = false }
   }, [])
 
@@ -108,7 +130,7 @@ export function PublicSidebar() {
     { href: "/forum",    label: t.nav.forum,   icon: MessageCircle },
     { href: "/videos",   label: t.nav.videos,  icon: PlaySquare },
     { href: "/pessoas",  label: t.nav.people,  icon: Users },
-    { href: "/eventos",  label: t.nav.events,  icon: Medal },
+    { href: "/eventos",  label: t.nav.events,  icon: Medal, badge: claimableEvents },
   ]
 
   return (

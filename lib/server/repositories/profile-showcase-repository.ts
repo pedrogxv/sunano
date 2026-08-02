@@ -2,6 +2,7 @@ import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { countFollowers } from "@/lib/server/repositories/users-repository"
+import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 import {
   coerceAccountTier,
   selectVisibleFavorites,
@@ -39,9 +40,34 @@ export {
 const PUBLIC_PROFILE_COLUMNS =
   "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle, created_at"
 
-const PERIPHERAL_COLUMNS = "id, name, brand, category, image_url, tier"
+// `specs` e `tags` só existem aqui para alimentar o hover/tooltip (ratings +
+// chips) reaproveitado da tierlist — a resposta pública (`ShowcasePeripheral`)
+// expõe só `ratings` já extraído, nunca o `specs` bruto.
+const PERIPHERAL_COLUMNS = "id, name, brand, category, image_url, tier, specs, tags"
 
-type PeripheralRow = ShowcasePeripheral
+type PeripheralRow = {
+  id: string
+  name: string
+  brand: string
+  category: string
+  image_url: string | null
+  tier: string | null
+  specs: Record<string, unknown> | null
+  tags: string[] | null
+}
+
+function toShowcasePeripheral(row: PeripheralRow): ShowcasePeripheral {
+  return {
+    id: row.id,
+    name: row.name,
+    brand: row.brand,
+    category: row.category,
+    image_url: row.image_url,
+    tier: row.tier,
+    tags: row.tags ?? [],
+    ratings: extractPeripheralRatings(row.specs),
+  }
+}
 
 function defaultNameFrom(id: string) {
   return `Membro ${id.slice(0, 6)}`
@@ -132,8 +158,8 @@ export async function getUserSetup(userId: string): Promise<SetupItem[]> {
   const bySlot = new Map<SetupSlot, SetupItem>()
   for (const r of rows) {
     // O join do PostgREST devolve objeto ou array conforme a cardinalidade.
-    const peripheral = Array.isArray(r.peripherals) ? (r.peripherals[0] ?? null) : r.peripherals
-    bySlot.set(r.slot, { slot: r.slot, peripheral })
+    const raw = Array.isArray(r.peripherals) ? (r.peripherals[0] ?? null) : r.peripherals
+    bySlot.set(r.slot, { slot: r.slot, peripheral: raw ? toShowcasePeripheral(raw) : null })
   }
 
   return SLOTS.map((slot) => bySlot.get(slot) ?? { slot, peripheral: null })
@@ -204,9 +230,9 @@ export async function getUserFavorites(
   }>
 
   return rows.flatMap((r) => {
-    const peripheral = Array.isArray(r.peripherals) ? r.peripherals[0] : r.peripherals
-    if (!peripheral) return []
-    return [{ position: r.position, peripheral }]
+    const raw = Array.isArray(r.peripherals) ? r.peripherals[0] : r.peripherals
+    if (!raw) return []
+    return [{ position: r.position, peripheral: toShowcasePeripheral(raw) }]
   })
 }
 

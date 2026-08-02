@@ -55,6 +55,7 @@ function AuthorByline({ post, size = "sm" }: { post: BlogListPost; size?: "xs" |
     display_name: name,
     avatar_url: post.author_profile?.avatar_url ?? post.admin_profiles?.avatar_url ?? null,
     account_tier: post.author_profile?.account_tier ?? ("common" as const),
+    display_slug: post.author_profile?.display_slug ?? null,
   }
   const role = post.admin_profiles?.role
 

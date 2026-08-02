@@ -1,7 +1,8 @@
-import { Crown } from "lucide-react"
+import { Crown, Sparkles } from "lucide-react"
 
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
+import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
@@ -25,7 +26,10 @@ export function PersonAvatar({
   size = "md",
   className,
 }: {
-  profile: Pick<PublicProfileSummary, "display_name" | "avatar_url" | "account_tier">
+  profile: Pick<PublicProfileSummary, "display_name" | "avatar_url" | "account_tier"> & {
+    /** Pode ser `null` fora do diretório de pessoas (ex: byline de notícia). */
+    display_slug: string | null
+  }
   size?: keyof typeof SIZE_CLASSES
   className?: string
 }) {
@@ -33,6 +37,7 @@ export function PersonAvatar({
   const initials =
     profile.display_name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2) || "?"
   const isVip = profile.account_tier !== "common"
+  const specialTag = getSpecialTag(profile.display_slug)
 
   return (
     <div className={cn("relative shrink-0", SIZE_CLASSES[size], className)}>
@@ -54,6 +59,11 @@ export function PersonAvatar({
       {isVip && (
         <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full border border-background bg-amber-400 p-[3px]">
           <Crown className={cn(CROWN_SIZE[size], "text-amber-950")} />
+        </span>
+      )}
+      {specialTag && (
+        <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center rounded-full border border-background bg-cyan-400 p-[3px]">
+          <Sparkles className={cn(CROWN_SIZE[size], "text-cyan-950")} />
         </span>
       )}
     </div>

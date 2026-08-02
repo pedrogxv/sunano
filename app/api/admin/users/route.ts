@@ -83,14 +83,28 @@ export async function GET() {
 
     const [{ data: adminRows }, { data: profileRows }] = await Promise.all([
       admin.from("admin_profiles").select("id, email, display_name, avatar_url, role, permissions, updated_at"),
-      admin.from("user_profiles").select("id, display_name, avatar_url, account_tier"),
+      admin.from("user_profiles").select("id, display_name, avatar_url, account_tier, display_slug"),
     ])
 
     const adminMap = new Map<string, AdminProfileRow>()
     for (const row of (adminRows ?? []) as AdminProfileRow[]) adminMap.set(row.id, row)
-    const profileMap = new Map<string, { display_name: string | null; avatar_url: string | null; account_tier: string | null }>()
-    for (const row of (profileRows ?? []) as { id: string; display_name: string | null; avatar_url: string | null; account_tier: string | null }[]) {
-      profileMap.set(row.id, { display_name: row.display_name, avatar_url: row.avatar_url, account_tier: row.account_tier })
+    const profileMap = new Map<
+      string,
+      { display_name: string | null; avatar_url: string | null; account_tier: string | null; display_slug: string | null }
+    >()
+    for (const row of (profileRows ?? []) as {
+      id: string
+      display_name: string | null
+      avatar_url: string | null
+      account_tier: string | null
+      display_slug: string | null
+    }[]) {
+      profileMap.set(row.id, {
+        display_name: row.display_name,
+        avatar_url: row.avatar_url,
+        account_tier: row.account_tier,
+        display_slug: row.display_slug,
+      })
     }
 
     const users = authUsers
@@ -105,6 +119,7 @@ export async function GET() {
           display_name: ap?.display_name?.trim() || up?.display_name?.trim() || defaultNameFromEmail(email),
           avatar_url: ap?.avatar_url ?? up?.avatar_url ?? null,
           account_tier: coerceAccountTier(up?.account_tier),
+          display_slug: up?.display_slug ?? null,
           role,
           permissions:
             role === "webmaster"

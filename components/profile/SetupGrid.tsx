@@ -1,8 +1,13 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
 import { Headphones, Keyboard, Monitor, Mouse, Square } from "lucide-react"
 
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { TierItemTooltipContent, type TierItemTooltipContentProps } from "@/components/tierlist/TierItemTooltipContent"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
+import { mapTier } from "@/lib/tier-utils"
 import type { SetupItem, SetupSlot } from "@/lib/profile-showcase"
 import { cn } from "@/lib/utils"
 
@@ -87,10 +92,33 @@ function SetupCard({ item, isOwner }: { item: SetupItem; isOwner: boolean }) {
   )
 
   if (item.peripheral) {
+    const peripheral = item.peripheral
+    const href = `/perifericos/${buildPeripheralSlug(peripheral.name, peripheral.id)}`
+
     return (
-      <Link href={`/perifericos/${buildPeripheralSlug(item.peripheral.name, item.peripheral.id)}`}>
-        {content}
-      </Link>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Link href={href}>{content}</Link>
+        </TooltipTrigger>
+        <TooltipContent
+          className="rounded-xl border border-border bg-popover p-4 shadow-2xl backdrop-blur-md"
+          sideOffset={12}
+          side="bottom"
+          align="center"
+        >
+          <Link href={href} aria-label={peripheral.name} className="block cursor-pointer hover:opacity-95">
+            <TierItemTooltipContent
+              name={peripheral.name}
+              brand={peripheral.brand}
+              categoryLabel={peripheral.category}
+              image_url={peripheral.image_url}
+              tier={peripheral.tier ? mapTier(peripheral.tier) : null}
+              ratings={peripheral.ratings}
+              tags={peripheral.tags as TierItemTooltipContentProps["tags"]}
+            />
+          </Link>
+        </TooltipContent>
+      </Tooltip>
     )
   }
 

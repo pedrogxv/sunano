@@ -12,7 +12,9 @@ import {
 
 import BannerCarousel from "@/components/home/BannerCarousel"
 import DefaultHero from "@/components/home/DefaultHero"
+import { EventsShowcase } from "@/components/home/EventsShowcase"
 import HeroHighlightsBar from "@/components/home/HeroHighlightsBar"
+import { UserAvatar } from "@/components/ui/user-avatar"
 import { getHomeData } from "@/lib/server/repositories/home-repository"
 import { formatBRL } from "@/lib/stripe"
 import { mapTier } from "@/lib/tier-utils"
@@ -84,7 +86,7 @@ function SectionHeader({
 }
 
 export default async function HomePage() {
-  const { banners, peripherals, blog, products, forum, videos, counts } = await getHomeData()
+  const { banners, peripherals, blog, products, forum, videos, events, counts } = await getHomeData()
 
   return (
     <div className="mx-auto max-w-6xl space-y-12 px-4 py-6 md:px-6 lg:px-8 md:py-10">
@@ -176,53 +178,56 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* ============ REVIEWS ============ */}
-      {blog.length > 0 && (
-        <section>
-          <SectionHeader
-            icon={Newspaper}
-            title="Últimos reviews"
-            subtitle="Análises detalhadas, sem enrolação"
-            href="/blog"
-            linkLabel="Ver todos"
-          />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {blog.map((post) => (
-              <Link
-                key={post.id}
-                href={`/blog/${post.slug}`}
-                className="group overflow-hidden rounded-xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-foreground/20"
-              >
-                <div className="relative aspect-[16/10] overflow-hidden bg-muted">
-                  {(post.cover_thumbnail_url || post.cover_image_url) && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={post.cover_thumbnail_url || post.cover_image_url || ""}
-                      alt={post.title}
-                      className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
-                    />
-                  )}
-                </div>
-                <div className="space-y-2 p-4">
-                  <p className="line-clamp-2 text-sm font-semibold text-foreground/90 group-hover:text-foreground">
-                    {post.title}
-                  </p>
-                  {post.excerpt && (
-                    <p className="line-clamp-2 text-xs text-muted-foreground">{post.excerpt}</p>
-                  )}
-                  <div className="flex items-center gap-2 pt-1 text-[11px] text-muted-foreground">
-                    <span>{formatTimeAgo(post.created_at)}</span>
-                    {post.read_time_minutes && (
-                      <>
-                        <span>·</span>
-                        <span>{post.read_time_minutes} min</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+      {/* ============ TWO COLUMNS: CONQUISTAS + REVIEWS ============ */}
+      {(events.length > 0 || blog.length > 0) && (
+        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {events.length > 0 && <EventsShowcase events={events} />}
+
+          {blog.length > 0 && (
+            <div>
+              <SectionHeader
+                icon={Newspaper}
+                title="Últimos reviews"
+                subtitle="Análises detalhadas, sem enrolação"
+                href="/blog"
+                linkLabel="Ver todos"
+              />
+              <div className="space-y-2">
+                {blog.map((post) => (
+                  <Link
+                    key={post.id}
+                    href={`/blog/${post.slug}`}
+                    className="group flex gap-3 rounded-xl border border-border bg-card p-2 transition-all hover:border-foreground/20 hover:bg-accent"
+                  >
+                    <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-md bg-muted">
+                      {(post.cover_thumbnail_url || post.cover_image_url) && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={post.cover_thumbnail_url || post.cover_image_url || ""}
+                          alt={post.title}
+                          className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1 py-1 pr-2">
+                      <p className="line-clamp-2 text-sm font-medium text-foreground/90 group-hover:text-foreground">
+                        {post.title}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span>{formatTimeAgo(post.created_at)}</span>
+                        {post.read_time_minutes && (
+                          <>
+                            <span>·</span>
+                            <span>{post.read_time_minutes} min</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -333,9 +338,18 @@ export default async function HomePage() {
                   className="group block rounded-xl border border-border bg-card p-3 transition-all hover:border-foreground/20 hover:bg-accent"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary">
-                      <MessageCircle className="size-4" />
-                    </div>
+                    {post.media_image_url ? (
+                      <div className="size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={post.media_image_url}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <UserAvatar name={post.author_name} avatarUrl={post.author_avatar_url} size={10} />
+                    )}
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-1 text-sm font-semibold text-foreground/90 group-hover:text-foreground">
                         {post.body_preview}

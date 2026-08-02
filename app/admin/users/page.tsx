@@ -1,13 +1,14 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ShieldCheck, Users as UsersIcon, UserPlus, Lock, Save, ChevronDown, ChevronUp, KeyRound, Crown } from "lucide-react"
+import { ShieldCheck, Users as UsersIcon, UserPlus, Lock, Save, ChevronDown, ChevronUp, KeyRound, Crown, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { ACCOUNT_TIERS, getTierCapabilities, type AccountTier } from "@/lib/account-tier"
 import { ADMIN_FEATURES, createDefaultPermissions, normalizePermissions, type AdminProfile } from "@/lib/admin-permissions"
+import { getSpecialTag } from "@/lib/special-tag"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +35,7 @@ type AdminUser = Omit<AdminProfile, "role"> & {
   /** Cargo persistido no servidor (não muda com a edição local do select). */
   originalRole: UserRole
   account_tier: AccountTier
+  display_slug: string | null
   created_at: string
   updated_at: string
 }
@@ -129,6 +131,18 @@ function TierBadge({ tier }: { tier: AccountTier }) {
   )
 }
 
+/* ── Special tag badge (ex: SUNANO) — aglutina com o TierBadge ─ */
+function SpecialTagBadge({ slug }: { slug: string | null }) {
+  const tag = getSpecialTag(slug)
+  if (!tag) return null
+  return (
+    <Badge className="bg-cyan-500/20 text-cyan-300 border-cyan-500/30 hover:bg-cyan-500/20">
+      <Sparkles className="mr-1 size-3" />
+      {tag.label}
+    </Badge>
+  )
+}
+
 /* ── User card ───────────────────────────────────────────── */
 function UserCard({
   user,
@@ -216,6 +230,7 @@ function UserCard({
             <p className="text-sm font-semibold text-foreground truncate">{user.display_name || user.email}</p>
             <RoleBadge role={user.role} />
             <TierBadge tier={user.account_tier} />
+            <SpecialTagBadge slug={user.display_slug} />
             {isCurrentUser && <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">Você</Badge>}
           </div>
           <p className="text-xs text-muted-foreground truncate">{user.email}</p>

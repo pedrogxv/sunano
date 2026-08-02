@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Eye, Heart, Search, UserPlus, Users, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
+import { PodiumSection } from "@/components/people/PodiumSection"
 import { ProfileCard } from "@/components/people/ProfileCard"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
@@ -195,18 +196,30 @@ export function PessoasContent({
             }
           />
         ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-            {shown.map((profile, index) => (
-              <ProfileCard
-                key={profile.id}
-                profile={profile}
-                metric={metric}
-                rank={isRanked ? index + 1 : undefined}
-                isFollowing={following.has(profile.id)}
-                isSelf={profile.id === currentUserId}
-              />
-            ))}
-          </div>
+          <>
+            {isRanked && shown.length >= 3 && (
+              <div className="mb-8">
+                <PodiumSection
+                  profiles={shown.slice(0, 3)}
+                  metric={metric}
+                  following={following}
+                  currentUserId={currentUserId}
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              {(isRanked && shown.length >= 3 ? shown.slice(3) : shown).map((profile, index) => (
+                <ProfileCard
+                  key={profile.id}
+                  profile={profile}
+                  metric={metric}
+                  rank={isRanked ? index + (shown.length >= 3 ? 4 : 1) : undefined}
+                  isFollowing={following.has(profile.id)}
+                  isSelf={profile.id === currentUserId}
+                />
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -1,12 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import { Crown, Eye, Users } from "lucide-react"
+import { Crown, Eye, Sparkles, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
 import { profilePath } from "@/lib/profile-name"
+import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 import { profileAccentHue, type PublicProfileSummary } from "@/lib/user-directory"
 
@@ -30,7 +31,7 @@ const RANK_STYLES: Record<number, string> = {
   3: "bg-orange-400/90 text-orange-950",
 }
 
-function formatCount(value: number): string {
+export function formatCount(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
   return String(value)
 }
@@ -63,6 +64,7 @@ export function ProfileCard({
     profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
     "?"
   const isVip = profile.account_tier !== "common"
+  const specialTag = getSpecialTag(profile.display_slug)
   const hue = profileAccentHue(profile.id)
   const glowHue = TIER_GLOW_HUE[profile.account_tier] ?? hue
   const value = metric === "views" ? profile.profile_views : profile.followers
@@ -149,6 +151,7 @@ export function ProfileCard({
           <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
             <span className="truncate">{profile.display_name}</span>
             {isVip && <Crown className="size-3.5 shrink-0 text-amber-400" />}
+            {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
           </p>
 
           <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">

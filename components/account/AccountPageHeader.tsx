@@ -5,6 +5,7 @@ import type { ProfileData } from "./ProfileSection"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { getTierCapabilities, coerceAccountTier } from "@/lib/account-tier"
 import { profilePath } from "@/lib/profile-name"
+import { getSpecialTag } from "@/lib/special-tag"
 
 /**
  * Cabeçalho compartilhado por /perfil e /conta — quem é você, com atalho
@@ -13,6 +14,7 @@ import { profilePath } from "@/lib/profile-name"
 export function AccountPageHeader({ profile }: { profile: ProfileData }) {
   const name = profile.display_name?.trim() || (profile.email?.split("@")[0] ?? "Usuário")
   const tierLabel = getTierCapabilities(coerceAccountTier(profile.account_tier)).label
+  const specialTag = getSpecialTag(profile.display_slug)
   // O endereço público é o slug do nome; o UUID fica de reserva para perfis
   // ainda sem slug (antes da migration rodar).
   const publicProfileHref = profile.display_slug
@@ -36,6 +38,13 @@ export function AccountPageHeader({ profile }: { profile: ProfileData }) {
           <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {tierLabel}
           </span>
+          {specialTag && (
+            <span
+              className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${specialTag.className}`}
+            >
+              {specialTag.label}
+            </span>
+          )}
         </div>
         <p className="truncate text-sm text-muted-foreground">{profile.email ?? "-"}</p>
       </div>

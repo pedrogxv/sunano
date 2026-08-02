@@ -3,13 +3,14 @@
 import Image from "next/image"
 import { useEffect, useState } from "react"
 import type { ChangeEvent } from "react"
-import { Camera, Crown, Youtube } from "lucide-react"
+import { Camera, Crown, Sparkles, Youtube } from "lucide-react"
 import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { TikTokIcon } from "@/components/icons/social-icons"
 import { resolveProfileMedia, type ProfileMedia } from "@/lib/account-tier"
+import { getSpecialTag } from "@/lib/special-tag"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -99,6 +100,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   }>({ state: "idle", message: null })
 
   const previewName = displayName.trim() || (profile.email?.split("@")[0] ?? "Usuário")
+  const specialTag = getSpecialTag(profile.display_slug)
   const slugPreview = slugifyDisplayName(displayName) || profile.display_slug || "seu-nome"
   const nameChanged = displayName.trim() !== (profile.display_name ?? "").trim()
   // GIF só entra no seletor de arquivos de quem pode usá-lo; a API valida de novo.
@@ -364,6 +366,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 name={previewName}
                 tierLabel={capabilities.label}
                 isVip={isVip}
+                specialTag={specialTag}
                 imageAccept={imageAccept}
                 uploadingAvatar={uploading}
                 onAvatarChange={handleAvatarSelect}
@@ -382,6 +385,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 avatarSrc={avatarPreview}
                 name={previewName}
                 isVip={isVip}
+                specialTag={specialTag}
                 accentHue={accentHue}
                 imageAccept={imageAccept}
                 uploadingAvatar={uploading}
@@ -569,6 +573,7 @@ function ProfilePagePreview({
   name,
   tierLabel,
   isVip,
+  specialTag,
   imageAccept,
   uploadingAvatar,
   onAvatarChange,
@@ -581,6 +586,7 @@ function ProfilePagePreview({
   name: string
   tierLabel: string
   isVip: boolean
+  specialTag: ReturnType<typeof getSpecialTag>
   imageAccept: string
   uploadingAvatar: boolean
   onAvatarChange: (event: ChangeEvent<HTMLInputElement>) => void
@@ -679,6 +685,17 @@ function ProfilePagePreview({
             {isVip && <Crown className="size-2.5" />}
             {tierLabel}
           </span>
+          {specialTag && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                specialTag.className
+              )}
+            >
+              <Sparkles className="size-2.5" />
+              {specialTag.label}
+            </span>
+          )}
         </div>
 
         {/* Setup, medalhas e favoritos entram em cinza: aqui eles só situam a
@@ -717,6 +734,7 @@ function MiniBannerCardPreview({
   avatarSrc,
   name,
   isVip,
+  specialTag,
   accentHue,
   imageAccept,
   uploadingAvatar,
@@ -728,6 +746,7 @@ function MiniBannerCardPreview({
   avatarSrc: string | null
   name: string
   isVip: boolean
+  specialTag: ReturnType<typeof getSpecialTag>
   accentHue: number
   imageAccept: string
   uploadingAvatar: boolean
@@ -808,6 +827,7 @@ function MiniBannerCardPreview({
           <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
             <span className="truncate">{name}</span>
             {isVip && <Crown className="size-3.5 shrink-0 text-amber-400" />}
+            {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
           </p>
 
           {/* Visitas e botão de seguir viram cinza: no editor eles não têm

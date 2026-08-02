@@ -28,6 +28,7 @@ export type BlogAuthor = {
 export type AuthorPublicProfile = {
   avatar_url: string | null
   account_tier: AccountTier
+  display_slug: string | null
 } | null
 
 export type BlogPeripheralRef = {
@@ -177,7 +178,7 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("user_profiles")
-    .select("id, avatar_url, account_tier")
+    .select("id, avatar_url, account_tier, display_slug")
     .in("id", ids)
   if (error) {
     console.error("[blog-repository] getAuthorProfiles:", error.message)
@@ -185,7 +186,11 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const row of (data ?? []) as any[]) {
-    map[row.id] = { avatar_url: row.avatar_url ?? null, account_tier: coerceAccountTier(row.account_tier) }
+    map[row.id] = {
+      avatar_url: row.avatar_url ?? null,
+      account_tier: coerceAccountTier(row.account_tier),
+      display_slug: row.display_slug ?? null,
+    }
   }
   return map
 }

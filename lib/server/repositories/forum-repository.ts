@@ -33,6 +33,8 @@ export type ForumListPost = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  /** Slug do autor — resolve tag especial (ex: SUNANO) junto do badge de tier. */
+  author_display_slug: string | null
 }
 
 export type ForumPostDetail = ForumListPost
@@ -47,6 +49,7 @@ export type ForumCommentDetail = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_display_slug: string | null
 }
 
 export type ForumTab = "recent" | "hot" | "category"
@@ -54,16 +57,23 @@ export type ForumTab = "recent" | "hot" | "category"
 // ── Helpers de enriquecimento ────────────────────────────────────────────────
 
 async function buildProfileMap(userIds: (string | null)[]) {
-  const map: Record<string, { display_name: string | null; avatar_url: string | null; account_tier: AccountTier }> = {}
+  const map: Record<
+    string,
+    { display_name: string | null; avatar_url: string | null; account_tier: AccountTier; display_slug: string | null }
+  > = {}
   const ids = [...new Set(userIds.filter((id): id is string => Boolean(id)))]
   if (ids.length === 0) return map
   const db = createSupabaseAdminClient()
-  const { data } = await db.from("user_profiles").select("id, display_name, avatar_url, account_tier").in("id", ids)
+  const { data } = await db
+    .from("user_profiles")
+    .select("id, display_name, avatar_url, account_tier, display_slug")
+    .in("id", ids)
   for (const row of data ?? []) {
     map[row.id] = {
       display_name: row.display_name,
       avatar_url: row.avatar_url,
       account_tier: coerceAccountTier(row.account_tier),
+      display_slug: row.display_slug,
     }
   }
   return map
@@ -179,6 +189,7 @@ export async function listForumPosts(params: {
     author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
     author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
+    author_display_slug: p.user_id ? profileMap[p.user_id]?.display_slug ?? null : null,
   }))
 }
 
@@ -235,6 +246,7 @@ export async function getForumPostBySlug(slug: string): Promise<{
       : post.author_name,
     author_avatar_url: post.user_id ? profileMap[post.user_id]?.avatar_url ?? null : null,
     author_account_tier: post.user_id ? profileMap[post.user_id]?.account_tier ?? "common" : "common",
+    author_display_slug: post.user_id ? profileMap[post.user_id]?.display_slug ?? null : null,
   }
 
   const enrichedComments: ForumCommentDetail[] = comments.map((c) => ({
@@ -248,6 +260,7 @@ export async function getForumPostBySlug(slug: string): Promise<{
     author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
+    author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
   }))
 
   return { post: enrichedPost, comments: enrichedComments }

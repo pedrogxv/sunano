@@ -6,6 +6,8 @@
  * só tipos e constantes, nenhum acesso a dados.
  */
 
+import type { Ratings } from "@/components/tierlist/TierItemTooltipContent"
+
 export const SETUP_SLOTS = ["mouse", "keyboard", "headset", "monitor", "mousepad"] as const
 
 export type SetupSlot = (typeof SETUP_SLOTS)[number]
@@ -36,6 +38,14 @@ export const MEDAL_RARITY_BAR: Record<MedalRarity, string> = {
   legendary: "bg-amber-400",
 }
 
+/** Mesmas cores de `MEDAL_RARITY_BAR`, em hex — para uso em `style` inline (ex: conic-gradient), onde uma classe Tailwind não serve. */
+export const MEDAL_RARITY_SOLID: Record<MedalRarity, string> = {
+  common: "#a1a1aa",
+  rare: "#38bdf8",
+  epic: "#a78bfa",
+  legendary: "#fbbf24",
+}
+
 export type ShowcasePeripheral = {
   id: string
   name: string
@@ -43,6 +53,10 @@ export type ShowcasePeripheral = {
   category: string
   image_url: string | null
   tier: string | null
+  /** Tags do catálogo (ver `CARD_TAG_STYLES`) — usadas no hover/tooltip de setup e favoritos. */
+  tags: string[]
+  /** Notas públicas (rating-first), extraídas de `specs.details.ratings` — usadas no mesmo tooltip. */
+  ratings: Ratings
 }
 
 /**

@@ -3,6 +3,7 @@ import { getTierlistMeta } from "@/lib/server/repositories/tierlist-meta-reposit
 import { TierlistInfo } from "@/components/tierlist/TierlistInfo"
 import { TierlistContent } from "@/components/tierlist/TierlistContent"
 import { mapTier } from "@/lib/tier-utils"
+import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 
 // ISR: serve do cache e revalida em background a cada 30s, em vez de
 // re-renderizar (com nova query ao banco) em toda requisição.
@@ -18,11 +19,7 @@ export default async function TierlistPage() {
     const specs = (p.specs || {}) as Record<string, unknown> & {
       details?: { ratings?: Record<string, number> }
     }
-    const rawRatings = specs.details?.ratings ?? {}
-    const ratings: Partial<Record<"overall" | "performance" | "build" | "value" | "software" | "battery" | "qc", number>> = {}
-    for (const key of ["overall", "performance", "build", "value", "software", "battery", "qc"] as const) {
-      if (typeof rawRatings[key] === "number") ratings[key] = rawRatings[key]
-    }
+    const ratings = extractPeripheralRatings(specs)
 
     return {
       id: p.id,

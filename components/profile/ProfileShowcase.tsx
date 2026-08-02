@@ -69,6 +69,7 @@ export function ProfileShowcase({
               bio={profile.bio}
               tier={profile.account_tier}
               memberSince={profile.member_since}
+              displaySlug={profile.display_slug}
             />
           </div>
 

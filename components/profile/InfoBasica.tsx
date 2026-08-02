@@ -1,6 +1,7 @@
-import { Crown } from "lucide-react"
+import { Crown, Sparkles } from "lucide-react"
 
 import { getTierCapabilities, type AccountTier } from "@/lib/account-tier"
+import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 
 interface InfoBasicaProps {
@@ -8,6 +9,8 @@ interface InfoBasicaProps {
   bio: string | null
   tier: AccountTier
   memberSince?: string | null
+  /** Slug do perfil — resolve tag especial (ex: SUNANO), se houver. */
+  displaySlug?: string | null
 }
 
 const TIER_BADGE_STYLES: Record<AccountTier, string> = {
@@ -16,11 +19,12 @@ const TIER_BADGE_STYLES: Record<AccountTier, string> = {
   vip_plus: "border-fuchsia-400/40 bg-fuchsia-400/10 text-fuchsia-300",
 }
 
-/** Nome, badge de tier e bio curta — bloco centralizado sob a foto. */
-export function InfoBasica({ name, bio, tier, memberSince }: InfoBasicaProps) {
+/** Nome, badge de tier + tag especial (aglutinados) e bio curta — bloco centralizado sob a foto. */
+export function InfoBasica({ name, bio, tier, memberSince, displaySlug }: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
   const isVip = tier !== "common"
   const isVipPlus = tier === "vip_plus"
+  const specialTag = getSpecialTag(displaySlug)
 
   const joinedLabel = memberSince
     ? new Date(memberSince).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
@@ -39,6 +43,18 @@ export function InfoBasica({ name, bio, tier, memberSince }: InfoBasicaProps) {
           {isVip && <Crown className={cn("size-3", isVipPlus && "vip-plus-badge-crown")} />}
           <span className={cn(isVipPlus && "vip-plus-badge-text")}>{label}</span>
         </span>
+
+        {specialTag && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
+              specialTag.className
+            )}
+          >
+            <Sparkles className="size-3" />
+            {specialTag.label}
+          </span>
+        )}
       </div>
 
       {bio && <p className="max-w-md text-sm leading-relaxed text-muted-foreground">{bio}</p>}

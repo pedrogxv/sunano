@@ -9,7 +9,7 @@ import { ArrowLeft, Lock, MessageCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { AuraButton } from "@/components/forum/AuraButton"
-import { AuthorTierBadge, PostCard, type PostCardData } from "@/components/forum/PostCard"
+import { AuthorSpecialTagBadge, AuthorTierBadge, PostCard, type PostCardData } from "@/components/forum/PostCard"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -25,6 +25,7 @@ type ForumComment = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_display_slug: string | null
   parent_comment_id: string | null
   created_at: string
   aura_count: number
@@ -404,6 +405,7 @@ function CommentRow({
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">{comment.author_display_name}</span>
           <AuthorTierBadge tier={comment.author_account_tier} />
+          <AuthorSpecialTagBadge slug={comment.author_display_slug} />
           <span>·</span>
           <span>{format(new Date(comment.created_at), "dd MMM yyyy", { locale: ptBR })}</span>
         </p>

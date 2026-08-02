@@ -136,12 +136,14 @@ export default function AdminEventsPage() {
                     <span className="text-xs text-muted-foreground">
                       {e.criteriaType === "manual_opt_in"
                         ? "Resgate manual"
-                        : `Primeiros ${e.maxParticipants.toLocaleString("pt-BR")} cadastros`}
+                        : e.criteriaType === "aura_redeem"
+                          ? `${e.auraCost?.toLocaleString("pt-BR")} Aura${e.maxParticipants ? ` · ${e.maxParticipants.toLocaleString("pt-BR")} vagas` : " · ilimitado"}`
+                          : `Primeiros ${e.maxParticipants?.toLocaleString("pt-BR")} cadastros`}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-sm font-medium text-foreground">
-                      {e.currentCount} / {e.maxParticipants}
+                      {e.maxParticipants !== null ? `${e.currentCount} / ${e.maxParticipants}` : `${e.currentCount} resgates`}
                     </span>
                   </td>
                   <td className="px-4 py-3">

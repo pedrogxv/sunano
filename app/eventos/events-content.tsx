@@ -11,6 +11,7 @@ import type { EventDisplay } from "@/lib/events"
 interface EventsContentProps {
   initialEvents: EventDisplay[]
   initialClaimedMedalIds: string[]
+  initialAuraBalance: number
   isLoggedIn: boolean
 }
 
@@ -18,12 +19,20 @@ interface EventsContentProps {
  * Client Component da página `/eventos`: mantém o estado local dos eventos
  * (contador de vagas, status) para atualização otimista após um resgate
  * manual, no mesmo espírito de `LikeButton`/`forum-content.tsx` — sem
- * depender de revalidar a página inteira a cada clique.
+ * depender de revalidar a página inteira a cada clique. `auraBalance`
+ * segue o mesmo padrão: decrementado otimisticamente num resgate
+ * `aura_redeem`, reconciliado com o evento retornado pela API.
  */
-export function EventsContent({ initialEvents, initialClaimedMedalIds, isLoggedIn }: EventsContentProps) {
+export function EventsContent({
+  initialEvents,
+  initialClaimedMedalIds,
+  initialAuraBalance,
+  isLoggedIn,
+}: EventsContentProps) {
   const router = useRouter()
   const [events, setEvents] = useState(initialEvents)
   const [claimedMedalIds, setClaimedMedalIds] = useState(() => new Set(initialClaimedMedalIds))
+  const [auraBalance, setAuraBalance] = useState(initialAuraBalance)
   const [pendingId, setPendingId] = useState<string | null>(null)
 
   const { active, ended } = useMemo(() => {
@@ -58,6 +67,9 @@ export function EventsContent({ initialEvents, initialClaimedMedalIds, isLoggedI
 
       setEvents((prev) => prev.map((e) => (e.id === event.id ? data.event! : e)))
       setClaimedMedalIds((prev) => new Set(prev).add(event.medalId))
+      if (event.criteriaType === "aura_redeem" && event.auraCost) {
+        setAuraBalance((prev) => prev - event.auraCost!)
+      }
       toast.success("Medalha resgatada!", { description: event.name })
     } catch {
       toast.error("Erro de conexão. Tente novamente.")
@@ -99,6 +111,7 @@ export function EventsContent({ initialEvents, initialClaimedMedalIds, isLoggedI
                     event={event}
                     claimed={claimedMedalIds.has(event.medalId)}
                     isLoggedIn={isLoggedIn}
+                    auraBalance={auraBalance}
                     pending={pendingId === event.id}
                     onClaim={() => handleClaim(event)}
                   />
@@ -122,6 +135,7 @@ export function EventsContent({ initialEvents, initialClaimedMedalIds, isLoggedI
                     event={event}
                     claimed={claimedMedalIds.has(event.medalId)}
                     isLoggedIn={isLoggedIn}
+                    auraBalance={auraBalance}
                     pending={false}
                     onClaim={() => handleClaim(event)}
                   />

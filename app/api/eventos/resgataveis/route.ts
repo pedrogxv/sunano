@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { getUserAuraBalance } from "@/lib/server/repositories/aura-repository"
 import { getClaimedMedalIds, listActiveEventsForDisplay } from "@/lib/server/repositories/events-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
@@ -12,8 +13,9 @@ export const runtime = "nodejs"
  * Fica fora de `getHomeData`/`listActiveEventsForDisplay` de propósito: essas
  * duas continuam sem estado por usuário para a Home poder ser cacheada (ISR).
  *
- * "Resgatável" = evento `manual_opt_in`, ativo, com vaga, que o usuário ainda
- * não resgatou — mesma regra do botão "Resgatar" em `EventCard`.
+ * "Resgatável" = evento `manual_opt_in` com vaga, ou `aura_redeem` com vaga
+ * (ou ilimitado) e saldo de Aura suficiente — ativo e ainda não resgatado
+ * pelo usuário. Mesma regra do botão "Resgatar" em `EventCard`.
  */
 export async function GET() {
   const supabase = await createSupabaseServerClient()
@@ -24,19 +26,20 @@ export async function GET() {
     return NextResponse.json({ count: 0, claimedMedalIds: [] })
   }
 
-  const [events, claimedMedalIds] = await Promise.all([
+  const [events, claimedMedalIds, auraBalance] = await Promise.all([
     listActiveEventsForDisplay(),
     getClaimedMedalIds(userId),
+    getUserAuraBalance(userId),
   ])
 
   const claimedSet = new Set(claimedMedalIds)
-  const count = events.filter(
-    (event) =>
-      event.active &&
-      event.criteriaType === "manual_opt_in" &&
-      !claimedSet.has(event.medalId) &&
-      event.currentCount < event.maxParticipants
-  ).length
+  const count = events.filter((event) => {
+    if (!event.active || claimedSet.has(event.medalId)) return false
+    const hasSlot = event.maxParticipants === null || event.currentCount < event.maxParticipants
+    if (event.criteriaType === "manual_opt_in") return hasSlot
+    if (event.criteriaType === "aura_redeem") return hasSlot && auraBalance >= (event.auraCost ?? 0)
+    return false
+  }).length
 
   return NextResponse.json({ count, claimedMedalIds })
 }

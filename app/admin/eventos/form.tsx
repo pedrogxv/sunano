@@ -42,6 +42,11 @@ const CRITERIA_OPTIONS: Array<{ value: EventCriteriaType; label: string; hint: s
     label: "Manual — usuário clica em Resgatar",
     hint: "A medalha só é concedida quando o usuário logado clica em \"Resgatar\" em /eventos, enquanto houver vagas.",
   },
+  {
+    value: "aura_redeem",
+    label: "Resgatável com Aura",
+    hint: "O usuário clica em \"Resgatar\" e a medalha desconta Aura do saldo dele. Vagas são opcionais (em branco = ilimitado, enquanto tiver Aura suficiente).",
+  },
 ]
 
 export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
@@ -54,9 +59,12 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
     description: event?.description ?? "",
     rarity: event?.rarity ?? ("legendary" as MedalRarity),
     maxParticipants: event?.maxParticipants?.toString() ?? "1000",
+    auraCost: event?.auraCost?.toString() ?? "",
     active: event?.active !== false,
     criteriaType: event?.criteriaType ?? ("first_n_signups" as EventCriteriaType),
   })
+
+  const criteriaType = event?.criteriaType ?? formData.criteriaType
 
   const [imageUrl, setImageUrl] = useState<string | null>(event?.imageUrl ?? null)
 
@@ -98,9 +106,23 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
       if (!formData.name.trim()) {
         throw new Error("Informe o nome do evento/medalha.")
       }
-      const maxParticipants = parseInt(formData.maxParticipants, 10)
-      if (isNaN(maxParticipants) || maxParticipants <= 0) {
-        throw new Error("Número de vagas inválido. Use um inteiro maior que zero.")
+
+      let maxParticipants: number | null = null
+      if (formData.maxParticipants.trim()) {
+        maxParticipants = parseInt(formData.maxParticipants, 10)
+        if (isNaN(maxParticipants) || maxParticipants <= 0) {
+          throw new Error("Número de vagas inválido. Use um inteiro maior que zero ou deixe em branco.")
+        }
+      } else if (criteriaType !== "aura_redeem") {
+        throw new Error("Informe o número de vagas.")
+      }
+
+      let auraCost: number | null = null
+      if (criteriaType === "aura_redeem") {
+        auraCost = parseInt(formData.auraCost, 10)
+        if (isNaN(auraCost) || auraCost <= 0) {
+          throw new Error("Custo em Aura inválido. Use um inteiro maior que zero.")
+        }
       }
 
       const payload = {
@@ -109,7 +131,8 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         imageUrl,
         rarity: formData.rarity,
         maxParticipants,
-        ...(event ? { active: formData.active } : { criteriaType: formData.criteriaType }),
+        auraCost,
+        ...(event ? { active: formData.active } : { criteriaType }),
       }
 
       const url = event ? `/api/admin/events/${event.id}` : "/api/admin/events"
@@ -226,27 +249,46 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         />
       </div>
 
-      {/* Vagas + Status */}
+      {/* Vagas + Custo em Aura */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>Número de vagas *</Label>
+          <Label>Número de vagas {criteriaType === "aura_redeem" ? "" : "*"}</Label>
           <Input
-            required
+            required={criteriaType !== "aura_redeem"}
             type="number"
             min={1}
             step={1}
             value={formData.maxParticipants}
             onChange={(e) => set("maxParticipants", e.target.value)}
-            placeholder="1000"
+            placeholder={criteriaType === "aura_redeem" ? "Deixe em branco para ilimitado" : "1000"}
           />
           {event && (
             <p className="text-[10px] text-muted-foreground/60">
-              {event.currentCount} de {formData.maxParticipants} já conquistaram.
+              {event.currentCount} já resgataram
+              {formData.maxParticipants.trim() ? ` de ${formData.maxParticipants}` : " (vagas ilimitadas)"}.
             </p>
           )}
         </div>
 
-        {event && (
+        {criteriaType === "aura_redeem" && (
+          <div className="space-y-2">
+            <Label>Custo em Aura *</Label>
+            <Input
+              required
+              type="number"
+              min={1}
+              step={1}
+              value={formData.auraCost}
+              onChange={(e) => set("auraCost", e.target.value)}
+              placeholder="Ex: 250"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Status */}
+      {event && (
+        <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <Label>Status</Label>
             <Select
@@ -265,8 +307,8 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
               Encerrar manualmente impede novas conquistas mesmo com vagas restantes.
             </p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Imagem */}
       <div className="space-y-3">

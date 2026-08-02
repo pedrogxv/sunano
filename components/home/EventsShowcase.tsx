@@ -62,7 +62,10 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
           um número fixo de "slots" vazios quando há só 1 ou 2. */}
       <div className="flex flex-wrap gap-3">
         {events.map((event) => {
-          const percent = Math.min(100, Math.round((event.currentCount / event.maxParticipants) * 100))
+          const percent =
+            event.maxParticipants !== null
+              ? Math.min(100, Math.round((event.currentCount / event.maxParticipants) * 100))
+              : 100
           const claimed = claimedMedalIds.has(event.medalId)
           const ringColor = MEDAL_RARITY_SOLID[event.rarity]
 
@@ -106,7 +109,7 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
 
               <p className="line-clamp-1 text-sm font-semibold text-foreground">{event.name}</p>
               <p className="text-[11px] text-muted-foreground">
-                {event.currentCount}/{event.maxParticipants} vagas
+                {event.maxParticipants !== null ? `${event.currentCount}/${event.maxParticipants} vagas` : `${event.currentCount} resgates`}
               </p>
             </Link>
           )

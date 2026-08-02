@@ -14,7 +14,7 @@ import type { EventCriteriaType, EventDisplay } from "@/lib/events"
  */
 
 const EVENT_SELECT =
-  "id, slug, medal_id, criteria_type, max_participants, current_count, active, start_date, end_date, medals ( name, description, icon_url, rarity )"
+  "id, slug, medal_id, criteria_type, max_participants, current_count, aura_cost, active, start_date, end_date, medals ( name, description, icon_url, rarity )"
 
 type MedalJoin = {
   name: string
@@ -28,8 +28,9 @@ type EventRow = {
   slug: string
   medal_id: string
   criteria_type: EventCriteriaType
-  max_participants: number
+  max_participants: number | null
   current_count: number
+  aura_cost: number | null
   active: boolean
   start_date: string
   end_date: string | null
@@ -50,6 +51,7 @@ function toEventDisplay(row: EventRow): EventDisplay | null {
     criteriaType: row.criteria_type,
     maxParticipants: row.max_participants,
     currentCount: row.current_count,
+    auraCost: row.aura_cost,
     active: row.active,
     startDate: row.start_date,
     endDate: row.end_date,
@@ -112,12 +114,20 @@ export type EventInput = {
   description: string | null
   imageUrl: string | null
   rarity: MedalRarity
-  maxParticipants: number
+  maxParticipants: number | null
   criteriaType: EventCriteriaType
+  auraCost: number | null
 }
 
 /** Cria a medalha do evento e o evento em si (nessa ordem, por causa da FK). */
 export async function createEvent(input: EventInput): Promise<EventDisplay> {
+  if (input.criteriaType !== "aura_redeem" && !input.maxParticipants) {
+    throw new Error("Informe o número de vagas.")
+  }
+  if (input.criteriaType === "aura_redeem" && !input.auraCost) {
+    throw new Error("Informe o custo em Aura do resgate.")
+  }
+
   const db = createSupabaseAdminClient()
 
   const medalSlug = await uniqueSlug("medals", input.name)
@@ -145,6 +155,9 @@ export async function createEvent(input: EventInput): Promise<EventDisplay> {
       medal_id: medal.id,
       criteria_type: input.criteriaType,
       max_participants: input.maxParticipants,
+      // Nunca persiste custo de aura fora do tipo aura_redeem, mesmo que o
+      // payload informe um por engano.
+      aura_cost: input.criteriaType === "aura_redeem" ? input.auraCost : null,
       active: true,
     })
     .select(EVENT_SELECT)
@@ -168,13 +181,20 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
 
   const { data: current, error: currentError } = await db
     .from("events")
-    .select("medal_id")
+    .select("medal_id, criteria_type")
     .eq("id", id)
     .maybeSingle()
 
   if (currentError || !current) {
     if (currentError) console.error("[events-repository] updateEvent (lookup):", currentError)
     return null
+  }
+
+  if (current.criteria_type !== "aura_redeem" && input.maxParticipants === null) {
+    throw new Error("Informe o número de vagas.")
+  }
+  if (current.criteria_type === "aura_redeem" && input.auraCost === null) {
+    throw new Error("Informe o custo em Aura do resgate.")
   }
 
   const medalUpdate: Record<string, unknown> = {}
@@ -191,6 +211,7 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
 
   const eventUpdate: Record<string, unknown> = {}
   if (input.maxParticipants !== undefined) eventUpdate.max_participants = input.maxParticipants
+  if (input.auraCost !== undefined) eventUpdate.aura_cost = input.auraCost
   if (input.active !== undefined) eventUpdate.active = input.active
   eventUpdate.updated_at = new Date().toISOString()
 
@@ -207,13 +228,6 @@ export async function deleteEvent(id: string): Promise<void> {
   await db.from("events").delete().eq("id", id)
 }
 
-/**
- * Concede automaticamente a medalha de cada evento ativo elegível a um
- * usuário recém-cadastrado. Chamado em todo lugar que cria a primeira linha
- * de `user_profiles` (cadastro por e-mail, primeiro login OAuth/social).
- *
- * Nunca lança: um erro aqui não pode derrubar o cadastro/login do usuário.
- */
 /** IDs das medalhas que o usuário já possui — usado em `/eventos` para marcar quais já foram resgatadas. */
 export async function getClaimedMedalIds(userId: string): Promise<string[]> {
   const db = createSupabaseAdminClient()
@@ -224,18 +238,19 @@ export async function getClaimedMedalIds(userId: string): Promise<string[]> {
 
 export type ClaimEventResult =
   | { ok: true; event: EventDisplay }
-  | { ok: false; reason: "not_found" | "not_manual" | "unavailable" }
+  | { ok: false; reason: "not_found" | "not_manual" | "unavailable" | "insufficient_aura" }
 
 /**
  * Resgate manual, disparado pelo clique do usuário em `/eventos`
- * (`POST /api/eventos/[id]/claim`). Só eventos `manual_opt_in` podem ser
- * resgatados assim — `first_n_signups` continua exclusivo de
- * `awardEligibleEventMedals`, chamado no login/cadastro.
+ * (`POST /api/eventos/[id]/claim`). Só eventos `manual_opt_in` e
+ * `aura_redeem` podem ser resgatados assim — `first_n_signups` continua
+ * exclusivo de `awardEligibleEventMedals`, chamado no login/cadastro.
  *
  * A concessão em si reaproveita `claim_event_medal`: a função já é atômica
  * (trava a linha do evento) e idempotente (clique duplicado não conta vaga
- * duas vezes), então não precisa de uma variante nova no banco — só o
- * gate de critério abaixo, decidido na aplicação.
+ * duas vezes). Pra `aura_redeem` ela também debita a Aura do usuário na
+ * mesma transação (20260816_aura_redeem_events.sql) — o gate de critério
+ * abaixo só decide quem pode chamá-la, não como ela se comporta.
  */
 export async function claimEventManually(userId: string, eventId: string): Promise<ClaimEventResult> {
   const db = createSupabaseAdminClient()
@@ -247,13 +262,20 @@ export async function claimEventManually(userId: string, eventId: string): Promi
     .maybeSingle()
 
   if (error || !row) return { ok: false, reason: "not_found" }
-  if (row.criteria_type !== "manual_opt_in") return { ok: false, reason: "not_manual" }
+  if (row.criteria_type !== "manual_opt_in" && row.criteria_type !== "aura_redeem") {
+    return { ok: false, reason: "not_manual" }
+  }
 
   const { data: claimed, error: rpcError } = await db.rpc("claim_event_medal", {
     p_event_id: eventId,
     p_user_id: userId,
   })
-  if (rpcError) throw rpcError
+  if (rpcError) {
+    if (rpcError.message?.includes("insufficient_aura_balance")) {
+      return { ok: false, reason: "insufficient_aura" }
+    }
+    throw rpcError
+  }
   if (!claimed) return { ok: false, reason: "unavailable" }
 
   const event = await getEventForAdmin(eventId)

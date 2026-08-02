@@ -9,18 +9,21 @@ export const runtime = "nodejs"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const ERROR_MESSAGES: Record<"not_found" | "not_manual" | "unavailable", string> = {
+const ERROR_MESSAGES: Record<"not_found" | "not_manual" | "unavailable" | "insufficient_aura", string> = {
   not_found: "Evento não encontrado.",
   not_manual: "Esse evento é concedido automaticamente, não precisa resgatar.",
   unavailable: "As vagas acabaram ou o evento foi encerrado.",
+  insufficient_aura: "Saldo de Aura insuficiente.",
 }
 
 /**
- * POST /api/eventos/:id/claim — resgate manual de um evento `manual_opt_in`.
+ * POST /api/eventos/:id/claim — resgate manual de um evento `manual_opt_in`
+ * ou `aura_redeem`.
  *
  * `claimEventManually` chama a mesma `claim_event_medal` usada no
- * cadastro/login (atômica e idempotente); esta rota só garante que quem
- * chama está autenticado e não está abusando do clique.
+ * cadastro/login (atômica e idempotente, e que também debita Aura pra
+ * `aura_redeem`); esta rota só garante que quem chama está autenticado e
+ * não está abusando do clique.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

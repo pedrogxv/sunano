@@ -8,7 +8,7 @@
 
 import type { MedalRarity } from "@/lib/profile-showcase"
 
-export type EventCriteriaType = "first_n_signups" | "manual_opt_in"
+export type EventCriteriaType = "first_n_signups" | "manual_opt_in" | "aura_redeem"
 
 /**
  * Evento com os dados da medalha já resolvidos (join com `medals`) — é o que
@@ -24,8 +24,11 @@ export type EventDisplay = {
   imageUrl: string | null
   rarity: MedalRarity
   criteriaType: EventCriteriaType
-  maxParticipants: number
+  /** `null` quando as vagas são ilimitadas — só faz sentido pra `aura_redeem`. */
+  maxParticipants: number | null
   currentCount: number
+  /** Custo em Aura pra resgatar — só usado por `aura_redeem`. */
+  auraCost: number | null
   active: boolean
   startDate: string
   endDate: string | null
@@ -35,4 +38,5 @@ export type EventDisplay = {
 export const EVENT_CRITERIA_LABEL: Record<EventCriteriaType, string> = {
   first_n_signups: "Primeiros N usuários cadastrados no site",
   manual_opt_in: "Resgate manual (usuário clica em Resgatar)",
+  aura_redeem: "Resgate com Aura (desconta do saldo do usuário)",
 }

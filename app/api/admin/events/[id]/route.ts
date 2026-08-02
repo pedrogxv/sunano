@@ -9,7 +9,8 @@ const updateEventSchema = z.object({
   description: z.string().trim().max(500).optional().nullable(),
   imageUrl: z.string().url().optional().nullable(),
   rarity: z.enum(["common", "rare", "epic", "legendary"]).optional(),
-  maxParticipants: z.number().int().positive().optional(),
+  maxParticipants: z.number().int().positive().optional().nullable(),
+  auraCost: z.number().int().positive().optional().nullable(),
   active: z.boolean().optional(),
 })
 
@@ -54,8 +55,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Evento não encontrado." }, { status: 404 })
     }
     return NextResponse.json({ event })
-  } catch {
-    return NextResponse.json({ error: "Erro ao atualizar evento." }, { status: 500 })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erro ao atualizar evento."
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 

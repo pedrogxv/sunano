@@ -1,3 +1,4 @@
+import { getUserAuraBalance } from "@/lib/server/repositories/aura-repository"
 import { getClaimedMedalIds, listActiveEventsForDisplay } from "@/lib/server/repositories/events-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { EventsContent } from "./events-content"
@@ -9,15 +10,17 @@ export default async function EventosPage() {
   const { data: authData } = await supabase.auth.getUser()
   const userId = authData.user?.id ?? null
 
-  const [events, claimedMedalIds] = await Promise.all([
+  const [events, claimedMedalIds, auraBalance] = await Promise.all([
     listActiveEventsForDisplay(),
     userId ? getClaimedMedalIds(userId) : Promise.resolve([]),
+    userId ? getUserAuraBalance(userId) : Promise.resolve(0),
   ])
 
   return (
     <EventsContent
       initialEvents={events}
       initialClaimedMedalIds={claimedMedalIds}
+      initialAuraBalance={auraBalance}
       isLoggedIn={Boolean(userId)}
     />
   )

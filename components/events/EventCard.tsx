@@ -13,13 +13,15 @@ interface EventCardProps {
   /** Se o usuário logado já tem a medalha desse evento (`user_medals`). */
   claimed: boolean
   isLoggedIn: boolean
+  /** Saldo de Aura do usuário — só relevante pra eventos `aura_redeem`. */
+  auraBalance: number
   /** Resgate manual em andamento para este card específico. */
   pending: boolean
   onClaim: () => void
 }
 
-/** Rodapé de ação: o único bloco que muda de fato entre os dois critérios de evento. */
-function EventFooter({ event, claimed, isLoggedIn, pending, onClaim }: EventCardProps) {
+/** Rodapé de ação: o único bloco que muda de fato entre os critérios de evento. */
+function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim }: EventCardProps) {
   if (claimed) {
     return (
       <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400">
@@ -46,8 +48,8 @@ function EventFooter({ event, claimed, isLoggedIn, pending, onClaim }: EventCard
     )
   }
 
-  // manual_opt_in
-  const soldOut = !event.active || event.currentCount >= event.maxParticipants
+  // manual_opt_in / aura_redeem
+  const soldOut = !event.active || (event.maxParticipants !== null && event.currentCount >= event.maxParticipants)
   if (soldOut) {
     return (
       <Button size="sm" variant="outline" disabled className="w-full gap-1.5 text-xs">
@@ -56,6 +58,19 @@ function EventFooter({ event, claimed, isLoggedIn, pending, onClaim }: EventCard
       </Button>
     )
   }
+
+  if (event.criteriaType === "aura_redeem" && isLoggedIn && auraBalance < (event.auraCost ?? 0)) {
+    const missing = (event.auraCost ?? 0) - auraBalance
+    return (
+      <Button size="sm" variant="outline" disabled className="w-full gap-1.5 text-xs">
+        <Lock className="size-3.5" />
+        Faltam {missing} Aura
+      </Button>
+    )
+  }
+
+  const label =
+    event.criteriaType === "aura_redeem" && isLoggedIn ? `Resgatar (${event.auraCost} Aura)` : "Resgatar"
 
   return (
     <Button
@@ -69,14 +84,17 @@ function EventFooter({ event, claimed, isLoggedIn, pending, onClaim }: EventCard
       className="w-full gap-1.5 text-xs"
     >
       {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-      {pending ? "Resgatando..." : isLoggedIn ? "Resgatar" : "Entrar para resgatar"}
+      {pending ? "Resgatando..." : isLoggedIn ? label : "Entrar para resgatar"}
     </Button>
   )
 }
 
 export function EventCard(props: EventCardProps) {
   const { event, claimed } = props
-  const percent = Math.min(100, Math.round((event.currentCount / event.maxParticipants) * 100))
+  const percent =
+    event.maxParticipants !== null
+      ? Math.min(100, Math.round((event.currentCount / event.maxParticipants) * 100))
+      : null
 
   return (
     <div
@@ -120,15 +138,21 @@ export function EventCard(props: EventCardProps) {
             <p className="font-semibold text-foreground">{event.name}</p>
 
             <div className="w-full space-y-1">
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
-                <div
-                  className={cn("h-full rounded-full transition-all", MEDAL_RARITY_BAR[event.rarity])}
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground">
-                {event.currentCount} / {event.maxParticipants}
-              </p>
+              {percent !== null ? (
+                <>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                    <div
+                      className={cn("h-full rounded-full transition-all", MEDAL_RARITY_BAR[event.rarity])}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {event.currentCount} / {event.maxParticipants}
+                  </p>
+                </>
+              ) : (
+                <p className="text-[11px] text-muted-foreground">{event.currentCount} resgates</p>
+              )}
             </div>
 
             <EventFooter {...props} />

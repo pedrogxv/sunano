@@ -120,9 +120,10 @@ export type Database = {
           id: string
           slug: string
           medal_id: string
-          criteria_type: "first_n_signups" | "manual_opt_in"
-          max_participants: number
+          criteria_type: "first_n_signups" | "manual_opt_in" | "aura_redeem"
+          max_participants: number | null
           current_count: number
+          aura_cost: number | null
           active: boolean
           start_date: string
           end_date: string | null
@@ -325,7 +326,12 @@ export type Database = {
           id: string
           user_id: string
           delta: number
-          reason: "post_aura_received" | "post_aura_removed" | "comment_aura_received" | "comment_aura_removed"
+          reason:
+            | "post_aura_received"
+            | "post_aura_removed"
+            | "comment_aura_received"
+            | "comment_aura_removed"
+            | "event_medal_redeemed"
           source_post_id: string | null
           source_comment_id: string | null
           giver_id: string | null

@@ -713,7 +713,7 @@ export const translations: Record<LocaleCode, Translations> = {
       store: "Loja",
       used: "Usado",
       offers: "Promoções",
-      people: "Pessoas",
+      people: "Usuários",
       events: "Eventos",
     },
     common: {

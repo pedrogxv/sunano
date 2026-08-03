@@ -1,8 +1,10 @@
+import type { ReactNode } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Clock, MessageCircle, Newspaper } from "lucide-react"
+import { ArrowRight, Clock, MessageCircle, Newspaper } from "lucide-react"
 
 import { getBlogImageWithFallback } from "@/lib/blog-images"
+import { truncateExcerpt } from "@/lib/blog-excerpt"
 import { extractFirstUrl } from "@/lib/extract-link"
 import { getVideoEmbedUrl } from "@/lib/video-embed"
 import { listPublishedPosts, type BlogListPost } from "@/lib/server/repositories/blog-repository"
@@ -74,6 +76,7 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
   const img = getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")
   const embedUrl = getVideoEmbedUrl(post.video_url)
   const { href, external } = getHeadlineHref(post)
+  const excerpt = post.excerpt ? truncateExcerpt(post.excerpt) : null
 
   const media = embedUrl ? (
     <div className="relative aspect-video w-full overflow-hidden bg-black">
@@ -103,8 +106,8 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
       <h2 className="font-display text-xl font-bold leading-tight text-foreground transition-colors group-hover:text-primary sm:text-2xl">
         {post.title}
       </h2>
-      {post.excerpt && (
-        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{post.excerpt}</p>
+      {excerpt && (
+        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{excerpt.text}</p>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
         <AuthorByline post={post} size="md" />
@@ -122,34 +125,41 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
   const cardClass =
     "group overflow-hidden rounded-2xl border border-border/50 bg-card/50 transition-colors hover:border-primary/30 hover:bg-card"
 
-  if (embedUrl) {
-    // O player de vídeo é interativo — só o texto/rodapé navega, o embed fica livre pra tocar.
-    return (
-      <div className={cardClass}>
-        {media}
-        {external ? (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="block">
-            {body}
-          </a>
-        ) : (
-          <Link href={href} className="block">
-            {body}
-          </Link>
-        )}
-      </div>
+  const linkWrap = (children: ReactNode) =>
+    external ? (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="block">
+        {children}
+      </a>
+    ) : (
+      <Link href={href} className="block">
+        {children}
+      </Link>
     )
-  }
 
-  return external ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={`block ${cardClass}`}>
-      {media}
-      {body}
-    </a>
-  ) : (
-    <Link href={href} className={`block ${cardClass}`}>
-      {media}
-      {body}
-    </Link>
+  return (
+    <div className={cardClass}>
+      {/* O player de vídeo é interativo — fica fora do link pra tocar sem navegar. */}
+      {embedUrl && media}
+      {linkWrap(
+        <>
+          {!embedUrl && media}
+          {body}
+        </>
+      )}
+      {/* "Ler mais" fica fora do link do card: quando o texto cita uma URL o card
+          leva pra ela, mas a notícia completa continua acessível aqui. */}
+      {excerpt?.truncated && (
+        <div className="border-t border-border/40 px-4 py-3 sm:px-5">
+          <Link
+            href={`/noticias/${post.slug}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary/80"
+          >
+            Ler mais
+            <ArrowRight className="size-3.5" />
+          </Link>
+        </div>
+      )}
+    </div>
   )
 }
 

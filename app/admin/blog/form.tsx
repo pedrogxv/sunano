@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { BLOG_IMAGE_STANDARDS } from "@/lib/blog-images"
+import { EXCERPT_MAX_CHARS, HEADLINE_EXCERPT_LIMIT } from "@/lib/blog-excerpt"
 import { useT } from "@/lib/use-t"
 import { usePageHeader } from "@/components/providers/page-header-context"
 
@@ -31,7 +32,9 @@ const postSchema = z
     post_type: z.enum(["news", "review"]),
     peripheral_id: z.string().optional().or(z.literal("")),
     title: z.string().min(5, "Título deve ter no mínimo 5 caracteres").max(200, "Título muito longo (máx. 200)"),
-    excerpt: z.string().max(500, "Resumo muito longo (máx. 500)").optional(),
+    // O excerpt é o corpo visível da manchete em /noticias — o card trunca em
+    // HEADLINE_EXCERPT_LIMIT e oferece "Ler mais", então há folga antes do corte.
+    excerpt: z.string().max(EXCERPT_MAX_CHARS, `Resumo muito longo (máx. ${EXCERPT_MAX_CHARS})`).optional(),
     cover_image_url: z.string().url("URL da imagem inválida (use http:// ou https://)").optional().or(z.literal("")),
     cover_thumbnail_url: z.string().url("URL da miniatura inválida (use http:// ou https://)").optional().or(z.literal("")),
     video_url: z.string().url("URL do vídeo inválida (use http:// ou https://)").optional().or(z.literal("")),
@@ -95,6 +98,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
   const isReview = watchedPostType === "review"
   const watchedContent = form.watch("content")
   const watchedTitle = form.watch("title")
+  const watchedExcerpt = form.watch("excerpt")
 
   const headerTitle = postId
     ? isReview
@@ -354,10 +358,23 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             {t.admin.blog.form.summaryLabel}
           </label>
           <Textarea
-            className="min-h-16 resize-none border-border bg-card/40 text-sm leading-relaxed"
+            className="min-h-32 resize-y border-border bg-card/40 text-sm leading-relaxed"
             placeholder={t.admin.blog.form.summaryPlaceholder}
             {...form.register("excerpt")}
           />
+          {form.formState.errors.excerpt && (
+            <p className="text-xs text-red-400">{form.formState.errors.excerpt.message}</p>
+          )}
+          {watchedExcerpt && (
+            <p className="text-[10px] text-muted-foreground">
+              {watchedExcerpt.length} / {EXCERPT_MAX_CHARS} {t.admin.blog.form.chars}
+              {watchedExcerpt.length > HEADLINE_EXCERPT_LIMIT && (
+                <span className="ml-1 text-muted-foreground/70">
+                  — na manchete será cortado em {HEADLINE_EXCERPT_LIMIT} com &ldquo;Ler mais&rdquo;
+                </span>
+              )}
+            </p>
+          )}
         </div>
 
         {/* Featured — entra no header de manchetes de /noticias */}

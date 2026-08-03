@@ -8,6 +8,7 @@ import { ProfileMetrics } from "@/components/people/ProfileCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
+import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
@@ -24,10 +25,13 @@ type Place = 1 | 2 | 3
  * está aqui: vive no CSS (`[data-place]` em globals.css), porque não é uma
  * cor só — é um gradiente animado que o anel, o pedestal e o halo compartilham.
  */
-const PODIUM_LAYOUT: Record<Place, { order: string; pedestal: string }> = {
-  1: { order: "order-2", pedestal: "h-16" },
-  2: { order: "order-1 sm:mb-6", pedestal: "h-10" },
-  3: { order: "order-3 sm:mb-9", pedestal: "h-7" },
+const PODIUM_LAYOUT: Record<
+  Place,
+  { order: string; pedestal: string; banner: string; avatarOffset: string }
+> = {
+  1: { order: "order-2", pedestal: "h-16", banner: "h-16", avatarOffset: "-mt-9" },
+  2: { order: "order-1 sm:mb-6", pedestal: "h-10", banner: "h-12", avatarOffset: "-mt-7" },
+  3: { order: "order-3 sm:mb-9", pedestal: "h-7", banner: "h-12", avatarOffset: "-mt-7" },
 }
 
 /** Faíscas do 1º lugar: posição/tamanho/atraso fixos, sem Math.random no render. */
@@ -87,6 +91,7 @@ function PodiumCard({
   const layout = PODIUM_LAYOUT[place]
   const isFirst = place === 1
   const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier)
+  const miniBanner = resolveProfileMedia(profile.mini_banner_url, profile.account_tier)
   const initials =
     profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
     "?"
@@ -110,8 +115,7 @@ function PodiumCard({
       <MiniProfileHoverCard slug={profile.display_slug} side="right">
         <div
           className={cn(
-            "relative flex w-full flex-col items-center rounded-t-2xl border border-b-0 border-border bg-card pb-4 transition-transform duration-200 hover:-translate-y-1",
-            isFirst ? "pt-9" : "pt-7"
+            "relative flex w-full flex-col items-center rounded-t-2xl border border-b-0 border-border bg-card pb-4 transition-transform duration-200 hover:-translate-y-1"
           )}
         >
           {isFirst && (
@@ -130,7 +134,33 @@ function PodiumCard({
             </>
           )}
 
-          <Link href={profilePath(profile.display_slug)} className="flex flex-col items-center px-2">
+          {/* Mesmo banner do card padrão (ProfileCard): fica em fluxo normal
+              e o avatar sobe por cima dele com margem negativa, em vez de
+              `absolute` — um elemento posicionado sem z-index pintaria por
+              cima do avatar/nome mesmo vindo antes no DOM. */}
+          <div
+            className={cn("relative w-full overflow-hidden rounded-t-2xl", layout.banner)}
+            style={{
+              backgroundImage: `linear-gradient(135deg, hsl(${hue} 65% 45% / 0.85), hsl(${(hue + 45) % 360} 60% 30% / 0.55))`,
+            }}
+          >
+            <ImageWithFallback
+              src={miniBanner.src}
+              alt=""
+              fill
+              unoptimized={miniBanner.animated}
+              sizes="168px"
+              style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}
+              className="object-cover"
+              fallback={null}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
+          </div>
+
+          <Link
+            href={profilePath(profile.display_slug)}
+            className={cn("flex flex-col items-center px-2", layout.avatarOffset)}
+          >
             {/* O anel metálico é um elemento atrás do avatar, não um `ring`:
                 gradiente animado não cabe numa borda, e mantê-lo por baixo
                 impede que o lustro do metal passe por cima da foto. */}

@@ -1,4 +1,5 @@
 import type { AccountTier } from "@/lib/account-tier"
+import type { ProfileMediaAdjustments } from "@/lib/profile-media-adjust"
 
 /**
  * Mini Perfil — o cartão compacto de preview rápido, no conceito de "Profile
@@ -18,6 +19,8 @@ export type MiniProfile = {
   avatar_url: string | null
   /** Fundo próprio do cartão de preview. Nada a ver com `banner_url`. */
   mini_banner_url: string | null
+  /** Enquadramento escolhido para cada imagem (ver `profile-media-adjust`). */
+  media_adjustments: ProfileMediaAdjustments
   account_tier: AccountTier
   bio: string | null
   profile_views: number

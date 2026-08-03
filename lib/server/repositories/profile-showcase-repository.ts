@@ -1,7 +1,11 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { countFollowers } from "@/lib/server/repositories/users-repository"
+import {
+  countFollowers,
+  getMediaAdjustmentsByUser,
+} from "@/lib/server/repositories/users-repository"
+import { DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { getUserAuraBalance } from "@/lib/server/repositories/aura-repository"
 import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 import {
@@ -109,16 +113,20 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
 
   const tier = coerceAccountTier(row.account_tier)
 
-  const [setup, medals, favorites, followers, aura] = await Promise.all([
-    getUserSetup(userId),
-    getUserMedals(userId),
-    getUserFavorites(userId),
-    countFollowers(userId),
-    getUserAuraBalance(userId),
-  ])
+  const [setup, medals, favorites, followers, aura, settings, forumActivity] =
+    await Promise.all([
+      getUserSetup(userId),
+      getUserMedals(userId),
+      getUserFavorites(userId),
+      countFollowers(userId),
+      getUserAuraBalance(userId),
+      getMediaAdjustmentsByUser([userId]),
+      countForumActivity(userId),
+    ])
 
   return {
     id: row.id,
+    media_adjustments: settings[userId] ?? DEFAULT_ADJUSTMENTS,
     display_name: row.display_name?.trim() || defaultNameFrom(row.id),
     display_slug: row.display_slug,
     avatar_url: row.avatar_url,
@@ -131,6 +139,8 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     member_since: row.created_at,
     followers,
     aura,
+    forum_posts: forumActivity.posts,
+    forum_comments: forumActivity.comments,
     setup,
     medals: selectVisibleMedals(medals, tier),
     medals_total: medals.length,
@@ -140,6 +150,37 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
 }
 
 /** Setup do usuário, sempre com os 5 slots (vazios inclusive). */
+/**
+ * Quantos posts e comentários a pessoa escreveu no fórum.
+ *
+ * `head: true` com `count: "exact"`: só o número volta, sem trazer linha
+ * nenhuma — o header mostra o total, nunca o conteúdo. Itens ocultos pela
+ * moderação ficam de fora, senão o contador exibiria o que já não aparece
+ * no fórum.
+ */
+async function countForumActivity(
+  userId: string
+): Promise<{ posts: number; comments: number }> {
+  const db = createSupabaseAdminClient()
+  const [posts, comments] = await Promise.all([
+    db
+      .from("forum_posts")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("is_hidden", false),
+    db
+      .from("forum_comments")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("is_hidden", false),
+  ])
+
+  if (posts.error) console.error("[profile-showcase] contagem de posts:", posts.error)
+  if (comments.error) console.error("[profile-showcase] contagem de comentários:", comments.error)
+
+  return { posts: posts.count ?? 0, comments: comments.count ?? 0 }
+}
+
 export async function getUserSetup(userId: string): Promise<SetupItem[]> {
   const db = createSupabaseAdminClient()
 

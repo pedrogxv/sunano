@@ -1,10 +1,17 @@
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
+import {
+  DEFAULT_ADJUST,
+  mediaAdjustStyle,
+  type MediaAdjust,
+} from "@/lib/profile-media-adjust"
 import { cn } from "@/lib/utils"
 
 interface BannerProps {
   bannerUrl: string | null
   tier: AccountTier
+  /** Enquadramento escolhido pelo dono no editor de perfil. */
+  adjust?: MediaAdjust
   className?: string
 }
 
@@ -16,7 +23,7 @@ interface BannerProps {
  * VIP com GIF pula esse caminho (`unoptimized`) e chega como foi enviada, sem
  * perder quadros na reamostragem.
  */
-export function Banner({ bannerUrl, tier, className }: BannerProps) {
+export function Banner({ bannerUrl, tier, adjust = DEFAULT_ADJUST, className }: BannerProps) {
   const { src, animated } = resolveProfileMedia(bannerUrl, tier)
 
   return (
@@ -41,13 +48,15 @@ export function Banner({ bannerUrl, tier, className }: BannerProps) {
         priority
         unoptimized={animated}
         sizes="100vw"
-        className="h-full w-full object-cover object-center"
+        style={mediaAdjustStyle(adjust)}
+        className="h-full w-full object-cover"
         fallback={null}
       />
-      {/* Escurece só a faixa de baixo — onde o avatar e o nome se apoiam.
-          Cobrindo o `inset-0` inteiro, o degradê apagava metade da capa e ela
-          parecia meio preta. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-background/70 to-transparent" />
+      {/* Sem véu escuro sobre a capa: nome, bio e contadores ficam abaixo dela,
+          no fundo do card — não há texto aqui para proteger. O degradê que
+          existia só apagava o terço de baixo da imagem e, colado ao fundo
+          escuro do card logo abaixo, fazia as duas áreas virarem uma tarja
+          preta única. */}
     </div>
   )
 }

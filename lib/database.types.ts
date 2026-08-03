@@ -51,8 +51,14 @@ export type Database = {
           lgpd_consent_at: string | null
           lgpd_consent_version: string | null
           banner_url: string | null
-          /** Faixa curta atrás do avatar no card do diretório e no mini perfil. */
+          /** Fundo do cartão de preview rápido (Mini Perfil) e da faixa do card do diretório. */
           mini_banner_url: string | null
+          /**
+           * Enquadramento não-destrutivo das imagens, por chave (avatar,
+           * banner, mini_banner): `{"x":0-100,"y":0-100,"zoom":1-3}`.
+           * Ver `lib/profile-media-adjust.ts` e a migration 20260817.
+           */
+          media_adjustments: Record<string, unknown>
           bio: string | null
           account_tier: "common" | "vip" | "vip_plus"
           /** Handle sem "@" — exibido como ícone clicável no perfil público. */

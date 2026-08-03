@@ -7,6 +7,7 @@ import { FollowButton } from "@/components/people/FollowButton"
 import { ProfileMetrics } from "@/components/people/ProfileCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
+import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
@@ -103,78 +104,83 @@ function PodiumCard({
         layout.order
       )}
     >
-      <div
-        className={cn(
-          "relative flex w-full flex-col items-center rounded-t-2xl border border-b-0 border-border bg-card pb-4 transition-transform duration-200 hover:-translate-y-1",
-          isFirst ? "pt-9" : "pt-7"
-        )}
-      >
-        {isFirst && (
-          <>
-            <Crown className="podium-crown absolute top-1.5 size-6" fill="currentColor" strokeWidth={1.25} />
-            {SPARKLES.map((sparkle) => (
-              <Sparkles
-                key={sparkle.className}
-                aria-hidden
-                style={{ animationDelay: sparkle.delay }}
-                className={cn("podium-sparkle", sparkle.className)}
-                fill="currentColor"
-                strokeWidth={0}
-              />
-            ))}
-          </>
-        )}
-
-        <Link href={profilePath(profile.display_slug)} className="flex flex-col items-center px-2">
-          {/* O anel metálico é um elemento atrás do avatar, não um `ring`:
-              gradiente animado não cabe numa borda, e mantê-lo por baixo
-              impede que o lustro do metal passe por cima da foto. */}
-          <div className={cn("group relative", isFirst ? "size-20" : "size-16")}>
-            <span
-              aria-hidden
-              className="podium-metal absolute -inset-[5px] rounded-full transition-transform duration-200 group-hover:scale-105"
-            />
-            <div className="relative size-full overflow-hidden rounded-full bg-muted transition-transform duration-200 group-hover:scale-105">
-              <ImageWithFallback
-                src={avatar.src}
-                alt={profile.display_name}
-                fill
-                unoptimized={avatar.animated}
-                sizes={isFirst ? "80px" : "64px"}
-                className="object-cover"
-                fallback={
-                  <div
-                    className="flex size-full items-center justify-center text-lg font-bold text-white/90"
-                    style={{
-                      backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
-                    }}
-                  >
-                    {initials}
-                  </div>
-                }
-              />
-            </div>
-          </div>
-
-          <p className="mt-2 flex w-full items-center justify-center gap-1 text-[13px] font-bold leading-tight text-foreground">
-            <span className="truncate">{profile.display_name}</span>
-            {isVip && <Crown className="size-3 shrink-0 text-amber-400" />}
-            {specialTag && <Sparkles className="size-3 shrink-0 text-cyan-400" />}
-          </p>
-
-          <ProfileMetrics profile={profile} metric={metric} compact />
-        </Link>
-
-        <div className="mt-2 w-full px-2">
-          {isSelf ? (
-            <p className="rounded-lg border border-dashed border-border py-1 text-center text-[10px] font-medium text-muted-foreground">
-              Você
-            </p>
-          ) : (
-            <FollowButton userId={profile.id} initialFollowing={isFollowing} className="w-full text-xs" />
+      {/* Mesmo gesto do card da grade: o top 3 sai da grade e vira pódio, mas
+          continua sendo um card de pessoa — passar o mouse nele abre o Mini
+          Perfil igual. */}
+      <MiniProfileHoverCard slug={profile.display_slug} side="right">
+        <div
+          className={cn(
+            "relative flex w-full flex-col items-center rounded-t-2xl border border-b-0 border-border bg-card pb-4 transition-transform duration-200 hover:-translate-y-1",
+            isFirst ? "pt-9" : "pt-7"
           )}
+        >
+          {isFirst && (
+            <>
+              <Crown className="podium-crown absolute top-1.5 size-6" fill="currentColor" strokeWidth={1.25} />
+              {SPARKLES.map((sparkle) => (
+                <Sparkles
+                  key={sparkle.className}
+                  aria-hidden
+                  style={{ animationDelay: sparkle.delay }}
+                  className={cn("podium-sparkle", sparkle.className)}
+                  fill="currentColor"
+                  strokeWidth={0}
+                />
+              ))}
+            </>
+          )}
+
+          <Link href={profilePath(profile.display_slug)} className="flex flex-col items-center px-2">
+            {/* O anel metálico é um elemento atrás do avatar, não um `ring`:
+                gradiente animado não cabe numa borda, e mantê-lo por baixo
+                impede que o lustro do metal passe por cima da foto. */}
+            <div className={cn("group relative", isFirst ? "size-20" : "size-16")}>
+              <span
+                aria-hidden
+                className="podium-metal absolute -inset-[5px] rounded-full transition-transform duration-200 group-hover:scale-105"
+              />
+              <div className="relative size-full overflow-hidden rounded-full bg-muted transition-transform duration-200 group-hover:scale-105">
+                <ImageWithFallback
+                  src={avatar.src}
+                  alt={profile.display_name}
+                  fill
+                  unoptimized={avatar.animated}
+                  sizes={isFirst ? "80px" : "64px"}
+                  className="object-cover"
+                  fallback={
+                    <div
+                      className="flex size-full items-center justify-center text-lg font-bold text-white/90"
+                      style={{
+                        backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
+                      }}
+                    >
+                      {initials}
+                    </div>
+                  }
+                />
+              </div>
+            </div>
+
+            <p className="mt-2 flex w-full items-center justify-center gap-1 text-[13px] font-bold leading-tight text-foreground">
+              <span className="truncate">{profile.display_name}</span>
+              {isVip && <Crown className="size-3 shrink-0 text-amber-400" />}
+              {specialTag && <Sparkles className="size-3 shrink-0 text-cyan-400" />}
+            </p>
+
+            <ProfileMetrics profile={profile} metric={metric} compact />
+          </Link>
+
+          <div className="mt-2 w-full px-2">
+            {isSelf ? (
+              <p className="rounded-lg border border-dashed border-border py-1 text-center text-[10px] font-medium text-muted-foreground">
+                Você
+              </p>
+            ) : (
+              <FollowButton userId={profile.id} initialFollowing={isFollowing} className="w-full text-xs" />
+            )}
+          </div>
         </div>
-      </div>
+      </MiniProfileHoverCard>
 
       <div
         className={cn(

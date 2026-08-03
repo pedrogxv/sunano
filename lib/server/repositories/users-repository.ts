@@ -3,6 +3,11 @@ import "server-only"
 import { coerceAccountTier } from "@/lib/account-tier"
 import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import {
+  coerceMediaAdjustments,
+  DEFAULT_ADJUSTMENTS,
+  type ProfileMediaAdjustments,
+} from "@/lib/profile-media-adjust"
 import type { MiniProfile } from "@/lib/mini-profile"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
@@ -69,10 +74,12 @@ type DirectoryRow = {
 function toProfileSummary(
   row: DirectoryRow,
   followers = 0,
-  aura = 0
+  aura = 0,
+  mediaAdjustments: ProfileMediaAdjustments = DEFAULT_ADJUSTMENTS
 ): PublicProfileSummary {
   return {
     id: row.id,
+    media_adjustments: mediaAdjustments,
     display_name: row.display_name?.trim() || `Membro ${row.id.slice(0, 6)}`,
     display_slug: row.display_slug,
     avatar_url: row.avatar_url,
@@ -112,6 +119,40 @@ async function countFollowersByUser(userIds: string[]): Promise<Record<string, n
 }
 
 /**
+ * Enquadramento das imagens de cada usuário, indexado por id.
+ *
+ * Query própria (e não uma coluna a mais no `select` do diretório) por causa
+ * do descompasso conhecido entre as migrations versionadas e o banco: se
+ * `media_adjustments` ainda não tiver sido criada no ambiente, o PostgREST
+ * responde 42703 e derrubaria a listagem inteira. Isolada aqui, a falta da
+ * coluna só significa "todo mundo no enquadramento padrão".
+ */
+export async function getMediaAdjustmentsByUser(
+  userIds: string[]
+): Promise<Record<string, ProfileMediaAdjustments>> {
+  const map: Record<string, ProfileMediaAdjustments> = {}
+  if (userIds.length === 0) return map
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_profiles")
+    .select("id, media_adjustments")
+    .in("id", userIds)
+
+  if (error) {
+    // 42703 = coluna inexistente: migration ainda não aplicada, segue no padrão.
+    if (error.code !== "42703") {
+      console.error("[users-repository] getMediaAdjustmentsByUser:", error)
+    }
+    return map
+  }
+  for (const row of (data ?? []) as Array<{ id: string; media_adjustments: unknown }>) {
+    map[row.id] = coerceMediaAdjustments(row.media_adjustments)
+  }
+  return map
+}
+
+/**
  * Saldo de Aura de cada usuário, indexado por id. Mesma carteira que o fórum
  * credita (`user_aura_wallet`, ver 20260806_forum_aura.sql) — quem nunca
  * recebeu aura não tem linha, e fica de fora do mapa (lido como 0).
@@ -143,11 +184,19 @@ async function getAuraByUser(userIds: string[]): Promise<Record<string, number>>
  */
 async function withCounters(rows: DirectoryRow[]): Promise<PublicProfileSummary[]> {
   const ids = rows.map((r) => r.id)
-  const [followers, aura] = await Promise.all([
+  const [followers, aura, adjustments] = await Promise.all([
     countFollowersByUser(ids),
     getAuraByUser(ids),
+    getMediaAdjustmentsByUser(ids),
   ])
-  return rows.map((row) => toProfileSummary(row, followers[row.id] ?? 0, aura[row.id] ?? 0))
+  return rows.map((row) =>
+    toProfileSummary(
+      row,
+      followers[row.id] ?? 0,
+      aura[row.id] ?? 0,
+      adjustments[row.id] ?? DEFAULT_ADJUSTMENTS
+    )
+  )
 }
 
 /**
@@ -546,11 +595,17 @@ export async function getMiniProfileBySlug(slug: string): Promise<MiniProfile | 
   }
 
   const row = data as DirectoryRow & { bio: string | null }
-  const [followers, aura] = await Promise.all([
+  const [followers, aura, adjustments] = await Promise.all([
     countFollowersByUser([row.id]),
     getAuraByUser([row.id]),
+    getMediaAdjustmentsByUser([row.id]),
   ])
-  const summary = toProfileSummary(row, followers[row.id] ?? 0, aura[row.id] ?? 0)
+  const summary = toProfileSummary(
+    row,
+    followers[row.id] ?? 0,
+    aura[row.id] ?? 0,
+    adjustments[row.id] ?? DEFAULT_ADJUSTMENTS
+  )
 
   return { ...summary, bio: row.bio }
 }
@@ -638,6 +693,8 @@ export type UserProfileSettings = {
   account_tier: string | null
   youtube_handle: string | null
   tiktok_handle: string | null
+  /** Enquadramento das imagens. Padrão quando a coluna ainda não existe. */
+  media_adjustments: ProfileMediaAdjustments
 }
 
 /** Lê as preferências/identificação do usuário para a página de perfil. */
@@ -645,14 +702,21 @@ export async function getUserProfileSettings(
   userId: string
 ): Promise<UserProfileSettings | null> {
   const db = createSupabaseAdminClient()
-  const { data } = await db
-    .from("user_profiles")
-    .select(
-      "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle"
-    )
-    .eq("id", userId)
-    .maybeSingle()
-  return (data ?? null) as UserProfileSettings | null
+  const [{ data }, adjustments] = await Promise.all([
+    db
+      .from("user_profiles")
+      .select(
+        "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle"
+      )
+      .eq("id", userId)
+      .maybeSingle(),
+    getMediaAdjustmentsByUser([userId]),
+  ])
+  if (!data) return null
+  return {
+    ...(data as Omit<UserProfileSettings, "media_adjustments">),
+    media_adjustments: adjustments[userId] ?? DEFAULT_ADJUSTMENTS,
+  }
 }
 
 /**
@@ -676,6 +740,7 @@ export async function updateUserProfileSettings(
     bio?: string | null
     youtubeHandle?: string | null
     tiktokHandle?: string | null
+    mediaAdjustments?: ProfileMediaAdjustments
   }
 ): Promise<void> {
   const db = createSupabaseAdminClient()
@@ -689,8 +754,21 @@ export async function updateUserProfileSettings(
   if (changes.bio !== undefined) payload.bio = changes.bio
   if (changes.youtubeHandle !== undefined) payload.youtube_handle = changes.youtubeHandle
   if (changes.tiktokHandle !== undefined) payload.tiktok_handle = changes.tiktokHandle
+  if (changes.mediaAdjustments !== undefined) payload.media_adjustments = changes.mediaAdjustments
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
+
+  // Enquadramento só é gravável depois da migration 20260817. Enquanto ela não
+  // roda, salvar o resto do perfil não pode falhar por causa dele: repete sem a
+  // coluna e deixa o aviso no log.
+  if (error?.code === "42703" && changes.mediaAdjustments !== undefined) {
+    console.warn("[users-repository] media_adjustments ausente — aplique 20260817_profile_media_adjustments.sql")
+    delete payload.media_adjustments
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const retry = await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
+    if (retry.error) throw retry.error
+    return
+  }
   if (error) throw error
 }
 

@@ -1,4 +1,5 @@
 import type { AccountTier } from "@/lib/account-tier"
+import type { ProfileMediaAdjustments } from "@/lib/profile-media-adjust"
 
 /**
  * Cartão de perfil do diretório de pessoas (`/pessoas`). Tipo puro —
@@ -11,6 +12,8 @@ export type PublicProfileSummary = {
   display_slug: string
   avatar_url: string | null
   mini_banner_url: string | null
+  /** Enquadramento escolhido para cada imagem (ver `profile-media-adjust`). */
+  media_adjustments: ProfileMediaAdjustments
   account_tier: AccountTier
   profile_views: number
   followers: number

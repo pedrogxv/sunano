@@ -87,8 +87,10 @@ export type ProfileShowcase = {
   display_slug: string | null
   avatar_url: string | null
   banner_url: string | null
-  /** Faixa curta atrás do avatar — o "mini perfil" do card do diretório. */
+  /** Fundo do cartão de preview rápido (ver `lib/mini-profile.ts`). */
   mini_banner_url: string | null
+  /** Enquadramento escolhido para cada imagem (ver `profile-media-adjust`). */
+  media_adjustments: import("./profile-media-adjust").ProfileMediaAdjustments
   bio: string | null
   account_tier: import("./account-tier").AccountTier
   member_since: string
@@ -96,6 +98,10 @@ export type ProfileShowcase = {
   followers: number
   /** Saldo de aura acumulado (0 se o usuário nunca recebeu). */
   aura: number
+  /** Posts abertos no fórum — um dos cards de estatística do header. */
+  forum_posts: number
+  /** Comentários escritos no fórum — idem. */
+  forum_comments: number
   setup: SetupItem[]
   /** Medalhas já filtradas pelo limite do tier. */
   medals: ShowcaseMedal[]

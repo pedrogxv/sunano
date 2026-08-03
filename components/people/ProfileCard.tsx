@@ -7,6 +7,7 @@ import { FollowButton } from "@/components/people/FollowButton"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
+import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
@@ -172,54 +173,61 @@ export function ProfileCard({
   } as React.CSSProperties
 
   return (
-    <div
-      style={neon}
-      className={cn(
-        "group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card",
-        "transition-all duration-[220ms] ease-out hover:z-10 hover:-translate-y-1",
-        "shadow-[var(--glow)] hover:border-[var(--glow-border)] hover:shadow-[var(--glow-hover)]"
-      )}
-    >
-      <Link href={profilePath(profile.display_slug)} className="flex flex-col items-center">
-        {/* Faixa: mini banner por cima da cor do próprio perfil. A cor fica
-            sempre no fundo para que uma imagem ausente — ou que falhe ao
-            carregar — descubra o gradiente em vez de um vazio. */}
-        <div
-          className="relative h-20 w-full overflow-hidden"
-          style={{
-            backgroundImage: `linear-gradient(135deg, hsl(${hue} 65% 45% / 0.85), hsl(${(hue + 45) % 360} 60% 30% / 0.55))`,
-          }}
-        >
-          <ImageWithFallback
-            src={miniBanner.src}
-            alt=""
-            fill
-            unoptimized={miniBanner.animated}
-            sizes="(max-width: 640px) 50vw, 240px"
-            className="object-cover transition-transform duration-300 group-hover:scale-110"
-            fallback={null}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
-        </div>
-
-        {rank !== undefined && (
-          <span
-            data-place={TOP_RANKS.includes(rank) ? rank : undefined}
-            className={cn(
-              "absolute left-2.5 top-2.5 flex min-w-6 items-center justify-center rounded-md px-1.5 py-0.5 text-[11px] font-bold shadow-sm",
-              TOP_RANKS.includes(rank)
-                ? "podium-metal"
-                : "bg-background/80 text-muted-foreground backdrop-blur-sm"
-            )}
-          >
-            <span className={cn(TOP_RANKS.includes(rank) && "podium-number")}>{rank}</span>
-          </span>
+    // O cartão inteiro abre o Mini Perfil: passar o mouse em qualquer canto
+    // basta, não só na foto. `side="right"` para o cartão não cobrir o card
+    // que o abriu.
+    <MiniProfileHoverCard slug={profile.display_slug} side="right">
+      <div
+        style={neon}
+        className={cn(
+          "group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card",
+          "transition-all duration-[220ms] ease-out hover:z-10 hover:-translate-y-1",
+          "shadow-[var(--glow)] hover:border-[var(--glow-border)] hover:shadow-[var(--glow-hover)]"
         )}
+      >
+        <Link href={profilePath(profile.display_slug)} className="flex flex-col items-center">
+          {/* Faixa: mini banner por cima da cor do próprio perfil. A cor fica
+              sempre no fundo para que uma imagem ausente — ou que falhe ao
+              carregar — descubra o gradiente em vez de um vazio. */}
+          <div
+            className="relative h-20 w-full overflow-hidden"
+            style={{
+              backgroundImage: `linear-gradient(135deg, hsl(${hue} 65% 45% / 0.85), hsl(${(hue + 45) % 360} 60% 30% / 0.55))`,
+            }}
+          >
+            {/* Duas camadas de transform: o zoom do enquadramento é `style`
+                inline na imagem e venceria a classe de hover se estivessem no
+                mesmo elemento. O wrapper fica com o crescer-ao-passar-o-mouse. */}
+            <div className="absolute inset-0 transition-transform duration-300 group-hover:scale-110">
+              <ImageWithFallback
+                src={miniBanner.src}
+                alt=""
+                fill
+                unoptimized={miniBanner.animated}
+                sizes="(max-width: 640px) 50vw, 240px"
+                style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}
+                className="object-cover"
+                fallback={null}
+              />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
+          </div>
 
-        <div className="-mt-11 flex flex-col items-center px-3">
-          {/* Passar o cursor sobre a foto abre o Mini Perfil — o cartão com o
-              fundo próprio da pessoa (ver `MiniProfileCard`). */}
-          <MiniProfileHoverCard slug={profile.display_slug}>
+          {rank !== undefined && (
+            <span
+              data-place={TOP_RANKS.includes(rank) ? rank : undefined}
+              className={cn(
+                "absolute left-2.5 top-2.5 flex min-w-6 items-center justify-center rounded-md px-1.5 py-0.5 text-[11px] font-bold shadow-sm",
+                TOP_RANKS.includes(rank)
+                  ? "podium-metal"
+                  : "bg-background/80 text-muted-foreground backdrop-blur-sm"
+              )}
+            >
+              <span className={cn(TOP_RANKS.includes(rank) && "podium-number")}>{rank}</span>
+            </span>
+          )}
+
+          <div className="-mt-11 flex flex-col items-center px-3">
             <div
               className={cn(
                 "relative size-[86px] overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 group-hover:scale-105",
@@ -232,6 +240,7 @@ export function ProfileCard({
                 fill
                 unoptimized={avatar.animated}
                 sizes="86px"
+                style={mediaAdjustStyle(profile.media_adjustments.avatar)}
                 className="object-cover"
                 fallback={
                   <div
@@ -245,27 +254,27 @@ export function ProfileCard({
                 }
               />
             </div>
-          </MiniProfileHoverCard>
 
-          <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
-            <span className="truncate">{profile.display_name}</span>
-            {isVip && <Crown className="size-3.5 shrink-0 text-amber-400" />}
-            {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
-          </p>
+            <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
+              <span className="truncate">{profile.display_name}</span>
+              {isVip && <Crown className="size-3.5 shrink-0 text-amber-400" />}
+              {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
+            </p>
 
-          <ProfileMetrics profile={profile} metric={metric} />
+            <ProfileMetrics profile={profile} metric={metric} />
+          </div>
+        </Link>
+
+        <div className="mt-3 px-3 pb-3">
+          {isSelf ? (
+            <p className="rounded-lg border border-dashed border-border py-1.5 text-center text-[11px] font-medium text-muted-foreground">
+              Você
+            </p>
+          ) : (
+            <FollowButton userId={profile.id} initialFollowing={isFollowing} className="w-full" />
+          )}
         </div>
-      </Link>
-
-      <div className="mt-3 px-3 pb-3">
-        {isSelf ? (
-          <p className="rounded-lg border border-dashed border-border py-1.5 text-center text-[11px] font-medium text-muted-foreground">
-            Você
-          </p>
-        ) : (
-          <FollowButton userId={profile.id} initialFollowing={isFollowing} className="w-full" />
-        )}
       </div>
-    </div>
+    </MiniProfileHoverCard>
   )
 }

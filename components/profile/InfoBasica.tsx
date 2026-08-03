@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils"
 
 interface InfoBasicaProps {
   name: string
-  bio: string | null
   tier: AccountTier
   memberSince?: string | null
   /** Slug do perfil — resolve tag especial (ex: SUNANO), se houver. */
@@ -19,8 +18,15 @@ const TIER_BADGE_STYLES: Record<AccountTier, string> = {
   vip_plus: "border-fuchsia-400/40 bg-fuchsia-400/10 text-fuchsia-300",
 }
 
-/** Nome, badge de tier + tag especial (aglutinados) e bio curta — bloco centralizado sob a foto. */
-export function InfoBasica({ name, bio, tier, memberSince, displaySlug }: InfoBasicaProps) {
+/**
+ * Nome, badge de tier + tag especial e data de entrada — o bloco que fica ao
+ * lado da foto no header.
+ *
+ * A bio saiu daqui: no layout novo ela tem card próprio abaixo do header, e
+ * mantê-la junto do nome espremia as duas coisas na faixa estreita ao lado da
+ * foto.
+ */
+export function InfoBasica({ name, tier, memberSince, displaySlug }: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
   const isVip = tier !== "common"
   const isVipPlus = tier === "vip_plus"
@@ -31,8 +37,8 @@ export function InfoBasica({ name, bio, tier, memberSince, displaySlug }: InfoBa
     : null
 
   return (
-    <div className="flex flex-col items-center gap-2 px-4 text-center">
-      <div className="flex flex-wrap items-center justify-center gap-2">
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{name}</h1>
         <span
           className={cn(
@@ -56,8 +62,6 @@ export function InfoBasica({ name, bio, tier, memberSince, displaySlug }: InfoBa
           </span>
         )}
       </div>
-
-      {bio && <p className="max-w-md text-sm leading-relaxed text-muted-foreground">{bio}</p>}
 
       {joinedLabel && (
         <p className="text-xs text-muted-foreground/60">Membro desde {joinedLabel}</p>

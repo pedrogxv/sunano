@@ -7,6 +7,15 @@ import { Camera, Crown, Sparkles, Youtube } from "lucide-react"
 import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
+import { MediaAdjuster } from "./MediaAdjuster"
+import {
+  coerceMediaAdjustments,
+  DEFAULT_ADJUST,
+  mediaAdjustStyle,
+  type AdjustableMedia,
+  type MediaAdjust,
+  type ProfileMediaAdjustments,
+} from "@/lib/profile-media-adjust"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { TikTokIcon } from "@/components/icons/social-icons"
 import { resolveProfileMedia, type ProfileMedia } from "@/lib/account-tier"
@@ -51,6 +60,7 @@ export type ProfileData = {
   account_tier?: string | null
   youtube_handle?: string | null
   tiktok_handle?: string | null
+  media_adjustments?: unknown
 }
 
 interface ProfileSectionProps {
@@ -82,6 +92,16 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   const [uploading, setUploading] = useState(false)
   const [uploadingBanner, setUploadingBanner] = useState(false)
   const [uploadingMiniBanner, setUploadingMiniBanner] = useState(false)
+  // Enquadramento das três imagens. Não recorta arquivo nenhum: guarda posição
+  // e zoom, que a exibição aplica em CSS (ver `lib/profile-media-adjust.ts`).
+  const [adjustments, setAdjustments] = useState<ProfileMediaAdjustments>(() =>
+    coerceMediaAdjustments(profile.media_adjustments)
+  )
+
+  /** Troca o enquadramento de uma das imagens, mantendo as outras. */
+  function setAdjust(key: AdjustableMedia, next: MediaAdjust) {
+    setAdjustments((current) => ({ ...current, [key]: next }))
+  }
 
   // ── Vitrine ──
   const [loadingShowcase, setLoadingShowcase] = useState(true)
@@ -213,6 +233,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
       setAvatarUrl(data.publicUrl)
       setAvatarPreview(data.publicUrl)
+      setAdjust("avatar", DEFAULT_ADJUST)
       toast.success("Avatar enviado")
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : "Erro ao enviar avatar"
@@ -234,6 +255,8 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
       if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
       setBannerUrl(data.publicUrl)
+      // Enquadramento da imagem anterior não vale para a nova.
+      setAdjust("banner", DEFAULT_ADJUST)
       toast.success("Banner enviado")
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : "Erro ao enviar banner"
@@ -256,6 +279,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
       if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
       setMiniBannerUrl(data.publicUrl)
+      setAdjust("mini_banner", DEFAULT_ADJUST)
       toast.success("Fundo do Mini Perfil enviado")
     } catch (err) {
       const message =
@@ -277,6 +301,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
           avatar_url: avatarUrl,
           banner_url: bannerUrl,
           mini_banner_url: miniBannerUrl,
+          media_adjustments: adjustments,
           bio,
           youtube_handle: youtubeHandle,
           tiktok_handle: tiktokHandle,
@@ -292,6 +317,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       setAvatarPreview(data.profile.avatar_url)
       setBannerUrl(data.profile.banner_url ?? null)
       setMiniBannerUrl(data.profile.mini_banner_url ?? null)
+      setAdjustments(coerceMediaAdjustments(data.profile.media_adjustments))
       setBio(data.profile.bio ?? "")
       setYoutubeHandle(data.profile.youtube_handle ?? "")
       setTiktokHandle(data.profile.tiktok_handle ?? "")
@@ -364,6 +390,8 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
 
               <ProfilePagePreview
                 banner={bannerPreview}
+                bannerAdjust={adjustments.banner}
+                avatarAdjust={adjustments.avatar}
                 avatarSrc={avatarPreview}
                 name={previewName}
                 tierLabel={capabilities.label}
@@ -375,6 +403,17 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 uploadingBanner={uploadingBanner}
                 onBannerChange={handleBannerSelect}
               />
+
+              {bannerPreview.src && (
+                <MediaAdjuster
+                  src={bannerPreview.src}
+                  animated={bannerPreview.animated}
+                  value={adjustments.banner}
+                  onChange={(next) => setAdjust("banner", next)}
+                  aspect="banner"
+                  disabled={uploadingBanner}
+                />
+              )}
             </div>
 
             {/* Fundo do Mini Perfil: imagem separada da capa, usada só no
@@ -388,6 +427,8 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
 
               <MiniBannerCardPreview
                 miniBanner={miniBannerPreview}
+                miniBannerAdjust={adjustments.mini_banner}
+                avatarAdjust={adjustments.avatar}
                 avatarSrc={avatarPreview}
                 name={previewName}
                 isVip={isVip}
@@ -399,7 +440,41 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 uploadingMiniBanner={uploadingMiniBanner}
                 onMiniBannerChange={handleMiniBannerSelect}
               />
+
+              {miniBannerPreview.src && (
+                <MediaAdjuster
+                  src={miniBannerPreview.src}
+                  animated={miniBannerPreview.animated}
+                  value={adjustments.mini_banner}
+                  onChange={(next) => setAdjust("mini_banner", next)}
+                  aspect="mini"
+                  disabled={uploadingMiniBanner}
+                />
+              )}
             </div>
+
+            {/* Foto: o mesmo enquadramento vale em todo lugar onde ela aparece
+                — perfil, card de /pessoas e Mini Perfil. */}
+            {avatarPreview && (
+              <div className="space-y-2">
+                <PreviewLabel
+                  label="Enquadramento da foto"
+                  hint="Arraste para escolher o que fica dentro do círculo."
+                />
+                <div className="flex justify-center">
+                  <div className="w-32">
+                    <MediaAdjuster
+                      src={avatarPreview}
+                      animated={resolveProfileMedia(avatarUrl, tier).animated}
+                      value={adjustments.avatar}
+                      onChange={(next) => setAdjust("avatar", next)}
+                      aspect="avatar"
+                      disabled={uploading}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -575,6 +650,8 @@ function PreviewLabel({ label, hint }: { label: string; hint?: string }) {
  */
 function ProfilePagePreview({
   banner,
+  bannerAdjust,
+  avatarAdjust,
   avatarSrc,
   name,
   tierLabel,
@@ -587,6 +664,8 @@ function ProfilePagePreview({
   onBannerChange,
 }: {
   banner: ProfileMedia
+  bannerAdjust: MediaAdjust
+  avatarAdjust: MediaAdjust
   avatarSrc: string | null
   name: string
   tierLabel: string
@@ -602,7 +681,9 @@ function ProfilePagePreview({
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       <div
         className={cn(
-          "relative h-28 w-full overflow-hidden sm:h-36",
+          // Mesma proporção da capa real (ver BANNER_HEIGHT em ProfileShowcase),
+          // reduzida para caber no editor.
+          "relative h-36 w-full overflow-hidden sm:h-48",
           !banner.src && "bg-gradient-to-br from-primary/20 via-muted/40 to-background"
         )}
       >
@@ -613,11 +694,13 @@ function ProfilePagePreview({
             fill
             unoptimized={banner.animated}
             sizes="(max-width: 768px) 100vw, 640px"
-            className="h-full w-full object-cover object-center"
+            style={mediaAdjustStyle(bannerAdjust)}
+            className="h-full w-full object-cover"
           />
         )}
-        {/* Só a base escurece — igual ao `Banner` de verdade. */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-card/70 to-transparent" />
+        {/* Sem véu escuro, igual ao `Banner` de verdade: não há texto sobre a
+            capa, e o degradê só fazia a base dela virar tarja preta junto com
+            o fundo do card. */}
         <label
           className={cn(
             "absolute bottom-2 right-2 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
@@ -636,15 +719,32 @@ function ProfilePagePreview({
         </label>
       </div>
 
-      <div className="flex flex-col items-center px-4 pb-4">
-        <div className="relative -mt-10 sm:-mt-12">
+      {/* Foto quadrada ancorada no canto inferior esquerdo, invadindo a capa
+          pela metade — igual ao header público. */}
+      <div className="relative px-4 pb-4">
+        <div className="absolute -top-10 left-4 sm:-top-12">
           <div className="relative">
-            <Avatar className="size-20 border-4 border-background shadow-xl sm:size-24">
-              <AvatarImage src={avatarSrc ?? undefined} alt={name} />
-              <AvatarFallback className="text-2xl font-bold">
-                {name.slice(0, 1).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
+            <div
+              className={cn(
+                "relative size-20 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-24",
+                isVip ? "border-amber-300" : "border-border"
+              )}
+            >
+              {avatarSrc ? (
+                <Image
+                  src={avatarSrc}
+                  alt={name}
+                  fill
+                  sizes="96px"
+                  style={mediaAdjustStyle(avatarAdjust)}
+                  className="object-cover"
+                />
+              ) : (
+                <div className="flex size-full items-center justify-center bg-primary/15 text-2xl font-bold text-primary">
+                  {name.slice(0, 1).toUpperCase()}
+                </div>
+              )}
+            </div>
             <label
               className={cn(
                 "absolute -bottom-1 -right-1 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
@@ -664,7 +764,7 @@ function ProfilePagePreview({
           </div>
         </div>
 
-        <div className="mt-2.5 flex items-center gap-2">
+        <div className="ml-24 flex flex-wrap items-center gap-2 pt-3 sm:ml-28">
           <p className="text-base font-bold text-foreground">{name}</p>
           <span
             className={cn(
@@ -723,6 +823,8 @@ function PreviewSkeletonRow({ columns }: { columns: number }) {
  */
 function MiniBannerCardPreview({
   miniBanner,
+  miniBannerAdjust,
+  avatarAdjust,
   avatarSrc,
   name,
   isVip,
@@ -735,6 +837,8 @@ function MiniBannerCardPreview({
   onMiniBannerChange,
 }: {
   miniBanner: ProfileMedia
+  miniBannerAdjust: MediaAdjust
+  avatarAdjust: MediaAdjust
   avatarSrc: string | null
   name: string
   isVip: boolean
@@ -766,6 +870,7 @@ function MiniBannerCardPreview({
               fill
               unoptimized={miniBanner.animated}
               sizes="240px"
+              style={mediaAdjustStyle(miniBannerAdjust)}
               className="object-cover"
             />
           )}
@@ -793,7 +898,12 @@ function MiniBannerCardPreview({
             <Avatar
               className={cn("size-[86px] ring-4", isVip ? "ring-amber-400/70" : "ring-background")}
             >
-              <AvatarImage src={avatarSrc ?? undefined} alt={name} />
+              <AvatarImage
+                src={avatarSrc ?? undefined}
+                alt={name}
+                style={mediaAdjustStyle(avatarAdjust)}
+                className="object-cover"
+              />
               <AvatarFallback className="text-xl font-bold">
                 {name.slice(0, 1).toUpperCase()}
               </AvatarFallback>

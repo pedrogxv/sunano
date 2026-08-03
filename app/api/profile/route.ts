@@ -3,6 +3,7 @@ import * as z from "zod"
 
 import { coerceAccountTier } from "@/lib/account-tier"
 import { dbErrorResponse } from "@/lib/db-errors"
+import { coerceMediaAdjustments, DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { DISPLAY_NAME_MAX_LENGTH, slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { BIO_MAX_LENGTH, normalizeSocialHandle, SOCIAL_HANDLE_PATTERN } from "@/lib/profile-showcase"
 import {
@@ -39,6 +40,11 @@ const profileSchema = z.object({
   // Aceita handle solto ("@user") ou URL colada — normalizado abaixo antes de salvar.
   youtube_handle: z.string().trim().max(200).nullable().optional(),
   tiktok_handle: z.string().trim().max(200).nullable().optional(),
+  // Enquadramento das imagens. O schema só exige "é um objeto": faixa e
+  // arredondamento ficam com `coerceMediaAdjustments`, que é o mesmo código
+  // que o editor usa no client — assim os dois nunca discordam sobre o que é
+  // um valor válido.
+  media_adjustments: z.record(z.string(), z.unknown()).optional(),
 })
 
 /** Normaliza e valida um handle de rede social. Retorna `undefined` (sem mudança), `null` (limpar) ou o handle válido. */
@@ -117,6 +123,7 @@ export async function GET() {
         account_tier: coerceAccountTier(settings?.account_tier),
         youtube_handle: settings?.youtube_handle ?? null,
         tiktok_handle: settings?.tiktok_handle ?? null,
+        media_adjustments: settings?.media_adjustments ?? DEFAULT_ADJUSTMENTS,
       },
     })
   } catch {
@@ -216,6 +223,10 @@ export async function POST(request: Request) {
       bio: parsed.data.bio === undefined ? undefined : parsed.data.bio || null,
       youtubeHandle: youtubeHandle.value,
       tiktokHandle: tiktokHandle.value,
+      mediaAdjustments:
+        parsed.data.media_adjustments === undefined
+          ? undefined
+          : coerceMediaAdjustments(parsed.data.media_adjustments),
     })
 
     const [settings, adminProfile] = await Promise.all([
@@ -245,6 +256,7 @@ export async function POST(request: Request) {
         account_tier: coerceAccountTier(settings?.account_tier),
         youtube_handle: settings?.youtube_handle ?? null,
         tiktok_handle: settings?.tiktok_handle ?? null,
+        media_adjustments: settings?.media_adjustments ?? DEFAULT_ADJUSTMENTS,
       },
     })
   } catch (err) {

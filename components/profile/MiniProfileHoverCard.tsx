@@ -63,7 +63,11 @@ export function MiniProfileHoverCard({
   if (!slug) return <>{children}</>
 
   return (
-    <HoverCardPrimitive.Root openDelay={350} closeDelay={120} onOpenChange={load}>
+    // Abertura quase imediata: o cartão é o conteúdo principal do gesto, não
+    // uma dica secundária que precise de pausa antes de aparecer. O
+    // `closeDelay` é o que evita piscar quando o cursor cruza a borda a caminho
+    // do próprio cartão.
+    <HoverCardPrimitive.Root openDelay={100} closeDelay={120} onOpenChange={load}>
       <HoverCardPrimitive.Trigger asChild>{children}</HoverCardPrimitive.Trigger>
       {profile && (
         <HoverCardPrimitive.Portal>
@@ -72,7 +76,7 @@ export function MiniProfileHoverCard({
             align={align}
             sideOffset={8}
             collisionPadding={12}
-            className="z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+            className="z-50 duration-150 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
           >
             <MiniProfileCard profile={profile} />
           </HoverCardPrimitive.Content>

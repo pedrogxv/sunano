@@ -419,6 +419,8 @@ type Translations = {
       failedToDelete: string
       cannotDeleteSelf: string
       cannotDeleteWebMaster: string
+      staffSectionTitle: string
+      membersSectionTitle: string
     }
     offers: {
       failedToLoad: string
@@ -1108,6 +1110,8 @@ export const translations: Record<LocaleCode, Translations> = {
         failedToDelete: "Erro ao excluir usuário",
         cannotDeleteSelf: "Você não pode excluir a própria conta.",
         cannotDeleteWebMaster: "Uma conta WEB Master não pode ser excluída por este painel.",
+        staffSectionTitle: "Staff - Sunano",
+        membersSectionTitle: "Membros",
       },
       offers: {
         failedToLoad: "Erro ao carregar ofertas",
@@ -1873,6 +1877,8 @@ export const translations: Record<LocaleCode, Translations> = {
         failedToDelete: "Failed to delete user",
         cannotDeleteSelf: "You cannot delete your own account.",
         cannotDeleteWebMaster: "A WEB Master account cannot be deleted from this panel.",
+        staffSectionTitle: "Staff - Sunano",
+        membersSectionTitle: "Members",
       },
       offers: {
         failedToLoad: "Failed to load offers",

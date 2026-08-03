@@ -514,6 +514,76 @@ function UserCard({
   )
 }
 
+/* ── Seção de lista de usuários (título + contador + cards) ──
+ * Nome específico (`UserListSection`) para não colidir com o
+ * componente de página `AdminUsersPage` nem com o rótulo genérico
+ * `common.users`: cada seção tem seu próprio título dedicado. */
+function UserListSection({
+  title,
+  icon: Icon,
+  users,
+  emptyLabel,
+  currentUserId,
+  isCurrentUserWebMaster,
+  savingId,
+  deletingId,
+  onRoleChange,
+  onPermissionChange,
+  onSave,
+  onTierSave,
+  onDelete,
+}: {
+  title: string
+  icon: React.ElementType
+  users: AdminUser[]
+  emptyLabel: string
+  currentUserId: string | null
+  isCurrentUserWebMaster: boolean
+  savingId: string | null
+  deletingId: string | null
+  onRoleChange: (id: string, role: UserRole) => void
+  onPermissionChange: (id: string, key: string, value: boolean) => void
+  onSave: (user: AdminUser) => void
+  onTierSave: (userId: string, tier: AccountTier) => Promise<void>
+  onDelete: (user: AdminUser) => Promise<void>
+}) {
+  return (
+    <Card className="border-border bg-card/90">
+      <CardHeader className="border-b border-border pb-4">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Icon className="size-4 text-primary" />
+          {title}
+          <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{users.length}</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 pt-4">
+        {users.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">{emptyLabel}</p>
+        ) : users.map((user, index) => (
+          <div
+            key={user.id}
+            className="animate-in fade-in slide-in-from-bottom-2 duration-300"
+            style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
+          >
+            <UserCard
+              user={user}
+              isCurrentUser={user.id === currentUserId}
+              isCurrentUserWebMaster={isCurrentUserWebMaster}
+              savingId={savingId}
+              deletingId={deletingId}
+              onRoleChange={onRoleChange}
+              onPermissionChange={onPermissionChange}
+              onSave={onSave}
+              onTierSave={onTierSave}
+              onDelete={onDelete}
+            />
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
 /* ── Stat chip — também funciona como atalho de filtro por cargo ─ */
 function StatChip({
   icon: Icon,
@@ -614,6 +684,16 @@ export default function AdminUsersPage() {
       return (u.display_name ?? "").toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q)
     })
   }, [users, search, roleFilter])
+
+  // Staff (WEB Master / Admin / Moderador) vs. Membros (Usuário comum) — mesmo filtro/busca acima.
+  const staffUsers = useMemo(
+    () => filteredUsers.filter((u) => u.role === "webmaster" || u.role === "admin" || u.role === "moderator"),
+    [filteredUsers]
+  )
+  const memberUsers = useMemo(
+    () => filteredUsers.filter((u) => u.role === "user"),
+    [filteredUsers]
+  )
 
   function updateUserRole(userId: string, nextRole: UserRole) {
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: nextRole } : u))
@@ -874,49 +954,52 @@ export default function AdminUsersPage() {
         </Select>
       </div>
 
-      {/* Users list */}
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border pb-4">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <UsersIcon className="size-4 text-primary" />
-            {t.common.users}
-            {!loading && <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{filteredUsers.length}</span>}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 pt-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-10">
-              <BoxLoader />
-            </div>
-          ) : users.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">{t.admin.users.noUsersFound}</p>
-          ) : filteredUsers.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-center">
-              <UserIcon className="size-6 text-muted-foreground/50" />
-              <p className="text-sm text-muted-foreground">{t.admin.users.noResultsFiltered}</p>
-            </div>
-          ) : filteredUsers.map((user, index) => (
-            <div
-              key={user.id}
-              className="animate-in fade-in slide-in-from-bottom-2 duration-300"
-              style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
-            >
-              <UserCard
-                user={user}
-                isCurrentUser={user.id === currentUserId}
-                isCurrentUserWebMaster={isCurrentUserWebMaster}
-                savingId={savingId}
-                deletingId={deletingId}
-                onRoleChange={updateUserRole}
-                onPermissionChange={updateUserPermission}
-                onSave={saveUser}
-                onTierSave={saveTier}
-                onDelete={deleteUser}
-              />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      {/* Users list — separado em Staff e Membros, mesmo filtro/busca da toolbar acima */}
+      {loading ? (
+        <div className="flex items-center justify-center py-10">
+          <BoxLoader />
+        </div>
+      ) : users.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">{t.admin.users.noUsersFound}</p>
+      ) : filteredUsers.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 py-10 text-center">
+          <UserIcon className="size-6 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">{t.admin.users.noResultsFiltered}</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <UserListSection
+            title={t.admin.users.staffSectionTitle}
+            icon={ShieldCheck}
+            users={staffUsers}
+            emptyLabel={t.admin.users.noResultsFiltered}
+            currentUserId={currentUserId}
+            isCurrentUserWebMaster={isCurrentUserWebMaster}
+            savingId={savingId}
+            deletingId={deletingId}
+            onRoleChange={updateUserRole}
+            onPermissionChange={updateUserPermission}
+            onSave={saveUser}
+            onTierSave={saveTier}
+            onDelete={deleteUser}
+          />
+          <UserListSection
+            title={t.admin.users.membersSectionTitle}
+            icon={UsersIcon}
+            users={memberUsers}
+            emptyLabel={t.admin.users.noResultsFiltered}
+            currentUserId={currentUserId}
+            isCurrentUserWebMaster={isCurrentUserWebMaster}
+            savingId={savingId}
+            deletingId={deletingId}
+            onRoleChange={updateUserRole}
+            onPermissionChange={updateUserPermission}
+            onSave={saveUser}
+            onTierSave={saveTier}
+            onDelete={deleteUser}
+          />
+        </div>
+      )}
     </div>
   )
 }

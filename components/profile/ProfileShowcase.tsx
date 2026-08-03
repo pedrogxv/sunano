@@ -76,6 +76,7 @@ export function ProfileShowcase({
                 tier={profile.account_tier}
                 memberSince={profile.member_since}
                 displaySlug={profile.display_slug}
+                auraRank={profile.aura_rank}
               />
               <SocialLinks
                 youtubeHandle={profile.youtube_handle}
@@ -115,7 +116,6 @@ export function ProfileShowcase({
         aura={profile.aura}
         posts={profile.forum_posts}
         comentarios={profile.forum_comments}
-        favoritos={profile.favorites_total}
         seguidores={profile.followers}
       />
 

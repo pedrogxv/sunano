@@ -62,6 +62,39 @@ export async function getUserAuraBalance(userId: string): Promise<number> {
   return data?.balance ?? 0
 }
 
+const AURA_RANK_TOP_CUTOFF = 100
+
+/**
+ * Posição do usuário no ranking geral de Aura (1 = maior saldo), ou `null`
+ * se ele não tem aura nenhuma ou cai fora do Top 100 — a badge de posição no
+ * perfil só faz sentido dentro desse recorte.
+ */
+export async function getUserAuraRank(userId: string): Promise<number | null> {
+  const db = createSupabaseAdminClient()
+
+  const { data: wallet } = await db
+    .from("user_aura_wallet")
+    .select("balance")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  const balance = wallet?.balance ?? 0
+  if (balance <= 0) return null
+
+  const { count, error } = await db
+    .from("user_aura_wallet")
+    .select("user_id", { count: "exact", head: true })
+    .gt("balance", balance)
+
+  if (error) {
+    console.error("[aura-repository] getUserAuraRank:", error)
+    return null
+  }
+
+  const rank = (count ?? 0) + 1
+  return rank <= AURA_RANK_TOP_CUTOFF ? rank : null
+}
+
 export type AuraLedgerEntry = {
   id: string
   delta: number

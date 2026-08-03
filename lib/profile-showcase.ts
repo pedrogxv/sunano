@@ -98,6 +98,8 @@ export type ProfileShowcase = {
   followers: number
   /** Saldo de aura acumulado (0 se o usuário nunca recebeu). */
   aura: number
+  /** Posição no ranking geral de Aura, só quando o usuário está no Top 100. */
+  aura_rank: number | null
   /** Posts abertos no fórum — um dos cards de estatística do header. */
   forum_posts: number
   /** Comentários escritos no fórum — idem. */

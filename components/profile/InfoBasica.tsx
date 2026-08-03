@@ -1,4 +1,4 @@
-import { Crown, Sparkles } from "lucide-react"
+import { Crown, Flame, Sparkles } from "lucide-react"
 
 import { getTierCapabilities, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -10,6 +10,8 @@ interface InfoBasicaProps {
   memberSince?: string | null
   /** Slug do perfil — resolve tag especial (ex: SUNANO), se houver. */
   displaySlug?: string | null
+  /** Posição no ranking de Aura. Só existe (não-null) dentro do Top 100. */
+  auraRank?: number | null
 }
 
 const TIER_BADGE_STYLES: Record<AccountTier, string> = {
@@ -26,7 +28,7 @@ const TIER_BADGE_STYLES: Record<AccountTier, string> = {
  * mantê-la junto do nome espremia as duas coisas na faixa estreita ao lado da
  * foto.
  */
-export function InfoBasica({ name, tier, memberSince, displaySlug }: InfoBasicaProps) {
+export function InfoBasica({ name, tier, memberSince, displaySlug, auraRank }: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
   const isVip = tier !== "common"
   const isVipPlus = tier === "vip_plus"
@@ -59,6 +61,14 @@ export function InfoBasica({ name, tier, memberSince, displaySlug }: InfoBasicaP
           >
             <Sparkles className="size-3" />
             {specialTag.label}
+          </span>
+        )}
+
+        {/* Só aparece dentro do Top 100 — fora dele a posição não diz muita
+            coisa e a badge vira ruído. */}
+        {auraRank != null && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-400">
+            <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />#{auraRank}
           </span>
         )}
       </div>

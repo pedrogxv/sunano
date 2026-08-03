@@ -6,7 +6,7 @@ import {
   getMediaAdjustmentsByUser,
 } from "@/lib/server/repositories/users-repository"
 import { DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
-import { getUserAuraBalance } from "@/lib/server/repositories/aura-repository"
+import { getUserAuraBalance, getUserAuraRank } from "@/lib/server/repositories/aura-repository"
 import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 import {
   coerceAccountTier,
@@ -113,13 +113,14 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
 
   const tier = coerceAccountTier(row.account_tier)
 
-  const [setup, medals, favorites, followers, aura, settings, forumActivity] =
+  const [setup, medals, favorites, followers, aura, auraRank, settings, forumActivity] =
     await Promise.all([
       getUserSetup(userId),
       getUserMedals(userId),
       getUserFavorites(userId),
       countFollowers(userId),
       getUserAuraBalance(userId),
+      getUserAuraRank(userId),
       getMediaAdjustmentsByUser([userId]),
       countForumActivity(userId),
     ])
@@ -139,6 +140,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     member_since: row.created_at,
     followers,
     aura,
+    aura_rank: auraRank,
     forum_posts: forumActivity.posts,
     forum_comments: forumActivity.comments,
     setup,

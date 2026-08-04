@@ -55,16 +55,6 @@ const METRIC_META: Record<
   followers: { icon: Users, label: (n) => (n === 1 ? "seguidor" : "seguidores") },
 }
 
-/**
- * Qual métrica desce para a linha secundária. Aura e visitas se revezam: as
- * duas têm aba própria, e a que não está em destaque continua visível embaixo
- * em vez de sumir do card. "Mais seguidos" mostra só o próprio contador.
- */
-const SECONDARY_METRIC: Partial<Record<DirectoryMetric, DirectoryMetric>> = {
-  aura: "views",
-  views: "aura",
-}
-
 function metricValue(profile: PublicProfileSummary, metric: DirectoryMetric): number {
   if (metric === "aura") return profile.aura
   if (metric === "views") return profile.profile_views
@@ -72,9 +62,10 @@ function metricValue(profile: PublicProfileSummary, metric: DirectoryMetric): nu
 }
 
 /**
- * As linhas de número sob o nick: a métrica da aba em destaque e, quando há,
- * a outra métrica de ranking logo abaixo, apagada. `compact` é a variação do
- * pódio, onde os cards são menores.
+ * O número sob o nick: só a métrica da aba em destaque. Sem métrica
+ * secundária — é a única informação do card, então ganha ícone e número
+ * grandes em vez de disputar espaço com uma segunda linha apagada.
+ * `compact` é a variação do pódio, onde os cards são menores.
  */
 export function ProfileMetrics({
   profile,
@@ -89,44 +80,28 @@ export function ProfileMetrics({
   const Icon = meta.icon
   const value = metricValue(profile, metric)
 
-  const secondary = SECONDARY_METRIC[metric]
-  const secondaryMeta = secondary ? METRIC_META[secondary] : null
-  const SecondaryIcon = secondaryMeta?.icon
-  const secondaryValue = secondary ? metricValue(profile, secondary) : 0
-
   return (
-    <>
-      <p
+    <p
+      className={cn(
+        "mt-1 flex items-center gap-1.5 text-muted-foreground",
+        compact ? "text-xs" : "text-sm"
+      )}
+    >
+      <Icon
+        className={cn(compact ? "size-4" : "size-5", meta.tone)}
+        {...(meta.filled ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
+      />
+      <span
         className={cn(
-          "mt-0.5 flex items-center gap-1 text-muted-foreground",
-          compact ? "text-[10.5px]" : "text-[11px]"
+          "font-extrabold",
+          compact ? "text-base" : "text-lg",
+          meta.tone ?? "text-foreground"
         )}
       >
-        <Icon
-          className={cn(compact ? "size-2.5" : "size-3", meta.tone)}
-          {...(meta.filled ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
-        />
-        <span className={cn("font-semibold", meta.tone ?? "text-foreground/70")}>
-          {formatCount(value)}
-        </span>
-        {meta.label(value)}
-      </p>
-
-      {secondaryMeta && SecondaryIcon && (
-        <p
-          className={cn(
-            "mt-0.5 flex items-center gap-1 text-muted-foreground/70",
-            compact ? "text-[9.5px]" : "text-[10px]"
-          )}
-        >
-          <SecondaryIcon
-            className={cn("size-2.5", secondaryMeta.tone && "opacity-80", secondaryMeta.tone)}
-            {...(secondaryMeta.filled ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
-          />
-          {formatCount(secondaryValue)} {secondaryMeta.label(secondaryValue)}
-        </p>
-      )}
-    </>
+        {formatCount(value)}
+      </span>
+      {meta.label(value)}
+    </p>
   )
 }
 

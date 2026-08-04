@@ -25,7 +25,7 @@ interface AuthUserProps {
   isCollapsed?: boolean
   /** Para onde mandar ao logar/deslogar. Sidebar pública usa "/login"; admin, "/admin/login". */
   loginHref?: string
-  /** "public" mostra "Meu Perfil" (/perfil) e "Configurações da conta" (/conta); "admin" mostra "Configurações" (/admin/settings). */
+  /** "public" mostra "Meu Perfil" (vitrine pública) e "Configurações da conta" (/conta); "admin" mostra "Configurações" (/admin/settings). */
   variant?: "public" | "admin"
   /** "sidebar" (padrão) usa o layout de rodapé; "topbar" usa um avatar compacto no canto,
    *  com o menu abrindo para baixo. */
@@ -38,6 +38,9 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   const ready = !loading
   const isAdmin = authUser?.isAdmin ?? false
   const user = authUser ? { name: authUser.displayName, email: authUser.email, avatar: authUser.avatarUrl || "" } : null
+  // Vitrine pública do próprio usuário. `/perfil/[handle]` resolve UUID e
+  // redireciona para o slug canônico quando existir (ver app/perfil/[handle]/page.tsx).
+  const myProfileHref = authUser ? `/perfil/${authUser.id}` : "/perfil"
 
   if (!ready) {
     if (layout === "topbar") {
@@ -159,7 +162,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
           <>
             <DropdownMenuItem asChild>
               <Link
-                href="/perfil"
+                href={myProfileHref}
                 className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
               >
                 <User className="size-4 text-muted-foreground" />
@@ -191,7 +194,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
           <>
             <DropdownMenuItem asChild>
               <Link
-                href="/perfil"
+                href={myProfileHref}
                 className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
               >
                 <User className="size-4 text-muted-foreground" />

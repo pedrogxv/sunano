@@ -53,6 +53,16 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const rankIndex = rankedInCategory.findIndex((p) => p.id === data.id)
   const rankBadge = rankIndex >= 0 ? { position: rankIndex + 1, total: rankedInCategory.length } : null
 
+  // Um mesmo produto às vezes é cadastrado mais de uma vez em categorias
+  // diferentes da tierlist (ex.: "ATK Duckbill" como mouse E como mousepad,
+  // cada linha com seu próprio tier). Agrupa por nome+marca pra mostrar
+  // todas as classificações desse produto na página, não só a da categoria
+  // que originou esta URL.
+  const classifications = allPeripherals
+    .filter((p) => p.name.trim().toLowerCase() === data.name.trim().toLowerCase() && p.brand === data.brand)
+    .map((p) => ({ id: p.id, name: p.name, category: p.category, tier: p.tier }))
+    .sort((a, b) => a.category.localeCompare(b.category))
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-4 md:px-6 lg:px-8">
       <div className="mb-3">
@@ -65,6 +75,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
         linkedStore={linkedStore}
         linkedBazaar={linkedBazaar}
         linkedSwitch={linkedSwitch ? { id: linkedSwitch.id, name: linkedSwitch.name } : null}
+        classifications={classifications}
       />
     </div>
   )

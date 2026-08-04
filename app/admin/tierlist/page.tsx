@@ -142,15 +142,16 @@ const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
 }
 
 // Modes not listed here share the `tier` column directly (the "default" mode for their
-// category group: performance/Geral for most categories, magnetic for keyboards). Every
-// other mode keeps its own tier assignment in `specs` so moving an item between tiers in
-// one mode never affects the others.
+// category group: performance/Geral for most categories). Every other mode keeps its own
+// tier assignment in `specs` so moving an item between tiers in one mode never affects
+// the others.
 const TIER_KEY_BY_MODE: Partial<Record<RatingMode, string>> = {
   value: "adminTier_value",
   recommended: "adminTier_recommended",
   oled: "adminTier_oled",
   soundTyping: "adminTier_soundTyping",
   mechanical: "adminTier_mechanical",
+  magnetic: "adminTier_magnetic",
   pcb: "adminTier_pcb",
   ips_va: "adminTier_ips_va",
   competitive: "adminTier_competitive",
@@ -158,10 +159,19 @@ const TIER_KEY_BY_MODE: Partial<Record<RatingMode, string>> = {
 
 const TIER_VALUES: Tier[] = ["GOAT", "SS", "S", "A", "B", "C", "L"]
 
+// "magnetic" used to share the `tier` column with "performance" before getting its own
+// `adminTier_magnetic` key — items classified before that migration fall back to `tier`
+// until explicitly moved in the Magnético tab, at which point they get their own
+// `adminTier_magnetic` value (including the explicit "unassigned" sentinel below).
+const MAGNETIC_TIER_KEY = "adminTier_magnetic"
+const MAGNETIC_UNASSIGNED_SENTINEL = "__unassigned__"
+
 function getModeTier(item: Peripheral, tierKey: string | null): TierValue {
   if (tierKey === null) return item.tier
   const value = item.specs?.[tierKey]
-  return typeof value === "string" && (TIER_VALUES as string[]).includes(value) ? (value as Tier) : null
+  if (typeof value === "string" && (TIER_VALUES as string[]).includes(value)) return value as Tier
+  if (tierKey === MAGNETIC_TIER_KEY && value === undefined) return item.tier
+  return null
 }
 
 // Sem `tierlistCategories` definido (itens legados), o item continua visível em todos os
@@ -178,6 +188,9 @@ function participatesInMode(item: Peripheral, mode: RatingMode): boolean {
 function withModeTier(item: Peripheral, tier: TierValue, tierKey: string | null): Peripheral {
   if (tierKey === null) return { ...item, tier }
   if (tier === null) {
+    if (tierKey === MAGNETIC_TIER_KEY) {
+      return { ...item, specs: { ...item.specs, [tierKey]: MAGNETIC_UNASSIGNED_SENTINEL } }
+    }
     const specs = { ...item.specs }
     delete specs[tierKey]
     return { ...item, specs }
@@ -690,7 +703,12 @@ export default function AdminPeripheralsPage() {
     const updates = new Map<string, Peripheral>()
 
     const destinationBase = sortByTierOrderThenName(
-      allItems.filter((item) => getModeTier(item, tierKey) === destinationTier && item.id !== draggedId),
+      allItems.filter(
+        (item) =>
+          getModeTier(item, tierKey) === destinationTier &&
+          item.category === draggedItem.category &&
+          item.id !== draggedId,
+      ),
       orderKey,
       allowLegacyFallback,
     )
@@ -718,7 +736,12 @@ export default function AdminPeripheralsPage() {
 
     if (sourceTier !== destinationTier) {
       const sourceItems = sortByTierOrderThenName(
-        allItems.filter((item) => getModeTier(item, tierKey) === sourceTier && item.id !== draggedId),
+        allItems.filter(
+          (item) =>
+            getModeTier(item, tierKey) === sourceTier &&
+            item.category === draggedItem.category &&
+            item.id !== draggedId,
+        ),
         orderKey,
         allowLegacyFallback,
       )
@@ -881,7 +904,11 @@ export default function AdminPeripheralsPage() {
     }
 
     const targetItem = peripherals.find((item) => item.id === targetItemId)
-    if (!targetItem || getModeTier(targetItem, tierKey) !== getModeTier(draggedItem, tierKey)) {
+    if (
+      !targetItem ||
+      getModeTier(targetItem, tierKey) !== getModeTier(draggedItem, tierKey) ||
+      targetItem.category !== draggedItem.category
+    ) {
       scheduleHoverUpdate(null)
       return
     }
@@ -1057,6 +1084,7 @@ export default function AdminPeripheralsPage() {
     if (!draggedItem || !targetItem) return peripherals
     if (draggedItem.id === targetItem.id) return peripherals
     if (getModeTier(draggedItem, tierKey) !== getModeTier(targetItem, tierKey)) return peripherals
+    if (draggedItem.category !== targetItem.category) return peripherals
 
     return applyTierReorder(
       peripherals,

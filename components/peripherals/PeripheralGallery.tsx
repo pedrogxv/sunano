@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Search, SearchX } from "lucide-react"
 import { VisuallyHidden } from "radix-ui"
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { Lens } from "@/components/ui/lens"
 import { cn } from "@/lib/utils"
 
 const MAX_THUMBS = 4
@@ -14,6 +15,7 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
   const photos = images.filter((image): image is string => Boolean(image))
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [lensEnabled, setLensEnabled] = useState(true)
 
   if (photos.length === 0) {
     return (
@@ -95,13 +97,43 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
             <DialogTitle>{alt}</DialogTitle>
           </VisuallyHidden.Root>
           <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-muted/40">
-            <Image
-              alt={alt}
-              src={photos[activeIndex]}
-              fill
-              sizes="(max-width: 768px) 100vw, 768px"
-              className="object-contain"
-            />
+            {/* A lupa só ganha sentido numa imagem grande e parada — por isso
+                fica restrita à foto expandida do dialog, não às miniaturas. */}
+            {lensEnabled ? (
+              <Lens
+                zoomFactor={2}
+                lensSize={180}
+                ariaLabel={`Zoom em ${alt}`}
+                className="cursor-zoom-in"
+              >
+                <Image
+                  alt={alt}
+                  src={photos[activeIndex]}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 768px"
+                  className="object-contain"
+                />
+              </Lens>
+            ) : (
+              <Image
+                alt={alt}
+                src={photos[activeIndex]}
+                fill
+                sizes="(max-width: 768px) 100vw, 768px"
+                className="object-contain"
+              />
+            )}
+
+            <button
+              type="button"
+              onClick={() => setLensEnabled((v) => !v)}
+              aria-pressed={lensEnabled}
+              aria-label={lensEnabled ? "Desativar lupa" : "Ativar lupa"}
+              title={lensEnabled ? "Desativar lupa" : "Ativar lupa"}
+              className="absolute left-2 top-2 z-[60] flex size-9 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
+            >
+              {lensEnabled ? <Search className="size-4" /> : <SearchX className="size-4" />}
+            </button>
 
             {photos.length > 1 && (
               <>
@@ -109,7 +141,7 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
                   type="button"
                   onClick={showPrev}
                   aria-label="Foto anterior"
-                  className="absolute left-2 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
+                  className="absolute left-2 top-1/2 z-[60] flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
                 >
                   <ChevronLeft className="size-5" />
                 </button>
@@ -117,7 +149,7 @@ export function PeripheralGallery({ images, alt }: { images: (string | null | un
                   type="button"
                   onClick={showNext}
                   aria-label="Próxima foto"
-                  className="absolute right-2 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
+                  className="absolute right-2 top-1/2 z-[60] flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
                 >
                   <ChevronRight className="size-5" />
                 </button>

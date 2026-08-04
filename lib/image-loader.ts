@@ -3,11 +3,10 @@ import { supabaseResizedImage } from "@/lib/storage-image"
 /**
  * Loader do `next/image` (configurado em next.config.mjs).
  *
- * Substitui o otimizador da Vercel em todo o app: em vez de `/_next/image`,
- * cada imagem do nosso bucket é redimensionada pelo próprio Supabase Storage.
- * O motivo está em `lib/storage-image.ts` — a cota de transformações da
- * Vercel estourou e o endpoint passou a responder 402, quebrando toda imagem
- * ainda não cacheada.
+ * Substitui o otimizador da Vercel em todo o app: nenhum `<Image>` passa por
+ * `/_next/image` nem por transformador nenhum — ver histórico e motivo em
+ * `lib/storage-image.ts`. Isso faz o `width`/`quality` do `next/image` serem
+ * ignorados; o navegador sempre recebe o arquivo original.
  *
  * Fazer isso pelo loader, e não caso a caso, garante que qualquer `<Image>`
  * novo já nasça no caminho certo.

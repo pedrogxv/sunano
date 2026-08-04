@@ -107,6 +107,61 @@ const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
 // categorias essa opção foi removida do formulário e não deve aparecer como aba no board.
 const RECOMMENDED_TAB_CATEGORIES = ["mousepad", "glasspad", "iem", "headset"]
 
+// Ordem e cor das abas por categoria — espelha exatamente `ratingModes` da Tierlist pública
+// (components/tierlist/TierlistGrid.tsx) para que admin e público mostrem as mesmas abas na
+// mesma ordem, com o mesmo indicador de cor.
+const MODES_BY_CATEGORY: Partial<Record<Category, { key: RatingMode; color: string }[]>> = {
+  keyboard: [
+    { key: "magnetic", color: "bg-blue-400" },
+    { key: "value", color: "bg-emerald-400" },
+    { key: "mechanical", color: "bg-purple-400" },
+  ],
+  monitors: [
+    { key: "oled", color: "bg-amber-400" },
+    { key: "ips_va", color: "bg-sky-400" },
+    { key: "competitive", color: "bg-purple-400" },
+    { key: "value", color: "bg-emerald-400" },
+  ],
+  mouse: [
+    { key: "performance", color: "bg-red-400" },
+    { key: "magnetic", color: "bg-blue-400" },
+    { key: "value", color: "bg-emerald-400" },
+  ],
+}
+
+const RATING_MODE_COLORS: Record<RatingMode, string> = {
+  oled: "bg-amber-400",
+  performance: "bg-red-400",
+  value: "bg-emerald-400",
+  recommended: "bg-purple-400",
+  soundTyping: "bg-cyan-500",
+  mechanical: "bg-purple-400",
+  magnetic: "bg-blue-400",
+  pcb: "bg-slate-400",
+  ips_va: "bg-sky-400",
+  competitive: "bg-purple-400",
+}
+
+function getModesForCategory(category: Category): { key: RatingMode; color: string }[] {
+  const override = MODES_BY_CATEGORY[category]
+  if (override) return override
+
+  if (category === "all") {
+    return RATING_MODES.filter((m) => m.key !== "pcb").map((m) => ({
+      key: m.key,
+      color: RATING_MODE_COLORS[m.key],
+    }))
+  }
+
+  const modes: { key: RatingMode; color: string }[] = [
+    { key: "performance", color: "bg-red-400" },
+    { key: "value", color: "bg-emerald-400" },
+  ]
+  if (RECOMMENDED_TAB_CATEGORIES.includes(category)) modes.push({ key: "recommended", color: "bg-purple-400" })
+  if (category === "switches") modes.push({ key: "soundTyping", color: "bg-cyan-500" })
+  return modes
+}
+
 // Labels específicos por categoria para MOUSEPAD, GLASSPAD, IEM e HEADSET
 function getRatingModeLabel(mode: RatingMode, category: string, locale: string): string {
   if (category === "mousepad" || category === "glasspad") {
@@ -1224,26 +1279,25 @@ export default function AdminPeripheralsPage() {
           <p className="mt-0.5 text-sm font-semibold text-foreground">{modeDescription}</p>
         </div>
         <div className="flex rounded-lg border border-border bg-muted/30 p-1">
-          {RATING_MODES.filter((m) => {
-            if (m.key === "pcb") return false
-            if (m.key === "oled" && selectedCategory !== "monitors") return false
-            if ((m.key === "ips_va" || m.key === "competitive") && selectedCategory !== "monitors") return false
-            if (m.key === "soundTyping" && selectedCategory !== "switches") return false
-            if (m.key === "mechanical" && selectedCategory !== "keyboard") return false
-            if (m.key === "magnetic" && selectedCategory !== "keyboard" && selectedCategory !== "mouse") return false
-            if (m.key === "performance" && (selectedCategory === "keyboard" || selectedCategory === "monitors")) return false
-            if (m.key === "recommended" && !RECOMMENDED_TAB_CATEGORIES.includes(selectedCategory)) return false
-            return true
-          }).map((mode) => (
+          {getModesForCategory(selectedCategory).map((mode) => (
             <button
               key={mode.key}
               type="button"
               onClick={() => setRatingMode(mode.key)}
-              className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${ratingMode === mode.key
-                ? "bg-cyan-500/20 text-cyan-300"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                }`}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-all",
+                ratingMode === mode.key
+                  ? "bg-cyan-500/20 text-cyan-300"
+                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+              )}
             >
+              <span
+                className={cn(
+                  "size-1.5 shrink-0 rounded-full",
+                  mode.color,
+                  ratingMode === mode.key ? "opacity-100" : "opacity-40",
+                )}
+              />
               {getRatingModeLabel(mode.key, selectedCategory, locale)}
             </button>
           ))}

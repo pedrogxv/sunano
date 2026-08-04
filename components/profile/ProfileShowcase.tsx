@@ -99,6 +99,7 @@ export function ProfileShowcase({
           memberSince={profile.member_since}
           displaySlug={profile.display_slug}
           auraRank={profile.aura_rank}
+          activityRank={profile.activity_rank}
           bio={profile.bio}
         />
         <SocialLinks

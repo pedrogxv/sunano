@@ -106,6 +106,11 @@ export type ProfileShowcase = {
   forum_posts: number
   /** Comentários escritos no fórum — idem. */
   forum_comments: number
+  /**
+   * Posição no ranking geral de atividade (posts + comentários do fórum e de
+   * notícias), só quando o usuário está no Top 100 — mesmo recorte de `aura_rank`.
+   */
+  activity_rank: number | null
   setup: SetupItem[]
   /** Medalhas já filtradas pelo limite do tier. */
   medals: ShowcaseMedal[]

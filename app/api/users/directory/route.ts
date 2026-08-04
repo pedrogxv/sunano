@@ -5,6 +5,7 @@ import { coerceDirectorySort, type PublicProfileSummary } from "@/lib/user-direc
 import {
   getFollowedIdsAmong,
   getFollowingProfiles,
+  getMostActiveProfiles,
   getMostFollowedProfiles,
   getMostVisitedProfiles,
   getTopAuraProfiles,
@@ -13,8 +14,8 @@ import {
 export const dynamic = "force-dynamic"
 
 /**
- * Listas do diretório de pessoas: `?sort=aura` (padrão), `visited`, `followed`
- * ou `following`. Quando há sessão, devolve também quais desses perfis o usuário
+ * Listas do diretório de pessoas: `?sort=aura` (padrão), `visited`, `followed`,
+ * `following` ou `active`. Quando há sessão, devolve também quais desses perfis o usuário
  * já segue — assim a grade renderiza o botão certo sem uma chamada por card.
  */
 export async function GET(request: NextRequest) {
@@ -43,6 +44,8 @@ export async function GET(request: NextRequest) {
       profiles = await getMostFollowedProfiles(limit)
     } else if (sort === "visited") {
       profiles = await getMostVisitedProfiles(limit)
+    } else if (sort === "active") {
+      profiles = await getMostActiveProfiles(limit)
     } else {
       profiles = await getTopAuraProfiles(limit)
     }

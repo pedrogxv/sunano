@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
+import { Activity, Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
@@ -53,11 +53,13 @@ const METRIC_META: Record<
   aura: { icon: Flame, filled: true, tone: "text-orange-500", label: () => "aura" },
   views: { icon: Eye, label: (n) => (n === 1 ? "visita" : "visitas") },
   followers: { icon: Users, label: (n) => (n === 1 ? "seguidor" : "seguidores") },
+  activity: { icon: Activity, tone: "text-emerald-400", label: () => "atividade" },
 }
 
 function metricValue(profile: PublicProfileSummary, metric: DirectoryMetric): number {
   if (metric === "aura") return profile.aura
   if (metric === "views") return profile.profile_views
+  if (metric === "activity") return profile.activity
   return profile.followers
 }
 

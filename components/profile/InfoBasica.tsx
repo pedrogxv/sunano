@@ -1,4 +1,4 @@
-import { Crown, Flame, Sparkles } from "lucide-react"
+import { Activity, Crown, Flame, Sparkles } from "lucide-react"
 
 import { getTierCapabilities, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -12,6 +12,8 @@ interface InfoBasicaProps {
   displaySlug?: string | null
   /** Posição no ranking de Aura. Só existe (não-null) dentro do Top 100. */
   auraRank?: number | null
+  /** Posição no ranking de atividade (posts + comentários). Idem, Top 100. */
+  activityRank?: number | null
   bio?: string | null
 }
 
@@ -32,7 +34,15 @@ const TIER_BADGE_STYLES: Record<AccountTier, string> = {
  * A bio entra por último, dentro do mesmo bloco centralizado — sem card
  * próprio, para não duplicar a moldura que já envolve nome e badges.
  */
-export function InfoBasica({ name, tier, memberSince, displaySlug, auraRank, bio }: InfoBasicaProps) {
+export function InfoBasica({
+  name,
+  tier,
+  memberSince,
+  displaySlug,
+  auraRank,
+  activityRank,
+  bio,
+}: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
   const isVip = tier !== "common"
   const isVipPlus = tier === "vip_plus"
@@ -74,6 +84,12 @@ export function InfoBasica({ name, tier, memberSince, displaySlug, auraRank, bio
         {auraRank != null && (
           <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-400">
             <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />#{auraRank}
+          </span>
+        )}
+
+        {activityRank != null && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">
+            <Activity className="size-3" strokeWidth={2} />#{activityRank}
           </span>
         )}
       </div>

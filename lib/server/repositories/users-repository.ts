@@ -76,7 +76,8 @@ function toProfileSummary(
   row: DirectoryRow,
   followers = 0,
   aura = 0,
-  mediaAdjustments: ProfileMediaAdjustments = DEFAULT_ADJUSTMENTS
+  mediaAdjustments: ProfileMediaAdjustments = DEFAULT_ADJUSTMENTS,
+  activity = 0
 ): PublicProfileSummary {
   return {
     id: row.id,
@@ -89,6 +90,7 @@ function toProfileSummary(
     profile_views: row.profile_views ?? 0,
     followers,
     aura,
+    activity,
     created_at: row.created_at,
   }
 }
@@ -179,6 +181,65 @@ async function getAuraByUser(userIds: string[]): Promise<Record<string, number>>
 }
 
 /**
+ * Atividade (posts do fórum + comentários do fórum + comentários em
+ * notícias) de um lote de usuários, indexada por id. Posts de notícia ficam
+ * de fora: `blog_posts.author_id` aponta para `admin_profiles`, não para
+ * membros comuns — só o comentário ali é atividade de usuário de verdade.
+ * Itens ocultos pela moderação não contam, mesmo padrão de `countForumActivity`.
+ */
+async function countActivityByUser(userIds: string[]): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {}
+  if (userIds.length === 0) return counts
+
+  const db = createSupabaseAdminClient()
+  const [posts, comments, blogComments] = await Promise.all([
+    db.from("forum_posts").select("user_id").eq("is_hidden", false).in("user_id", userIds),
+    db.from("forum_comments").select("user_id").eq("is_hidden", false).in("user_id", userIds),
+    db.from("blog_comments").select("user_id").eq("is_hidden", false).in("user_id", userIds),
+  ])
+
+  for (const res of [posts, comments, blogComments]) {
+    if (res.error) {
+      console.error("[users-repository] countActivityByUser:", res.error)
+      continue
+    }
+    for (const row of (res.data ?? []) as Array<{ user_id: string | null }>) {
+      if (!row.user_id) continue
+      counts[row.user_id] = (counts[row.user_id] ?? 0) + 1
+    }
+  }
+  return counts
+}
+
+/**
+ * Mesma contagem de atividade, mas para a base inteira de usuários — usada
+ * pelo ranking "Mais Ativos" e pela posição do usuário nele. Sem view/função
+ * de agregação (ver `getMostFollowedProfiles`), então soma em JS; compensa
+ * enquanto a base de membros for pequena.
+ */
+async function getActivityCounts(): Promise<Record<string, number>> {
+  const db = createSupabaseAdminClient()
+  const [posts, comments, blogComments] = await Promise.all([
+    db.from("forum_posts").select("user_id").eq("is_hidden", false),
+    db.from("forum_comments").select("user_id").eq("is_hidden", false),
+    db.from("blog_comments").select("user_id").eq("is_hidden", false),
+  ])
+
+  const counts: Record<string, number> = {}
+  for (const res of [posts, comments, blogComments]) {
+    if (res.error) {
+      console.error("[users-repository] getActivityCounts:", res.error)
+      continue
+    }
+    for (const row of (res.data ?? []) as Array<{ user_id: string | null }>) {
+      if (!row.user_id) continue
+      counts[row.user_id] = (counts[row.user_id] ?? 0) + 1
+    }
+  }
+  return counts
+}
+
+/**
  * Filtro compartilhado por TODAS as abas do diretório de pessoas (Aura,
  * Visitados, Seguidores, Seguindo): esconde o dono do site (`SITE_OWNER_SLUG`)
  * das listagens públicas sem apagar seus dados — os demais usuários sobem uma
@@ -196,17 +257,19 @@ function excludeSiteOwner<Q extends { neq(column: string, value: string): Q }>(q
  */
 async function withCounters(rows: DirectoryRow[]): Promise<PublicProfileSummary[]> {
   const ids = rows.map((r) => r.id)
-  const [followers, aura, adjustments] = await Promise.all([
+  const [followers, aura, adjustments, activity] = await Promise.all([
     countFollowersByUser(ids),
     getAuraByUser(ids),
     getMediaAdjustmentsByUser(ids),
+    countActivityByUser(ids),
   ])
   return rows.map((row) =>
     toProfileSummary(
       row,
       followers[row.id] ?? 0,
       aura[row.id] ?? 0,
-      adjustments[row.id] ?? DEFAULT_ADJUSTMENTS
+      adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+      activity[row.id] ?? 0
     )
   )
 }
@@ -429,15 +492,104 @@ export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfile
     return []
   }
 
-  // Os seguidores já foram contados aqui; só o saldo de aura falta buscar.
+  // Os seguidores já foram contados aqui; só aura e atividade faltam buscar.
   const rows = (data ?? []) as DirectoryRow[]
-  const aura = await getAuraByUser(rows.map((r) => r.id))
+  const [aura, activity] = await Promise.all([
+    getAuraByUser(rows.map((r) => r.id)),
+    countActivityByUser(rows.map((r) => r.id)),
+  ])
 
   // O `in` volta em ordem arbitrária — reordena pelo ranking de seguidores.
   return rows
-    .map((row) => toProfileSummary(row, counts[row.id] ?? 0, aura[row.id] ?? 0))
+    .map((row) =>
+      toProfileSummary(
+        row,
+        counts[row.id] ?? 0,
+        aura[row.id] ?? 0,
+        DEFAULT_ADJUSTMENTS,
+        activity[row.id] ?? 0
+      )
+    )
     .sort((a, b) => b.followers - a.followers)
     .slice(0, limit)
+}
+
+/**
+ * Perfis com mais atividade (posts do fórum + comentários do fórum + comentários
+ * em notícias somados).
+ *
+ * Mesma estratégia de `getMostFollowedProfiles`: sem coluna nem view para
+ * ordenar no banco, então soma em JS a partir das três tabelas de origem.
+ * O dono do site fica de fora (ver `excludeSiteOwner`); buscamos um a mais
+ * que `limit` para cobrir o caso dele estar entre os top N.
+ */
+export async function getMostActiveProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+  const counts = await getActivityCounts()
+
+  const topIds = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit + 1)
+    .map(([id]) => id)
+
+  if (topIds.length === 0) return []
+
+  const { data, error: profilesError } = await excludeSiteOwner(
+    db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", topIds)
+  )
+
+  if (profilesError) {
+    console.error("[users-repository] getMostActiveProfiles:", profilesError)
+    return []
+  }
+
+  const rows = (data ?? []) as DirectoryRow[]
+  const [followers, aura, adjustments] = await Promise.all([
+    countFollowersByUser(rows.map((r) => r.id)),
+    getAuraByUser(rows.map((r) => r.id)),
+    getMediaAdjustmentsByUser(rows.map((r) => r.id)),
+  ])
+
+  // O `in` volta em ordem arbitrária — reordena pela contagem de atividade.
+  return rows
+    .map((row) =>
+      toProfileSummary(
+        row,
+        followers[row.id] ?? 0,
+        aura[row.id] ?? 0,
+        adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+        counts[row.id] ?? 0
+      )
+    )
+    .sort((a, b) => b.activity - a.activity)
+    .slice(0, limit)
+}
+
+const ACTIVITY_RANK_TOP_CUTOFF = 100
+
+/**
+ * Posição do usuário no ranking geral de atividade (1 = mais posts +
+ * comentários), ou `null` se ele não tem atividade nenhuma ou cai fora do
+ * Top 100 — mesmo recorte de `getUserAuraRank`, para a badge no perfil só
+ * aparecer quando a posição diz alguma coisa.
+ *
+ * O dono do site não participa deste ranking público, mesmo critério de
+ * `getUserAuraRank`.
+ */
+export async function getUserActivityRank(userId: string): Promise<number | null> {
+  const ownerId = await findUserIdByDisplaySlug(SITE_OWNER_SLUG)
+  if (userId === ownerId) return null
+
+  const counts = await getActivityCounts()
+  const activity = counts[userId] ?? 0
+  if (activity <= 0) return null
+
+  let rank = 1
+  for (const [id, count] of Object.entries(counts)) {
+    if (id === ownerId || id === userId) continue
+    if (count > activity) rank += 1
+  }
+  return rank <= ACTIVITY_RANK_TOP_CUTOFF ? rank : null
 }
 
 /**
@@ -616,16 +768,18 @@ export async function getMiniProfileBySlug(slug: string): Promise<MiniProfile | 
   }
 
   const row = data as DirectoryRow & { bio: string | null }
-  const [followers, aura, adjustments] = await Promise.all([
+  const [followers, aura, adjustments, activity] = await Promise.all([
     countFollowersByUser([row.id]),
     getAuraByUser([row.id]),
     getMediaAdjustmentsByUser([row.id]),
+    countActivityByUser([row.id]),
   ])
   const summary = toProfileSummary(
     row,
     followers[row.id] ?? 0,
     aura[row.id] ?? 0,
-    adjustments[row.id] ?? DEFAULT_ADJUSTMENTS
+    adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+    activity[row.id] ?? 0
   )
 
   return { ...summary, bio: row.bio }

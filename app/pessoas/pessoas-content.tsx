@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Eye, Flame, Heart, Search, UserPlus, Users, X } from "lucide-react"
+import { Activity, Eye, Flame, Heart, Search, UserPlus, Users, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { PodiumSection } from "@/components/people/PodiumSection"
@@ -16,13 +16,14 @@ import type {
 
 const TABS: { key: DirectorySort; label: string; icon: React.ElementType }[] = [
   { key: "aura", label: "Mais Aura", icon: Flame },
+  { key: "active", label: "Mais Ativos", icon: Activity },
   { key: "visited", label: "Mais visitados", icon: Eye },
   { key: "followed", label: "Mais seguidos", icon: Users },
   { key: "following", label: "Seguindo", icon: Heart },
 ]
 
-/** As três primeiras abas são rankings; "Seguindo" é uma lista pessoal. */
-const RANKED_TABS: DirectorySort[] = ["aura", "visited", "followed"]
+/** As quatro primeiras abas são rankings; "Seguindo" é uma lista pessoal. */
+const RANKED_TABS: DirectorySort[] = ["aura", "active", "visited", "followed"]
 
 /**
  * Número que cada aba destaca no card. A busca e "Seguindo" não são rankings,
@@ -30,6 +31,7 @@ const RANKED_TABS: DirectorySort[] = ["aura", "visited", "followed"]
  */
 const TAB_METRIC: Record<DirectorySort, DirectoryMetric> = {
   aura: "aura",
+  active: "activity",
   visited: "views",
   followed: "followers",
   following: "followers",

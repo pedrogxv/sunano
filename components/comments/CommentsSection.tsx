@@ -46,8 +46,8 @@ export function CommentsSection({
   isLocked?: boolean
 }) {
   const {
-    commentAuraGiven,
-    toggleCommentAura,
+    commentReactions,
+    reactToComment,
     formExpanded,
     setFormExpanded,
     body,
@@ -148,9 +148,9 @@ export function CommentsSection({
                   >
                     <CommentRow
                       comment={comment}
-                      auraGiven={commentAuraGiven.has(comment.id)}
+                      auraReaction={commentReactions.get(comment.id) ?? null}
                       authDisabled={!authUser}
-                      onToggleAura={() => toggleCommentAura(comment)}
+                      onReactAura={(kind) => reactToComment(comment, kind)}
                       onReply={() => startReply(comment.id)}
                       replying={replyingTo === comment.id}
                     />
@@ -164,9 +164,9 @@ export function CommentsSection({
                           >
                             <CommentRow
                               comment={reply}
-                              auraGiven={commentAuraGiven.has(reply.id)}
+                              auraReaction={commentReactions.get(reply.id) ?? null}
                               authDisabled={!authUser}
-                              onToggleAura={() => toggleCommentAura(reply)}
+                              onReactAura={(kind) => reactToComment(reply, kind)}
                               onReply={() => startReply(comment.id)}
                               replying={replyingTo === comment.id}
                               compactAvatar

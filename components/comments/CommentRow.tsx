@@ -1,7 +1,7 @@
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-import { AuraButton } from "@/components/forum/AuraButton"
+import { AuraButton, type Reaction } from "@/components/forum/AuraButton"
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import type { CommentItem } from "./types"
@@ -9,17 +9,17 @@ import type { CommentItem } from "./types"
 /** Uma linha de comentário (raiz ou resposta) com avatar, autor, corpo e ações. */
 export function CommentRow({
   comment,
-  auraGiven,
+  auraReaction,
   authDisabled,
-  onToggleAura,
+  onReactAura,
   onReply,
   replying,
   compactAvatar = false,
 }: {
   comment: CommentItem
-  auraGiven: boolean
+  auraReaction: Reaction
   authDisabled: boolean
-  onToggleAura: () => void
+  onReactAura: (kind: "like" | "dislike") => void
   onReply: () => void
   replying: boolean
   compactAvatar?: boolean
@@ -41,9 +41,9 @@ export function CommentRow({
         <div className="mt-2 flex items-center gap-3">
           <AuraButton
             auraCount={comment.aura_count}
-            given={auraGiven}
+            reaction={auraReaction}
             disabled={authDisabled}
-            onToggle={onToggleAura}
+            onReact={onReactAura}
           />
           <button
             type="button"

@@ -337,9 +337,11 @@ export type Database = {
           comment_id: string | null
           blog_post_id: string | null
           blog_comment_id: string | null
+          kind: "like" | "dislike"
           created_at: string
         }
-        Insert: Omit<Database["public"]["Tables"]["forum_aura"]["Row"], "id" | "created_at">
+        Insert: Omit<Database["public"]["Tables"]["forum_aura"]["Row"], "id" | "created_at" | "kind"> &
+          Partial<Pick<Database["public"]["Tables"]["forum_aura"]["Row"], "kind">>
         Update: Partial<Database["public"]["Tables"]["forum_aura"]["Insert"]>
       }
       user_aura_wallet: {
@@ -368,6 +370,17 @@ export type Database = {
             | "blog_post_aura_removed"
             | "blog_comment_aura_received"
             | "blog_comment_aura_removed"
+            | "post_aura_disliked"
+            | "post_aura_undisliked"
+            | "comment_aura_disliked"
+            | "comment_aura_undisliked"
+            | "blog_post_aura_disliked"
+            | "blog_post_aura_undisliked"
+            | "blog_comment_aura_disliked"
+            | "blog_comment_aura_undisliked"
+            | "post_created"
+            | "comment_created"
+            | "blog_comment_created"
           source_post_id: string | null
           source_comment_id: string | null
           source_blog_post_id: string | null
@@ -618,8 +631,17 @@ export type Database = {
           p_giver_id: string
           p_target_type: "post" | "comment" | "blog_post" | "blog_comment"
           p_target_id: string
+          p_kind?: "like" | "dislike"
         }
-        Returns: { given: boolean; aura_count: number }[]
+        Returns: { reaction: "like" | "dislike" | null; aura_count: number }[]
+      }
+      credit_forum_post_creation_aura: {
+        Args: { p_user_id: string; p_post_id: string }
+        Returns: boolean
+      }
+      credit_comment_creation_aura: {
+        Args: { p_user_id: string; p_target_type: "post" | "blog_post"; p_target_id: string }
+        Returns: boolean
       }
     }
   }

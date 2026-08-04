@@ -2,6 +2,7 @@ import "server-only"
 
 import type { AccountTier } from "@/lib/account-tier"
 import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
+import { creditCommentCreationAura, creditForumPostCreationAura } from "@/lib/server/repositories/aura-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -321,24 +322,32 @@ export async function createForumPost(params: {
   const seed = slugSeedFromBody(params.body)
   const slug = await createUniqueSlug(slugify(seed) || `post-${Date.now()}`)
 
-  const { error } = await db.from("forum_posts").insert({
-    slug,
-    body: params.body.trim(),
-    author_name: params.authorName,
-    user_id: params.userId,
-    category_id: params.categoryId,
-    media_image_url: params.mediaImageUrl ?? null,
-    media_video_url: params.mediaVideoUrl ?? null,
-    is_hidden: false,
-    is_locked: false,
-    is_pinned: false,
-    aura_count: 0,
-  })
+  const { data: created, error } = await db
+    .from("forum_posts")
+    .insert({
+      slug,
+      body: params.body.trim(),
+      author_name: params.authorName,
+      user_id: params.userId,
+      category_id: params.categoryId,
+      media_image_url: params.mediaImageUrl ?? null,
+      media_video_url: params.mediaVideoUrl ?? null,
+      is_hidden: false,
+      is_locked: false,
+      is_pinned: false,
+      aura_count: 0,
+    })
+    .select("id")
+    .single()
 
-  if (error) {
+  if (error || !created) {
     console.error("[forum-repository] createForumPost:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: error?.message ?? "Erro ao criar post.", status: 400 }
   }
+
+  // +10 de aura por criar post, 1x/dia — best-effort, não bloqueia a criação do post.
+  await creditForumPostCreationAura(params.userId, created.id)
+
   return { ok: true, slug }
 }
 
@@ -392,6 +401,10 @@ export async function addForumComment(params: {
     console.error("[forum-repository] addForumComment:", error)
     return { ok: false, error: error.message, status: 400 }
   }
+
+  // +5 de aura por comentar, 1x por post — best-effort, não bloqueia o comentário.
+  await creditCommentCreationAura(params.userId, "post", post.id)
+
   return { ok: true }
 }
 

@@ -7,20 +7,21 @@ export const dynamic = "force-dynamic"
 
 /**
  * Retorna quais das notícias/comentários informados (`?postIds=a,b&commentIds=c,d`)
- * o usuário autenticado já deu aura — usado para hidratar o estado inicial
- * do `AuraButton` na página de notícia. Espelha `/api/forum/aura`.
+ * o usuário autenticado já curtiu/descurtiu — usado para hidratar o estado
+ * inicial do `AuraButton` na página de notícia. Espelha `/api/forum/aura`.
  */
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request)
   if (!user) {
-    return NextResponse.json({ ok: true, postsGiven: [], commentsGiven: [] })
+    const empty = { liked: [] as string[], disliked: [] as string[] }
+    return NextResponse.json({ ok: true, posts: empty, comments: empty })
   }
 
   const { searchParams } = new URL(request.url)
   const postIds = (searchParams.get("postIds") ?? "").split(",").map((id) => id.trim()).filter(Boolean)
   const commentIds = (searchParams.get("commentIds") ?? "").split(",").map((id) => id.trim()).filter(Boolean)
 
-  const { blogPostsGiven, blogCommentsGiven } = await getUserAuraGiven(user.id, {
+  const { blogPosts, blogComments } = await getUserAuraGiven(user.id, {
     postIds: [],
     commentIds: [],
     blogPostIds: postIds,
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
   })
   return NextResponse.json({
     ok: true,
-    postsGiven: [...blogPostsGiven],
-    commentsGiven: [...blogCommentsGiven],
+    posts: { liked: [...blogPosts.liked], disliked: [...blogPosts.disliked] },
+    comments: { liked: [...blogComments.liked], disliked: [...blogComments.disliked] },
   })
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
+import { nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
 import type { CommentItem, CommentsAuthUser } from "./types"
 
 /**
@@ -27,7 +28,7 @@ export function useCommentsController({
   onCommentsChange: (comments: CommentItem[]) => void
   authUser: CommentsAuthUser
 }) {
-  const [commentAuraGiven, setCommentAuraGiven] = useState<Set<string>>(new Set())
+  const [commentReactions, setCommentReactions] = useState<Map<string, Reaction>>(new Map())
 
   const [formExpanded, setFormExpanded] = useState(false)
   const [body, setBody] = useState("")
@@ -40,51 +41,53 @@ export function useCommentsController({
   const [replyError, setReplyError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!authUser) setCommentAuraGiven(new Set())
+    if (!authUser) setCommentReactions(new Map())
   }, [authUser])
 
-  // Aura dada pelo usuário atual nos comentários visíveis.
+  // Reação do usuário atual nos comentários visíveis.
   useEffect(() => {
     if (!authUser || comments.length === 0) return
     const commentIds = comments.map((c) => c.id)
     const query = new URLSearchParams({ commentIds: commentIds.join(",") })
     fetch(`${auraLookupPath}?${query}`)
       .then((res) => res.json())
-      .then((data) => setCommentAuraGiven(new Set(data?.commentsGiven ?? [])))
-      .catch(() => setCommentAuraGiven(new Set()))
+      .then((data) => {
+        const next = new Map<string, Reaction>()
+        for (const id of data?.comments?.liked ?? []) next.set(id, "like")
+        for (const id of data?.comments?.disliked ?? []) next.set(id, "dislike")
+        setCommentReactions(next)
+      })
+      .catch(() => setCommentReactions(new Map()))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUser, comments.length, auraLookupPath])
 
-  async function toggleCommentAura(comment: CommentItem) {
+  async function reactToComment(comment: CommentItem, kind: "like" | "dislike") {
     if (!authUser) return
-    const wasGiven = commentAuraGiven.has(comment.id)
+    const prevReaction = commentReactions.get(comment.id) ?? null
     const prevCount = comment.aura_count
+    const delta = nextReactionDelta(prevReaction, kind)
+    const optimisticReaction = nextReaction(prevReaction, kind)
 
-    setCommentAuraGiven((prev) => {
-      const next = new Set(prev)
-      if (wasGiven) next.delete(comment.id)
-      else next.add(comment.id)
-      return next
-    })
+    setCommentReactions((prev) => new Map(prev).set(comment.id, optimisticReaction))
     onCommentsChange(
-      comments.map((c) => (c.id === comment.id ? { ...c, aura_count: c.aura_count + (wasGiven ? -10 : 10) } : c))
+      comments.map((c) => (c.id === comment.id ? { ...c, aura_count: c.aura_count + delta } : c))
     )
 
-    const res = await fetch(`${apiBasePath}/comments/${comment.id}/aura`, { method: "POST" })
+    const res = await fetch(`${apiBasePath}/comments/${comment.id}/aura`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind }),
+    })
 
     if (!res.ok) {
-      setCommentAuraGiven((prev) => {
-        const next = new Set(prev)
-        if (wasGiven) next.add(comment.id)
-        else next.delete(comment.id)
-        return next
-      })
+      setCommentReactions((prev) => new Map(prev).set(comment.id, prevReaction))
       onCommentsChange(comments.map((c) => (c.id === comment.id ? { ...c, aura_count: prevCount } : c)))
       const data = await res.json().catch(() => null)
-      toast.error(data?.error ?? "Erro ao dar aura")
+      toast.error(data?.error ?? "Erro ao reagir")
     } else {
       const data = await res.json().catch(() => null)
       if (data?.aura_count !== undefined) {
+        setCommentReactions((prev) => new Map(prev).set(comment.id, data.reaction ?? null))
         onCommentsChange(comments.map((c) => (c.id === comment.id ? { ...c, aura_count: data.aura_count } : c)))
       }
     }
@@ -153,8 +156,8 @@ export function useCommentsController({
   }
 
   return {
-    commentAuraGiven,
-    toggleCommentAura,
+    commentReactions,
+    reactToComment,
     formExpanded,
     setFormExpanded,
     body,

@@ -4,24 +4,28 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 
 /**
- * Repositório do sistema de Aura do fórum — dar/remover aura em posts e
+ * Repositório do sistema de Aura — reagir (like/dislike) em posts e
  * comentários (`forum_aura`), saldo pessoal (`user_aura_wallet`) e extrato
- * (`aura_ledger`). Toda a atomicidade vive na função Postgres
- * `toggle_forum_aura` (ver 20260806_forum_aura.sql); este repositório só
- * chama a RPC e traduz o resultado.
+ * (`aura_ledger`), além dos bônus de criar post/comentário. Toda a
+ * atomicidade vive nas funções Postgres `toggle_forum_aura`,
+ * `credit_forum_post_creation_aura` e `credit_comment_creation_aura` (ver
+ * 20260804_aura_rebalance.sql); este repositório só chama as RPCs e traduz
+ * o resultado.
  */
 
 export type ToggleAuraTarget = "post" | "comment" | "blog_post" | "blog_comment"
+export type ReactionKind = "like" | "dislike"
 
 export type ToggleAuraResult =
-  | { ok: true; given: boolean; auraCount: number }
+  | { ok: true; reaction: ReactionKind | null; auraCount: number }
   | { ok: false; error: string; status: number }
 
-/** Dá ou remove (toggle) a aura do usuário atual num post ou comentário. */
+/** Dá, troca ou remove (toggle) a reação do usuário atual num post ou comentário. */
 export async function toggleAura(params: {
   giverId: string
   targetType: ToggleAuraTarget
   targetId: string
+  kind: ReactionKind
 }): Promise<ToggleAuraResult> {
   const db = createSupabaseAdminClient()
 
@@ -29,27 +33,65 @@ export async function toggleAura(params: {
     p_giver_id: params.giverId,
     p_target_type: params.targetType,
     p_target_id: params.targetId,
+    p_kind: params.kind,
   })
 
   if (error) {
     if (error.message?.includes("self_aura_not_allowed")) {
-      return { ok: false, error: "Você não pode dar aura no seu próprio post ou comentário.", status: 400 }
+      return { ok: false, error: "Você não pode reagir no seu próprio post ou comentário.", status: 400 }
     }
     if (error.message?.includes("target not found")) {
       return { ok: false, error: "Post ou comentário não encontrado.", status: 404 }
     }
     if (error.message?.includes("daily_aura_limit_reached")) {
-      return { ok: false, error: "Você atingiu o limite de 50 auras dadas hoje. Volte amanhã!", status: 429 }
+      return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", status: 429 }
     }
     console.error("[aura-repository] toggleAura:", error)
-    return { ok: false, error: "Erro ao dar aura.", status: 400 }
+    return { ok: false, error: "Erro ao reagir.", status: 400 }
   }
 
   const result = data?.[0]
   if (!result) {
-    return { ok: false, error: "Erro ao dar aura.", status: 400 }
+    return { ok: false, error: "Erro ao reagir.", status: 400 }
   }
-  return { ok: true, given: result.given, auraCount: result.aura_count }
+  return { ok: true, reaction: result.reaction as ReactionKind | null, auraCount: result.aura_count }
+}
+
+/**
+ * Credita +10 de aura ao autor por criar um post no fórum, no máximo 1x a
+ * cada 24h (ver `credit_forum_post_creation_aura`). Best-effort: erros são
+ * logados mas não impedem a criação do post em si.
+ */
+export async function creditForumPostCreationAura(userId: string, postId: string): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const { error } = await db.rpc("credit_forum_post_creation_aura", {
+    p_user_id: userId,
+    p_post_id: postId,
+  })
+  if (error) {
+    console.error("[aura-repository] creditForumPostCreationAura:", error)
+  }
+}
+
+/**
+ * Credita +5 de aura ao autor por comentar, no máximo 1x por post/notícia
+ * (ver `credit_comment_creation_aura`). Best-effort: erros são logados mas
+ * não impedem o comentário em si.
+ */
+export async function creditCommentCreationAura(
+  userId: string,
+  targetType: "post" | "blog_post",
+  targetId: string
+): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const { error } = await db.rpc("credit_comment_creation_aura", {
+    p_user_id: userId,
+    p_target_type: targetType,
+    p_target_id: targetId,
+  })
+  if (error) {
+    console.error("[aura-repository] creditCommentCreationAura:", error)
+  }
 }
 
 /** Saldo de aura acumulado por um usuário. 0 se ele nunca recebeu aura. */
@@ -158,7 +200,10 @@ export async function listAuraLedger(userId: string, limit = 50): Promise<AuraLe
   }))
 }
 
-/** Quais posts/comentários (dentre os informados) o usuário atual já deu aura. */
+/** Um post/comentário por (like, dislike) — conjuntos sempre mutuamente exclusivos. */
+export type ReactionSets = { liked: Set<string>; disliked: Set<string> }
+
+/** Quais posts/comentários (dentre os informados) o usuário atual já curtiu/descurtiu. */
 export async function getUserAuraGiven(
   userId: string,
   targets: {
@@ -168,15 +213,15 @@ export async function getUserAuraGiven(
     blogCommentIds?: string[]
   }
 ): Promise<{
-  postsGiven: Set<string>
-  commentsGiven: Set<string>
-  blogPostsGiven: Set<string>
-  blogCommentsGiven: Set<string>
+  posts: ReactionSets
+  comments: ReactionSets
+  blogPosts: ReactionSets
+  blogComments: ReactionSets
 }> {
-  const postsGiven = new Set<string>()
-  const commentsGiven = new Set<string>()
-  const blogPostsGiven = new Set<string>()
-  const blogCommentsGiven = new Set<string>()
+  const posts: ReactionSets = { liked: new Set(), disliked: new Set() }
+  const comments: ReactionSets = { liked: new Set(), disliked: new Set() }
+  const blogPosts: ReactionSets = { liked: new Set(), disliked: new Set() }
+  const blogComments: ReactionSets = { liked: new Set(), disliked: new Set() }
   const blogPostIds = targets.blogPostIds ?? []
   const blogCommentIds = targets.blogCommentIds ?? []
   if (
@@ -185,13 +230,13 @@ export async function getUserAuraGiven(
     blogPostIds.length === 0 &&
     blogCommentIds.length === 0
   ) {
-    return { postsGiven, commentsGiven, blogPostsGiven, blogCommentsGiven }
+    return { posts, comments, blogPosts, blogComments }
   }
 
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("forum_aura")
-    .select("post_id, comment_id, blog_post_id, blog_comment_id")
+    .select("post_id, comment_id, blog_post_id, blog_comment_id, kind")
     .eq("giver_id", userId)
     .or(
       [
@@ -205,11 +250,19 @@ export async function getUserAuraGiven(
     )
 
   for (const row of data ?? []) {
-    if (row.post_id) postsGiven.add(row.post_id)
-    if (row.comment_id) commentsGiven.add(row.comment_id)
-    if (row.blog_post_id) blogPostsGiven.add(row.blog_post_id)
-    if (row.blog_comment_id) blogCommentsGiven.add(row.blog_comment_id)
+    const bucket = row.post_id
+      ? posts
+      : row.comment_id
+        ? comments
+        : row.blog_post_id
+          ? blogPosts
+          : row.blog_comment_id
+            ? blogComments
+            : null
+    if (!bucket) continue
+    const id = (row.post_id ?? row.comment_id ?? row.blog_post_id ?? row.blog_comment_id) as string
+    ;(row.kind === "dislike" ? bucket.disliked : bucket.liked).add(id)
   }
 
-  return { postsGiven, commentsGiven, blogPostsGiven, blogCommentsGiven }
+  return { posts, comments, blogPosts, blogComments }
 }

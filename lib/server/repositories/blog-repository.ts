@@ -3,6 +3,7 @@ import "server-only"
 import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
+import { creditCommentCreationAura } from "@/lib/server/repositories/aura-repository"
 
 /**
  * Repositório de Blog — única porta de acesso à tabela `blog_posts` para
@@ -481,5 +482,9 @@ export async function addBlogComment(params: {
     console.error("[blog-repository] addBlogComment:", error.message)
     return { ok: false, error: error.message, status: 400 }
   }
+
+  // +5 de aura por comentar, 1x por notícia — best-effort, não bloqueia o comentário.
+  await creditCommentCreationAura(params.userId, "blog_post", postId)
+
   return { ok: true }
 }

@@ -6,7 +6,7 @@ import Image from "next/image"
 import { ArrowLeft, Clock, MessageCircle, Newspaper } from "lucide-react"
 import { toast } from "sonner"
 
-import { AuraButton } from "@/components/forum/AuraButton"
+import { AuraButton, nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
 import { CommentsSection } from "@/components/comments/CommentsSection"
 import type { CommentItem } from "@/components/comments/types"
 import { UserAvatar } from "@/components/ui/user-avatar"
@@ -149,11 +149,9 @@ export function NoticiasPostContent({
         : null,
     [contextUser]
   )
-  // `null` = ainda não sabemos (sem usuário, ou fetch em andamento).
-  const [postAuraGivenFetched, setPostAuraGivenFetched] = useState<boolean | null>(null)
-  const postAuraGiven = postAuraGivenFetched ?? false
+  const [postAuraReaction, setPostAuraReaction] = useState<Reaction>(null)
 
-  // Aura dada pelo usuário atual nesta notícia.
+  // Reação do usuário atual nesta notícia.
   useEffect(() => {
     if (!authUser || !post) return
     let cancelled = false
@@ -161,34 +159,43 @@ export function NoticiasPostContent({
     fetch(`/api/blog/aura?${query}`)
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) setPostAuraGivenFetched((data?.postsGiven ?? []).includes(post.id))
+        if (cancelled) return
+        if ((data?.posts?.liked ?? []).includes(post.id)) setPostAuraReaction("like")
+        else if ((data?.posts?.disliked ?? []).includes(post.id)) setPostAuraReaction("dislike")
+        else setPostAuraReaction(null)
       })
       .catch(() => {
-        if (!cancelled) setPostAuraGivenFetched(false)
+        if (!cancelled) setPostAuraReaction(null)
       })
     return () => {
       cancelled = true
     }
   }, [authUser, post])
 
-  async function handleTogglePostAura() {
+  async function handleReactPostAura(kind: "like" | "dislike") {
     if (!authUser || !post) return
-    const wasGiven = postAuraGiven
+    const prevReaction = postAuraReaction
     const prevCount = post.aura_count
+    const delta = nextReactionDelta(prevReaction, kind)
 
-    setPostAuraGivenFetched(!wasGiven)
-    setPost((p) => (p ? { ...p, aura_count: p.aura_count + (wasGiven ? -10 : 10) } : p))
+    setPostAuraReaction(nextReaction(prevReaction, kind))
+    setPost((p) => (p ? { ...p, aura_count: p.aura_count + delta } : p))
 
-    const res = await fetch(`/api/blog/${encodeURIComponent(post.slug)}/aura`, { method: "POST" })
+    const res = await fetch(`/api/blog/${encodeURIComponent(post.slug)}/aura`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind }),
+    })
 
     if (!res.ok) {
-      setPostAuraGivenFetched(wasGiven)
+      setPostAuraReaction(prevReaction)
       setPost((p) => (p ? { ...p, aura_count: prevCount } : p))
       const data = await res.json().catch(() => null)
-      toast.error(data?.error ?? "Erro ao dar aura")
+      toast.error(data?.error ?? "Erro ao reagir")
     } else {
       const data = await res.json().catch(() => null)
       if (data?.aura_count !== undefined) {
+        setPostAuraReaction(data.reaction ?? null)
         setPost((p) => (p ? { ...p, aura_count: data.aura_count } : p))
       }
     }
@@ -289,9 +296,9 @@ export function NoticiasPostContent({
         <div className="ml-auto">
           <AuraButton
             auraCount={post.aura_count}
-            given={postAuraGiven}
+            reaction={postAuraReaction}
             disabled={!authUser}
-            onToggle={handleTogglePostAura}
+            onReact={handleReactPostAura}
           />
         </div>
       </div>

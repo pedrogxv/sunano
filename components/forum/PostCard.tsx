@@ -6,7 +6,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Crown, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
 
-import { AuraButton } from "@/components/forum/AuraButton"
+import { AuraButton, type Reaction } from "@/components/forum/AuraButton"
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { ShareMenu } from "@/components/forum/ShareMenu"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
@@ -78,16 +78,16 @@ function extractYoutubeId(url: string): string | null {
  */
 export function PostCard({
   post,
-  auraGiven,
+  auraReaction,
   auraDisabled,
-  onToggleAura,
+  onReactAura,
   clickable = true,
   compact = true,
 }: {
   post: PostCardData
-  auraGiven: boolean
+  auraReaction: Reaction
   auraDisabled: boolean
-  onToggleAura: () => void
+  onReactAura: (kind: "like" | "dislike") => void
   clickable?: boolean
   compact?: boolean
 }) {
@@ -174,9 +174,9 @@ export function PostCard({
           <div className="relative z-10 mt-3 flex items-center gap-2 pointer-events-auto">
             <AuraButton
               auraCount={post.aura_count}
-              given={auraGiven}
+              reaction={auraReaction}
               disabled={auraDisabled}
-              onToggle={onToggleAura}
+              onReact={onReactAura}
               orientation="horizontal"
             />
             <Link

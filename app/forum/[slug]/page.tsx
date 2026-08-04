@@ -7,6 +7,7 @@ import { ArrowLeft } from "lucide-react"
 import { toast } from "sonner"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
+import { nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
 import BoxLoader from "@/components/ui/box-loader"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { CommentsSection } from "@/components/comments/CommentsSection"
@@ -29,10 +30,10 @@ export default function ForumPostPage() {
         : null,
     [contextUser]
   )
-  const [postAuraGiven, setPostAuraGiven] = useState(false)
+  const [postAuraReaction, setPostAuraReaction] = useState<Reaction>(null)
 
   useEffect(() => {
-    if (!authUser) setPostAuraGiven(false)
+    if (!authUser) setPostAuraReaction(null)
   }, [authUser])
 
   const loadPost = useCallback(async (opts?: { silent?: boolean }) => {
@@ -56,34 +57,44 @@ export default function ForumPostPage() {
 
   useEffect(() => { loadPost() }, [loadPost])
 
-  // Aura dada pelo usuário atual no post.
+  // Reação do usuário atual no post.
   useEffect(() => {
     if (!authUser || !post) return
     const query = new URLSearchParams({ postIds: post.id })
     fetch(`/api/forum/aura?${query}`)
       .then((res) => res.json())
-      .then((data) => setPostAuraGiven((data?.postsGiven ?? []).includes(post.id)))
-      .catch(() => setPostAuraGiven(false))
+      .then((data) => {
+        if ((data?.posts?.liked ?? []).includes(post.id)) setPostAuraReaction("like")
+        else if ((data?.posts?.disliked ?? []).includes(post.id)) setPostAuraReaction("dislike")
+        else setPostAuraReaction(null)
+      })
+      .catch(() => setPostAuraReaction(null))
   }, [authUser, post])
 
-  async function handleTogglePostAura() {
+  async function handleReactPostAura(kind: "like" | "dislike") {
     if (!authUser || !post) return
-    const wasGiven = postAuraGiven
+    const prevReaction = postAuraReaction
     const prevCount = post.aura_count
+    const delta = nextReactionDelta(prevReaction, kind)
 
-    setPostAuraGiven(!wasGiven)
-    setPost((p) => (p ? { ...p, aura_count: p.aura_count + (wasGiven ? -10 : 10) } : p))
+    setPostAuraReaction(nextReaction(prevReaction, kind))
+    setPost((p) => (p ? { ...p, aura_count: p.aura_count + delta } : p))
 
-    const res = await fetch(`/api/forum/posts/${post.slug}/aura`, { method: "POST" })
+    const res = await fetch(`/api/forum/posts/${post.slug}/aura`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind }),
+    })
 
     if (!res.ok) {
-      setPostAuraGiven(wasGiven)
+      setPostAuraReaction(prevReaction)
       setPost((p) => (p ? { ...p, aura_count: prevCount } : p))
       const data = await res.json().catch(() => null)
-      toast.error(data?.error ?? "Erro ao dar aura")
+      toast.error(data?.error ?? "Erro ao reagir")
     } else {
       const data = await res.json().catch(() => null)
       if (data?.aura_count !== undefined) {
+        setPostAuraReaction(data.reaction ?? null)
         setPost((p) => (p ? { ...p, aura_count: data.aura_count } : p))
       }
     }
@@ -114,9 +125,9 @@ export default function ForumPostPage() {
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 motion-reduce:animate-none space-y-6">
             <PostCard
               post={post}
-              auraGiven={postAuraGiven}
+              auraReaction={postAuraReaction}
               auraDisabled={!authUser}
-              onToggleAura={handleTogglePostAura}
+              onReactAura={handleReactPostAura}
               clickable={false}
               compact={false}
             />

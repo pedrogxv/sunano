@@ -6,6 +6,7 @@ import { Clock, Flame, Plus, Tag, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
+import { nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
 import { CategoryPicker } from "@/components/forum/CategoryPicker"
 import { PostMediaField } from "@/components/forum/PostMediaField"
 import BoxLoader from "@/components/ui/box-loader"
@@ -41,7 +42,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
         : null,
     [contextUser]
   )
-  const [auraGiven, setAuraGiven] = useState<Set<string>>(new Set())
+  const [auraReactions, setAuraReactions] = useState<Map<string, Reaction>>(new Map())
 
   const [activeTab, setActiveTab] = useState<Tab>("recent")
   const [categories, setCategories] = useState<ForumCategoryOption[]>([])
@@ -65,7 +66,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
   }, [])
 
   useEffect(() => {
-    if (!authUser) setAuraGiven(new Set())
+    if (!authUser) setAuraReactions(new Map())
   }, [authUser])
 
   const loadAuraGiven = useCallback(async (postIds: string[]) => {
@@ -73,9 +74,12 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
     try {
       const res = await fetch(`/api/forum/aura?postIds=${postIds.join(",")}`)
       const data = await res.json().catch(() => null)
-      setAuraGiven(new Set(data?.postsGiven ?? []))
+      const next = new Map<string, Reaction>()
+      for (const id of data?.posts?.liked ?? []) next.set(id, "like")
+      for (const id of data?.posts?.disliked ?? []) next.set(id, "dislike")
+      setAuraReactions(next)
     } catch {
-      setAuraGiven(new Set())
+      setAuraReactions(new Map())
     }
   }, [])
 
@@ -114,36 +118,31 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
     loadPosts(activeTab, activeCategoryId, !!authUser)
   }, [activeTab, activeCategoryId, authUser, loadPosts])
 
-  async function handleToggleAura(post: ForumPost) {
+  async function handleReactAura(post: ForumPost, kind: "like" | "dislike") {
     if (!authUser) return
-    const wasGiven = auraGiven.has(post.id)
+    const prevReaction = auraReactions.get(post.id) ?? null
     const prevCount = post.aura_count
+    const delta = nextReactionDelta(prevReaction, kind)
+    const optimisticReaction = nextReaction(prevReaction, kind)
 
-    setAuraGiven((prev) => {
-      const next = new Set(prev)
-      if (wasGiven) next.delete(post.id)
-      else next.add(post.id)
-      return next
+    setAuraReactions((prev) => new Map(prev).set(post.id, optimisticReaction))
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, aura_count: p.aura_count + delta } : p)))
+
+    const res = await fetch(`/api/forum/posts/${post.slug}/aura`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind }),
     })
-    setPosts((prev) =>
-      prev.map((p) => (p.id === post.id ? { ...p, aura_count: p.aura_count + (wasGiven ? -10 : 10) } : p))
-    )
-
-    const res = await fetch(`/api/forum/posts/${post.slug}/aura`, { method: "POST" })
 
     if (!res.ok) {
-      setAuraGiven((prev) => {
-        const next = new Set(prev)
-        if (wasGiven) next.add(post.id)
-        else next.delete(post.id)
-        return next
-      })
+      setAuraReactions((prev) => new Map(prev).set(post.id, prevReaction))
       setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, aura_count: prevCount } : p)))
       const data = await res.json().catch(() => null)
-      toast.error(data?.error ?? "Erro ao dar aura")
+      toast.error(data?.error ?? "Erro ao reagir")
     } else {
       const data = await res.json().catch(() => null)
       if (data?.aura_count !== undefined) {
+        setAuraReactions((prev) => new Map(prev).set(post.id, data.reaction ?? null))
         setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, aura_count: data.aura_count } : p)))
       }
     }
@@ -398,9 +397,9 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
             <PostCard
               key={post.id}
               post={post}
-              auraGiven={auraGiven.has(post.id)}
+              auraReaction={auraReactions.get(post.id) ?? null}
               auraDisabled={!authUser}
-              onToggleAura={() => handleToggleAura(post)}
+              onReactAura={(kind) => handleReactAura(post, kind)}
             />
           ))}
         </div>

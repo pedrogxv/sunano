@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
-import { toggleAura } from "@/lib/server/repositories/aura-repository"
+import { toggleAura, type ReactionKind } from "@/lib/server/repositories/aura-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
-/** Dá ou remove (toggle) a aura do usuário atual numa notícia. */
+/** Dá, troca ou remove (toggle) a reação (like/dislike) do usuário atual numa notícia. */
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ slug: string }> }
@@ -14,8 +14,11 @@ export async function POST(
 
   const user = await getRequestUser(request)
   if (!user) {
-    return NextResponse.json({ error: "Você precisa estar logado para dar aura." }, { status: 401 })
+    return NextResponse.json({ error: "Você precisa estar logado para reagir." }, { status: 401 })
   }
+
+  const body = await request.json().catch(() => null)
+  const kind: ReactionKind = body?.kind === "dislike" ? "dislike" : "like"
 
   const rateLimit = await checkRateLimit({
     action: "blog_aura",
@@ -24,7 +27,7 @@ export async function POST(
     windowSeconds: 60,
   })
   if (!rateLimit.allowed) {
-    return NextResponse.json({ error: "Aguarde um pouco antes de dar aura novamente." }, { status: 429 })
+    return NextResponse.json({ error: "Aguarde um pouco antes de reagir novamente." }, { status: 429 })
   }
 
   const db = createSupabaseAdminClient()
@@ -38,9 +41,9 @@ export async function POST(
     return NextResponse.json({ error: "Notícia não encontrada." }, { status: 404 })
   }
 
-  const result = await toggleAura({ giverId: user.id, targetType: "blog_post", targetId: post.id })
+  const result = await toggleAura({ giverId: user.id, targetType: "blog_post", targetId: post.id, kind })
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
-  return NextResponse.json({ ok: true, given: result.given, aura_count: result.auraCount })
+  return NextResponse.json({ ok: true, reaction: result.reaction, aura_count: result.auraCount })
 }

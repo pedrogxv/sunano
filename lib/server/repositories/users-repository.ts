@@ -2,6 +2,7 @@ import "server-only"
 
 import { coerceAccountTier } from "@/lib/account-tier"
 import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
+import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   coerceMediaAdjustments,
@@ -253,6 +254,12 @@ export async function getMostVisitedProfiles(limit = 12): Promise<PublicProfileS
  * demais membros — todos empatados em 0 —, ordenados por visitas, que é a
  * ordem que esta aba tinha antes e continua visível no card. Sem isso o
  * diretório inteiro encolheria para meia dúzia de cards.
+ *
+ * O dono do site (`SITE_OWNER_SLUG`) não participa deste ranking público:
+ * sua aura continua sendo somada normalmente na carteira, só não aparece
+ * aqui, nem no pódio nem na lista — os demais sobem uma posição para
+ * preencher a vaga. Buscamos um item a mais que `limit` na carteira só para
+ * cobrir o caso dele estar entre os top N; o `slice` abaixo recorta de volta.
  */
 export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
@@ -262,7 +269,7 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
     .select("user_id, balance")
     .gt("balance", 0)
     .order("balance", { ascending: false })
-    .limit(limit)
+    .limit(limit + 1)
 
   if (walletsError) {
     console.error("[users-repository] getTopAuraProfiles:", walletsError)
@@ -277,7 +284,11 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
   const rankedIds = [...balances.keys()]
 
   const { data: rankedRows, error: rankedError } = rankedIds.length
-    ? await db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
+    ? await db
+        .from("user_profiles")
+        .select(DIRECTORY_COLUMNS)
+        .in("id", rankedIds)
+        .neq("display_slug", SITE_OWNER_SLUG)
     : { data: [], error: null }
 
   if (rankedError) {
@@ -286,9 +297,9 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
 
   // A carteira pode apontar para uma conta sem perfil (perfil excluído): o
   // ranking é o que voltou de user_profiles, não o que voltou da carteira.
-  const ranked = ((rankedRows ?? []) as DirectoryRow[]).sort(
-    (a, b) => (balances.get(b.id) ?? 0) - (balances.get(a.id) ?? 0)
-  )
+  const ranked = ((rankedRows ?? []) as DirectoryRow[])
+    .sort((a, b) => (balances.get(b.id) ?? 0) - (balances.get(a.id) ?? 0))
+    .slice(0, limit)
 
   const remaining = limit - ranked.length
   let fillers: DirectoryRow[] = []
@@ -296,6 +307,7 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
     let query = db
       .from("user_profiles")
       .select(DIRECTORY_COLUMNS)
+      .neq("display_slug", SITE_OWNER_SLUG)
       .order("profile_views", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(remaining)

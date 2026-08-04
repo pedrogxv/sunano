@@ -12,8 +12,16 @@ export type SpecialTag = {
   className: string
 }
 
+/**
+ * Slug do dono do site — mesmo valor reservado em `RESERVED_SLUGS`
+ * (`lib/profile-name.ts`). Fonte única para identificá-lo onde ele precisa
+ * ser tratado como caso especial (aqui, e no filtro dos rankings de Aura em
+ * `users-repository.ts`/`aura-repository.ts`).
+ */
+export const SITE_OWNER_SLUG = "sunano"
+
 const SPECIAL_TAGS: Record<string, SpecialTag> = {
-  sunano: {
+  [SITE_OWNER_SLUG]: {
     label: "SUNANO",
     className: "border-cyan-400/40 bg-cyan-400/10 text-cyan-300",
   },

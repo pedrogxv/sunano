@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 
 /**
  * Repositório do sistema de Aura do fórum — dar/remover aura em posts e
@@ -65,12 +66,41 @@ export async function getUserAuraBalance(userId: string): Promise<number> {
 const AURA_RANK_TOP_CUTOFF = 100
 
 /**
+ * Id do dono do site, resolvido a partir do slug reservado (`SITE_OWNER_SLUG`)
+ * e cacheado em memória — não muda em produção, então uma consulta por
+ * instância do servidor basta. Usado só para excluí-lo do cálculo do ranking
+ * público de Aura (`getUserAuraRank`); o saldo dele continua intacto na
+ * carteira.
+ */
+let cachedOwnerId: string | null | undefined
+
+async function getSiteOwnerId(
+  db: ReturnType<typeof createSupabaseAdminClient>
+): Promise<string | null> {
+  if (cachedOwnerId !== undefined) return cachedOwnerId
+  const { data } = await db
+    .from("user_profiles")
+    .select("id")
+    .eq("display_slug", SITE_OWNER_SLUG)
+    .maybeSingle()
+  cachedOwnerId = (data as { id: string } | null)?.id ?? null
+  return cachedOwnerId
+}
+
+/**
  * Posição do usuário no ranking geral de Aura (1 = maior saldo), ou `null`
  * se ele não tem aura nenhuma ou cai fora do Top 100 — a badge de posição no
  * perfil só faz sentido dentro desse recorte.
+ *
+ * O dono do site não participa do ranking público: no próprio perfil dele
+ * isso retorna `null` (sem badge), e o saldo dele é excluído da comparação
+ * usada para calcular a posição dos demais — sem isso, todo mundo abaixo
+ * dele apareceria uma posição atrás da que deveria.
  */
 export async function getUserAuraRank(userId: string): Promise<number | null> {
   const db = createSupabaseAdminClient()
+  const ownerId = await getSiteOwnerId(db)
+  if (userId === ownerId) return null
 
   const { data: wallet } = await db
     .from("user_aura_wallet")
@@ -81,10 +111,13 @@ export async function getUserAuraRank(userId: string): Promise<number | null> {
   const balance = wallet?.balance ?? 0
   if (balance <= 0) return null
 
-  const { count, error } = await db
+  let countQuery = db
     .from("user_aura_wallet")
     .select("user_id", { count: "exact", head: true })
     .gt("balance", balance)
+  if (ownerId) countQuery = countQuery.neq("user_id", ownerId)
+
+  const { count, error } = await countQuery
 
   if (error) {
     console.error("[aura-repository] getUserAuraRank:", error)

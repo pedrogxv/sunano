@@ -72,7 +72,7 @@ export const Changelog1 = ({
               const styles = COLOR_STYLES[entry.color ?? "cyan"];
               const Icon = entry.icon;
               return (
-                <div key={entry.version} className="relative flex flex-col gap-4 md:flex-row md:gap-10">
+                <div key={`${entry.version}-${entry.date}`} className="relative flex flex-col gap-4 md:flex-row md:gap-10">
                   <span
                     className={cn(
                       "relative z-10 hidden size-4 shrink-0 rounded-full ring-4 ring-background md:absolute md:top-1 md:left-0 md:block",

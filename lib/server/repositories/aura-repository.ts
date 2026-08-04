@@ -10,7 +10,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
  * chama a RPC e traduz o resultado.
  */
 
-export type ToggleAuraTarget = "post" | "comment"
+export type ToggleAuraTarget = "post" | "comment" | "blog_post" | "blog_comment"
 
 export type ToggleAuraResult =
   | { ok: true; given: boolean; auraCount: number }
@@ -128,23 +128,44 @@ export async function listAuraLedger(userId: string, limit = 50): Promise<AuraLe
 /** Quais posts/comentários (dentre os informados) o usuário atual já deu aura. */
 export async function getUserAuraGiven(
   userId: string,
-  targets: { postIds: string[]; commentIds: string[] }
-): Promise<{ postsGiven: Set<string>; commentsGiven: Set<string> }> {
+  targets: {
+    postIds: string[]
+    commentIds: string[]
+    blogPostIds?: string[]
+    blogCommentIds?: string[]
+  }
+): Promise<{
+  postsGiven: Set<string>
+  commentsGiven: Set<string>
+  blogPostsGiven: Set<string>
+  blogCommentsGiven: Set<string>
+}> {
   const postsGiven = new Set<string>()
   const commentsGiven = new Set<string>()
-  if (targets.postIds.length === 0 && targets.commentIds.length === 0) {
-    return { postsGiven, commentsGiven }
+  const blogPostsGiven = new Set<string>()
+  const blogCommentsGiven = new Set<string>()
+  const blogPostIds = targets.blogPostIds ?? []
+  const blogCommentIds = targets.blogCommentIds ?? []
+  if (
+    targets.postIds.length === 0 &&
+    targets.commentIds.length === 0 &&
+    blogPostIds.length === 0 &&
+    blogCommentIds.length === 0
+  ) {
+    return { postsGiven, commentsGiven, blogPostsGiven, blogCommentsGiven }
   }
 
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("forum_aura")
-    .select("post_id, comment_id")
+    .select("post_id, comment_id, blog_post_id, blog_comment_id")
     .eq("giver_id", userId)
     .or(
       [
         targets.postIds.length > 0 ? `post_id.in.(${targets.postIds.join(",")})` : null,
         targets.commentIds.length > 0 ? `comment_id.in.(${targets.commentIds.join(",")})` : null,
+        blogPostIds.length > 0 ? `blog_post_id.in.(${blogPostIds.join(",")})` : null,
+        blogCommentIds.length > 0 ? `blog_comment_id.in.(${blogCommentIds.join(",")})` : null,
       ]
         .filter(Boolean)
         .join(",")
@@ -153,7 +174,9 @@ export async function getUserAuraGiven(
   for (const row of data ?? []) {
     if (row.post_id) postsGiven.add(row.post_id)
     if (row.comment_id) commentsGiven.add(row.comment_id)
+    if (row.blog_post_id) blogPostsGiven.add(row.blog_post_id)
+    if (row.blog_comment_id) blogCommentsGiven.add(row.blog_comment_id)
   }
 
-  return { postsGiven, commentsGiven }
+  return { postsGiven, commentsGiven, blogPostsGiven, blogCommentsGiven }
 }

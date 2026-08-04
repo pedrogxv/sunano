@@ -9,7 +9,8 @@ import { getUserProfile } from "@/lib/server/repositories/users-repository"
 export const dynamic = "force-dynamic"
 
 const commentSchema = z.object({
-  body: z.string().trim().min(2).max(2000),
+  body: z.string().trim().min(4).max(2000),
+  parentCommentId: z.string().uuid().nullable().optional(),
 })
 
 /** Lista pública dos comentários de uma notícia. */
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sl
       userId: user.id,
       authorName,
       body: parsed.data.body,
+      parentCommentId: parsed.data.parentCommentId ?? null,
     })
 
     if (!result.ok) {

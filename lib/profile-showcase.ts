@@ -96,6 +96,8 @@ export type ProfileShowcase = {
   member_since: string
   /** Quantas pessoas seguem este perfil. */
   followers: number
+  /** Quantas visitas a página já recebeu (exclui o próprio dono). */
+  profile_views: number
   /** Saldo de aura acumulado (0 se o usuário nunca recebeu). */
   aura: number
   /** Posição no ranking geral de Aura, só quando o usuário está no Top 100. */

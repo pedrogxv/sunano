@@ -1,12 +1,17 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowLeft, Clock, MessageCircle, Newspaper } from "lucide-react"
+import { toast } from "sonner"
+
+import { AuraButton } from "@/components/forum/AuraButton"
+import { CommentsSection } from "@/components/comments/CommentsSection"
+import type { CommentItem } from "@/components/comments/types"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
-import { supabaseAuth } from "@/lib/client/supabase-auth"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +29,7 @@ export type NewsPost = {
   read_time_minutes: number | null
   created_at: string
   comment_count?: number
+  aura_count: number
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
   peripherals?: PeripheralRef[] | null
 }
@@ -36,18 +42,6 @@ export type RelatedPost = {
   cover_image_url: string | null
   created_at: string
 }
-
-export type NewsComment = {
-  id: string
-  body: string
-  author_name: string
-  user_id: string | null
-  created_at: string
-  author_display_name: string
-  author_avatar_url: string | null
-}
-
-type AuthUser = { id: string; display_name: string; avatar_url: string | null } | null
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,18 +57,6 @@ const CATEGORY_LABEL: Record<string, string> = {
   monitors: "Monitores",
   switches: "Switches",
   dac_amp: "DAC/Amp",
-}
-
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return "agora"
-  if (m < 60) return `${m}m atrás`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h atrás`
-  const d = Math.floor(h / 24)
-  if (d < 7) return `${d}d atrás`
-  return new Date(dateStr).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })
 }
 
 function getAuthorName(post: NewsPost) {
@@ -146,186 +128,78 @@ function RelatedNews({ posts }: { posts: RelatedPost[] }) {
   )
 }
 
-// ─── Comments (account-based) ─────────────────────────────────────────────────
-
-function CommentsSection({
-  slug,
-  comments,
-  authUser,
-  authLoading,
-  onPosted,
-}: {
-  slug: string
-  comments: NewsComment[]
-  authUser: AuthUser
-  authLoading: boolean
-  onPosted: () => Promise<void> | void
-}) {
-  const [body, setBody] = useState("")
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function submit() {
-    if (!authUser || body.trim().length < 2) return
-    try {
-      setSaving(true)
-      setError(null)
-      const res = await fetch(`/api/blog/${encodeURIComponent(slug)}/comments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar comentário.")
-      setBody("")
-      await onPosted()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao enviar comentário.")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <section id="comentarios" className="mt-10 pt-6 border-t border-border/40 scroll-mt-24">
-      <div className="mb-6 flex items-center gap-2">
-        <MessageCircle className="size-5 text-foreground" />
-        <h2 className="text-lg font-bold text-foreground">
-          {comments.length} {comments.length === 1 ? "Comentário" : "Comentários"}
-        </h2>
-      </div>
-
-      {/* New comment / login gate */}
-      {authLoading ? (
-        <div className="mb-8 h-24 rounded-xl border border-border bg-card/40 animate-pulse" />
-      ) : authUser ? (
-        <div className="mb-8 rounded-xl border border-border bg-card p-4 space-y-3">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <UserAvatar name={authUser.display_name} avatarUrl={authUser.avatar_url} size={6} />
-            Comentando como <span className="font-medium text-foreground">{authUser.display_name}</span>
-          </div>
-          {error && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-              {error}
-            </div>
-          )}
-          <textarea
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder="Escreva seu comentário..."
-            className="min-h-[90px] w-full resize-none rounded-lg border border-border bg-muted/20 px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) submit()
-            }}
-          />
-          <div className="flex justify-end gap-2">
-            {body && (
-              <button
-                onClick={() => setBody("")}
-                className="rounded-lg px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Cancelar
-              </button>
-            )}
-            <button
-              onClick={submit}
-              disabled={saving || body.trim().length < 2}
-              className="rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {saving ? "Enviando…" : "Comentar"}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mb-8 rounded-xl border border-border bg-card/50 p-6 text-center">
-          <p className="text-sm text-muted-foreground">
-            <Link href="/login" className="font-medium text-primary hover:underline">
-              Entre na sua conta
-            </Link>{" "}
-            para deixar um comentário.
-          </p>
-        </div>
-      )}
-
-      {/* Comments list */}
-      {comments.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">Seja o primeiro a comentar.</p>
-      ) : (
-        <div className="space-y-5">
-          {comments.map((c) => (
-            <div key={c.id} className="flex gap-3">
-              <UserAvatar name={c.author_display_name} avatarUrl={c.author_avatar_url} size={8} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-sm font-semibold text-foreground">{c.author_display_name}</span>
-                  <span className="text-[11px] text-muted-foreground/60">{timeAgo(c.created_at)}</span>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">{c.body}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
 // ─── Main content ─────────────────────────────────────────────────────────────
 
 export function NoticiasPostContent({
-  post,
+  post: initialPost,
   related,
   initialComments,
 }: {
   post: NewsPost | null
   related: RelatedPost[]
-  initialComments: NewsComment[]
+  initialComments: CommentItem[]
 }) {
-  const [comments, setComments] = useState<NewsComment[]>(initialComments)
-  const [authUser, setAuthUser] = useState<AuthUser>(null)
-  const [authLoading, setAuthLoading] = useState(true)
+  const [post, setPost] = useState(initialPost)
+  const [comments, setComments] = useState<CommentItem[]>(initialComments)
+  const { user: contextUser, loading: authLoading } = useAuthUser()
+  const authUser = useMemo(
+    () =>
+      contextUser
+        ? { id: contextUser.id, display_name: contextUser.displayName, avatar_url: contextUser.avatarUrl }
+        : null,
+    [contextUser]
+  )
+  // `null` = ainda não sabemos (sem usuário, ou fetch em andamento).
+  const [postAuraGivenFetched, setPostAuraGivenFetched] = useState<boolean | null>(null)
+  const postAuraGiven = postAuraGivenFetched ?? false
 
-  // Sessão do usuário (conta) — perfil enriquecido via /api/auth/me.
+  // Aura dada pelo usuário atual nesta notícia.
   useEffect(() => {
-    // Em alguns navegadores mobile (webviews como o do Telegram) o evento
-    // inicial do onAuthStateChange pode nunca disparar, travando a caixa de
-    // comentário num skeleton eterno. Depois de alguns segundos, assume-se
-    // deslogado — se o evento chegar depois, o estado ainda é atualizado.
-    const timeout = setTimeout(() => setAuthLoading(false), 6000)
-
-    const { data: { subscription } } = supabaseAuth.auth.onAuthStateChange(async (_event, session) => {
-      clearTimeout(timeout)
-      if (session?.user) {
-        let displayName = session.user.email?.split("@")[0] || "Usuário"
-        let avatarUrl: string | null = null
-        try {
-          const res = await fetch("/api/auth/me")
-          const data = await res.json()
-          if (data?.userProfile) {
-            displayName = data.userProfile.display_name || displayName
-            avatarUrl = data.userProfile.avatar_url || null
-          }
-        } catch {
-          // mantém os fallbacks derivados do e-mail
-        }
-        setAuthUser({ id: session.user.id, display_name: displayName, avatar_url: avatarUrl })
-      } else {
-        setAuthUser(null)
-      }
-      setAuthLoading(false)
-    })
+    if (!authUser || !post) return
+    let cancelled = false
+    const query = new URLSearchParams({ postIds: post.id })
+    fetch(`/api/blog/aura?${query}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setPostAuraGivenFetched((data?.postsGiven ?? []).includes(post.id))
+      })
+      .catch(() => {
+        if (!cancelled) setPostAuraGivenFetched(false)
+      })
     return () => {
-      clearTimeout(timeout)
-      subscription.unsubscribe()
+      cancelled = true
     }
-  }, [])
+  }, [authUser, post])
+
+  async function handleTogglePostAura() {
+    if (!authUser || !post) return
+    const wasGiven = postAuraGiven
+    const prevCount = post.aura_count
+
+    setPostAuraGivenFetched(!wasGiven)
+    setPost((p) => (p ? { ...p, aura_count: p.aura_count + (wasGiven ? -10 : 10) } : p))
+
+    const res = await fetch(`/api/blog/${encodeURIComponent(post.slug)}/aura`, { method: "POST" })
+
+    if (!res.ok) {
+      setPostAuraGivenFetched(wasGiven)
+      setPost((p) => (p ? { ...p, aura_count: prevCount } : p))
+      const data = await res.json().catch(() => null)
+      toast.error(data?.error ?? "Erro ao dar aura")
+    } else {
+      const data = await res.json().catch(() => null)
+      if (data?.aura_count !== undefined) {
+        setPost((p) => (p ? { ...p, aura_count: data.aura_count } : p))
+      }
+    }
+  }
 
   const loadComments = useCallback(async () => {
     if (!post) return
     try {
       const res = await fetch(`/api/blog/${encodeURIComponent(post.slug)}/comments`)
       const data = await res.json().catch(() => null)
-      setComments((data?.comments ?? []) as NewsComment[])
+      setComments((data?.comments ?? []) as CommentItem[])
     } catch {
       // mantém os comentários já carregados
     }
@@ -406,11 +280,19 @@ export function NoticiasPostContent({
               </>
             )}
             <span>•</span>
-            <a href="#comentarios" className="flex items-center gap-1 transition-colors hover:text-primary">
+            <a href="#comments" className="flex items-center gap-1 transition-colors hover:text-primary">
               <MessageCircle className="size-3" />
               {commentCount} {commentCount === 1 ? "comentário" : "comentários"}
             </a>
           </div>
+        </div>
+        <div className="ml-auto">
+          <AuraButton
+            auraCount={post.aura_count}
+            given={postAuraGiven}
+            disabled={!authUser}
+            onToggle={handleTogglePostAura}
+          />
         </div>
       </div>
 
@@ -441,14 +323,18 @@ export function NoticiasPostContent({
       {/* Related news (via tags) */}
       <RelatedNews posts={related} />
 
-      {/* Comments */}
-      <CommentsSection
-        slug={post.slug}
-        comments={comments}
-        authUser={authUser}
-        authLoading={authLoading}
-        onPosted={loadComments}
-      />
+      {/* Comments — mesma lógica/visual do fórum (thread de 1 nível, Aura, badges de autor). */}
+      <section className="mt-10 pt-6 border-t border-border/40">
+        <CommentsSection
+          apiBasePath={`/api/blog/${encodeURIComponent(post.slug)}`}
+          auraLookupPath="/api/blog/aura"
+          comments={comments}
+          onCommentsChange={setComments}
+          reloadComments={loadComments}
+          authUser={authUser}
+          authLoading={authLoading}
+        />
+      </section>
     </article>
   )
 }

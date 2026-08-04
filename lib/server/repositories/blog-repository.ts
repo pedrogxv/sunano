@@ -2,7 +2,7 @@ import "server-only"
 
 import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { getUserProfiles } from "@/lib/server/repositories/users-repository"
+import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
 
 /**
  * Repositório de Blog — única porta de acesso à tabela `blog_posts` para
@@ -74,6 +74,7 @@ export type BlogPostDetail = {
   read_time_minutes: number | null
   created_at: string
   comment_count: number
+  aura_count: number
   admin_profiles: BlogAuthor
   peripherals: BlogPeripheralRef[] | null
 }
@@ -87,21 +88,25 @@ export type RelatedBlogPost = {
   created_at: string
 }
 
-export type BlogComment = {
+export type BlogCommentDetail = {
   id: string
   body: string
   author_name: string
   user_id: string | null
+  parent_comment_id: string | null
   created_at: string
+  aura_count: number
   author_display_name: string
   author_avatar_url: string | null
+  author_account_tier: AccountTier
+  author_display_slug: string | null
 }
 
 const LIST_COLUMNS =
   "id, title, slug, post_type, author_id, is_featured, excerpt, cover_image_url, cover_thumbnail_url, video_url, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
 
 const DETAIL_COLUMNS =
-  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
+  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, aura_count, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
 
 // Variantes sem `post_type`, usadas como fallback caso a migração
 // `blog_post_type.sql` ainda não tenha sido aplicada.
@@ -254,9 +259,16 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPostDeta
       .eq("is_published", true)
       .maybeSingle()
 
-  let { data, error } = await runQuery(DETAIL_COLUMNS)
+  let columns = DETAIL_COLUMNS
+  let { data, error } = await runQuery(columns)
   if (error && isMissingPostType(error.message)) {
-    ({ data, error } = await runQuery(DETAIL_COLUMNS_LEGACY))
+    columns = DETAIL_COLUMNS_LEGACY
+    ;({ data, error } = await runQuery(columns))
+  }
+  // Fallback: migração `20260818_blog_aura_and_threads.sql` ainda não aplicada.
+  if (error && isMissingColumn(error.message, "aura_count")) {
+    columns = withoutColumn(columns, "aura_count")
+    ;({ data, error } = await runQuery(columns))
   }
   if (error) {
     console.error("[blog-repository] getPublishedPostBySlug:", error)
@@ -266,7 +278,12 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPostDeta
 
   const post = data as unknown as BlogPostDetail
   const counts = await countCommentsByPost([post.id])
-  return stripAuthorEmail({ ...post, post_type: post.post_type ?? "review", comment_count: counts[post.id] ?? 0 })
+  return stripAuthorEmail({
+    ...post,
+    post_type: post.post_type ?? "review",
+    aura_count: post.aura_count ?? 0,
+    comment_count: counts[post.id] ?? 0,
+  })
 }
 
 /** Posts publicados relacionados a um periférico (página de detalhe). */
@@ -366,9 +383,11 @@ export async function listRelatedPosts(params: {
 
 /**
  * Lista os comentários visíveis de uma notícia, já enriquecidos com o perfil
- * público (`user_profiles`) do autor. Resiliente caso a tabela ainda não exista.
+ * público (`user_profiles`) do autor — mesma lógica de `getForumPostBySlug`
+ * em `forum-repository.ts` (thread de 1 nível via `parent_comment_id`, Aura,
+ * badges de autor), só que apontando para `blog_comments`.
  */
-export async function listBlogComments(slug: string): Promise<BlogComment[]> {
+export async function listBlogComments(slug: string): Promise<BlogCommentDetail[]> {
   const db = createSupabaseAdminClient()
 
   const { data: post } = await db
@@ -382,7 +401,7 @@ export async function listBlogComments(slug: string): Promise<BlogComment[]> {
   const postId = (post as { id: string }).id
   const { data: rows, error } = await db
     .from("blog_comments")
-    .select("id, body, author_name, user_id, created_at")
+    .select("id, body, author_name, user_id, parent_comment_id, created_at, aura_count")
     .eq("post_id", postId)
     .eq("is_hidden", false)
     .order("created_at", { ascending: true })
@@ -394,27 +413,34 @@ export async function listBlogComments(slug: string): Promise<BlogComment[]> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const comments = (rows ?? []) as any[]
-  const profiles = await getUserProfiles(comments.map((c) => c.user_id).filter(Boolean))
+  const profileMap = await buildProfileMap(comments.map((c) => c.user_id))
 
   return comments.map((c) => ({
     id: c.id,
     body: c.body,
     author_name: c.author_name,
     user_id: c.user_id,
+    parent_comment_id: c.parent_comment_id ?? null,
     created_at: c.created_at,
-    author_display_name: c.user_id
-      ? profiles[c.user_id]?.display_name ?? c.author_name
-      : c.author_name,
-    author_avatar_url: c.user_id ? profiles[c.user_id]?.avatar_url ?? null : null,
+    aura_count: c.aura_count ?? 0,
+    author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
+    author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
+    author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
+    author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
   }))
 }
 
-/** Cria um comentário em uma notícia (exige usuário autenticado). */
+/**
+ * Cria um comentário em uma notícia (exige usuário autenticado) — mesma
+ * lógica de `addForumComment`: thread de 1 nível, resposta sempre reancorada
+ * no comentário raiz.
+ */
 export async function addBlogComment(params: {
   postSlug: string
   userId: string
   authorName: string
   body: string
+  parentCommentId?: string | null
 }): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -426,13 +452,29 @@ export async function addBlogComment(params: {
     .maybeSingle()
   if (!post) return { ok: false, error: "Notícia não encontrada.", status: 404 }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (db.from("blog_comments") as any).insert({
-    post_id: (post as { id: string }).id,
+  const postId = (post as { id: string }).id
+
+  let parentCommentId: string | null = null
+  if (params.parentCommentId) {
+    const { data: parent } = await db
+      .from("blog_comments")
+      .select("id, post_id, parent_comment_id")
+      .eq("id", params.parentCommentId)
+      .maybeSingle()
+    if (!parent || parent.post_id !== postId) {
+      return { ok: false, error: "Comentário original não encontrado.", status: 404 }
+    }
+    parentCommentId = parent.parent_comment_id ? parent.parent_comment_id : parent.id
+  }
+
+  const { error } = await db.from("blog_comments").insert({
+    post_id: postId,
     body: params.body.trim(),
     author_name: params.authorName,
     user_id: params.userId,
+    parent_comment_id: parentCommentId,
     is_hidden: false,
+    aura_count: 0,
   })
 
   if (error) {

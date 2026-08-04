@@ -370,6 +370,21 @@ button,
   }
 }
 
+/* Variante mais intensa para os cards de destaque na Home (maiores, pedem mais brilho). */
+.event-card-glow-strong::before {
+  inset: -12px;
+  filter: blur(18px);
+}
+
+@keyframes event-card-glow-pulse-strong {
+  0%, 100% { opacity: 0.65; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.08); }
+}
+
+.event-card-glow-strong::before {
+  animation: event-card-glow-pulse-strong 2.8s ease-in-out infinite;
+}
+
 /* Badge "VIP+" no perfil público (InfoBasica.tsx) — shimmer no texto + leve
    respiração de escala na coroa. Mesma técnica de .nav-fire-text/.nav-fire-icon. */
 @keyframes vip-plus-badge-text-shimmer {
@@ -696,5 +711,119 @@ button:not(:disabled):hover .aura-icon-holder {
   .podium-sparkle {
     animation: none;
     opacity: 0.7;
+  }
+}
+
+/* ════════════════════════════════════════════
+   Card de "Aura" no header do perfil público (EstatisticasGrid.tsx) — o único
+   dos três mini-cards com uma borda viva, pra puxar o olho pro número que
+   mais importa na página.
+
+   Três camadas, mesma família de truques já usada em .nav-fire-holder e
+   .aura-icon-holder (botão de dar aura do fórum), só que aplicadas à borda
+   inteira em vez de um halo atrás de um ícone redondo:
+
+   1. `.aura-stat-card::before` — um retângulo de conic-gradient bem maior
+      que o card, girando atrás dele; só a faixa da borda escapa por baixo
+      porque o miolo é coberto pelo `::after` (cor do card, mesmo raio,
+      1.5px encolhido pra dentro). É o "picture frame" clássico de borda
+      animada: sem `mask`/`background-clip`, então roda igual em qualquer
+      navegador. É o que faz a luz correr ao redor do contorno em vez de só
+      brilhar parada.
+   2. `.aura-stat-icon-holder::before` — halo respirando atrás do círculo do
+      ícone, mesma técnica do halo do pódio.
+   3. `.aura-stat-icon` — a chama pulsando (escala + drop-shadow), viva
+      mesmo sem interação nenhuma do usuário.
+   ════════════════════════════════════════════ */
+@keyframes aura-stat-border-run {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes aura-stat-halo-breathe {
+  0%, 100% { opacity: 0.4; transform: scale(0.94); }
+  50%      { opacity: 0.85; transform: scale(1.08); }
+}
+
+@keyframes aura-stat-icon-pulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px oklch(0.75 0.19 45 / 0.5));
+  }
+  50% {
+    transform: scale(1.16);
+    filter: drop-shadow(0 0 6px oklch(0.78 0.2 50 / 0.9)) drop-shadow(0 0 12px oklch(0.65 0.22 35 / 0.55));
+  }
+}
+
+.aura-stat-card {
+  isolation: isolate;
+  overflow: hidden;
+  border-color: transparent;
+}
+
+.aura-stat-card::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -2;
+  width: 250%;
+  height: 250%;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    oklch(0.65 0.22 25),
+    oklch(0.82 0.18 70),
+    oklch(0.75 0.19 45),
+    oklch(0.7 0.2 35),
+    oklch(0.65 0.22 25)
+  );
+  pointer-events: none;
+  animation: aura-stat-border-run 2.8s linear infinite;
+}
+
+.aura-stat-card::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--card);
+  pointer-events: none;
+}
+
+.aura-stat-icon-holder {
+  position: relative;
+  isolation: isolate;
+}
+
+.aura-stat-icon-holder::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  z-index: -1;
+  border-radius: 9999px;
+  background: radial-gradient(circle, oklch(0.75 0.19 45 / 0.55), transparent 70%);
+  filter: blur(4px);
+  pointer-events: none;
+  animation: aura-stat-halo-breathe 2.2s ease-in-out infinite;
+}
+
+.aura-stat-icon {
+  transform-origin: center;
+  animation: aura-stat-icon-pulse 2.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-stat-card::before {
+    animation: none;
+  }
+  .aura-stat-icon-holder::before {
+    animation: none;
+    opacity: 0.6;
+  }
+  .aura-stat-icon {
+    animation: none;
   }
 }

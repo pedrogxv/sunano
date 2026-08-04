@@ -60,12 +60,8 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
       {/* flex-wrap com cards de largura fixa (não grid de colunas fixas): a
           fileira acompanha a quantidade real de eventos em vez de reservar
           um número fixo de "slots" vazios quando há só 1 ou 2. */}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-4">
         {events.map((event) => {
-          const percent =
-            event.maxParticipants !== null
-              ? Math.min(100, Math.round((event.currentCount / event.maxParticipants) * 100))
-              : 100
           const claimed = claimedMedalIds.has(event.medalId)
           const ringColor = MEDAL_RARITY_SOLID[event.rarity]
 
@@ -75,7 +71,7 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
               href="/eventos"
               style={{ "--glow-color": ringColor } as React.CSSProperties}
               className={cn(
-                "event-card-glow group relative flex w-36 shrink-0 flex-col items-center gap-3 rounded-2xl border-2 bg-card p-4 text-center transition-transform hover:z-10 hover:-translate-y-1",
+                "event-card-glow event-card-glow-strong group relative flex w-48 shrink-0 flex-col items-center gap-3 rounded-2xl border-2 bg-card p-6 text-center transition-transform hover:z-10 hover:-translate-y-1",
                 MEDAL_RARITY_STYLES[event.rarity]
               )}
             >
@@ -85,26 +81,18 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
                 </span>
               )}
 
-              {/* Anel de progresso (conic-gradient) em vez da barra linear de /eventos — mesma info, leitura mais rápida num card pequeno. */}
-              <div
-                className="relative flex size-16 items-center justify-center rounded-full"
-                style={{
-                  background: `conic-gradient(${ringColor} ${percent * 3.6}deg, color-mix(in srgb, ${ringColor} 18%, transparent) 0deg)`,
-                }}
-              >
-                <div className="flex size-[52px] items-center justify-center rounded-full bg-card">
-                  {event.imageUrl ? (
-                    <Image
-                      src={event.imageUrl}
-                      alt={event.name}
-                      width={36}
-                      height={36}
-                      className="size-9 object-contain"
-                    />
-                  ) : (
-                    <Award className="size-7" />
-                  )}
-                </div>
+              <div className="flex size-20 items-center justify-center rounded-full bg-card">
+                {event.imageUrl ? (
+                  <Image
+                    src={event.imageUrl}
+                    alt={event.name}
+                    width={48}
+                    height={48}
+                    className="size-12 object-contain"
+                  />
+                ) : (
+                  <Award className="size-9" />
+                )}
               </div>
 
               <p className="line-clamp-1 text-sm font-semibold text-foreground">{event.name}</p>

@@ -1,6 +1,7 @@
 import "server-only"
 
-import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
+import type { AccountTier } from "@/lib/account-tier"
+import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -55,29 +56,6 @@ export type ForumCommentDetail = {
 export type ForumTab = "recent" | "hot" | "category"
 
 // ── Helpers de enriquecimento ────────────────────────────────────────────────
-
-async function buildProfileMap(userIds: (string | null)[]) {
-  const map: Record<
-    string,
-    { display_name: string | null; avatar_url: string | null; account_tier: AccountTier; display_slug: string | null }
-  > = {}
-  const ids = [...new Set(userIds.filter((id): id is string => Boolean(id)))]
-  if (ids.length === 0) return map
-  const db = createSupabaseAdminClient()
-  const { data } = await db
-    .from("user_profiles")
-    .select("id, display_name, avatar_url, account_tier, display_slug")
-    .in("id", ids)
-  for (const row of data ?? []) {
-    map[row.id] = {
-      display_name: row.display_name,
-      avatar_url: row.avatar_url,
-      account_tier: coerceAccountTier(row.account_tier),
-      display_slug: row.display_slug,
-    }
-  }
-  return map
-}
 
 type CategoryRow = { id: string; slug: string; name: string; parent_id: string | null }
 

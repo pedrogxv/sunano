@@ -12,6 +12,7 @@ interface InfoBasicaProps {
   displaySlug?: string | null
   /** Posição no ranking de Aura. Só existe (não-null) dentro do Top 100. */
   auraRank?: number | null
+  bio?: string | null
 }
 
 const TIER_BADGE_STYLES: Record<AccountTier, string> = {
@@ -21,14 +22,17 @@ const TIER_BADGE_STYLES: Record<AccountTier, string> = {
 }
 
 /**
- * Nome, badge de tier + tag especial e data de entrada — o bloco que fica ao
- * lado da foto no header.
+ * Nome, badges (tier + tag especial + ranking) e data de entrada — o bloco
+ * centralizado abaixo da foto no header do perfil público.
  *
- * A bio saiu daqui: no layout novo ela tem card próprio abaixo do header, e
- * mantê-la junto do nome espremia as duas coisas na faixa estreita ao lado da
- * foto.
+ * Nome numa linha e badges na linha de baixo, cada bloco no seu próprio eixo
+ * central: colados na mesma linha, um nome curto ("end") deixava as badges
+ * grudadas nele em vez de formarem uma segunda fileira equilibrada.
+ *
+ * A bio entra por último, dentro do mesmo bloco centralizado — sem card
+ * próprio, para não duplicar a moldura que já envolve nome e badges.
  */
-export function InfoBasica({ name, tier, memberSince, displaySlug, auraRank }: InfoBasicaProps) {
+export function InfoBasica({ name, tier, memberSince, displaySlug, auraRank, bio }: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
   const isVip = tier !== "common"
   const isVipPlus = tier === "vip_plus"
@@ -39,9 +43,10 @@ export function InfoBasica({ name, tier, memberSince, displaySlug, auraRank }: I
     : null
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{name}</h1>
+    <div className="flex flex-col items-center gap-1.5">
+      <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{name}</h1>
+
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <span
           className={cn(
             "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
@@ -76,6 +81,8 @@ export function InfoBasica({ name, tier, memberSince, displaySlug, auraRank }: I
       {joinedLabel && (
         <p className="text-xs text-muted-foreground/60">Membro desde {joinedLabel}</p>
       )}
+
+      {bio && <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">{bio}</p>}
     </div>
   )
 }

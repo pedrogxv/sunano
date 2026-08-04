@@ -87,9 +87,8 @@ export async function getHomeData(): Promise<HomeData> {
     db
       .from("peripherals")
       .select("id, name, brand, image_url, category, tier")
-      .in("tier", ["GOAT", "SS", "S"])
       .order("created_at", { ascending: false })
-      .limit(8),
+      .limit(4),
     db
       .from("blog_posts")
       .select(

@@ -43,7 +43,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle, created_at"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle, created_at, profile_views"
 
 // `specs` e `tags` só existem aqui para alimentar o hover/tooltip (ratings +
 // chips) reaproveitado da tierlist — a resposta pública (`ShowcasePeripheral`)
@@ -109,6 +109,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     youtube_handle: string | null
     tiktok_handle: string | null
     created_at: string
+    profile_views: number | null
   }
 
   const tier = coerceAccountTier(row.account_tier)
@@ -138,6 +139,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     youtube_handle: row.youtube_handle,
     tiktok_handle: row.tiktok_handle,
     member_since: row.created_at,
+    profile_views: row.profile_views ?? 0,
     followers,
     aura,
     aura_rank: auraRank,

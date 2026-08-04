@@ -3,7 +3,6 @@ import {
   ArrowRight,
   Crown,
   MessageCircle,
-  Newspaper,
   Package,
   PlayCircle,
   Recycle,
@@ -15,6 +14,7 @@ import DefaultHero from "@/components/home/DefaultHero"
 import { EventsShowcase } from "@/components/home/EventsShowcase"
 import HeroHighlightsBar from "@/components/home/HeroHighlightsBar"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getHomeData } from "@/lib/server/repositories/home-repository"
 import { formatBRL } from "@/lib/stripe"
 import { mapTier } from "@/lib/tier-utils"
@@ -86,7 +86,7 @@ function SectionHeader({
 }
 
 export default async function HomePage() {
-  const { banners, peripherals, blog, products, forum, videos, events, counts } = await getHomeData()
+  const { banners, peripherals, products, forum, videos, events, counts } = await getHomeData()
 
   return (
     <div className="mx-auto max-w-6xl space-y-12 px-4 py-6 md:px-6 lg:px-8 md:py-10">
@@ -111,24 +111,24 @@ export default async function HomePage() {
         <DefaultHero counts={counts} />
       )}
 
-      {/* ============ TOP TIER ============ */}
+      {/* ============ EM ALTA ============ */}
       {peripherals.length > 0 && (
         <section>
           <SectionHeader
             icon={Crown}
-            title="Top Tier"
-            subtitle="Os melhores periféricos avaliados"
-            href="/tierlist"
-            linkLabel="Tierlist completa"
+            title="Em Alta"
+            subtitle="Os últimos periféricos adicionados"
+            href="/perifericos"
+            linkLabel="Periféricos completo"
           />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {peripherals.slice(0, 8).map((p) => {
+            {peripherals.slice(0, 4).map((p) => {
               const tier = p.tier ? mapTier(p.tier) : null
               const tierStyle = tier ? CARD_TIER_STYLES[tier as keyof typeof CARD_TIER_STYLES] : null
               return (
                 <Link
                   key={p.id}
-                  href="/tierlist"
+                  href={`/perifericos/${buildPeripheralSlug(p.name, p.id)}`}
                   className="group relative overflow-hidden rounded-xl border border-border bg-card p-3 transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-accent"
                 >
                   {/* Tier accent bar */}
@@ -178,58 +178,8 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* ============ TWO COLUMNS: CONQUISTAS + REVIEWS ============ */}
-      {(events.length > 0 || blog.length > 0) && (
-        <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {events.length > 0 && <EventsShowcase events={events} />}
-
-          {blog.length > 0 && (
-            <div>
-              <SectionHeader
-                icon={Newspaper}
-                title="Últimos reviews"
-                subtitle="Análises detalhadas, sem enrolação"
-                href="/blog"
-                linkLabel="Ver todos"
-              />
-              <div className="space-y-2">
-                {blog.map((post) => (
-                  <Link
-                    key={post.id}
-                    href={`/blog/${post.slug}`}
-                    className="group flex gap-3 rounded-xl border border-border bg-card p-2 transition-all hover:border-foreground/20 hover:bg-accent"
-                  >
-                    <div className="relative aspect-video w-32 shrink-0 overflow-hidden rounded-md bg-muted">
-                      {(post.cover_thumbnail_url || post.cover_image_url) && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={post.cover_thumbnail_url || post.cover_image_url || ""}
-                          alt={post.title}
-                          className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1 py-1 pr-2">
-                      <p className="line-clamp-2 text-sm font-medium text-foreground/90 group-hover:text-foreground">
-                        {post.title}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <span>{formatTimeAgo(post.created_at)}</span>
-                        {post.read_time_minutes && (
-                          <>
-                            <span>·</span>
-                            <span>{post.read_time_minutes} min</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
+      {/* ============ CONQUISTAS EM DESTAQUE ============ */}
+      {events.length > 0 && <EventsShowcase events={events} />}
 
       {/* ============ LOJA & BAZAR ============ */}
       {SHOW_STORE_SECTION && products.length > 0 && (

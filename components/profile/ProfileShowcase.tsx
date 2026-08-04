@@ -1,10 +1,11 @@
 import Link from "next/link"
-import { Settings } from "lucide-react"
+import { Eye, Settings } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
+import { cn } from "@/lib/utils"
 import { AvatarQuadrado } from "./AvatarQuadrado"
 import { Banner } from "./Banner"
-import { EstatisticasGrid } from "./EstatisticasGrid"
+import { EstatisticasGrid, formatCount } from "./EstatisticasGrid"
 import { FavoritosGrid } from "./FavoritosGrid"
 import { InfoBasica } from "./InfoBasica"
 import { MedalhasGrid } from "./MedalhasGrid"
@@ -27,13 +28,11 @@ interface ProfileShowcaseProps {
 }
 
 /**
- * Vitrine pública do perfil: capa larga, foto quadrada ancorada no canto
- * inferior esquerdo dela, nome e badges ao lado, e então bio, estatísticas,
- * medalhas, setup e favoritos.
- *
- * A foto sai do fluxo (`absolute`) e invade a capa pela metade — é o que
- * elimina a faixa vazia que o layout antigo, de foto circular centralizada,
- * obrigava a existir logo abaixo do banner.
+ * Vitrine pública do perfil: capa larga com cantos próprios arredondados
+ * (sem card envolvendo tudo), foto quadrada centralizada invadindo a capa
+ * pela metade, e nome, badges e data centralizados logo abaixo dela. O botão
+ * de ação (Seguir/Editar) fica fora desse bloco central, ancorado à direita
+ * na mesma faixa vertical do nome — não é mais parte do retângulo da capa.
  */
 export function ProfileShowcase({
   profile,
@@ -42,74 +41,72 @@ export function ProfileShowcase({
 }: ProfileShowcaseProps) {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
-      <div className="overflow-hidden rounded-2xl border border-border bg-card/60">
-        <div className="relative">
-          <Banner
-            bannerUrl={profile.banner_url}
+      <div className="relative">
+        <Banner
+          bannerUrl={profile.banner_url}
+          tier={profile.account_tier}
+          adjust={profile.media_adjustments.banner}
+          className={cn("rounded-2xl", BANNER_HEIGHT)}
+        />
+
+        {/* Contador de visitas — canto superior direito da capa, sem competir com o botão Seguir/Editar (que fica abaixo dela). */}
+        <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+          <Eye className="size-3.5" />
+          {formatCount(profile.profile_views)}
+        </div>
+
+        {/* A foto fica centralizada no eixo horizontal e invade a capa pela
+            metade (fora do fluxo, absolute). Centralizar em vez de ancorar
+            num canto é o que permite o bloco de nome/badges também ficar
+            centralizado abaixo dela, como um cartão de perfil em vez de um
+            header alinhado à esquerda. */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2">
+          <AvatarQuadrado
+            avatarUrl={profile.avatar_url}
+            name={profile.display_name}
             tier={profile.account_tier}
-            adjust={profile.media_adjustments.banner}
-            className={BANNER_HEIGHT}
+            adjust={profile.media_adjustments.avatar}
           />
-
-          {/* A foto ancora no canto inferior esquerdo e invade a capa pela
-              metade. Fora do fluxo (absolute) de propósito: assim o bloco de
-              nome ao lado sobe junto com ela, em vez de a página reservar uma
-              faixa vazia sob o banner só para caber a foto. */}
-          <div className="absolute bottom-0 left-4 translate-y-1/2 sm:left-6">
-            <AvatarQuadrado
-              avatarUrl={profile.avatar_url}
-              name={profile.display_name}
-              tier={profile.account_tier}
-              adjust={profile.media_adjustments.avatar}
-            />
-          </div>
         </div>
 
-        {/* Recuo à esquerda = largura da foto + respiro, para o nome começar
-            depois dela. No mobile a foto ocupa quase toda a coluna, então o
-            texto desce para baixo dela em vez de espremer. */}
-        <div className="px-4 pb-5 pt-3 sm:px-6 sm:pl-[9.5rem] sm:pt-4 md:pl-[10.5rem]">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="mt-12 sm:mt-0">
-              <InfoBasica
-                name={profile.display_name}
-                tier={profile.account_tier}
-                memberSince={profile.member_since}
-                displaySlug={profile.display_slug}
-                auraRank={profile.aura_rank}
-              />
-              <SocialLinks
-                youtubeHandle={profile.youtube_handle}
-                tiktokHandle={profile.tiktok_handle}
-                className="mt-2 justify-start"
-              />
-            </div>
-
-            {isOwner ? (
-              <Link
-                href="/perfil"
-                className="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-              >
-                <Settings className="size-3.5" />
-                Editar perfil
-              </Link>
-            ) : (
-              <FollowButton
-                userId={profile.id}
-                initialFollowing={isFollowing}
-                size="md"
-                className="shrink-0 self-start"
-              />
-            )}
-          </div>
-        </div>
+        {/* Ancorado à direita, na mesma altura do nome (metade da foto abaixo
+            da capa) — fora do retângulo da capa, como na referência, em vez
+            de flutuar por cima da imagem. */}
+        {isOwner ? (
+          <Link
+            href="/perfil"
+            className="absolute right-0 top-full mt-3 inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          >
+            <Settings className="size-3.5" />
+            Editar perfil
+          </Link>
+        ) : (
+          <FollowButton
+            userId={profile.id}
+            initialFollowing={isFollowing}
+            size="md"
+            className="absolute right-0 top-full mt-3 shrink-0"
+          />
+        )}
       </div>
 
-      {profile.bio && (
-        <div className="mt-3 rounded-2xl border border-border bg-card/60 px-4 py-3.5 sm:px-5">
-          <p className="text-sm leading-relaxed text-muted-foreground">{profile.bio}</p>
-        </div>
-      )}
+      {/* Espaço reservado abaixo da capa = metade da foto que invade por cima
+          dela, para o texto centralizado não colidir com a moldura. */}
+      <div className="flex flex-col items-center px-4 pb-5 pt-16 text-center sm:pt-[4.5rem]">
+        <InfoBasica
+          name={profile.display_name}
+          tier={profile.account_tier}
+          memberSince={profile.member_since}
+          displaySlug={profile.display_slug}
+          auraRank={profile.aura_rank}
+          bio={profile.bio}
+        />
+        <SocialLinks
+          youtubeHandle={profile.youtube_handle}
+          tiktokHandle={profile.tiktok_handle}
+          className="mt-2 justify-center"
+        />
+      </div>
 
       <EstatisticasGrid
         className="mt-3"

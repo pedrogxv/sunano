@@ -2,7 +2,7 @@ import Image from "next/image"
 import { Award, Lock } from "lucide-react"
 
 import { countHiddenByTier, getMedalLimit, type AccountTier } from "@/lib/account-tier"
-import { MEDAL_RARITY_STYLES, type ShowcaseMedal } from "@/lib/profile-showcase"
+import { MEDAL_RARITY_SOLID, MEDAL_RARITY_STYLES, type ShowcaseMedal } from "@/lib/profile-showcase"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
@@ -35,13 +35,14 @@ export function MedalhasGrid({ medals, total, tier, isOwner = false }: MedalhasG
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-4">
         {medals.map((medal) => (
           <Tooltip key={medal.id}>
             <TooltipTrigger asChild>
               <div
+                style={{ "--glow-color": MEDAL_RARITY_SOLID[medal.rarity] } as React.CSSProperties}
                 className={cn(
-                  "flex size-16 shrink-0 items-center justify-center rounded-xl border transition-transform hover:-translate-y-0.5",
+                  "event-card-glow relative flex size-16 shrink-0 items-center justify-center rounded-xl border transition-transform hover:-translate-y-0.5",
                   MEDAL_RARITY_STYLES[medal.rarity]
                 )}
               >

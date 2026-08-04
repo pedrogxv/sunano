@@ -215,11 +215,35 @@ export type Database = {
           video_url: string | null
           content: string
           is_published: boolean
+          aura_count: number
           created_at: string
           updated_at: string
         }
         Insert: Omit<Database["public"]["Tables"]["blog_posts"]["Row"], "id" | "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["blog_posts"]["Insert"]>
+      }
+      blog_comments: {
+        Relationships: []
+        Row: {
+          id: string
+          post_id: string
+          body: string
+          /** Coluna gerada (`left(body, 200)`) — nunca enviada no Insert/Update. */
+          body_preview: string
+          author_name: string
+          user_id: string | null
+          /** Aponta sempre para um comentário raiz (nunca outra resposta) — thread de 1 nível. */
+          parent_comment_id: string | null
+          is_hidden: boolean
+          aura_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<
+          Database["public"]["Tables"]["blog_comments"]["Row"],
+          "id" | "body_preview" | "created_at" | "updated_at"
+        >
+        Update: Partial<Database["public"]["Tables"]["blog_comments"]["Insert"]>
       }
       admin_profiles: {
         Relationships: []
@@ -311,6 +335,8 @@ export type Database = {
           giver_id: string
           post_id: string | null
           comment_id: string | null
+          blog_post_id: string | null
+          blog_comment_id: string | null
           created_at: string
         }
         Insert: Omit<Database["public"]["Tables"]["forum_aura"]["Row"], "id" | "created_at">
@@ -338,8 +364,14 @@ export type Database = {
             | "comment_aura_received"
             | "comment_aura_removed"
             | "event_medal_redeemed"
+            | "blog_post_aura_received"
+            | "blog_post_aura_removed"
+            | "blog_comment_aura_received"
+            | "blog_comment_aura_removed"
           source_post_id: string | null
           source_comment_id: string | null
+          source_blog_post_id: string | null
+          source_blog_comment_id: string | null
           giver_id: string | null
           created_at: string
         }
@@ -582,7 +614,11 @@ export type Database = {
         Returns: boolean
       }
       toggle_forum_aura: {
-        Args: { p_giver_id: string; p_target_type: "post" | "comment"; p_target_id: string }
+        Args: {
+          p_giver_id: string
+          p_target_type: "post" | "comment" | "blog_post" | "blog_comment"
+          p_target_id: string
+        }
         Returns: { given: boolean; aura_count: number }[]
       }
     }

@@ -72,19 +72,24 @@ export function EstatisticasGrid({
     <div className={cn("grid grid-cols-3 gap-2 sm:gap-3", className)}>
       {itens.map((item) => {
         const Icone = item.icone
+        const isAura = item.rotulo === "Aura"
         return (
           <div
             key={item.rotulo}
-            className="flex items-center gap-2.5 rounded-xl border border-border bg-card/60 px-3 py-2.5 sm:gap-3 sm:px-4"
+            className={cn(
+              "relative flex items-center gap-2.5 rounded-xl border border-border bg-card/60 px-3 py-2.5 sm:gap-3 sm:px-4",
+              isAura && "aura-stat-card"
+            )}
           >
             <span
               className={cn(
                 "flex size-8 shrink-0 items-center justify-center rounded-full sm:size-9",
-                item.fundo
+                item.fundo,
+                isAura && "aura-stat-icon-holder"
               )}
             >
               <Icone
-                className={cn("size-4", item.tom)}
+                className={cn("size-4", item.tom, isAura && "aura-stat-icon")}
                 {...(item.preenchido ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
               />
             </span>

@@ -1,4 +1,4 @@
-import { Flame, MessageSquare, Users } from "lucide-react"
+import { FileText, Flame, MessageSquare, Users } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -20,7 +20,7 @@ function formatCount(value: number): string {
 }
 
 /**
- * Mini-cards de estatística do header: aura, contribuições no fórum e
+ * Mini-cards de estatística do header: aura, posts, comentários e
  * seguidores — cada um com o ícone dentro de um círculo colorido, minimalista.
  *
  * Favoritos ficam de fora daqui: já têm seção própria (`FavoritosGrid`) mais
@@ -39,8 +39,6 @@ export function EstatisticasGrid({
   seguidores: number
   className?: string
 }) {
-  const contribuicoes = posts + comentarios
-
   const itens: Estatistica[] = [
     // Laranja de fogo: no tema escuro `primary` é branco, e uma chama branca
     // não diz "aura" nenhuma (mesma escolha do card de /pessoas).
@@ -53,9 +51,16 @@ export function EstatisticasGrid({
       preenchido: true,
     },
     {
+      icone: FileText,
+      rotulo: posts === 1 ? "Post" : "Posts",
+      valor: posts,
+      tom: "text-emerald-400",
+      fundo: "bg-emerald-400/10",
+    },
+    {
       icone: MessageSquare,
-      rotulo: contribuicoes === 1 ? "Contribuição" : "Contribuições",
-      valor: contribuicoes,
+      rotulo: comentarios === 1 ? "Comentário" : "Comentários",
+      valor: comentarios,
       tom: "text-violet-400",
       fundo: "bg-violet-400/10",
     },
@@ -69,7 +74,7 @@ export function EstatisticasGrid({
   ]
 
   return (
-    <div className={cn("grid grid-cols-3 gap-2 sm:gap-3", className)}>
+    <div className={cn("grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3", className)}>
       {itens.map((item) => {
         const Icone = item.icone
         const isAura = item.rotulo === "Aura"

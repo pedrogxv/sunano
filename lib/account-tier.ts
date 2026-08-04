@@ -98,10 +98,9 @@ export type AwardedMedalLike = {
 /**
  * Decide quais medalhas aparecem no perfil.
  *
- * Regra: as fixadas pelo usuário vêm primeiro (na ordem que ele escolheu);
- * se sobrar espaço no limite do tier, completa com as mais recentes. Assim
- * um perfil nunca fica vazio por falta de escolha, e rebaixar de tier apenas
- * esconde medalhas — nunca as perde.
+ * Regra: só as fixadas pelo usuário, na ordem que ele escolheu, até o limite
+ * do tier — quem não selecionou nada não mostra nenhuma. Rebaixar de tier
+ * apenas esconde as excedentes — nunca as perde.
  */
 export function selectVisibleMedals<T extends AwardedMedalLike>(
   medals: T[],
@@ -121,10 +120,7 @@ export function selectVisibleMedals<T extends AwardedMedalLike>(
       return orderA === orderB ? byRecency(a, b) : orderA - orderB
     })
 
-  if (pinned.length >= limit) return pinned.slice(0, limit)
-
-  const rest = medals.filter((m) => !m.pinned).sort(byRecency)
-  return [...pinned, ...rest.slice(0, limit - pinned.length)]
+  return pinned.slice(0, limit)
 }
 
 /** Um favorito, no formato mínimo exigido pela seleção. */

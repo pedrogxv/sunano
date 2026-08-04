@@ -179,6 +179,17 @@ async function getAuraByUser(userIds: string[]): Promise<Record<string, number>>
 }
 
 /**
+ * Filtro compartilhado por TODAS as abas do diretório de pessoas (Aura,
+ * Visitados, Seguidores, Seguindo): esconde o dono do site (`SITE_OWNER_SLUG`)
+ * das listagens públicas sem apagar seus dados — os demais usuários sobem uma
+ * posição. Antes cada função repetia (ou esquecia de repetir) o `.neq` na sua
+ * própria query; centralizado aqui, uma aba nova herda o filtro por padrão.
+ */
+function excludeSiteOwner<Q extends { neq(column: string, value: string): Q }>(query: Q): Q {
+  return query.neq("display_slug", SITE_OWNER_SLUG)
+}
+
+/**
  * Anexa seguidores e saldo de Aura a um lote de linhas do diretório. Os dois
  * contadores vêm em paralelo e num lote só cada — o card mostra ambos, e pedir
  * perfil a perfil faria a grade disparar uma consulta por card.
@@ -227,12 +238,12 @@ export async function searchUserProfiles(
   return withCounters((data ?? []) as DirectoryRow[])
 }
 
-/** Perfis com mais visitas. */
+/** Perfis com mais visitas. O dono do site fica de fora (ver `excludeSiteOwner`). */
 export async function getMostVisitedProfiles(limit = 12): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("user_profiles")
-    .select(DIRECTORY_COLUMNS)
+  const { data, error } = await excludeSiteOwner(
+    db.from("user_profiles").select(DIRECTORY_COLUMNS)
+  )
     .order("profile_views", { ascending: false })
     .order("created_at", { ascending: false })
     .limit(limit)
@@ -284,11 +295,9 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
   const rankedIds = [...balances.keys()]
 
   const { data: rankedRows, error: rankedError } = rankedIds.length
-    ? await db
-        .from("user_profiles")
-        .select(DIRECTORY_COLUMNS)
-        .in("id", rankedIds)
-        .neq("display_slug", SITE_OWNER_SLUG)
+    ? await excludeSiteOwner(
+        db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
+      )
     : { data: [], error: null }
 
   if (rankedError) {
@@ -304,10 +313,7 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
   const remaining = limit - ranked.length
   let fillers: DirectoryRow[] = []
   if (remaining > 0) {
-    let query = db
-      .from("user_profiles")
-      .select(DIRECTORY_COLUMNS)
-      .neq("display_slug", SITE_OWNER_SLUG)
+    let query = excludeSiteOwner(db.from("user_profiles").select(DIRECTORY_COLUMNS))
       .order("profile_views", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(remaining)
@@ -364,10 +370,9 @@ export async function getFollowingProfiles(
   const ids = (follows ?? []).map((r) => (r as { following_id: string }).following_id)
   if (ids.length === 0) return []
 
-  const { data, error: profilesError } = await db
-    .from("user_profiles")
-    .select(DIRECTORY_COLUMNS)
-    .in("id", ids)
+  const { data, error: profilesError } = await excludeSiteOwner(
+    db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", ids)
+  )
 
   if (profilesError) {
     console.error("[users-repository] getFollowingProfiles:", profilesError)
@@ -389,6 +394,10 @@ export async function getFollowingProfiles(
  * coluna: agregar `user_follows` e ordenar exigiria uma view/função. Enquanto
  * a base de membros for pequena isso não compensa — o dia em que compensar,
  * a troca fica contida nesta função.
+ *
+ * O dono do site fica de fora (ver `excludeSiteOwner`). A contagem de
+ * seguidores é feita por id, então buscamos um a mais que `limit` para cobrir
+ * o caso dele estar entre os top N — mesmo padrão de `getTopAuraProfiles`.
  */
 export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
@@ -406,15 +415,14 @@ export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfile
 
   const topIds = Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
+    .slice(0, limit + 1)
     .map(([id]) => id)
 
   if (topIds.length === 0) return []
 
-  const { data, error: profilesError } = await db
-    .from("user_profiles")
-    .select(DIRECTORY_COLUMNS)
-    .in("id", topIds)
+  const { data, error: profilesError } = await excludeSiteOwner(
+    db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", topIds)
+  )
 
   if (profilesError) {
     console.error("[users-repository] getMostFollowedProfiles:", profilesError)
@@ -429,6 +437,7 @@ export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfile
   return rows
     .map((row) => toProfileSummary(row, counts[row.id] ?? 0, aura[row.id] ?? 0))
     .sort((a, b) => b.followers - a.followers)
+    .slice(0, limit)
 }
 
 /**

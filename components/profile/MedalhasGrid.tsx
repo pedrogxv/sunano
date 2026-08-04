@@ -1,13 +1,13 @@
 import Image from "next/image"
-import { Award, Lock } from "lucide-react"
+import { Award } from "lucide-react"
 
-import { countHiddenByTier, getMedalLimit, type AccountTier } from "@/lib/account-tier"
+import { getMedalLimit, type AccountTier } from "@/lib/account-tier"
 import { MEDAL_RARITY_SOLID, MEDAL_RARITY_STYLES, type ShowcaseMedal } from "@/lib/profile-showcase"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 
 interface MedalhasGridProps {
-  /** Já filtradas pelo limite do tier (ver `selectVisibleMedals`). */
+  /** Já filtradas: só as conquistadas e selecionadas pelo usuário (ver `selectVisibleMedals`). */
   medals: ShowcaseMedal[]
   total: number
   tier: AccountTier
@@ -15,14 +15,29 @@ interface MedalhasGridProps {
 }
 
 /**
- * Grid de medalhas. A quantidade exibida é decidida no domínio
- * (`selectVisibleMedals`); aqui só renderizamos e mostramos os slots
- * vazios restantes do tier, além do excedente como "+N".
+ * Grid de medalhas. Mostra só o que o usuário selecionou para o perfil — sem
+ * slots vazios nem indicador de medalhas ocultas, então a seção some quando
+ * não há nada selecionado.
  */
 export function MedalhasGrid({ medals, total, tier, isOwner = false }: MedalhasGridProps) {
   const limit = getMedalLimit(tier)
-  const hidden = countHiddenByTier(total, limit)
-  const emptySlots = Math.max(0, limit - medals.length)
+
+  // Visitante não vê nada a destacar; só o dono ganha uma dica para ir
+  // selecionar, já que ele tem medalhas conquistadas mas nenhuma escolhida.
+  if (medals.length === 0) {
+    if (!isOwner || total === 0) return null
+    return (
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          Medalhas
+        </h2>
+        <p className="text-sm text-muted-foreground/60">
+          Você tem {total} medalha{total === 1 ? "" : "s"} conquistada{total === 1 ? "" : "s"}, mas
+          nenhuma selecionada para o perfil. Escolha quais destacar nas configurações.
+        </p>
+      </section>
+    )
+  }
 
   return (
     <section className="space-y-3">
@@ -67,38 +82,7 @@ export function MedalhasGrid({ medals, total, tier, isOwner = false }: MedalhasG
             </TooltipContent>
           </Tooltip>
         ))}
-
-        {Array.from({ length: emptySlots }, (_, i) => (
-          <div
-            key={`empty-${i}`}
-            className="flex size-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-border/60"
-          >
-            <Award className="size-6 text-muted-foreground/20" />
-          </div>
-        ))}
-
-        {hidden > 0 && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="flex size-16 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl border border-border bg-muted/20 text-muted-foreground">
-                <Lock className="size-4" />
-                <span className="text-xs font-semibold">+{hidden}</span>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              {isOwner
-                ? `Você tem ${hidden} medalha${hidden === 1 ? "" : "s"} além do limite do seu plano. Escolha quais destacar nas configurações.`
-                : `${hidden} medalha${hidden === 1 ? "" : "s"} não exibida${hidden === 1 ? "" : "s"}.`}
-            </TooltipContent>
-          </Tooltip>
-        )}
       </div>
-
-      {medals.length === 0 && total === 0 && (
-        <p className="text-sm text-muted-foreground/60">
-          {isOwner ? "Você ainda não conquistou medalhas." : "Nenhuma medalha conquistada ainda."}
-        </p>
-      )}
     </section>
   )
 }

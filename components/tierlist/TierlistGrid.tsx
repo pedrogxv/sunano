@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState } from "react"
 
 import { PeripheralCard } from "./PeripheralCard"
 import { useT } from "@/lib/use-t"
@@ -128,6 +128,12 @@ interface ModeConfig {
 // Categorias que ainda oferecem a aba "recommended" (com rótulo próprio) — nas demais
 // categorias essa opção foi removida do formulário e não deve aparecer como aba pública.
 const RECOMMENDED_TAB_CATEGORIES = ["mousepad", "glasspad", "iem", "headset"]
+
+function getDefaultRatingMode(category: string): RatingMode {
+  if (category === "keyboard") return "magnetic"
+  if (category === "monitors") return "oled"
+  return "overall"
+}
 
 // Labels específicos por categoria para MOUSEPAD, GLASSPAD, IEM e HEADSET
 function getRatingModeLabel(mode: RatingMode, category: string): string {
@@ -261,7 +267,7 @@ const MASCOT_IMAGES: Record<string, string> = {}
 
 export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   const t = useT()
-  const [ratingMode, setRatingMode] = useState<RatingMode>("overall")
+  const [ratingMode, setRatingMode] = useState<RatingMode>(() => getDefaultRatingMode(category))
   const modeConfig = MODE_CONFIGS[ratingMode]
   const orderKey = ORDER_KEY_BY_MODE[ratingMode]
   const allowLegacyFallback = ratingMode === "overall"
@@ -383,17 +389,11 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
   const hasItems = visibleItems.length > 0
 
-  useEffect(() => {
-    if (ratingMode === "oled" && category !== "monitors") setRatingMode("overall")
-    if ((ratingMode === "ips_va" || ratingMode === "competitive") && category !== "monitors") setRatingMode("overall")
-    if (ratingMode === "soundTyping" && category !== "switches") setRatingMode("overall")
-    if (ratingMode === "pcb") setRatingMode("overall")
-    if (ratingMode === "mechanical" && category !== "keyboard") setRatingMode("overall")
-    if (ratingMode === "magnetic" && category !== "keyboard" && category !== "mouse") setRatingMode("overall")
-    if (ratingMode === "recommended" && !RECOMMENDED_TAB_CATEGORIES.includes(category)) setRatingMode("overall")
-    if ((ratingMode === "overall" || ratingMode === "recommended") && category === "keyboard") setRatingMode("magnetic")
-    if ((ratingMode === "overall" || ratingMode === "recommended") && category === "monitors") setRatingMode("oled")
-  }, [category, ratingMode])
+  const [previousCategory, setPreviousCategory] = useState(category)
+  if (previousCategory !== category) {
+    setPreviousCategory(category)
+    setRatingMode(getDefaultRatingMode(category))
+  }
 
   if (isComingSoon) {
     const mascotImage = MASCOT_IMAGES[category]

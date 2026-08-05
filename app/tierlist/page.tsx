@@ -1,3 +1,5 @@
+import type { Metadata } from "next"
+
 import { listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { getTierlistMeta } from "@/lib/server/repositories/tierlist-meta-repository"
 import { TierlistInfo } from "@/components/tierlist/TierlistInfo"
@@ -8,6 +10,12 @@ import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 // ISR: serve do cache e revalida em background a cada 30s, em vez de
 // re-renderizar (com nova query ao banco) em toda requisição.
 export const revalidate = 30
+
+export const metadata: Metadata = {
+  title: "Tierlist",
+  description: "A tierlist definitiva de periféricos gamers, com filtros avançados por categoria, preço e modo de avaliação.",
+  alternates: { canonical: "/tierlist" },
+}
 
 export default async function TierlistPage() {
   const [peripheralsList, tierlistMeta] = await Promise.all([

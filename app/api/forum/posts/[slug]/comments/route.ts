@@ -3,13 +3,27 @@ import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { checkRateLimit } from "@/lib/server/rate-limit"
-import { addForumComment } from "@/lib/server/repositories/forum-repository"
+import { addForumComment, listForumComments } from "@/lib/server/repositories/forum-repository"
 import { getUserProfile } from "@/lib/server/repositories/users-repository"
 
 const commentSchema = z.object({
   body: z.string().trim().min(4).max(2000),
   parentCommentId: z.string().uuid().nullable().optional(),
 })
+
+/** Lista pública paginada dos comentários de um post do fórum (`?page=1&sort=recent|aura`). */
+export async function GET(request: NextRequest, context: { params: Promise<{ slug: string }> }) {
+  const { slug } = await context.params
+  const searchParams = request.nextUrl.searchParams
+  const page = Math.max(1, Number(searchParams.get("page")) || 1)
+  const sort = searchParams.get("sort") === "aura" ? "aura" : "recent"
+  try {
+    const result = await listForumComments(slug, { page, sort })
+    return NextResponse.json({ ok: true, ...result })
+  } catch {
+    return NextResponse.json({ error: "Erro ao carregar comentários." }, { status: 500 })
+  }
+}
 
 export async function POST(
   request: NextRequest,

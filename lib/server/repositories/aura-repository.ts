@@ -1,7 +1,10 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import type { Database } from "@/lib/database.types"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
+
+type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reason"]
 
 /**
  * Repositório do sistema de Aura — reagir (like/dislike) em comentários
@@ -21,9 +24,11 @@ import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 export type ToggleAuraTarget = "comment" | "blog_comment"
 export type ReactionKind = "like" | "dislike"
 
+export type ToggleAuraErrorCode = "self_reaction" | "not_found" | "daily_limit" | "rate_limited" | "unauthenticated" | "unknown"
+
 export type ToggleAuraResult =
   | { ok: true; reaction: ReactionKind | null; auraCount: number }
-  | { ok: false; error: string; status: number }
+  | { ok: false; error: string; code: ToggleAuraErrorCode; status: number }
 
 /** Dá, troca ou remove (toggle) a reação do usuário atual num comentário. */
 export async function toggleAura(params: {
@@ -43,21 +48,21 @@ export async function toggleAura(params: {
 
   if (error) {
     if (error.message?.includes("self_aura_not_allowed")) {
-      return { ok: false, error: "Você não pode reagir no seu próprio comentário.", status: 400 }
+      return { ok: false, error: "Você não pode reagir no seu próprio comentário.", code: "self_reaction", status: 400 }
     }
     if (error.message?.includes("target not found")) {
-      return { ok: false, error: "Comentário não encontrado.", status: 404 }
+      return { ok: false, error: "Comentário não encontrado.", code: "not_found", status: 404 }
     }
     if (error.message?.includes("daily_aura_limit_reached")) {
-      return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", status: 429 }
+      return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
     }
     console.error("[aura-repository] toggleAura:", error)
-    return { ok: false, error: "Erro ao reagir.", status: 400 }
+    return { ok: false, error: "Erro ao reagir.", code: "unknown", status: 400 }
   }
 
   const result = data?.[0]
   if (!result) {
-    return { ok: false, error: "Erro ao reagir.", status: 400 }
+    return { ok: false, error: "Erro ao reagir.", code: "unknown", status: 400 }
   }
   return { ok: true, reaction: result.reaction as ReactionKind | null, auraCount: result.aura_count }
 }
@@ -108,6 +113,67 @@ export async function getUserAuraBalance(userId: string): Promise<number> {
     .eq("user_id", userId)
     .maybeSingle()
   return data?.balance ?? 0
+}
+
+/** Mesmas `reason`s que `toggle_forum_aura` conta pro limite diário de "dados" (ver 20260804120000_aura_rebalance.sql). */
+const DAILY_LIMIT_REASONS: AuraLedgerReason[] = [
+  "post_aura_received", "comment_aura_received", "blog_post_aura_received", "blog_comment_aura_received",
+  "post_aura_disliked", "comment_aura_disliked", "blog_post_aura_disliked", "blog_comment_aura_disliked",
+]
+
+export const DAILY_AURA_GIVE_LIMIT = 50
+
+export type AuraUsage = {
+  balance: number
+  /** Quantas reações (like/dislike, dar ou trocar) o usuário já deu nas últimas 24h. */
+  givenToday: number
+  limit: number
+  /** `true` quando `givenToday >= limit` — não pode mais dar reação até o rolling window liberar. */
+  limitReached: boolean
+  /**
+   * Quando a reação mais antiga da janela sai do rolling 24h e libera 1 vaga —
+   * não é um "reset" fixo (não existe um contador que zera à meia-noite; ver
+   * `toggle_forum_aura`), é só a estimativa de quando `givenToday` cai. `null`
+   * quando o usuário não está perto do limite (não vale a pena calcular).
+   */
+  nextSlotAt: string | null
+}
+
+/**
+ * Saldo + quanto do limite diário de "dar reação" (50/24h, rolling window —
+ * não é um contador que zera à meia-noite) o usuário já consumiu, pra
+ * exibir na TopBar. Espelha a mesma contagem de `toggle_forum_aura` no
+ * banco; se a lógica de lá mudar, atualizar aqui também.
+ */
+export async function getUserAuraUsage(userId: string): Promise<AuraUsage> {
+  const db = createSupabaseAdminClient()
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  const [{ data: wallet }, { data: ledgerRows, count }] = await Promise.all([
+    db.from("user_aura_wallet").select("balance").eq("user_id", userId).maybeSingle(),
+    db
+      .from("aura_ledger")
+      .select("created_at", { count: "exact" })
+      .eq("giver_id", userId)
+      .gte("created_at", since)
+      .in("reason", DAILY_LIMIT_REASONS)
+      .order("created_at", { ascending: true })
+      .limit(1),
+  ])
+
+  const givenToday = count ?? 0
+  const limitReached = givenToday >= DAILY_AURA_GIVE_LIMIT
+  const oldest = ledgerRows?.[0]?.created_at ?? null
+  const nextSlotAt =
+    limitReached && oldest ? new Date(new Date(oldest).getTime() + 24 * 60 * 60 * 1000).toISOString() : null
+
+  return {
+    balance: wallet?.balance ?? 0,
+    givenToday,
+    limit: DAILY_AURA_GIVE_LIMIT,
+    limitReached,
+    nextSlotAt,
+  }
 }
 
 const AURA_RANK_TOP_CUTOFF = 100

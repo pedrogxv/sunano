@@ -19,10 +19,12 @@ export default async function NoticiasSlugPage({
   const post = await getPublishedPostBySlug(slug)
 
   if (!post) {
-    return <NoticiasPostContent post={null} related={[]} initialComments={[]} />
+    return (
+      <NoticiasPostContent post={null} related={[]} initialComments={[]} initialHasMore={false} />
+    )
   }
 
-  const [related, initialComments] = await Promise.all([
+  const [related, commentsPage] = await Promise.all([
     listRelatedPosts({
       slug,
       peripheralId: post.peripheral_id,
@@ -36,7 +38,8 @@ export default async function NoticiasSlugPage({
     <NoticiasPostContent
       post={post as unknown as NewsPost}
       related={related}
-      initialComments={initialComments}
+      initialComments={commentsPage.comments}
+      initialHasMore={commentsPage.hasMore}
     />
   )
 }

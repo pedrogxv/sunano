@@ -1,12 +1,14 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Crown, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
+import { Crown, EyeOff, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
 
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
+import { PostVisibilityButton } from "@/components/forum/PostVisibilityButton"
+import { ImageLightbox } from "@/components/forum/ImageLightbox"
+import { ReportMenu } from "@/components/forum/ReportMenu"
 import { ShareMenu } from "@/components/forum/ShareMenu"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { UserAvatar } from "@/components/ui/user-avatar"
@@ -18,16 +20,19 @@ export type PostCardData = {
   id: string
   slug: string
   body: string
+  user_id: string | null
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
   author_display_slug: string | null
   category: ForumCategoryInfo | null
-  media_image_url: string | null
+  media_image_urls: string[]
   media_video_url: string | null
   created_at: string
   is_locked: boolean
   is_pinned: boolean
+  /** `true` só é relevante na aba "Meus Posts" — nas demais listagens públicas o post oculto nem chega aqui. */
+  is_hidden?: boolean
   comment_count: number
 }
 
@@ -82,27 +87,30 @@ export function PostCard({
   post,
   clickable = true,
   compact = true,
+  currentUserId = null,
+  onOwnPostVisibilityChange,
 }: {
   post: PostCardData
   clickable?: boolean
   compact?: boolean
+  /** Id do usuário logado — quando bate com `post.user_id`, mostra o botão de ocultar/mostrar. */
+  currentUserId?: string | null
+  /** Quando definido, o botão de ocultar não navega — deixa o chamador atualizar a lista. */
+  onOwnPostVisibilityChange?: (slug: string, hidden: boolean) => void
 }) {
+  const isOwner = Boolean(currentUserId) && post.user_id === currentUserId
   const youtubeId = post.media_video_url ? extractYoutubeId(post.media_video_url) : null
 
   return (
     <div
       className={`group relative rounded-xl border bg-card transition-all ${
         clickable ? "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20" : ""
-      } ${
+      } ${post.is_hidden ? "opacity-60" : ""} ${
         post.is_pinned
-          ? "border-primary/30 bg-primary/[0.03] hover:border-primary/50"
+          ? "border-primary/40 bg-primary/[0.03] ring-1 ring-primary/15 hover:border-primary/60"
           : "border-border hover:border-border/70"
       }`}
     >
-      {post.is_pinned && (
-        <div className="absolute -top-px left-0 right-0 h-px rounded-t-xl bg-gradient-to-r from-primary/60 via-primary/30 to-transparent" />
-      )}
-
       {clickable && (
         <Link href={`/forum/${post.slug}`} aria-label="Ver post" className="absolute inset-0 z-0 rounded-xl" />
       )}
@@ -130,8 +138,14 @@ export function PostCard({
                 Fixado
               </span>
             )}
+            {post.is_hidden && (
+              <span className="inline-flex items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                <EyeOff className="size-2.5" />
+                Oculto
+              </span>
+            )}
             {post.is_locked && <Lock className="size-3 text-amber-500" />}
-            <CategoryBadge category={post.category} />
+            <CategoryBadge category={post.category} linked={!clickable} />
           </div>
 
           <p
@@ -142,17 +156,11 @@ export function PostCard({
             {post.body}
           </p>
 
-          {post.media_image_url && (
-            <div className="relative z-10 mt-3 overflow-hidden rounded-lg border border-border/50">
-              <Image
-                src={post.media_image_url}
-                alt=""
-                width={640}
-                height={400}
-                unoptimized
-                className="max-h-[420px] w-full object-cover"
-              />
-            </div>
+          {post.media_image_urls.length > 0 && (
+            <ImageLightbox
+              srcs={post.media_image_urls}
+              alt={`Imagem do post de ${post.author_display_name}${post.category ? ` sobre ${post.category.name}` : ""}`}
+            />
           )}
 
           {youtubeId && (
@@ -177,6 +185,15 @@ export function PostCard({
               {post.comment_count}
             </Link>
             <ShareMenu slug={post.slug} body={post.body} />
+            {isOwner ? (
+              <PostVisibilityButton
+                postSlug={post.slug}
+                isHidden={Boolean(post.is_hidden)}
+                onChanged={onOwnPostVisibilityChange}
+              />
+            ) : (
+              <ReportMenu postSlug={post.slug} targetType="post" />
+            )}
           </div>
         </div>
       </div>

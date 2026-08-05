@@ -202,6 +202,22 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
   return map
 }
 
+/** Slugs + data de todos os posts publicados — usado só pelo `app/sitemap.ts`, sem joins. */
+export async function listAllBlogSlugsForSitemap(): Promise<{ slug: string; updated_at: string }[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("blog_posts")
+    .select("slug, created_at")
+    .eq("is_published", true)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("[blog-repository] listAllBlogSlugsForSitemap:", error)
+    return []
+  }
+  return (data ?? []).map((p) => ({ slug: p.slug, updated_at: p.created_at }))
+}
+
 /** Lista posts publicados, opcionalmente filtrando por periférico. */
 export async function listPublishedPosts(peripheralId?: string | null): Promise<BlogListPost[]> {
   const db = createSupabaseAdminClient()
@@ -377,41 +393,21 @@ export async function listRelatedPosts(params: {
 
 // ── Comentários das notícias (com conta) ──────────────────────────────────────
 
-/**
- * Lista os comentários visíveis de uma notícia, já enriquecidos com o perfil
- * público (`user_profiles`) do autor — mesma lógica de `getForumPostBySlug`
- * em `forum-repository.ts` (thread de 1 nível via `parent_comment_id`, Aura,
- * badges de autor), só que apontando para `blog_comments`.
- */
-export async function listBlogComments(slug: string): Promise<BlogCommentDetail[]> {
-  const db = createSupabaseAdminClient()
+export type CommentSort = "recent" | "aura"
+export const COMMENTS_PAGE_SIZE = 20
 
-  const { data: post } = await db
-    .from("blog_posts")
-    .select("id")
-    .eq("slug", slug)
-    .eq("is_published", true)
-    .maybeSingle()
-  if (!post) return []
+export type PaginatedComments = {
+  comments: BlogCommentDetail[]
+  totalRootCount: number
+  hasMore: boolean
+}
 
-  const postId = (post as { id: string }).id
-  const { data: rows, error } = await db
-    .from("blog_comments")
-    .select("id, body, author_name, user_id, parent_comment_id, created_at, is_edited, aura_count")
-    .eq("post_id", postId)
-    .eq("is_hidden", false)
-    .order("created_at", { ascending: true })
-
-  if (error) {
-    console.error("[blog-repository] listBlogComments:", error.message)
-    return []
-  }
-
+function mapCommentRows(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const comments = (rows ?? []) as any[]
-  const profileMap = await buildProfileMap(comments.map((c) => c.user_id))
-
-  return comments.map((c) => ({
+  rows: any[],
+  profileMap: Awaited<ReturnType<typeof buildProfileMap>>
+): BlogCommentDetail[] {
+  return rows.map((c) => ({
     id: c.id,
     body: c.body,
     author_name: c.author_name,
@@ -425,6 +421,86 @@ export async function listBlogComments(slug: string): Promise<BlogCommentDetail[
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
     author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
   }))
+}
+
+const COMMENT_COLUMNS =
+  "id, body, author_name, user_id, parent_comment_id, created_at, is_edited, aura_count"
+
+/**
+ * Lista paginada dos comentários visíveis de uma notícia, já enriquecidos com
+ * o perfil público (`user_profiles`) do autor. Pagina por thread (comentário-
+ * raiz), não por linha: busca uma página de raízes ordenada por `sort` e, em
+ * seguida, todas as respostas dessas raízes numa segunda query — assim uma
+ * página nunca corta uma thread ao meio, e o banco só processa o necessário
+ * pra essa página (sem trazer o post inteiro a cada carregamento).
+ */
+export async function listBlogComments(
+  slug: string,
+  { page = 1, sort = "recent" }: { page?: number; sort?: CommentSort } = {}
+): Promise<PaginatedComments> {
+  const db = createSupabaseAdminClient()
+
+  const { data: post } = await db
+    .from("blog_posts")
+    .select("id")
+    .eq("slug", slug)
+    .eq("is_published", true)
+    .maybeSingle()
+  if (!post) return { comments: [], totalRootCount: 0, hasMore: false }
+
+  const postId = (post as { id: string }).id
+  const from = (page - 1) * COMMENTS_PAGE_SIZE
+  const to = from + COMMENTS_PAGE_SIZE - 1
+
+  let rootQuery = db
+    .from("blog_comments")
+    .select(COMMENT_COLUMNS, { count: "exact" })
+    .eq("post_id", postId)
+    .eq("is_hidden", false)
+    .is("parent_comment_id", null)
+  rootQuery =
+    sort === "aura"
+      ? rootQuery.order("aura_count", { ascending: false }).order("created_at", { ascending: false })
+      : rootQuery.order("created_at", { ascending: false })
+  const { data: rootRows, error: rootError, count } = await rootQuery.range(from, to)
+
+  if (rootError) {
+    console.error("[blog-repository] listBlogComments (roots):", rootError.message)
+    return { comments: [], totalRootCount: 0, hasMore: false }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roots = (rootRows ?? []) as any[]
+  const totalRootCount = count ?? roots.length
+
+  let replies: unknown[] = []
+  if (roots.length > 0) {
+    const { data: replyRows, error: replyError } = await db
+      .from("blog_comments")
+      .select(COMMENT_COLUMNS)
+      .eq("post_id", postId)
+      .eq("is_hidden", false)
+      .in(
+        "parent_comment_id",
+        roots.map((r) => r.id)
+      )
+      .order("created_at", { ascending: true })
+    if (replyError) {
+      console.error("[blog-repository] listBlogComments (replies):", replyError.message)
+    } else {
+      replies = replyRows ?? []
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allRows = [...roots, ...(replies as any[])]
+  const profileMap = await buildProfileMap(allRows.map((c) => c.user_id))
+
+  return {
+    comments: mapCommentRows(allRows, profileMap),
+    totalRootCount,
+    hasMore: from + roots.length < totalRootCount,
+  }
 }
 
 /**

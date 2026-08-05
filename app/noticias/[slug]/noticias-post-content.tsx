@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowLeft, Clock, MessageCircle, Newspaper } from "lucide-react"
@@ -131,10 +131,12 @@ export function NoticiasPostContent({
   post: initialPost,
   related,
   initialComments,
+  initialHasMore = false,
 }: {
   post: NewsPost | null
   related: RelatedPost[]
   initialComments: CommentItem[]
+  initialHasMore?: boolean
 }) {
   // A notícia em si vem pronta do servidor e não muda no cliente (sem
   // reação no post) — só os comentários têm estado local.
@@ -148,20 +150,6 @@ export function NoticiasPostContent({
         : null,
     [contextUser]
   )
-  const loadComments = useCallback(async () => {
-    if (!post) return
-    try {
-      // `no-store` explícito — este refetch é o que traz o comentário
-      // recém-editado, então não pode sair do cache do browser.
-      const res = await fetch(`/api/blog/${encodeURIComponent(post.slug)}/comments`, {
-        cache: "no-store",
-      })
-      const data = await res.json().catch(() => null)
-      setComments((data?.comments ?? []) as CommentItem[])
-    } catch {
-      // mantém os comentários já carregados
-    }
-  }, [post])
 
   if (!post) {
     return (
@@ -178,7 +166,7 @@ export function NoticiasPostContent({
   const authorName = getAuthorName(post)
   const brandName = post.peripherals?.[0]?.brand ?? null
   const tags = buildTags(post)
-  const commentCount = comments.length || post.comment_count || 0
+  const commentCount = post.comment_count ?? 0
 
   return (
     <article className="mx-auto max-w-3xl px-4 py-8 md:px-6">
@@ -280,7 +268,8 @@ export function NoticiasPostContent({
           auraLookupPath="/api/blog/aura"
           comments={comments}
           onCommentsChange={setComments}
-          reloadComments={loadComments}
+          initialHasMore={initialHasMore}
+          totalCount={commentCount}
           authUser={authUser}
           authLoading={authLoading}
         />

@@ -610,6 +610,93 @@ button:not(:disabled):hover .aura-icon-holder {
   }
 }
 
+/* Badge de reações de Aura disponíveis na TopBar (components/layout/AuraBalanceBadge.tsx).
+
+   O ícone é um "medidor" do quanto resta da cota diária, não só decoração:
+   1. `.aura-gauge` — anel de progresso ao redor da chama, feito com o mesmo
+      truque "picture frame" de `.aura-stat-card` (conic-gradient girando
+      atrás + um disco da cor do badge por cima cobrindo o miolo), só que o
+      ângulo do gradiente é controlado por `--aura-gauge-pct` (0 a 100,
+      setado inline pelo componente a partir de `remaining / limit`) em vez
+      de girar sozinho. Cheio (100%) fecha o anel inteiro; esvazia junto com
+      a cota.
+   2. A chama em si (`.aura-gauge-icon`) desbota (opacity) junto com o
+      anel — em vez de só o contorno indicar "quase acabando", o próprio
+      fogo "apaga" visualmente conforme o usuário gasta reações.
+   3. Em 0% (`data-frozen="true"`), o anel para de aparecer e o ícone vira
+      floco de neve com o tremor de frio + glow gelado pulsando na borda —
+      igual já era antes, só que agora é o estado final de um gauge que
+      esvaziou, não um on/off solto. */
+@keyframes aura-frozen-glow {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.75 0.14 235 / 35%); }
+  50%      { box-shadow: 0 0 0 3px oklch(0.75 0.14 235 / 0%); }
+}
+
+@keyframes aura-frozen-shiver {
+  0%, 100% { transform: rotate(0deg); }
+  20%      { transform: rotate(-8deg); }
+  40%      { transform: rotate(6deg); }
+  60%      { transform: rotate(-4deg); }
+  80%      { transform: rotate(3deg); }
+}
+
+.aura-balance-badge[data-frozen="true"] {
+  animation: aura-frozen-glow 2.4s ease-in-out infinite;
+}
+
+.aura-balance-badge[data-frozen="true"] .aura-balance-icon {
+  animation: aura-frozen-shiver 2.4s ease-in-out infinite;
+}
+
+.aura-gauge {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  transition: opacity 0.4s ease;
+}
+
+.aura-gauge::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border-radius: 9999px;
+  background: conic-gradient(
+    oklch(0.75 0.19 45) calc(var(--aura-gauge-pct, 100) * 1%),
+    oklch(0.55 0.02 45 / 0.25) 0
+  );
+  transition: background 0.5s ease;
+}
+
+.aura-gauge::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 9999px;
+  background: var(--card);
+}
+
+.aura-gauge-icon {
+  transition: opacity 0.4s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-balance-badge[data-frozen="true"] {
+    animation: none;
+  }
+  .aura-balance-badge[data-frozen="true"] .aura-balance-icon {
+    animation: none;
+  }
+  .aura-gauge::before,
+  .aura-gauge-icon {
+    transition: none;
+  }
+}
+
 /* ════════════════════════════════════════════
    Pódio do diretório de pessoas (components/people/PodiumSection.tsx) —
    ouro, prata e bronze de verdade.

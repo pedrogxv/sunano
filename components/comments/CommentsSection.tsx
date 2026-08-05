@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Lock, MessageCircle } from "lucide-react"
+import { Clock, Flame, Lock, MessageCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -9,8 +9,13 @@ import { UserAvatar } from "@/components/ui/user-avatar"
 import { CommentFormatHint } from "./CommentBody"
 import { CommentRow } from "./CommentRow"
 import { ReplyForm } from "./ReplyForm"
-import { useCommentsController } from "./useCommentsController"
+import { useCommentsController, type CommentSort } from "./useCommentsController"
 import type { CommentItem, CommentsAuthUser } from "./types"
+
+const SORT_OPTIONS: { value: CommentSort; label: string; icon: typeof Clock }[] = [
+  { value: "recent", label: "Mais Recente", icon: Clock },
+  { value: "aura", label: "Mais Aura", icon: Flame },
+]
 
 // Atraso crescente pra comentários entrarem em sequência (stagger) em vez de
 // todos de uma vez só; a partir do 5º comentário, satura no maior atraso.
@@ -29,10 +34,12 @@ export function CommentsSection({
   auraLookupPath,
   comments,
   onCommentsChange,
-  reloadComments,
+  initialHasMore = false,
+  totalCount,
   authUser,
   authLoading,
   isLocked = false,
+  reportPostSlug,
 }: {
   /** Ex.: `/api/forum/posts/[slug]` ou `/api/blog/[slug]`. */
   apiBasePath: string
@@ -40,15 +47,25 @@ export function CommentsSection({
   auraLookupPath: string
   comments: CommentItem[]
   onCommentsChange: (comments: CommentItem[]) => void
-  /** Refetch (silencioso) da lista completa após postar comentário/resposta. */
-  reloadComments: () => Promise<void> | void
+  /** Se a 1ª página (SSR) já indica que há mais comentários-raiz pra paginar. */
+  initialHasMore?: boolean
+  /** Total real (raiz + respostas) pro cabeçalho — `comments` só tem as páginas já carregadas. */
+  totalCount: number
   authUser: CommentsAuthUser
   authLoading: boolean
   isLocked?: boolean
+  /** Slug do post do fórum — habilita "Denunciar" nos comentários. Ausente no blog. */
+  reportPostSlug?: string
 }) {
   const {
     commentReactions,
+    dailyAuraLimitReached,
     reactToComment,
+    sort,
+    changeSort,
+    hasMore,
+    loadingMore,
+    loadMore,
     formExpanded,
     setFormExpanded,
     body,
@@ -73,7 +90,14 @@ export function CommentsSection({
     submitEdit,
     startEdit,
     cancelEdit,
-  } = useCommentsController({ apiBasePath, auraLookupPath, comments, onCommentsChange, authUser })
+  } = useCommentsController({
+    apiBasePath,
+    auraLookupPath,
+    comments,
+    onCommentsChange,
+    authUser,
+    initialHasMore,
+  })
 
   /**
    * Só o autor vê "Editar". O prazo de 15 minutos é conferido dentro do
@@ -83,6 +107,10 @@ export function CommentsSection({
   const isAuthor = (comment: CommentItem) =>
     !!authUser && !!comment.user_id && comment.user_id === authUser.id
 
+  /** Motivo de bloqueio do botão de Aura, resolvido no cliente antes de tentar a requisição. */
+  const auraBlockReason = (comment: CommentItem) =>
+    isAuthor(comment) ? "own-comment" : dailyAuraLimitReached ? "daily-limit" : null
+
   const editProps = (comment: CommentItem) => ({
     canEdit: isAuthor(comment),
     editing: editingId === comment.id,
@@ -90,7 +118,7 @@ export function CommentsSection({
     onEditChange: setEditBody,
     onStartEdit: () => startEdit(comment),
     onCancelEdit: cancelEdit,
-    onSubmitEdit: () => submitEdit(comment.id, reloadComments),
+    onSubmitEdit: () => submitEdit(comment.id),
     editSaving,
     editError,
   })
@@ -130,7 +158,7 @@ export function CommentsSection({
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => submitComment(reloadComments)}
+                  onClick={() => submitComment()}
                   disabled={saving || body.trim().length < 4}
                 >
                   {saving ? "Enviando…" : "Comentar"}
@@ -161,9 +189,32 @@ export function CommentsSection({
         id="comments"
         className="scroll-mt-20 animate-in fade-in slide-in-from-bottom-2 duration-300 delay-150 motion-reduce:animate-none"
       >
-        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground">
-          <MessageCircle className="size-4 text-primary" />
-          {comments.length} comentário{comments.length !== 1 ? "s" : ""}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+            <MessageCircle className="size-4 text-primary" />
+            {totalCount} comentário{totalCount !== 1 ? "s" : ""}
+          </div>
+
+          {totalCount > 0 && (
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1">
+              {SORT_OPTIONS.map(({ value, label, icon: Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => changeSort(value)}
+                  disabled={loadingMore}
+                  className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-60 ${
+                    sort === value
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Icon className="size-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {comments.length > 0 ? (
@@ -181,9 +232,11 @@ export function CommentsSection({
                       comment={comment}
                       auraReaction={commentReactions.get(comment.id) ?? null}
                       authDisabled={!authUser}
+                      auraBlockReason={auraBlockReason(comment)}
                       onReactAura={(kind) => reactToComment(comment, kind)}
                       onReply={() => startReply(comment.id)}
                       replying={replyingTo === comment.id}
+                      reportPostSlug={isAuthor(comment) ? undefined : reportPostSlug}
                       {...editProps(comment)}
                     />
 
@@ -198,10 +251,12 @@ export function CommentsSection({
                               comment={reply}
                               auraReaction={commentReactions.get(reply.id) ?? null}
                               authDisabled={!authUser}
+                              auraBlockReason={auraBlockReason(reply)}
                               onReactAura={(kind) => reactToComment(reply, kind)}
                               onReply={() => startReply(comment.id)}
                               replying={replyingTo === comment.id}
                               compactAvatar
+                              reportPostSlug={isAuthor(reply) ? undefined : reportPostSlug}
                               {...editProps(reply)}
                             />
                           </div>
@@ -216,7 +271,7 @@ export function CommentsSection({
                           value={replyBody}
                           onChange={setReplyBody}
                           onCancel={() => cancelReply(comment.id)}
-                          onSubmit={() => submitReply(comment.id, reloadComments)}
+                          onSubmit={() => submitReply(comment.id)}
                           saving={replySaving}
                           error={replyError}
                         />
@@ -228,6 +283,14 @@ export function CommentsSection({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Ainda não há comentários.</p>
+        )}
+
+        {hasMore && (
+          <div className="mt-5 flex justify-center">
+            <Button variant="outline" size="sm" className="border-border" onClick={loadMore} disabled={loadingMore}>
+              {loadingMore ? "Carregando…" : "Carregar mais comentários"}
+            </Button>
+          </div>
         )}
       </div>
     </div>

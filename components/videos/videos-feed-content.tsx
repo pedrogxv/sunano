@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { getYouTubeChannelFeed } from "@/lib/server/integrations/youtube"
+import { SOCIAL_LINKS } from "@/lib/social-links"
 
 function formatDate(value: string) {
   if (!value) return ""
@@ -28,15 +29,10 @@ export async function VideosFeedContent() {
 
   // Esta é a única vitrine das redes oficiais (a topbar não lista mais os ícones),
   // então o card não pode depender do feed do YouTube ter carregado: os links são
-  // fixos e só a URL do canal aproveita o dado da API quando ele existe.
-  const socialLinks = [
-    { label: "YouTube", href: channel?.channelUrl ?? "https://youtube.com/@sunano_" },
-    { label: "Discord", href: "https://discord.gg/kAHbEe5w3D" },
-    { label: "Telegram", href: "https://t.me/canal_sunano" },
-    { label: "TikTok", href: "https://www.tiktok.com/@_sunano" },
-    { label: "Instagram", href: "https://www.instagram.com/sunano.gg?igsh=NWk0ZnQ1dXg2aWxw" },
-    { label: "X", href: "https://x.com/_sunan0" },
-  ]
+  // fixos (`SOCIAL_LINKS`) e só a URL do canal aproveita o dado da API quando existe.
+  const socialLinks = SOCIAL_LINKS.map((link) =>
+    link.label === "YouTube" && channel?.channelUrl ? { ...link, href: channel.channelUrl } : link
+  )
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-3 py-4 sm:px-4 sm:py-6 md:space-y-8 md:px-6 lg:px-8">

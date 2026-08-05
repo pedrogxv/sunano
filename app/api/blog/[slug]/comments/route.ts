@@ -13,12 +13,15 @@ const commentSchema = z.object({
   parentCommentId: z.string().uuid().nullable().optional(),
 })
 
-/** Lista pública dos comentários de uma notícia. */
-export async function GET(_request: NextRequest, context: { params: Promise<{ slug: string }> }) {
+/** Lista pública paginada dos comentários de uma notícia (`?page=1&sort=recent|aura`). */
+export async function GET(request: NextRequest, context: { params: Promise<{ slug: string }> }) {
   const { slug } = await context.params
+  const searchParams = request.nextUrl.searchParams
+  const page = Math.max(1, Number(searchParams.get("page")) || 1)
+  const sort = searchParams.get("sort") === "aura" ? "aura" : "recent"
   try {
-    const comments = await listBlogComments(slug)
-    return NextResponse.json({ ok: true, comments })
+    const result = await listBlogComments(slug, { page, sort })
+    return NextResponse.json({ ok: true, ...result })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar comentários." }, { status: 500 })
   }

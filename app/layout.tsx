@@ -13,6 +13,7 @@ import { PageHeaderProvider } from "@/components/providers/page-header-context"
 import { AuthProvider } from "@/components/providers/auth-context"
 import { LayoutShell } from "@/components/layout/LayoutShell"
 import { CookieBanner } from "@/components/lgpd/CookieBanner"
+import { OrganizationJsonLd } from "@/components/seo/OrganizationJsonLd"
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -30,10 +31,32 @@ const caveat = Caveat({
   variable: "--font-caveat",
 })
 
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sunano.com.br"
+const SITE_TITLE = "Sunano | Tierlist de Periféricos"
+const SITE_DESCRIPTION = "A tierlist definitiva de periféricos gamers. Compare mouses, teclados, headsets e mais com filtros avancados e reviews detalhadas."
+
 export const metadata: Metadata = {
-  title: "Sunano | Tierlist de Periféricos",
-  description: "A tierlist definitiva de periféricos gamers. Compare mouses, teclados, headsets e mais com filtros avancados e reviews detalhadas.",
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: "%s | Sunano" },
+  description: SITE_DESCRIPTION,
   keywords: ["tierlist", "periféricos", "mouse", "teclado", "headset", "gaming", "review"],
+  openGraph: {
+    type: "website",
+    locale: "pt_BR",
+    siteName: "Sunano",
+    url: "/",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [{ url: "/icon.png", width: 512, height: 512 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  verification: {
+    google: process.env.GOOGLE_SITE_VERIFICATION,
+  },
 }
 
 export const viewport: Viewport = {
@@ -73,6 +96,7 @@ export default function RootLayout({
         <Script id="theme-init" strategy="beforeInteractive">
           {THEME_INIT_SCRIPT}
         </Script>
+        <OrganizationJsonLd />
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} ${caveat.variable} font-sans`}>
         <ThemeProvider>

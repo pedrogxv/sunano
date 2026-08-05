@@ -2,8 +2,9 @@ import { useEffect, useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-import { AuraButton, type Reaction } from "@/components/forum/AuraButton"
+import { AuraButton, type AuraBlockReason, type Reaction } from "@/components/forum/AuraButton"
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
+import { ReportMenu } from "@/components/forum/ReportMenu"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
@@ -40,6 +41,7 @@ export function CommentRow({
   comment,
   auraReaction,
   authDisabled,
+  auraBlockReason = null,
   onReactAura,
   onReply,
   replying,
@@ -53,10 +55,13 @@ export function CommentRow({
   onSubmitEdit,
   editSaving = false,
   editError = null,
+  reportPostSlug,
 }: {
   comment: CommentItem
   auraReaction: Reaction
   authDisabled: boolean
+  /** Motivo pra travar o botão de Aura antes de tentar (comentário próprio, limite diário). */
+  auraBlockReason?: AuraBlockReason
   onReactAura: (kind: "like" | "dislike") => void
   onReply: () => void
   replying: boolean
@@ -71,6 +76,8 @@ export function CommentRow({
   onSubmitEdit?: () => void
   editSaving?: boolean
   editError?: string | null
+  /** Slug do post do fórum, para habilitar "Denunciar" — ausente no blog (ainda sem denúncia). */
+  reportPostSlug?: string
 }) {
   const withinEditWindow = useWithinEditWindow(comment.created_at)
   const showEditButton = canEdit && withinEditWindow && !editing
@@ -125,6 +132,7 @@ export function CommentRow({
               auraCount={comment.aura_count}
               reaction={auraReaction}
               disabled={authDisabled}
+              blockReason={auraBlockReason}
               onReact={onReactAura}
             />
             <button
@@ -144,6 +152,9 @@ export function CommentRow({
               >
                 Editar
               </button>
+            )}
+            {reportPostSlug && (
+              <ReportMenu postSlug={reportPostSlug} targetType="comment" commentId={comment.id} />
             )}
           </div>
         )}

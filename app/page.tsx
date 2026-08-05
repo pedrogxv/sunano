@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -22,6 +23,13 @@ import { CARD_TIER_STYLES } from "@/lib/tierlist-theme"
 import { cn } from "@/lib/utils"
 
 export const revalidate = 300
+
+// Título/descrição da home vêm do `default` do layout raiz (já é a cópia
+// certa para "/") — aqui só fixamos a URL canônica, sem sobrescrever o
+// `title.template` com um título redundante ("Sunano | ... | Sunano").
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+}
 
 // TODO: reativar quando Loja/Bazar estiverem prontos para lançamento.
 // Enquanto false, a seção "Loja & Bazar" fica oculta na Home (o menu lateral
@@ -288,11 +296,11 @@ export default async function HomePage() {
                   className="group block rounded-xl border border-border bg-card p-3 transition-all hover:border-foreground/20 hover:bg-accent"
                 >
                   <div className="flex items-start gap-3">
-                    {post.media_image_url ? (
+                    {post.media_image_urls[0] ? (
                       <div className="size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={post.media_image_url}
+                          src={post.media_image_urls[0]}
                           alt=""
                           className="size-full object-cover"
                         />

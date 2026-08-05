@@ -13,13 +13,13 @@ const patchSchema = z
   .object({
     body: z.string().trim().min(20).max(5000).optional(),
     category_id: z.string().uuid().optional(),
-    media_image_url: z.string().url().nullable().optional(),
+    media_image_urls: z.array(z.string().url()).max(5).optional(),
     media_video_url: z.string().url().nullable().optional(),
     is_hidden: z.boolean().optional(),
     is_locked: z.boolean().optional(),
     is_pinned: z.boolean().optional(),
   })
-  .refine((data) => !(data.media_image_url && data.media_video_url), {
+  .refine((data) => !(data.media_image_urls?.length && data.media_video_url), {
     message: "Escolha apenas um tipo de mídia: imagem ou vídeo.",
   })
 
@@ -34,7 +34,12 @@ export async function GET(
     if (!result) {
       return NextResponse.json({ error: "Post não encontrado." }, { status: 404 })
     }
-    return NextResponse.json({ ok: true, post: result.post, comments: result.comments })
+    return NextResponse.json({
+      ok: true,
+      post: result.post,
+      comments: result.comments,
+      hasMore: result.hasMoreComments,
+    })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar post." }, { status: 500 })
   }

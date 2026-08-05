@@ -6,6 +6,7 @@ import {
   type MediaAdjust,
 } from "@/lib/profile-media-adjust"
 import { cn } from "@/lib/utils"
+import { ProfileImageLightbox } from "./ProfileImageLightbox"
 
 interface AvatarQuadradoProps {
   avatarUrl: string | null
@@ -55,7 +56,7 @@ export function AvatarQuadrado({
   const { src, animated } = resolveProfileMedia(avatarUrl, tier)
   const initials = name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2)
 
-  return (
+  const frame = (
     <div
       className={cn(
         "relative size-24 shrink-0 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-28 md:size-32",
@@ -80,5 +81,14 @@ export function AvatarQuadrado({
         }
       />
     </div>
+  )
+
+  // Sem foto enviada, o fallback de iniciais não tem o que ampliar.
+  if (!src) return frame
+
+  return (
+    <ProfileImageLightbox src={src} alt={`Foto de perfil de ${name}`} unoptimized={animated}>
+      {frame}
+    </ProfileImageLightbox>
   )
 }

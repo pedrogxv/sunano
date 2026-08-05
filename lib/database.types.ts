@@ -293,7 +293,7 @@ export type Database = {
           author_name: string
           user_id: string | null
           category_id: string
-          media_image_url: string | null
+          media_image_urls: string[]
           media_video_url: string | null
           is_hidden: boolean
           is_locked: boolean
@@ -334,6 +334,28 @@ export type Database = {
           "id" | "body_preview" | "is_edited" | "edited_at" | "created_at" | "updated_at"
         > & { edited_at?: string | null }
         Update: Partial<Database["public"]["Tables"]["forum_comments"]["Insert"]>
+      }
+      forum_reports: {
+        Relationships: []
+        Row: {
+          id: string
+          target_type: "post" | "comment"
+          /** Post denunciado, ou post-pai do comentário denunciado — sempre presente. */
+          post_id: string
+          comment_id: string | null
+          reporter_user_id: string
+          status: "pending" | "reviewed" | "dismissed"
+          created_at: string
+          reviewed_at: string | null
+        }
+        Insert: Omit<
+          Database["public"]["Tables"]["forum_reports"]["Row"],
+          "id" | "status" | "created_at" | "reviewed_at"
+        >
+        Update: Partial<Database["public"]["Tables"]["forum_reports"]["Insert"]> & {
+          status?: "pending" | "reviewed" | "dismissed"
+          reviewed_at?: string | null
+        }
       }
       forum_categories: {
         Relationships: []

@@ -24,7 +24,7 @@ type Post = {
   body: string
   author_name: string
   category_id: string
-  media_image_url: string | null
+  media_image_urls: string[]
   media_video_url: string | null
   is_hidden: boolean
   is_locked: boolean
@@ -45,7 +45,7 @@ export default function EditPostClient({
 
   const [body, setBody] = useState(initialPost.body)
   const [categoryId, setCategoryId] = useState(initialPost.category_id)
-  const [mediaImageUrl, setMediaImageUrl] = useState(initialPost.media_image_url)
+  const [mediaImageUrls, setMediaImageUrls] = useState(initialPost.media_image_urls)
   const [mediaVideoUrl, setMediaVideoUrl] = useState(initialPost.media_video_url)
 
   const [flags, setFlags] = useState({
@@ -79,7 +79,7 @@ export default function EditPostClient({
         body: JSON.stringify({
           body: body.trim(),
           category_id: categoryId,
-          media_image_url: mediaImageUrl,
+          media_image_urls: mediaImageUrls,
           media_video_url: mediaVideoUrl,
         }),
       })
@@ -154,7 +154,8 @@ export default function EditPostClient({
   const isDirty =
     body.trim() !== initialPost.body ||
     categoryId !== initialPost.category_id ||
-    mediaImageUrl !== initialPost.media_image_url ||
+    mediaImageUrls.length !== initialPost.media_image_urls.length ||
+    mediaImageUrls.some((url, i) => url !== initialPost.media_image_urls[i]) ||
     mediaVideoUrl !== initialPost.media_video_url
 
   const canSave = canWrite && isDirty && body.trim().length >= 20 && categoryId.length > 0
@@ -296,9 +297,9 @@ export default function EditPostClient({
               Mídia <span className="normal-case font-normal">(opcional)</span>
             </label>
             <PostMediaField
-              imageUrl={mediaImageUrl}
+              imageUrls={mediaImageUrls}
               videoUrl={mediaVideoUrl}
-              onImageChange={setMediaImageUrl}
+              onImagesChange={setMediaImageUrls}
               onVideoChange={setMediaVideoUrl}
               disabled={!canWrite}
             />

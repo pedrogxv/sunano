@@ -1395,6 +1395,41 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.2.2",
+          date: "5 de agosto",
+          title: "Notificações, edição de comentários e ajustes na Aura",
+          description: "Chegou o sino de notificações, comentários agora podem ser editados por um tempo, e a Aura ficou mais simples: reações vivem só nos comentários.",
+          items: [
+            "Notificações no sino do topo: aura recebida, comentários no seu post, respostas e novos seguidores",
+            "Comentários podem ser editados por até 15 minutos após publicados, com suporte a negrito",
+            "Reações (Like/Dislike) removidas dos posts — ficam só nos comentários, mantendo o foco da Aura em premiar quem posta",
+            "Ajustes nos links de redes sociais e nas traduções da seção de vídeos",
+          ],
+        },
+        {
+          version: "v0.2.1",
+          date: "5 de agosto",
+          title: "Denúncias no fórum e SEO do site geral",
+          description: "Fórum ganhou denúncia de post/comentário e visualização de imagem em tela cheia, e o site inteiro ganhou os fundamentos de SEO que faltavam para aparecer melhor no Google.",
+          items: [
+            "Denúncia de post e comentário no fórum, com fila de moderação para a equipe revisar",
+            "Imagem do post agora abre em tela cheia, com zoom",
+            "Borda do post fixado ficou mais nítida e simples",
+            "SEO geral do site: metadados de compartilhamento (Open Graph/Twitter), dados estruturados ligando o Sunano ao canal do YouTube e redes sociais, e página inicial/tierlist/ranking/periféricos agora com título e descrição próprios",
+          ],
+        },
+        {
+          version: "v0.2.0",
+          date: "5 de agosto",
+          title: "SEO do fórum e do blog",
+          description: "A partir desta versão o changelog passa a usar versionamento semântico (v0.2.0, v0.2.1...), com registro mais preciso do que muda em cada versão.",
+          items: [
+            "Posts do fórum renderizados no servidor, com metadata e dados estruturados (JSON-LD) para aparecer melhor no Google",
+            "Páginas de categoria do fórum agora são indexáveis",
+            "sitemap.xml e robots.txt novos, cobrindo fórum, blog e páginas estáticas",
+          ],
+        },
+        {
           version: "Agosto 2026",
           date: "4 de agosto",
           title: "Aura rebalanceada e mais no Diretório de Pessoas",
@@ -2181,6 +2216,41 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.2.2",
+          date: "August 5",
+          title: "Notifications, comment editing, and Aura tweaks",
+          description: "A notification bell landed, comments can now be edited for a short window, and Aura got simpler: reactions now live only on comments.",
+          items: [
+            "Notification bell up top: aura received, comments on your post, replies, and new followers",
+            "Comments can be edited for up to 15 minutes after posting, with bold text support",
+            "Like/Dislike reactions removed from posts — they now live only on comments, keeping Aura focused on rewarding posting",
+            "Tweaks to social links and the video section's translations",
+          ],
+        },
+        {
+          version: "v0.2.1",
+          date: "August 5",
+          title: "Forum reports and site-wide SEO",
+          description: "The forum got post/comment reporting and full-screen image viewing, and the whole site got the SEO fundamentals it was missing to show up better on Google.",
+          items: [
+            "Report a post or comment in the forum, with a moderation queue for the team to review",
+            "Post images now open full-screen, with zoom",
+            "Pinned post border is now cleaner and sharper",
+            "Site-wide SEO: sharing metadata (Open Graph/Twitter), structured data linking Sunano to its YouTube channel and social accounts, and the home/tierlist/ranking/peripherals pages now have their own title and description",
+          ],
+        },
+        {
+          version: "v0.2.0",
+          date: "August 5",
+          title: "Forum and blog SEO",
+          description: "Starting with this version, the changelog switches to semantic versioning (v0.2.0, v0.2.1...), with a more precise record of what changes in each version.",
+          items: [
+            "Forum posts now server-rendered, with metadata and structured data (JSON-LD) for better Google visibility",
+            "Forum category pages are now indexable",
+            "New sitemap.xml and robots.txt, covering forum, blog, and static pages",
+          ],
+        },
         {
           version: "August 2026",
           date: "August 4",

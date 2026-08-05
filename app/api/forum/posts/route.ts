@@ -5,6 +5,7 @@ import { getRequestUser } from "@/lib/server/auth/current-user"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import {
   createForumPost,
+  hasForumPostsByUser,
   listForumPosts,
   type ForumTab,
 } from "@/lib/server/repositories/forum-repository"
@@ -21,7 +22,7 @@ const postSchema = z
   .object({
     body: z.string().trim().min(20).max(5000),
     category_id: z.string().uuid(),
-    media_image_url: z.string().url().optional(),
+    media_image_urls: z.array(z.string().url()).max(5).optional(),
     media_video_url: z
       .string()
       .url()
@@ -30,22 +31,41 @@ const postSchema = z
       })
       .optional(),
   })
-  .refine((data) => !(data.media_image_url && data.media_video_url), {
+  .refine((data) => !(data.media_image_urls?.length && data.media_video_url), {
     message: "Escolha apenas um tipo de mídia: imagem ou vídeo.",
   })
 
-const VALID_TABS: ForumTab[] = ["recent", "hot", "category"]
+const VALID_TABS: ForumTab[] = ["recent", "hot", "category", "mine"]
 
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
+
+    // Checagem leve pra decidir se a aba "Meus Posts" aparece — não carrega
+    // a lista inteira, só um `count`.
+    if (url.searchParams.get("hasPosts") === "1") {
+      const user = await getRequestUser(request)
+      if (!user) return NextResponse.json({ ok: true, hasPosts: false })
+      const hasPosts = await hasForumPostsByUser(user.id)
+      return NextResponse.json({ ok: true, hasPosts })
+    }
+
     const tabParam = url.searchParams.get("tab") ?? "recent"
     const tab: ForumTab = VALID_TABS.includes(tabParam as ForumTab)
       ? (tabParam as ForumTab)
       : "recent"
     const categoryId = url.searchParams.get("categoryId") ?? undefined
 
-    const posts = await listForumPosts({ tab, categoryId })
+    let userId: string | undefined
+    if (tab === "mine") {
+      const user = await getRequestUser(request)
+      if (!user) {
+        return NextResponse.json({ error: "Você precisa estar logado." }, { status: 401 })
+      }
+      userId = user.id
+    }
+
+    const posts = await listForumPosts({ tab, categoryId, userId })
     return NextResponse.json({ ok: true, posts })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar posts do forum." }, { status: 500 })
@@ -88,7 +108,7 @@ export async function POST(request: NextRequest) {
       authorName,
       body: parsed.data.body,
       categoryId: parsed.data.category_id,
-      mediaImageUrl: parsed.data.media_image_url ?? null,
+      mediaImageUrls: parsed.data.media_image_urls ?? [],
       mediaVideoUrl: parsed.data.media_video_url ?? null,
     })
 

@@ -121,20 +121,32 @@ function ReactionIcon({
  * likes. Dar like credita +1 de aura ao autor; dislike, -1; trocar de um
  * para o outro aplica os dois de uma vez.
  */
+/**
+ * Motivo pelo qual o par de botões está travado ANTES de tentar a requisição
+ * — cada um vira um tooltip específico em vez do genérico "entre pra reagir"
+ * (ou, pior, um toast de erro depois do clique). `null`/omitido = sem
+ * bloqueio conhecido no cliente (usa `disabled` puro, ex.: deslogado).
+ */
+export type AuraBlockReason = "own-comment" | "daily-limit" | null
+
 export function AuraButton({
   auraCount,
   reaction,
   disabled,
+  blockReason = null,
   onReact,
 }: {
   auraCount: number
   reaction: Reaction
   disabled: boolean
+  blockReason?: AuraBlockReason
   onReact: (kind: "like" | "dislike") => void
 }) {
   const [bumping, setBumping] = useState(false)
+  const isBlocked = disabled || blockReason !== null
 
   function handleReact(kind: "like" | "dislike") {
+    if (blockReason) return
     setBumping(true)
     setTimeout(() => setBumping(false), 500)
     onReact(kind)
@@ -145,11 +157,15 @@ export function AuraButton({
 
   const tooltipText = disabled
     ? "Entre na sua conta para reagir — like concede +1 de aura, dislike tira -1"
-    : reaction === "like"
-      ? "Você curtiu isso (+1 de aura pro autor) — toque de novo pra desfazer"
-      : reaction === "dislike"
-        ? "Você descurtiu isso (-1 de aura pro autor) — toque de novo pra desfazer"
-        : "Curtir dá +1 de aura ao autor, descurtir tira -1"
+    : blockReason === "own-comment"
+      ? "Você não pode reagir ao seu próprio comentário"
+      : blockReason === "daily-limit"
+        ? "Limite de aura do dia esgotado — as reações recarregam aos poucos, tente de novo mais tarde"
+        : reaction === "like"
+          ? "Você curtiu isso (+1 de aura pro autor) — toque de novo pra desfazer"
+          : reaction === "dislike"
+            ? "Você descurtiu isso (-1 de aura pro autor) — toque de novo pra desfazer"
+            : "Curtir dá +1 de aura ao autor, descurtir tira -1"
 
   const count = (
     <span
@@ -163,14 +179,18 @@ export function AuraButton({
   const iconProps = (kind: "like" | "dislike") => ({
     kind,
     active: reaction === kind,
-    disabled,
+    disabled: isBlocked,
     iconSize,
     particleDistance,
     onClick: () => handleReact(kind),
   })
 
   const button = (
-    <div className="flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5">
+    <div
+      className={`flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5 transition-opacity ${
+        blockReason ? "opacity-45 grayscale-[0.4]" : ""
+      }`}
+    >
       <ReactionIcon {...iconProps("like")} />
       {count}
       <ReactionIcon {...iconProps("dislike")} />

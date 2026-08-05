@@ -9,17 +9,19 @@ import { Input } from "@/components/ui/input"
 
 type MediaTab = "image" | "video"
 
-/** Abas Imagem/Vídeo mutuamente exclusivas do formulário de post — imagem sobe de verdade, vídeo é só um link do YouTube. */
+const MAX_IMAGES = 5
+
+/** Abas Imagem/Vídeo mutuamente exclusivas do formulário de post — até 5 imagens sobem de verdade, vídeo é só um link do YouTube. */
 export function PostMediaField({
-  imageUrl,
+  imageUrls,
   videoUrl,
-  onImageChange,
+  onImagesChange,
   onVideoChange,
   disabled,
 }: {
-  imageUrl: string | null
+  imageUrls: string[]
   videoUrl: string | null
-  onImageChange: (url: string | null) => void
+  onImagesChange: (urls: string[]) => void
   onVideoChange: (url: string | null) => void
   disabled?: boolean
 }) {
@@ -28,16 +30,30 @@ export function PostMediaField({
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  async function handleFileSelected(file: File) {
+  async function uploadOne(file: File): Promise<string> {
+    const formData = new FormData()
+    formData.append("file", file)
+    const res = await fetch("/api/forum/posts/upload-media", { method: "POST", body: formData })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "Erro ao enviar imagem")
+    return data.publicUrl as string
+  }
+
+  async function handleFilesSelected(files: File[]) {
+    const room = MAX_IMAGES - imageUrls.length
+    if (room <= 0) return
+    const toUpload = files.slice(0, room)
+
     try {
       setUploading(true)
       setError(null)
-      const formData = new FormData()
-      formData.append("file", file)
-      const res = await fetch("/api/forum/posts/upload-media", { method: "POST", body: formData })
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "Erro ao enviar imagem")
-      onImageChange(data.publicUrl)
+      const uploaded: string[] = []
+      // Sequencial (não Promise.all): evita disparar N uploads simultâneos
+      // no rate limit de `forum_media_upload` e mantém a ordem das fotos.
+      for (const file of toUpload) {
+        uploaded.push(await uploadOne(file))
+      }
+      onImagesChange([...imageUrls, ...uploaded])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao enviar imagem")
     } finally {
@@ -45,12 +61,18 @@ export function PostMediaField({
     }
   }
 
+  function removeImage(index: number) {
+    onImagesChange(imageUrls.filter((_, i) => i !== index))
+  }
+
   function switchTab(next: MediaTab) {
     setTab(next)
     setError(null)
     if (next === "image") onVideoChange(null)
-    else onImageChange(null)
+    else onImagesChange([])
   }
+
+  const canAddMore = imageUrls.length < MAX_IMAGES
 
   return (
     <div className="space-y-2">
@@ -82,43 +104,57 @@ export function PostMediaField({
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       {tab === "image" ? (
-        imageUrl ? (
-          <div className="relative w-full max-w-xs overflow-hidden rounded-lg border border-border">
-            <Image src={imageUrl} alt="" width={320} height={200} unoptimized className="w-full object-cover" />
-            <button
-              type="button"
-              onClick={() => onImageChange(null)}
-              disabled={disabled}
-              className="absolute right-1.5 top-1.5 rounded-full bg-background/80 p-1 text-foreground transition-colors hover:text-destructive"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        ) : (
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) handleFileSelected(file)
-              }}
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={disabled || uploading}
-              onClick={() => fileInputRef.current?.click()}
-              className="gap-2 border-border text-xs"
-            >
-              <ImagePlus className="size-3.5" />
-              {uploading ? "Enviando…" : "Adicionar imagem"}
-            </Button>
-          </>
-        )
+        <div className="space-y-2">
+          {imageUrls.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {imageUrls.map((url, index) => (
+                <div key={url} className="relative size-24 overflow-hidden rounded-lg border border-border">
+                  <Image src={url} alt="" fill unoptimized className="object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    disabled={disabled}
+                    className="absolute right-1 top-1 rounded-full bg-background/80 p-1 text-foreground transition-colors hover:text-destructive"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {canAddMore && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? [])
+                  if (files.length > 0) handleFilesSelected(files)
+                  e.target.value = ""
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled || uploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-2 border-border text-xs"
+              >
+                <ImagePlus className="size-3.5" />
+                {uploading
+                  ? "Enviando…"
+                  : imageUrls.length > 0
+                    ? `Adicionar imagem (${imageUrls.length}/${MAX_IMAGES})`
+                    : "Adicionar imagem"}
+              </Button>
+            </>
+          )}
+        </div>
       ) : (
         <Input
           value={videoUrl ?? ""}

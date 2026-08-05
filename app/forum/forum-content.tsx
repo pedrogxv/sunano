@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
-import { Clock, Flame, Plus, Tag, X } from "lucide-react"
+import { Clock, Flame, Plus, Tag, User, X } from "lucide-react"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
 import { CategoryPicker } from "@/components/forum/CategoryPicker"
@@ -23,7 +23,7 @@ type ForumCategoryOption = {
 }
 
 type AuthUser = { id: string; display_name: string; avatar_url: string | null } | null
-type Tab = "recent" | "hot" | "category"
+type Tab = "recent" | "hot" | "category" | "mine"
 
 const MIN_BODY = 20
 const MAX_BODY = 5000
@@ -44,12 +44,13 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
   const [categories, setCategories] = useState<ForumCategoryOption[]>([])
   const [activeRoot, setActiveRoot] = useState<string>("")
   const [activeCategoryId, setActiveCategoryId] = useState<string>("")
+  const [hasOwnPosts, setHasOwnPosts] = useState(false)
 
   // New post form
   const [showForm, setShowForm] = useState(false)
   const [body, setBody] = useState("")
   const [categoryId, setCategoryId] = useState("")
-  const [mediaImageUrl, setMediaImageUrl] = useState<string | null>(null)
+  const [mediaImageUrls, setMediaImageUrls] = useState<string[]>([])
   const [mediaVideoUrl, setMediaVideoUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -60,6 +61,18 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       .then((data) => setCategories(data?.categories ?? []))
       .catch(() => setCategories([]))
   }, [])
+
+  // Decide se a aba "Meus Posts" aparece — só quando logado e com >= 1 post.
+  useEffect(() => {
+    if (!authUser) {
+      setHasOwnPosts(false)
+      return
+    }
+    fetch("/api/forum/posts?hasPosts=1")
+      .then((res) => res.json())
+      .then((data) => setHasOwnPosts(Boolean(data?.hasPosts)))
+      .catch(() => setHasOwnPosts(false))
+  }, [authUser])
 
   const loadPosts = useCallback(async (tab: Tab, categoryId: string) => {
     try {
@@ -78,6 +91,22 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
     }
   }, [])
 
+  /**
+   * Atualiza a lista na hora quando o dono oculta/reativa um post, sem
+   * esperar o próximo fetch. Fora de "Meus Posts" o post ocultado some da
+   * lista (ele nunca mais voltaria a aparecer nas abas públicas); dentro de
+   * "Meus Posts" ele continua na lista, só com a flag `is_hidden` trocada,
+   * já que essa aba mostra visíveis e ocultos.
+   */
+  const handleOwnPostVisibilityChange = useCallback((slug: string, hidden: boolean) => {
+    setPosts((prev) => {
+      if (activeTab !== "mine") {
+        return hidden ? prev.filter((p) => p.slug !== slug) : prev
+      }
+      return prev.map((p) => (p.slug === slug ? { ...p, is_hidden: hidden } : p))
+    })
+  }, [activeTab])
+
   // O servidor já renderizou os posts da aba padrão (SSR/ISR) e a lista não
   // depende de quem está logado (post não tem reação) — o primeiro paint
   // dispensa o fetch client-side; daí em diante, trocar de aba/categoria
@@ -92,6 +121,15 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
     loadPosts(activeTab, activeCategoryId)
   }, [activeTab, activeCategoryId, loadPosts])
 
+  // Se a aba "Meus Posts" deixa de existir (deslogou, ou excluiu o último
+  // post) enquanto ela está selecionada, volta pra "Recente" em vez de
+  // deixar a aba ativa sumir da barra sem seleção visível.
+  useEffect(() => {
+    if (activeTab === "mine" && !authLoading && (!authUser || !hasOwnPosts)) {
+      switchTab("recent")
+    }
+  }, [activeTab, authUser, authLoading, hasOwnPosts])
+
   async function submitPost() {
     if (!authUser) return
     try {
@@ -103,7 +141,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
         body: JSON.stringify({
           body,
           category_id: categoryId,
-          media_image_url: mediaImageUrl ?? undefined,
+          media_image_urls: mediaImageUrls.length > 0 ? mediaImageUrls : undefined,
           media_video_url: mediaVideoUrl ?? undefined,
         }),
       })
@@ -111,9 +149,10 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       if (!res.ok || !data?.ok || !data.slug) throw new Error(data?.error ?? "Erro ao criar post")
       setBody("")
       setCategoryId("")
-      setMediaImageUrl(null)
+      setMediaImageUrls([])
       setMediaVideoUrl(null)
       setShowForm(false)
+      setHasOwnPosts(true)
       await loadPosts(activeTab, activeCategoryId)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao criar post")
@@ -145,10 +184,11 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
     activeTab === "hot" ? "Nenhum tópico em destaque no momento." :
     activeTab === "category" && activeCategoryId ? `Nenhum tópico em ${activeCategoryName ?? "categoria"} ainda.` :
     activeTab === "category" ? "Selecione uma categoria." :
+    activeTab === "mine" ? "Você ainda não postou nada." :
     "Nenhum tópico ainda. Seja o primeiro!"
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:px-6">
+    <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -181,10 +221,13 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
         <div className="flex items-center gap-1 rounded-xl border border-border bg-card p-1">
           {(
             [
-              { value: "recent" as Tab,   label: "Recente",  icon: Clock },
-              { value: "hot" as Tab,      label: "Em Alta",  icon: Flame },
-              { value: "category" as Tab, label: "Categoria", icon: Tag  },
-            ] as const
+              { value: "recent" as Tab,   label: "Recente",   icon: Clock },
+              { value: "hot" as Tab,      label: "Em Alta",   icon: Flame },
+              { value: "category" as Tab, label: "Categoria", icon: Tag   },
+              ...(authUser && hasOwnPosts
+                ? [{ value: "mine" as Tab, label: "Meus Posts", icon: User }]
+                : []),
+            ]
           ).map(({ value, label, icon: Icon }) => (
             <button
               key={value}
@@ -221,6 +264,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
                   key={c.id}
                   type="button"
                   onClick={() => selectRootFilter(c)}
+                  title={`Ver página de ${c.name}`}
                   className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                     activeRoot === c.id
                       ? "border-primary bg-primary/15 text-primary"
@@ -230,6 +274,16 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
                   {c.name}
                 </button>
               ))}
+              {/* Link real (não só estado de aba) para cada categoria ter uma
+                  URL própria indexável em /forum/categoria/[slug]. */}
+              {activeRootOption && (
+                <Link
+                  href={`/forum/categoria/${activeRootOption.slug}`}
+                  className="rounded-full border border-dashed border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
+                >
+                  Ver página de {activeRootOption.name} →
+                </Link>
+              )}
             </div>
             {activeRootOption && activeRootOption.children.length > 0 && (
               <div className="flex flex-wrap gap-1.5 pl-3">
@@ -286,7 +340,14 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
               placeholder="O que você quer compartilhar?"
               maxLength={MAX_BODY}
             />
-            <p className="text-right text-[10px] text-muted-foreground">{body.length}/{MAX_BODY}</p>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <span className={body.trim().length < MIN_BODY ? "text-amber-400" : ""}>
+                {body.trim().length < MIN_BODY
+                  ? `Mínimo de ${MIN_BODY} caracteres (faltam ${MIN_BODY - body.trim().length})`
+                  : "Mínimo de caracteres atingido"}
+              </span>
+              <span>{body.length}/{MAX_BODY}</span>
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -299,9 +360,9 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
               Mídia <span className="normal-case font-normal">(opcional)</span>
             </label>
             <PostMediaField
-              imageUrl={mediaImageUrl}
+              imageUrls={mediaImageUrls}
               videoUrl={mediaVideoUrl}
-              onImageChange={setMediaImageUrl}
+              onImagesChange={setMediaImageUrls}
               onVideoChange={setMediaVideoUrl}
             />
           </div>
@@ -338,7 +399,12 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <PostCard
+              key={post.id}
+              post={post}
+              currentUserId={authUser?.id ?? null}
+              onOwnPostVisibilityChange={handleOwnPostVisibilityChange}
+            />
           ))}
         </div>
       )}

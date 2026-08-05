@@ -26,11 +26,13 @@ export type ForumListPost = {
   author_name: string
   user_id: string | null
   category: ForumCategoryInfo | null
-  media_image_url: string | null
+  media_image_urls: string[]
   media_video_url: string | null
   created_at: string
   is_locked: boolean
   is_pinned: boolean
+  /** Só vem preenchido de verdade na aba "mine" — nas demais abas o post já chega sempre `false`. */
+  is_hidden: boolean
   comment_count: number
   author_display_name: string
   author_avatar_url: string | null
@@ -55,7 +57,7 @@ export type ForumCommentDetail = {
   author_display_slug: string | null
 }
 
-export type ForumTab = "recent" | "hot" | "category"
+export type ForumTab = "recent" | "hot" | "category" | "mine"
 
 // ── Helpers de enriquecimento ────────────────────────────────────────────────
 
@@ -94,22 +96,47 @@ async function resolveCategoryIdsForFilter(categoryId: string): Promise<string[]
   return [categoryId, ...childIds]
 }
 
+/** Slugs + data de todos os posts visíveis — usado só pelo `app/sitemap.ts`, sem o enriquecimento pesado de `listForumPosts`. */
+export async function listAllForumSlugsForSitemap(): Promise<{ slug: string; updated_at: string }[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("forum_posts")
+    .select("slug, created_at")
+    .eq("is_hidden", false)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("[forum-repository] listAllForumSlugsForSitemap:", error)
+    return []
+  }
+  return (data ?? []).map((p) => ({ slug: p.slug, updated_at: p.created_at }))
+}
+
 // ── Leitura pública ──────────────────────────────────────────────────────────
 
 /** Lista posts visíveis do fórum, conforme a aba selecionada. */
 export async function listForumPosts(params: {
   tab: ForumTab
   categoryId?: string
+  /** Obrigatório quando `tab === "mine"` — ignorado nas demais abas. */
+  userId?: string
 }): Promise<ForumListPost[]> {
   const db = createSupabaseAdminClient()
-  const { tab, categoryId } = params
+  const { tab, categoryId, userId } = params
+
+  if (tab === "mine" && !userId) return []
 
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, body_preview, author_name, user_id, category_id, media_image_url, media_video_url, created_at, is_locked, is_pinned"
+      "id, slug, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden"
     )
-    .eq("is_hidden", false)
+
+  // Em "Meus Posts" o dono também vê o que ocultou (pra poder reativar);
+  // em todas as outras abas a listagem pública segue escondendo `is_hidden`.
+  if (tab !== "mine") {
+    query = query.eq("is_hidden", false)
+  }
 
   if (tab === "category" && categoryId) {
     const ids = await resolveCategoryIdsForFilter(categoryId)
@@ -119,6 +146,10 @@ export async function listForumPosts(params: {
   if (tab === "hot") {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     query = query.gte("created_at", since)
+  }
+
+  if (tab === "mine" && userId) {
+    query = query.eq("user_id", userId)
   }
 
   // Post fixado só sobe ao topo na aba "Recente" — em "Em Alta" e "Categoria"
@@ -160,11 +191,12 @@ export async function listForumPosts(params: {
     author_name: p.author_name,
     user_id: p.user_id,
     category: resolveCategoryInfo(p.category_id, categoryMap),
-    media_image_url: p.media_image_url,
+    media_image_urls: p.media_image_urls ?? [],
     media_video_url: p.media_video_url,
     created_at: p.created_at,
     is_locked: p.is_locked,
     is_pinned: p.is_pinned,
+    is_hidden: p.is_hidden,
     comment_count: commentCounts[p.id] ?? 0,
     author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
@@ -181,20 +213,232 @@ export async function listForumPosts(params: {
   return list
 }
 
-/** Busca um post visível pelo slug, já com comentários enriquecidos. */
-export async function getForumPostBySlug(slug: string): Promise<{
+/**
+ * Resolve uma categoria (raiz ou subcategoria) pelo slug e lista os posts
+ * dela — base da página `/forum/categoria/[slug]`, indexável por periférico
+ * (ex: "mouses", "teclados").
+ */
+export async function getForumPostsByCategorySlug(slug: string): Promise<{
+  category: ForumCategoryInfo
+  posts: ForumListPost[]
+} | null> {
+  const db = createSupabaseAdminClient()
+  const { data: category } = await db
+    .from("forum_categories")
+    .select("id, slug, name, parent_id")
+    .eq("slug", slug)
+    .eq("is_active", true)
+    .maybeSingle()
+
+  if (!category) return null
+
+  const categoryMap = await buildCategoryMap()
+  const categoryInfo = resolveCategoryInfo(category.id, categoryMap)
+  if (!categoryInfo) return null
+
+  const posts = await listForumPosts({ tab: "category", categoryId: category.id })
+  return { category: categoryInfo, posts }
+}
+
+export type ForumSidebarData = {
+  totalPosts: number
+  totalComments: number
+  categoryPostCount: number
+  relatedPosts: { slug: string; body: string; created_at: string; comment_count: number }[]
+}
+
+/**
+ * Dados da sidebar estilo Reddit na página do post: estatísticas gerais do
+ * fórum + quantos tópicos existem na mesma categoria + outros tópicos
+ * recentes dela (pra navegação lateral). Tudo em paralelo e com `head:true`
+ * (só contagem) onde não precisamos das linhas.
+ */
+export async function getForumSidebarData(params: {
+  postId: string
+  categoryId: string | null
+}): Promise<ForumSidebarData> {
+  const db = createSupabaseAdminClient()
+  const { postId, categoryId } = params
+
+  const categoryIdsPromise = categoryId ? resolveCategoryIdsForFilter(categoryId) : Promise.resolve<string[]>([])
+
+  const [{ count: totalPosts }, { count: totalComments }, categoryIds] = await Promise.all([
+    db.from("forum_posts").select("id", { count: "exact", head: true }).eq("is_hidden", false),
+    db.from("forum_comments").select("id", { count: "exact", head: true }).eq("is_hidden", false),
+    categoryIdsPromise,
+  ])
+
+  if (categoryIds.length === 0) {
+    return { totalPosts: totalPosts ?? 0, totalComments: totalComments ?? 0, categoryPostCount: 0, relatedPosts: [] }
+  }
+
+  const [{ count: categoryPostCount }, { data: relatedRows }] = await Promise.all([
+    db.from("forum_posts").select("id", { count: "exact", head: true }).eq("is_hidden", false).in("category_id", categoryIds),
+    db
+      .from("forum_posts")
+      .select("id, slug, body_preview, created_at")
+      .eq("is_hidden", false)
+      .in("category_id", categoryIds)
+      .neq("id", postId)
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ])
+
+  const relatedIds = (relatedRows ?? []).map((p) => p.id)
+  const commentCounts: Record<string, number> = {}
+  if (relatedIds.length > 0) {
+    const { data: comments } = await db
+      .from("forum_comments")
+      .select("post_id")
+      .in("post_id", relatedIds)
+      .eq("is_hidden", false)
+    for (const c of comments ?? []) {
+      commentCounts[c.post_id] = (commentCounts[c.post_id] ?? 0) + 1
+    }
+  }
+
+  return {
+    totalPosts: totalPosts ?? 0,
+    totalComments: totalComments ?? 0,
+    categoryPostCount: categoryPostCount ?? 0,
+    relatedPosts: (relatedRows ?? []).map((p) => ({
+      slug: p.slug,
+      body: p.body_preview,
+      created_at: p.created_at,
+      comment_count: commentCounts[p.id] ?? 0,
+    })),
+  }
+}
+
+export type CommentSort = "recent" | "aura"
+export const COMMENTS_PAGE_SIZE = 20
+
+export type PaginatedComments = {
+  comments: ForumCommentDetail[]
+  totalRootCount: number
+  hasMore: boolean
+}
+
+const FORUM_COMMENT_COLUMNS =
+  "id, body, author_name, user_id, parent_comment_id, created_at, is_edited, aura_count"
+
+function mapForumCommentRows(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rows: any[],
+  profileMap: Awaited<ReturnType<typeof buildProfileMap>>
+): ForumCommentDetail[] {
+  return rows.map((c) => ({
+    id: c.id,
+    body: c.body,
+    author_name: c.author_name,
+    user_id: c.user_id,
+    parent_comment_id: c.parent_comment_id ?? null,
+    created_at: c.created_at,
+    is_edited: c.is_edited ?? false,
+    aura_count: c.aura_count ?? 0,
+    author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
+    author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
+    author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
+    author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
+  }))
+}
+
+/**
+ * Lista paginada dos comentários visíveis de um post do fórum. Mesma
+ * estratégia de `listBlogComments` em `blog-repository.ts`: pagina por
+ * thread (comentário-raiz) pra nunca cortar uma thread ao meio — busca uma
+ * página de raízes ordenada por `sort` e depois todas as respostas dessas
+ * raízes numa segunda query.
+ */
+export async function listForumComments(
+  slug: string,
+  { page = 1, sort = "recent" }: { page?: number; sort?: CommentSort } = {}
+): Promise<PaginatedComments> {
+  const db = createSupabaseAdminClient()
+
+  const { data: post } = await db.from("forum_posts").select("id").eq("slug", slug).maybeSingle()
+  if (!post) return { comments: [], totalRootCount: 0, hasMore: false }
+  const postId = (post as { id: string }).id
+
+  const from = (page - 1) * COMMENTS_PAGE_SIZE
+  const to = from + COMMENTS_PAGE_SIZE - 1
+
+  let rootQuery = db
+    .from("forum_comments")
+    .select(FORUM_COMMENT_COLUMNS, { count: "exact" })
+    .eq("post_id", postId)
+    .eq("is_hidden", false)
+    .is("parent_comment_id", null)
+  rootQuery =
+    sort === "aura"
+      ? rootQuery.order("aura_count", { ascending: false }).order("created_at", { ascending: false })
+      : rootQuery.order("created_at", { ascending: false })
+  const { data: rootRows, error: rootError, count } = await rootQuery.range(from, to)
+
+  if (rootError) {
+    console.error("[forum-repository] listForumComments (roots):", rootError.message)
+    return { comments: [], totalRootCount: 0, hasMore: false }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roots = (rootRows ?? []) as any[]
+  const totalRootCount = count ?? roots.length
+
+  let replies: unknown[] = []
+  if (roots.length > 0) {
+    const { data: replyRows, error: replyError } = await db
+      .from("forum_comments")
+      .select(FORUM_COMMENT_COLUMNS)
+      .eq("post_id", postId)
+      .eq("is_hidden", false)
+      .in(
+        "parent_comment_id",
+        roots.map((r) => r.id)
+      )
+      .order("created_at", { ascending: true })
+    if (replyError) {
+      console.error("[forum-repository] listForumComments (replies):", replyError.message)
+    } else {
+      replies = replyRows ?? []
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allRows = [...roots, ...(replies as any[])]
+  const profileMap = await buildProfileMap(allRows.map((c) => c.user_id))
+
+  return {
+    comments: mapForumCommentRows(allRows, profileMap),
+    totalRootCount,
+    hasMore: from + roots.length < totalRootCount,
+  }
+}
+
+/**
+ * Busca um post pelo slug, já com a primeira página de comentários
+ * enriquecida (ordenação "recent" — mesmo padrão do carregamento inicial de
+ * `listBlogComments`). Páginas seguintes vêm de `listForumComments` via API.
+ *
+ * Post oculto (`is_hidden`) só é retornado pro próprio dono (`viewerId` bate
+ * com `user_id`) — pra ele conseguir reativar o próprio post pela página de
+ * detalhe. Pra qualquer outro visitante, oculto continua como se não existisse.
+ */
+export async function getForumPostBySlug(
+  slug: string,
+  viewerId?: string | null
+): Promise<{
   post: ForumPostDetail
   comments: ForumCommentDetail[]
+  hasMoreComments: boolean
 } | null> {
   const db = createSupabaseAdminClient()
 
   const { data: post, error } = await db
     .from("forum_posts")
     .select(
-      "id, slug, body, author_name, user_id, category_id, media_image_url, media_video_url, created_at, is_locked, is_pinned"
+      "id, slug, body, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden"
     )
     .eq("slug", slug)
-    .eq("is_hidden", false)
     .maybeSingle()
 
   if (error) {
@@ -202,17 +446,18 @@ export async function getForumPostBySlug(slug: string): Promise<{
     throw error
   }
   if (!post) return null
+  if (post.is_hidden && post.user_id !== viewerId) return null
 
-  const { data: commentRows } = await db
-    .from("forum_comments")
-    .select("id, body, author_name, user_id, parent_comment_id, created_at, is_edited, aura_count")
-    .eq("post_id", post.id)
-    .eq("is_hidden", false)
-    .order("created_at", { ascending: true })
+  const [commentsPage, { count: totalCommentCount }] = await Promise.all([
+    listForumComments(slug),
+    db
+      .from("forum_comments")
+      .select("id", { count: "exact", head: true })
+      .eq("post_id", post.id)
+      .eq("is_hidden", false),
+  ])
 
-  const comments = commentRows ?? []
-
-  const profileMap = await buildProfileMap([post.user_id, ...comments.map((c) => c.user_id)])
+  const profileMap = await buildProfileMap([post.user_id, ...commentsPage.comments.map((c) => c.user_id)])
   const categoryMap = await buildCategoryMap()
 
   const enrichedPost: ForumPostDetail = {
@@ -222,12 +467,13 @@ export async function getForumPostBySlug(slug: string): Promise<{
     author_name: post.author_name,
     user_id: post.user_id,
     category: resolveCategoryInfo(post.category_id, categoryMap),
-    media_image_url: post.media_image_url,
+    media_image_urls: post.media_image_urls ?? [],
     media_video_url: post.media_video_url,
     created_at: post.created_at,
     is_locked: post.is_locked,
     is_pinned: post.is_pinned,
-    comment_count: comments.length,
+    is_hidden: post.is_hidden,
+    comment_count: totalCommentCount ?? 0,
     author_display_name: post.user_id
       ? profileMap[post.user_id]?.display_name ?? post.author_name
       : post.author_name,
@@ -236,22 +482,7 @@ export async function getForumPostBySlug(slug: string): Promise<{
     author_display_slug: post.user_id ? profileMap[post.user_id]?.display_slug ?? null : null,
   }
 
-  const enrichedComments: ForumCommentDetail[] = comments.map((c) => ({
-    id: c.id,
-    body: c.body,
-    author_name: c.author_name,
-    user_id: c.user_id,
-    parent_comment_id: c.parent_comment_id,
-    created_at: c.created_at,
-    is_edited: c.is_edited ?? false,
-    aura_count: c.aura_count,
-    author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
-    author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
-    author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
-    author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
-  }))
-
-  return { post: enrichedPost, comments: enrichedComments }
+  return { post: enrichedPost, comments: commentsPage.comments, hasMoreComments: commentsPage.hasMore }
 }
 
 // ── Escrita pública ──────────────────────────────────────────────────────────
@@ -301,9 +532,15 @@ async function validateCategoryId(categoryId: string): Promise<boolean> {
   return Boolean(data)
 }
 
-function validateMedia(mediaImageUrl?: string | null, mediaVideoUrl?: string | null) {
-  if (mediaImageUrl && mediaVideoUrl) {
+const MAX_POST_IMAGES = 5
+
+function validateMedia(mediaImageUrls?: string[] | null, mediaVideoUrl?: string | null) {
+  const imageCount = mediaImageUrls?.length ?? 0
+  if (imageCount > 0 && mediaVideoUrl) {
     return "Escolha apenas um tipo de mídia: imagem ou vídeo."
+  }
+  if (imageCount > MAX_POST_IMAGES) {
+    return `Envie no máximo ${MAX_POST_IMAGES} imagens por post.`
   }
   return null
 }
@@ -314,12 +551,12 @@ export async function createForumPost(params: {
   authorName: string
   body: string
   categoryId: string
-  mediaImageUrl?: string | null
+  mediaImageUrls?: string[]
   mediaVideoUrl?: string | null
 }): Promise<{ ok: true; slug: string } | { ok: false; error: string; status: number }> {
   const db = createSupabaseAdminClient()
 
-  const mediaError = validateMedia(params.mediaImageUrl, params.mediaVideoUrl)
+  const mediaError = validateMedia(params.mediaImageUrls, params.mediaVideoUrl)
   if (mediaError) return { ok: false, error: mediaError, status: 400 }
 
   if (!(await validateCategoryId(params.categoryId))) {
@@ -337,7 +574,7 @@ export async function createForumPost(params: {
       author_name: params.authorName,
       user_id: params.userId,
       category_id: params.categoryId,
-      media_image_url: params.mediaImageUrl ?? null,
+      media_image_urls: params.mediaImageUrls ?? [],
       media_video_url: params.mediaVideoUrl ?? null,
       is_hidden: false,
       is_locked: false,
@@ -478,6 +715,50 @@ export async function updateForumComment(params: {
   return { ok: true }
 }
 
+/** Existe ao menos um post (visível ou oculto) do usuário? Decide se a aba "Meus Posts" aparece — inclui ocultos pra ele conseguir reativar. */
+export async function hasForumPostsByUser(userId: string): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { count } = await db
+    .from("forum_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+  return (count ?? 0) > 0
+}
+
+/**
+ * Oculta ou reativa um post do próprio autor — mesma semântica de
+ * `is_hidden` usada pela moderação, mas a checagem de dono acontece aqui
+ * contra o banco, nunca confiando no `userId` que o cliente alega ter.
+ */
+export async function setOwnForumPostHidden(params: {
+  postSlug: string
+  userId: string
+  hidden: boolean
+}): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: post } = await db
+    .from("forum_posts")
+    .select("id, user_id, is_hidden")
+    .eq("slug", params.postSlug)
+    .maybeSingle()
+
+  if (!post) {
+    return { ok: false, error: "Post não encontrado.", status: 404 }
+  }
+  if (post.user_id !== params.userId) {
+    return { ok: false, error: "Você só pode alterar os seus próprios posts.", status: 403 }
+  }
+
+  const { error } = await db.from("forum_posts").update({ is_hidden: params.hidden }).eq("id", post.id)
+  if (error) {
+    console.error("[forum-repository] setOwnForumPostHidden:", error)
+    return { ok: false, error: error.message, status: 400 }
+  }
+
+  return { ok: true }
+}
+
 // ── Moderação (admin) ────────────────────────────────────────────────────────
 
 export type ModerationFilter = "all" | "visible" | "hidden" | "locked" | "pinned"
@@ -487,7 +768,10 @@ export type ModerationPost = {
   slug: string
   body_preview: string
   author_name: string
+  author_avatar_url: string | null
   category: ForumCategoryInfo | null
+  media_image_urls: string[]
+  media_video_url: string | null
   is_hidden: boolean
   is_locked: boolean
   is_pinned: boolean
@@ -500,6 +784,7 @@ export type ModerationComment = {
   post_id: string
   body: string
   author_name: string
+  author_avatar_url: string | null
   is_hidden: boolean
   created_at: string
 }
@@ -522,7 +807,7 @@ export async function listForumPostsForModeration(params: {
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, body_preview, author_name, category_id, is_hidden, is_locked, is_pinned, created_at",
+      "id, slug, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, is_hidden, is_locked, is_pinned, created_at",
       { count: "exact" }
     )
 
@@ -548,25 +833,52 @@ export async function listForumPostsForModeration(params: {
   const postIds = rows.map((p) => p.id)
   const commentsByPost: Record<string, ModerationComment[]> = {}
 
+  let commentRows: {
+    id: string
+    post_id: string
+    body: string
+    author_name: string
+    user_id: string | null
+    is_hidden: boolean
+    created_at: string
+  }[] = []
+
   if (postIds.length > 0) {
     const { data: comments } = await db
       .from("forum_comments")
-      .select("id, post_id, body, author_name, is_hidden, created_at")
+      .select("id, post_id, body, author_name, user_id, is_hidden, created_at")
       .in("post_id", postIds)
       .order("created_at", { ascending: true })
-    for (const c of comments ?? []) {
-      ;(commentsByPost[c.post_id] ??= []).push(c)
-    }
+    commentRows = comments ?? []
   }
 
   const categoryMap = await buildCategoryMap()
+  const profileMap = await buildProfileMap([
+    ...rows.map((p) => p.user_id),
+    ...commentRows.map((c) => c.user_id),
+  ])
+
+  for (const c of commentRows) {
+    ;(commentsByPost[c.post_id] ??= []).push({
+      id: c.id,
+      post_id: c.post_id,
+      body: c.body,
+      author_name: c.author_name,
+      author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
+      is_hidden: c.is_hidden,
+      created_at: c.created_at,
+    })
+  }
 
   const moderationPosts: ModerationPost[] = rows.map((p) => ({
     id: p.id,
     slug: p.slug,
     body_preview: p.body_preview ?? "",
     author_name: p.author_name,
+    author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
     category: resolveCategoryInfo(p.category_id, categoryMap),
+    media_image_urls: p.media_image_urls ?? [],
+    media_video_url: p.media_video_url,
     is_hidden: p.is_hidden,
     is_locked: p.is_locked,
     is_pinned: p.is_pinned,
@@ -583,7 +895,7 @@ export type ForumPostForEdit = {
   body: string
   author_name: string
   category_id: string
-  media_image_url: string | null
+  media_image_urls: string[]
   media_video_url: string | null
   is_hidden: boolean
   is_locked: boolean
@@ -597,12 +909,12 @@ export async function getForumPostForEdit(slug: string): Promise<ForumPostForEdi
   const { data: post } = await db
     .from("forum_posts")
     .select(
-      "id, slug, body, author_name, category_id, media_image_url, media_video_url, is_hidden, is_locked, is_pinned, created_at"
+      "id, slug, body, author_name, category_id, media_image_urls, media_video_url, is_hidden, is_locked, is_pinned, created_at"
     )
     .eq("slug", slug)
     .maybeSingle()
 
-  return post ?? null
+  return post ? { ...post, media_image_urls: post.media_image_urls ?? [] } : null
 }
 
 /** Atualiza campos de um post do fórum (admin). */
@@ -611,7 +923,7 @@ export async function updateForumPost(
   updates: Partial<{
     body: string
     category_id: string
-    media_image_url: string | null
+    media_image_urls: string[]
     media_video_url: string | null
     is_hidden: boolean
     is_locked: boolean
@@ -627,7 +939,7 @@ export async function updateForumPost(
     return { ok: false, error: "Categoria inválida ou inativa.", status: 400 }
   }
 
-  const mediaError = validateMedia(updates.media_image_url, updates.media_video_url)
+  const mediaError = validateMedia(updates.media_image_urls, updates.media_video_url)
   if (mediaError) return { ok: false, error: mediaError, status: 400 }
 
   // Só 1 post fixado por vez: fixar este desfixa qualquer outro que já estivesse.
@@ -683,4 +995,136 @@ export async function deleteForumPostBySlug(slug: string): Promise<RepositoryRes
   const { data: existing } = await db.from("forum_posts").select("id").eq("slug", slug).maybeSingle()
   if (!existing) return { ok: false, error: "Post não encontrado.", status: 404 }
   return deleteForumPost(existing.id)
+}
+
+// ────────────────────────────────────────────
+// Denúncias
+// ────────────────────────────────────────────
+
+/** Cria uma denúncia direta (sem motivo) de um post ou comentário do fórum. */
+export async function createForumReport(params: {
+  targetType: "post" | "comment"
+  postSlug: string
+  commentId?: string | null
+  reporterUserId: string
+}): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: post } = await db.from("forum_posts").select("id").eq("slug", params.postSlug).maybeSingle()
+  if (!post) return { ok: false, error: "Post não encontrado.", status: 404 }
+
+  let commentId: string | null = null
+  if (params.targetType === "comment") {
+    if (!params.commentId) return { ok: false, error: "Comentário não informado.", status: 400 }
+    const { data: comment } = await db
+      .from("forum_comments")
+      .select("id, post_id")
+      .eq("id", params.commentId)
+      .maybeSingle()
+    if (!comment || comment.post_id !== post.id) {
+      return { ok: false, error: "Comentário não encontrado.", status: 404 }
+    }
+    commentId = comment.id
+  }
+
+  const { error } = await db.from("forum_reports").insert({
+    target_type: params.targetType,
+    post_id: post.id,
+    comment_id: commentId,
+    reporter_user_id: params.reporterUserId,
+  })
+
+  if (error) {
+    // Unique violation: já denunciou esse alvo antes.
+    if (error.code === "23505") {
+      return { ok: false, error: "Você já denunciou isso.", status: 409 }
+    }
+    console.error("[forum-repository] createForumReport:", error)
+    return { ok: false, error: error.message, status: 400 }
+  }
+  return { ok: true }
+}
+
+export type ModerationReport = {
+  id: string
+  target_type: "post" | "comment"
+  status: "pending" | "reviewed" | "dismissed"
+  created_at: string
+  reporter_name: string
+  post_slug: string
+  post_preview: string
+  comment_body: string | null
+}
+
+/** Lista denúncias para a fila de moderação, mais recentes primeiro. */
+export async function listForumReportsForModeration(params: {
+  status: "all" | "pending" | "reviewed" | "dismissed"
+  page: number
+  pageSize: number
+}): Promise<{ reports: ModerationReport[]; total: number }> {
+  const db = createSupabaseAdminClient()
+  const start = (params.page - 1) * params.pageSize
+  const end = start + params.pageSize - 1
+
+  let query = db
+    .from("forum_reports")
+    .select("id, target_type, status, created_at, post_id, comment_id, reporter_user_id", { count: "exact" })
+
+  if (params.status !== "all") query = query.eq("status", params.status)
+
+  const { data: rows, count } = await query.order("created_at", { ascending: false }).range(start, end)
+  const reportRows = rows ?? []
+  if (reportRows.length === 0) return { reports: [], total: count ?? 0 }
+
+  const postIds = [...new Set(reportRows.map((r) => r.post_id))]
+  const commentIds = [...new Set(reportRows.map((r) => r.comment_id).filter((id): id is string => !!id))]
+  const reporterIds = [...new Set(reportRows.map((r) => r.reporter_user_id))]
+
+  const [{ data: posts }, { data: comments }, { data: reporters }] = await Promise.all([
+    db.from("forum_posts").select("id, slug, body_preview").in("id", postIds),
+    commentIds.length > 0
+      ? db.from("forum_comments").select("id, body").in("id", commentIds)
+      : Promise.resolve({ data: [] as { id: string; body: string }[] }),
+    db.from("user_profiles").select("id, display_name").in("id", reporterIds),
+  ])
+
+  const postMap = new Map((posts ?? []).map((p) => [p.id, p]))
+  const commentMap = new Map((comments ?? []).map((c) => [c.id, c]))
+  const reporterMap = new Map((reporters ?? []).map((r) => [r.id, r.display_name]))
+
+  const reports: ModerationReport[] = reportRows.map((r) => {
+    const post = postMap.get(r.post_id)
+    const comment = r.comment_id ? commentMap.get(r.comment_id) : null
+    return {
+      id: r.id,
+      target_type: r.target_type as "post" | "comment",
+      status: r.status as ModerationReport["status"],
+      created_at: r.created_at,
+      reporter_name: reporterMap.get(r.reporter_user_id) ?? "Usuário",
+      post_slug: post?.slug ?? "",
+      post_preview: post?.body_preview ?? "",
+      comment_body: comment?.body ?? null,
+    }
+  })
+
+  return { reports, total: count ?? 0 }
+}
+
+/** Marca uma denúncia como revisada ou descartada. */
+export async function setForumReportStatus(
+  reportId: string,
+  status: "reviewed" | "dismissed"
+): Promise<void> {
+  const db = createSupabaseAdminClient()
+  await db.from("forum_reports").update({ status, reviewed_at: new Date().toISOString() }).eq("id", reportId)
+}
+
+/** Conta denúncias pendentes, para o badge da fila de moderação. */
+export async function countPendingForumReports(): Promise<number> {
+  const db = createSupabaseAdminClient()
+  const { count } = await db
+    .from("forum_reports")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+  return count ?? 0
 }

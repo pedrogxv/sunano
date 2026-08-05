@@ -6,6 +6,7 @@ import {
   type MediaAdjust,
 } from "@/lib/profile-media-adjust"
 import { cn } from "@/lib/utils"
+import { ProfileImageLightbox } from "./ProfileImageLightbox"
 
 interface BannerProps {
   bannerUrl: string | null
@@ -26,7 +27,7 @@ interface BannerProps {
 export function Banner({ bannerUrl, tier, adjust = DEFAULT_ADJUST, className }: BannerProps) {
   const { src, animated } = resolveProfileMedia(bannerUrl, tier)
 
-  return (
+  const image = (
     <div
       className={cn(
         // O gradiente fica sempre no fundo: capa ausente — ou que falhe ao
@@ -58,5 +59,14 @@ export function Banner({ bannerUrl, tier, adjust = DEFAULT_ADJUST, className }: 
           escuro do card logo abaixo, fazia as duas áreas virarem uma tarja
           preta única. */}
     </div>
+  )
+
+  // Sem capa enviada não há o que ampliar — o gradiente de fallback não abre modal.
+  if (!src) return image
+
+  return (
+    <ProfileImageLightbox src={src} alt="Capa do perfil" unoptimized={animated} triggerClassName="w-full">
+      {image}
+    </ProfileImageLightbox>
   )
 }

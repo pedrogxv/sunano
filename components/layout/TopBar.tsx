@@ -33,6 +33,12 @@ const NotificationBell = dynamic(
   () => import("@/components/notifications/notification-bell").then((m) => m.NotificationBell),
   { ssr: false }
 )
+// Idem: o saldo de Aura só existe pra quem tem conta e busca seu próprio
+// endpoint — sem sentido no bundle público. Também se esconde sozinho.
+const AuraBalanceBadge = dynamic(
+  () => import("@/components/layout/AuraBalanceBadge").then((m) => m.AuraBalanceBadge),
+  { ssr: false }
+)
 import { getLanguageEntry, I18N, LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
 import { useLocale } from "@/components/providers/locale-context"
 import { useTheme } from "@/components/providers/theme-context"
@@ -67,6 +73,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/settings":    { title: "Configurações", description: "Gerencie seu perfil e preferências do sistema." },
   "/admin/store":       { title: "Loja & Bazar", description: "Gerencie os produtos da loja e os itens do bazar." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
+  "/admin/forum/denuncias": { title: "Denúncias", description: "Posts e comentários denunciados pela comunidade." },
   "/admin/eventos":     { title: "Eventos", description: "Gerencie os eventos que concedem medalhas automaticamente." },
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
   "/admin/notificacoes":{ title: "Avisos do sistema", description: "Envie um recado que aparece no sino de quem usa o site." },
@@ -253,6 +260,7 @@ export function TopBar() {
           {/* Conta — sempre visível no canto; no admin fica na própria sidebar. */}
           {!isAdmin && (
             <>
+              <AuraBalanceBadge />
               <div className="h-6 w-px shrink-0 bg-border" />
               <AuthUser layout="topbar" variant="public" loginHref="/login" />
             </>

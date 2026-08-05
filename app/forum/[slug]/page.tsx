@@ -1,97 +1,125 @@
-"use client"
+import type { Metadata } from "next"
+import { notFound } from "next/navigation"
 
-import { useEffect, useState, useCallback, useMemo } from "react"
-import Link from "next/link"
-import { useParams } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { getForumPostBySlug, getForumSidebarData } from "@/lib/server/repositories/forum-repository"
+import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
+import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { ForumPostContent } from "./forum-post-content"
 
-import { PostCard, type PostCardData } from "@/components/forum/PostCard"
-import BoxLoader from "@/components/ui/box-loader"
-import { useAuthUser } from "@/components/providers/auth-context"
-import { CommentsSection } from "@/components/comments/CommentsSection"
-import type { CommentItem } from "@/components/comments/types"
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sunano.com.br"
 
-type ForumPost = PostCardData
+// ISR: o post e os comentários são renderizados no servidor — essencial para
+// SEO, já que a busca por um periférico específico precisa encontrar o HTML
+// da discussão, não um shell vazio esperando fetch client-side.
+export const revalidate = 30
 
-export default function ForumPostPage() {
-  const params = useParams<{ slug: string }>()
+function truncate(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, " ").trim()
+  if (clean.length <= max) return clean
+  return clean.slice(0, max - 1).trimEnd() + "…"
+}
 
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [post, setPost] = useState<ForumPost | null>(null)
-  const [comments, setComments] = useState<CommentItem[]>([])
-  const { user: contextUser, loading: authLoading } = useAuthUser()
-  const authUser = useMemo(
-    () =>
-      contextUser
-        ? { id: contextUser.id, display_name: contextUser.displayName, avatar_url: contextUser.avatarUrl }
-        : null,
-    [contextUser]
-  )
-  const loadPost = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!params.slug) return
-    try {
-      // Refetch "silencioso" (após comentar) não troca a tela pelo loader —
-      // só atualiza os dados por baixo, pra não parecer que a página recarregou.
-      if (!opts?.silent) setLoading(true)
-      setError(null)
-      // `no-store` explícito: a rota não manda Cache-Control nenhum, e este
-      // mesmo refetch é o que traz o comentário recém-editado de volta — servir
-      // do cache do browser mostraria o texto antigo logo depois de salvar.
-      const res = await fetch(`/api/forum/posts/${params.slug}`, { cache: "no-store" })
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data?.post) throw new Error(data?.error ?? "Erro ao carregar post")
-      setPost(data.post)
-      setComments(data.comments ?? [])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar post")
-    } finally {
-      if (!opts?.silent) setLoading(false)
-    }
-  }, [params.slug])
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const supabase = await createSupabaseServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  const result = await getForumPostBySlug(slug, authData.user?.id ?? null)
+  if (!result) return { title: "Post não encontrado | Fórum Sunano" }
 
-  useEffect(() => { loadPost() }, [loadPost])
+  const { post } = result
+  const categoryName = post.category?.name
+  const title = categoryName
+    ? `${truncate(post.body, 70)} — ${categoryName} | Fórum Sunano`
+    : `${truncate(post.body, 70)} | Fórum Sunano`
+  const description = truncate(post.body, 160)
+  const url = `${SITE_URL}/forum/${post.slug}`
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    // Oculto só é visível pro próprio dono (pra ele reativar) — não deve ser indexado.
+    ...(post.is_hidden ? { robots: { index: false, follow: false } } : {}),
+    openGraph: {
+      title,
+      description,
+      url,
+      type: "article",
+      publishedTime: post.created_at,
+      images: post.media_image_urls.length > 0 ? post.media_image_urls.map((url) => ({ url })) : undefined,
+    },
+    twitter: {
+      card: post.media_image_urls.length > 0 ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: post.media_image_urls.length > 0 ? post.media_image_urls : undefined,
+    },
+  }
+}
+
+export default async function ForumPostPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
+  const { slug } = await params
+  const supabase = await createSupabaseServerClient()
+  const { data: authData } = await supabase.auth.getUser()
+  const viewerId = authData.user?.id ?? null
+  const result = await getForumPostBySlug(slug, viewerId)
+  if (!result) notFound()
+
+  const { post, comments, hasMoreComments } = result
+  const url = `${SITE_URL}/forum/${post.slug}`
+  const [sidebarData, authorProfile] = await Promise.all([
+    getForumSidebarData({ postId: post.id, categoryId: post.category?.id ?? null }),
+    post.user_id ? getProfileShowcase(post.user_id) : Promise.resolve(null),
+  ])
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "DiscussionForumPosting",
+    "@id": url,
+    headline: truncate(post.body, 110),
+    text: post.body,
+    url,
+    datePublished: post.created_at,
+    author: {
+      "@type": "Person",
+      name: post.author_display_name,
+    },
+    ...(post.category ? { about: post.category.name } : {}),
+    ...(post.media_image_urls.length > 0 ? { image: post.media_image_urls } : {}),
+    interactionStatistic: {
+      "@type": "InteractionCounter",
+      interactionType: "https://schema.org/CommentAction",
+      userInteractionCount: post.comment_count,
+    },
+    comment: comments.slice(0, 20).map((c) => ({
+      "@type": "Comment",
+      text: c.body,
+      dateCreated: c.created_at,
+      author: { "@type": "Person", name: c.author_display_name },
+    })),
+  }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:px-6">
-      <Link
-        href="/forum"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        Voltar ao fórum
-      </Link>
-
-      {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
+    <>
+      {/* Post oculto só é renderizado pro próprio dono reativar — sem dado estruturado, não deve parecer indexável. */}
+      {!post.is_hidden && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       )}
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <BoxLoader />
-        </div>
-      ) : post ? (
-        <div className="space-y-6">
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 motion-reduce:animate-none space-y-6">
-            <PostCard post={post} clickable={false} compact={false} />
-          </div>
-
-          {/* Comments — surge logo depois do post, com um leve atraso pra
-              sensação de sequência (não uma seção à parte, "carregada"). */}
-          <CommentsSection
-            apiBasePath={`/api/forum/posts/${params.slug}`}
-            auraLookupPath="/api/forum/aura"
-            comments={comments}
-            onCommentsChange={setComments}
-            reloadComments={() => loadPost({ silent: true })}
-            authUser={authUser}
-            authLoading={authLoading}
-            isLocked={post.is_locked}
-          />
-        </div>
-      ) : null}
-    </div>
+      <ForumPostContent
+        post={post}
+        initialComments={comments}
+        initialHasMoreComments={hasMoreComments}
+        sidebarData={sidebarData}
+        authorProfile={authorProfile}
+      />
+    </>
   )
 }

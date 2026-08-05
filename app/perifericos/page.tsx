@@ -1,8 +1,16 @@
+import type { Metadata } from "next"
+
 import { listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { PerifericosContent } from "./perifericos-content"
 import { mapTier } from "@/lib/tier-utils"
 
 export const revalidate = 30
+
+export const metadata: Metadata = {
+  title: "Periféricos",
+  description: "Wiki completa de periféricos gamers: mouses, teclados, headsets e mais, com ficha técnica, tier e reviews.",
+  alternates: { canonical: "/perifericos" },
+}
 
 export default async function PerifericosPage() {
   const peripheralsList = (await listAllPeripherals()) as Array<{

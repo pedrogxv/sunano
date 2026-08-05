@@ -14,7 +14,7 @@ export async function POST(
 
   const user = await getRequestUser(request)
   if (!user) {
-    return NextResponse.json({ error: "Você precisa estar logado para reagir." }, { status: 401 })
+    return NextResponse.json({ error: "Você precisa estar logado para reagir.", code: "unauthenticated" }, { status: 401 })
   }
 
   const body = await request.json().catch(() => null)
@@ -27,7 +27,7 @@ export async function POST(
     windowSeconds: 60,
   })
   if (!rateLimit.allowed) {
-    return NextResponse.json({ error: "Aguarde um pouco antes de reagir novamente." }, { status: 429 })
+    return NextResponse.json({ error: "Aguarde um pouco antes de reagir novamente.", code: "rate_limited" }, { status: 429 })
   }
 
   const db = createSupabaseAdminClient()
@@ -38,12 +38,12 @@ export async function POST(
     .maybeSingle()
 
   if (!comment || comment.is_hidden) {
-    return NextResponse.json({ error: "Comentário não encontrado." }, { status: 404 })
+    return NextResponse.json({ error: "Comentário não encontrado.", code: "not_found" }, { status: 404 })
   }
 
   const result = await toggleAura({ giverId: user.id, targetType: "blog_comment", targetId: comment.id, kind })
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: result.status })
+    return NextResponse.json({ error: result.error, code: result.code }, { status: result.status })
   }
   return NextResponse.json({ ok: true, reaction: result.reaction, aura_count: result.auraCount })
 }

@@ -39,7 +39,7 @@ export type HomeForumPost = {
   body_preview: string
   author_name: string
   author_avatar_url: string | null
-  media_image_url: string | null
+  media_image_urls: string[]
   created_at: string
 }
 
@@ -100,7 +100,7 @@ export async function getHomeData(): Promise<HomeData> {
     listFeaturedProducts(6),
     db
       .from("forum_posts")
-      .select("id, slug, body_preview, author_name, user_id, media_image_url, created_at")
+      .select("id, slug, body_preview, author_name, user_id, media_image_urls, created_at")
       .eq("is_hidden", false)
       .order("created_at", { ascending: false })
       .limit(4),
@@ -134,7 +134,7 @@ export async function getHomeData(): Promise<HomeData> {
       body_preview: p.body_preview,
       author_name: p.author_name,
       author_avatar_url: p.user_id ? avatarMap[p.user_id] ?? null : null,
-      media_image_url: p.media_image_url,
+      media_image_urls: p.media_image_urls ?? [],
       created_at: p.created_at,
     })),
     videos: ((ytFeed?.data?.videos ?? []) as HomeVideo[]).slice(0, 3),

@@ -1,18 +1,22 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { toast } from "sonner"
 
 import { nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
+import { notifyAuraChanged } from "@/lib/client/aura-events"
 import type { CommentItem, CommentsAuthUser } from "./types"
 
+export type CommentSort = "recent" | "aura"
+
 /**
- * Estado e handlers de comentários (listagem, novo comentário, resposta em
- * thread de 1 nível, Aura e edição na janela de 15min) — mesma lógica do fórum,
- * parametrizada só pelo prefixo de API (`/api/forum/posts/[slug]` ou
- * `/api/blog/[slug]`) para ser reaproveitada por notícias e futuras features.
+ * Estado e handlers de comentários (listagem paginada, novo comentário,
+ * resposta em thread de 1 nível, Aura e edição na janela de 15min) — mesma
+ * lógica do fórum, parametrizada só pelo prefixo de API (`/api/forum/posts/[slug]`
+ * ou `/api/blog/[slug]`) para ser reaproveitada por notícias e futuras features.
  *
- * Não busca o post em si — cada página resolve isso do jeito que já faz
- * (client-side fetch no fórum, RSC/ISR em notícias) e passa `comments`
- * iniciais + `onCommentsChange` para manter esse hook em sincronia.
+ * A página inicial (SSR) já busca a 1ª leva de comentários — este hook só
+ * assume o controle a partir daí: troca de ordenação e "carregar mais" pedem
+ * uma página por vez em vez de trazer o post inteiro de novo, minimizando
+ * consulta ao banco.
  */
 export function useCommentsController({
   apiBasePath,
@@ -20,6 +24,7 @@ export function useCommentsController({
   comments,
   onCommentsChange,
   authUser,
+  initialHasMore = false,
 }: {
   apiBasePath: string
   /** Endpoint bulk de "o que eu já dei aura" (`/api/forum/aura` ou `/api/blog/aura`). */
@@ -27,8 +32,18 @@ export function useCommentsController({
   comments: CommentItem[]
   onCommentsChange: (comments: CommentItem[]) => void
   authUser: CommentsAuthUser
+  /** Se a 1ª página (carregada via SSR) já indica que há mais comentários-raiz. */
+  initialHasMore?: boolean
 }) {
   const [commentReactions, setCommentReactions] = useState<Map<string, Reaction>>(new Map())
+  const [sort, setSort] = useState<CommentSort>("recent")
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(initialHasMore)
+  const [loadingMore, setLoadingMore] = useState(false)
+  // Setado quando o servidor responde `code: "daily_limit"` — trava o botão
+  // de Aura no cliente pro resto da sessão (é um rolling window de 24h, não
+  // dá pra saber com certeza quando libera de novo sem reconsultar).
+  const [dailyAuraLimitReached, setDailyAuraLimitReached] = useState(false)
 
   const [formExpanded, setFormExpanded] = useState(false)
   const [body, setBody] = useState("")
@@ -44,6 +59,63 @@ export function useCommentsController({
   const [editBody, setEditBody] = useState("")
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
+
+  const fetchCommentsPage = useCallback(
+    async (targetPage: number, targetSort: CommentSort) => {
+      const query = new URLSearchParams({ page: String(targetPage), sort: targetSort })
+      const res = await fetch(`${apiBasePath}/comments?${query}`, { cache: "no-store" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao carregar comentários")
+      return data as { comments: CommentItem[]; hasMore: boolean }
+    },
+    [apiBasePath]
+  )
+
+  /** Busca a próxima página de comentários-raiz (+ replies) e concatena ao final da lista. */
+  async function loadMore() {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const nextPage = page + 1
+      const data = await fetchCommentsPage(nextPage, sort)
+      onCommentsChange([...comments, ...data.comments])
+      setPage(nextPage)
+      setHasMore(data.hasMore)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao carregar comentários")
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  /** Troca "Mais Recente"/"Mais Aura" — recomeça da página 1 substituindo a lista. */
+  async function changeSort(nextSort: CommentSort) {
+    if (nextSort === sort || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const data = await fetchCommentsPage(1, nextSort)
+      onCommentsChange(data.comments)
+      setSort(nextSort)
+      setPage(1)
+      setHasMore(data.hasMore)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao carregar comentários")
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  /** Após postar comentário/resposta: recarrega só a página 1 na ordenação atual (barato). */
+  async function reloadFirstPage() {
+    try {
+      const data = await fetchCommentsPage(1, sort)
+      onCommentsChange(data.comments)
+      setPage(1)
+      setHasMore(data.hasMore)
+    } catch {
+      // mantém os comentários já carregados
+    }
+  }
 
   useEffect(() => {
     if (!authUser) setCommentReactions(new Map())
@@ -88,17 +160,25 @@ export function useCommentsController({
       setCommentReactions((prev) => new Map(prev).set(comment.id, prevReaction))
       onCommentsChange(comments.map((c) => (c.id === comment.id ? { ...c, aura_count: prevCount } : c)))
       const data = await res.json().catch(() => null)
-      toast.error(data?.error ?? "Erro ao reagir")
+      // "Próprio comentário" e "limite diário" já aparecem como estado visual
+      // do botão (opacidade + tooltip) — um toast em cima seria redundante.
+      // Só o inesperado (rate limit genérico, erro de rede, etc.) vira toast.
+      if (data?.code === "daily_limit") {
+        setDailyAuraLimitReached(true)
+      } else if (data?.code !== "self_reaction") {
+        toast.error(data?.error ?? "Erro ao reagir")
+      }
     } else {
       const data = await res.json().catch(() => null)
       if (data?.aura_count !== undefined) {
         setCommentReactions((prev) => new Map(prev).set(comment.id, data.reaction ?? null))
         onCommentsChange(comments.map((c) => (c.id === comment.id ? { ...c, aura_count: data.aura_count } : c)))
+        notifyAuraChanged()
       }
     }
   }
 
-  async function submitComment(onPosted: () => Promise<void> | void) {
+  async function submitComment() {
     if (!authUser) return
     try {
       setSaving(true)
@@ -112,7 +192,7 @@ export function useCommentsController({
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar comentário")
       setBody("")
       setFormExpanded(false)
-      await onPosted()
+      await reloadFirstPage()
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao enviar comentário")
     } finally {
@@ -120,7 +200,7 @@ export function useCommentsController({
     }
   }
 
-  async function submitReply(parentCommentId: string, onPosted: () => Promise<void> | void) {
+  async function submitReply(parentCommentId: string) {
     if (!authUser) return
     try {
       setReplySaving(true)
@@ -134,7 +214,7 @@ export function useCommentsController({
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar resposta")
       setReplyBody("")
       setReplyingTo(null)
-      await onPosted()
+      await reloadFirstPage()
     } catch (err) {
       setReplyError(err instanceof Error ? err.message : "Erro ao enviar resposta")
     } finally {
@@ -142,7 +222,7 @@ export function useCommentsController({
     }
   }
 
-  async function submitEdit(commentId: string, onSaved: () => Promise<void> | void) {
+  async function submitEdit(commentId: string) {
     if (!authUser) return
     try {
       setEditSaving(true)
@@ -157,9 +237,14 @@ export function useCommentsController({
       // a mensagem dele é a que aparece — o formulário fica aberto com o texto
       // digitado em vez de sumir levando a edição junto.
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao editar comentário")
+      const newBody = editBody
       setEditingId(null)
       setEditBody("")
-      await onSaved()
+      // Edição não muda a ordenação (recente ou aura) nem a posição na
+      // página — atualiza só o corpo/flag localmente, sem refetch.
+      onCommentsChange(
+        comments.map((c) => (c.id === commentId ? { ...c, body: newBody, is_edited: true } : c))
+      )
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Erro ao editar comentário")
     } finally {
@@ -201,7 +286,13 @@ export function useCommentsController({
 
   return {
     commentReactions,
+    dailyAuraLimitReached,
     reactToComment,
+    sort,
+    changeSort,
+    hasMore,
+    loadingMore,
+    loadMore,
     formExpanded,
     setFormExpanded,
     body,

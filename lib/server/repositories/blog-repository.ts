@@ -75,7 +75,6 @@ export type BlogPostDetail = {
   read_time_minutes: number | null
   created_at: string
   comment_count: number
-  aura_count: number
   admin_profiles: BlogAuthor
   peripherals: BlogPeripheralRef[] | null
 }
@@ -107,7 +106,7 @@ const LIST_COLUMNS =
   "id, title, slug, post_type, author_id, is_featured, excerpt, cover_image_url, cover_thumbnail_url, video_url, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
 
 const DETAIL_COLUMNS =
-  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, aura_count, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
+  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
 
 // Variantes sem `post_type`, usadas como fallback caso a migração
 // `blog_post_type.sql` ainda não tenha sido aplicada.
@@ -266,11 +265,6 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPostDeta
     columns = DETAIL_COLUMNS_LEGACY
     ;({ data, error } = await runQuery(columns))
   }
-  // Fallback: migração `20260818_blog_aura_and_threads.sql` ainda não aplicada.
-  if (error && isMissingColumn(error.message, "aura_count")) {
-    columns = withoutColumn(columns, "aura_count")
-    ;({ data, error } = await runQuery(columns))
-  }
   if (error) {
     console.error("[blog-repository] getPublishedPostBySlug:", error)
     return null
@@ -282,7 +276,6 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPostDeta
   return stripAuthorEmail({
     ...post,
     post_type: post.post_type ?? "review",
-    aura_count: post.aura_count ?? 0,
     comment_count: counts[post.id] ?? 0,
   })
 }

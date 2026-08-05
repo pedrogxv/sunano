@@ -3,10 +3,8 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
 import { Clock, Flame, Plus, Tag, X } from "lucide-react"
-import { toast } from "sonner"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
-import { nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
 import { CategoryPicker } from "@/components/forum/CategoryPicker"
 import { PostMediaField } from "@/components/forum/PostMediaField"
 import BoxLoader from "@/components/ui/box-loader"
@@ -42,8 +40,6 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
         : null,
     [contextUser]
   )
-  const [auraReactions, setAuraReactions] = useState<Map<string, Reaction>>(new Map())
-
   const [activeTab, setActiveTab] = useState<Tab>("recent")
   const [categories, setCategories] = useState<ForumCategoryOption[]>([])
   const [activeRoot, setActiveRoot] = useState<string>("")
@@ -65,25 +61,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       .catch(() => setCategories([]))
   }, [])
 
-  useEffect(() => {
-    if (!authUser) setAuraReactions(new Map())
-  }, [authUser])
-
-  const loadAuraGiven = useCallback(async (postIds: string[]) => {
-    if (!postIds.length) return
-    try {
-      const res = await fetch(`/api/forum/aura?postIds=${postIds.join(",")}`)
-      const data = await res.json().catch(() => null)
-      const next = new Map<string, Reaction>()
-      for (const id of data?.posts?.liked ?? []) next.set(id, "like")
-      for (const id of data?.posts?.disliked ?? []) next.set(id, "dislike")
-      setAuraReactions(next)
-    } catch {
-      setAuraReactions(new Map())
-    }
-  }, [])
-
-  const loadPosts = useCallback(async (tab: Tab, categoryId: string, withAura: boolean) => {
+  const loadPosts = useCallback(async (tab: Tab, categoryId: string) => {
     try {
       setLoading(true)
       setError(null)
@@ -92,61 +70,27 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       const res = await fetch(`/api/forum/posts?${params}`)
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.posts) throw new Error(data?.error ?? "Erro ao carregar posts")
-      const loaded = data.posts as ForumPost[]
-      setPosts(loaded)
-      if (withAura && loaded.length > 0) {
-        await loadAuraGiven(loaded.map((p) => p.id))
-      }
+      setPosts(data.posts as ForumPost[])
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar posts")
     } finally {
       setLoading(false)
     }
-  }, [loadAuraGiven])
+  }, [])
 
-  // O servidor já renderizou os posts da aba padrão (SSR/ISR). Evita um
-  // fetch client-side redundante logo no primeiro paint para visitantes
-  // anônimos — se o usuário estiver autenticado, o efeito abaixo ainda
-  // busca a aura junto com os posts normalmente.
+  // O servidor já renderizou os posts da aba padrão (SSR/ISR) e a lista não
+  // depende de quem está logado (post não tem reação) — o primeiro paint
+  // dispensa o fetch client-side; daí em diante, trocar de aba/categoria
+  // recarrega normalmente.
   const isFirstLoadRef = useRef(true)
 
   useEffect(() => {
     if (isFirstLoadRef.current) {
       isFirstLoadRef.current = false
-      if (!authUser) return
+      return
     }
-    loadPosts(activeTab, activeCategoryId, !!authUser)
-  }, [activeTab, activeCategoryId, authUser, loadPosts])
-
-  async function handleReactAura(post: ForumPost, kind: "like" | "dislike") {
-    if (!authUser) return
-    const prevReaction = auraReactions.get(post.id) ?? null
-    const prevCount = post.aura_count
-    const delta = nextReactionDelta(prevReaction, kind)
-    const optimisticReaction = nextReaction(prevReaction, kind)
-
-    setAuraReactions((prev) => new Map(prev).set(post.id, optimisticReaction))
-    setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, aura_count: p.aura_count + delta } : p)))
-
-    const res = await fetch(`/api/forum/posts/${post.slug}/aura`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind }),
-    })
-
-    if (!res.ok) {
-      setAuraReactions((prev) => new Map(prev).set(post.id, prevReaction))
-      setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, aura_count: prevCount } : p)))
-      const data = await res.json().catch(() => null)
-      toast.error(data?.error ?? "Erro ao reagir")
-    } else {
-      const data = await res.json().catch(() => null)
-      if (data?.aura_count !== undefined) {
-        setAuraReactions((prev) => new Map(prev).set(post.id, data.reaction ?? null))
-        setPosts((prev) => prev.map((p) => (p.id === post.id ? { ...p, aura_count: data.aura_count } : p)))
-      }
-    }
-  }
+    loadPosts(activeTab, activeCategoryId)
+  }, [activeTab, activeCategoryId, loadPosts])
 
   async function submitPost() {
     if (!authUser) return
@@ -170,7 +114,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       setMediaImageUrl(null)
       setMediaVideoUrl(null)
       setShowForm(false)
-      await loadPosts(activeTab, activeCategoryId, !!authUser)
+      await loadPosts(activeTab, activeCategoryId)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao criar post")
     } finally {
@@ -394,13 +338,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       ) : (
         <div className="space-y-3">
           {posts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              auraReaction={auraReactions.get(post.id) ?? null}
-              auraDisabled={!authUser}
-              onReactAura={(kind) => handleReactAura(post, kind)}
-            />
+            <PostCard key={post.id} post={post} />
           ))}
         </div>
       )}

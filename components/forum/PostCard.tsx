@@ -6,7 +6,6 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Crown, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
 
-import { AuraButton, type Reaction } from "@/components/forum/AuraButton"
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { ShareMenu } from "@/components/forum/ShareMenu"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
@@ -29,7 +28,6 @@ export type PostCardData = {
   created_at: string
   is_locked: boolean
   is_pinned: boolean
-  aura_count: number
   comment_count: number
 }
 
@@ -72,22 +70,20 @@ function extractYoutubeId(url: string): string | null {
 
 /**
  * Card de post no estilo Reddit/Twitter: avatar + autor + tempo, texto
- * corrido (sem título separado), mídia opcional, rodapé com Aura /
- * Comentários / Compartilhar. Usado tanto na listagem quanto no cabeçalho
- * da página de post individual.
+ * corrido (sem título separado), mídia opcional, rodapé com Comentários /
+ * Compartilhar. Usado tanto na listagem quanto no cabeçalho da página de
+ * post individual.
+ *
+ * Post não tem like/dislike: a aura de postar (+10, 1x/dia) é creditada na
+ * criação e independe de reação — a ideia é incentivar quem posta, não
+ * julgar o post. Reagir só existe em comentário (ver `AuraButton`).
  */
 export function PostCard({
   post,
-  auraReaction,
-  auraDisabled,
-  onReactAura,
   clickable = true,
   compact = true,
 }: {
   post: PostCardData
-  auraReaction: Reaction
-  auraDisabled: boolean
-  onReactAura: (kind: "like" | "dislike") => void
   clickable?: boolean
   compact?: boolean
 }) {
@@ -172,13 +168,6 @@ export function PostCard({
           )}
 
           <div className="relative z-10 mt-3 flex items-center gap-2 pointer-events-auto">
-            <AuraButton
-              auraCount={post.aura_count}
-              reaction={auraReaction}
-              disabled={auraDisabled}
-              onReact={onReactAura}
-              orientation="horizontal"
-            />
             <Link
               href={clickable ? `/forum/${post.slug}#comments` : "#comments"}
               onClick={(event) => event.stopPropagation()}

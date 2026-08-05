@@ -4,10 +4,8 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
-import { toast } from "sonner"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
-import { nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
 import BoxLoader from "@/components/ui/box-loader"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { CommentsSection } from "@/components/comments/CommentsSection"
@@ -30,12 +28,6 @@ export default function ForumPostPage() {
         : null,
     [contextUser]
   )
-  const [postAuraReaction, setPostAuraReaction] = useState<Reaction>(null)
-
-  useEffect(() => {
-    if (!authUser) setPostAuraReaction(null)
-  }, [authUser])
-
   const loadPost = useCallback(async (opts?: { silent?: boolean }) => {
     if (!params.slug) return
     try {
@@ -56,49 +48,6 @@ export default function ForumPostPage() {
   }, [params.slug])
 
   useEffect(() => { loadPost() }, [loadPost])
-
-  // Reação do usuário atual no post.
-  useEffect(() => {
-    if (!authUser || !post) return
-    const query = new URLSearchParams({ postIds: post.id })
-    fetch(`/api/forum/aura?${query}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if ((data?.posts?.liked ?? []).includes(post.id)) setPostAuraReaction("like")
-        else if ((data?.posts?.disliked ?? []).includes(post.id)) setPostAuraReaction("dislike")
-        else setPostAuraReaction(null)
-      })
-      .catch(() => setPostAuraReaction(null))
-  }, [authUser, post])
-
-  async function handleReactPostAura(kind: "like" | "dislike") {
-    if (!authUser || !post) return
-    const prevReaction = postAuraReaction
-    const prevCount = post.aura_count
-    const delta = nextReactionDelta(prevReaction, kind)
-
-    setPostAuraReaction(nextReaction(prevReaction, kind))
-    setPost((p) => (p ? { ...p, aura_count: p.aura_count + delta } : p))
-
-    const res = await fetch(`/api/forum/posts/${post.slug}/aura`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind }),
-    })
-
-    if (!res.ok) {
-      setPostAuraReaction(prevReaction)
-      setPost((p) => (p ? { ...p, aura_count: prevCount } : p))
-      const data = await res.json().catch(() => null)
-      toast.error(data?.error ?? "Erro ao reagir")
-    } else {
-      const data = await res.json().catch(() => null)
-      if (data?.aura_count !== undefined) {
-        setPostAuraReaction(data.reaction ?? null)
-        setPost((p) => (p ? { ...p, aura_count: data.aura_count } : p))
-      }
-    }
-  }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:px-6">
@@ -123,14 +72,7 @@ export default function ForumPostPage() {
       ) : post ? (
         <div className="space-y-6">
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 motion-reduce:animate-none space-y-6">
-            <PostCard
-              post={post}
-              auraReaction={postAuraReaction}
-              auraDisabled={!authUser}
-              onReactAura={handleReactPostAura}
-              clickable={false}
-              compact={false}
-            />
+            <PostCard post={post} clickable={false} compact={false} />
           </div>
 
           {/* Comments — surge logo depois do post, com um leve atraso pra

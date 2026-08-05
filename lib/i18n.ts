@@ -1397,10 +1397,12 @@ export const translations: Record<LocaleCode, Translations> = {
         {
           version: "Agosto 2026",
           date: "4 de agosto",
-          title: "Like/Dislike e mais no Diretório de Pessoas",
-          description: "Ajustes logo depois da fase Alpha: reações viraram Like/Dislike, os comentários do blog ganharam o mesmo tratamento do fórum, e o Diretório de Pessoas ficou mais completo.",
+          title: "Aura rebalanceada e mais no Diretório de Pessoas",
+          description: "Ajustes logo depois da fase Alpha: a Aura foi rebalanceada para premiar quem posta, reagir virou Like/Dislike e passou a existir só nos comentários, e o Diretório de Pessoas ficou mais completo.",
           items: [
-            "Reações de Aura em posts e comentários trocadas por Like/Dislike, no fórum e no blog",
+            "Aura rebalanceada: postar dá +10 (1x por dia) e comentar dá +5 (1x por post)",
+            "Reações trocadas por Like/Dislike (+1 e -1 de aura pro autor), agora só em comentários — post não recebe mais reação, quem posta é premiado por postar",
+            "Aba Em Alta do fórum passou a ordenar pelos tópicos mais comentados",
             "Comentários das notícias/reviews do blog ganharam respostas em thread e reações, no mesmo padrão do fórum",
             "Diretório de Pessoas com ranking de atividade, e pódio com mini banner",
             "Ranking de Aura exibido também no perfil",
@@ -2182,10 +2184,12 @@ export const translations: Record<LocaleCode, Translations> = {
         {
           version: "August 2026",
           date: "August 4",
-          title: "Like/Dislike and more in the People directory",
-          description: "Quick follow-ups after Alpha: reactions became Like/Dislike, blog comments got the same treatment as the forum, and the People directory got a bit more complete.",
+          title: "Aura rebalanced and more in the People directory",
+          description: "Quick follow-ups after Alpha: Aura was rebalanced to reward posting, reacting became Like/Dislike and now lives only on comments, and the People directory got a bit more complete.",
           items: [
-            "Aura reactions on posts and comments swapped for Like/Dislike, on the forum and the blog",
+            "Aura rebalanced: posting gives +10 (once a day) and commenting gives +5 (once per post)",
+            "Reactions swapped for Like/Dislike (+1 and -1 aura for the author), now on comments only — posts no longer take reactions, posting itself is what gets rewarded",
+            "The forum's Hot tab now ranks topics by how much they're being discussed",
             "Blog/news comments now get thread replies and reactions, same as the forum",
             "People directory got an activity ranking, and the podium now shows a mini banner",
             "Aura ranking now shown on profiles too",

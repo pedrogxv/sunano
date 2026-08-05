@@ -1,12 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { ArrowLeft, Clock, MessageCircle, Newspaper } from "lucide-react"
-import { toast } from "sonner"
 
-import { AuraButton, nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
 import { CommentsSection } from "@/components/comments/CommentsSection"
 import type { CommentItem } from "@/components/comments/types"
 import { UserAvatar } from "@/components/ui/user-avatar"
@@ -29,7 +27,6 @@ export type NewsPost = {
   read_time_minutes: number | null
   created_at: string
   comment_count?: number
-  aura_count: number
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
   peripherals?: PeripheralRef[] | null
 }
@@ -139,7 +136,9 @@ export function NoticiasPostContent({
   related: RelatedPost[]
   initialComments: CommentItem[]
 }) {
-  const [post, setPost] = useState(initialPost)
+  // A notícia em si vem pronta do servidor e não muda no cliente (sem
+  // reação no post) — só os comentários têm estado local.
+  const post = initialPost
   const [comments, setComments] = useState<CommentItem[]>(initialComments)
   const { user: contextUser, loading: authLoading } = useAuthUser()
   const authUser = useMemo(
@@ -149,58 +148,6 @@ export function NoticiasPostContent({
         : null,
     [contextUser]
   )
-  const [postAuraReaction, setPostAuraReaction] = useState<Reaction>(null)
-
-  // Reação do usuário atual nesta notícia.
-  useEffect(() => {
-    if (!authUser || !post) return
-    let cancelled = false
-    const query = new URLSearchParams({ postIds: post.id })
-    fetch(`/api/blog/aura?${query}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled) return
-        if ((data?.posts?.liked ?? []).includes(post.id)) setPostAuraReaction("like")
-        else if ((data?.posts?.disliked ?? []).includes(post.id)) setPostAuraReaction("dislike")
-        else setPostAuraReaction(null)
-      })
-      .catch(() => {
-        if (!cancelled) setPostAuraReaction(null)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [authUser, post])
-
-  async function handleReactPostAura(kind: "like" | "dislike") {
-    if (!authUser || !post) return
-    const prevReaction = postAuraReaction
-    const prevCount = post.aura_count
-    const delta = nextReactionDelta(prevReaction, kind)
-
-    setPostAuraReaction(nextReaction(prevReaction, kind))
-    setPost((p) => (p ? { ...p, aura_count: p.aura_count + delta } : p))
-
-    const res = await fetch(`/api/blog/${encodeURIComponent(post.slug)}/aura`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind }),
-    })
-
-    if (!res.ok) {
-      setPostAuraReaction(prevReaction)
-      setPost((p) => (p ? { ...p, aura_count: prevCount } : p))
-      const data = await res.json().catch(() => null)
-      toast.error(data?.error ?? "Erro ao reagir")
-    } else {
-      const data = await res.json().catch(() => null)
-      if (data?.aura_count !== undefined) {
-        setPostAuraReaction(data.reaction ?? null)
-        setPost((p) => (p ? { ...p, aura_count: data.aura_count } : p))
-      }
-    }
-  }
-
   const loadComments = useCallback(async () => {
     if (!post) return
     try {
@@ -292,14 +239,6 @@ export function NoticiasPostContent({
               {commentCount} {commentCount === 1 ? "comentário" : "comentários"}
             </a>
           </div>
-        </div>
-        <div className="ml-auto">
-          <AuraButton
-            auraCount={post.aura_count}
-            reaction={postAuraReaction}
-            disabled={!authUser}
-            onReact={handleReactPostAura}
-          />
         </div>
       </div>
 

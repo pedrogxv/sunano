@@ -30,7 +30,6 @@ export type ForumListPost = {
   created_at: string
   is_locked: boolean
   is_pinned: boolean
-  aura_count: number
   comment_count: number
   author_display_name: string
   author_avatar_url: string | null
@@ -106,7 +105,7 @@ export async function listForumPosts(params: {
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, body_preview, author_name, user_id, category_id, media_image_url, media_video_url, created_at, is_locked, is_pinned, aura_count"
+      "id, slug, body_preview, author_name, user_id, category_id, media_image_url, media_video_url, created_at, is_locked, is_pinned"
     )
     .eq("is_hidden", false)
 
@@ -123,7 +122,6 @@ export async function listForumPosts(params: {
   // Post fixado só sobe ao topo na aba "Recente" — em "Em Alta" e "Categoria"
   // a ordenação continua só por engajamento/data, sem o pin sobrepor o critério.
   if (tab === "recent") query = query.order("is_pinned", { ascending: false })
-  if (tab === "hot") query = query.order("aura_count", { ascending: false })
   query = query.order("created_at", { ascending: false })
   // Sem paginação na UI ainda — limita para não trazer o fórum inteiro a
   // cada carregamento de página conforme o volume de posts cresce.
@@ -153,7 +151,7 @@ export async function listForumPosts(params: {
   const profileMap = await buildProfileMap(rows.map((p) => p.user_id))
   const categoryMap = await buildCategoryMap()
 
-  return rows.map((p) => ({
+  const list = rows.map((p) => ({
     id: p.id,
     slug: p.slug,
     body: p.body_preview,
@@ -165,13 +163,20 @@ export async function listForumPosts(params: {
     created_at: p.created_at,
     is_locked: p.is_locked,
     is_pinned: p.is_pinned,
-    aura_count: p.aura_count,
     comment_count: commentCounts[p.id] ?? 0,
     author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
     author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
     author_display_slug: p.user_id ? profileMap[p.user_id]?.display_slug ?? null : null,
   }))
+
+  // "Em Alta" = mais discutido. O `comment_count` é montado aqui em JS (vem de
+  // uma segunda consulta, não é coluna de `forum_posts`), então a ordenação
+  // também é em JS — sobre os 50 posts mais recentes dos últimos 30 dias já
+  // recortados acima, que é o mesmo universo que a aba mostrava antes.
+  if (tab === "hot") list.sort((a, b) => b.comment_count - a.comment_count)
+
+  return list
 }
 
 /** Busca um post visível pelo slug, já com comentários enriquecidos. */
@@ -184,7 +189,7 @@ export async function getForumPostBySlug(slug: string): Promise<{
   const { data: post, error } = await db
     .from("forum_posts")
     .select(
-      "id, slug, body, author_name, user_id, category_id, media_image_url, media_video_url, created_at, is_locked, is_pinned, aura_count"
+      "id, slug, body, author_name, user_id, category_id, media_image_url, media_video_url, created_at, is_locked, is_pinned"
     )
     .eq("slug", slug)
     .eq("is_hidden", false)
@@ -220,7 +225,6 @@ export async function getForumPostBySlug(slug: string): Promise<{
     created_at: post.created_at,
     is_locked: post.is_locked,
     is_pinned: post.is_pinned,
-    aura_count: post.aura_count,
     comment_count: comments.length,
     author_display_name: post.user_id
       ? profileMap[post.user_id]?.display_name ?? post.author_name
@@ -335,6 +339,8 @@ export async function createForumPost(params: {
       is_hidden: false,
       is_locked: false,
       is_pinned: false,
+      // Coluna herdada de quando post tinha like/dislike: continua zerada e
+      // ninguém mais lê, mas `database.types.ts` a exige no insert.
       aura_count: 0,
     })
     .select("id")
@@ -421,7 +427,6 @@ export type ModerationPost = {
   is_hidden: boolean
   is_locked: boolean
   is_pinned: boolean
-  aura_count: number
   created_at: string
   comment_count: number
 }
@@ -453,7 +458,7 @@ export async function listForumPostsForModeration(params: {
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, body_preview, author_name, category_id, is_hidden, is_locked, is_pinned, aura_count, created_at",
+      "id, slug, body_preview, author_name, category_id, is_hidden, is_locked, is_pinned, created_at",
       { count: "exact" }
     )
 
@@ -501,7 +506,6 @@ export async function listForumPostsForModeration(params: {
     is_hidden: p.is_hidden,
     is_locked: p.is_locked,
     is_pinned: p.is_pinned,
-    aura_count: p.aura_count,
     created_at: p.created_at,
     comment_count: commentsByPost[p.id]?.length ?? 0,
   }))
@@ -520,7 +524,6 @@ export type ForumPostForEdit = {
   is_hidden: boolean
   is_locked: boolean
   is_pinned: boolean
-  aura_count: number
   created_at: string
 }
 
@@ -530,7 +533,7 @@ export async function getForumPostForEdit(slug: string): Promise<ForumPostForEdi
   const { data: post } = await db
     .from("forum_posts")
     .select(
-      "id, slug, body, author_name, category_id, media_image_url, media_video_url, is_hidden, is_locked, is_pinned, aura_count, created_at"
+      "id, slug, body, author_name, category_id, media_image_url, media_video_url, is_hidden, is_locked, is_pinned, created_at"
     )
     .eq("slug", slug)
     .maybeSingle()

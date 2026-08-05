@@ -22,7 +22,7 @@ export function nextReaction(current: Reaction, kind: "like" | "dislike"): React
 /**
  * Efeito líquido no `aura_count`/saldo do autor ao trocar `current` por
  * `kind` — espelha exatamente a lógica de `toggle_forum_aura`
- * (20260804_aura_rebalance.sql): dar/tirar vale 1, trocar like<->dislike
+ * (20260804120000_aura_rebalance.sql): dar/tirar vale 1, trocar like<->dislike
  * vale 2 (as duas pernas de uma vez). Usado pra atualização otimista antes
  * da resposta da API.
  */
@@ -112,13 +112,11 @@ function ReactionIcon({
 }
 
 /**
- * Par de botões like/dislike (mutuamente exclusivos) de um post ou
- * comentário. `orientation="vertical"` empilha flame / contador / snowflake
- * (coluna de voto, estilo Reddit) e é o padrão para posts;
- * `orientation="horizontal"` (flame, contador, snowflake lado a lado) é
- * usada nos comentários, onde não há coluna lateral.
+ * Par de botões like/dislike (mutuamente exclusivos) de um comentário —
+ * flame, contador e snowflake lado a lado. Post não tem reação: quem posta
+ * ganha +10 de aura na criação (1x/dia) e ninguém pode tirar isso dele.
  *
- * O contador no meio é o placar líquido do alvo (likes − dislikes,
+ * O contador no meio é o placar líquido do comentário (likes − dislikes,
  * `toggle_forum_aura`) — pode ficar negativo se houver mais dislikes que
  * likes. Dar like credita +1 de aura ao autor; dislike, -1; trocar de um
  * para o outro aplica os dois de uma vez.
@@ -128,13 +126,11 @@ export function AuraButton({
   reaction,
   disabled,
   onReact,
-  orientation = "horizontal",
 }: {
   auraCount: number
   reaction: Reaction
   disabled: boolean
   onReact: (kind: "like" | "dislike") => void
-  orientation?: "vertical" | "horizontal"
 }) {
   const [bumping, setBumping] = useState(false)
 
@@ -144,8 +140,8 @@ export function AuraButton({
     onReact(kind)
   }
 
-  const iconSize = orientation === "vertical" ? "size-5" : "size-3.5"
-  const particleDistance = orientation === "vertical" ? 22 : 15
+  const iconSize = "size-3.5"
+  const particleDistance = 15
 
   const tooltipText = disabled
     ? "Entre na sua conta para reagir — like concede +1 de aura, dislike tira -1"
@@ -173,20 +169,13 @@ export function AuraButton({
     onClick: () => handleReact(kind),
   })
 
-  const button =
-    orientation === "vertical" ? (
-      <div className="flex w-10 shrink-0 flex-col items-center gap-0.5">
-        <ReactionIcon {...iconProps("like")} />
-        {count}
-        <ReactionIcon {...iconProps("dislike")} />
-      </div>
-    ) : (
-      <div className="flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5">
-        <ReactionIcon {...iconProps("like")} />
-        {count}
-        <ReactionIcon {...iconProps("dislike")} />
-      </div>
-    )
+  const button = (
+    <div className="flex items-center gap-1 rounded-full border border-border px-1.5 py-0.5">
+      <ReactionIcon {...iconProps("like")} />
+      {count}
+      <ReactionIcon {...iconProps("dislike")} />
+    </div>
+  )
 
   return (
     <Tooltip>
@@ -196,7 +185,7 @@ export function AuraButton({
       <TooltipTrigger asChild>
         <span className="inline-flex">{button}</span>
       </TooltipTrigger>
-      <TooltipContent side={orientation === "vertical" ? "right" : "top"} className="max-w-56 text-center">
+      <TooltipContent side="top" className="max-w-56 text-center">
         {tooltipText}
       </TooltipContent>
     </Tooltip>

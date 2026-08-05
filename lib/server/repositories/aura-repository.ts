@@ -4,23 +4,28 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 
 /**
- * Repositório do sistema de Aura — reagir (like/dislike) em posts e
- * comentários (`forum_aura`), saldo pessoal (`user_aura_wallet`) e extrato
+ * Repositório do sistema de Aura — reagir (like/dislike) em comentários
+ * (`forum_aura`), saldo pessoal (`user_aura_wallet`) e extrato
  * (`aura_ledger`), além dos bônus de criar post/comentário. Toda a
  * atomicidade vive nas funções Postgres `toggle_forum_aura`,
  * `credit_forum_post_creation_aura` e `credit_comment_creation_aura` (ver
  * 20260804_aura_rebalance.sql); este repositório só chama as RPCs e traduz
  * o resultado.
+ *
+ * Post não recebe reação (ver 20260804130000_aura_no_post_reactions.sql): o
+ * autor ganha os +10 na criação e pronto — quem posta é premiado por postar,
+ * não julgado. `toggle_forum_aura` ainda aceita 'post'/'blog_post' no banco
+ * por compatibilidade com o histórico, mas nada aqui passa esses valores.
  */
 
-export type ToggleAuraTarget = "post" | "comment" | "blog_post" | "blog_comment"
+export type ToggleAuraTarget = "comment" | "blog_comment"
 export type ReactionKind = "like" | "dislike"
 
 export type ToggleAuraResult =
   | { ok: true; reaction: ReactionKind | null; auraCount: number }
   | { ok: false; error: string; status: number }
 
-/** Dá, troca ou remove (toggle) a reação do usuário atual num post ou comentário. */
+/** Dá, troca ou remove (toggle) a reação do usuário atual num comentário. */
 export async function toggleAura(params: {
   giverId: string
   targetType: ToggleAuraTarget
@@ -38,10 +43,10 @@ export async function toggleAura(params: {
 
   if (error) {
     if (error.message?.includes("self_aura_not_allowed")) {
-      return { ok: false, error: "Você não pode reagir no seu próprio post ou comentário.", status: 400 }
+      return { ok: false, error: "Você não pode reagir no seu próprio comentário.", status: 400 }
     }
     if (error.message?.includes("target not found")) {
-      return { ok: false, error: "Post ou comentário não encontrado.", status: 404 }
+      return { ok: false, error: "Comentário não encontrado.", status: 404 }
     }
     if (error.message?.includes("daily_aura_limit_reached")) {
       return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", status: 429 }
@@ -200,49 +205,36 @@ export async function listAuraLedger(userId: string, limit = 50): Promise<AuraLe
   }))
 }
 
-/** Um post/comentário por (like, dislike) — conjuntos sempre mutuamente exclusivos. */
+/** Um comentário por (like, dislike) — conjuntos sempre mutuamente exclusivos. */
 export type ReactionSets = { liked: Set<string>; disliked: Set<string> }
 
-/** Quais posts/comentários (dentre os informados) o usuário atual já curtiu/descurtiu. */
+/** Quais comentários (dentre os informados) o usuário atual já curtiu/descurtiu. */
 export async function getUserAuraGiven(
   userId: string,
   targets: {
-    postIds: string[]
-    commentIds: string[]
-    blogPostIds?: string[]
+    commentIds?: string[]
     blogCommentIds?: string[]
   }
 ): Promise<{
-  posts: ReactionSets
   comments: ReactionSets
-  blogPosts: ReactionSets
   blogComments: ReactionSets
 }> {
-  const posts: ReactionSets = { liked: new Set(), disliked: new Set() }
   const comments: ReactionSets = { liked: new Set(), disliked: new Set() }
-  const blogPosts: ReactionSets = { liked: new Set(), disliked: new Set() }
   const blogComments: ReactionSets = { liked: new Set(), disliked: new Set() }
-  const blogPostIds = targets.blogPostIds ?? []
+  const commentIds = targets.commentIds ?? []
   const blogCommentIds = targets.blogCommentIds ?? []
-  if (
-    targets.postIds.length === 0 &&
-    targets.commentIds.length === 0 &&
-    blogPostIds.length === 0 &&
-    blogCommentIds.length === 0
-  ) {
-    return { posts, comments, blogPosts, blogComments }
+  if (commentIds.length === 0 && blogCommentIds.length === 0) {
+    return { comments, blogComments }
   }
 
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("forum_aura")
-    .select("post_id, comment_id, blog_post_id, blog_comment_id, kind")
+    .select("comment_id, blog_comment_id, kind")
     .eq("giver_id", userId)
     .or(
       [
-        targets.postIds.length > 0 ? `post_id.in.(${targets.postIds.join(",")})` : null,
-        targets.commentIds.length > 0 ? `comment_id.in.(${targets.commentIds.join(",")})` : null,
-        blogPostIds.length > 0 ? `blog_post_id.in.(${blogPostIds.join(",")})` : null,
+        commentIds.length > 0 ? `comment_id.in.(${commentIds.join(",")})` : null,
         blogCommentIds.length > 0 ? `blog_comment_id.in.(${blogCommentIds.join(",")})` : null,
       ]
         .filter(Boolean)
@@ -250,19 +242,11 @@ export async function getUserAuraGiven(
     )
 
   for (const row of data ?? []) {
-    const bucket = row.post_id
-      ? posts
-      : row.comment_id
-        ? comments
-        : row.blog_post_id
-          ? blogPosts
-          : row.blog_comment_id
-            ? blogComments
-            : null
+    const bucket = row.comment_id ? comments : row.blog_comment_id ? blogComments : null
     if (!bucket) continue
-    const id = (row.post_id ?? row.comment_id ?? row.blog_post_id ?? row.blog_comment_id) as string
+    const id = (row.comment_id ?? row.blog_comment_id) as string
     ;(row.kind === "dislike" ? bucket.disliked : bucket.liked).add(id)
   }
 
-  return { posts, comments, blogPosts, blogComments }
+  return { comments, blogComments }
 }

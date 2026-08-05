@@ -29,7 +29,6 @@ type Post = {
   is_hidden: boolean
   is_locked: boolean
   is_pinned: boolean
-  aura_count: number
   created_at: string
 }
 
@@ -208,9 +207,6 @@ export default function EditPostClient({
                   className={flags.is_locked ? "bg-amber-500/15 text-amber-400 text-[10px]" : "bg-muted/40 text-muted-foreground text-[10px]"}
                 >
                   {flags.is_locked ? "Bloqueado" : "Aberto"}
-                </Badge>
-                <Badge variant="secondary" className="bg-muted/40 text-muted-foreground text-[10px]">
-                  {initialPost.aura_count} aura
                 </Badge>
               </div>
             </div>

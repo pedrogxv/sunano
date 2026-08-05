@@ -26,14 +26,17 @@ export async function VideosFeedContent() {
 
   const channelAvatar = "/images/mascot/sunano-icon.png"
 
-  const socialLinks = channel
-    ? [
-        { label: "YouTube", href: channel.channelUrl },
-        { label: "TikTok", href: "https://www.tiktok.com/@_sunano" },
-        { label: "X", href: "https://x.com/_sunan0" },
-        { label: "Instagram", href: "https://www.instagram.com/sunano.gg?igsh=NWk0ZnQ1dXg2aWxw" },
-      ]
-    : []
+  // Esta é a única vitrine das redes oficiais (a topbar não lista mais os ícones),
+  // então o card não pode depender do feed do YouTube ter carregado: os links são
+  // fixos e só a URL do canal aproveita o dado da API quando ele existe.
+  const socialLinks = [
+    { label: "YouTube", href: channel?.channelUrl ?? "https://youtube.com/@sunano_" },
+    { label: "Discord", href: "https://discord.gg/kAHbEe5w3D" },
+    { label: "Telegram", href: "https://t.me/canal_sunano" },
+    { label: "TikTok", href: "https://www.tiktok.com/@_sunano" },
+    { label: "Instagram", href: "https://www.instagram.com/sunano.gg?igsh=NWk0ZnQ1dXg2aWxw" },
+    { label: "X", href: "https://x.com/_sunan0" },
+  ]
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-3 py-4 sm:px-4 sm:py-6 md:space-y-8 md:px-6 lg:px-8">
@@ -48,41 +51,39 @@ export async function VideosFeedContent() {
             </h1>
           </div>
 
-          {channel ? (
-            <Card size="sm" className="w-full border-border bg-background md:max-w-sm">
-              <CardContent className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <Image
-                    src={channelAvatar}
-                    alt={channel.title}
-                    width={48}
-                    height={48}
-                    className="size-9 shrink-0 object-contain md:size-12"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-foreground">{channel.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">{channel.customUrl || "Canal no YouTube"}</p>
-                  </div>
+          <Card size="sm" className="w-full border-border bg-background md:max-w-sm">
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Image
+                  src={channelAvatar}
+                  alt={channel?.title || "Sunano"}
+                  width={48}
+                  height={48}
+                  className="size-9 shrink-0 object-contain md:size-12"
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-foreground">{channel?.title || "Sunano"}</p>
+                  <p className="truncate text-xs text-muted-foreground">{channel?.customUrl || "@sunano_"}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {socialLinks.map((social) => (
-                    <Button
-                      key={social.label}
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className="w-full border-border bg-background text-foreground transition-colors hover:bg-muted"
-                    >
-                      <Link href={social.href} target="_blank" rel="noreferrer">
-                        {social.label}
-                        <ExternalLink className="ml-1.5 size-3.5" />
-                      </Link>
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {socialLinks.map((social) => (
+                  <Button
+                    key={social.label}
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-border bg-background text-foreground transition-colors hover:bg-muted"
+                  >
+                    <Link href={social.href} target="_blank" rel="noreferrer">
+                      {social.label}
+                      <ExternalLink className="ml-1.5 size-3.5" />
+                    </Link>
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </section>
 

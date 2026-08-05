@@ -6,6 +6,7 @@ import { Lock, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { CommentFormatHint } from "./CommentBody"
 import { CommentRow } from "./CommentRow"
 import { ReplyForm } from "./ReplyForm"
 import { useCommentsController } from "./useCommentsController"
@@ -64,7 +65,35 @@ export function CommentsSection({
     submitReply,
     startReply,
     cancelReply,
+    editingId,
+    editBody,
+    setEditBody,
+    editSaving,
+    editError,
+    submitEdit,
+    startEdit,
+    cancelEdit,
   } = useCommentsController({ apiBasePath, auraLookupPath, comments, onCommentsChange, authUser })
+
+  /**
+   * Só o autor vê "Editar". O prazo de 15 minutos é conferido dentro do
+   * `CommentRow` (que também o faz expirar sozinho) e, de novo, no servidor
+   * antes de gravar.
+   */
+  const isAuthor = (comment: CommentItem) =>
+    !!authUser && !!comment.user_id && comment.user_id === authUser.id
+
+  const editProps = (comment: CommentItem) => ({
+    canEdit: isAuthor(comment),
+    editing: editingId === comment.id,
+    editValue: editBody,
+    onEditChange: setEditBody,
+    onStartEdit: () => startEdit(comment),
+    onCancelEdit: cancelEdit,
+    onSubmitEdit: () => submitEdit(comment.id, reloadComments),
+    editSaving,
+    editError,
+  })
 
   return (
     <div className="space-y-6">
@@ -92,6 +121,8 @@ export function CommentsSection({
                 className="min-h-[100px] border-border bg-muted/20"
                 placeholder="Escreva seu comentário..."
               />
+
+              <CommentFormatHint />
 
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={cancelComment}>
@@ -153,6 +184,7 @@ export function CommentsSection({
                       onReactAura={(kind) => reactToComment(comment, kind)}
                       onReply={() => startReply(comment.id)}
                       replying={replyingTo === comment.id}
+                      {...editProps(comment)}
                     />
 
                     {replies.length > 0 && (
@@ -170,6 +202,7 @@ export function CommentsSection({
                               onReply={() => startReply(comment.id)}
                               replying={replyingTo === comment.id}
                               compactAvatar
+                              {...editProps(reply)}
                             />
                           </div>
                         ))}

@@ -2,6 +2,7 @@ import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { CommentFormatHint } from "./CommentBody"
 
 /** Formulário inline de resposta a um comentário raiz, aberto sob o comentário. */
 export function ReplyForm({
@@ -44,6 +45,7 @@ export function ReplyForm({
         className="min-h-[72px] border-border bg-background text-sm"
         placeholder="Escreva sua resposta..."
       />
+      <CommentFormatHint />
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>
           Cancelar

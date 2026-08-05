@@ -164,7 +164,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
           authUser ? (
             <Button size="sm" className="shrink-0 gap-2" onClick={() => setShowForm((v) => !v)}>
               {showForm ? <X className="size-4" /> : <Plus className="size-4" />}
-              {showForm ? "Cancelar" : "Novo tópico"}
+              {showForm ? "Cancelar" : "Novo Post"}
             </Button>
           ) : (
             <Link href="/login">

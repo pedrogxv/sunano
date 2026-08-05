@@ -6,7 +6,7 @@ import type { CommentItem, CommentsAuthUser } from "./types"
 
 /**
  * Estado e handlers de comentários (listagem, novo comentário, resposta em
- * thread de 1 nível, Aura em comentário) — mesma lógica usada pelo fórum,
+ * thread de 1 nível, Aura e edição na janela de 15min) — mesma lógica do fórum,
  * parametrizada só pelo prefixo de API (`/api/forum/posts/[slug]` ou
  * `/api/blog/[slug]`) para ser reaproveitada por notícias e futuras features.
  *
@@ -39,6 +39,11 @@ export function useCommentsController({
   const [replyBody, setReplyBody] = useState("")
   const [replySaving, setReplySaving] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editBody, setEditBody] = useState("")
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!authUser) setCommentReactions(new Map())
@@ -137,6 +142,45 @@ export function useCommentsController({
     }
   }
 
+  async function submitEdit(commentId: string, onSaved: () => Promise<void> | void) {
+    if (!authUser) return
+    try {
+      setEditSaving(true)
+      setEditError(null)
+      const res = await fetch(`${apiBasePath}/comments/${commentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: editBody }),
+      })
+      const data = await res.json().catch(() => null)
+      // Inclui o 403 de janela expirada: o servidor é quem decide o prazo, então
+      // a mensagem dele é a que aparece — o formulário fica aberto com o texto
+      // digitado em vez de sumir levando a edição junto.
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao editar comentário")
+      setEditingId(null)
+      setEditBody("")
+      await onSaved()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Erro ao editar comentário")
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  function startEdit(comment: CommentItem) {
+    // Abre com o texto cru (com os `**`), que é o que está no banco — o
+    // negrito é aplicado só na exibição.
+    setEditingId(comment.id)
+    setEditBody(comment.body)
+    setEditError(null)
+  }
+
+  function cancelEdit() {
+    setEditingId(null)
+    setEditBody("")
+    setEditError(null)
+  }
+
   function startReply(commentId: string) {
     setReplyingTo((current) => (current === commentId ? null : commentId))
     setReplyBody("")
@@ -174,5 +218,13 @@ export function useCommentsController({
     submitReply,
     startReply,
     cancelReply,
+    editingId,
+    editBody,
+    setEditBody,
+    editSaving,
+    editError,
+    submitEdit,
+    startEdit,
+    cancelEdit,
   }
 }

@@ -151,7 +151,11 @@ export function NoticiasPostContent({
   const loadComments = useCallback(async () => {
     if (!post) return
     try {
-      const res = await fetch(`/api/blog/${encodeURIComponent(post.slug)}/comments`)
+      // `no-store` explícito — este refetch é o que traz o comentário
+      // recém-editado, então não pode sair do cache do browser.
+      const res = await fetch(`/api/blog/${encodeURIComponent(post.slug)}/comments`, {
+        cache: "no-store",
+      })
       const data = await res.json().catch(() => null)
       setComments((data?.comments ?? []) as CommentItem[])
     } catch {

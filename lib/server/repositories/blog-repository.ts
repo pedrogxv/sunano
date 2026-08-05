@@ -1,6 +1,7 @@
 import "server-only"
 
 import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
+import { canEditComment } from "@/lib/comment-edit"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
 import { creditCommentCreationAura } from "@/lib/server/repositories/aura-repository"
@@ -95,6 +96,7 @@ export type BlogCommentDetail = {
   user_id: string | null
   parent_comment_id: string | null
   created_at: string
+  is_edited: boolean
   aura_count: number
   author_display_name: string
   author_avatar_url: string | null
@@ -395,7 +397,7 @@ export async function listBlogComments(slug: string): Promise<BlogCommentDetail[
   const postId = (post as { id: string }).id
   const { data: rows, error } = await db
     .from("blog_comments")
-    .select("id, body, author_name, user_id, parent_comment_id, created_at, aura_count")
+    .select("id, body, author_name, user_id, parent_comment_id, created_at, is_edited, aura_count")
     .eq("post_id", postId)
     .eq("is_hidden", false)
     .order("created_at", { ascending: true })
@@ -416,6 +418,7 @@ export async function listBlogComments(slug: string): Promise<BlogCommentDetail[
     user_id: c.user_id,
     parent_comment_id: c.parent_comment_id ?? null,
     created_at: c.created_at,
+    is_edited: c.is_edited ?? false,
     aura_count: c.aura_count ?? 0,
     author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
@@ -478,6 +481,63 @@ export async function addBlogComment(params: {
 
   // +5 de aura por comentar, 1x por notícia — best-effort, não bloqueia o comentário.
   await creditCommentCreationAura(params.userId, "blog_post", postId)
+
+  return { ok: true }
+}
+
+/**
+ * Reescreve um comentário do próprio autor dentro da janela de edição — mesma
+ * regra de `updateForumComment`: autoria e prazo conferidos aqui, contra o
+ * `created_at` do banco, e não no cliente.
+ */
+export async function updateBlogComment(params: {
+  postSlug: string
+  commentId: string
+  userId: string
+  body: string
+}): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: comment } = await db
+    .from("blog_comments")
+    .select("id, post_id, user_id, created_at, is_hidden")
+    .eq("id", params.commentId)
+    .maybeSingle()
+
+  if (!comment || comment.is_hidden) {
+    return { ok: false, error: "Comentário não encontrado.", status: 404 }
+  }
+
+  const { data: post } = await db
+    .from("blog_posts")
+    .select("id")
+    .eq("slug", params.postSlug)
+    .eq("is_published", true)
+    .maybeSingle()
+
+  if (!post || (post as { id: string }).id !== comment.post_id) {
+    return { ok: false, error: "Comentário não encontrado.", status: 404 }
+  }
+  if (comment.user_id !== params.userId) {
+    return { ok: false, error: "Você só pode editar os seus comentários.", status: 403 }
+  }
+  if (!canEditComment(comment.created_at)) {
+    return {
+      ok: false,
+      error: "O prazo de 15 minutos para editar este comentário já passou.",
+      status: 403,
+    }
+  }
+
+  const { error } = await db
+    .from("blog_comments")
+    .update({ body: params.body.trim(), edited_at: new Date().toISOString() })
+    .eq("id", comment.id)
+
+  if (error) {
+    console.error("[blog-repository] updateBlogComment:", error.message)
+    return { ok: false, error: error.message, status: 400 }
+  }
 
   return { ok: true }
 }

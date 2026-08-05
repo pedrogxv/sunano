@@ -254,13 +254,17 @@ export type Database = {
           parent_comment_id: string | null
           is_hidden: boolean
           aura_count: number
+          /** Última edição do texto pelo autor (janela de 15min). Null = nunca editado. */
+          edited_at: string | null
+          /** Coluna gerada (`edited_at is not null`) — nunca enviada no Insert/Update. */
+          is_edited: boolean
           created_at: string
           updated_at: string
         }
         Insert: Omit<
           Database["public"]["Tables"]["blog_comments"]["Row"],
-          "id" | "body_preview" | "created_at" | "updated_at"
-        >
+          "id" | "body_preview" | "is_edited" | "edited_at" | "created_at" | "updated_at"
+        > & { edited_at?: string | null }
         Update: Partial<Database["public"]["Tables"]["blog_comments"]["Insert"]>
       }
       admin_profiles: {
@@ -318,13 +322,17 @@ export type Database = {
           parent_comment_id: string | null
           is_hidden: boolean
           aura_count: number
+          /** Última edição do texto pelo autor (janela de 15min). Null = nunca editado. */
+          edited_at: string | null
+          /** Coluna gerada (`edited_at is not null`) — nunca enviada no Insert/Update. */
+          is_edited: boolean
           created_at: string
           updated_at: string
         }
         Insert: Omit<
           Database["public"]["Tables"]["forum_comments"]["Row"],
-          "id" | "body_preview" | "created_at" | "updated_at"
-        >
+          "id" | "body_preview" | "is_edited" | "edited_at" | "created_at" | "updated_at"
+        > & { edited_at?: string | null }
         Update: Partial<Database["public"]["Tables"]["forum_comments"]["Insert"]>
       }
       forum_categories: {

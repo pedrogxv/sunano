@@ -35,7 +35,10 @@ export default function ForumPostPage() {
       // só atualiza os dados por baixo, pra não parecer que a página recarregou.
       if (!opts?.silent) setLoading(true)
       setError(null)
-      const res = await fetch(`/api/forum/posts/${params.slug}`)
+      // `no-store` explícito: a rota não manda Cache-Control nenhum, e este
+      // mesmo refetch é o que traz o comentário recém-editado de volta — servir
+      // do cache do browser mostraria o texto antigo logo depois de salvar.
+      const res = await fetch(`/api/forum/posts/${params.slug}`, { cache: "no-store" })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.post) throw new Error(data?.error ?? "Erro ao carregar post")
       setPost(data.post)

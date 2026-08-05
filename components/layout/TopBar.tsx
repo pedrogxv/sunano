@@ -27,6 +27,13 @@ const AuthUser = dynamic(
     loading: () => <div className="size-8 shrink-0 rounded-lg bg-muted/40 animate-pulse md:size-8" />,
   }
 )
+// Mesmo motivo do AuthUser: o sino só interessa a quem está logado e puxa
+// date-fns + popover. Fora do bundle crítico das páginas públicas. Ele já
+// se esconde sozinho quando não há sessão, então o placeholder é vazio.
+const NotificationBell = dynamic(
+  () => import("@/components/notifications/notification-bell").then((m) => m.NotificationBell),
+  { ssr: false }
+)
 import { getLanguageEntry, I18N, LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
 import { useLocale } from "@/components/providers/locale-context"
 import { useTheme } from "@/components/providers/theme-context"
@@ -91,6 +98,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
   "/admin/eventos":     { title: "Eventos", description: "Gerencie os eventos que concedem medalhas automaticamente." },
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
+  "/admin/notificacoes":{ title: "Avisos do sistema", description: "Envie um recado que aparece no sino de quem usa o site." },
   "/admin/login":       { title: "Login" },
 }
 
@@ -287,6 +295,9 @@ export function TopBar() {
               )
             })}
           </div>
+
+          {/* Notificações — vale também no admin, onde não há AuthUser aqui. */}
+          <NotificationBell />
 
           {/* Conta — sempre visível no canto; no admin fica na própria sidebar. */}
           {!isAdmin && (

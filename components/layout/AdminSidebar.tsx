@@ -10,6 +10,7 @@ import {
   Gift,
   Home,
   Medal,
+  Megaphone,
   MessageSquare,
   Mouse,
   Newspaper,
@@ -99,8 +100,9 @@ export function AdminSidebar() {
     {
       label: t.admin.sidebar.system,
       items: [
-        { href: "/admin/users",       label: t.admin.sidebar.users,       icon: Users,    requiresWebMaster: true },
-        { href: "/admin/settings",    label: t.admin.sidebar.settings,    icon: Settings, permission: "settings_read" },
+        { href: "/admin/users",         label: t.admin.sidebar.users,     icon: Users,    requiresWebMaster: true },
+        { href: "/admin/notificacoes",  label: "Avisos do sistema",       icon: Megaphone, requiresWebMaster: true },
+        { href: "/admin/settings",      label: t.admin.sidebar.settings,  icon: Settings, permission: "settings_read" },
       ],
     },
   ]

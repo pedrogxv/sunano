@@ -63,6 +63,23 @@ type Translations = {
     themeLabel: string
     themeHelper: string
   }
+  notifications: {
+    title: string
+    ariaLabel: string
+    empty: string
+    error: string
+    dismiss: string
+    unreadOne: string
+    /** `{count}` = número de não lidas. */
+    unreadMany: string
+    systemTitle: string
+    /** `{name}` = quem causou; `{amount}` = aura ganha. */
+    auraFromActor: string
+    auraSelf: string
+    postComment: string
+    commentReply: string
+    newFollower: string
+  }
   nav: {
     home: string
     peripherals: string
@@ -703,6 +720,21 @@ export const translations: Record<LocaleCode, Translations> = {
       languageHelper: "Escolha o idioma da interface",
       themeLabel: "Tema",
       themeHelper: "Escolha um clima de cor",
+    },
+    notifications: {
+      title: "Notificações",
+      ariaLabel: "Notificações",
+      empty: "Nenhuma notificação por enquanto.",
+      error: "Não foi possível carregar suas notificações.",
+      dismiss: "Dispensar",
+      unreadOne: "1 não lida",
+      unreadMany: "{count} não lidas",
+      systemTitle: "Aviso do sistema",
+      auraFromActor: "{name} te deu +{amount} de Aura",
+      auraSelf: "Você farmou +{amount} de Aura",
+      postComment: "{name} comentou no seu post",
+      commentReply: "{name} respondeu ao seu comentário",
+      newFollower: "{name} começou a seguir você",
     },
     nav: {
       home: "Início",
@@ -1473,6 +1505,21 @@ export const translations: Record<LocaleCode, Translations> = {
       languageHelper: "Choose the interface language",
       themeLabel: "Theme",
       themeHelper: "Pick a color mood",
+    },
+    notifications: {
+      title: "Notifications",
+      ariaLabel: "Notifications",
+      empty: "Nothing here yet.",
+      error: "Couldn't load your notifications.",
+      dismiss: "Dismiss",
+      unreadOne: "1 unread",
+      unreadMany: "{count} unread",
+      systemTitle: "System notice",
+      auraFromActor: "{name} gave you +{amount} Aura",
+      auraSelf: "You farmed +{amount} Aura",
+      postComment: "{name} commented on your post",
+      commentReply: "{name} replied to your comment",
+      newFollower: "{name} started following you",
     },
     nav: {
       home: "Home",

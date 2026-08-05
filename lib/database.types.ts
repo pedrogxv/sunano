@@ -7,6 +7,24 @@
  * vivem exclusivamente na camada de domínio (`lib/server`).
  */
 
+/**
+ * Tipos de notificação. Espelham o `check` da coluna `notifications.type`
+ * (ver 20260819_notifications.sql) — mexer aqui exige mexer lá.
+ */
+export type NotificationType =
+  | "aura_received"
+  | "post_comment"
+  | "comment_reply"
+  | "new_follower"
+  | "system"
+
+export type NotificationEntityType =
+  | "forum_post"
+  | "forum_comment"
+  | "blog_post"
+  | "blog_comment"
+  | "user"
+
 export type Database = {
   public: {
     Tables: {
@@ -603,9 +621,48 @@ export type Database = {
           updated_at?: string
         }
       }
+      notifications: {
+        Relationships: []
+        Row: {
+          id: string
+          /** Destinatário do aviso — nunca quem o causou (esse é `actor_id`). */
+          user_id: string
+          type: NotificationType
+          actor_id: string | null
+          actor_name: string | null
+          entity_type: NotificationEntityType | null
+          entity_id: string | null
+          link: string | null
+          title: string | null
+          body: string | null
+          amount: number | null
+          is_read: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          type: NotificationType
+          actor_id?: string | null
+          actor_name?: string | null
+          entity_type?: NotificationEntityType | null
+          entity_id?: string | null
+          link?: string | null
+          title?: string | null
+          body?: string | null
+          amount?: number | null
+          is_read?: boolean
+          created_at?: string
+        }
+        Update: { is_read?: boolean }
+      }
     }
     Views: Record<string, never>
     Functions: {
+      broadcast_system_notification: {
+        Args: { p_title: string; p_body: string; p_link?: string | null; p_user_id?: string | null }
+        Returns: number
+      }
       decrement_store_stock: {
         Args: { p_product_id: string; p_quantity: number }
         Returns: boolean

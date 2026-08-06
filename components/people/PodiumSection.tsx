@@ -52,12 +52,15 @@ export function PodiumSection({
   metric,
   following,
   currentUserId,
+  showFollowButton = false,
 }: {
   /** Exatamente os 3 primeiros colocados, em ordem (1º, 2º, 3º). */
   profiles: PublicProfileSummary[]
   metric: DirectoryMetric
   following: Set<string>
   currentUserId: string | null
+  /** Só a aba "Mais visitados" mostra o botão Seguir nos cards do pódio. */
+  showFollowButton?: boolean
 }) {
   return (
     <div className="flex items-end justify-center gap-3 sm:gap-6">
@@ -69,6 +72,7 @@ export function PodiumSection({
           metric={metric}
           isFollowing={following.has(profile.id)}
           isSelf={profile.id === currentUserId}
+          showFollowButton={showFollowButton}
         />
       ))}
     </div>
@@ -81,12 +85,14 @@ function PodiumCard({
   metric,
   isFollowing,
   isSelf,
+  showFollowButton,
 }: {
   profile: PublicProfileSummary
   place: Place
   metric: DirectoryMetric
   isFollowing: boolean
   isSelf: boolean
+  showFollowButton: boolean
 }) {
   const layout = PODIUM_LAYOUT[place]
   const isFirst = place === 1
@@ -200,15 +206,17 @@ function PodiumCard({
             <ProfileMetrics profile={profile} metric={metric} compact />
           </Link>
 
-          <div className="mt-2 w-full px-2">
-            {isSelf ? (
-              <p className="rounded-lg border border-dashed border-border py-1 text-center text-[10px] font-medium text-muted-foreground">
-                Você
-              </p>
-            ) : (
-              <FollowButton userId={profile.id} initialFollowing={isFollowing} className="w-full text-xs" />
-            )}
-          </div>
+          {showFollowButton && (
+            <div className="mt-2 w-full px-2">
+              {isSelf ? (
+                <p className="rounded-lg border border-dashed border-border py-1 text-center text-[10px] font-medium text-muted-foreground">
+                  Você
+                </p>
+              ) : (
+                <FollowButton userId={profile.id} initialFollowing={isFollowing} className="w-full text-xs" />
+              )}
+            </div>
+          )}
         </div>
       </MiniProfileHoverCard>
 

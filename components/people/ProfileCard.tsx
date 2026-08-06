@@ -118,6 +118,7 @@ export function ProfileCard({
   rank,
   isFollowing = false,
   isSelf = false,
+  showFollowButton = false,
 }: {
   profile: PublicProfileSummary
   /** Qual número aparece sob o nick — acompanha a aba selecionada. */
@@ -127,6 +128,8 @@ export function ProfileCard({
   isFollowing?: boolean
   /** Esconde o botão: ninguém segue a si mesmo. */
   isSelf?: boolean
+  /** Só a aba "Mais visitados" mostra o botão Seguir nos cards de ranking. */
+  showFollowButton?: boolean
 }) {
 
   const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier)
@@ -204,7 +207,7 @@ export function ProfileCard({
             </span>
           )}
 
-          <div className="-mt-11 flex flex-col items-center px-3">
+          <div className={cn("-mt-11 flex flex-col items-center px-3", !showFollowButton && "pb-4")}>
             <div
               className={cn(
                 "relative size-[86px] overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 group-hover:scale-105",
@@ -242,15 +245,17 @@ export function ProfileCard({
           </div>
         </Link>
 
-        <div className="mt-3 px-3 pb-3">
-          {isSelf ? (
-            <p className="rounded-lg border border-dashed border-border py-1.5 text-center text-[11px] font-medium text-muted-foreground">
-              Você
-            </p>
-          ) : (
-            <FollowButton userId={profile.id} initialFollowing={isFollowing} className="w-full" />
-          )}
-        </div>
+        {showFollowButton && (
+          <div className="mt-3 px-3 pb-3">
+            {isSelf ? (
+              <p className="rounded-lg border border-dashed border-border py-1.5 text-center text-[11px] font-medium text-muted-foreground">
+                Você
+              </p>
+            ) : (
+              <FollowButton userId={profile.id} initialFollowing={isFollowing} className="w-full" />
+            )}
+          </div>
+        )}
       </div>
     </MiniProfileHoverCard>
   )

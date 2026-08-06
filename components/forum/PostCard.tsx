@@ -184,6 +184,15 @@ export function PostCard({
           )}
 
           <div className="relative z-10 mt-3 flex items-center gap-2 pointer-events-auto">
+            <span
+              title="Aura acumulada nos comentários deste post"
+              className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-orange-500"
+            >
+              <span className="aura-stat-icon-holder inline-flex">
+                <Flame className="aura-stat-icon size-4 text-orange-500" fill="currentColor" strokeWidth={1.5} />
+              </span>
+              {post.aura_count}
+            </span>
             <Link
               href={clickable ? `/forum/${post.slug}#comments` : "#comments"}
               onClick={(event) => event.stopPropagation()}
@@ -192,15 +201,6 @@ export function PostCard({
               <MessageCircle className="size-3.5" />
               {post.comment_count}
             </Link>
-            <span
-              title="Aura acumulada nos comentários deste post"
-              className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground"
-            >
-              <span className="aura-stat-icon-holder inline-flex">
-                <Flame className="aura-stat-icon size-3.5 text-primary" fill="currentColor" strokeWidth={1.5} />
-              </span>
-              {post.aura_count}
-            </span>
             <ShareMenu slug={post.slug} title={post.title} />
             {isOwner ? (
               <>

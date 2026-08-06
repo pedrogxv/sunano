@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 import { AuraButton, type AuraBlockReason, type Reaction } from "@/components/forum/AuraButton"
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
 import { ReportMenu } from "@/components/forum/ReportMenu"
+import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { canEditComment, commentEditDeadline } from "@/lib/comment-edit"
+import { profilePath } from "@/lib/profile-name"
 import { CommentBody, CommentFormatHint } from "./CommentBody"
 import type { CommentItem } from "./types"
 
@@ -102,10 +105,29 @@ export function CommentRow({
 
   return (
     <div className="flex gap-3">
-      <UserAvatar name={comment.author_display_name} avatarUrl={comment.author_avatar_url} size={compactAvatar ? 7 : 8} />
+      <MiniProfileHoverCard slug={comment.author_display_slug} side="right" align="start">
+        {comment.author_display_slug ? (
+          <Link href={profilePath(comment.author_display_slug)} className="shrink-0">
+            <UserAvatar name={comment.author_display_name} avatarUrl={comment.author_avatar_url} size={compactAvatar ? 7 : 8} />
+          </Link>
+        ) : (
+          <UserAvatar name={comment.author_display_name} avatarUrl={comment.author_avatar_url} size={compactAvatar ? 7 : 8} />
+        )}
+      </MiniProfileHoverCard>
       <div className="flex-1">
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{comment.author_display_name}</span>
+          <MiniProfileHoverCard slug={comment.author_display_slug} side="right" align="start">
+            {comment.author_display_slug ? (
+              <Link
+                href={profilePath(comment.author_display_slug)}
+                className="font-medium text-foreground hover:underline"
+              >
+                {comment.author_display_name}
+              </Link>
+            ) : (
+              <span className="font-medium text-foreground">{comment.author_display_name}</span>
+            )}
+          </MiniProfileHoverCard>
           <AuthorTierBadge tier={comment.author_account_tier} />
           <AuthorSpecialTagBadge slug={comment.author_display_slug} />
           <span>·</span>

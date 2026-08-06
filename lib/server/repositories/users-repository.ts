@@ -565,6 +565,40 @@ export async function getMostActiveProfiles(limit = 12): Promise<PublicProfileSu
     .slice(0, limit)
 }
 
+/**
+ * Ids fixos dos moderadores da comunidade, exibidos na sidebar do Fórum.
+ *
+ * Não é o mesmo conceito do `role` de `admin_profiles` (que controla acesso
+ * ao painel admin): Ryantech, por exemplo, tem `role: "admin"` ali, não
+ * "moderator". Lista mantida à mão até existir um flag próprio para
+ * "moderador da comunidade".
+ */
+const FORUM_MODERATOR_IDS = [
+  "2d1a5685-391e-41a4-9042-2b45d2eb6e99", // victinho
+  "755eaaed-d9b7-443b-8312-728446c8d538", // end
+  "de85833c-70b8-440b-ab10-0202ae869c13", // ryantechofc
+]
+
+/** Perfis dos moderadores da comunidade, na ordem fixa acima. */
+export async function getForumModeratorProfiles(): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_profiles")
+    .select(DIRECTORY_COLUMNS)
+    .in("id", FORUM_MODERATOR_IDS)
+
+  if (error) {
+    console.error("[users-repository] getForumModeratorProfiles:", error)
+    return []
+  }
+
+  const rows = (data ?? []) as DirectoryRow[]
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  return FORUM_MODERATOR_IDS.map((id) => byId.get(id))
+    .filter((row): row is DirectoryRow => Boolean(row))
+    .map((row) => toProfileSummary(row))
+}
+
 const ACTIVITY_RANK_TOP_CUTOFF = 100
 
 /**

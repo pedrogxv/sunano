@@ -1,6 +1,10 @@
 import type { Metadata } from "next"
 
 import { listForumPosts } from "@/lib/server/repositories/forum-repository"
+import {
+  getForumModeratorProfiles,
+  getMostActiveProfiles,
+} from "@/lib/server/repositories/users-repository"
 import { ForumContent, type ForumPost } from "./forum-content"
 
 // ISR: os posts da aba padrão ("recent") são renderizados no servidor,
@@ -23,7 +27,11 @@ export const metadata: Metadata = {
 }
 
 export default async function ForumPage() {
-  const initialPosts = (await listForumPosts({ tab: "recent" })) as ForumPost[]
+  const [initialPosts, topActive, moderators] = await Promise.all([
+    listForumPosts({ tab: "recent" }) as Promise<ForumPost[]>,
+    getMostActiveProfiles(3),
+    getForumModeratorProfiles(),
+  ])
 
-  return <ForumContent initialPosts={initialPosts} />
+  return <ForumContent initialPosts={initialPosts} topActive={topActive} moderators={moderators} />
 }

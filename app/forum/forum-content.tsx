@@ -9,6 +9,7 @@ import { CategoryPickerCompact } from "@/components/forum/CategoryPicker"
 import { PostMediaField } from "@/components/forum/PostMediaField"
 import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { ForumSidebar, ForumSidebarMobileTrigger } from "@/components/forum/ForumSidebar"
+import type { PublicProfileSummary } from "@/lib/user-directory"
 import { CommentBody, CommentFormatHint } from "@/components/comments/CommentBody"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
@@ -31,7 +32,15 @@ type Tab = "recent" | "hot" | "category" | "mine"
 const MAX_TITLE = 200
 const MAX_BODY = 5000
 
-export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
+export function ForumContent({
+  initialPosts,
+  topActive,
+  moderators,
+}: {
+  initialPosts: ForumPost[]
+  topActive: PublicProfileSummary[]
+  moderators: PublicProfileSummary[]
+}) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [posts, setPosts] = useState<ForumPost[]>(initialPosts)
@@ -229,7 +238,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       </div>
 
       <div className="lg:hidden">
-        <ForumSidebarMobileTrigger />
+        <ForumSidebarMobileTrigger topActive={topActive} moderators={moderators} />
       </div>
 
       {/* Tab bar */}
@@ -454,7 +463,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       )}
       </div>
 
-      <ForumSidebar />
+      <ForumSidebar topActive={topActive} moderators={moderators} />
     </div>
   )
 }

@@ -1,3 +1,6 @@
+"use client"
+
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Package, ShoppingBag, Trophy } from "lucide-react"
@@ -7,7 +10,7 @@ import { SiShopee } from "react-icons/si"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { mapTier } from "@/lib/tier-utils"
+import { mapTier, NEW_TIERS } from "@/lib/tier-utils"
 import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
@@ -75,6 +78,98 @@ interface PeripheralDetailViewProps {
   /** Destino do badge/link de ranking. Passe "/admin/ranking" ao renderizar
    *  dentro do painel admin, senão o clique sai para o site público. */
   rankingHref?: string
+}
+
+/** Modos de ranking por categoria — espelha `TIERLIST_MODE_OPTIONS` do form de
+ *  admin (app/admin/tierlist/form.tsx) e `ratingModes` da Tierlist pública
+ *  (components/tierlist/TierlistGrid.tsx). Cada periférico pode aparecer em
+ *  mais de um modo dentro da mesma categoria (ex.: um mouse é ranqueado tanto
+ *  em "Geral" quanto em "Magnético"), cada um com seu próprio tier. */
+type RankingMode = "oled" | "overall" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb" | "ips_va" | "competitive"
+
+const DEFAULT_RANKING_MODES: { key: RankingMode; label: string; color: string }[] = [
+  { key: "overall", label: "Geral", color: "bg-red-400" },
+  { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
+]
+
+const RANKING_MODES_BY_CATEGORY: Record<string, { key: RankingMode; label: string; color: string }[]> = {
+  keyboard: [
+    { key: "magnetic", label: "Magnético", color: "bg-blue-400" },
+    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
+    { key: "mechanical", label: "Mecânico", color: "bg-purple-400" },
+  ],
+  monitors: [
+    { key: "oled", label: "OLED", color: "bg-amber-400" },
+    { key: "ips_va", label: "IPS / VA", color: "bg-sky-400" },
+    { key: "competitive", label: "Competitivo", color: "bg-purple-400" },
+    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
+  ],
+  mouse: [
+    { key: "overall", label: "Geral", color: "bg-red-400" },
+    { key: "magnetic", label: "Magnético", color: "bg-blue-400" },
+    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
+  ],
+  switches: [
+    { key: "overall", label: "Geral", color: "bg-red-400" },
+    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
+    { key: "soundTyping", label: "Som e Digitação", color: "bg-cyan-500" },
+  ],
+  mousepad: [
+    { key: "overall", label: "Geral", color: "bg-red-400" },
+    { key: "value", label: "Nacional", color: "bg-emerald-400" },
+    { key: "recommended", label: "Custo Benefício", color: "bg-purple-400" },
+  ],
+  glasspad: [
+    { key: "overall", label: "Geral", color: "bg-red-400" },
+    { key: "value", label: "Nacional", color: "bg-emerald-400" },
+    { key: "recommended", label: "Custo Benefício", color: "bg-purple-400" },
+  ],
+  iem: [
+    { key: "overall", label: "Geral", color: "bg-red-400" },
+    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
+    { key: "recommended", label: "Gamer", color: "bg-purple-400" },
+  ],
+  headset: [
+    { key: "overall", label: "Geral", color: "bg-red-400" },
+    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
+    { key: "recommended", label: "Nacionais", color: "bg-purple-400" },
+  ],
+}
+
+// Modos que não compartilham a coluna `tier` — cada um lê seu próprio valor em
+// `specs.adminTier_<modo>`. "overall"/"magnetic" (teclado) ficam de fora: são o
+// modo "padrão" da categoria e usam a coluna `tier` diretamente.
+const RANKING_TIER_SPEC_KEY: Partial<Record<RankingMode, string>> = {
+  value: "adminTier_value",
+  recommended: "adminTier_recommended",
+  oled: "adminTier_oled",
+  soundTyping: "adminTier_soundTyping",
+  mechanical: "adminTier_mechanical",
+  magnetic: "adminTier_magnetic",
+  pcb: "adminTier_pcb",
+  ips_va: "adminTier_ips_va",
+  competitive: "adminTier_competitive",
+}
+
+function getDefaultRankingMode(category: string): RankingMode {
+  if (category === "keyboard") return "magnetic"
+  if (category === "monitors") return "oled"
+  return "overall"
+}
+
+function getRankingModeTier(
+  category: string,
+  tier: string | null,
+  specs: Record<string, unknown>,
+  mode: RankingMode,
+): string | null {
+  // Teclado usa "magnetic" como modo padrão (compartilha a coluna `tier`).
+  const defaultMode = getDefaultRankingMode(category)
+  if (mode === defaultMode) return tier
+  const specKey = RANKING_TIER_SPEC_KEY[mode]
+  if (!specKey) return tier
+  const value = specs?.[specKey]
+  return typeof value === "string" && (NEW_TIERS as readonly string[]).includes(value) ? value : null
 }
 
 function formatLabel(value: string) {
@@ -457,12 +552,30 @@ export function PeripheralDetailView({
   const specCardCount =
     1 + (performanceRows.length > 0 ? 1 : 0) + (showGrip ? 1 : 0) + (isSwitch ? 1 : 0)
 
-  const tierStyle = data.tier ? TIER_THEMES[data.tier as keyof typeof TIER_THEMES] : null
-
   const classificationsList = classifications.length > 0
     ? classifications
     : [{ id: data.id, name: data.name, category: data.category, tier: data.tier }]
   const hasMultipleClassifications = classificationsList.length > 1
+
+  // Dentro da própria categoria (ex.: mouse), o mesmo produto pode ser ranqueado
+  // em mais de um "modo" (Geral, Magnético, Custo-Benefício...), cada um com seu
+  // tier — ver RANKING_MODES_BY_CATEGORY. Filtra pelos modos que o admin marcou
+  // como aplicáveis (specs.tierlistCategories); sem esse campo (itens legados),
+  // participa de todos, igual à Tierlist pública.
+  const tierlistCategories = Array.isArray(specs.tierlistCategories) ? specs.tierlistCategories as string[] : null
+  const rankingModes = (RANKING_MODES_BY_CATEGORY[data.category] ?? DEFAULT_RANKING_MODES)
+    .filter((mode) => !tierlistCategories || tierlistCategories.includes(mode.key))
+    .map((mode) => ({ ...mode, tier: getRankingModeTier(data.category, data.tier, specs, mode.key) }))
+    .filter((mode) => mode.tier !== null)
+
+  const defaultRankingMode = getDefaultRankingMode(data.category)
+  const initialRankingMode = rankingModes.find((m) => m.key === defaultRankingMode) ?? rankingModes[0]
+  const [activeRankingModeKey, setActiveRankingModeKey] = useState(initialRankingMode?.key ?? defaultRankingMode)
+  const activeRankingMode = rankingModes.find((m) => m.key === activeRankingModeKey) ?? initialRankingMode
+
+  const hasMultipleRankingModes = rankingModes.length > 1
+  const activeTier = hasMultipleRankingModes ? activeRankingMode?.tier ?? null : data.tier
+  const tierStyle = activeTier ? TIER_THEMES[activeTier as keyof typeof TIER_THEMES] : null
 
   return (
     // @container/pdv: permite que este componente seja reaproveitado tanto na página
@@ -530,8 +643,31 @@ export function PeripheralDetailView({
                 </div>
               ) : tierStyle ? (
                 <div className={cn("rounded-2xl bg-gradient-to-br px-4 py-3 text-center", tierStyle.accent, tierStyle.textColor)}>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">Classificação</p>
-                  <p className="text-3xl font-bold tracking-tight leading-none">{data.tier ? mapTier(data.tier) : "Sob Revisão"}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">
+                    {hasMultipleRankingModes ? activeRankingMode?.label : "Classificação"}
+                  </p>
+                  <p className="text-3xl font-bold tracking-tight leading-none">{activeTier ? mapTier(activeTier) : "Sob Revisão"}</p>
+                  {hasMultipleRankingModes && (
+                    <div className="mt-3 flex flex-wrap justify-center gap-1">
+                      {rankingModes.map((mode) => (
+                        <button
+                          key={mode.key}
+                          type="button"
+                          onClick={() => setActiveRankingModeKey(mode.key)}
+                          aria-pressed={mode.key === activeRankingModeKey}
+                          className={cn(
+                            "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
+                            mode.key === activeRankingModeKey
+                              ? "bg-background/90 text-foreground"
+                              : "bg-background/20 text-current/80 hover:bg-background/40",
+                          )}
+                        >
+                          <span className={cn("size-1.5 shrink-0 rounded-full", mode.color)} />
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="rounded-2xl border border-border bg-muted/40 px-4 py-3 text-center">

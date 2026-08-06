@@ -1,12 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { Activity, Eye, Flame, Heart, Search, UserPlus, Users, X } from "lucide-react"
+import { Activity, Eye, Flame, Heart, UserPlus, Users } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { PodiumSection } from "@/components/people/PodiumSection"
 import { ProfileCard } from "@/components/people/ProfileCard"
-import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import type {
   DirectoryMetric,
@@ -14,12 +13,42 @@ import type {
   PublicProfileSummary,
 } from "@/lib/user-directory"
 
-const TABS: { key: DirectorySort; label: string; icon: React.ElementType }[] = [
-  { key: "aura", label: "Mais Aura", icon: Flame },
-  { key: "active", label: "Mais Ativos", icon: Activity },
-  { key: "visited", label: "Mais visitados", icon: Eye },
-  { key: "followed", label: "Mais seguidos", icon: Users },
-  { key: "following", label: "Seguindo", icon: Heart },
+const TABS: {
+  key: DirectorySort
+  label: string
+  icon: React.ElementType
+  description: string
+}[] = [
+  {
+    key: "aura",
+    label: "Mais Aura",
+    icon: Flame,
+    description: "Top 100 usuários por Aura — reputação ganha com curtidas da comunidade.",
+  },
+  {
+    key: "active",
+    label: "Mais Ativos",
+    icon: Activity,
+    description: "Quem mais participa por aqui: posts, comentários e reações recentes.",
+  },
+  {
+    key: "visited",
+    label: "Mais visitados",
+    icon: Eye,
+    description: "Os perfis que mais chamaram atenção — ordenados por visitas.",
+  },
+  {
+    key: "followed",
+    label: "Mais seguidos",
+    icon: Users,
+    description: "Quem tem a maior torcida: perfis com mais seguidores na Sunano.",
+  },
+  {
+    key: "following",
+    label: "Seguindo",
+    icon: Heart,
+    description: "Os perfis que você segue, todos reunidos num só lugar.",
+  },
 ]
 
 /** As quatro primeiras abas são rankings; "Seguindo" é uma lista pessoal. */
@@ -50,10 +79,7 @@ export function PessoasContent({
   const [profiles, setProfiles] = useState(initialProfiles)
   const [loading, setLoading] = useState(false)
   const [requiresAuth, setRequiresAuth] = useState(false)
-  const [query, setQuery] = useState("")
-  const [results, setResults] = useState<PublicProfileSummary[]>([])
-  const [searching, setSearching] = useState(false)
-  // Acumula o que já se sabe: cada aba/busca traz o estado dos seus perfis,
+  // Acumula o que já se sabe: cada aba traz o estado dos seus perfis,
   // e o conjunto cresce em vez de descartar o que veio antes.
   const [following, setFollowing] = useState(() => new Set(followedIds))
   // A primeira aba já veio renderizada pelo servidor — não refaz o fetch dela.
@@ -87,99 +113,59 @@ export function PessoasContent({
     }
   }, [tab])
 
-  useEffect(() => {
-    const trimmed = query.trim()
-    if (trimmed.length < 2) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setResults([])
-      setSearching(false)
-      return
-    }
-
-    let active = true
-    setSearching(true)
-    const timer = setTimeout(() => {
-      fetch(`/api/users/search?q=${encodeURIComponent(trimmed)}&limit=24`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (!active) return
-          setResults(data.profiles ?? [])
-          setFollowing((prev) => new Set([...prev, ...((data.followedIds ?? []) as string[])]))
-        })
-        .catch(() => {
-          if (active) setResults([])
-        })
-        .finally(() => {
-          if (active) setSearching(false)
-        })
-    }, 300)
-
-    return () => {
-      active = false
-      clearTimeout(timer)
-    }
-  }, [query])
-
-  const isSearching = query.trim().length >= 2
-  const shown = isSearching ? results : profiles
-  const isRanked = !isSearching && RANKED_TABS.includes(tab)
-  const metric: DirectoryMetric = isSearching ? "followers" : TAB_METRIC[tab]
+  const activeTab = TABS.find((item) => item.key === tab) ?? TABS[0]
+  const shown = profiles
+  const isRanked = RANKED_TABS.includes(tab)
+  const metric: DirectoryMetric = TAB_METRIC[tab]
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
-      {/* Busca — o título da página fica a cargo da TopBar. */}
-      <div className="flex flex-col items-center">
-        <div className="relative w-full max-w-md">
-          <Search className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar perfil pelo nome..."
-            className={cn(
-              "h-11 rounded-xl border-border bg-card pl-10 text-foreground shadow-sm",
-              query && "pr-10"
-            )}
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              aria-label="Limpar busca"
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
+      {/* Título + descrição da aba ativa fora do card, abas soltas embaixo —
+          sem borda envolvendo os dois juntos. */}
+      <div className="flex flex-col items-center gap-3 text-center">
+        <span
+          className={cn(
+            "flex size-11 shrink-0 items-center justify-center rounded-xl border",
+            activeTab.key === "aura"
+              ? "border-orange-500/30 bg-orange-500/10 text-orange-500"
+              : "border-border bg-muted/40 text-foreground"
           )}
+        >
+          <activeTab.icon
+            className="size-5"
+            {...(activeTab.key === "aura" ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
+          />
+        </span>
+        <div>
+          <p className="text-base font-bold leading-tight text-foreground">{activeTab.label}</p>
+          <p className="mt-0.5 max-w-md text-xs text-muted-foreground">{activeTab.description}</p>
         </div>
       </div>
 
-      {!isSearching && (
-        <div className="mt-6 flex flex-wrap justify-center gap-2">
-          {TABS.map((item) => {
-            const Icon = item.icon
-            const active = tab === item.key
-            return (
-              <button
-                key={item.key}
-                onClick={() => setTab(item.key)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-semibold transition-all",
-                  active
-                    ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                    : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
-                )}
-              >
-                <Icon className="size-3.5" />
-                {item.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      <div className="mt-4 flex flex-wrap justify-center gap-2">
+        {TABS.map((item) => {
+          const Icon = item.icon
+          const active = tab === item.key
+          return (
+            <button
+              key={item.key}
+              onClick={() => setTab(item.key)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-semibold transition-all",
+                active
+                  ? "border-primary bg-primary text-primary-foreground shadow-sm"
+                  : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40 hover:text-foreground"
+              )}
+            >
+              <Icon className="size-3.5" />
+              {item.label}
+            </button>
+          )
+        })}
+      </div>
 
       <div className="mt-6">
-        {loading || searching ? (
+        {loading ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {Array.from({ length: 10 }).map((_, i) => (
               <div
@@ -197,20 +183,14 @@ export function PessoasContent({
           />
         ) : shown.length === 0 ? (
           <EmptyState
-            icon={isSearching ? Search : tab === "following" ? Heart : Users}
+            icon={tab === "following" ? Heart : Users}
             title={
-              isSearching
-                ? "Nenhum perfil encontrado"
-                : tab === "following"
-                  ? "Você ainda não segue ninguém"
-                  : "Nenhum membro por aqui ainda"
+              tab === "following" ? "Você ainda não segue ninguém" : "Nenhum membro por aqui ainda"
             }
             description={
-              isSearching
-                ? "Tente outro nome — a busca é pelo nome de exibição."
-                : tab === "following"
-                  ? "Encontre pessoas nas outras abas e toque em Seguir."
-                  : undefined
+              tab === "following"
+                ? "Encontre pessoas nas outras abas e toque em Seguir."
+                : undefined
             }
           />
         ) : (

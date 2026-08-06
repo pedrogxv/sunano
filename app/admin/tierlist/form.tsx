@@ -999,6 +999,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [linkedBazaar, setLinkedBazaar] = useState<LinkedProduct | null>(null)
   const [linkedSwitch, setLinkedSwitch] = useState<LinkedSwitch | null>(null)
   const [rankedPeripherals, setRankedPeripherals] = useState<{ id: string; name: string; tier: string; ranking: number; score: number | null }[]>([])
+  // Tiers por modo (adminTier_value, adminTier_magnetic, ...) só existem depois que o item
+  // é ranqueado no board de drag-and-drop da Tierlist — o form não tem campo para editá-los,
+  // então precisam ser preservados à parte para o preview ao vivo continuar mostrando o
+  // seletor de modo (o mesmo que aparece na página pública do periférico).
+  const [existingModeTiers, setExistingModeTiers] = useState<Record<string, unknown>>({})
   const [galleryFiles, setGalleryFiles] = useState<File[]>([])
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([])
   const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>([])
@@ -1058,7 +1063,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     price: watchedAll.price ?? 0,
     tags: selectedTag,
     image_url: imagePreview,
-    specs: buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery }),
+    specs: {
+      ...existingModeTiers,
+      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery }),
+    },
   }
 
   useEffect(() => {
@@ -1207,6 +1215,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           ...data.specs,
         })
         setSelectedTag(data.tags ?? [])
+        setExistingModeTiers(
+          Object.fromEntries(
+            Object.entries(data.specs ?? {}).filter(([key]) => key.startsWith("adminTier_")),
+          ),
+        )
         const validTierlistKeys = (TIERLIST_MODE_OPTIONS[data.category as Category] ?? []).map((option) => option.key)
         const storedTierlistCategories = Array.isArray(data.specs?.tierlistCategories)
           ? (data.specs.tierlistCategories as string[])

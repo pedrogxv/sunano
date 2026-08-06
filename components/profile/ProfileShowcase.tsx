@@ -117,7 +117,7 @@ export function ProfileShowcase({
         seguidores={profile.followers}
       />
 
-      <div className="mt-6 space-y-8">
+      <div className="mt-3 space-y-8">
         <MedalhasGrid
           medals={profile.medals}
           total={profile.medals_total}

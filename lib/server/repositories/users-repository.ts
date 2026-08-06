@@ -1137,7 +1137,8 @@ export type UserDataExport = {
   } | null
   forum_posts: Array<{
     id: string
-    body: string
+    title: string
+    body: string | null
     created_at: string
   }>
   forum_comments: Array<{
@@ -1195,7 +1196,7 @@ export async function getUserDataExport(
       .maybeSingle(),
     db
       .from("forum_posts")
-      .select("id, body, created_at")
+      .select("id, title, body, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false }),
     db

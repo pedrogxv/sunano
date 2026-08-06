@@ -21,10 +21,12 @@ export function CategoryPicker({
   value,
   onChange,
   disabled,
+  "aria-invalid": ariaInvalid,
 }: {
   value: string
   onChange: (categoryId: string) => void
   disabled?: boolean
+  "aria-invalid"?: boolean
 }) {
   const [categories, setCategories] = useState<ForumCategoryOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,6 +65,7 @@ export function CategoryPicker({
         searchPlaceholder="Buscar categoria…"
         emptyText="Nenhuma categoria encontrada."
         disabled={disabled || loading}
+        aria-invalid={ariaInvalid}
         className="min-w-0 flex-1 border-border bg-muted/20"
       />
       {selectedRoot && selectedRoot.children.length > 0 && (

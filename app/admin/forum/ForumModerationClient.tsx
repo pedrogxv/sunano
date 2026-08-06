@@ -313,9 +313,12 @@ export function ForumModerationClient({
                         </Badge>
                       )}
                     </div>
-                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground line-clamp-3">
-                      {post.body_preview}
-                    </p>
+                    <p className="mt-2 text-sm font-semibold text-foreground">{post.title}</p>
+                    {post.body_preview && post.body_preview !== post.title && (
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground line-clamp-3">
+                        {post.body_preview}
+                      </p>
+                    )}
 
                     {post.media_image_urls.length > 0 && (
                       <div className="max-w-sm">
@@ -385,7 +388,7 @@ export function ForumModerationClient({
                       </Button>
                       <DeletePostButton
                         action={() => handleDeletePost(post.id)}
-                        postTitle={post.body_preview}
+                        postTitle={post.title}
                       />
                     </>
                   )}

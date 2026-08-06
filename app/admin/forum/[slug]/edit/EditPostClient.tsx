@@ -16,12 +16,14 @@ import { CategoryPicker } from "@/components/forum/CategoryPicker"
 import { PostMediaField } from "@/components/forum/PostMediaField"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 
 type Post = {
   id: string
   slug: string
-  body: string
+  title: string
+  body: string | null
   author_name: string
   category_id: string
   media_image_urls: string[]
@@ -32,6 +34,7 @@ type Post = {
   created_at: string
 }
 
+const MAX_TITLE = 200
 const MAX_BODY = 5000
 
 export default function EditPostClient({
@@ -43,7 +46,8 @@ export default function EditPostClient({
 }) {
   const router = useRouter()
 
-  const [body, setBody] = useState(initialPost.body)
+  const [title, setTitle] = useState(initialPost.title)
+  const [body, setBody] = useState(initialPost.body ?? "")
   const [categoryId, setCategoryId] = useState(initialPost.category_id)
   const [mediaImageUrls, setMediaImageUrls] = useState(initialPost.media_image_urls)
   const [mediaVideoUrl, setMediaVideoUrl] = useState(initialPost.media_video_url)
@@ -77,7 +81,8 @@ export default function EditPostClient({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          body: body.trim(),
+          title: title.trim(),
+          body: body.trim() || null,
           category_id: categoryId,
           media_image_urls: mediaImageUrls,
           media_video_url: mediaVideoUrl,
@@ -152,13 +157,14 @@ export default function EditPostClient({
   }
 
   const isDirty =
-    body.trim() !== initialPost.body ||
+    title.trim() !== initialPost.title ||
+    body.trim() !== (initialPost.body ?? "") ||
     categoryId !== initialPost.category_id ||
     mediaImageUrls.length !== initialPost.media_image_urls.length ||
     mediaImageUrls.some((url, i) => url !== initialPost.media_image_urls[i]) ||
     mediaVideoUrl !== initialPost.media_video_url
 
-  const canSave = canWrite && isDirty && body.trim().length >= 20 && categoryId.length > 0
+  const canSave = canWrite && isDirty && title.trim().length > 0 && categoryId.length > 0
 
   return (
     <div className="space-y-6 w-full">
@@ -274,7 +280,20 @@ export default function EditPostClient({
           )}
 
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Corpo</label>
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Título</label>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              disabled={!canWrite}
+              className="border-border bg-muted/20 text-sm"
+              maxLength={MAX_TITLE}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Corpo <span className="normal-case font-normal">(opcional)</span>
+            </label>
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}

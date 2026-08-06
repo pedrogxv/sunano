@@ -204,7 +204,7 @@ export function ForumPostSidebar({
               <li key={post.slug}>
                 <Link href={`/forum/${post.slug}`} className="block group">
                   <p className="line-clamp-2 text-xs leading-snug text-foreground group-hover:text-primary">
-                    {truncate(post.body, 90)}
+                    {truncate(post.title, 90)}
                   </p>
                   <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
                     <span>{format(new Date(post.created_at), "dd MMM yyyy", { locale: ptBR })}</span>

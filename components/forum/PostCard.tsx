@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Crown, EyeOff, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
+import { Crown, EyeOff, Flame, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
 
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { PostVisibilityButton } from "@/components/forum/PostVisibilityButton"
@@ -19,7 +19,8 @@ import type { ForumCategoryInfo } from "@/lib/server/repositories/forum-reposito
 export type PostCardData = {
   id: string
   slug: string
-  body: string
+  title: string
+  body: string | null
   user_id: string | null
   author_display_name: string
   author_avatar_url: string | null
@@ -34,6 +35,8 @@ export type PostCardData = {
   /** `true` só é relevante na aba "Meus Posts" — nas demais listagens públicas o post oculto nem chega aqui. */
   is_hidden?: boolean
   comment_count: number
+  /** Somatório da aura de todos os comentários do post (denormalizado). */
+  aura_count: number
 }
 
 /** Selo de VIP/VIP+ ao lado do nome do autor — mesmo rótulo do tier usado no perfil. */
@@ -148,13 +151,19 @@ export function PostCard({
             <CategoryBadge category={post.category} linked={!clickable} />
           </div>
 
-          <p
-            className={`mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground ${
-              compact ? "line-clamp-4" : ""
-            }`}
-          >
-            {post.body}
+          <p className={`mt-2 font-semibold text-foreground ${compact ? "line-clamp-2" : ""}`}>
+            {post.title}
           </p>
+
+          {post.body && (
+            <p
+              className={`mt-1 text-sm leading-relaxed text-muted-foreground ${
+                compact ? "line-clamp-4" : ""
+              }`}
+            >
+              {post.body}
+            </p>
+          )}
 
           {post.media_image_urls.length > 0 && (
             <ImageLightbox
@@ -184,7 +193,16 @@ export function PostCard({
               <MessageCircle className="size-3.5" />
               {post.comment_count}
             </Link>
-            <ShareMenu slug={post.slug} body={post.body} />
+            <span
+              title="Aura acumulada nos comentários deste post"
+              className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground"
+            >
+              <span className="aura-stat-icon-holder inline-flex">
+                <Flame className="aura-stat-icon size-3.5 text-primary" fill="currentColor" strokeWidth={1.5} />
+              </span>
+              {post.aura_count}
+            </span>
+            <ShareMenu slug={post.slug} title={post.title} />
             {isOwner ? (
               <PostVisibilityButton
                 postSlug={post.slug}

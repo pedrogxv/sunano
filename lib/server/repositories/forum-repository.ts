@@ -22,7 +22,9 @@ export type ForumCategoryInfo = {
 export type ForumListPost = {
   id: string
   slug: string
-  body: string
+  title: string
+  /** Opcional — post pode ter só título. */
+  body: string | null
   author_name: string
   user_id: string | null
   category: ForumCategoryInfo | null
@@ -34,6 +36,8 @@ export type ForumListPost = {
   /** Só vem preenchido de verdade na aba "mine" — nas demais abas o post já chega sempre `false`. */
   is_hidden: boolean
   comment_count: number
+  /** Somatório denormalizado da aura de todos os comentários do post — ver 20260823000000_forum_post_aura_from_comments.sql. */
+  aura_count: number
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
@@ -129,7 +133,7 @@ export async function listForumPosts(params: {
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden"
+      "id, slug, title, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, aura_count"
     )
 
   // Em "Meus Posts" o dono também vê o que ocultou (pra poder reativar);
@@ -187,6 +191,7 @@ export async function listForumPosts(params: {
   const list = rows.map((p) => ({
     id: p.id,
     slug: p.slug,
+    title: p.title,
     body: p.body_preview,
     author_name: p.author_name,
     user_id: p.user_id,
@@ -198,6 +203,7 @@ export async function listForumPosts(params: {
     is_pinned: p.is_pinned,
     is_hidden: p.is_hidden,
     comment_count: commentCounts[p.id] ?? 0,
+    aura_count: p.aura_count ?? 0,
     author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
     author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
@@ -244,7 +250,7 @@ export type ForumSidebarData = {
   totalPosts: number
   totalComments: number
   categoryPostCount: number
-  relatedPosts: { slug: string; body: string; created_at: string; comment_count: number }[]
+  relatedPosts: { slug: string; title: string; created_at: string; comment_count: number }[]
 }
 
 /**
@@ -276,7 +282,7 @@ export async function getForumSidebarData(params: {
     db.from("forum_posts").select("id", { count: "exact", head: true }).eq("is_hidden", false).in("category_id", categoryIds),
     db
       .from("forum_posts")
-      .select("id, slug, body_preview, created_at")
+      .select("id, slug, title, created_at")
       .eq("is_hidden", false)
       .in("category_id", categoryIds)
       .neq("id", postId)
@@ -303,7 +309,7 @@ export async function getForumSidebarData(params: {
     categoryPostCount: categoryPostCount ?? 0,
     relatedPosts: (relatedRows ?? []).map((p) => ({
       slug: p.slug,
-      body: p.body_preview,
+      title: p.title,
       created_at: p.created_at,
       comment_count: commentCounts[p.id] ?? 0,
     })),
@@ -436,7 +442,7 @@ export async function getForumPostBySlug(
   const { data: post, error } = await db
     .from("forum_posts")
     .select(
-      "id, slug, body, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden"
+      "id, slug, title, body, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, aura_count"
     )
     .eq("slug", slug)
     .maybeSingle()
@@ -463,6 +469,7 @@ export async function getForumPostBySlug(
   const enrichedPost: ForumPostDetail = {
     id: post.id,
     slug: post.slug,
+    title: post.title,
     body: post.body,
     author_name: post.author_name,
     user_id: post.user_id,
@@ -474,6 +481,7 @@ export async function getForumPostBySlug(
     is_pinned: post.is_pinned,
     is_hidden: post.is_hidden,
     comment_count: totalCommentCount ?? 0,
+    aura_count: post.aura_count ?? 0,
     author_display_name: post.user_id
       ? profileMap[post.user_id]?.display_name ?? post.author_name
       : post.author_name,
@@ -500,10 +508,9 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "")
 }
 
-/** Sem título separado — deriva a semente do slug das primeiras palavras do corpo. */
-function slugSeedFromBody(body: string) {
-  const firstLine = body.trim().split("\n")[0] ?? ""
-  return firstLine.trim().split(/\s+/).slice(0, 8).join(" ")
+/** Deriva a semente do slug das primeiras palavras do título. */
+function slugSeedFromTitle(title: string) {
+  return title.trim().split(/\s+/).slice(0, 8).join(" ")
 }
 
 async function createUniqueSlug(baseSlug: string) {
@@ -549,7 +556,8 @@ function validateMedia(mediaImageUrls?: string[] | null, mediaVideoUrl?: string 
 export async function createForumPost(params: {
   userId: string
   authorName: string
-  body: string
+  title: string
+  body?: string | null
   categoryId: string
   mediaImageUrls?: string[]
   mediaVideoUrl?: string | null
@@ -563,14 +571,15 @@ export async function createForumPost(params: {
     return { ok: false, error: "Categoria inválida ou inativa.", status: 400 }
   }
 
-  const seed = slugSeedFromBody(params.body)
+  const seed = slugSeedFromTitle(params.title)
   const slug = await createUniqueSlug(slugify(seed) || `post-${Date.now()}`)
 
   const { data: created, error } = await db
     .from("forum_posts")
     .insert({
       slug,
-      body: params.body.trim(),
+      title: params.title.trim(),
+      body: params.body?.trim() || null,
       author_name: params.authorName,
       user_id: params.userId,
       category_id: params.categoryId,
@@ -579,8 +588,8 @@ export async function createForumPost(params: {
       is_hidden: false,
       is_locked: false,
       is_pinned: false,
-      // Coluna herdada de quando post tinha like/dislike: continua zerada e
-      // ninguém mais lê, mas `database.types.ts` a exige no insert.
+      // Somatório denormalizado da aura dos comentários — nasce zerado, post
+      // novo ainda não tem comentário nenhum.
       aura_count: 0,
     })
     .select("id")
@@ -766,6 +775,7 @@ export type ModerationFilter = "all" | "visible" | "hidden" | "locked" | "pinned
 export type ModerationPost = {
   id: string
   slug: string
+  title: string
   body_preview: string
   author_name: string
   author_avatar_url: string | null
@@ -807,7 +817,7 @@ export async function listForumPostsForModeration(params: {
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, is_hidden, is_locked, is_pinned, created_at",
+      "id, slug, title, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, is_hidden, is_locked, is_pinned, created_at",
       { count: "exact" }
     )
 
@@ -873,6 +883,7 @@ export async function listForumPostsForModeration(params: {
   const moderationPosts: ModerationPost[] = rows.map((p) => ({
     id: p.id,
     slug: p.slug,
+    title: p.title,
     body_preview: p.body_preview ?? "",
     author_name: p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
@@ -892,7 +903,8 @@ export async function listForumPostsForModeration(params: {
 export type ForumPostForEdit = {
   id: string
   slug: string
-  body: string
+  title: string
+  body: string | null
   author_name: string
   category_id: string
   media_image_urls: string[]
@@ -909,7 +921,7 @@ export async function getForumPostForEdit(slug: string): Promise<ForumPostForEdi
   const { data: post } = await db
     .from("forum_posts")
     .select(
-      "id, slug, body, author_name, category_id, media_image_urls, media_video_url, is_hidden, is_locked, is_pinned, created_at"
+      "id, slug, title, body, author_name, category_id, media_image_urls, media_video_url, is_hidden, is_locked, is_pinned, created_at"
     )
     .eq("slug", slug)
     .maybeSingle()
@@ -921,7 +933,8 @@ export async function getForumPostForEdit(slug: string): Promise<ForumPostForEdi
 export async function updateForumPost(
   slug: string,
   updates: Partial<{
-    body: string
+    title: string
+    body: string | null
     category_id: string
     media_image_urls: string[]
     media_video_url: string | null

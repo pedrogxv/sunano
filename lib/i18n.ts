@@ -79,6 +79,14 @@ type Translations = {
     postComment: string
     commentReply: string
     newFollower: string
+    loadMore: string
+    loadingMore: string
+    clearAll: string
+    clearAllConfirm: string
+    clearing: string
+    markRead: string
+    markUnread: string
+    markAllRead: string
   }
   nav: {
     home: string
@@ -735,6 +743,14 @@ export const translations: Record<LocaleCode, Translations> = {
       postComment: "{name} comentou no seu post",
       commentReply: "{name} respondeu ao seu comentário",
       newFollower: "{name} começou a seguir você",
+      loadMore: "Carregar mais",
+      loadingMore: "Carregando...",
+      clearAll: "Limpar",
+      clearAllConfirm: "Apagar todas as notificações? Essa ação não pode ser desfeita.",
+      clearing: "Limpando...",
+      markRead: "Marcar como lida",
+      markUnread: "Marcar como não lida",
+      markAllRead: "Marcar todas como lidas",
     },
     nav: {
       home: "Início",
@@ -1557,6 +1573,14 @@ export const translations: Record<LocaleCode, Translations> = {
       postComment: "{name} commented on your post",
       commentReply: "{name} replied to your comment",
       newFollower: "{name} started following you",
+      loadMore: "Load more",
+      loadingMore: "Loading...",
+      clearAll: "Clear",
+      clearAllConfirm: "Delete all notifications? This can't be undone.",
+      clearing: "Clearing...",
+      markRead: "Mark as read",
+      markUnread: "Mark as unread",
+      markAllRead: "Mark all as read",
     },
     nav: {
       home: "Home",

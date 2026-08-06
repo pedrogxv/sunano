@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, ChevronDown, Globe, Moon, PanelLeft, Sun } from "lucide-react"
+import { Check, ChevronDown, Globe, Moon, PanelLeft, Settings2, Sun } from "lucide-react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
@@ -199,15 +199,72 @@ export function TopBar() {
         </div>
 
         {/* Right — Language + Theme */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          {/* Mobile (<sm): idioma e tema colapsam num único menu pra não estourar a largura. */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="flex h-11 items-center gap-1.5 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 md:h-8"
+                className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70 text-foreground transition-all hover:bg-muted/40 sm:hidden"
+                type="button"
+                aria-label="Idioma e tema"
+              >
+                <Settings2 className="size-[16px] text-primary" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 border-border bg-popover text-foreground shadow-xl">
+              <DropdownMenuLabel className="space-y-0.5 px-2 py-1.5">
+                <div className="text-sm font-semibold text-foreground">{I18N[locale].topbar.languageLabel}</div>
+                <div className="text-xs font-normal text-muted-foreground">
+                  {I18N[locale].topbar.languageHelper}
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-border" />
+              {LANGUAGE_OPTIONS.map((language) => {
+                const isActive = language.code === locale
+                return (
+                  <DropdownMenuItem
+                    key={language.code}
+                    className={cn(
+                      "flex items-center justify-between rounded-md px-2 py-2 text-sm text-foreground focus:bg-muted/40 focus:text-foreground",
+                      isActive && "bg-primary/15 text-primary"
+                    )}
+                    onSelect={() => setLocale(language.code as LocaleCode)}
+                  >
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium">{language.nativeLabel}</span>
+                      <span className="text-xs text-muted-foreground">{language.label}</span>
+                    </div>
+                    {isActive && <Check className="size-4 text-primary" />}
+                  </DropdownMenuItem>
+                )
+              })}
+              <DropdownMenuSeparator className="bg-border" />
+              <DropdownMenuItem
+                className="flex items-center justify-between rounded-md px-2 py-2 text-sm text-foreground focus:bg-muted/40 focus:text-foreground"
+                onSelect={(e) => {
+                  e.preventDefault()
+                  setTheme(isLight ? "dark" : "light")
+                }}
+              >
+                <span className="font-medium">{isLight ? "Modo escuro" : "Modo claro"}</span>
+                {isLight ? (
+                  <Moon className="size-4 text-primary" />
+                ) : (
+                  <Sun className="size-4 text-primary" />
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* sm+: idioma e tema voltam a ser controles próprios, lado a lado. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="hidden h-8 items-center gap-1.5 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:flex"
                 type="button"
               >
                 <Globe className="size-[15px] text-primary" />
-                <span className="hidden sm:inline">{selectedLanguage.nativeLabel}</span>
+                <span className="hidden lg:inline">{selectedLanguage.nativeLabel}</span>
                 <ChevronDown className="size-3 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
@@ -242,7 +299,7 @@ export function TopBar() {
           </DropdownMenu>
 
           <button
-            className="flex h-11 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 md:h-8"
+            className="hidden h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:flex"
             type="button"
             onClick={() => setTheme(isLight ? "dark" : "light")}
             aria-label={isLight ? "Ativar modo escuro" : "Ativar modo claro"}
@@ -261,7 +318,7 @@ export function TopBar() {
           {!isAdmin && (
             <>
               <AuraBalanceBadge />
-              <div className="h-6 w-px shrink-0 bg-border" />
+              <div className="hidden h-6 w-px shrink-0 bg-border sm:block" />
               <AuthUser layout="topbar" variant="public" loginHref="/login" />
             </>
           )}

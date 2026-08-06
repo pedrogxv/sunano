@@ -27,28 +27,33 @@ export type Notification = {
   createdAt: string
 }
 
-/** Teto por requisição — o painel é uma prévia, não um histórico paginado. */
+/** Tamanho de página — "carregar mais" busca um lote por vez. */
 const DEFAULT_LIMIT = 20
 const MAX_LIMIT = 50
 
 export type NotificationsPage = {
   notifications: Notification[]
   unreadCount: number
+  hasMore: boolean
 }
 
 /**
- * Lista as notificações mais recentes do usuário e o total de não lidas.
+ * Lista as notificações do usuário (mais recentes primeiro), paginadas por
+ * offset, e o total de não lidas.
  *
  * O `unreadCount` é uma contagem própria (`head: true`, sem trazer linhas),
  * não o número de não lidas dentro da página: com mais avisos que o limite,
- * derivar da lista mostraria um badge menor que a realidade.
+ * derivar da lista mostraria um badge menor que a realidade. `hasMore` pede
+ * um item a mais que `limit` e descarta o excedente, evitando um segundo
+ * round-trip de `count` só pra saber se ainda há próxima página.
  */
 export async function listNotifications(
   userId: string,
-  limit = DEFAULT_LIMIT
+  options: { limit?: number; offset?: number } = {}
 ): Promise<NotificationsPage> {
   const db = createSupabaseAdminClient()
-  const safeLimit = Math.min(Math.max(limit, 1), MAX_LIMIT)
+  const safeLimit = Math.min(Math.max(options.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
+  const safeOffset = Math.max(options.offset ?? 0, 0)
 
   const [list, unread] = await Promise.all([
     db
@@ -56,7 +61,7 @@ export async function listNotifications(
       .select("id, type, actor_name, entity_type, link, title, body, amount, is_read, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
-      .limit(safeLimit),
+      .range(safeOffset, safeOffset + safeLimit),
     db
       .from("notifications")
       .select("id", { count: "exact", head: true })
@@ -72,8 +77,11 @@ export async function listNotifications(
     console.error("[notifications-repository] unreadCount:", unread.error)
   }
 
+  const rows = list.data ?? []
+  const hasMore = rows.length > safeLimit
+
   return {
-    notifications: (list.data ?? []).map((row) => ({
+    notifications: rows.slice(0, safeLimit).map((row) => ({
       id: row.id,
       type: row.type,
       actorName: row.actor_name,
@@ -86,6 +94,7 @@ export async function listNotifications(
       createdAt: row.created_at,
     })),
     unreadCount: unread.count ?? 0,
+    hasMore,
   }
 }
 
@@ -116,6 +125,28 @@ export async function markNotificationsRead(userId: string, ids?: string[]): Pro
   return data?.length ?? 0
 }
 
+/**
+ * Marca notificações como não lidas. Usado pelo toggle manual do sino, pra
+ * quem quer "guardar pra depois" um aviso que a abertura do painel já leu.
+ */
+export async function markNotificationsUnread(userId: string, ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("notifications")
+    .update({ is_read: false })
+    .eq("user_id", userId)
+    .in("id", ids)
+    .select("id")
+
+  if (error) {
+    console.error("[notifications-repository] markNotificationsUnread:", error)
+    throw error
+  }
+  return data?.length ?? 0
+}
+
 /** Apaga uma notificação do próprio usuário. */
 export async function deleteNotification(userId: string, id: string): Promise<void> {
   const db = createSupabaseAdminClient()
@@ -124,6 +155,22 @@ export async function deleteNotification(userId: string, id: string): Promise<vo
     console.error("[notifications-repository] deleteNotification:", error)
     throw error
   }
+}
+
+/** Apaga todas as notificações do usuário — botão "Limpar" do painel. */
+export async function deleteAllNotifications(userId: string): Promise<number> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("notifications")
+    .delete()
+    .eq("user_id", userId)
+    .select("id")
+
+  if (error) {
+    console.error("[notifications-repository] deleteAllNotifications:", error)
+    throw error
+  }
+  return data?.length ?? 0
 }
 
 /**

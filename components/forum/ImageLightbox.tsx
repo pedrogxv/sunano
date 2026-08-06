@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { ChevronLeft, ChevronRight, ZoomIn } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, ZoomIn } from "lucide-react"
 
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
@@ -17,10 +17,14 @@ export function ImageLightbox({ srcs, alt }: { srcs: string[]; alt: string }) {
   const [open, setOpen] = useState(false)
   const [zoomed, setZoomed] = useState(false)
   const [index, setIndex] = useState(0)
+  const [loadedThumb, setLoadedThumb] = useState<number | null>(null)
+  const [loadedDialog, setLoadedDialog] = useState<number | null>(null)
 
   if (srcs.length === 0) return null
 
   const hasMultiple = srcs.length > 1
+  const thumbLoading = loadedThumb !== index
+  const dialogLoading = loadedDialog !== index
 
   function go(delta: number, event?: React.MouseEvent) {
     event?.stopPropagation()
@@ -43,13 +47,22 @@ export function ImageLightbox({ srcs, alt }: { srcs: string[]; alt: string }) {
           className="group/lightbox relative z-10 mt-3 block w-full overflow-hidden rounded-lg border border-border/50 pointer-events-auto"
         >
           <Image
+            key={srcs[index]}
             src={srcs[index]}
             alt={alt}
             width={640}
             height={400}
             unoptimized
-            className="max-h-[420px] w-full object-cover"
+            onLoad={() => setLoadedThumb(index)}
+            className={`max-h-[420px] w-full object-cover transition-opacity duration-150 ${
+              thumbLoading ? "opacity-0" : "opacity-100"
+            }`}
           />
+          {thumbLoading && (
+            <span className="absolute inset-0 flex items-center justify-center bg-muted">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </span>
+          )}
           <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover/lightbox:opacity-100">
             <ZoomIn className="size-4" />
           </span>
@@ -102,13 +115,22 @@ export function ImageLightbox({ srcs, alt }: { srcs: string[]; alt: string }) {
             className={`relative max-h-[85vh] w-full overflow-auto rounded-lg ${zoomed ? "cursor-zoom-out" : "cursor-zoom-in"}`}
           >
             <Image
+              key={srcs[index]}
               src={srcs[index]}
               alt={alt}
               width={1600}
               height={1000}
               unoptimized
-              className={`h-auto w-full transition-transform duration-200 ${zoomed ? "scale-[2]" : "scale-100"}`}
+              onLoad={() => setLoadedDialog(index)}
+              className={`h-auto w-full transition-[opacity,transform] duration-200 ${zoomed ? "scale-[2]" : "scale-100"} ${
+                dialogLoading ? "opacity-0" : "opacity-100"
+              }`}
             />
+            {dialogLoading && (
+              <span className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="size-8 animate-spin text-white" />
+              </span>
+            )}
           </button>
 
           {hasMultiple && (

@@ -11,7 +11,8 @@ import {
 
 const patchSchema = z
   .object({
-    body: z.string().trim().min(20).max(5000).optional(),
+    title: z.string().trim().min(1).max(200).optional(),
+    body: z.string().trim().max(5000).nullable().optional(),
     category_id: z.string().uuid().optional(),
     media_image_urls: z.array(z.string().url()).max(5).optional(),
     media_video_url: z.string().url().nullable().optional(),

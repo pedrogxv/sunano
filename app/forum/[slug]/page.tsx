@@ -33,9 +33,9 @@ export async function generateMetadata({
   const { post } = result
   const categoryName = post.category?.name
   const title = categoryName
-    ? `${truncate(post.body, 70)} — ${categoryName} | Fórum Sunano`
-    : `${truncate(post.body, 70)} | Fórum Sunano`
-  const description = truncate(post.body, 160)
+    ? `${truncate(post.title, 70)} — ${categoryName} | Fórum Sunano`
+    : `${truncate(post.title, 70)} | Fórum Sunano`
+  const description = truncate(post.body ?? post.title, 160)
   const url = `${SITE_URL}/forum/${post.slug}`
 
   return {
@@ -84,8 +84,8 @@ export default async function ForumPostPage({
     "@context": "https://schema.org",
     "@type": "DiscussionForumPosting",
     "@id": url,
-    headline: truncate(post.body, 110),
-    text: post.body,
+    headline: truncate(post.title, 110),
+    text: post.body ?? post.title,
     url,
     datePublished: post.created_at,
     author: {

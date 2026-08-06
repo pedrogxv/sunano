@@ -20,7 +20,8 @@ const YOUTUBE_HOST_RE = /^(www\.)?(youtube\.com|youtu\.be)$/i
 
 const postSchema = z
   .object({
-    body: z.string().trim().min(20).max(5000),
+    title: z.string().trim().min(1).max(200),
+    body: z.string().trim().max(5000).optional(),
     category_id: z.string().uuid(),
     media_image_urls: z.array(z.string().url()).max(5).optional(),
     media_video_url: z
@@ -106,6 +107,7 @@ export async function POST(request: NextRequest) {
     const result = await createForumPost({
       userId: user.id,
       authorName,
+      title: parsed.data.title,
       body: parsed.data.body,
       categoryId: parsed.data.category_id,
       mediaImageUrls: parsed.data.media_image_urls ?? [],

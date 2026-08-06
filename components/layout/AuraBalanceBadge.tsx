@@ -98,7 +98,7 @@ export function AuraBalanceBadge() {
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`aura-balance-badge flex h-11 shrink-0 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold tabular-nums transition-all md:h-8 ${
+          className={`aura-balance-badge flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold tabular-nums transition-all sm:h-8 sm:w-auto sm:justify-start sm:px-3 ${
             frozen
               ? "border-sky-400/40 bg-sky-500/10 text-sky-300"
               : "border-border bg-card/70 text-foreground"
@@ -120,7 +120,7 @@ export function AuraBalanceBadge() {
               />
             )}
           </span>
-          <span className="leading-none">
+          <span className="hidden leading-none sm:inline">
             {remaining}
             <span className="text-muted-foreground font-normal">/{usage.limit}</span>
           </span>

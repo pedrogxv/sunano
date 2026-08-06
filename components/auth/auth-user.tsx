@@ -69,10 +69,10 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
       return (
         <Link
           href={loginHref}
-          className="flex h-11 items-center gap-1.5 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 md:h-8"
+          className="flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card/70 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
         >
           <LogIn className="size-[15px] text-primary" />
-          <span>Login</span>
+          <span className="hidden sm:inline">Login</span>
         </Link>
       )
     }

@@ -287,8 +287,9 @@ export type Database = {
         Row: {
           id: string
           slug: string
-          body: string
-          /** Coluna gerada (`left(body, 280)`) — nunca enviada no Insert/Update. */
+          title: string
+          body: string | null
+          /** Coluna gerada (`left(coalesce(body, title), 280)`) — nunca enviada no Insert/Update. */
           body_preview: string
           author_name: string
           user_id: string | null

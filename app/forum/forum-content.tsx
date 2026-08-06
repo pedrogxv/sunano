@@ -9,8 +9,8 @@ import { CategoryPicker } from "@/components/forum/CategoryPicker"
 import { PostMediaField } from "@/components/forum/PostMediaField"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { UserAvatar } from "@/components/ui/user-avatar"
 import { useAuthUser } from "@/components/providers/auth-context"
 
 export type ForumPost = PostCardData
@@ -25,7 +25,7 @@ type ForumCategoryOption = {
 type AuthUser = { id: string; display_name: string; avatar_url: string | null } | null
 type Tab = "recent" | "hot" | "category" | "mine"
 
-const MIN_BODY = 20
+const MAX_TITLE = 200
 const MAX_BODY = 5000
 
 export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
@@ -48,6 +48,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
 
   // New post form
   const [showForm, setShowForm] = useState(false)
+  const [title, setTitle] = useState("")
   const [body, setBody] = useState("")
   const [categoryId, setCategoryId] = useState("")
   const [mediaImageUrls, setMediaImageUrls] = useState<string[]>([])
@@ -139,7 +140,8 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          body,
+          title,
+          body: body.trim() ? body : undefined,
           category_id: categoryId,
           media_image_urls: mediaImageUrls.length > 0 ? mediaImageUrls : undefined,
           media_video_url: mediaVideoUrl ?? undefined,
@@ -147,6 +149,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok || !data.slug) throw new Error(data?.error ?? "Erro ao criar post")
+      setTitle("")
       setBody("")
       setCategoryId("")
       setMediaImageUrls([])
@@ -178,7 +181,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
   const activeCategoryName =
     categories.flatMap((c) => [c, ...c.children]).find((c) => c.id === activeCategoryId)?.name
 
-  const canSubmit = body.trim().length >= MIN_BODY && categoryId.length > 0
+  const canSubmit = title.trim().length > 0 && categoryId.length > 0
 
   const emptyMessage =
     activeTab === "hot" ? "Nenhum tópico em destaque no momento." :
@@ -320,42 +323,48 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
 
       {/* New post form */}
       {showForm && authUser && (
-        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-            <UserAvatar name={authUser.display_name} avatarUrl={authUser.avatar_url} size={6} />
-            Postando como <span className="text-primary">{authUser.display_name}</span>
-          </div>
-
+        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
           {formError && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {formError}
             </div>
           )}
 
-          <div className="space-y-1.5">
+          <div className="space-y-1">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="h-9 border-border bg-muted/20 text-sm font-medium"
+              placeholder="Título do post"
+              maxLength={MAX_TITLE}
+            />
+          </div>
+
+          <div className="space-y-1">
             <Textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="min-h-[120px] border-border bg-muted/20"
-              placeholder="O que você quer compartilhar?"
+              className="min-h-[80px] border-border bg-muted/20 text-sm"
+              placeholder="Corpo do texto (opcional)"
               maxLength={MAX_BODY}
             />
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span className={body.trim().length < MIN_BODY ? "text-amber-400" : ""}>
-                {body.trim().length < MIN_BODY
-                  ? `Mínimo de ${MIN_BODY} caracteres (faltam ${MIN_BODY - body.trim().length})`
-                  : "Mínimo de caracteres atingido"}
-              </span>
+            <div className="flex items-center justify-end text-[10px] text-muted-foreground">
               <span>{body.length}/{MAX_BODY}</span>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Categoria</label>
-            <CategoryPicker value={categoryId} onChange={setCategoryId} />
+          <div className="space-y-1">
+            <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Categoria <span className="text-destructive">*</span>
+            </label>
+            <CategoryPicker
+              value={categoryId}
+              onChange={setCategoryId}
+              aria-invalid={categoryId.length === 0}
+            />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Mídia <span className="normal-case font-normal">(opcional)</span>
             </label>
@@ -367,7 +376,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
             />
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pt-1">
             <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancelar</Button>
             <Button size="sm" onClick={submitPost} disabled={saving || !canSubmit}>
               {saving ? "Publicando…" : "Publicar"}

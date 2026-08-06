@@ -29,10 +29,8 @@ function WhatsAppIcon(props: SVGProps<SVGSVGElement>) {
   )
 }
 
-/** Primeira linha do corpo do post, truncada — não há título separado no fórum. */
-function buildShareText(body: string): string {
-  const firstLine = body.split("\n")[0]?.trim() ?? ""
-  return firstLine.length > 140 ? `${firstLine.slice(0, 137)}...` : firstLine
+function buildShareText(title: string): string {
+  return title.length > 140 ? `${title.slice(0, 137)}...` : title
 }
 
 const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function"
@@ -42,7 +40,7 @@ const canNativeShare = typeof navigator !== "undefined" && typeof navigator.shar
  * (placeholder), X, WhatsApp e — quando o browser/dispositivo suporta — a
  * Web Share API nativa via "Mais opções".
  */
-export function ShareMenu({ slug, body }: { slug: string; body: string }) {
+export function ShareMenu({ slug, title }: { slug: string; title: string }) {
   function getUrl() {
     return `${window.location.origin}/forum/${slug}`
   }
@@ -61,18 +59,18 @@ export function ShareMenu({ slug, body }: { slug: string; body: string }) {
   }
 
   function handleShareX() {
-    const params = new URLSearchParams({ text: buildShareText(body), url: getUrl() })
+    const params = new URLSearchParams({ text: buildShareText(title), url: getUrl() })
     window.open(`https://twitter.com/intent/tweet?${params.toString()}`, "_blank", "noopener,noreferrer")
   }
 
   function handleShareWhatsApp() {
-    const params = new URLSearchParams({ text: `${buildShareText(body)} ${getUrl()}` })
+    const params = new URLSearchParams({ text: `${buildShareText(title)} ${getUrl()}` })
     window.open(`https://wa.me/?${params.toString()}`, "_blank", "noopener,noreferrer")
   }
 
   async function handleNativeShare() {
     try {
-      await navigator.share({ url: getUrl(), text: buildShareText(body) })
+      await navigator.share({ url: getUrl(), text: buildShareText(title) })
     } catch {
       // usuário cancelou o compartilhamento — nada a fazer
     }

@@ -125,10 +125,12 @@ export function ForumContent({
     setPosts((prev) => prev.filter((p) => p.slug !== slug))
   }, [])
 
-  // O servidor já renderizou os posts da aba padrão (SSR/ISR) e a lista não
-  // depende de quem está logado (post não tem reação) — o primeiro paint
-  // dispensa o fetch client-side; daí em diante, trocar de aba/categoria
-  // recarrega normalmente.
+  // O servidor já renderizou os posts da aba padrão (SSR/ISR) e essa lista em
+  // si não depende de quem está logado — "já dei aura nesse post?" não vai
+  // junto (o ISR é compartilhado entre visitantes distintos); cada
+  // `PostCard` busca seu próprio estado de reação depois de montado (ver
+  // `PostAuraButton`). Isso dispensa o fetch client-side no primeiro paint;
+  // daí em diante, trocar de aba/categoria recarrega normalmente.
   const isFirstLoadRef = useRef(true)
 
   useEffect(() => {

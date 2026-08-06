@@ -1,9 +1,11 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Crown, EyeOff, Flame, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
+import { toast } from "sonner"
 
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { PostVisibilityButton } from "@/components/forum/PostVisibilityButton"
@@ -13,9 +15,13 @@ import { ReportMenu } from "@/components/forum/ReportMenu"
 import { ShareMenu } from "@/components/forum/ShareMenu"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { CommentBody } from "@/components/comments/CommentBody"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { useAuthUser } from "@/components/providers/auth-context"
+import { notifyAuraChanged } from "@/lib/client/aura-events"
 import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
+import { cn } from "@/lib/utils"
 import type { ForumCategoryInfo } from "@/lib/server/repositories/forum-repository"
 
 export type PostCardData = {
@@ -79,14 +85,129 @@ function extractYoutubeId(url: string): string | null {
 }
 
 /**
+ * "Dar aura" num post — só like, nunca dislike (post não pode render aura
+ * negativa pro autor; ver 20260824000000_forum_post_direct_aura.sql). O
+ * número exibido é `aura_count`, que já soma a aura dos comentários (ver
+ * 20260823000000_forum_post_aura_from_comments.sql) com a reação direta no
+ * post no mesmo campo.
+ *
+ * Self-contido de propósito: busca o estado inicial ("já dei aura nesse
+ * post?") e o próprio clique de forma independente, sem depender de a página
+ * que renderiza o `PostCard` ter passado esse dado — assim funciona igual em
+ * qualquer listagem (fórum, categoria, perfil) sem precisar fiar prop por
+ * prop. O custo é 1 fetch por card visível quando logado; aceitável na
+ * escala atual do fórum.
+ */
+function PostAuraButton({
+  postSlug,
+  authorId,
+  initialCount,
+}: {
+  postSlug: string
+  authorId: string | null
+  initialCount: number
+}) {
+  const { user } = useAuthUser()
+  const isOwner = Boolean(user) && user!.id === authorId
+  const canReact = Boolean(user) && !isOwner
+
+  const [reacted, setReacted] = useState(false)
+  const [count, setCount] = useState(initialCount)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setCount(initialCount)
+  }, [initialCount])
+
+  useEffect(() => {
+    if (!canReact) return
+    let cancelled = false
+    fetch(`/api/forum/posts/${postSlug}/aura`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.ok) setReacted(data.reaction === "like")
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [canReact, postSlug])
+
+  async function handleClick(event: React.MouseEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!canReact || busy) return
+
+    const nextReacted = !reacted
+    setBusy(true)
+    setReacted(nextReacted)
+    setCount((c) => c + (nextReacted ? 1 : -1))
+
+    const res = await fetch(`/api/forum/posts/${postSlug}/aura`, { method: "POST" }).catch(() => null)
+    setBusy(false)
+
+    if (!res?.ok) {
+      setReacted(!nextReacted)
+      setCount((c) => c + (nextReacted ? -1 : 1))
+      const data = await res?.json().catch(() => null)
+      if (data?.code === "daily_limit") {
+        toast.error(data.error ?? "Limite diário de aura esgotado.")
+      } else if (data?.code !== "self_reaction") {
+        toast.error(data?.error ?? "Erro ao dar aura.")
+      }
+      return
+    }
+
+    const data = await res.json().catch(() => null)
+    if (data?.aura_count !== undefined) {
+      setReacted(data.reaction === "like")
+      setCount(data.aura_count)
+      notifyAuraChanged()
+    }
+  }
+
+  const tooltipText = !user
+    ? "Entre na sua conta pra dar aura — vale +1 pro autor do post"
+    : isOwner
+      ? "Você não pode dar aura no seu próprio post"
+      : reacted
+        ? "Você deu aura nesse post — toque de novo pra desfazer"
+        : "Dar aura credita +1 pro autor do post"
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="pointer-events-auto inline-flex">
+          <button
+            type="button"
+            onClick={handleClick}
+            disabled={!canReact}
+            aria-pressed={reacted}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold text-orange-500 transition-colors disabled:cursor-not-allowed",
+              reacted ? "border-orange-500/50 bg-orange-500/10" : "border-border",
+              canReact && "hover:border-orange-500/40 hover:bg-orange-500/5"
+            )}
+          >
+            <span className="aura-stat-icon-holder inline-flex">
+              <Flame className="aura-stat-icon size-4 text-orange-500" fill="currentColor" strokeWidth={1.5} />
+            </span>
+            {count}
+          </button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-56 text-center">
+        {tooltipText}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
  * Card de post no estilo Reddit/Twitter: avatar + autor + tempo, texto
  * corrido (sem título separado), mídia opcional, rodapé com Comentários /
  * Compartilhar. Usado tanto na listagem quanto no cabeçalho da página de
  * post individual.
- *
- * Post não tem like/dislike: a aura de postar (+10, 1x/dia) é creditada na
- * criação e independe de reação — a ideia é incentivar quem posta, não
- * julgar o post. Reagir só existe em comentário (ver `AuraButton`).
  */
 export function PostCard({
   post,
@@ -184,15 +305,7 @@ export function PostCard({
           )}
 
           <div className="relative z-10 mt-3 flex items-center gap-2 pointer-events-auto">
-            <span
-              title="Aura acumulada nos comentários deste post"
-              className="flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-orange-500"
-            >
-              <span className="aura-stat-icon-holder inline-flex">
-                <Flame className="aura-stat-icon size-4 text-orange-500" fill="currentColor" strokeWidth={1.5} />
-              </span>
-              {post.aura_count}
-            </span>
+            <PostAuraButton postSlug={post.slug} authorId={post.user_id} initialCount={post.aura_count} />
             <Link
               href={clickable ? `/forum/${post.slug}#comments` : "#comments"}
               onClick={(event) => event.stopPropagation()}

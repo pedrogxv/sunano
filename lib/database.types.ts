@@ -723,6 +723,10 @@ export type Database = {
         }
         Returns: { reaction: "like" | "dislike" | null; aura_count: number }[]
       }
+      toggle_forum_post_aura: {
+        Args: { p_giver_id: string; p_post_id: string }
+        Returns: { reaction: "like" | "dislike" | null; aura_count: number }[]
+      }
       credit_forum_post_creation_aura: {
         Args: { p_user_id: string; p_post_id: string }
         Returns: boolean

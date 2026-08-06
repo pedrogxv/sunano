@@ -15,10 +15,13 @@ type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reas
  * 20260804_aura_rebalance.sql); este repositório só chama as RPCs e traduz
  * o resultado.
  *
- * Post não recebe reação (ver 20260804130000_aura_no_post_reactions.sql): o
- * autor ganha os +10 na criação e pronto — quem posta é premiado por postar,
- * não julgado. `toggle_forum_aura` ainda aceita 'post'/'blog_post' no banco
- * por compatibilidade com o histórico, mas nada aqui passa esses valores.
+ * Post também recebe reação, mas só "dar aura" (like) — nunca dislike, pra
+ * nunca render aura negativa pro autor (ver
+ * 20260824000000_forum_post_direct_aura.sql, que reabre o que
+ * 20260804130000_aura_no_post_reactions.sql tinha fechado). Por não ter o
+ * terceiro estado de "trocar like<->dislike", isso vive numa função/helper
+ * dedicados (`toggle_forum_post_aura` / `togglePostAura`) em vez de reusar
+ * `toggleAura`.
  */
 
 export type ToggleAuraTarget = "comment" | "blog_comment"
@@ -65,6 +68,48 @@ export async function toggleAura(params: {
     return { ok: false, error: "Erro ao reagir.", code: "unknown", status: 400 }
   }
   return { ok: true, reaction: result.reaction as ReactionKind | null, auraCount: result.aura_count }
+}
+
+/** Dá ou remove (toggle) a aura do usuário atual num post — só "like", sem dislike (ver `toggle_forum_post_aura`). */
+export async function togglePostAura(giverId: string, postId: string): Promise<ToggleAuraResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db.rpc("toggle_forum_post_aura", {
+    p_giver_id: giverId,
+    p_post_id: postId,
+  })
+
+  if (error) {
+    if (error.message?.includes("self_aura_not_allowed")) {
+      return { ok: false, error: "Você não pode dar aura no seu próprio post.", code: "self_reaction", status: 400 }
+    }
+    if (error.message?.includes("target not found")) {
+      return { ok: false, error: "Post não encontrado.", code: "not_found", status: 404 }
+    }
+    if (error.message?.includes("daily_aura_limit_reached")) {
+      return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
+    }
+    console.error("[aura-repository] togglePostAura:", error)
+    return { ok: false, error: "Erro ao dar aura.", code: "unknown", status: 400 }
+  }
+
+  const result = data?.[0]
+  if (!result) {
+    return { ok: false, error: "Erro ao dar aura.", code: "unknown", status: 400 }
+  }
+  return { ok: true, reaction: result.reaction as ReactionKind | null, auraCount: result.aura_count }
+}
+
+/** Se o usuário atual já deu aura no post — hidrata o estado inicial do botão. */
+export async function getUserPostAuraReaction(userId: string, postId: string): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("forum_aura")
+    .select("post_id")
+    .eq("giver_id", userId)
+    .eq("post_id", postId)
+    .maybeSingle()
+  return Boolean(data)
 }
 
 /**

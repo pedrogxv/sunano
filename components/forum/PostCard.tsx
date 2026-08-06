@@ -160,11 +160,8 @@ export function PostCard({
             {post.title}
           </p>
 
-          {post.body && (
-            <CommentBody
-              body={post.body}
-              className={`mt-1 text-muted-foreground ${compact ? "line-clamp-4" : ""}`}
-            />
+          {!compact && post.body && (
+            <CommentBody body={post.body} className="mt-1 text-muted-foreground" />
           )}
 
           {post.media_image_urls.length > 0 && (

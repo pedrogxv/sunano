@@ -617,3 +617,48 @@ export async function updateBlogComment(params: {
 
   return { ok: true }
 }
+
+/**
+ * Exclui (soft-delete via `is_hidden`) um comentário do próprio autor — mesma
+ * regra de `deleteOwnForumComment`: autoria conferida aqui, contra o banco, e
+ * não no cliente. `is_hidden` já é filtrado em toda listagem pública.
+ */
+export async function deleteOwnBlogComment(params: {
+  postSlug: string
+  commentId: string
+  userId: string
+}): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: comment } = await db
+    .from("blog_comments")
+    .select("id, post_id, user_id, is_hidden")
+    .eq("id", params.commentId)
+    .maybeSingle()
+
+  if (!comment || comment.is_hidden) {
+    return { ok: false, error: "Comentário não encontrado.", status: 404 }
+  }
+
+  const { data: post } = await db
+    .from("blog_posts")
+    .select("id")
+    .eq("slug", params.postSlug)
+    .eq("is_published", true)
+    .maybeSingle()
+
+  if (!post || (post as { id: string }).id !== comment.post_id) {
+    return { ok: false, error: "Comentário não encontrado.", status: 404 }
+  }
+  if (comment.user_id !== params.userId) {
+    return { ok: false, error: "Você só pode excluir os seus próprios comentários.", status: 403 }
+  }
+
+  const { error } = await db.from("blog_comments").update({ is_hidden: true }).eq("id", comment.id)
+  if (error) {
+    console.error("[blog-repository] deleteOwnBlogComment:", error.message)
+    return { ok: false, error: error.message, status: 400 }
+  }
+
+  return { ok: true }
+}

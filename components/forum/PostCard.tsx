@@ -7,10 +7,12 @@ import { Crown, EyeOff, Flame, Lock, MessageCircle, Pin, Sparkles } from "lucide
 
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { PostVisibilityButton } from "@/components/forum/PostVisibilityButton"
+import { PostDeleteButton } from "@/components/forum/PostDeleteButton"
 import { ImageLightbox } from "@/components/forum/ImageLightbox"
 import { ReportMenu } from "@/components/forum/ReportMenu"
 import { ShareMenu } from "@/components/forum/ShareMenu"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
+import { CommentBody } from "@/components/comments/CommentBody"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -92,14 +94,17 @@ export function PostCard({
   compact = true,
   currentUserId = null,
   onOwnPostVisibilityChange,
+  onOwnPostDeleted,
 }: {
   post: PostCardData
   clickable?: boolean
   compact?: boolean
-  /** Id do usuário logado — quando bate com `post.user_id`, mostra o botão de ocultar/mostrar. */
+  /** Id do usuário logado — quando bate com `post.user_id`, mostra os botões de ocultar/excluir. */
   currentUserId?: string | null
   /** Quando definido, o botão de ocultar não navega — deixa o chamador atualizar a lista. */
   onOwnPostVisibilityChange?: (slug: string, hidden: boolean) => void
+  /** Quando definido, o botão de excluir não navega — deixa o chamador remover o post da lista. */
+  onOwnPostDeleted?: (slug: string) => void
 }) {
   const isOwner = Boolean(currentUserId) && post.user_id === currentUserId
   const youtubeId = post.media_video_url ? extractYoutubeId(post.media_video_url) : null
@@ -156,13 +161,10 @@ export function PostCard({
           </p>
 
           {post.body && (
-            <p
-              className={`mt-1 text-sm leading-relaxed text-muted-foreground ${
-                compact ? "line-clamp-4" : ""
-              }`}
-            >
-              {post.body}
-            </p>
+            <CommentBody
+              body={post.body}
+              className={`mt-1 text-muted-foreground ${compact ? "line-clamp-4" : ""}`}
+            />
           )}
 
           {post.media_image_urls.length > 0 && (
@@ -204,11 +206,14 @@ export function PostCard({
             </span>
             <ShareMenu slug={post.slug} title={post.title} />
             {isOwner ? (
-              <PostVisibilityButton
-                postSlug={post.slug}
-                isHidden={Boolean(post.is_hidden)}
-                onChanged={onOwnPostVisibilityChange}
-              />
+              <>
+                <PostVisibilityButton
+                  postSlug={post.slug}
+                  isHidden={Boolean(post.is_hidden)}
+                  onChanged={onOwnPostVisibilityChange}
+                />
+                <PostDeleteButton postSlug={post.slug} onDeleted={onOwnPostDeleted} />
+              </>
             ) : (
               <ReportMenu postSlug={post.slug} targetType="post" />
             )}

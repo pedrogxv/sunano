@@ -90,6 +90,8 @@ export function CommentsSection({
     submitEdit,
     startEdit,
     cancelEdit,
+    deletingId,
+    deleteComment,
   } = useCommentsController({
     apiBasePath,
     auraLookupPath,
@@ -121,6 +123,12 @@ export function CommentsSection({
     onSubmitEdit: () => submitEdit(comment.id),
     editSaving,
     editError,
+  })
+
+  const deleteProps = (comment: CommentItem) => ({
+    canDelete: isAuthor(comment),
+    deleting: deletingId === comment.id,
+    onDelete: () => deleteComment(comment.id),
   })
 
   return (
@@ -238,6 +246,7 @@ export function CommentsSection({
                       replying={replyingTo === comment.id}
                       reportPostSlug={isAuthor(comment) ? undefined : reportPostSlug}
                       {...editProps(comment)}
+                      {...deleteProps(comment)}
                     />
 
                     {replies.length > 0 && (
@@ -258,6 +267,7 @@ export function CommentsSection({
                               compactAvatar
                               reportPostSlug={isAuthor(reply) ? undefined : reportPostSlug}
                               {...editProps(reply)}
+                              {...deleteProps(reply)}
                             />
                           </div>
                         ))}

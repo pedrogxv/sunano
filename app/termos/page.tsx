@@ -66,7 +66,7 @@ export default function TermosPage() {
           </ul>
         </section>
 
-        <section>
+        <section id="regras-de-conduta">
           <h2>4. Regras de Conduta</h2>
           <p>Ao usar o fórum e outras funcionalidades interativas, você concorda em:</p>
           <ul>

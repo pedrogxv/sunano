@@ -954,3 +954,37 @@ button:not(:disabled):hover .aura-icon-holder {
     animation: none;
   }
 }
+
+/* ════════════════════════════════════════════
+   Card "Em Alta" na Home (post com mais aura da semana) — borda sólida na
+   cor da aura (sem girar, ao contrário de `.aura-stat-card`) com um halo
+   respirando por trás, mesma técnica de `.event-card-glow`. O ícone de
+   chama continua pulsando (`.aura-stat-icon`) — é só a borda que fica fixa. */
+@keyframes trending-post-glow-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.98); }
+  50%      { opacity: 0.7; transform: scale(1.03); }
+}
+
+.trending-post-card {
+  isolation: isolate;
+  border-color: oklch(0.75 0.19 45 / 0.5);
+}
+
+.trending-post-card::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at center, oklch(0.75 0.19 45 / 0.35), transparent 70%);
+  filter: blur(10px);
+  pointer-events: none;
+  animation: trending-post-glow-pulse 2.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trending-post-card::before {
+    animation: none;
+    opacity: 0.5;
+  }
+}

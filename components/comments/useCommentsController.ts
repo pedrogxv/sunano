@@ -60,6 +60,8 @@ export function useCommentsController({
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
   const fetchCommentsPage = useCallback(
     async (targetPage: number, targetSort: CommentSort) => {
       const query = new URLSearchParams({ page: String(targetPage), sort: targetSort })
@@ -266,6 +268,27 @@ export function useCommentsController({
     setEditError(null)
   }
 
+  /**
+   * Exclui o próprio comentário. Remove localmente também as respostas dele
+   * (a listagem já não as devolveria mais na próxima página), sem refetch.
+   */
+  async function deleteComment(commentId: string) {
+    if (!authUser) return
+    try {
+      setDeletingId(commentId)
+      const res = await fetch(`${apiBasePath}/comments/${commentId}`, { method: "DELETE" })
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao excluir comentário")
+      onCommentsChange(
+        comments.filter((c) => c.id !== commentId && c.parent_comment_id !== commentId)
+      )
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao excluir comentário")
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   function startReply(commentId: string) {
     setReplyingTo((current) => (current === commentId ? null : commentId))
     setReplyBody("")
@@ -317,5 +340,7 @@ export function useCommentsController({
     submitEdit,
     startEdit,
     cancelEdit,
+    deletingId,
+    deleteComment,
   }
 }

@@ -3,7 +3,7 @@ import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { checkRateLimit } from "@/lib/server/rate-limit"
-import { updateForumComment } from "@/lib/server/repositories/forum-repository"
+import { deleteOwnForumComment, updateForumComment } from "@/lib/server/repositories/forum-repository"
 
 // Mesmos limites do POST de criação — o texto editado passa pelas mesmas
 // regras do original, senão dava pra escapar do mínimo/máximo editando depois.
@@ -58,5 +58,41 @@ export async function PATCH(
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Erro ao editar comentário." }, { status: 500 })
+  }
+}
+
+/** Exclui o próprio comentário — a checagem de autoria acontece no repositório, contra o banco. */
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ slug: string; commentId: string }> }
+) {
+  const { slug, commentId } = await context.params
+
+  try {
+    const user = await getRequestUser(request)
+    if (!user) {
+      return NextResponse.json({ error: "Você precisa estar logado para excluir." }, { status: 401 })
+    }
+
+    const rateLimit = await checkRateLimit({
+      action: "forum_comment_delete",
+      identifier: user.id,
+      maxAttempts: 30,
+      windowSeconds: 3600,
+    })
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Você excluiu comentários muitas vezes recentemente. Tente novamente mais tarde." },
+        { status: 429 }
+      )
+    }
+
+    const result = await deleteOwnForumComment({ postSlug: slug, commentId, userId: user.id })
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+    return NextResponse.json({ ok: true })
+  } catch {
+    return NextResponse.json({ error: "Erro ao excluir comentário." }, { status: 500 })
   }
 }

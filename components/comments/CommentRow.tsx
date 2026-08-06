@@ -5,6 +5,17 @@ import { ptBR } from "date-fns/locale"
 import { AuraButton, type AuraBlockReason, type Reaction } from "@/components/forum/AuraButton"
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
 import { ReportMenu } from "@/components/forum/ReportMenu"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
@@ -56,6 +67,9 @@ export function CommentRow({
   editSaving = false,
   editError = null,
   reportPostSlug,
+  canDelete = false,
+  deleting = false,
+  onDelete,
 }: {
   comment: CommentItem
   auraReaction: Reaction
@@ -78,6 +92,10 @@ export function CommentRow({
   editError?: string | null
   /** Slug do post do fórum, para habilitar "Denunciar" — ausente no blog (ainda sem denúncia). */
   reportPostSlug?: string
+  /** O usuário logado é o autor deste comentário — excluir não tem janela de tempo, ao contrário de editar. */
+  canDelete?: boolean
+  deleting?: boolean
+  onDelete?: () => void
 }) {
   const withinEditWindow = useWithinEditWindow(comment.created_at)
   const showEditButton = canEdit && withinEditWindow && !editing
@@ -155,6 +173,36 @@ export function CommentRow({
             )}
             {reportPostSlug && (
               <ReportMenu postSlug={reportPostSlug} targetType="comment" commentId={comment.id} />
+            )}
+            {canDelete && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    className="text-xs font-medium text-muted-foreground transition-colors hover:text-destructive disabled:opacity-60"
+                  >
+                    {deleting ? "Excluindo…" : "Excluir"}
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir este comentário?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Essa ação é definitiva e não pode ser desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={onDelete}
+                      className="bg-red-600 text-white hover:bg-red-500"
+                    >
+                      Excluir
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
           </div>
         )}

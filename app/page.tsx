@@ -3,6 +3,7 @@ import Link from "next/link"
 import {
   ArrowRight,
   Crown,
+  Flame,
   MessageCircle,
   Package,
   PlayCircle,
@@ -94,7 +95,7 @@ function SectionHeader({
 }
 
 export default async function HomePage() {
-  const { banners, peripherals, products, forum, videos, events, counts } = await getHomeData()
+  const { banners, peripherals, products, forum, trendingForum, videos, events, counts } = await getHomeData()
 
   return (
     <div className="mx-auto max-w-6xl space-y-12 px-4 py-6 md:px-6 lg:px-8 md:py-10">
@@ -289,7 +290,55 @@ export default async function HomePage() {
               linkLabel="Ir ao fórum"
             />
             <div className="space-y-2">
-              {forum.map((post) => (
+              {trendingForum.map((post) => (
+                <Link
+                  key={post.id}
+                  href={`/forum/${post.slug}`}
+                  className="trending-post-card group relative block rounded-xl border bg-card p-3 transition-transform hover:-translate-y-0.5"
+                >
+                  <div className="relative z-10 flex items-start gap-3">
+                    {post.media_image_urls[0] ? (
+                      <div className="size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={post.media_image_urls[0]}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <UserAvatar name={post.author_name} avatarUrl={post.author_avatar_url} size={10} />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="aura-stat-icon-holder inline-flex shrink-0">
+                          <Flame className="aura-stat-icon size-3.5 text-primary" fill="currentColor" strokeWidth={1.5} />
+                        </span>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                          Em alta
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-1 text-sm font-semibold text-foreground/90 group-hover:text-foreground">
+                        {post.body_preview}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span>{post.author_name}</span>
+                        <span>·</span>
+                        <span>{formatTimeAgo(post.created_at)}</span>
+                        <span>·</span>
+                        <span className="flex items-center gap-1 font-medium text-primary/80">
+                          <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
+                          {post.aura_count}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+              {forum
+                .filter((post) => !trendingForum.some((t) => t.id === post.id))
+                .slice(0, Math.max(0, 4 - trendingForum.length))
+                .map((post) => (
                 <Link
                   key={post.id}
                   href={`/forum/${post.slug}`}

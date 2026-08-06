@@ -5,8 +5,11 @@ import Link from "next/link"
 import { Clock, Flame, Plus, Tag, User, X } from "lucide-react"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
-import { CategoryPicker } from "@/components/forum/CategoryPicker"
+import { CategoryPickerCompact } from "@/components/forum/CategoryPicker"
 import { PostMediaField } from "@/components/forum/PostMediaField"
+import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
+import { ForumSidebar, ForumSidebarMobileTrigger } from "@/components/forum/ForumSidebar"
+import { CommentBody, CommentFormatHint } from "@/components/comments/CommentBody"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,6 +58,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
   const [mediaVideoUrl, setMediaVideoUrl] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     fetch("/api/forum/categories")
@@ -107,6 +111,10 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
       return prev.map((p) => (p.slug === slug ? { ...p, is_hidden: hidden } : p))
     })
   }, [activeTab])
+
+  const handleOwnPostDeleted = useCallback((slug: string) => {
+    setPosts((prev) => prev.filter((p) => p.slug !== slug))
+  }, [])
 
   // O servidor já renderizou os posts da aba padrão (SSR/ISR) e a lista não
   // depende de quem está logado (post não tem reação) — o primeiro paint
@@ -191,7 +199,8 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
     "Nenhum tópico ainda. Seja o primeiro!"
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-8 md:px-6">
+    <div className="mx-auto flex max-w-6xl items-start gap-6 px-4 py-8 md:px-6">
+      <div className="min-w-0 flex-1 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -217,6 +226,10 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
             </Link>
           )
         )}
+      </div>
+
+      <div className="lg:hidden">
+        <ForumSidebarMobileTrigger />
       </div>
 
       {/* Tab bar */}
@@ -331,6 +344,9 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
           )}
 
           <div className="space-y-1">
+            <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Título <span className="text-destructive">*</span>
+            </label>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -340,28 +356,30 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
             />
           </div>
 
+          <CategoryPickerCompact value={categoryId} onChange={setCategoryId} />
+
           <div className="space-y-1">
+            <TextFormatToolbar textareaRef={bodyTextareaRef} value={body} onChange={setBody} />
             <Textarea
+              ref={bodyTextareaRef}
               value={body}
               onChange={(e) => setBody(e.target.value)}
               className="min-h-[80px] border-border bg-muted/20 text-sm"
               placeholder="Corpo do texto (opcional)"
               maxLength={MAX_BODY}
             />
-            <div className="flex items-center justify-end text-[10px] text-muted-foreground">
+            {body.trim().length > 0 && (
+              <div className="rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Pré-visualização
+                </p>
+                <CommentBody body={body} />
+              </div>
+            )}
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+              <CommentFormatHint />
               <span>{body.length}/{MAX_BODY}</span>
             </div>
-          </div>
-
-          <div className="space-y-1">
-            <label className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Categoria <span className="text-destructive">*</span>
-            </label>
-            <CategoryPicker
-              value={categoryId}
-              onChange={setCategoryId}
-              aria-invalid={categoryId.length === 0}
-            />
           </div>
 
           <div className="space-y-1">
@@ -376,7 +394,14 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex items-center justify-end gap-2 pt-1">
+            {!canSubmit && (
+              <p className="mr-auto text-xs text-muted-foreground">
+                {title.trim().length === 0
+                  ? "Adicione um título para publicar."
+                  : "Escolha uma categoria para publicar."}
+              </p>
+            )}
             <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Cancelar</Button>
             <Button size="sm" onClick={submitPost} disabled={saving || !canSubmit}>
               {saving ? "Publicando…" : "Publicar"}
@@ -413,6 +438,7 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
               post={post}
               currentUserId={authUser?.id ?? null}
               onOwnPostVisibilityChange={handleOwnPostVisibilityChange}
+              onOwnPostDeleted={handleOwnPostDeleted}
             />
           ))}
         </div>
@@ -426,6 +452,9 @@ export function ForumContent({ initialPosts }: { initialPosts: ForumPost[] }) {
           </p>
         </div>
       )}
+      </div>
+
+      <ForumSidebar />
     </div>
   )
 }

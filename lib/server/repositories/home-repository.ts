@@ -43,6 +43,10 @@ export type HomeForumPost = {
   created_at: string
 }
 
+export type HomeTrendingPost = HomeForumPost & {
+  aura_count: number
+}
+
 export type HomeVideo = {
   id: string
   title: string
@@ -57,6 +61,8 @@ export type HomeData = {
   blog: HomeBlogPost[]
   products: FeaturedProduct[]
   forum: HomeForumPost[]
+  /** Post(s) "em alta" (maior aura nos últimos 7 dias) — até 2, vazio se nada se destacar. */
+  trendingForum: HomeTrendingPost[]
   videos: HomeVideo[]
   /** Eventos ativos (medalhas em resgate) — a personalização por usuário (já resgatado?) é carregada à parte no client, ver `EventsShowcase`. */
   events: EventDisplay[]
@@ -77,6 +83,7 @@ export async function getHomeData(): Promise<HomeData> {
     latestBlogRes,
     featuredProducts,
     forumPostsRes,
+    trendingForumRes,
     ytFeed,
     countsRes,
     activeEvents,
@@ -104,6 +111,19 @@ export async function getHomeData(): Promise<HomeData> {
       .eq("is_hidden", false)
       .order("created_at", { ascending: false })
       .limit(4),
+    // "Em alta": maior aura acumulada (soma da aura dos comentários) dentre os
+    // posts dos últimos 7 dias — mesmo campo denormalizado usado no fórum
+    // (ver aura_count em forum-repository.ts). Só interessa se tiver aura de
+    // verdade, por isso o filtro `gt(0)` — sem isso o "em alta" poderia
+    // destacar um post qualquer com zero engajamento.
+    db
+      .from("forum_posts")
+      .select("id, slug, body_preview, author_name, user_id, media_image_urls, created_at, aura_count")
+      .eq("is_hidden", false)
+      .gt("aura_count", 0)
+      .gte("created_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .order("aura_count", { ascending: false })
+      .limit(2),
     getYouTubeChannelFeed({ forceRefresh: false }).catch(() => ({ data: null, error: null })),
     Promise.all([
       db.from("peripherals").select("id", { count: "exact", head: true }),
@@ -116,7 +136,12 @@ export async function getHomeData(): Promise<HomeData> {
   ])
 
   const forumRows = forumPostsRes.data ?? []
-  const authorIds = [...new Set(forumRows.map((p) => p.user_id).filter((id): id is string => Boolean(id)))]
+  const trendingRows = trendingForumRes.data ?? []
+  const authorIds = [
+    ...new Set(
+      [...forumRows, ...trendingRows].map((p) => p.user_id).filter((id): id is string => Boolean(id))
+    ),
+  ]
   const avatarMap: Record<string, string | null> = {}
   if (authorIds.length > 0) {
     const { data: profiles } = await db.from("user_profiles").select("id, avatar_url").in("id", authorIds)
@@ -136,6 +161,16 @@ export async function getHomeData(): Promise<HomeData> {
       author_avatar_url: p.user_id ? avatarMap[p.user_id] ?? null : null,
       media_image_urls: p.media_image_urls ?? [],
       created_at: p.created_at,
+    })),
+    trendingForum: trendingRows.map((p) => ({
+      id: p.id,
+      slug: p.slug,
+      body_preview: p.body_preview,
+      author_name: p.author_name,
+      author_avatar_url: p.user_id ? avatarMap[p.user_id] ?? null : null,
+      media_image_urls: p.media_image_urls ?? [],
+      created_at: p.created_at,
+      aura_count: p.aura_count ?? 0,
     })),
     videos: ((ytFeed?.data?.videos ?? []) as HomeVideo[]).slice(0, 3),
     events: activeEvents.filter((event) => event.active).slice(0, 6),

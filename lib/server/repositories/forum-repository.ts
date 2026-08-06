@@ -220,6 +220,65 @@ export async function listForumPosts(params: {
   return list
 }
 
+export type ForumUserComment = {
+  id: string
+  body: string
+  created_at: string
+  aura_count: number
+  post_slug: string
+  post_title: string
+}
+
+/**
+ * Comentários visíveis de um usuário, com o post ao qual cada um pertence —
+ * modal "Comentários" na vitrine pública do perfil dele. Mesmo padrão em
+ * dois passos de `listForumPosts` (busca os comentários, depois os posts
+ * correspondentes numa segunda query) em vez de relação embutida do
+ * Supabase. Comentário cujo post está oculto fica de fora — pro mesmo
+ * visitante que não pode ver o post, o link também não deveria aparecer.
+ */
+export async function listForumCommentsByUser(userId: string): Promise<ForumUserComment[]> {
+  const db = createSupabaseAdminClient()
+
+  const { data: comments, error } = await db
+    .from("forum_comments")
+    .select("id, body, created_at, aura_count, post_id")
+    .eq("user_id", userId)
+    .eq("is_hidden", false)
+    .order("created_at", { ascending: false })
+    .limit(50)
+
+  if (error) {
+    console.error("[forum-repository] listForumCommentsByUser:", error)
+    throw error
+  }
+
+  const rows = comments ?? []
+  const postIds = [...new Set(rows.map((c) => c.post_id))]
+  if (postIds.length === 0) return []
+
+  const { data: posts } = await db
+    .from("forum_posts")
+    .select("id, slug, title, is_hidden")
+    .in("id", postIds)
+  const postMap = new Map((posts ?? []).map((p) => [p.id, p]))
+
+  return rows
+    .map((c): ForumUserComment | null => {
+      const post = postMap.get(c.post_id)
+      if (!post || post.is_hidden) return null
+      return {
+        id: c.id,
+        body: c.body,
+        created_at: c.created_at,
+        aura_count: c.aura_count ?? 0,
+        post_slug: post.slug,
+        post_title: post.title,
+      }
+    })
+    .filter((c): c is ForumUserComment => c !== null)
+}
+
 /**
  * Resolve uma categoria (raiz ou subcategoria) pelo slug e lista os posts
  * dela — base da página `/forum/categoria/[slug]`, indexável por periférico

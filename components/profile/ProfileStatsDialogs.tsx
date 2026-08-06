@@ -2,10 +2,13 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { FileText, Loader2, MessageSquare, Users } from "lucide-react"
+import { format } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { FileText, Flame, Loader2, MessageSquare, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
+import { CommentBody } from "@/components/comments/CommentBody"
 import { Contador, type Estatistica } from "@/components/profile/EstatisticasContador"
 import {
   Dialog,
@@ -18,6 +21,7 @@ import { UserAvatar } from "@/components/ui/user-avatar"
 import { TIER_CAPABILITIES } from "@/lib/account-tier"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
+import type { ForumUserComment } from "@/lib/server/repositories/forum-repository"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
 function DialogListState({
@@ -161,7 +165,42 @@ export function FollowersStatTrigger({ userId, followersCount }: { userId: strin
   )
 }
 
-/** Card "Posts" que abre o modal com a lista ao ser clicado — ver nota em `FollowersStatTrigger`. */
+/** Linha compacta de comentário dentro do modal — trecho do texto + o post ao qual pertence. */
+function CommentRow({ comment }: { comment: ForumUserComment }) {
+  return (
+    <Link
+      href={`/forum/${comment.post_slug}#comments`}
+      className="block rounded-lg border border-border/60 px-3 py-2.5 transition-colors hover:border-border hover:bg-muted/40"
+    >
+      <p className="truncate text-xs text-muted-foreground">
+        Em: <span className="font-medium text-foreground">{comment.post_title}</span>
+      </p>
+      <CommentBody body={comment.body} className="mt-1 line-clamp-3" />
+      <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
+        <span>{format(new Date(comment.created_at), "dd MMM yyyy", { locale: ptBR })}</span>
+        {comment.aura_count > 0 && (
+          <>
+            <span>·</span>
+            <span className="inline-flex items-center gap-1 text-orange-500">
+              <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
+              {comment.aura_count}
+            </span>
+          </>
+        )}
+      </div>
+    </Link>
+  )
+}
+
+/**
+ * Card "Posts | Comentários" — visualmente uma caixa só (as duas métricas
+ * medem "produção no fórum"), mas cada metade é o seu próprio `DialogTrigger`
+ * com o seu próprio modal: "Posts" abre a lista de posts, "Comentários" abre
+ * a lista de comentários. As duas ficarem dentro do mesmo `<button>` foi o
+ * bug original — o clique inteiro ia sempre para o modal de Posts, mesmo do
+ * lado de "Comentários". Ver nota em `FollowersStatTrigger` sobre o gatilho
+ * nascer aqui dentro em vez de vir de fora via `children`.
+ */
 export function PostsStatTrigger({
   userId,
   postsCount,
@@ -186,51 +225,97 @@ export function PostsStatTrigger({
     fundo: "bg-violet-400/10",
   }
 
-  const [open, setOpen] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [loaded, setLoaded] = useState(false)
+  const [postsOpen, setPostsOpen] = useState(false)
+  const [postsLoading, setPostsLoading] = useState(false)
+  const [postsLoaded, setPostsLoaded] = useState(false)
   const [posts, setPosts] = useState<PostCardData[]>([])
 
-  async function handleOpenChange(next: boolean) {
-    setOpen(next)
-    if (!next || loaded) return
+  async function handlePostsOpenChange(next: boolean) {
+    setPostsOpen(next)
+    if (!next || postsLoaded) return
 
-    setLoading(true)
+    setPostsLoading(true)
     try {
       const res = await fetch(`/api/forum/posts?tab=user&userId=${userId}`)
       const data = (await res.json()) as { ok?: boolean; posts?: PostCardData[] }
       if (data.ok) setPosts(data.posts ?? [])
     } finally {
-      setLoading(false)
-      setLoaded(true)
+      setPostsLoading(false)
+      setPostsLoaded(true)
+    }
+  }
+
+  const [commentsOpen, setCommentsOpen] = useState(false)
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentsLoaded, setCommentsLoaded] = useState(false)
+  const [comments, setComments] = useState<ForumUserComment[]>([])
+
+  async function handleCommentsOpenChange(next: boolean) {
+    setCommentsOpen(next)
+    if (!next || commentsLoaded) return
+
+    setCommentsLoading(true)
+    try {
+      const res = await fetch(`/api/forum/comments?userId=${userId}`)
+      const data = (await res.json()) as { ok?: boolean; comments?: ForumUserComment[] }
+      if (data.ok) setComments(data.comments ?? [])
+    } finally {
+      setCommentsLoading(false)
+      setCommentsLoaded(true)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-4 rounded-xl border border-border bg-card/60 px-4 py-3 text-left transition-colors hover:bg-card sm:gap-5 sm:px-5 sm:py-3.5"
-        >
-          <Contador item={postsItem} />
-          <div className="h-8 w-px shrink-0 bg-border sm:h-9" aria-hidden />
-          <Contador item={comentariosItem} />
-        </button>
-      </DialogTrigger>
-      <DialogContent className="flex max-h-[80vh] flex-col overflow-hidden sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Posts</DialogTitle>
-        </DialogHeader>
-        <div className="-mx-1 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 pb-1">
-          <DialogListState
-            loading={loading}
-            empty={!loading && posts.length === 0}
-            emptyLabel="Nenhum post ainda."
-          />
-          {!loading && posts.map((post) => <PostCard key={post.id} post={post} />)}
-        </div>
-      </DialogContent>
-    </Dialog>
+    <div className="flex items-center rounded-xl border border-border bg-card/60">
+      <Dialog open={postsOpen} onOpenChange={handlePostsOpenChange}>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center rounded-l-xl px-4 py-3 text-left transition-colors hover:bg-card sm:px-5 sm:py-3.5"
+          >
+            <Contador item={postsItem} />
+          </button>
+        </DialogTrigger>
+        <DialogContent className="flex max-h-[80vh] flex-col overflow-hidden sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Posts</DialogTitle>
+          </DialogHeader>
+          <div className="-mx-1 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 pb-1">
+            <DialogListState
+              loading={postsLoading}
+              empty={!postsLoading && posts.length === 0}
+              emptyLabel="Nenhum post ainda."
+            />
+            {!postsLoading && posts.map((post) => <PostCard key={post.id} post={post} />)}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="h-8 w-px shrink-0 bg-border sm:h-9" aria-hidden />
+
+      <Dialog open={commentsOpen} onOpenChange={handleCommentsOpenChange}>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="flex items-center rounded-r-xl px-4 py-3 text-left transition-colors hover:bg-card sm:px-5 sm:py-3.5"
+          >
+            <Contador item={comentariosItem} />
+          </button>
+        </DialogTrigger>
+        <DialogContent className="flex max-h-[80vh] flex-col overflow-hidden sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Comentários</DialogTitle>
+          </DialogHeader>
+          <div className="-mx-1 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 pb-1">
+            <DialogListState
+              loading={commentsLoading}
+              empty={!commentsLoading && comments.length === 0}
+              emptyLabel="Nenhum comentário ainda."
+            />
+            {!commentsLoading && comments.map((comment) => <CommentRow key={comment.id} comment={comment} />)}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

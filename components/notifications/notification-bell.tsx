@@ -8,12 +8,12 @@ import {
   Bell,
   Circle,
   CircleCheck,
+  Flame,
   Heart,
   Loader2,
   Megaphone,
   MessageSquare,
   Reply,
-  Sparkles,
   UserPlus,
   X,
 } from "lucide-react"
@@ -59,7 +59,7 @@ const POLL_MS = 60_000
 const PAGE_SIZE = 20
 
 const ICONS: Record<NotificationType, typeof Bell> = {
-  aura_received: Sparkles,
+  aura_received: Flame,
   post_comment: MessageSquare,
   comment_reply: Reply,
   new_follower: UserPlus,

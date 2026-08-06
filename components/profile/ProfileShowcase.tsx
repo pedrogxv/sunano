@@ -111,6 +111,7 @@ export function ProfileShowcase({
 
       <EstatisticasGrid
         className="mt-3"
+        userId={profile.id}
         aura={profile.aura}
         posts={profile.forum_posts}
         comentarios={profile.forum_comments}

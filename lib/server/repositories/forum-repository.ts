@@ -61,7 +61,7 @@ export type ForumCommentDetail = {
   author_display_slug: string | null
 }
 
-export type ForumTab = "recent" | "hot" | "category" | "mine"
+export type ForumTab = "recent" | "hot" | "category" | "mine" | "user"
 
 // ── Helpers de enriquecimento ────────────────────────────────────────────────
 
@@ -122,13 +122,13 @@ export async function listAllForumSlugsForSitemap(): Promise<{ slug: string; upd
 export async function listForumPosts(params: {
   tab: ForumTab
   categoryId?: string
-  /** Obrigatório quando `tab === "mine"` — ignorado nas demais abas. */
+  /** Obrigatório quando `tab` é `"mine"` ou `"user"` — ignorado nas demais abas. */
   userId?: string
 }): Promise<ForumListPost[]> {
   const db = createSupabaseAdminClient()
   const { tab, categoryId, userId } = params
 
-  if (tab === "mine" && !userId) return []
+  if ((tab === "mine" || tab === "user") && !userId) return []
 
   let query = db
     .from("forum_posts")
@@ -136,8 +136,9 @@ export async function listForumPosts(params: {
       "id, slug, title, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, aura_count"
     )
 
-  // Em "Meus Posts" o dono também vê o que ocultou (pra poder reativar);
-  // em todas as outras abas a listagem pública segue escondendo `is_hidden`.
+  // Em "Meus Posts" o dono também vê o que ocultou (pra poder reativar); em
+  // todas as outras abas — incluindo "user" (posts de um autor, na vitrine
+  // pública do perfil dele) — a listagem segue escondendo `is_hidden`.
   if (tab !== "mine") {
     query = query.eq("is_hidden", false)
   }
@@ -152,7 +153,7 @@ export async function listForumPosts(params: {
     query = query.gte("created_at", since)
   }
 
-  if (tab === "mine" && userId) {
+  if ((tab === "mine" || tab === "user") && userId) {
     query = query.eq("user_id", userId)
   }
 

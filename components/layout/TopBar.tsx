@@ -1,17 +1,9 @@
 "use client"
 
-import { Check, ChevronDown, Globe, Moon, PanelLeft, Settings2, Sun } from "lucide-react"
+import { Moon, PanelLeft, Sun } from "lucide-react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Code-split: o AuthUser puxa o cliente Supabase (@supabase/ssr), pesado e
@@ -39,8 +31,6 @@ const AuraBalanceBadge = dynamic(
   () => import("@/components/layout/AuraBalanceBadge").then((m) => m.AuraBalanceBadge),
   { ssr: false }
 )
-import { getLanguageEntry, I18N, LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
-import { useLocale } from "@/components/providers/locale-context"
 import { useTheme } from "@/components/providers/theme-context"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
@@ -132,7 +122,6 @@ function getPageDefaults(pathname: string): PageDefaults {
 }
 
 export function TopBar() {
-  const { locale, setLocale } = useLocale()
   const { theme, setTheme } = useTheme()
   const {
     publicCollapsed,
@@ -147,7 +136,6 @@ export function TopBar() {
   const pathname = usePathname()
 
   const isLight = theme === "light"
-  const selectedLanguage = getLanguageEntry(locale)
   const isAdmin = pathname?.startsWith("/admin")
   const isCollapsed = isAdmin ? adminCollapsed : publicCollapsed
   const toggleCollapsed = isAdmin ? toggleAdmin : togglePublic
@@ -198,105 +186,21 @@ export function TopBar() {
           </div>
         </div>
 
-        {/* Right — Language + Theme */}
+        {/* Right — Theme */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {/* Mobile (<sm): idioma e tema colapsam num único menu pra não estourar a largura. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70 text-foreground transition-all hover:bg-muted/40 sm:hidden"
-                type="button"
-                aria-label="Idioma e tema"
-              >
-                <Settings2 className="size-[16px] text-primary" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 border-border bg-popover text-foreground shadow-xl">
-              <DropdownMenuLabel className="space-y-0.5 px-2 py-1.5">
-                <div className="text-sm font-semibold text-foreground">{I18N[locale].topbar.languageLabel}</div>
-                <div className="text-xs font-normal text-muted-foreground">
-                  {I18N[locale].topbar.languageHelper}
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-border" />
-              {LANGUAGE_OPTIONS.map((language) => {
-                const isActive = language.code === locale
-                return (
-                  <DropdownMenuItem
-                    key={language.code}
-                    className={cn(
-                      "flex items-center justify-between rounded-md px-2 py-2 text-sm text-foreground focus:bg-muted/40 focus:text-foreground",
-                      isActive && "bg-primary/15 text-primary"
-                    )}
-                    onSelect={() => setLocale(language.code as LocaleCode)}
-                  >
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">{language.nativeLabel}</span>
-                      <span className="text-xs text-muted-foreground">{language.label}</span>
-                    </div>
-                    {isActive && <Check className="size-4 text-primary" />}
-                  </DropdownMenuItem>
-                )
-              })}
-              <DropdownMenuSeparator className="bg-border" />
-              <DropdownMenuItem
-                className="flex items-center justify-between rounded-md px-2 py-2 text-sm text-foreground focus:bg-muted/40 focus:text-foreground"
-                onSelect={(e) => {
-                  e.preventDefault()
-                  setTheme(isLight ? "dark" : "light")
-                }}
-              >
-                <span className="font-medium">{isLight ? "Modo escuro" : "Modo claro"}</span>
-                {isLight ? (
-                  <Moon className="size-4 text-primary" />
-                ) : (
-                  <Sun className="size-4 text-primary" />
-                )}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* sm+: idioma e tema voltam a ser controles próprios, lado a lado. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="hidden h-8 items-center gap-1.5 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:flex"
-                type="button"
-              >
-                <Globe className="size-[15px] text-primary" />
-                <span className="hidden lg:inline">{selectedLanguage.nativeLabel}</span>
-                <ChevronDown className="size-3 text-muted-foreground" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64 border-border bg-popover text-foreground shadow-xl">
-              <DropdownMenuLabel className="space-y-0.5 px-2 py-1.5">
-                <div className="text-sm font-semibold text-foreground">{I18N[locale].topbar.languageLabel}</div>
-                <div className="text-xs font-normal text-muted-foreground">
-                  {I18N[locale].topbar.languageHelper}
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-border" />
-              {LANGUAGE_OPTIONS.map((language) => {
-                const isActive = language.code === locale
-                return (
-                  <DropdownMenuItem
-                    key={language.code}
-                    className={cn(
-                      "flex items-center justify-between rounded-md px-2 py-2 text-sm text-foreground focus:bg-muted/40 focus:text-foreground",
-                      isActive && "bg-primary/15 text-primary"
-                    )}
-                    onSelect={() => setLocale(language.code as LocaleCode)}
-                  >
-                    <div className="flex flex-col items-start">
-                      <span className="font-medium">{language.nativeLabel}</span>
-                      <span className="text-xs text-muted-foreground">{language.label}</span>
-                    </div>
-                    {isActive && <Check className="size-4 text-primary" />}
-                  </DropdownMenuItem>
-                )
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Mobile (<sm): botão de tema dedicado. */}
+          <button
+            className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70 text-foreground transition-all hover:bg-muted/40 sm:hidden"
+            type="button"
+            onClick={() => setTheme(isLight ? "dark" : "light")}
+            aria-label={isLight ? "Ativar modo escuro" : "Ativar modo claro"}
+          >
+            {isLight ? (
+              <Moon className="size-[16px] text-primary" />
+            ) : (
+              <Sun className="size-[16px] text-primary" />
+            )}
+          </button>
 
           <button
             className="hidden h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:flex"

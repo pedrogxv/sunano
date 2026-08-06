@@ -450,6 +450,44 @@ export async function getFollowingProfiles(
   )
 }
 
+/** Perfis que seguem `userId`, do mais recente para o mais antigo. */
+export async function getFollowerProfiles(
+  userId: string,
+  limit = 48
+): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+  const { data: follows, error } = await db
+    .from("user_follows")
+    .select("follower_id, created_at")
+    .eq("following_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("[users-repository] getFollowerProfiles:", error)
+    return []
+  }
+
+  const ids = (follows ?? []).map((r) => (r as { follower_id: string }).follower_id)
+  if (ids.length === 0) return []
+
+  const { data, error: profilesError } = await excludeSiteOwner(
+    db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", ids)
+  )
+
+  if (profilesError) {
+    console.error("[users-repository] getFollowerProfiles:", profilesError)
+    return []
+  }
+
+  // O `in` volta em ordem arbitrária — restaura a ordem de quando passou a seguir.
+  const rank = new Map(ids.map((id, index) => [id, index]))
+  const profiles = await withCounters((data ?? []) as DirectoryRow[])
+  return profiles.sort(
+    (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
+  )
+}
+
 /**
  * Perfis com mais seguidores.
  *

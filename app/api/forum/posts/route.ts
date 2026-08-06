@@ -36,7 +36,7 @@ const postSchema = z
     message: "Escolha apenas um tipo de mídia: imagem ou vídeo.",
   })
 
-const VALID_TABS: ForumTab[] = ["recent", "hot", "category", "mine"]
+const VALID_TABS: ForumTab[] = ["recent", "hot", "category", "mine", "user"]
 
 export async function GET(request: NextRequest) {
   try {
@@ -64,6 +64,14 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: "Você precisa estar logado." }, { status: 401 })
       }
       userId = user.id
+    } else if (tab === "user") {
+      // Posts de um autor específico — modal "Posts" na vitrine pública do
+      // perfil dele. Não exige sessão: é a mesma listagem que qualquer
+      // visitante já vê espalhada pelo fórum, só filtrada por autor.
+      userId = url.searchParams.get("userId") ?? undefined
+      if (!userId) {
+        return NextResponse.json({ error: "Usuário não informado." }, { status: 400 })
+      }
     }
 
     const posts = await listForumPosts({ tab, categoryId, userId })

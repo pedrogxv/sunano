@@ -1411,6 +1411,23 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.2.3",
+          date: "6 de agosto",
+          title: "Aura de volta aos posts, exclusão de post/comentário e fórum mais social",
+          description: "A Aura ganhou um botão de like direto nos posts do fórum, agora dá pra excluir seus próprios posts e comentários, e a barra lateral do fórum passou a mostrar quem está mais ativo e quem modera. Perfil e Diretório de Pessoas também tiveram ajustes.",
+          items: [
+            "Dar aura em posts: um like (sem dislike) credita +1 pro autor, com limite diário e sem poder reagir ao próprio post",
+            "Exclusão do próprio post e do próprio comentário, direto pela interface",
+            "Mini perfil ao passar o mouse sobre o nome/avatar de quem comentou, com link pro perfil",
+            "Barra lateral do fórum ganhou cards de 'Mais Ativos' e 'Moderadores', além de uma descrição do fórum",
+            "Card 'Em Alta' na Home, destacando o post com mais aura da semana",
+            "Perfil: clicar nos números de posts, comentários, seguidores ou seguindo agora abre a lista correspondente",
+            "Diretório de Pessoas redesenhado: busca por nome removida, cada aba ganhou uma descrição, e o botão Seguir só aparece nas abas 'Mais visitados' e 'Seguindo'",
+            "Página de periférico: quando o item é ranqueado em mais de um modo (ex.: mouse Geral/Magnético/Custo-Benefício), dá pra alternar entre eles direto na página",
+            "Seletor de idioma saiu do topo do site — agora fica nas Preferências da conta",
+          ],
+        },
+        {
           version: "v0.2.2",
           date: "5 de agosto",
           title: "Notificações, edição de comentários e ajustes na Aura",
@@ -2240,6 +2257,23 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.2.3",
+          date: "August 6",
+          title: "Aura back on posts, deleting your own posts/comments, and a more social forum",
+          description: "Aura got a direct like button on forum posts, you can now delete your own posts and comments, and the forum sidebar now shows who's most active and who moderates. Profile pages and the People directory got some polish too.",
+          items: [
+            "Give aura on posts: a like (no dislike) credits the author +1, with a daily cap and no reacting to your own post",
+            "Delete your own posts and comments, right from the UI",
+            "Hover mini profile on commenters' name/avatar, linking to their profile",
+            "Forum sidebar now shows 'Most Active' and 'Moderators' cards, plus a short forum description",
+            "'Trending' card on the Home page, spotlighting the post with the most aura this week",
+            "Profile: clicking the post/comment/follower/following counts now opens the matching list",
+            "People directory redesign: name search removed, each tab now has a description, and the Follow button only shows on the 'Most visited' and 'Following' tabs",
+            "Peripheral page: when an item is ranked in more than one mode (e.g. a mouse's Overall/Magnetic/Value), you can switch between them right on the page",
+            "Language selector moved out of the top bar — now lives in account Preferences",
+          ],
+        },
         {
           version: "v0.2.2",
           date: "August 5",

@@ -6,7 +6,11 @@ import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import { validateImageUpload } from "@/lib/server/upload-validation"
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
+// Funções serverless do Vercel cortam o corpo da requisição em ~4.5MB antes
+// do handler rodar — um limite acima disso nunca é alcançado pela validação
+// abaixo, e o upload falha com um erro genérico de plataforma em vez da
+// mensagem específica de tamanho.
+const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 
 /**

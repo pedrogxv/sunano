@@ -8,6 +8,7 @@ import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
 import { MediaAdjuster } from "./MediaAdjuster"
+import { compressImageFile } from "@/lib/client/compress-image"
 import {
   coerceMediaAdjustments,
   DEFAULT_ADJUST,
@@ -66,6 +67,15 @@ export type ProfileData = {
 interface ProfileSectionProps {
   profile: ProfileData
   onProfileChange: (profile: ProfileData) => void
+}
+
+// Vale para banner e fundo do Mini Perfil: o endpoint aceita até 4MB, mas a
+// meta fica com folga porque o corpo da requisição (multipart) soma alguns
+// bytes de overhead em cima do arquivo.
+const COVER_IMAGE_COMPRESS_OPTIONS = {
+  maxDimension: 2400,
+  targetBytes: 3.5 * 1024 * 1024,
+  skipBelowBytes: 3 * 1024 * 1024,
 }
 
 /**
@@ -249,8 +259,9 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     if (!file) return
     try {
       setUploadingBanner(true)
+      const compressed = await compressImageFile(file, COVER_IMAGE_COMPRESS_OPTIONS)
       const body = new FormData()
-      body.append("file", file)
+      body.append("file", compressed)
       const res = await fetch("/api/profile/upload-banner", { method: "POST", body })
       const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
       if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
@@ -271,8 +282,9 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     if (!file) return
     try {
       setUploadingMiniBanner(true)
+      const compressed = await compressImageFile(file, COVER_IMAGE_COMPRESS_OPTIONS)
       const body = new FormData()
-      body.append("file", file)
+      body.append("file", compressed)
       // Rota própria: o fundo do Mini Perfil é uma imagem independente da capa
       // grande, e trocar uma não pode sobrescrever a outra no bucket.
       const res = await fetch("/api/profile/upload-mini-banner", { method: "POST", body })

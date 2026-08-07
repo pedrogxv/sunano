@@ -24,6 +24,13 @@ export type RegisterState = {
   error: string | null
   needsConfirmation?: boolean
   /**
+   * A conta já existia e já está confirmada — a pessoa deve fazer login, não
+   * esperar por um novo email. Distinto de `needsConfirmation`: aquele cobre
+   * tanto cadastro novo quanto conta existente ainda não confirmada (que
+   * ganha um reenvio); este é só para quem já pode entrar.
+   */
+  alreadyRegistered?: boolean
+  /**
    * Ecoa de volta os campos não sensíveis que a pessoa preencheu, para o form
    * poder repopulá-los depois de um erro. `<form action={fn}>` (React 19)
    * reseta os campos não controlados assim que a action termina — mesmo em
@@ -175,8 +182,27 @@ export async function registerUserAction(
 
   if (error) {
     if (error.code === "email_exists" || /already registered|already exists|User already/i.test(error.message)) {
-      // Não revela que o email já está cadastrado (evita enumeração de contas) —
-      // responde com o mesmo estado de um cadastro novo pendente de confirmação.
+      // A conta já existe: descobrir se está confirmada tentando reenviar o
+      // email de confirmação. O GoTrue recusa esse reenvio com
+      // `email_already_confirmed` (HTTP 422/400) quando a conta já pode
+      // logar — nesse caso mandamos a pessoa para o login em vez de fingir
+      // "conta criada". Se a conta ainda estiver em limbo (nunca confirmou),
+      // o reenvio funciona de verdade e ela sai do beco sem saída que existia
+      // antes (cadastrar de novo não fazia nada).
+      try {
+        const { error: resendError } = await supabase.auth.resend({ type: "signup", email })
+        if (resendError) {
+          if (resendError.code === "email_already_confirmed" || /already confirmed/i.test(resendError.message)) {
+            return { error: null, alreadyRegistered: true, values }
+          }
+          console.error(
+            "[register] resend para email_exists falhou:",
+            JSON.stringify({ status: resendError.status, code: resendError.code, message: resendError.message })
+          )
+        }
+      } catch (resendException) {
+        console.error("[register] resend para email_exists lançou exceção:", resendException)
+      }
       return { error: null, needsConfirmation: true, values }
     }
 

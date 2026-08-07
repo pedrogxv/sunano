@@ -143,6 +143,19 @@ export function UserRegisterForm() {
   const minLength = relaxed ? 6 : 8
   const errorMessage = state.error ? (REGISTER_ERRORS[state.error] ?? state.error) : null
 
+  if (state.alreadyRegistered) {
+    return (
+      <div className="space-y-5">
+        <div className="rounded-lg border border-border bg-muted/20 px-4 py-4 text-sm text-foreground">
+          Já existe uma conta com esse email. Faça login, ou use &quot;Esqueci minha senha&quot; se não lembrar a senha.
+        </div>
+        <Link href="/login" className="block">
+          <Button className="w-full">Ir para o login</Button>
+        </Link>
+      </div>
+    )
+  }
+
   if (state.needsConfirmation) {
     return (
       <div className="space-y-5">

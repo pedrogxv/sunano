@@ -43,7 +43,7 @@ import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailV
 type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone"
 
 const peripheralSchema = z.object({
   name: z
@@ -277,6 +277,7 @@ const GENERIC_TAGS_OPTIONS: (TagOption & { categories?: Category[] })[] = [
   { key: "macio", en: "Soft", pt: "Macio", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
   { key: "afetado_umidade", en: "Moisture affected", pt: "Afetado por umidade", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
   { key: "ultrapassado", en: "Outdated", pt: "Ultrapassado", color: "border-gray-400/50 bg-gray-500/10 text-gray-300 data-[active=true]:bg-gray-500/30 data-[active=true]:border-gray-400", categories: ["keyboard", "pcb"] },
+  { key: "headphone", en: "Headphone", pt: "Headphone", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400", categories: ["headset", "iem"] },
 ]
 
 // Lista de tags exclusiva da categoria Mousepad — substitui completamente a lista genérica
@@ -462,6 +463,7 @@ const BRAND_OPTIONS = [
   "Attack Shark",
   "Aula",
   "Ausdom",
+  "Audeze",
   "Audio-Technica",
   "BenQ",
   "Beyerdynamic",
@@ -514,14 +516,18 @@ const BRAND_OPTIONS = [
   "Keychron",
   "Keyverse",
   "Kibu",
+  "Kinera",
   "KingJade",
+  "Kiwi Ears",
   "Kurosun",
   "Kysona",
   "Lamzu",
   "Leobog",
   "Leopold",
+  "Lethal Gaming Gear",
   "Lian Li",
   "LG",
+  "Linsoul",
   "Lock-On",
   "Logitech",
   "Luvinco",
@@ -532,6 +538,7 @@ const BRAND_OPTIONS = [
   "Mechlands",
   "MEETKB",
   "Melgeek",
+  "Meow Gaming Gear",
   "MIKIT",
   "MM Studios",
   "Morkblade",

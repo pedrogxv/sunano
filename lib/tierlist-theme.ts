@@ -126,6 +126,7 @@ export const CARD_TAG_STYLES = {
   fhd:             { bg: "bg-slate-500/15",   text: "text-slate-300",   border: "border-slate-500/30",   dot: "bg-slate-400" },
   qhd:             { bg: "bg-cyan-500/15",    text: "text-cyan-300",    border: "border-cyan-500/30",    dot: "bg-cyan-400" },
   "4k":            { bg: "bg-purple-500/15",  text: "text-purple-300",  border: "border-purple-500/30",  dot: "bg-purple-400" },
+  headphone:       { bg: "bg-rose-500/15",    text: "text-rose-300",    border: "border-rose-500/30",    dot: "bg-rose-400" },
 } as const
 
 // Rating scale colors (0–6) — single source of truth shared by the peripheral

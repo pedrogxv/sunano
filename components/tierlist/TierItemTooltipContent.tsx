@@ -7,7 +7,7 @@ import { CARD_TAG_STYLES, CARD_TIER_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } f
 import { useLocale } from "@/components/providers/locale-context"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone"
 
 export type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
 export type Ratings = Partial<Record<RatingKey, number>>
@@ -80,6 +80,7 @@ const TAG_LABELS: Record<Tag, { en: string; pt: string }> = {
   fhd: { en: "FHD", pt: "FHD" },
   qhd: { en: "QHD", pt: "QHD" },
   "4k": { en: "4K", pt: "4K" },
+  headphone: { en: "Headphone", pt: "Headphone" },
 }
 
 export interface TierItemTooltipContentProps {

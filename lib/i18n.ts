@@ -1413,6 +1413,16 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.2.4",
+          date: "8 de agosto",
+          title: "Menções e imagens nos comentários do Fórum.",
+          description: "Agora dá pra marcar outras pessoas nos comentários com @ e anexar imagens direto na resposta, no fórum e no blog.",
+          items: [
+            "Menção a usuários com @ nos comentários, com autocompletar e notificação para quem foi marcado",
+            "Upload de imagens nos comentários, com preview antes de enviar",
+          ],
+        },
+        {
           version: "v0.2.3",
           date: "6 de agosto",
           title: "Aura de volta aos posts, exclusão de post/comentário e fórum mais social",
@@ -2260,6 +2270,16 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.2.4",
+          date: "August 8",
+          title: "Mentions and images in comments",
+          description: "You can now tag other people in comments with @ and attach images straight in your reply, on both forum and blog.",
+          items: [
+            "@ mentions in comments, with autocomplete and a notification for whoever gets tagged",
+            "Image uploads on comments, with a preview before you post",
+          ],
+        },
         {
           version: "v0.2.3",
           date: "August 6",

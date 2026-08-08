@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import { TopBar } from "@/components/layout/TopBar"
+import { ChangelogBanner } from "@/components/layout/ChangelogBanner"
 import { PublicSidebar } from "@/components/layout/PublicSidebar"
 import { AdminSidebar } from "@/components/layout/AdminSidebar"
 
@@ -41,6 +42,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         {isAdmin ? (
           <div className="flex-1 min-w-0 bg-card mx-2 mt-2 mb-2 rounded-2xl md:ml-0">
             <TopBar />
+            <ChangelogBanner />
             {isSelfPaddedAdminPage ? (
               <main className="overflow-auto">{children}</main>
             ) : (
@@ -52,6 +54,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
         ) : (
           <div className="flex-1 min-w-0 bg-card mx-2 mt-2 mb-2 rounded-2xl md:ml-0">
             <TopBar />
+            <ChangelogBanner />
             <main>{children}</main>
           </div>
         )}

@@ -52,7 +52,8 @@ export function ForumPostSidebar({
   const categoryLabel = category ? (category.parent ? `${category.parent.name} / ${category.name}` : category.name) : null
 
   return (
-    <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+    <aside className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto">
+      <div className="space-y-4 pb-1">
       {/* Card da categoria — equivalente ao "r/keyboards" do Reddit */}
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -227,6 +228,7 @@ export function ForumPostSidebar({
         <Users className="size-3.5" />
         Ver todo o fórum
       </Link>
+      </div>
     </aside>
   )
 }

@@ -162,15 +162,23 @@ type ForumSidebarProps = {
   moderators: PublicProfileSummary[]
 }
 
-/** Coluna fixa e sticky ao lado da lista de posts — telas `lg`+. */
+/**
+ * Coluna fixa e sticky ao lado da lista de posts — telas `lg`+.
+ * Ganha scroll próprio (`max-h` + `overflow-y-auto`) porque, sem isso, o
+ * sticky recorta contra o viewport quando a soma dos cards é mais alta que
+ * a tela — a única forma de ver o resto era rolar a página inteira até o
+ * fim, escondendo cards como "Moderadores" no meio do caminho.
+ */
 export function ForumSidebar({ topActive, moderators }: ForumSidebarProps) {
   return (
-    <aside className="hidden w-72 shrink-0 space-y-4 lg:block lg:sticky lg:top-6 lg:self-start">
-      <DescriptionCard />
-      <ActiveUsersCard profiles={topActive} />
-      <RulesCard />
-      <ModeratorsCard moderators={moderators} />
-      <CommunityCard />
+    <aside className="hidden w-72 shrink-0 lg:sticky lg:top-6 lg:block lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto">
+      <div className="space-y-4 pb-1">
+        <DescriptionCard />
+        <ActiveUsersCard profiles={topActive} />
+        <RulesCard />
+        <ModeratorsCard moderators={moderators} />
+        <CommunityCard />
+      </div>
     </aside>
   )
 }

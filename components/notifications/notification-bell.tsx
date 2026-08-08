@@ -14,6 +14,7 @@ import {
   Loader2,
   Megaphone,
   MessageSquare,
+  Newspaper,
   Reply,
   UserPlus,
   X,
@@ -66,6 +67,7 @@ const ICONS: Record<NotificationType, typeof Bell> = {
   new_follower: UserPlus,
   system: Megaphone,
   mention: AtSign,
+  new_post: Newspaper,
 }
 
 const ICON_TONE: Record<NotificationType, string> = {
@@ -75,6 +77,7 @@ const ICON_TONE: Record<NotificationType, string> = {
   new_follower: "bg-amber-500/15 text-amber-400",
   system: "bg-primary/15 text-primary",
   mention: "bg-rose-500/15 text-rose-400",
+  new_post: "bg-emerald-500/15 text-emerald-400",
 }
 
 function fill(template: string, values: Record<string, string | number>) {
@@ -101,6 +104,8 @@ function buildMessage(n: Notification, t: ReturnType<typeof useT>): string {
       return fill(t.notifications.newFollower, { name })
     case "mention":
       return fill(t.notifications.mention, { name })
+    case "new_post":
+      return fill(t.notifications.newPost, { name })
     case "system":
       return n.title ?? t.notifications.systemTitle
   }
@@ -327,14 +332,15 @@ export function NotificationBell() {
             <p className="text-sm text-muted-foreground">{t.notifications.empty}</p>
           </div>
         ) : (
-          <ScrollArea className="min-h-0 flex-1">
+          <ScrollArea className="min-h-0 flex-1 max-h-[26rem]">
             <ul className="divide-y divide-border">
               {items.map((n) => {
                 const Icon = ICONS[n.type]
                 const isNew = highlighted.current.has(n.id)
                 const message = buildMessage(n, t)
-                // Corpo do aviso do sistema, ou trecho do comentário recebido.
-                const preview = n.body
+                // Corpo do aviso do sistema, trecho do comentário recebido, ou
+                // título do post pra quem foi notificado de um post novo.
+                const preview = n.type === "new_post" ? n.title : n.body
 
                 const row = (
                   <div className="flex items-start gap-2.5">

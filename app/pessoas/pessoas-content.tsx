@@ -202,7 +202,7 @@ export function PessoasContent({
                   metric={metric}
                   following={following}
                   currentUserId={currentUserId}
-                  showFollowButton={tab === "visited" || tab === "following"}
+                  showFollowButton={tab === "visited" || tab === "followed" || tab === "following"}
                 />
               </div>
             )}
@@ -215,7 +215,7 @@ export function PessoasContent({
                   rank={isRanked ? index + (shown.length >= 3 ? 4 : 1) : undefined}
                   isFollowing={following.has(profile.id)}
                   isSelf={profile.id === currentUserId}
-                  showFollowButton={tab === "visited" || tab === "following"}
+                  showFollowButton={tab === "visited" || tab === "followed" || tab === "following"}
                 />
               ))}
             </div>

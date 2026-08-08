@@ -263,7 +263,7 @@ export function CommentsSection({
                       authDisabled={!authUser}
                       auraBlockReason={auraBlockReason(comment)}
                       onReactAura={(kind) => reactToComment(comment, kind)}
-                      onReply={() => startReply(comment.id)}
+                      onReply={() => startReply(comment)}
                       replying={replyingTo === comment.id}
                       reportPostSlug={isAuthor(comment) ? undefined : reportPostSlug}
                       {...editProps(comment)}
@@ -283,7 +283,7 @@ export function CommentsSection({
                               authDisabled={!authUser}
                               auraBlockReason={auraBlockReason(reply)}
                               onReactAura={(kind) => reactToComment(reply, kind)}
-                              onReply={() => startReply(comment.id)}
+                              onReply={() => startReply(reply)}
                               replying={replyingTo === comment.id}
                               compactAvatar
                               reportPostSlug={isAuthor(reply) ? undefined : reportPostSlug}

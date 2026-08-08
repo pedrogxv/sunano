@@ -325,11 +325,29 @@ export function useCommentsController({
     }
   }
 
-  function startReply(commentId: string) {
-    setReplyingTo((current) => (current === commentId ? null : commentId))
-    setReplyBody("")
+  function startReply(comment: CommentItem) {
+    setReplyingTo((current) => {
+      if (current === comment.id) return null
+      // Pré-preenche a resposta com o autor já mencionado, como em qualquer
+      // rede social — só quando o comentário tem autor de conta (perfis
+      // deletados/anônimos não têm user_id pra montar a menção).
+      if (comment.user_id) {
+        setReplyBody(`@${comment.author_display_name} `)
+        setReplyMentionedUsers([
+          {
+            id: comment.user_id,
+            display_name: comment.author_display_name,
+            display_slug: comment.author_display_slug,
+            avatar_url: comment.author_avatar_url,
+          },
+        ])
+      } else {
+        setReplyBody("")
+        setReplyMentionedUsers([])
+      }
+      return comment.id
+    })
     setReplyImageUrls([])
-    setReplyMentionedUsers([])
     setReplyError(null)
   }
 

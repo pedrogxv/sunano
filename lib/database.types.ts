@@ -18,6 +18,7 @@ export type NotificationType =
   | "new_follower"
   | "system"
   | "mention"
+  | "new_post"
 
 export type NotificationEntityType =
   | "forum_post"

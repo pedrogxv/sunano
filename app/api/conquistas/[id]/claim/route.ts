@@ -10,14 +10,14 @@ export const runtime = "nodejs"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const ERROR_MESSAGES: Record<"not_found" | "not_manual" | "unavailable" | "insufficient_aura", string> = {
-  not_found: "Evento não encontrado.",
-  not_manual: "Esse evento é concedido automaticamente, não precisa resgatar.",
-  unavailable: "As vagas acabaram ou o evento foi encerrado.",
+  not_found: "Conquista não encontrada.",
+  not_manual: "Essa conquista é concedida automaticamente, não precisa resgatar.",
+  unavailable: "As vagas acabaram ou a conquista foi encerrada.",
   insufficient_aura: "Saldo de Aura insuficiente.",
 }
 
 /**
- * POST /api/eventos/:id/claim — resgate manual de um evento `manual_opt_in`
+ * POST /api/conquistas/:id/claim — resgate manual de um evento `manual_opt_in`
  * ou `aura_redeem`.
  *
  * `claimEventManually` chama a mesma `claim_event_medal` usada no
@@ -28,7 +28,7 @@ const ERROR_MESSAGES: Record<"not_found" | "not_manual" | "unavailable" | "insuf
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!UUID_RE.test(id)) {
-    return NextResponse.json({ error: "Evento inválido." }, { status: 400 })
+    return NextResponse.json({ error: "Conquista inválida." }, { status: 400 })
   }
 
   const supabase = await createSupabaseServerClient()

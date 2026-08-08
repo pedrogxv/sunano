@@ -70,6 +70,13 @@ const nextConfig = {
 			},
 		]
 	},
+	async redirects() {
+		return [
+			// /eventos virou /conquistas (a área admin continua em /admin/eventos).
+			{ source: "/eventos", destination: "/conquistas", permanent: true },
+			{ source: "/api/eventos/:path*", destination: "/api/conquistas/:path*", permanent: true },
+		]
+	},
 }
 
 export default nextConfig

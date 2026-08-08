@@ -8,6 +8,7 @@ import {
 import { DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { getUserAuraBalance, getUserAuraRank } from "@/lib/server/repositories/aura-repository"
 import { getUserActivityRank } from "@/lib/server/repositories/users-repository"
+import { getUserAchievements, getUserStreak } from "@/lib/server/repositories/achievements-repository"
 import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 import {
   coerceAccountTier,
@@ -125,6 +126,8 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     settings,
     forumActivity,
     activityRank,
+    achievements,
+    streak,
   ] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
@@ -135,6 +138,8 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     getMediaAdjustmentsByUser([userId]),
     countForumActivity(userId),
     getUserActivityRank(userId),
+    getUserAchievements(userId),
+    getUserStreak(userId),
   ])
 
   return {
@@ -160,6 +165,8 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     setup,
     medals: selectVisibleMedals(medals, tier),
     medals_total: medals.length,
+    achievements,
+    streak,
     favorites: selectVisibleFavorites(favorites, tier).map((f) => f.peripheral),
     favorites_total: favorites.length,
   }
@@ -174,7 +181,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
  * moderação ficam de fora, senão o contador exibiria o que já não aparece
  * no fórum.
  */
-async function countForumActivity(
+export async function countForumActivity(
   userId: string
 ): Promise<{ posts: number; comments: number }> {
   const db = createSupabaseAdminClient()
@@ -231,7 +238,7 @@ export async function getUserMedals(userId: string): Promise<ShowcaseMedal[]> {
 
   const { data, error } = await db
     .from("user_medals")
-    .select("awarded_at, pinned, pinned_order, medals ( id, slug, name, description, icon_url, rarity )")
+    .select("awarded_at, pinned, pinned_order, medals ( id, slug, name, description, icon_url, rarity, category )")
     .eq("user_id", userId)
 
   if (error) {
@@ -246,6 +253,7 @@ export async function getUserMedals(userId: string): Promise<ShowcaseMedal[]> {
     description: string | null
     icon_url: string | null
     rarity: ShowcaseMedal["rarity"]
+    category: ShowcaseMedal["category"]
   }
 
   const rows = (data ?? []) as unknown as Array<{

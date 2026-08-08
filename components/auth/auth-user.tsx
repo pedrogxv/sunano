@@ -30,9 +30,15 @@ interface AuthUserProps {
   /** "sidebar" (padrão) usa o layout de rodapé; "topbar" usa um avatar compacto no canto,
    *  com o menu abrindo para baixo. */
   layout?: "sidebar" | "topbar"
+  /**
+   * Itens extras só visíveis no mobile (`sm:hidden`), renderizados no topo do
+   * menu — usado pela TopBar para recolher tema/Aura para dentro do avatar
+   * no celular, já que lá a barra não tem espaço para um botão por função.
+   */
+  mobileExtraItems?: React.ReactNode
 }
 
-export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", variant = "admin", layout = "sidebar" }: AuthUserProps) {
+export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", variant = "admin", layout = "sidebar", mobileExtraItems }: AuthUserProps) {
   const t = useT()
   const { user: authUser, loading } = useAuthUser()
   const ready = !loading
@@ -157,6 +163,13 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator className="bg-border" />
+
+        {mobileExtraItems && (
+          <>
+            <div className="sm:hidden">{mobileExtraItems}</div>
+            <DropdownMenuSeparator className="bg-border sm:hidden" />
+          </>
+        )}
 
         {variant === "public" ? (
           <>

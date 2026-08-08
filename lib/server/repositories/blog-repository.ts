@@ -107,6 +107,7 @@ export type BlogCommentDetail = {
   author_avatar_url: string | null
   author_account_tier: AccountTier
   author_display_slug: string | null
+  author_streak: number
 }
 
 const LIST_COLUMNS =
@@ -434,6 +435,7 @@ function mapCommentRows(
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
     author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
+    author_streak: c.user_id ? profileMap[c.user_id]?.streak ?? 0 : 0,
   }))
 }
 

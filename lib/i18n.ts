@@ -773,7 +773,7 @@ export const translations: Record<LocaleCode, Translations> = {
       used: "Usado",
       offers: "Promoções",
       people: "Usuários",
-      events: "Eventos",
+      events: "Conquistas",
     },
     common: {
       all: "Todos",
@@ -1424,6 +1424,20 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.2.5",
+          date: "8 de agosto",
+          title: "Conquistas, ofensiva diária e Eventos virou Conquistas",
+          description: "Novo sistema de Conquistas com progressão por posts, comentários e seguidores, missões diárias com ofensiva (streak), e a página de Eventos foi unificada com as novas conquistas em /conquistas.",
+          items: [
+            "Conquistas por trilha (Posts, Comentários, Seguidores) com 5 níveis — Bronze, Prata, Ouro, Platina e Diamante",
+            "Missões diárias (postar, comentar, dar aura) com badge própria na TopBar e painel de progresso",
+            "Ofensiva (streak): completar as 3 missões do dia mantém a sequência viva, exibida com selo de pássaro na TopBar, no perfil, no mini-perfil e junto ao nome nos comentários",
+            "Página /eventos virou /conquistas, reunindo eventos por tempo limitado e as novas conquistas gerais no mesmo lugar",
+            "Medalhas do perfil agora mostram uma tag 'Evento' quando vieram de um evento, e a seção fica mais enxuta (sem contagem de slots)",
+            "Menu do avatar no mobile ganhou tema, saldo de Aura e ofensiva, liberando espaço na barra superior para notificações e missões",
+          ],
+        },
+        {
           version: "v0.2.4",
           date: "8 de agosto",
           title: "Menções e imagens nos comentários do Fórum.",
@@ -1636,7 +1650,7 @@ export const translations: Record<LocaleCode, Translations> = {
       used: "Used",
       offers: "Deals",
       people: "People",
-      events: "Events",
+      events: "Achievements",
     },
     common: {
       all: "All",
@@ -2286,6 +2300,20 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.2.5",
+          date: "August 8",
+          title: "Achievements, daily streaks, and Events became Achievements",
+          description: "New Achievements system with progression across posts, comments, and followers, daily missions with a streak, and the Events page was merged with the new achievements into /conquistas.",
+          items: [
+            "Track-based achievements (Posts, Comments, Followers) with 5 tiers — Bronze, Silver, Gold, Platinum, and Diamond",
+            "Daily missions (post, comment, give aura) with their own TopBar badge and a progress panel",
+            "Streak: completing all 3 daily missions keeps the streak alive, shown with a bird badge in the TopBar, on the profile, in the mini profile, and next to the author name on comments",
+            "The /eventos page became /conquistas, bringing time-limited events and the new general achievements together in one place",
+            "Profile medals now show an 'Event' tag when earned from an event, and the section is leaner (no more slot count)",
+            "The mobile avatar menu now includes theme, Aura balance, and streak, freeing up room in the top bar for notifications and missions",
+          ],
+        },
         {
           version: "v0.2.4",
           date: "August 8",

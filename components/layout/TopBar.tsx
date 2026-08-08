@@ -31,6 +31,17 @@ const AuraBalanceBadge = dynamic(
   () => import("@/components/layout/AuraBalanceBadge").then((m) => m.AuraBalanceBadge),
   { ssr: false }
 )
+// Mesma badge de Aura, versão de linha pro menu do avatar no mobile (ver `mobileExtraItems` abaixo).
+const AuraBalanceRow = dynamic(
+  () => import("@/components/layout/AuraBalanceBadge").then((m) => m.AuraBalanceRow),
+  { ssr: false }
+)
+// Idem: missões diárias/ofensiva só existem pra quem tem conta e busca seu
+// próprio endpoint. Também se esconde sozinho.
+const MissionsBadge = dynamic(
+  () => import("@/components/layout/MissionsBadge").then((m) => m.MissionsBadge),
+  { ssr: false }
+)
 import { useTheme } from "@/components/providers/theme-context"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
@@ -47,7 +58,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/offers":            { title: "Promoções", description: "Promoções e descontos selecionados do Telegram." },
   "/forum":             { title: "Fórum", description: "Discussões e perguntas da comunidade." },
   "/pessoas":           { title: "Pessoas", description: "Encontre outros membros, veja os destaques e siga quem você curte." },
-  "/eventos":           { title: "Eventos", description: "Medalhas e conquistas por tempo limitado." },
+  "/conquistas":        { title: "Conquistas", description: "Medalhas e conquistas por tempo limitado." },
   "/perfil":            { title: "Meu Perfil", description: "Identidade e vitrine pública." },
   "/conta":             { title: "Conta e segurança", description: "Acesso, preferências e privacidade." },
   "/videos":            { title: "Vídeos e redes sociais", description: "Conteúdo em vídeo do canal e todos os canais oficiais do Sunano." },
@@ -64,7 +75,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/store":       { title: "Loja & Bazar", description: "Gerencie os produtos da loja e os itens do bazar." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
   "/admin/forum/denuncias": { title: "Denúncias", description: "Posts e comentários denunciados pela comunidade." },
-  "/admin/eventos":     { title: "Eventos", description: "Gerencie os eventos que concedem medalhas automaticamente." },
+  "/admin/eventos":     { title: "Conquistas", description: "Gerencie as conquistas que concedem medalhas automaticamente." },
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
   "/admin/notificacoes":{ title: "Avisos do sistema", description: "Envie um recado que aparece no sino de quem usa o site." },
   "/admin/login":       { title: "Login" },
@@ -111,8 +122,8 @@ function getPageDefaults(pathname: string): PageDefaults {
   if (pathname.startsWith("/admin/tierlist/new"))    return { title: "Novo periférico", description: "Adicione um novo periférico à tierlist." }
   if (pathname.startsWith("/admin/tierlist/"))       return { title: "Editar periférico", description: "Atualize as informações do periférico." }
   if (pathname.startsWith("/admin/forum/"))      return { title: "Moderar post", description: "Edite, oculte ou bloqueie um post do fórum." }
-  if (pathname.startsWith("/admin/eventos/new")) return { title: "Novo evento", description: "Crie um evento e a medalha concedida por ele." }
-  if (pathname.startsWith("/admin/eventos/"))    return { title: "Editar evento", description: "Atualize os dados do evento e da medalha." }
+  if (pathname.startsWith("/admin/eventos/new")) return { title: "Nova conquista", description: "Crie uma conquista e a medalha concedida por ela." }
+  if (pathname.startsWith("/admin/eventos/"))    return { title: "Editar conquista", description: "Atualize os dados da conquista e da medalha." }
   if (pathname.startsWith("/admin/"))            return { title: "Admin" }
   if (pathname.startsWith("/blog/"))             return { title: "Review" }
   if (pathname.startsWith("/forum/"))            return { title: "Fórum" }
@@ -158,7 +169,7 @@ export function TopBar() {
   const pageDescription = override.description ?? defaults.description
 
   return (
-    <div className="min-h-16 border-b border-border">
+    <div className="sticky top-0 z-20 min-h-16 border-b border-border bg-card">
       <div className="min-h-16 flex items-center justify-between gap-4 px-4 py-2">
         {/* Left — Toggle + Page Title + Description */}
         <div className="flex items-center gap-3 min-w-0">
@@ -186,22 +197,10 @@ export function TopBar() {
           </div>
         </div>
 
-        {/* Right — Theme */}
+        {/* Right — no mobile, prioriza notificação e missão diária: tema e Aura
+            saem da barra e viram itens do menu do avatar (`mobileExtraItems`). */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {/* Mobile (<sm): botão de tema dedicado. */}
-          <button
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70 text-foreground transition-all hover:bg-muted/40 sm:hidden"
-            type="button"
-            onClick={() => setTheme(isLight ? "dark" : "light")}
-            aria-label={isLight ? "Ativar modo escuro" : "Ativar modo claro"}
-          >
-            {isLight ? (
-              <Moon className="size-[16px] text-primary" />
-            ) : (
-              <Sun className="size-[16px] text-primary" />
-            )}
-          </button>
-
+          {/* Tema — só a partir de `sm`; no mobile vive dentro do menu do avatar. */}
           <button
             className="hidden h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:flex"
             type="button"
@@ -221,9 +220,31 @@ export function TopBar() {
           {/* Conta — sempre visível no canto; no admin fica na própria sidebar. */}
           {!isAdmin && (
             <>
+              <MissionsBadge />
               <AuraBalanceBadge />
               <div className="hidden h-6 w-px shrink-0 bg-border sm:block" />
-              <AuthUser layout="topbar" variant="public" loginHref="/login" />
+              <AuthUser
+                layout="topbar"
+                variant="public"
+                loginHref="/login"
+                mobileExtraItems={
+                  <div className="flex flex-col gap-0.5 py-1">
+                    <AuraBalanceRow />
+                    <button
+                      type="button"
+                      onClick={() => setTheme(isLight ? "dark" : "light")}
+                      className="flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                    >
+                      {isLight ? (
+                        <Moon className="size-4 shrink-0 text-primary" />
+                      ) : (
+                        <Sun className="size-4 shrink-0 text-primary" />
+                      )}
+                      {isLight ? "Modo escuro" : "Modo claro"}
+                    </button>
+                  </div>
+                }
+              />
             </>
           )}
         </div>

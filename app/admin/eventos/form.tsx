@@ -40,7 +40,7 @@ const CRITERIA_OPTIONS: Array<{ value: EventCriteriaType; label: string; hint: s
   {
     value: "manual_opt_in",
     label: "Manual — usuário clica em Resgatar",
-    hint: "A medalha só é concedida quando o usuário logado clica em \"Resgatar\" em /eventos, enquanto houver vagas.",
+    hint: "A medalha só é concedida quando o usuário logado clica em \"Resgatar\" em /eventos (Conquistas), enquanto houver vagas.",
   },
   {
     value: "aura_redeem",
@@ -104,7 +104,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
 
     try {
       if (!formData.name.trim()) {
-        throw new Error("Informe o nome do evento/medalha.")
+        throw new Error("Informe o nome da conquista/medalha.")
       }
 
       let maxParticipants: number | null = null
@@ -147,10 +147,10 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
       const data = (await res.json()) as { event?: EventDisplay; error?: string }
 
       if (!res.ok || !data.event) {
-        throw new Error(data.error ?? "Erro ao salvar evento")
+        throw new Error(data.error ?? "Erro ao salvar conquista")
       }
 
-      toast.success(event ? "Evento atualizado" : "Evento criado", {
+      toast.success(event ? "Conquista atualizada" : "Conquista criada", {
         description: data.event.name,
       })
 
@@ -158,7 +158,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao salvar"
       setError(message)
-      toast.error("Erro ao salvar evento", { description: message })
+      toast.error("Erro ao salvar conquista", { description: message })
     } finally {
       setLoading(false)
     }
@@ -355,7 +355,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         </Button>
         <Button type="submit" disabled={loading || uploading}>
           {loading && <Loader2 className="mr-2 size-4 animate-spin" />}
-          {event ? "Salvar alterações" : "Criar evento"}
+          {event ? "Salvar alterações" : "Criar conquista"}
         </Button>
       </div>
     </form>

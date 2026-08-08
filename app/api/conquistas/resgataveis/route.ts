@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 /**
- * GET /api/eventos/resgataveis — status pessoal de eventos, consumido pelo
+ * GET /api/conquistas/resgataveis — status pessoal de eventos, consumido pelo
  * client (badge da sidebar em `PublicSidebar` e `EventsShowcase` na Home).
  * Fica fora de `getHomeData`/`listActiveEventsForDisplay` de propósito: essas
  * duas continuam sem estado por usuário para a Home poder ser cacheada (ISR).

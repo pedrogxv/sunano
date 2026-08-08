@@ -3,6 +3,7 @@ import { Activity, Crown, Flame, Sparkles } from "lucide-react"
 import { getTierCapabilities, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
+import { StreakBadge } from "./StreakBadge"
 
 interface InfoBasicaProps {
   name: string
@@ -14,6 +15,8 @@ interface InfoBasicaProps {
   auraRank?: number | null
   /** Posição no ranking de atividade (posts + comentários). Idem, Top 100. */
   activityRank?: number | null
+  /** Dias de ofensiva atual — some da badge quando zerada (ver `StreakBadge`). */
+  streak?: number
   bio?: string | null
 }
 
@@ -41,6 +44,7 @@ export function InfoBasica({
   displaySlug,
   auraRank,
   activityRank,
+  streak = 0,
   bio,
 }: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
@@ -92,6 +96,8 @@ export function InfoBasica({
             <Activity className="size-3" strokeWidth={2} />#{activityRank}
           </span>
         )}
+
+        <StreakBadge days={streak} size="sm" showInactive className="px-2 py-0.5 text-[11px]" />
       </div>
 
       {joinedLabel && (

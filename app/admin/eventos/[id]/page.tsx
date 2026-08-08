@@ -21,12 +21,12 @@ export default function EditEventPage() {
       try {
         const res = await fetch(`/api/admin/events/${id}`)
         const data = (await res.json()) as { event?: EventDisplay; error?: string }
-        if (!res.ok || !data.event) throw new Error(data.error ?? "Evento não encontrado")
+        if (!res.ok || !data.event) throw new Error(data.error ?? "Conquista não encontrada")
         setEvent(data.event)
       } catch (err) {
         const message = err instanceof Error ? err.message : "Erro ao carregar"
         setError(message)
-        toast.error("Erro ao carregar evento", { description: message })
+        toast.error("Erro ao carregar conquista", { description: message })
       } finally {
         setLoading(false)
       }
@@ -34,18 +34,18 @@ export default function EditEventPage() {
     load()
   }, [id])
 
-  usePageHeader("Editar evento", event ? event.name : "Atualize os dados do evento e da medalha.")
+  usePageHeader("Editar conquista", event ? event.name : "Atualize os dados da conquista e da medalha.")
 
-  const currentLabel = event?.name ?? (loading ? "Carregando…" : "Editar evento")
+  const currentLabel = event?.name ?? (loading ? "Carregando…" : "Editar conquista")
 
   if (loading) {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
-        <BackBreadcrumb href="/admin/eventos" parentLabel="Eventos" currentLabel={currentLabel} />
+        <BackBreadcrumb href="/admin/eventos" parentLabel="Conquistas" currentLabel={currentLabel} />
         <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card/40 py-20">
           <BoxLoader />
           <div className="text-center">
-            <p className="text-sm font-medium text-foreground">Carregando evento…</p>
+            <p className="text-sm font-medium text-foreground">Carregando conquista…</p>
             <p className="mt-1 text-xs text-muted-foreground">Buscando dados da medalha e do progresso.</p>
           </div>
         </div>
@@ -56,9 +56,9 @@ export default function EditEventPage() {
   if (error || !event) {
     return (
       <div className="mx-auto max-w-2xl space-y-6">
-        <BackBreadcrumb href="/admin/eventos" parentLabel="Eventos" />
+        <BackBreadcrumb href="/admin/eventos" parentLabel="Conquistas" />
         <div className="flex flex-col items-center justify-center gap-2 py-14 text-center">
-          <p className="text-sm text-red-400">{error ?? "Evento não encontrado"}</p>
+          <p className="text-sm text-red-400">{error ?? "Conquista não encontrada"}</p>
         </div>
       </div>
     )
@@ -66,7 +66,7 @@ export default function EditEventPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <BackBreadcrumb href="/admin/eventos" parentLabel="Eventos" currentLabel={event.name} />
+      <BackBreadcrumb href="/admin/eventos" parentLabel="Conquistas" currentLabel={event.name} />
       <div className="rounded-xl border border-border bg-card p-6">
         <EventForm
           event={event}

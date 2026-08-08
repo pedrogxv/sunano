@@ -11,6 +11,7 @@ import {
 } from "@/lib/profile-media-adjust"
 import type { MiniProfile } from "@/lib/mini-profile"
 import type { PublicProfileSummary } from "@/lib/user-directory"
+import { getUserStreaksByUser } from "@/lib/server/repositories/achievements-repository"
 
 export type { PublicProfileSummary } from "@/lib/user-directory"
 export type { MiniProfile } from "@/lib/mini-profile"
@@ -840,11 +841,12 @@ export async function getMiniProfileBySlug(slug: string): Promise<MiniProfile | 
   }
 
   const row = data as DirectoryRow & { bio: string | null }
-  const [followers, aura, adjustments, activity] = await Promise.all([
+  const [followers, aura, adjustments, activity, streaks] = await Promise.all([
     countFollowersByUser([row.id]),
     getAuraByUser([row.id]),
     getMediaAdjustmentsByUser([row.id]),
     countActivityByUser([row.id]),
+    getUserStreaksByUser([row.id]),
   ])
   const summary = toProfileSummary(
     row,
@@ -854,7 +856,7 @@ export async function getMiniProfileBySlug(slug: string): Promise<MiniProfile | 
     activity[row.id] ?? 0
   )
 
-  return { ...summary, bio: row.bio }
+  return { ...summary, bio: row.bio, streak: streaks[row.id] ?? 0 }
 }
 
 /** Resumo do perfil administrativo (usado pela sidebar admin). */

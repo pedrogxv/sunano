@@ -26,5 +26,7 @@ export type MiniProfile = {
   profile_views: number
   followers: number
   aura: number
+  /** Ofensiva atual (dias consecutivos completando as missões diárias) — 0 se não tem ou expirou. */
+  streak: number
   created_at: string
 }

@@ -3,6 +3,7 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import type { Database } from "@/lib/database.types"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
+import { completeDailyMission } from "@/lib/server/repositories/achievements-repository"
 
 type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reason"]
 
@@ -67,6 +68,10 @@ export async function toggleAura(params: {
   if (!result) {
     return { ok: false, error: "Erro ao reagir.", code: "unknown", status: 400 }
   }
+  // Missão diária "dar aura" só quando o resultado é "curtiu" (like), nunca ao remover ou trocar pra dislike.
+  if (result.reaction === "like") {
+    await completeDailyMission(params.giverId, "aura")
+  }
   return { ok: true, reaction: result.reaction as ReactionKind | null, auraCount: result.aura_count }
 }
 
@@ -96,6 +101,10 @@ export async function togglePostAura(giverId: string, postId: string): Promise<T
   const result = data?.[0]
   if (!result) {
     return { ok: false, error: "Erro ao dar aura.", code: "unknown", status: 400 }
+  }
+  // Missão diária "dar aura" só quando o resultado é "curtiu" — post só tem like, nunca dislike, mas o toggle pode estar removendo.
+  if (result.reaction === "like") {
+    await completeDailyMission(giverId, "aura")
   }
   return { ok: true, reaction: result.reaction as ReactionKind | null, auraCount: result.aura_count }
 }

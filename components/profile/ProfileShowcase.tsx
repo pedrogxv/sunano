@@ -4,6 +4,7 @@ import { Eye, Settings } from "lucide-react"
 import { FollowButton } from "@/components/people/FollowButton"
 import { cn } from "@/lib/utils"
 import { AvatarQuadrado } from "./AvatarQuadrado"
+import { AchievementsGrid } from "./AchievementsGrid"
 import { Banner } from "./Banner"
 import { EstatisticasGrid, formatCount } from "./EstatisticasGrid"
 import { FavoritosGrid } from "./FavoritosGrid"
@@ -30,15 +31,41 @@ interface ProfileShowcaseProps {
 /**
  * Vitrine pública do perfil: capa larga com cantos próprios arredondados
  * (sem card envolvendo tudo), foto quadrada centralizada invadindo a capa
- * pela metade, e nome, badges e data centralizados logo abaixo dela. O botão
- * de ação (Seguir/Editar) fica fora desse bloco central, ancorado à direita
- * na mesma faixa vertical do nome — não é mais parte do retângulo da capa.
+ * pela metade, e nome, badges e data centralizados logo abaixo dela.
+ *
+ * Medalhas e botão de ação (Seguir/Editar) ficam ancorados nos cantos,
+ * fora do retângulo da capa, só a partir de `sm` — largura de sobra ali.
+ * No celular eles voltam para o fluxo normal, empilhados abaixo do bloco
+ * central: `absolute` nos dois lados brigava com o nome centralizado e
+ * estourava a largura da tela em nomes/badges maiores.
  */
 export function ProfileShowcase({
   profile,
   isOwner = false,
   isFollowing = false,
 }: ProfileShowcaseProps) {
+  const actionButton = isOwner ? (
+    <Link
+      href="/perfil"
+      className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+    >
+      <Settings className="size-3.5" />
+      Editar perfil
+    </Link>
+  ) : (
+    <FollowButton
+      userId={profile.id}
+      initialFollowing={isFollowing}
+      size="md"
+      className="shrink-0"
+    />
+  )
+
+  const medals = <MedalhasGrid medals={profile.medals} />
+  const medalsCentered = (
+    <MedalhasGrid medals={profile.medals} className="justify-center text-center" />
+  )
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
       <div className="relative">
@@ -69,25 +96,15 @@ export function ProfileShowcase({
           />
         </div>
 
+        {/* Ancorado à esquerda, na mesma linha do botão Seguir/Editar — só a
+            partir de `sm`, onde há largura de sobra nas laterais do bloco
+            central para não colidir com ele. */}
+        <div className="absolute left-0 top-full mt-3 hidden sm:block">{medals}</div>
+
         {/* Ancorado à direita, na mesma altura do nome (metade da foto abaixo
             da capa) — fora do retângulo da capa, como na referência, em vez
-            de flutuar por cima da imagem. */}
-        {isOwner ? (
-          <Link
-            href="/perfil"
-            className="absolute right-0 top-full mt-3 inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-          >
-            <Settings className="size-3.5" />
-            Editar perfil
-          </Link>
-        ) : (
-          <FollowButton
-            userId={profile.id}
-            initialFollowing={isFollowing}
-            size="md"
-            className="absolute right-0 top-full mt-3 shrink-0"
-          />
-        )}
+            de flutuar por cima da imagem. Também só a partir de `sm`. */}
+        <div className="absolute right-0 top-full mt-3 hidden sm:block">{actionButton}</div>
       </div>
 
       {/* Espaço reservado abaixo da capa = metade da foto que invade por cima
@@ -100,6 +117,7 @@ export function ProfileShowcase({
           displaySlug={profile.display_slug}
           auraRank={profile.aura_rank}
           activityRank={profile.activity_rank}
+          streak={profile.streak.current}
           bio={profile.bio}
         />
         <SocialLinks
@@ -107,23 +125,29 @@ export function ProfileShowcase({
           tiktokHandle={profile.tiktok_handle}
           className="mt-2 justify-center"
         />
+
+        {/* Versão de fluxo normal do botão de ação + medalhas, só até `sm`
+            (a versão ancorada nos cantos da capa assume dali pra cima). */}
+        <div className="mt-3 flex w-full flex-col items-center gap-3 sm:hidden">
+          {actionButton}
+          {medalsCentered}
+        </div>
       </div>
 
-      <EstatisticasGrid
-        className="mt-3"
-        userId={profile.id}
-        aura={profile.aura}
-        posts={profile.forum_posts}
-        comentarios={profile.forum_comments}
-        seguidores={profile.followers}
-      />
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        <EstatisticasGrid
+          userId={profile.id}
+          aura={profile.aura}
+          posts={profile.forum_posts}
+          comentarios={profile.forum_comments}
+          seguidores={profile.followers}
+        />
+      </div>
 
       <div className="mt-3 space-y-8">
-        <MedalhasGrid
-          medals={profile.medals}
-          total={profile.medals_total}
-          tier={profile.account_tier}
-          isOwner={isOwner}
+        <AchievementsGrid
+          achievements={profile.achievements}
+          counts={{ posts: profile.forum_posts, comments: profile.forum_comments, followers: profile.followers }}
         />
 
         <SetupGrid setup={profile.setup} isOwner={isOwner} />

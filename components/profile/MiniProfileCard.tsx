@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
+import { Bird, Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
 
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
 import { resolveProfileMedia } from "@/lib/account-tier"
@@ -135,6 +135,12 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
             <Eye className="size-3" />
             <span className="font-semibold text-white">{formatCount(profile.profile_views)}</span>
           </span>
+          {profile.streak > 0 && (
+            <span className="flex items-center gap-1" title={`${profile.streak} dia${profile.streak === 1 ? "" : "s"} de ofensiva`}>
+              <Bird className="size-3 text-amber-300 drop-shadow-[0_0_3px_rgba(251,191,36,0.8)]" />
+              <span className="font-semibold text-amber-300">{formatCount(profile.streak)}</span>
+            </span>
+          )}
         </div>
       </div>
     </Link>

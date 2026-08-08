@@ -6,17 +6,22 @@ import { Medal, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { EventCard } from "@/components/events/EventCard"
+import { AchievementsGrid } from "@/components/profile/AchievementsGrid"
 import type { EventDisplay } from "@/lib/events"
+import type { AchievementTrack, ShowcaseAchievement } from "@/lib/achievements"
 
 interface EventsContentProps {
   initialEvents: EventDisplay[]
   initialClaimedMedalIds: string[]
   initialAuraBalance: number
   isLoggedIn: boolean
+  /** Conquistas gerais (posts/comentários/seguidores) já desbloqueadas — vazio quando deslogado. */
+  achievements: ShowcaseAchievement[]
+  achievementCounts: Record<AchievementTrack, number>
 }
 
 /**
- * Client Component da página `/eventos`: mantém o estado local dos eventos
+ * Client Component da página `/conquistas`: mantém o estado local dos eventos
  * (contador de vagas, status) para atualização otimista após um resgate
  * manual, no mesmo espírito de `LikeButton`/`forum-content.tsx` — sem
  * depender de revalidar a página inteira a cada clique. `auraBalance`
@@ -28,6 +33,8 @@ export function EventsContent({
   initialClaimedMedalIds,
   initialAuraBalance,
   isLoggedIn,
+  achievements,
+  achievementCounts,
 }: EventsContentProps) {
   const router = useRouter()
   const [events, setEvents] = useState(initialEvents)
@@ -52,7 +59,7 @@ export function EventsContent({
 
     setPendingId(event.id)
     try {
-      const res = await fetch(`/api/eventos/${event.id}/claim`, { method: "POST" })
+      const res = await fetch(`/api/conquistas/${event.id}/claim`, { method: "POST" })
       const data = (await res.json().catch(() => null)) as { event?: EventDisplay; error?: string } | null
 
       if (res.status === 401) {
@@ -82,12 +89,24 @@ export function EventsContent({
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 md:px-6 lg:px-8">
       <div>
         <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-          Eventos
+          Conquistas
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Medalhas por tempo ou vagas limitadas. Passe o mouse sobre um card para ver os detalhes.
         </p>
       </div>
+
+      {isLoggedIn && (
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-primary" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+              Gerais
+            </h2>
+          </div>
+          <AchievementsGrid achievements={achievements} counts={achievementCounts} showTitle={false} />
+        </section>
+      )}
 
       {events.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-border bg-card/50 py-16 text-center">
@@ -101,7 +120,7 @@ export function EventsContent({
               <div className="flex items-center gap-2">
                 <Sparkles className="size-4 text-primary" />
                 <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                  Em andamento
+                  Eventos em andamento
                 </h2>
               </div>
               <div className="flex flex-wrap gap-6">
@@ -125,7 +144,7 @@ export function EventsContent({
               <div className="flex items-center gap-2">
                 <Medal className="size-4 text-muted-foreground" />
                 <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
-                  Encerrados
+                  Eventos encerrados
                 </h2>
               </div>
               <div className="flex flex-wrap gap-6">

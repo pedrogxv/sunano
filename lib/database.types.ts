@@ -117,10 +117,81 @@ export type Database = {
           description: string | null
           icon_url: string | null
           rarity: "common" | "rare" | "epic" | "legendary"
+          /** 'event' = concedida por campanha em /admin/eventos; 'general' = catálogo fixo. */
+          category: "general" | "event"
           created_at: string
         }
-        Insert: Omit<Database["public"]["Tables"]["medals"]["Row"], "id" | "created_at">
+        Insert: Omit<Database["public"]["Tables"]["medals"]["Row"], "id" | "created_at" | "category"> &
+          Partial<Pick<Database["public"]["Tables"]["medals"]["Row"], "category">>
         Update: Partial<Database["public"]["Tables"]["medals"]["Insert"]>
+      }
+      achievements: {
+        Relationships: []
+        Row: {
+          id: string
+          slug: string
+          track: "posts" | "comments" | "followers"
+          tier: "bronze" | "silver" | "gold" | "platinum" | "diamond"
+          threshold: number
+          name: string
+          description: string | null
+          aura_reward: number
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["achievements"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["achievements"]["Insert"]>
+      }
+      user_achievements: {
+        Relationships: []
+        Row: {
+          user_id: string
+          achievement_id: string
+          awarded_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["user_achievements"]["Row"], "awarded_at"> & {
+          awarded_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_achievements"]["Insert"]>
+      }
+      daily_missions: {
+        Relationships: []
+        Row: {
+          user_id: string
+          mission_date: string
+          created_post: boolean
+          gave_aura: boolean
+          wrote_comment: boolean
+          bonus_claimed: boolean
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          mission_date: string
+          created_post?: boolean
+          gave_aura?: boolean
+          wrote_comment?: boolean
+          bonus_claimed?: boolean
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["daily_missions"]["Insert"]>
+      }
+      user_streaks: {
+        Relationships: []
+        Row: {
+          user_id: string
+          current_streak: number
+          longest_streak: number
+          last_completed_date: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          current_streak?: number
+          longest_streak?: number
+          last_completed_date?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_streaks"]["Insert"]>
       }
       user_medals: {
         Relationships: []
@@ -440,6 +511,9 @@ export type Database = {
             | "post_created"
             | "comment_created"
             | "blog_comment_created"
+            | "daily_mission_completed"
+            | "daily_streak_bonus"
+            | "achievement_unlocked"
           source_post_id: string | null
           source_comment_id: string | null
           source_blog_post_id: string | null
@@ -755,6 +829,14 @@ export type Database = {
       credit_comment_creation_aura: {
         Args: { p_user_id: string; p_target_type: "post" | "blog_post"; p_target_id: string }
         Returns: boolean
+      }
+      check_and_award_track_achievements: {
+        Args: { p_user_id: string; p_track: "posts" | "comments" | "followers"; p_count: number }
+        Returns: undefined
+      }
+      complete_daily_mission: {
+        Args: { p_user_id: string; p_mission: "post" | "aura" | "comment" }
+        Returns: { all_completed: boolean; streak: number }[]
       }
     }
   }

@@ -6,6 +6,8 @@ import type { CommentMention } from "@/components/comments/types"
 import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
 import { creditCommentCreationAura, creditForumPostCreationAura } from "@/lib/server/repositories/aura-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { checkTrackAchievements, completeDailyMission } from "@/lib/server/repositories/achievements-repository"
+import { countForumActivity } from "@/lib/server/repositories/profile-showcase-repository"
 
 /**
  * Repositório do Fórum — única porta de acesso às tabelas `forum_posts` e
@@ -64,6 +66,7 @@ export type ForumCommentDetail = {
   author_avatar_url: string | null
   author_account_tier: AccountTier
   author_display_slug: string | null
+  author_streak: number
 }
 
 export type ForumTab = "recent" | "hot" | "category" | "mine" | "user"
@@ -420,6 +423,7 @@ function mapForumCommentRows(
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
     author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
+    author_streak: c.user_id ? profileMap[c.user_id]?.streak ?? 0 : 0,
   }))
 }
 
@@ -680,6 +684,11 @@ export async function createForumPost(params: {
   // +10 de aura por criar post, 1x/dia — best-effort, não bloqueia a criação do post.
   await creditForumPostCreationAura(params.userId, created.id)
 
+  // Missão diária "criar post" + conquista da trilha "posts" — best-effort, mesma postura da aura acima.
+  await completeDailyMission(params.userId, "post")
+  const { posts } = await countForumActivity(params.userId)
+  await checkTrackAchievements(params.userId, "posts", posts)
+
   return { ok: true, slug }
 }
 
@@ -742,6 +751,11 @@ export async function addForumComment(params: {
 
   // +5 de aura por comentar, 1x por post — best-effort, não bloqueia o comentário.
   await creditCommentCreationAura(params.userId, "post", post.id)
+
+  // Missão diária "comentar" + conquista da trilha "comments" — best-effort, mesma postura da aura acima.
+  await completeDailyMission(params.userId, "comment")
+  const { comments } = await countForumActivity(params.userId)
+  await checkTrackAchievements(params.userId, "comments", comments)
 
   return { ok: true }
 }

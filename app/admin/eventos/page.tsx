@@ -39,7 +39,7 @@ export default function AdminEventsPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao carregar"
       setError(message)
-      toast.error("Erro ao carregar eventos", { description: message })
+      toast.error("Erro ao carregar conquistas", { description: message })
     } finally {
       setLoading(false)
     }
@@ -56,17 +56,17 @@ export default function AdminEventsPage() {
       if (!res.ok) throw new Error("Erro ao deletar")
       setEvents((prev) => prev.filter((e) => e.id !== deleteDialog.id))
       setDeleteDialog({ open: false, id: "" })
-      toast.success("Evento deletado", { description: target?.name })
+      toast.success("Conquista deletada", { description: target?.name })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao deletar"
       setError(message)
-      toast.error("Erro ao deletar evento", { description: message })
+      toast.error("Erro ao deletar conquista", { description: message })
     } finally {
       setDeleting(false)
     }
   }
 
-  usePageHeader("Eventos", "Gerencie os eventos que concedem medalhas automaticamente.")
+  usePageHeader("Conquistas", "Gerencie as conquistas que concedem medalhas automaticamente.")
 
   return (
     <div className="space-y-6">
@@ -74,7 +74,7 @@ export default function AdminEventsPage() {
         <Link href="/admin/eventos/new">
           <Button className="gap-2">
             <Plus className="size-4" />
-            Novo evento
+            Nova conquista
           </Button>
         </Link>
       </div>
@@ -93,11 +93,11 @@ export default function AdminEventsPage() {
       ) : events.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16 text-center">
           <Medal className="size-10 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Nenhum evento cadastrado</p>
+          <p className="text-sm text-muted-foreground">Nenhuma conquista cadastrada</p>
           <Link href="/admin/eventos/new">
             <Button variant="outline" size="sm" className="gap-2">
               <Plus className="size-3.5" />
-              Criar evento
+              Criar conquista
             </Button>
           </Link>
         </div>
@@ -186,9 +186,9 @@ export default function AdminEventsPage() {
       <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>
         <DialogContent className="border border-border bg-card">
           <DialogHeader>
-            <DialogTitle>Deletar evento?</DialogTitle>
+            <DialogTitle>Deletar conquista?</DialogTitle>
             <DialogDescription>
-              A medalha já concedida a quem participou não é removida — só o evento deixa de existir.
+              A medalha já concedida a quem participou não é removida — só a conquista deixa de existir.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

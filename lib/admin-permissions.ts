@@ -48,7 +48,7 @@ export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKe
   { key: "offers", label: "Ofertas", readKey: "offers_read", writeKey: "offers_write" },
   { key: "store", label: "Loja / Bazar", readKey: "store_read", writeKey: "store_write" },
   { key: "banners", label: "Banners da Home", readKey: "banners_read", writeKey: "banners_write" },
-  { key: "events", label: "Eventos", readKey: "events_read", writeKey: "events_write" },
+  { key: "events", label: "Conquistas", readKey: "events_read", writeKey: "events_write" },
 ]
 
 export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [

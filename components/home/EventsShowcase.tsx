@@ -21,7 +21,7 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
 
   useEffect(() => {
     let mounted = true
-    fetch("/api/eventos/resgataveis")
+    fetch("/api/conquistas/resgataveis")
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { claimedMedalIds?: string[] } | null) => {
         if (mounted && data?.claimedMedalIds) setClaimedMedalIds(new Set(data.claimedMedalIds))
@@ -49,7 +49,7 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
           </p>
         </div>
         <Link
-          href="/eventos"
+          href="/conquistas"
           className="group flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:bg-muted hover:text-foreground"
         >
           Ver todos
@@ -68,7 +68,7 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
           return (
             <Link
               key={event.id}
-              href="/eventos"
+              href="/conquistas"
               style={{ "--glow-color": ringColor } as React.CSSProperties}
               className={cn(
                 "event-card-glow event-card-glow-strong group relative flex w-48 shrink-0 flex-col items-center gap-3 rounded-2xl border-2 bg-card p-6 text-center transition-transform hover:z-10 hover:-translate-y-1",

@@ -14,6 +14,8 @@ export type CommentItem = {
   author_avatar_url: string | null
   author_account_tier: AccountTier
   author_display_slug: string | null
+  /** Ofensiva atual do autor (dias consecutivos de missões diárias) — 0 se não tem ou expirou. */
+  author_streak: number
   parent_comment_id: string | null
   created_at: string
   /** `edited_at is not null` no banco — liga o rótulo "(editado)". */

@@ -8,6 +8,7 @@ import {
   isFollowing,
   unfollowUser,
 } from "@/lib/server/repositories/users-repository"
+import { checkTrackAchievements } from "@/lib/server/repositories/achievements-repository"
 
 export const dynamic = "force-dynamic"
 
@@ -39,6 +40,8 @@ export async function POST(request: NextRequest) {
   try {
     await followUser(resolved.userId, resolved.targetId)
     const followers = await countFollowers(resolved.targetId)
+    // Conquista da trilha "followers" para quem foi seguido — best-effort, não bloqueia a resposta.
+    await checkTrackAchievements(resolved.targetId, "followers", followers)
     return NextResponse.json({ ok: true, following: true, followers })
   } catch {
     return NextResponse.json({ error: "Erro ao seguir o perfil." }, { status: 500 })

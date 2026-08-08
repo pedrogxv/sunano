@@ -283,7 +283,7 @@ export function NotificationBell() {
       <PopoverContent
         align="end"
         sideOffset={8}
-        className="flex w-[min(22rem,calc(100vw-2rem))] max-h-[min(32rem,calc(var(--radix-popover-content-available-height)-2rem))] flex-col border-border bg-popover p-0 text-foreground shadow-xl"
+        className="flex w-[min(22rem,calc(100vw-2rem))] max-h-[min(32rem,calc(var(--radix-popover-content-available-height)-2rem))] flex-col bg-popover p-0 text-foreground shadow-md"
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2.5">
           <div className="flex items-baseline gap-2">

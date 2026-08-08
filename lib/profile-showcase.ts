@@ -7,6 +7,7 @@
  */
 
 import type { Ratings } from "@/components/tierlist/TierItemTooltipContent"
+import type { ShowcaseAchievement, UserStreak } from "@/lib/achievements"
 
 export const SETUP_SLOTS = ["mouse", "keyboard", "headset", "monitor", "mousepad"] as const
 
@@ -68,6 +69,9 @@ export type SetupItem = {
   peripheral: ShowcasePeripheral | null
 }
 
+/** 'event' = concedida por campanha em /admin/eventos (ex.: "ERA TUDO MATO"); 'general' = catálogo fixo (pioneiro, colecionador etc). */
+export type MedalCategory = "general" | "event"
+
 export type ShowcaseMedal = {
   id: string
   slug: string
@@ -75,6 +79,7 @@ export type ShowcaseMedal = {
   description: string | null
   icon_url: string | null
   rarity: MedalRarity
+  category: MedalCategory
   awarded_at: string
   pinned: boolean
   pinned_order: number | null
@@ -116,6 +121,10 @@ export type ProfileShowcase = {
   medals: ShowcaseMedal[]
   /** Total conquistado, para exibir "+N" quando exceder o limite. */
   medals_total: number
+  /** Conquistas gerais desbloqueadas (posts/comentários/seguidores). */
+  achievements: ShowcaseAchievement[]
+  /** Ofensiva de missões diárias. */
+  streak: UserStreak
   /** Favoritos já filtrados pelo limite do tier. */
   favorites: ShowcasePeripheral[]
   favorites_total: number

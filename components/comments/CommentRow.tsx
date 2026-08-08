@@ -8,6 +8,7 @@ import { ImageLightbox } from "@/components/forum/ImageLightbox"
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
 import { ReportMenu } from "@/components/forum/ReportMenu"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
+import { StreakBadge } from "@/components/profile/StreakBadge"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -140,6 +141,7 @@ export function CommentRow({
           </MiniProfileHoverCard>
           <AuthorTierBadge tier={comment.author_account_tier} />
           <AuthorSpecialTagBadge slug={comment.author_display_slug} />
+          <StreakBadge days={comment.author_streak} size="sm" />
           <span>·</span>
           <span>{format(new Date(comment.created_at), "dd MMM yyyy", { locale: ptBR })}</span>
           {comment.is_edited && <span className="italic opacity-70">(editado)</span>}

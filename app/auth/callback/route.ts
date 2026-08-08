@@ -36,6 +36,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/reset-password`)
   }
 
+  if (tokenHash && type === "signup") {
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "signup" })
+    if (error) {
+      // Também de uso único: se o clique duplo (ou o link já usado) já
+      // confirmou a conta antes, `verifyOtp` falha na segunda tentativa mesmo
+      // a pessoa já podendo logar — manda pro login sem alarmar.
+      if (/expired|invalid/i.test(error.message)) {
+        return NextResponse.redirect(`${origin}/login?error=confirmation_error`)
+      }
+      return NextResponse.redirect(`${origin}/login`)
+    }
+    // Confirmar o e-mail não cria sessão (ver nota em app/register/actions.ts
+    // sobre `confirmed_at`) — a pessoa ainda precisa logar com a senha.
+    await supabase.auth.signOut()
+    return NextResponse.redirect(`${origin}/login?confirmed=1`)
+  }
+
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`)
   }

@@ -11,6 +11,7 @@ import { SidebarProvider } from "@/components/providers/sidebar-context"
 import { CartProvider } from "@/components/providers/cart-context"
 import { PageHeaderProvider } from "@/components/providers/page-header-context"
 import { AuthProvider } from "@/components/providers/auth-context"
+import { AuthHashErrorListener } from "@/components/auth/AuthHashErrorListener"
 import { LayoutShell } from "@/components/layout/LayoutShell"
 import { CookieBanner } from "@/components/lgpd/CookieBanner"
 import { OrganizationJsonLd } from "@/components/seo/OrganizationJsonLd"
@@ -108,6 +109,7 @@ export default function RootLayout({
                     <TooltipProvider delayDuration={200}>
                       <LayoutShell>{children}</LayoutShell>
                       <Toaster />
+                      <AuthHashErrorListener />
                       <CookieBanner />
                     </TooltipProvider>
                   </PageHeaderProvider>

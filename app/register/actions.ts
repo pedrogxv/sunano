@@ -94,6 +94,13 @@ function optional(value: FormDataEntryValue | null): string | null {
   return v.length > 0 ? v : null
 }
 
+/** `origin` nem sempre é enviado; reconstrói a partir do host quando faltar (mesmo padrão de forgot-password/actions.ts). */
+function resolveOrigin(headersList: Headers): string {
+  const host = headersList.get("host") ?? ""
+  const proto = headersList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")
+  return headersList.get("origin") || (host ? `${proto}://${host}` : "")
+}
+
 export async function registerUserAction(
   _: RegisterState,
   formData: FormData
@@ -190,7 +197,11 @@ export async function registerUserAction(
       // o reenvio funciona de verdade e ela sai do beco sem saída que existia
       // antes (cadastrar de novo não fazia nada).
       try {
-        const { error: resendError } = await supabase.auth.resend({ type: "signup", email })
+        const { error: resendError } = await supabase.auth.resend({
+          type: "signup",
+          email,
+          options: { emailRedirectTo: `${resolveOrigin(headersList)}/auth/callback?type=signup` },
+        })
         if (resendError) {
           if (resendError.code === "email_already_confirmed" || /already confirmed/i.test(resendError.message)) {
             return { error: null, alreadyRegistered: true, values }
@@ -229,7 +240,11 @@ export async function registerUserAction(
   // cota, a conta já foi criada mesmo assim — a tela de "conta criada" tem
   // um botão de reenvio (`resendConfirmationAction`) para esse caso.
   try {
-    const { error: resendError } = await supabase.auth.resend({ type: "signup", email })
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${resolveOrigin(headersList)}/auth/callback?type=signup` },
+    })
     if (resendError) {
       console.error("[register] resend do e-mail de confirmação falhou:", resendError.message)
     }
@@ -300,8 +315,13 @@ export async function resendConfirmationAction(
     return { error: "missing_fields", success: false }
   }
 
+  const headersList = await headers()
   const supabase = await createSupabaseServerClient()
-  const { error } = await supabase.auth.resend({ type: "signup", email })
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email,
+    options: { emailRedirectTo: `${resolveOrigin(headersList)}/auth/callback?type=signup` },
+  })
 
   if (error) {
     console.error("[resend-confirmation] auth.resend falhou:", error.status, error.message)

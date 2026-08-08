@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Saiba como o Sunano coleta, usa e protege seus dados pessoais em conformidade com a LGPD.",
 }
 
-const CURRENT_VERSION = "2026-06"
+const CURRENT_VERSION = "2026-08"
 
 export default function PrivacidadePage() {
   return (
@@ -19,7 +19,7 @@ export default function PrivacidadePage() {
           Como tratamos seus dados pessoais
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Versão <strong>{CURRENT_VERSION}</strong> · Em vigor a partir de 13 de junho de 2026.
+          Versão <strong>{CURRENT_VERSION}</strong> · Em vigor a partir de 8 de agosto de 2026.
           Em conformidade com a <strong>Lei Geral de Proteção de Dados — LGPD (Lei 13.709/2018)</strong>.
         </p>
       </header>
@@ -87,6 +87,10 @@ export default function PrivacidadePage() {
             <li>Endereço IP coletado em ações de segurança (criação de conta, 2FA, exclusão de conta).</li>
             <li>Preferências de interface: tema visual e idioma.</li>
             <li>Cookies de sessão HTTPOnly (ver Seção 6).</li>
+            <li>
+              Hash irreversível de IP + navegador, usado apenas para contar visitantes do site de
+              forma agregada (ver Seção 6).
+            </li>
           </ul>
         </section>
 
@@ -241,8 +245,17 @@ export default function PrivacidadePage() {
             </li>
           </ul>
           <p>
-            <strong>Não utilizamos</strong> cookies de rastreamento, publicidade ou análise de
-            comportamento (sem Google Analytics, Meta Pixel ou similares).
+            <strong>Não utilizamos</strong> cookies de rastreamento, publicidade ou serviços de
+            análise de terceiros (sem Google Analytics, Meta Pixel ou similares).
+          </p>
+          <p>
+            Para contar visitas ao site (visível só para a administração, como &ldquo;visitantes
+            hoje&rdquo; e &ldquo;visitantes no mês&rdquo;), geramos um hash irreversível
+            (IP + navegador + um segredo do servidor) a cada acesso a uma página pública. Esse
+            hash não é um cookie, não identifica você pessoalmente e não permite reconstruir seu
+            IP — serve só para contar visitantes de forma agregada e saber se um acesso é novo ou
+            recorrente no site. Não é usado para publicidade, perfil de comportamento individual
+            ou compartilhado com terceiros.
           </p>
         </section>
 

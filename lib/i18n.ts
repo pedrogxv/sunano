@@ -271,6 +271,10 @@ type Translations = {
       statOffersCaption: string
       statBanners: string
       statBannersCaption: (active: number, max: number) => string
+      statVisitorsToday: string
+      statVisitorsTodayCaption: (unique: number, returning: number) => string
+      statVisitorsMonth: string
+      statVisitorsMonthCaption: string
       attentionPendingReview: (count: number) => string
       attentionDrafts: (count: number) => string
       attentionOutOfStock: (count: number) => string
@@ -987,6 +991,10 @@ export const translations: Record<LocaleCode, Translations> = {
         statOffersCaption: "últimos 30 dias",
         statBanners: "Banners",
         statBannersCaption: (active, max) => `${active}/${max} ativos`,
+        statVisitorsToday: "Visitantes hoje",
+        statVisitorsTodayCaption: (unique, returning) => `${unique} novo${unique === 1 ? "" : "s"} · ${returning} recorrente${returning === 1 ? "" : "s"}`,
+        statVisitorsMonth: "Visitantes no mês",
+        statVisitorsMonthCaption: "visitantes únicos",
         attentionPendingReview: (count) => `${count} periférico${count === 1 ? "" : "s"} pendente${count === 1 ? "" : "s"} de revisão`,
         attentionDrafts: (count) => `${count} rascunho${count === 1 ? "" : "s"} de blog aguardando publicação`,
         attentionOutOfStock: (count) => `${count} produto${count === 1 ? "" : "s"} fora de estoque`,
@@ -1846,6 +1854,10 @@ export const translations: Record<LocaleCode, Translations> = {
         statOffersCaption: "last 30 days",
         statBanners: "Banners",
         statBannersCaption: (active, max) => `${active}/${max} active`,
+        statVisitorsToday: "Visitors today",
+        statVisitorsTodayCaption: (unique, returning) => `${unique} new · ${returning} returning`,
+        statVisitorsMonth: "Visitors this month",
+        statVisitorsMonthCaption: "unique visitors",
         attentionPendingReview: (count) => `${count} peripheral${count === 1 ? "" : "s"} pending review`,
         attentionDrafts: (count) => `${count} blog draft${count === 1 ? "" : "s"} awaiting publish`,
         attentionOutOfStock: (count) => `${count} product${count === 1 ? "" : "s"} out of stock`,

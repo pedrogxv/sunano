@@ -473,6 +473,17 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["offers_votes"]["Row"], "id" | "created_at">
         Update: Partial<Database["public"]["Tables"]["offers_votes"]["Insert"]>
       }
+      site_visits: {
+        Relationships: []
+        Row: {
+          id: string
+          visitor_hash: string
+          visited_date: string
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["site_visits"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["site_visits"]["Insert"]>
+      }
       mfa_trusted_devices: {
         Relationships: []
         Row: {

@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart2,
+  Eye,
   GalleryHorizontalEnd,
   Gift,
   LayoutGrid,
@@ -18,6 +19,7 @@ import {
   ShoppingBag,
   Trophy,
   Users,
+  UserCheck,
   Zap,
 } from "lucide-react"
 
@@ -34,6 +36,7 @@ type DashboardStats = {
   store: { total: number; active: number; outOfStock: number } | null
   offers: { active: number } | null
   banners: { total: number; active: number; max: number } | null
+  visits: { today: number; uniqueToday: number; returningToday: number; month: number } | null
 }
 
 type ColorKey = "cyan" | "emerald" | "amber" | "violet" | "rose" | "sky" | "fuchsia" | "orange" | "slate"
@@ -151,7 +154,29 @@ export default function AdminPage() {
       caption: d.statBannersCaption(stats.banners.active, stats.banners.max),
       alert: false,
     },
-  ].filter((tile): tile is NonNullable<typeof tile> => Boolean(tile))
+    stats?.visits && {
+      href: null,
+      key: "visitors-today",
+      icon: Eye,
+      color: "fuchsia" as ColorKey,
+      value: stats.visits.today,
+      label: d.statVisitorsToday,
+      caption: d.statVisitorsTodayCaption(stats.visits.uniqueToday, stats.visits.returningToday),
+      alert: false,
+    },
+    stats?.visits && {
+      href: null,
+      key: "visitors-month",
+      icon: UserCheck,
+      color: "orange" as ColorKey,
+      value: stats.visits.month,
+      label: d.statVisitorsMonth,
+      caption: d.statVisitorsMonthCaption,
+      alert: false,
+    },
+  ]
+    .filter((tile): tile is NonNullable<typeof tile> => Boolean(tile))
+    .map((tile) => ("key" in tile ? tile : { ...tile, key: tile.href }))
 
   const attentionItems = [
     // /admin/tierlist/revisao permite aprovar/categorizar direto na página —
@@ -218,17 +243,8 @@ export default function AdminPage() {
             : statTiles.map((tile, index) => {
                 const Icon = tile.icon
                 const styles = COLOR_STYLES[tile.color]
-                return (
-                  <Link
-                    key={tile.href}
-                    href={tile.href}
-                    style={{ animationDelay: `${index * 60}ms` }}
-                    className={cn(
-                      "group animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-border bg-card p-3 transition-all duration-200",
-                      "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5",
-                      styles.hover
-                    )}
-                  >
+                const content = (
+                  <>
                     <div className="flex items-center justify-between">
                       <div className={cn("flex size-7 items-center justify-center rounded-lg transition-colors", styles.icon)}>
                         <Icon className="size-3.5" />
@@ -244,7 +260,22 @@ export default function AdminPage() {
                     <p className="truncate text-xs text-muted-foreground">
                       {tile.label} · {tile.caption}
                     </p>
+                  </>
+                )
+                const className = cn(
+                  "group animate-in fade-in slide-in-from-bottom-2 rounded-xl border border-border bg-card p-3 transition-all duration-200",
+                  tile.href && "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5",
+                  styles.hover
+                )
+
+                return tile.href ? (
+                  <Link key={tile.key} href={tile.href} style={{ animationDelay: `${index * 60}ms` }} className={className}>
+                    {content}
                   </Link>
+                ) : (
+                  <div key={tile.key} style={{ animationDelay: `${index * 60}ms` }} className={className}>
+                    {content}
+                  </div>
                 )
               })}
         </div>

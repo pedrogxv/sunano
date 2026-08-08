@@ -5,6 +5,7 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getTelegramOffers } from "@/lib/server/integrations/telegram-offers"
 import { countActiveBanners, MAX_ACTIVE_BANNERS } from "@/lib/server/repositories/banners-repository"
+import { getVisitStats } from "@/lib/server/repositories/visits-repository"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -28,6 +29,7 @@ export async function GET() {
     store: null,
     offers: null,
     banners: null,
+    visits: null,
   }
 
   // Cada seção roda isolada: se uma falhar (ex.: integração externa fora do ar),
@@ -89,6 +91,16 @@ export async function GET() {
       const { count: total } = await db.from("home_banners").select("id", { count: "exact", head: true })
       const active = await countActiveBanners()
       stats.banners = { total: total ?? 0, active, max: MAX_ACTIVE_BANNERS }
+    }),
+    safe("visits", async () => {
+      if (!hasAdminPermission(profile, "dashboard_read")) return
+      const visitStats = await getVisitStats()
+      stats.visits = {
+        today: visitStats.today,
+        uniqueToday: visitStats.uniqueToday,
+        returningToday: visitStats.returningToday,
+        month: visitStats.month,
+      }
     }),
   ])
 

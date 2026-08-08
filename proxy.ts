@@ -1,4 +1,4 @@
-import type { NextRequest } from "next/server"
+import type { NextFetchEvent, NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
 import { hasAdminPermission, isWebMaster, type AdminPermissionKey, type AdminProfile } from "@/lib/admin-permissions"
@@ -49,6 +49,27 @@ function copyCookies(source: NextResponse, destination: NextResponse) {
   source.cookies.getAll().forEach((cookie) => {
     destination.cookies.set(cookie.name, cookie.value, cookie)
   })
+}
+
+// Dispara o registro de visita (dashboard admin) sem bloquear a navegação:
+// `event.waitUntil` deixa o fetch terminar em segundo plano depois da
+// resposta já ter sido enviada, sem atrasar o visitante nem arriscar ser
+// cancelado ao fim da função (diferente de um fetch solto sem await). Só
+// para navegação de página (não API, não asset) de visitante anônimo em
+// rota pública — é o cenário que este arquivo já isola no early-return.
+function trackVisit(request: NextRequest, event: NextFetchEvent) {
+  if (request.method !== "GET" || request.nextUrl.pathname.startsWith("/api")) return
+
+  event.waitUntil(
+    fetch(new URL("/api/track-visit", request.url), {
+      method: "POST",
+      headers: {
+        "x-forwarded-for": request.headers.get("x-forwarded-for") ?? "",
+        "x-real-ip": request.headers.get("x-real-ip") ?? "",
+        "user-agent": request.headers.get("user-agent") ?? "",
+      },
+    }).catch(() => {})
+  )
 }
 
 // Página mostrada a quem tem perfil administrativo mas nenhuma seção liberada.
@@ -111,7 +132,7 @@ function resolveLandingPath(profile: AdminProfile | null) {
   return landing?.path ?? NO_ACCESS_PATH
 }
 
-export async function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl
   const isAdminRoute = pathname.startsWith("/admin")
   const isLoginRoute = pathname === "/admin/login"
@@ -127,6 +148,7 @@ export async function proxy(request: NextRequest) {
   // O cookie de sessão é a única condição que exige resolver a sessão aqui —
   // necessário para aplicar o 2FA também fora do /admin.
   if (!maintenanceMode && !isAdminRoute && !hasSupabaseSession(request)) {
+    trackVisit(request, event)
     return NextResponse.next()
   }
 

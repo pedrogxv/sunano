@@ -5,6 +5,7 @@ import Link from "next/link"
 import { formatDistanceToNow } from "date-fns"
 import { enUS, ptBR } from "date-fns/locale"
 import {
+  AtSign,
   Bell,
   Circle,
   CircleCheck,
@@ -64,6 +65,7 @@ const ICONS: Record<NotificationType, typeof Bell> = {
   comment_reply: Reply,
   new_follower: UserPlus,
   system: Megaphone,
+  mention: AtSign,
 }
 
 const ICON_TONE: Record<NotificationType, string> = {
@@ -72,6 +74,7 @@ const ICON_TONE: Record<NotificationType, string> = {
   comment_reply: "bg-teal-500/15 text-teal-400",
   new_follower: "bg-amber-500/15 text-amber-400",
   system: "bg-primary/15 text-primary",
+  mention: "bg-rose-500/15 text-rose-400",
 }
 
 function fill(template: string, values: Record<string, string | number>) {
@@ -96,6 +99,8 @@ function buildMessage(n: Notification, t: ReturnType<typeof useT>): string {
       return fill(t.notifications.commentReply, { name })
     case "new_follower":
       return fill(t.notifications.newFollower, { name })
+    case "mention":
+      return fill(t.notifications.mention, { name })
     case "system":
       return n.title ?? t.notifications.systemTitle
   }

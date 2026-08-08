@@ -1,14 +1,20 @@
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { CommentFormatHint } from "./CommentBody"
+import { CommentImagesField } from "./CommentImagesField"
+import { MentionTextarea } from "./MentionTextarea"
+import type { CommentMention } from "./types"
 
 /** Formulário inline de resposta a um comentário raiz, aberto sob o comentário. */
 export function ReplyForm({
   authUser,
   value,
   onChange,
+  imageUrls,
+  onImagesChange,
+  mentionedUsers,
+  onMentionedUsersChange,
   onCancel,
   onSubmit,
   saving,
@@ -17,6 +23,10 @@ export function ReplyForm({
   authUser: { display_name: string; avatar_url: string | null } | null
   value: string
   onChange: (value: string) => void
+  imageUrls: string[]
+  onImagesChange: (urls: string[]) => void
+  mentionedUsers: CommentMention[]
+  onMentionedUsersChange: (users: CommentMention[]) => void
   onCancel: () => void
   onSubmit: () => void
   saving: boolean
@@ -38,13 +48,16 @@ export function ReplyForm({
           {error}
         </div>
       )}
-      <Textarea
+      <MentionTextarea
         autoFocus
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
+        mentionedUsers={mentionedUsers}
+        onMentionedUsersChange={onMentionedUsersChange}
         className="min-h-[72px] border-border bg-background text-sm"
-        placeholder="Escreva sua resposta..."
+        placeholder="Escreva sua resposta... (@ para mencionar)"
       />
+      <CommentImagesField imageUrls={imageUrls} onImagesChange={onImagesChange} disabled={saving} />
       <CommentFormatHint />
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>

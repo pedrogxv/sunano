@@ -17,6 +17,7 @@ export type NotificationType =
   | "comment_reply"
   | "new_follower"
   | "system"
+  | "mention"
 
 export type NotificationEntityType =
   | "forum_post"
@@ -254,6 +255,10 @@ export type Database = {
           parent_comment_id: string | null
           is_hidden: boolean
           aura_count: number
+          /** Até 2 URLs do bucket `comments` — limite também travado por CHECK no banco. */
+          image_urls: string[]
+          /** Até 2 ids de usuário @mencionados — dispara notificação tipo `mention`. */
+          mentioned_user_ids: string[]
           /** Última edição do texto pelo autor (janela de 15min). Null = nunca editado. */
           edited_at: string | null
           /** Coluna gerada (`edited_at is not null`) — nunca enviada no Insert/Update. */
@@ -323,6 +328,10 @@ export type Database = {
           parent_comment_id: string | null
           is_hidden: boolean
           aura_count: number
+          /** Até 2 URLs do bucket `comments` — limite também travado por CHECK no banco. */
+          image_urls: string[]
+          /** Até 2 ids de usuário @mencionados — dispara notificação tipo `mention`. */
+          mentioned_user_ids: string[]
           /** Última edição do texto pelo autor (janela de 15min). Null = nunca editado. */
           edited_at: string | null
           /** Coluna gerada (`edited_at is not null`) — nunca enviada no Insert/Update. */

@@ -2,13 +2,17 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
+import { isOwnedCommentImageUrl, MAX_COMMENT_IMAGES, MAX_COMMENT_MENTIONS } from "@/lib/server/comment-media"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import { deleteOwnForumComment, updateForumComment } from "@/lib/server/repositories/forum-repository"
+import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 
 // Mesmos limites do POST de criação — o texto editado passa pelas mesmas
 // regras do original, senão dava pra escapar do mínimo/máximo editando depois.
 const editSchema = z.object({
   body: z.string().trim().min(4).max(2000),
+  imageUrls: z.array(z.string().url()).max(MAX_COMMENT_IMAGES).optional(),
+  mentionedUserIds: z.array(z.string().uuid()).max(MAX_COMMENT_MENTIONS).optional(),
 })
 
 /** Edita o próprio comentário, dentro da janela de 15 minutos (conferida no repositório). */
@@ -45,11 +49,30 @@ export async function PATCH(
       )
     }
 
+    let imageUrls: string[] | undefined
+    if (parsed.data.imageUrls !== undefined) {
+      imageUrls = parsed.data.imageUrls
+      if (imageUrls.some((url) => !isOwnedCommentImageUrl(url, user.id))) {
+        return NextResponse.json({ error: "Imagem inválida." }, { status: 400 })
+      }
+    }
+
+    let mentionedUserIds: string[] | undefined
+    if (parsed.data.mentionedUserIds !== undefined) {
+      const requestedMentionIds = [...new Set(parsed.data.mentionedUserIds)].filter((id) => id !== user.id)
+      const mentionedProfiles = requestedMentionIds.length
+        ? await getUserProfiles(requestedMentionIds)
+        : {}
+      mentionedUserIds = requestedMentionIds.filter((id) => mentionedProfiles[id])
+    }
+
     const result = await updateForumComment({
       postSlug: slug,
       commentId,
       userId: user.id,
       body: parsed.data.body,
+      imageUrls,
+      mentionedUserIds,
     })
 
     if (!result.ok) {

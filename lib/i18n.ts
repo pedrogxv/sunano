@@ -79,6 +79,7 @@ type Translations = {
     postComment: string
     commentReply: string
     newFollower: string
+    mention: string
     loadMore: string
     loadingMore: string
     clearAll: string
@@ -743,6 +744,7 @@ export const translations: Record<LocaleCode, Translations> = {
       postComment: "{name} comentou no seu post",
       commentReply: "{name} respondeu ao seu comentário",
       newFollower: "{name} começou a seguir você",
+      mention: "{name} mencionou você em um comentário",
       loadMore: "Carregar mais",
       loadingMore: "Carregando...",
       clearAll: "Limpar",
@@ -1590,6 +1592,7 @@ export const translations: Record<LocaleCode, Translations> = {
       postComment: "{name} commented on your post",
       commentReply: "{name} replied to your comment",
       newFollower: "{name} started following you",
+      mention: "{name} mentioned you in a comment",
       loadMore: "Load more",
       loadingMore: "Loading...",
       clearAll: "Clear",

@@ -2,15 +2,18 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
+import { isOwnedCommentImageUrl, MAX_COMMENT_IMAGES, MAX_COMMENT_MENTIONS } from "@/lib/server/comment-media"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import { addBlogComment, listBlogComments } from "@/lib/server/repositories/blog-repository"
-import { getUserProfile } from "@/lib/server/repositories/users-repository"
+import { getUserProfile, getUserProfiles } from "@/lib/server/repositories/users-repository"
 
 export const dynamic = "force-dynamic"
 
 const commentSchema = z.object({
   body: z.string().trim().min(4).max(2000),
   parentCommentId: z.string().uuid().nullable().optional(),
+  imageUrls: z.array(z.string().url()).max(MAX_COMMENT_IMAGES).optional(),
+  mentionedUserIds: z.array(z.string().uuid()).max(MAX_COMMENT_MENTIONS).optional(),
 })
 
 /** Lista pública paginada dos comentários de uma notícia (`?page=1&sort=recent|aura`). */
@@ -61,6 +64,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sl
       )
     }
 
+    const imageUrls = parsed.data.imageUrls ?? []
+    if (imageUrls.some((url) => !isOwnedCommentImageUrl(url, user.id))) {
+      return NextResponse.json({ error: "Imagem inválida." }, { status: 400 })
+    }
+
+    const requestedMentionIds = [...new Set(parsed.data.mentionedUserIds ?? [])].filter(
+      (id) => id !== user.id
+    )
+    const mentionedProfiles = requestedMentionIds.length
+      ? await getUserProfiles(requestedMentionIds)
+      : {}
+    const mentionedUserIds = requestedMentionIds.filter((id) => mentionedProfiles[id])
+
     const profile = await getUserProfile(user.id)
     const authorName = profile?.display_name || user.email?.split("@")[0] || "Usuário"
 
@@ -70,6 +86,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sl
       authorName,
       body: parsed.data.body,
       parentCommentId: parsed.data.parentCommentId ?? null,
+      imageUrls,
+      mentionedUserIds,
     })
 
     if (!result.ok) {

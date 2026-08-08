@@ -4,10 +4,11 @@ import Link from "next/link"
 import { Clock, Flame, Lock, MessageCircle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { CommentFormatHint } from "./CommentBody"
+import { CommentImagesField } from "./CommentImagesField"
 import { CommentRow } from "./CommentRow"
+import { MentionTextarea } from "./MentionTextarea"
 import { ReplyForm } from "./ReplyForm"
 import { useCommentsController, type CommentSort } from "./useCommentsController"
 import type { CommentItem, CommentsAuthUser } from "./types"
@@ -70,6 +71,10 @@ export function CommentsSection({
     setFormExpanded,
     body,
     setBody,
+    imageUrls,
+    setImageUrls,
+    mentionedUsers,
+    setMentionedUsers,
     saving,
     formError,
     submitComment,
@@ -77,6 +82,10 @@ export function CommentsSection({
     replyingTo,
     replyBody,
     setReplyBody,
+    replyImageUrls,
+    setReplyImageUrls,
+    replyMentionedUsers,
+    setReplyMentionedUsers,
     replySaving,
     replyError,
     submitReply,
@@ -85,6 +94,10 @@ export function CommentsSection({
     editingId,
     editBody,
     setEditBody,
+    editImageUrls,
+    setEditImageUrls,
+    editMentionedUsers,
+    setEditMentionedUsers,
     editSaving,
     editError,
     submitEdit,
@@ -118,6 +131,10 @@ export function CommentsSection({
     editing: editingId === comment.id,
     editValue: editBody,
     onEditChange: setEditBody,
+    editImageUrls,
+    onEditImagesChange: setEditImageUrls,
+    editMentionedUsers,
+    onEditMentionedUsersChange: setEditMentionedUsers,
     onStartEdit: () => startEdit(comment),
     onCancelEdit: cancelEdit,
     onSubmitEdit: () => submitEdit(comment.id),
@@ -150,13 +167,17 @@ export function CommentsSection({
                 </div>
               )}
 
-              <Textarea
+              <MentionTextarea
                 autoFocus
                 value={body}
-                onChange={(e) => setBody(e.target.value)}
+                onChange={setBody}
+                mentionedUsers={mentionedUsers}
+                onMentionedUsersChange={setMentionedUsers}
                 className="min-h-[100px] border-border bg-muted/20"
-                placeholder="Escreva seu comentário..."
+                placeholder="Escreva seu comentário... (@ para mencionar)"
               />
+
+              <CommentImagesField imageUrls={imageUrls} onImagesChange={setImageUrls} disabled={saving} />
 
               <CommentFormatHint />
 
@@ -280,6 +301,10 @@ export function CommentsSection({
                           authUser={authUser}
                           value={replyBody}
                           onChange={setReplyBody}
+                          imageUrls={replyImageUrls}
+                          onImagesChange={setReplyImageUrls}
+                          mentionedUsers={replyMentionedUsers}
+                          onMentionedUsersChange={setReplyMentionedUsers}
                           onCancel={() => cancelReply(comment.id)}
                           onSubmit={() => submitReply(comment.id)}
                           saving={replySaving}

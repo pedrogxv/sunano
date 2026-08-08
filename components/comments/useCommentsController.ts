@@ -3,7 +3,7 @@ import { toast } from "sonner"
 
 import { nextReaction, nextReactionDelta, type Reaction } from "@/components/forum/AuraButton"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
-import type { CommentItem, CommentsAuthUser } from "./types"
+import type { CommentItem, CommentMention, CommentsAuthUser } from "./types"
 
 export type CommentSort = "recent" | "aura"
 
@@ -47,16 +47,22 @@ export function useCommentsController({
 
   const [formExpanded, setFormExpanded] = useState(false)
   const [body, setBody] = useState("")
+  const [imageUrls, setImageUrls] = useState<string[]>([])
+  const [mentionedUsers, setMentionedUsers] = useState<CommentMention[]>([])
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyBody, setReplyBody] = useState("")
+  const [replyImageUrls, setReplyImageUrls] = useState<string[]>([])
+  const [replyMentionedUsers, setReplyMentionedUsers] = useState<CommentMention[]>([])
   const [replySaving, setReplySaving] = useState(false)
   const [replyError, setReplyError] = useState<string | null>(null)
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editBody, setEditBody] = useState("")
+  const [editImageUrls, setEditImageUrls] = useState<string[]>([])
+  const [editMentionedUsers, setEditMentionedUsers] = useState<CommentMention[]>([])
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
@@ -188,11 +194,17 @@ export function useCommentsController({
       const res = await fetch(`${apiBasePath}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({
+          body,
+          imageUrls,
+          mentionedUserIds: mentionedUsers.map((u) => u.id),
+        }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar comentário")
       setBody("")
+      setImageUrls([])
+      setMentionedUsers([])
       setFormExpanded(false)
       await reloadFirstPage()
     } catch (err) {
@@ -210,11 +222,18 @@ export function useCommentsController({
       const res = await fetch(`${apiBasePath}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: replyBody, parentCommentId }),
+        body: JSON.stringify({
+          body: replyBody,
+          parentCommentId,
+          imageUrls: replyImageUrls,
+          mentionedUserIds: replyMentionedUsers.map((u) => u.id),
+        }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao enviar resposta")
       setReplyBody("")
+      setReplyImageUrls([])
+      setReplyMentionedUsers([])
       setReplyingTo(null)
       await reloadFirstPage()
     } catch (err) {
@@ -232,7 +251,11 @@ export function useCommentsController({
       const res = await fetch(`${apiBasePath}/comments/${commentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: editBody }),
+        body: JSON.stringify({
+          body: editBody,
+          imageUrls: editImageUrls,
+          mentionedUserIds: editMentionedUsers.map((u) => u.id),
+        }),
       })
       const data = await res.json().catch(() => null)
       // Inclui o 403 de janela expirada: o servidor é quem decide o prazo, então
@@ -240,12 +263,20 @@ export function useCommentsController({
       // digitado em vez de sumir levando a edição junto.
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao editar comentário")
       const newBody = editBody
+      const newImageUrls = editImageUrls
+      const newMentions = editMentionedUsers
       setEditingId(null)
       setEditBody("")
+      setEditImageUrls([])
+      setEditMentionedUsers([])
       // Edição não muda a ordenação (recente ou aura) nem a posição na
-      // página — atualiza só o corpo/flag localmente, sem refetch.
+      // página — atualiza só o corpo/flag/mídia localmente, sem refetch.
       onCommentsChange(
-        comments.map((c) => (c.id === commentId ? { ...c, body: newBody, is_edited: true } : c))
+        comments.map((c) =>
+          c.id === commentId
+            ? { ...c, body: newBody, is_edited: true, image_urls: newImageUrls, mentions: newMentions }
+            : c
+        )
       )
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Erro ao editar comentário")
@@ -256,15 +287,20 @@ export function useCommentsController({
 
   function startEdit(comment: CommentItem) {
     // Abre com o texto cru (com os `**`), que é o que está no banco — o
-    // negrito é aplicado só na exibição.
+    // negrito é aplicado só na exibição. Imagens e menções já confirmadas
+    // entram como estado inicial, exatamente como no formulário de criação.
     setEditingId(comment.id)
     setEditBody(comment.body)
+    setEditImageUrls(comment.image_urls)
+    setEditMentionedUsers(comment.mentions)
     setEditError(null)
   }
 
   function cancelEdit() {
     setEditingId(null)
     setEditBody("")
+    setEditImageUrls([])
+    setEditMentionedUsers([])
     setEditError(null)
   }
 
@@ -292,18 +328,24 @@ export function useCommentsController({
   function startReply(commentId: string) {
     setReplyingTo((current) => (current === commentId ? null : commentId))
     setReplyBody("")
+    setReplyImageUrls([])
+    setReplyMentionedUsers([])
     setReplyError(null)
   }
 
   function cancelComment() {
     setFormExpanded(false)
     setBody("")
+    setImageUrls([])
+    setMentionedUsers([])
     setFormError(null)
   }
 
   function cancelReply(commentId: string) {
     setReplyingTo((current) => (current === commentId ? null : current))
     setReplyBody("")
+    setReplyImageUrls([])
+    setReplyMentionedUsers([])
     setReplyError(null)
   }
 
@@ -320,6 +362,10 @@ export function useCommentsController({
     setFormExpanded,
     body,
     setBody,
+    imageUrls,
+    setImageUrls,
+    mentionedUsers,
+    setMentionedUsers,
     saving,
     formError,
     submitComment,
@@ -327,6 +373,10 @@ export function useCommentsController({
     replyingTo,
     replyBody,
     setReplyBody,
+    replyImageUrls,
+    setReplyImageUrls,
+    replyMentionedUsers,
+    setReplyMentionedUsers,
     replySaving,
     replyError,
     submitReply,
@@ -335,6 +385,10 @@ export function useCommentsController({
     editingId,
     editBody,
     setEditBody,
+    editImageUrls,
+    setEditImageUrls,
+    editMentionedUsers,
+    setEditMentionedUsers,
     editSaving,
     editError,
     submitEdit,

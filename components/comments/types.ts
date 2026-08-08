@@ -19,6 +19,17 @@ export type CommentItem = {
   /** `edited_at is not null` no banco — liga o rótulo "(editado)". */
   is_edited: boolean
   aura_count: number
+  /** Até 2 URLs do bucket `comments`. */
+  image_urls: string[]
+  /** Perfis @mencionados no comentário — só o necessário pra exibir o link. */
+  mentions: CommentMention[]
+}
+
+export type CommentMention = {
+  id: string
+  display_name: string
+  display_slug: string | null
+  avatar_url: string | null
 }
 
 export type CommentsAuthUser = { id: string; display_name: string; avatar_url: string | null } | null

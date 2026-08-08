@@ -2,6 +2,7 @@ import "server-only"
 
 import type { AccountTier } from "@/lib/account-tier"
 import { canEditComment } from "@/lib/comment-edit"
+import type { CommentMention } from "@/components/comments/types"
 import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
 import { creditCommentCreationAura, creditForumPostCreationAura } from "@/lib/server/repositories/aura-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -55,6 +56,10 @@ export type ForumCommentDetail = {
   created_at: string
   is_edited: boolean
   aura_count: number
+  /** Até 2 URLs do bucket `comments`. */
+  image_urls: string[]
+  /** Perfis @mencionados no comentário — só o necessário pra exibir o link. */
+  mentions: CommentMention[]
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
@@ -386,7 +391,7 @@ export type PaginatedComments = {
 }
 
 const FORUM_COMMENT_COLUMNS =
-  "id, body, author_name, user_id, parent_comment_id, created_at, is_edited, aura_count"
+  "id, body, author_name, user_id, parent_comment_id, created_at, is_edited, aura_count, image_urls, mentioned_user_ids"
 
 function mapForumCommentRows(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -402,6 +407,15 @@ function mapForumCommentRows(
     created_at: c.created_at,
     is_edited: c.is_edited ?? false,
     aura_count: c.aura_count ?? 0,
+    image_urls: c.image_urls ?? [],
+    mentions: ((c.mentioned_user_ids ?? []) as string[])
+      .filter((id) => profileMap[id])
+      .map((id) => ({
+        id,
+        display_name: profileMap[id]!.display_name ?? "Usuário",
+        display_slug: profileMap[id]!.display_slug,
+        avatar_url: profileMap[id]!.avatar_url,
+      })),
     author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
@@ -471,7 +485,10 @@ export async function listForumComments(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allRows = [...roots, ...(replies as any[])]
-  const profileMap = await buildProfileMap(allRows.map((c) => c.user_id))
+  const profileMap = await buildProfileMap([
+    ...allRows.map((c) => c.user_id),
+    ...allRows.flatMap((c) => (c.mentioned_user_ids ?? []) as string[]),
+  ])
 
   return {
     comments: mapForumCommentRows(allRows, profileMap),
@@ -673,6 +690,10 @@ export async function addForumComment(params: {
   authorName: string
   body: string
   parentCommentId?: string | null
+  /** Até 2 URLs já publicadas no bucket `comments` (validação de dono é feita na rota). */
+  imageUrls?: string[]
+  /** Até 2 ids de usuário @mencionados (a notificação é disparada por trigger no insert). */
+  mentionedUserIds?: string[]
 }): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -710,6 +731,8 @@ export async function addForumComment(params: {
     parent_comment_id: parentCommentId,
     is_hidden: false,
     aura_count: 0,
+    image_urls: params.imageUrls ?? [],
+    mentioned_user_ids: params.mentionedUserIds ?? [],
   })
 
   if (error) {
@@ -735,6 +758,9 @@ export async function updateForumComment(params: {
   commentId: string
   userId: string
   body: string
+  /** Quando ausente, imagens/menções do comentário não são alteradas. */
+  imageUrls?: string[]
+  mentionedUserIds?: string[]
 }): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -773,7 +799,12 @@ export async function updateForumComment(params: {
 
   const { error } = await db
     .from("forum_comments")
-    .update({ body: params.body.trim(), edited_at: new Date().toISOString() })
+    .update({
+      body: params.body.trim(),
+      edited_at: new Date().toISOString(),
+      ...(params.imageUrls !== undefined ? { image_urls: params.imageUrls } : {}),
+      ...(params.mentionedUserIds !== undefined ? { mentioned_user_ids: params.mentionedUserIds } : {}),
+    })
     .eq("id", comment.id)
 
   if (error) {

@@ -4,6 +4,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 import { AuraButton, type AuraBlockReason, type Reaction } from "@/components/forum/AuraButton"
+import { ImageLightbox } from "@/components/forum/ImageLightbox"
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
 import { ReportMenu } from "@/components/forum/ReportMenu"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
@@ -19,12 +20,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { canEditComment, commentEditDeadline } from "@/lib/comment-edit"
 import { profilePath } from "@/lib/profile-name"
 import { CommentBody, CommentFormatHint } from "./CommentBody"
-import type { CommentItem } from "./types"
+import { CommentImagesField } from "./CommentImagesField"
+import { MentionTextarea } from "./MentionTextarea"
+import type { CommentItem, CommentMention } from "./types"
 
 /**
  * `true` enquanto o comentário está dentro da janela de edição, virando
@@ -64,6 +66,10 @@ export function CommentRow({
   editing = false,
   editValue = "",
   onEditChange,
+  editImageUrls = [],
+  onEditImagesChange,
+  editMentionedUsers = [],
+  onEditMentionedUsersChange,
   onStartEdit,
   onCancelEdit,
   onSubmitEdit,
@@ -88,6 +94,10 @@ export function CommentRow({
   editing?: boolean
   editValue?: string
   onEditChange?: (value: string) => void
+  editImageUrls?: string[]
+  onEditImagesChange?: (urls: string[]) => void
+  editMentionedUsers?: CommentMention[]
+  onEditMentionedUsersChange?: (users: CommentMention[]) => void
   onStartEdit?: () => void
   onCancelEdit?: () => void
   onSubmitEdit?: () => void
@@ -142,11 +152,19 @@ export function CommentRow({
                 {editError}
               </div>
             )}
-            <Textarea
+            <MentionTextarea
               autoFocus
               value={editValue}
-              onChange={(e) => onEditChange?.(e.target.value)}
+              onChange={(value) => onEditChange?.(value)}
+              mentionedUsers={editMentionedUsers}
+              onMentionedUsersChange={(users) => onEditMentionedUsersChange?.(users)}
               className="min-h-[72px] border-border bg-background text-sm"
+              placeholder="Escreva seu comentário... (@ para mencionar)"
+            />
+            <CommentImagesField
+              imageUrls={editImageUrls}
+              onImagesChange={(urls) => onEditImagesChange?.(urls)}
+              disabled={editSaving}
             />
             <CommentFormatHint />
             <div className="flex justify-end gap-2">
@@ -163,7 +181,14 @@ export function CommentRow({
             </div>
           </div>
         ) : (
-          <CommentBody body={comment.body} className="mt-1.5" />
+          <>
+            <CommentBody body={comment.body} mentions={comment.mentions} className="mt-1.5" />
+            {comment.image_urls.length > 0 && (
+              <div className="mt-1.5 flex max-w-xs gap-2">
+                <ImageLightbox srcs={comment.image_urls} alt="Imagem do comentário" />
+              </div>
+            )}
+          </>
         )}
 
         {!editing && (

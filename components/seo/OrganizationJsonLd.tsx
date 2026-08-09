@@ -1,6 +1,6 @@
 import { SOCIAL_LINKS } from "@/lib/social-links"
+import { SITE_URL } from "@/lib/site-url"
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sunano.com.br"
 
 /**
  * JSON-LD Organization + WebSite, renderizado uma vez no `app/layout.tsx`.

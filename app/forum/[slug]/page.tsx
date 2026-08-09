@@ -5,8 +5,8 @@ import { getForumPostBySlug, getForumSidebarData } from "@/lib/server/repositori
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { ForumPostContent } from "./forum-post-content"
+import { SITE_URL } from "@/lib/site-url"
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sunano.com.br"
 
 // ISR: o post e os comentários são renderizados no servidor — essencial para
 // SEO, já que a busca por um periférico específico precisa encontrar o HTML

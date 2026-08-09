@@ -15,6 +15,7 @@ import { AuthHashErrorListener } from "@/components/auth/AuthHashErrorListener"
 import { LayoutShell } from "@/components/layout/LayoutShell"
 import { CookieBanner } from "@/components/lgpd/CookieBanner"
 import { OrganizationJsonLd } from "@/components/seo/OrganizationJsonLd"
+import { SITE_URL } from "@/lib/site-url"
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -32,7 +33,6 @@ const caveat = Caveat({
   variable: "--font-caveat",
 })
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sunano.com.br"
 const SITE_TITLE = "Sunano | Tierlist de Periféricos"
 const SITE_DESCRIPTION = "A tierlist definitiva de periféricos gamers. Compare mouses, teclados, headsets e mais com filtros avancados e reviews detalhadas."
 

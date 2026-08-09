@@ -8,7 +8,9 @@ import { BlogContent, type BlogPost } from "./blog-content"
 export const revalidate = 30
 
 export const metadata: Metadata = {
-  title: "Blog | Sunano",
+  // Sem o sufixo "| Sunano": o `title.template` do layout raiz já o acrescenta,
+  // e repetir aqui gerava "Blog | Sunano | Sunano" na SERP.
+  title: "Blog",
   description: "Reviews, comparativos e novidades sobre periféricos gamers: mouses, teclados, headsets e mais.",
   alternates: { canonical: "/blog" },
   openGraph: {

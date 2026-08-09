@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import type { ReactNode } from "react"
 import Link from "next/link"
 import Image from "next/image"
@@ -15,6 +16,22 @@ import { NewNewsButton } from "./new-news-button"
 // ISR: renderizado no servidor e revalidado em background, sem o fetch
 // client-side que exibia um spinner a cada acesso.
 export const revalidate = 30
+
+// Sem isto a página herdava título e canonical da home, então o Google via
+// duas URLs distintas se declarando a mesma página e indexava só uma.
+export const metadata: Metadata = {
+  title: "Notícias",
+  description:
+    "As últimas notícias do mundo dos periféricos gamers: lançamentos, novidades de marcas e o que está movimentando a comunidade.",
+  alternates: { canonical: "/noticias" },
+  openGraph: {
+    title: "Notícias Sunano",
+    description:
+      "As últimas notícias do mundo dos periféricos gamers: lançamentos, novidades de marcas e o que está movimentando a comunidade.",
+    url: "/noticias",
+    type: "website",
+  },
+}
 
 // Quantas notícias entram no header de manchetes — controlado manualmente
 // pelo toggle "Destacar no header" em /admin/blog.

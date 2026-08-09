@@ -8,8 +8,10 @@ import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { PessoasContent } from "./pessoas-content"
 
 export const metadata: Metadata = {
-  title: "Pessoas — Sunano Tierlist",
+  // O `title.template` do layout raiz já acrescenta "| Sunano".
+  title: "Pessoas",
   description: "Encontre outros membros, veja quem tem mais Aura e siga quem você curte.",
+  alternates: { canonical: "/pessoas" },
 }
 
 // Lê a sessão para marcar quem o visitante já segue e esconder o botão no

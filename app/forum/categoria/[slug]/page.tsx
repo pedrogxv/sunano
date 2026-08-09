@@ -5,8 +5,8 @@ import { ArrowLeft } from "lucide-react"
 
 import { getForumPostsByCategorySlug } from "@/lib/server/repositories/forum-repository"
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
+import { SITE_URL } from "@/lib/site-url"
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sunano.com.br"
 
 // ISR: página de categoria é conteúdo público e estável — vale a pena ficar
 // indexável e cacheada, igual à listagem principal do fórum.

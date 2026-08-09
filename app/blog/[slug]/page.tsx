@@ -2,8 +2,8 @@ import type { Metadata } from "next"
 
 import { getPublishedPostBySlug } from "@/lib/server/repositories/blog-repository"
 import { BlogPostContent, type BlogPost } from "./blog-post-content"
+import { SITE_URL } from "@/lib/site-url"
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://sunano.com.br"
 
 // ISR: o post é renderizado no servidor e revalidado em background,
 // eliminando o fetch client-side (que mostrava um spinner a cada visita).

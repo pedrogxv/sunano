@@ -13,7 +13,8 @@ import { ForumContent, type ForumPost } from "./forum-content"
 export const revalidate = 30
 
 export const metadata: Metadata = {
-  title: "Fórum | Sunano",
+  // Sem o sufixo "| Sunano": o `title.template` do layout raiz já o acrescenta.
+  title: "Fórum",
   description:
     "Discussões, dúvidas e opiniões da comunidade sobre mouses, teclados, headsets e outros periféricos gamers.",
   alternates: { canonical: "/forum" },

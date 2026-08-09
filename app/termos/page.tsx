@@ -17,7 +17,7 @@ export default function TermosPage() {
           Condições de uso da plataforma
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Versão <strong>2026-06</strong> · Em vigor a partir de 13 de junho de 2026.
+          Versão <strong>2026-08</strong> · Em vigor a partir de 10 de agosto de 2026.
         </p>
       </header>
 
@@ -76,10 +76,21 @@ export default function TermosPage() {
             <li>Não tentar acessar áreas restritas ou sistemas do Sunano sem autorização.</li>
             <li>Não distribuir malware, vírus ou código malicioso.</li>
             <li>Respeitar direitos autorais e propriedade intelectual de terceiros.</li>
+            <li>
+              Não usar nome de exibição ou biografia com palavrões, xingamentos ou termos
+              discriminatórios/ofensivos.
+            </li>
           </ul>
           <p>
             Conteúdos que violem estas regras podem ser removidos a qualquer momento pelos
             moderadores, e as contas responsáveis poderão ser suspensas.
+          </p>
+          <p>
+            O nome de exibição e a biografia do perfil passam por um filtro automático de
+            termos ofensivos no momento do cadastro ou da edição: textos que contenham esses
+            termos são recusados e precisam ser reescritos antes de salvar. Perfis que já
+            continham um termo ofensivo antes da adoção deste filtro tiveram o termo
+            substituído por asteriscos, com aviso enviado à conta afetada.
           </p>
         </section>
 
@@ -187,7 +198,7 @@ export default function TermosPage() {
 
       <footer className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
         <p>
-          Versão 2026-06 · Última atualização: 13 de junho de 2026.{" "}
+          Versão 2026-08 · Última atualização: 10 de agosto de 2026.{" "}
           <Link href="/privacidade" className="text-primary hover:underline">
             Política de Privacidade
           </Link>

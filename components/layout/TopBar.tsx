@@ -172,7 +172,7 @@ export function TopBar() {
     <div className="sticky top-0 z-20 min-h-16 border-b border-border bg-card">
       <div className="min-h-16 flex items-center justify-between gap-4 px-4 py-2">
         {/* Left — Toggle + Page Title + Description */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 shrink-0">
           <button
             type="button"
             onClick={handleSidebarToggle}
@@ -196,6 +196,8 @@ export function TopBar() {
             )}
           </div>
         </div>
+
+        <div className="min-w-0 flex-1" />
 
         {/* Right — no mobile, prioriza notificação e missão diária: tema e Aura
             saem da barra e viram itens do menu do avatar (`mobileExtraItems`). */}

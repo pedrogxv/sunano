@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Activity, Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
+import { Activity, Bird, Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
@@ -10,6 +10,7 @@ import { resolveProfileMedia } from "@/lib/account-tier"
 import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
+import { streakHeatTier, STREAK_HEAT_STYLES } from "@/lib/streak-multiplier"
 import { cn } from "@/lib/utils"
 import {
   profileAccentHue,
@@ -54,12 +55,14 @@ const METRIC_META: Record<
   views: { icon: Eye, label: (n) => (n === 1 ? "visita" : "visitas") },
   followers: { icon: Users, label: (n) => (n === 1 ? "seguidor" : "seguidores") },
   activity: { icon: Activity, tone: "text-emerald-400", label: () => "atividade" },
+  streak: { icon: Bird, label: (n) => (n === 1 ? "dia de ofensiva" : "dias de ofensiva") },
 }
 
 function metricValue(profile: PublicProfileSummary, metric: DirectoryMetric): number {
   if (metric === "aura") return profile.aura
   if (metric === "views") return profile.profile_views
   if (metric === "activity") return profile.activity
+  if (metric === "streak") return profile.streak
   return profile.followers
 }
 
@@ -81,6 +84,10 @@ export function ProfileMetrics({
   const meta = METRIC_META[metric]
   const Icon = meta.icon
   const value = metricValue(profile, metric)
+  // Ofensiva não tem uma cor fixa: esquenta de âmbar pra vermelho conforme os
+  // dias sobem (mesmo eixo do multiplicador de Aura), então a tonalidade é
+  // calculada por card em vez de vir de METRIC_META.
+  const tone = metric === "streak" ? STREAK_HEAT_STYLES[streakHeatTier(value)].text : meta.tone
 
   return (
     <p
@@ -90,14 +97,14 @@ export function ProfileMetrics({
       )}
     >
       <Icon
-        className={cn(compact ? "size-4" : "size-5", meta.tone)}
+        className={cn(compact ? "size-4" : "size-5", tone)}
         {...(meta.filled ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
       />
       <span
         className={cn(
           "font-extrabold",
           compact ? "text-base" : "text-lg",
-          meta.tone ?? "text-foreground"
+          tone ?? "text-foreground"
         )}
       >
         {formatCount(value)}
@@ -207,10 +214,10 @@ export function ProfileCard({
             </span>
           )}
 
-          <div className={cn("-mt-11 flex flex-col items-center px-3", !showFollowButton && "pb-4")}>
+          <div className={cn("-mt-10 flex flex-col items-center px-2 sm:-mt-11 sm:px-3", !showFollowButton && "pb-4")}>
             <div
               className={cn(
-                "relative size-[86px] overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 group-hover:scale-105",
+                "relative size-16 overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 group-hover:scale-105 sm:size-[86px]",
                 TIER_RING[profile.account_tier]
               )}
             >
@@ -219,7 +226,7 @@ export function ProfileCard({
                 alt={profile.display_name}
                 fill
                 unoptimized={avatar.animated}
-                sizes="86px"
+                sizes="(max-width: 640px) 64px, 86px"
                 style={mediaAdjustStyle(profile.media_adjustments.avatar)}
                 className="object-cover"
                 fallback={

@@ -63,7 +63,7 @@ export function PodiumSection({
   showFollowButton?: boolean
 }) {
   return (
-    <div className="flex items-end justify-center gap-3 sm:gap-6">
+    <div className="flex items-end justify-center gap-1.5 sm:gap-6">
       {profiles.map((profile, index) => (
         <PodiumCard
           key={profile.id}
@@ -111,7 +111,7 @@ function PodiumCard({
     <div
       data-place={place}
       className={cn(
-        "podium-halo relative flex w-full max-w-[168px] flex-col items-center",
+        "podium-halo relative flex w-full max-w-[108px] flex-col items-center sm:max-w-[168px]",
         layout.order
       )}
     >

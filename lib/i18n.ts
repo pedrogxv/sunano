@@ -1424,6 +1424,21 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.2.7 · Index Librorum Prohibitorum",
+          date: "10 de agosto",
+          title: "Filtro de conteúdo ofensivo, bônus de Aura da ofensiva e Changelog público",
+          description: "Nome de exibição e bio passam por um filtro automático de termos ofensivos, a ofensiva diária agora rende um bônus percentual de Aura sobre tudo que você ganha, e o Changelog deixou de ser exclusivo de admin.",
+          items: [
+            "Nome de exibição e biografia do perfil são validados contra uma lista de termos ofensivos (baixo calão, discurso de ódio) no cadastro e na edição — quem já tinha um termo bloqueado no perfil foi censurado retroativamente com asteriscos e avisado pelo sino de notificações",
+            "Bônus de Aura por ofensiva: cada dia seguido completando as 3 missões diárias aumenta um multiplicador percentual (de 1,1% a 6%) aplicado a todo ganho positivo de Aura — curtidas, missões, conquistas e criação de post/comentário",
+            "Selo de ofensiva (perfil, mini-perfil, comentários e diretório) agora esquenta de âmbar para vermelho conforme os dias sobem, e mostra o bônus atual ao passar o mouse",
+            "Nova aba 'Maiores Ofensivas' no Diretório de Pessoas, e as listas de ranking (Aura, Mais Ativos, Mais Visitados, Mais Seguidos) passaram a mostrar até 100 perfis",
+            "Página /changelog deixou de ser restrita a administradores e agora aparece no menu para todo mundo",
+            "Ícone de aura recebida nas notificações trocou de roxo para laranja (mesma cor da Aura no resto do site), e chamado de comentário/resposta não repete mais o texto da mensagem",
+            "Termos de uso atualizados (versão 2026-08) com a regra sobre o filtro de conteúdo ofensivo",
+          ],
+        },
+        {
           version: "v0.2.6",
           date: "9 de agosto",
           title: "Comentários com mais níveis de resposta e telas mais aproveitadas no celular",
@@ -2314,6 +2329,21 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.2.7 · Index Librorum Prohibitorum",
+          date: "August 10",
+          title: "Offensive content filter, streak Aura bonus, and a public Changelog",
+          description: "Display name and bio now go through an automatic offensive-content filter, daily streaks now grant a percentage Aura bonus on everything you earn, and the Changelog is no longer admin-only.",
+          items: [
+            "Display name and profile bio are checked against a list of offensive terms (profanity, hate speech) on signup and edit — profiles that already had a blocked term were retroactively censored with asterisks and notified via the notification bell",
+            "Streak Aura bonus: each consecutive day completing all 3 daily missions raises a percentage multiplier (1.1% to 6%) applied to every positive Aura gain — likes, missions, achievements, and creating posts/comments",
+            "The streak badge (profile, mini profile, comments, and directory) now heats up from amber to red as the streak grows, and shows the current bonus on hover",
+            "New 'Top Streaks' tab in the People directory, and the ranking lists (Aura, Most Active, Most Visited, Most Followed) now show up to 100 profiles",
+            "The /changelog page is no longer admin-only and now shows up in the menu for everyone",
+            "The aura-received notification icon switched from purple to orange (matching Aura's color elsewhere on the site), and comment/reply notifications no longer repeat the message text",
+            "Terms of use updated (version 2026-08) with the rule about the offensive-content filter",
+          ],
+        },
         {
           version: "v0.2.6",
           date: "August 9",

@@ -9,19 +9,21 @@ import {
   getMostFollowedProfiles,
   getMostVisitedProfiles,
   getTopAuraProfiles,
+  getTopStreakProfiles,
 } from "@/lib/server/repositories/users-repository"
 
 export const dynamic = "force-dynamic"
 
 /**
  * Listas do diretório de pessoas: `?sort=aura` (padrão), `visited`, `followed`,
- * `following` ou `active`. Quando há sessão, devolve também quais desses perfis o usuário
- * já segue — assim a grade renderiza o botão certo sem uma chamada por card.
+ * `following`, `active` ou `streak`. Quando há sessão, devolve também quais desses
+ * perfis o usuário já segue — assim a grade renderiza o botão certo sem uma
+ * chamada por card.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const sort = coerceDirectorySort(searchParams.get("sort"))
-  const limit = Math.min(Number(searchParams.get("limit")) || 12, 48)
+  const limit = Math.min(Number(searchParams.get("limit")) || 12, 100)
 
   try {
     const user = await getRequestUser(request)
@@ -46,6 +48,8 @@ export async function GET(request: NextRequest) {
       profiles = await getMostVisitedProfiles(limit)
     } else if (sort === "active") {
       profiles = await getMostActiveProfiles(limit)
+    } else if (sort === "streak") {
+      profiles = await getTopStreakProfiles(limit)
     } else {
       profiles = await getTopAuraProfiles(limit)
     }

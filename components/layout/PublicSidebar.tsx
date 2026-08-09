@@ -92,18 +92,7 @@ export function PublicSidebar() {
   const pathname = usePathname()
   const { count: cartCount, setOpen: openCart } = useCart()
 
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [isAdminLoading, setIsAdminLoading] = useState(true)
   const [claimableEvents, setClaimableEvents] = useState(0)
-
-  useEffect(() => {
-    let mounted = true
-    fetch("/api/admin/profile")
-      .then((res) => { if (mounted) setIsAdmin(res.ok) })
-      .catch(() => { if (mounted) setIsAdmin(false) })
-      .finally(() => { if (mounted) setIsAdminLoading(false) })
-    return () => { mounted = false }
-  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -289,26 +278,15 @@ export function PublicSidebar() {
           </div>
         </nav>
 
-        {/* Changelog — visível apenas para admins; shimmer enquanto carrega */}
-        {isAdminLoading ? (
-          <div className="border-t border-border px-3 py-3">
-            <div
-              className={cn(
-                "h-10 rounded-lg bg-muted/30 animate-pulse",
-                isCollapsed ? "w-10 mx-auto" : "w-full"
-              )}
-            />
-          </div>
-        ) : isAdmin ? (
-          <div className="border-t border-border px-3 py-3">
-            <NavLink
-              item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
-              isActive={isActive("/changelog")}
-              collapsed={isCollapsed}
-              onClick={close}
-            />
-          </div>
-        ) : null}
+        {/* Changelog — público */}
+        <div className="border-t border-border px-3 py-3">
+          <NavLink
+            item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
+            isActive={isActive("/changelog")}
+            collapsed={isCollapsed}
+            onClick={close}
+          />
+        </div>
 
         {/* Links legais — ocultos quando colapsado */}
         {!isCollapsed && (

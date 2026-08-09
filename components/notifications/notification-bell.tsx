@@ -71,7 +71,7 @@ const ICONS: Record<NotificationType, typeof Bell> = {
 }
 
 const ICON_TONE: Record<NotificationType, string> = {
-  aura_received: "bg-violet-500/15 text-violet-400",
+  aura_received: "bg-orange-500/15 text-orange-500",
   post_comment: "bg-sky-500/15 text-sky-400",
   comment_reply: "bg-teal-500/15 text-teal-400",
   new_follower: "bg-amber-500/15 text-amber-400",
@@ -338,9 +338,10 @@ export function NotificationBell() {
                 const Icon = ICONS[n.type]
                 const isNew = highlighted.current.has(n.id)
                 const message = buildMessage(n, t)
-                // Corpo do aviso do sistema, trecho do comentário recebido, ou
-                // título do post pra quem foi notificado de um post novo.
-                const preview = n.type === "new_post" ? n.title : n.body
+                // Só o aviso do sistema e "post novo" mostram um trecho extra
+                // (corpo do aviso, título do post) — comentário/resposta não
+                // exibe o texto da mensagem em si, só o aviso de que chegou.
+                const preview = n.type === "system" ? n.body : n.type === "new_post" ? n.title : null
 
                 const row = (
                   <div className="flex items-start gap-2.5">
@@ -350,7 +351,10 @@ export function NotificationBell() {
                         ICON_TONE[n.type]
                       )}
                     >
-                      <Icon className="size-[14px]" />
+                      <Icon
+                        className={cn("size-[14px]", n.type === "aura_received" && "nav-fire-icon")}
+                        {...(n.type === "aura_received" ? { fill: "currentColor", strokeWidth: 1.5 } : {})}
+                      />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm leading-snug text-foreground">{message}</p>

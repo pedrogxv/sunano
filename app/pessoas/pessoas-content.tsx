@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Activity, Eye, Flame, Heart, UserPlus, Users } from "lucide-react"
+import { Activity, Bird, Eye, Flame, Heart, UserPlus, Users } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 
 import { PodiumSection } from "@/components/people/PodiumSection"
@@ -29,19 +29,25 @@ const TABS: {
     key: "active",
     label: "Mais Ativos",
     icon: Activity,
-    description: "Quem mais participa por aqui: posts, comentários e reações recentes.",
+    description: "Top 100 usuários mais ativos: posts, comentários e reações recentes.",
   },
   {
     key: "visited",
     label: "Mais visitados",
     icon: Eye,
-    description: "Os perfis que mais chamaram atenção — ordenados por visitas.",
+    description: "Top 100 perfis que mais chamaram atenção — ordenados por visitas.",
   },
   {
     key: "followed",
     label: "Mais seguidos",
     icon: Users,
-    description: "Quem tem a maior torcida: perfis com mais seguidores na Sunano.",
+    description: "Top 100 perfis com mais seguidores na Sunano.",
+  },
+  {
+    key: "streak",
+    label: "Maiores Ofensivas",
+    icon: Bird,
+    description: "Top 100 usuários com a maior ofensiva ativa — dias seguidos completando as missões diárias.",
   },
   {
     key: "following",
@@ -51,8 +57,8 @@ const TABS: {
   },
 ]
 
-/** As quatro primeiras abas são rankings; "Seguindo" é uma lista pessoal. */
-const RANKED_TABS: DirectorySort[] = ["aura", "active", "visited", "followed"]
+/** As cinco primeiras abas são rankings; "Seguindo" é uma lista pessoal. */
+const RANKED_TABS: DirectorySort[] = ["aura", "active", "visited", "followed", "streak"]
 
 /**
  * Número que cada aba destaca no card. A busca e "Seguindo" não são rankings,
@@ -63,6 +69,7 @@ const TAB_METRIC: Record<DirectorySort, DirectoryMetric> = {
   active: "activity",
   visited: "views",
   followed: "followers",
+  streak: "streak",
   following: "followers",
 }
 
@@ -94,7 +101,7 @@ export function PessoasContent({
     // Mesmo padrão (e mesmo aviso pré-existente) de SidebarRankingSection.tsx.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
-    fetch(`/api/users/directory?sort=${tab}&limit=48`)
+    fetch(`/api/users/directory?sort=${tab}&limit=100`)
       .then((r) => r.json())
       .then((data) => {
         if (!active) return
@@ -128,7 +135,9 @@ export function PessoasContent({
             "flex size-11 shrink-0 items-center justify-center rounded-xl border",
             activeTab.key === "aura"
               ? "border-orange-500/30 bg-orange-500/10 text-orange-500"
-              : "border-border bg-muted/40 text-foreground"
+              : activeTab.key === "streak"
+                ? "border-red-500/30 bg-red-500/10 text-red-500"
+                : "border-border bg-muted/40 text-foreground"
           )}
         >
           <activeTab.icon
@@ -166,7 +175,7 @@ export function PessoasContent({
 
       <div className="mt-6">
         {loading ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
             {Array.from({ length: 10 }).map((_, i) => (
               <div
                 key={i}
@@ -206,7 +215,7 @@ export function PessoasContent({
                 />
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
               {(isRanked && shown.length >= 3 ? shown.slice(3) : shown).map((profile, index) => (
                 <ProfileCard
                   key={profile.id}

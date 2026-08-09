@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic"
 
 export default async function PessoasPage() {
-  const profiles = await getTopAuraProfiles(48)
+  const profiles = await getTopAuraProfiles(100)
 
   const supabase = await createSupabaseServerClient()
   const { data: authData } = await supabase.auth.getUser()

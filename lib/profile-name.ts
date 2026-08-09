@@ -11,6 +11,8 @@
  * que é a fonte da verdade.
  */
 
+import { checkContent, CONTENT_FILTER_MESSAGE } from "@/lib/content-filter"
+
 export const DISPLAY_NAME_MIN_LENGTH = 2
 export const DISPLAY_NAME_MAX_LENGTH = 30
 export const DISPLAY_SLUG_MIN_LENGTH = 2
@@ -88,6 +90,9 @@ export function validateDisplayName(name: string): string | null {
   }
   if (RESERVED_SLUGS.has(slug)) {
     return "Esse nome é reservado. Escolha outro."
+  }
+  if (checkContent(trimmed).blocked) {
+    return CONTENT_FILTER_MESSAGE
   }
   return null
 }

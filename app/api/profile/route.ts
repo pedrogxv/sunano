@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import * as z from "zod"
 
 import { coerceAccountTier } from "@/lib/account-tier"
+import { checkContent, CONTENT_FILTER_MESSAGE } from "@/lib/content-filter"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { coerceMediaAdjustments, DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { DISPLAY_NAME_MAX_LENGTH, slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
@@ -192,6 +193,10 @@ export async function POST(request: Request) {
           { status: 409 }
         )
       }
+    }
+
+    if (parsed.data.bio && checkContent(parsed.data.bio).blocked) {
+      return NextResponse.json({ error: CONTENT_FILTER_MESSAGE, field: "bio" }, { status: 400 })
     }
 
     const youtubeHandle = parseSocialHandle(parsed.data.youtube_handle)

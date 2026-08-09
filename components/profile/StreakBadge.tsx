@@ -1,5 +1,6 @@
 import { Bird } from "lucide-react"
 
+import { formatStreakMultiplier, streakHeatTier, STREAK_HEAT_STYLES } from "@/lib/streak-multiplier"
 import { cn } from "@/lib/utils"
 
 /**
@@ -7,6 +8,11 @@ import { cn } from "@/lib/utils"
  * missões diárias (ver `lib/achievements.ts` / `daily_missions`). O brilho
  * (glow) só aparece com ofensiva ativa (`days > 0`); ofensiva zerada mostra
  * o pássaro apagado, sem número, como convite a recomeçar.
+ *
+ * A cor sobe de âmbar para vermelho conforme a ofensiva cresce (ver
+ * `streakHeatTier`/`STREAK_HEAT_STYLES` em `lib/streak-multiplier.ts`) — o
+ * mesmo eixo que define o bônus de Aura da ofensiva, então quanto mais
+ * "quente" a cor, maior o multiplicador.
  *
  * `size="sm"` é a versão inline usada ao lado do nome do autor em
  * comentários, no mini-perfil e na linha de badges do perfil completo — sem
@@ -28,19 +34,23 @@ export function StreakBadge({
   className?: string
 }) {
   const active = days > 0
+  const heat = STREAK_HEAT_STYLES[streakHeatTier(days)]
+  const title = active
+    ? `${days} dia${days === 1 ? "" : "s"} de ofensiva — +${formatStreakMultiplier(days)} de Aura`
+    : "Complete as missões diárias para começar uma ofensiva"
 
   if (size === "sm") {
     if (!active && !showInactive) return null
     return (
       <span
-        title={active ? `${days} dia${days === 1 ? "" : "s"} de ofensiva` : "Complete as missões diárias para começar uma ofensiva"}
+        title={title}
         className={cn(
           "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium",
-          active ? "bg-amber-400/15 text-amber-400" : "bg-muted/40 text-muted-foreground",
+          active ? cn(heat.bg, heat.text) : "bg-muted/40 text-muted-foreground",
           className
         )}
       >
-        <Bird className={cn("size-2.5", active && "drop-shadow-[0_0_3px_rgba(251,191,36,0.8)]")} />
+        <Bird className={cn("size-2.5", active && heat.glow)} />
         {active ? days : "Sem ofensiva"}
       </span>
     )
@@ -48,19 +58,16 @@ export function StreakBadge({
 
   return (
     <div
-      title={active ? `${days} dia${days === 1 ? "" : "s"} de ofensiva` : "Complete as missões diárias para começar uma ofensiva"}
+      title={title}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium",
-        active
-          ? "border-amber-400/40 bg-amber-400/10 text-amber-300"
-          : "border-border bg-card/60 text-muted-foreground",
+        active ? cn(heat.border, heat.bg, heat.text) : "border-border bg-card/60 text-muted-foreground",
         className
       )}
     >
-      <Bird
-        className={cn("size-4", active && "drop-shadow-[0_0_5px_rgba(251,191,36,0.9)]")}
-      />
+      <Bird className={cn("size-4", active && heat.glow)} />
       <span>{active ? `${days} dia${days === 1 ? "" : "s"}` : "Sem ofensiva"}</span>
+      {active && <span className="opacity-70">· +{formatStreakMultiplier(days)}</span>}
     </div>
   )
 }

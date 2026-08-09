@@ -78,7 +78,8 @@ function toProfileSummary(
   followers = 0,
   aura = 0,
   mediaAdjustments: ProfileMediaAdjustments = DEFAULT_ADJUSTMENTS,
-  activity = 0
+  activity = 0,
+  streak = 0
 ): PublicProfileSummary {
   return {
     id: row.id,
@@ -92,6 +93,7 @@ function toProfileSummary(
     followers,
     aura,
     activity,
+    streak,
     created_at: row.created_at,
   }
 }
@@ -258,11 +260,12 @@ function excludeSiteOwner<Q extends { neq(column: string, value: string): Q }>(q
  */
 async function withCounters(rows: DirectoryRow[]): Promise<PublicProfileSummary[]> {
   const ids = rows.map((r) => r.id)
-  const [followers, aura, adjustments, activity] = await Promise.all([
+  const [followers, aura, adjustments, activity, streaks] = await Promise.all([
     countFollowersByUser(ids),
     getAuraByUser(ids),
     getMediaAdjustmentsByUser(ids),
     countActivityByUser(ids),
+    getUserStreaksByUser(ids),
   ])
   return rows.map((row) =>
     toProfileSummary(
@@ -270,7 +273,8 @@ async function withCounters(rows: DirectoryRow[]): Promise<PublicProfileSummary[
       followers[row.id] ?? 0,
       aura[row.id] ?? 0,
       adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
-      activity[row.id] ?? 0
+      activity[row.id] ?? 0,
+      streaks[row.id] ?? 0
     )
   )
 }
@@ -394,6 +398,83 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
 
   // `withCounters` preserva a ordem que chega — ranqueados por aura, depois o
   // preenchimento — e é ele quem carimba o saldo em cada card.
+  return withCounters([...ranked, ...fillers])
+}
+
+/**
+ * Perfis com a maior ofensiva ativa ("Maiores Ofensivas").
+ *
+ * `user_streaks.current_streak` sozinho não basta: uma ofensiva com
+ * `last_completed_date` de mais de 1 dia atrás está expirada (mesma regra de
+ * `isStreakActive` em `achievements-repository.ts`), mas o banco não zera a
+ * linha sozinho — só a leitura decide isso. Por isso busca-se um lote maior
+ * que `limit` ordenado por `current_streak` e filtra-se as expiradas em JS
+ * antes de cortar pro tamanho pedido; o `getUserStreaksByUser` do
+ * `withCounters` reaplica a mesma regra depois, então o número que aparece
+ * no card sempre bate com o motivo de ele estar no ranking.
+ *
+ * O dono do site fica de fora (mesmo critério de `getTopAuraProfiles`).
+ */
+export async function getTopStreakProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+  const db = createSupabaseAdminClient()
+
+  const { data: streakRows, error: streaksError } = await db
+    .from("user_streaks")
+    .select("user_id, current_streak, last_completed_date")
+    .gt("current_streak", 0)
+    .order("current_streak", { ascending: false })
+    .limit(limit * 3 + 10)
+
+  if (streaksError) {
+    console.error("[users-repository] getTopStreakProfiles:", streaksError)
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+  const active = ((streakRows ?? []) as Array<{
+    user_id: string
+    current_streak: number
+    last_completed_date: string | null
+  }>)
+    .filter((r) => r.last_completed_date === today || r.last_completed_date === yesterday)
+    .slice(0, limit)
+
+  const rankedIds = active.map((r) => r.user_id)
+
+  const { data: rankedRows, error: rankedError } = rankedIds.length
+    ? await excludeSiteOwner(
+        db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
+      )
+    : { data: [], error: null }
+
+  if (rankedError) {
+    console.error("[users-repository] getTopStreakProfiles ranked:", rankedError)
+  }
+
+  const streakByUser = new Map(active.map((r) => [r.user_id, r.current_streak]))
+  const ranked = ((rankedRows ?? []) as DirectoryRow[]).sort(
+    (a, b) => (streakByUser.get(b.id) ?? 0) - (streakByUser.get(a.id) ?? 0)
+  )
+
+  const remaining = limit - ranked.length
+  let fillers: DirectoryRow[] = []
+  if (remaining > 0) {
+    let query = excludeSiteOwner(db.from("user_profiles").select(DIRECTORY_COLUMNS))
+      .order("profile_views", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(remaining)
+    if (ranked.length > 0) {
+      query = query.not("id", "in", `(${ranked.map((r) => r.id).join(",")})`)
+    }
+
+    const { data, error } = await query
+    if (error) {
+      console.error("[users-repository] getTopStreakProfiles fillers:", error)
+    }
+    fillers = (data ?? []) as DirectoryRow[]
+  }
+
   return withCounters([...ranked, ...fillers])
 }
 

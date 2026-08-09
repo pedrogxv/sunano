@@ -89,6 +89,7 @@ function getRequiredPermission(pathname: string): AdminPermissionKey | null {
   if (pathname.startsWith("/admin/tierlist")) return "peripherals_read"
   if (pathname.startsWith("/admin/perifericos")) return "peripherals_read"
   if (pathname.startsWith("/admin/ranking")) return "peripherals_read"
+  if (pathname.startsWith("/admin/brands")) return "brands_read"
   if (pathname.startsWith("/admin/banners")) return "banners_read"
   if (pathname.startsWith("/admin/blog/new") || /^\/admin\/blog\/[^/]+$/.test(pathname)) {
     return "blog_write"

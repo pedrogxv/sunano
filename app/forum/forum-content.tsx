@@ -210,7 +210,7 @@ export function ForumContent({
     "Nenhum tópico ainda. Seja o primeiro!"
 
   return (
-    <div className="mx-auto flex max-w-6xl items-start gap-6 px-4 py-8 md:px-6">
+    <div className="mx-auto flex max-w-6xl items-start gap-6 px-2 py-8 sm:px-4 md:px-6">
       <div className="min-w-0 flex-1 space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">

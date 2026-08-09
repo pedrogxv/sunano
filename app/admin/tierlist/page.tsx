@@ -65,6 +65,17 @@ interface Peripheral {
   created_at: string
 }
 
+interface PeripheralApiRow extends Omit<Peripheral, "brand"> {
+  brand_id: string
+  brands: { name: string } | { name: string }[] | null
+}
+
+function normalizePeripheral(row: PeripheralApiRow): Peripheral {
+  const brandRow = Array.isArray(row.brands) ? row.brands[0] : row.brands
+  const { brand_id: _brandId, brands: _brands, ...rest } = row
+  return { ...rest, brand: brandRow?.name ?? "" }
+}
+
 const CATEGORY_META = [
   { key: "keyboard" as Category, en: "Keyboard", pt: "Teclado" },
   { key: "mouse" as Category, en: "Mouse", pt: "Mouse" },
@@ -882,11 +893,11 @@ export default function AdminPeripheralsPage() {
       setLoading(true)
       setError(null)
       const res = await fetch("/api/admin/peripherals", { cache: "no-store" })
-      const data = (await res.json().catch(() => null)) as { peripherals?: Peripheral[]; error?: string } | null
+      const data = (await res.json().catch(() => null)) as { peripherals?: PeripheralApiRow[]; error?: string } | null
       if (!res.ok || !data?.peripherals) {
         throw new Error(data?.error ?? t.admin.tierlistPage.failedToLoad)
       }
-      setPeripherals(data.peripherals)
+      setPeripherals(data.peripherals.map(normalizePeripheral))
     } catch (err) {
       const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToLoad
       setError(message)

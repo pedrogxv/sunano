@@ -93,7 +93,7 @@ export async function getHomeData(): Promise<HomeData> {
     listActiveBanners().catch(() => [] as HomeBanner[]),
     db
       .from("peripherals")
-      .select("id, name, brand, image_url, category, tier")
+      .select("id, name, brand_id, brands(name), image_url, category, tier")
       .order("created_at", { ascending: false })
       .limit(4),
     db
@@ -148,9 +148,26 @@ export async function getHomeData(): Promise<HomeData> {
     for (const row of profiles ?? []) avatarMap[row.id] = row.avatar_url
   }
 
+  const topPeripheralRows = (topPeripheralsRes.data ?? []) as unknown as Array<{
+    id: string
+    name: string
+    brand_id: string
+    brands: { name: string } | { name: string }[] | null
+    image_url: string | null
+    category: string
+    tier: string | null
+  }>
+
   return {
     banners,
-    peripherals: (topPeripheralsRes.data ?? []) as unknown as HomeTopPeripheral[],
+    peripherals: topPeripheralRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      brand: (Array.isArray(row.brands) ? row.brands[0] : row.brands)?.name ?? "",
+      image_url: row.image_url,
+      category: row.category,
+      tier: row.tier,
+    })),
     blog: (latestBlogRes.data ?? []) as unknown as HomeBlogPost[],
     products: featuredProducts,
     forum: forumRows.map((p) => ({

@@ -60,7 +60,7 @@ export function BlogPostContent({ post }: { post: BlogPost | null }) {
   }
 
   return (
-    <div className="mx-auto max-w-4xl p-4 md:p-5 lg:p-6">
+    <div className="mx-auto max-w-4xl px-2 py-4 sm:p-4 md:p-5 lg:p-6">
       <Card className="overflow-hidden border-border bg-card/90 shadow-2xl shadow-black/20">
         <div className="relative h-72 w-full">
           <Image

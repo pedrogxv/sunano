@@ -36,6 +36,10 @@ interface ComboboxProps {
   contentClassName?: string
   disabled?: boolean
   "aria-invalid"?: boolean
+  /** Quando informado, mostra uma ação "Criar <termo>" quando a busca não bate com nenhuma opção. */
+  onCreateOption?: (label: string) => void
+  createOptionLabel?: (label: string) => string
+  creating?: boolean
 }
 
 export function Combobox({
@@ -48,13 +52,29 @@ export function Combobox({
   className,
   contentClassName,
   disabled,
+  onCreateOption,
+  createOptionLabel = (label) => `Criar "${label}"`,
+  creating = false,
   ...props
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+  const [search, setSearch] = React.useState("")
   const selected = options.find((option) => option.value === value)
 
+  const trimmedSearch = search.trim()
+  const hasExactMatch = options.some(
+    (option) => option.label.toLowerCase() === trimmedSearch.toLowerCase()
+  )
+  const canOffercreate = Boolean(onCreateOption) && trimmedSearch.length > 0 && !hasExactMatch
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) setSearch("")
+      }}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -78,9 +98,9 @@ export function Combobox({
         className={cn("w-(--radix-popover-trigger-width) flex-col gap-0 p-0", contentClassName)}
       >
         <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+          <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            {!canOffercreate && <CommandEmpty>{emptyText}</CommandEmpty>}
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
@@ -95,6 +115,17 @@ export function Combobox({
                   {option.label}
                 </CommandItem>
               ))}
+              {canOffercreate && (
+                <CommandItem
+                  value={`__create__${trimmedSearch}`}
+                  disabled={creating}
+                  onSelect={() => {
+                    onCreateOption?.(trimmedSearch)
+                  }}
+                >
+                  {creating ? "Criando..." : createOptionLabel(trimmedSearch)}
+                </CommandItem>
+              )}
             </CommandGroup>
           </CommandList>
         </Command>

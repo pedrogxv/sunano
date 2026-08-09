@@ -10,7 +10,7 @@ const CURRENT_VERSION = "2026-08"
 
 export default function PrivacidadePage() {
   return (
-    <article className="mx-auto max-w-3xl px-4 py-10 md:px-6">
+    <article className="mx-auto max-w-3xl px-2 py-10 sm:px-4 md:px-6">
       <header className="mb-8 border-b border-border pb-6">
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">
           Política de Privacidade

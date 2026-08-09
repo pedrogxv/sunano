@@ -135,7 +135,7 @@ export default function OffersPage() {
   const pageItems = offers.slice((safePage - 1) * ITEMS_PER_PAGE, safePage * ITEMS_PER_PAGE)
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5 px-4 py-8 md:px-6">
+    <div className="mx-auto max-w-2xl space-y-5 px-2 py-8 sm:px-4 md:px-6">
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-2xl border border-border/40 bg-card/60 px-6 py-10">

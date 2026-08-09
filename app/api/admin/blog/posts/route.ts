@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest) {
     db
       .from("blog_posts")
       .select(
-        `id, title, slug, ${withType ? "post_type, " : ""}excerpt, cover_thumbnail_url, cover_image_url, is_published, created_at, peripherals(name, brand)`
+        `id, title, slug, ${withType ? "post_type, " : ""}excerpt, cover_thumbnail_url, cover_image_url, is_published, created_at, peripherals(name, brand_id, brands(name))`
       )
       .order("created_at", { ascending: false })
 

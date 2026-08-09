@@ -383,7 +383,7 @@ export function ComparePageClient() {
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8 md:px-6 lg:px-8 space-y-8">
+    <div className="mx-auto max-w-5xl px-2 py-8 sm:px-4 md:px-6 lg:px-8 space-y-8">
 
       {/* Header */}
       <div>
@@ -413,7 +413,7 @@ export function ComparePageClient() {
           <BoxLoader />
         </div>
       ) : (
-        <div className="-mx-4 overflow-x-auto px-4 pb-1 snap-x snap-mandatory md:mx-0 md:overflow-visible md:px-0 md:pb-0 md:snap-none">
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 snap-x snap-mandatory md:mx-0 md:overflow-visible md:px-2 md:pb-0 md:snap-none">
         <div
           className="grid gap-4"
           style={{ gridTemplateColumns: `repeat(${Math.min(items.length + (items.length < MAX_ITEMS ? 1 : 0), MAX_ITEMS + 1)}, minmax(190px, 1fr))` }}

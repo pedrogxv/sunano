@@ -98,7 +98,7 @@ export default async function HomePage() {
   const { banners, peripherals, products, forum, trendingForum, videos, events, counts } = await getHomeData()
 
   return (
-    <div className="mx-auto max-w-6xl space-y-12 px-4 py-6 md:px-6 lg:px-8 md:py-10">
+    <div className="mx-auto max-w-6xl space-y-12 px-2 py-6 sm:px-4 md:px-6 lg:px-8 md:py-10">
       {/* ============ HERO ============ */}
       {/* Com banners no ar (/admin/banners) o topo vira um carrossel; sem
           nenhum, cai no hero padrão. A faixa abaixo preserva os CTAs e os

@@ -111,10 +111,27 @@ export type BlogCommentDetail = {
 }
 
 const LIST_COLUMNS =
-  "id, title, slug, post_type, author_id, is_featured, excerpt, cover_image_url, cover_thumbnail_url, video_url, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
+  "id, title, slug, post_type, author_id, is_featured, excerpt, cover_image_url, cover_thumbnail_url, video_url, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
 
 const DETAIL_COLUMNS =
-  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand, category)"
+  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
+
+/**
+ * Achata o embed `peripherals(brand_id, brands(name))` do PostgREST em
+ * `BlogPeripheralRef.brand` — mantém o shape público inalterado para quem só
+ * exibe `peripheral.brand` como string.
+ */
+function normalizePeripheralRefs<T extends { peripherals: unknown }>(post: T): T {
+  const raw = post.peripherals as
+    | Array<{ id?: string; name: string; brand_id?: string; brands?: { name: string } | { name: string }[] | null; category?: string | null }>
+    | null
+  if (!raw) return post
+  const peripherals: BlogPeripheralRef[] = raw.map((p) => {
+    const brandRow = Array.isArray(p.brands) ? p.brands[0] : p.brands
+    return { id: p.id, name: p.name, brand: brandRow?.name ?? "", category: p.category }
+  })
+  return { ...post, peripherals }
+}
 
 // Variantes sem `post_type`, usadas como fallback caso a migração
 // `blog_post_type.sql` ainda não tenha sido aplicada.
@@ -262,13 +279,15 @@ export async function listPublishedPosts(peripheralId?: string | null): Promise<
     getAuthorProfiles(rows.map((p) => p.author_id).filter((id): id is string => Boolean(id))),
   ])
   return rows.map((p) =>
-    stripAuthorEmail({
-      ...p,
-      post_type: p.post_type ?? "review",
-      is_featured: p.is_featured ?? false,
-      comment_count: counts[p.id] ?? 0,
-      author_profile: (p.author_id && authorProfiles[p.author_id]) || null,
-    })
+    stripAuthorEmail(
+      normalizePeripheralRefs({
+        ...p,
+        post_type: p.post_type ?? "review",
+        is_featured: p.is_featured ?? false,
+        comment_count: counts[p.id] ?? 0,
+        author_profile: (p.author_id && authorProfiles[p.author_id]) || null,
+      })
+    )
   )
 }
 
@@ -297,11 +316,13 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPostDeta
 
   const post = data as unknown as BlogPostDetail
   const counts = await countCommentsByPost([post.id])
-  return stripAuthorEmail({
-    ...post,
-    post_type: post.post_type ?? "review",
-    comment_count: counts[post.id] ?? 0,
-  })
+  return stripAuthorEmail(
+    normalizePeripheralRefs({
+      ...post,
+      post_type: post.post_type ?? "review",
+      comment_count: counts[post.id] ?? 0,
+    })
+  )
 }
 
 /** Posts publicados relacionados a um periférico (página de detalhe). */
@@ -489,9 +510,14 @@ export async function listBlogComments(
   const roots = (rootRows ?? []) as any[]
   const totalRootCount = count ?? roots.length
 
-  let replies: unknown[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let replies: any[] = []
   if (roots.length > 0) {
-    const { data: replyRows, error: replyError } = await db
+    // Thread tem até 4 níveis: busca nível 2 (filhos da raiz) e, com os ids
+    // resultantes, o nível 3 (netos) e depois o nível 4 (bisnetos) — só 3
+    // idas ao banco, nunca recursão ilimitada, porque a profundidade já é
+    // limitada no insert (trigger).
+    const { data: level2Rows, error: level2Error } = await db
       .from("blog_comments")
       .select(COMMENT_COLUMNS)
       .eq("post_id", postId)
@@ -501,10 +527,47 @@ export async function listBlogComments(
         roots.map((r) => r.id)
       )
       .order("created_at", { ascending: true })
-    if (replyError) {
-      console.error("[blog-repository] listBlogComments (replies):", replyError.message)
+    if (level2Error) {
+      console.error("[blog-repository] listBlogComments (level 2):", level2Error.message)
     } else {
-      replies = replyRows ?? []
+      replies = level2Rows ?? []
+    }
+
+    if (replies.length > 0) {
+      const { data: level3Rows, error: level3Error } = await db
+        .from("blog_comments")
+        .select(COMMENT_COLUMNS)
+        .eq("post_id", postId)
+        .eq("is_hidden", false)
+        .in(
+          "parent_comment_id",
+          replies.map((r) => r.id)
+        )
+        .order("created_at", { ascending: true })
+      if (level3Error) {
+        console.error("[blog-repository] listBlogComments (level 3):", level3Error.message)
+      } else {
+        const level3Rows_ = level3Rows ?? []
+        replies = [...replies, ...level3Rows_]
+
+        if (level3Rows_.length > 0) {
+          const { data: level4Rows, error: level4Error } = await db
+            .from("blog_comments")
+            .select(COMMENT_COLUMNS)
+            .eq("post_id", postId)
+            .eq("is_hidden", false)
+            .in(
+              "parent_comment_id",
+              level3Rows_.map((r) => r.id)
+            )
+            .order("created_at", { ascending: true })
+          if (level4Error) {
+            console.error("[blog-repository] listBlogComments (level 4):", level4Error.message)
+          } else {
+            replies = [...replies, ...(level4Rows ?? [])]
+          }
+        }
+      }
     }
   }
 
@@ -524,8 +587,8 @@ export async function listBlogComments(
 
 /**
  * Cria um comentário em uma notícia (exige usuário autenticado) — mesma
- * lógica de `addForumComment`: thread de 1 nível, resposta sempre reancorada
- * no comentário raiz.
+ * lógica de `addForumComment`: thread de até 4 níveis, reancorando no avô
+ * quando a resposta já estaria no nível 5.
  */
 export async function addBlogComment(params: {
   postSlug: string
@@ -552,6 +615,9 @@ export async function addBlogComment(params: {
 
   let parentCommentId: string | null = null
   if (params.parentCommentId) {
+    // Thread de até 4 níveis: sobe a cadeia de pais pra achar a profundidade.
+    // No limite (nível 4), a resposta é reancorada no avô (vira irmã, não
+    // filha) em vez de rejeitada — mesma lógica de `addForumComment`.
     const { data: parent } = await db
       .from("blog_comments")
       .select("id, post_id, parent_comment_id")
@@ -560,7 +626,24 @@ export async function addBlogComment(params: {
     if (!parent || parent.post_id !== postId) {
       return { ok: false, error: "Comentário original não encontrado.", status: 404 }
     }
-    parentCommentId = parent.parent_comment_id ? parent.parent_comment_id : parent.id
+    parentCommentId = parent.id
+    if (parent.parent_comment_id) {
+      const { data: grandparent } = await db
+        .from("blog_comments")
+        .select("id, parent_comment_id")
+        .eq("id", parent.parent_comment_id)
+        .maybeSingle()
+      if (grandparent?.parent_comment_id) {
+        const { data: greatGrandparent } = await db
+          .from("blog_comments")
+          .select("id, parent_comment_id")
+          .eq("id", grandparent.parent_comment_id)
+          .maybeSingle()
+        if (greatGrandparent?.parent_comment_id) {
+          parentCommentId = parent.parent_comment_id
+        }
+      }
+    }
   }
 
   const { error } = await db.from("blog_comments").insert({

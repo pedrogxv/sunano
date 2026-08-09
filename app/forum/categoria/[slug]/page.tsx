@@ -48,7 +48,7 @@ export default async function ForumCategoryPage({
   const label = category.parent ? `${category.parent.name} — ${category.name}` : category.name
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:px-6">
+    <div className="mx-auto max-w-3xl space-y-6 px-2 py-8 sm:px-4 md:px-6">
       <Link
         href="/forum"
         className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"

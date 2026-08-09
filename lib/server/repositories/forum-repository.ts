@@ -468,9 +468,14 @@ export async function listForumComments(
   const roots = (rootRows ?? []) as any[]
   const totalRootCount = count ?? roots.length
 
-  let replies: unknown[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let replies: any[] = []
   if (roots.length > 0) {
-    const { data: replyRows, error: replyError } = await db
+    // Thread tem até 4 níveis: busca nível 2 (filhos da raiz) e, com os ids
+    // resultantes, o nível 3 (netos) e depois o nível 4 (bisnetos) — só 3
+    // idas ao banco, nunca recursão ilimitada, porque a profundidade já é
+    // limitada no insert (trigger).
+    const { data: level2Rows, error: level2Error } = await db
       .from("forum_comments")
       .select(FORUM_COMMENT_COLUMNS)
       .eq("post_id", postId)
@@ -480,10 +485,47 @@ export async function listForumComments(
         roots.map((r) => r.id)
       )
       .order("created_at", { ascending: true })
-    if (replyError) {
-      console.error("[forum-repository] listForumComments (replies):", replyError.message)
+    if (level2Error) {
+      console.error("[forum-repository] listForumComments (level 2):", level2Error.message)
     } else {
-      replies = replyRows ?? []
+      replies = level2Rows ?? []
+    }
+
+    if (replies.length > 0) {
+      const { data: level3Rows, error: level3Error } = await db
+        .from("forum_comments")
+        .select(FORUM_COMMENT_COLUMNS)
+        .eq("post_id", postId)
+        .eq("is_hidden", false)
+        .in(
+          "parent_comment_id",
+          replies.map((r) => r.id)
+        )
+        .order("created_at", { ascending: true })
+      if (level3Error) {
+        console.error("[forum-repository] listForumComments (level 3):", level3Error.message)
+      } else {
+        const level3Rows_ = level3Rows ?? []
+        replies = [...replies, ...level3Rows_]
+
+        if (level3Rows_.length > 0) {
+          const { data: level4Rows, error: level4Error } = await db
+            .from("forum_comments")
+            .select(FORUM_COMMENT_COLUMNS)
+            .eq("post_id", postId)
+            .eq("is_hidden", false)
+            .in(
+              "parent_comment_id",
+              level3Rows_.map((r) => r.id)
+            )
+            .order("created_at", { ascending: true })
+          if (level4Error) {
+            console.error("[forum-repository] listForumComments (level 4):", level4Error.message)
+          } else {
+            replies = [...replies, ...(level4Rows ?? [])]
+          }
+        }
+      }
     }
   }
 
@@ -708,19 +750,24 @@ export async function addForumComment(params: {
 
   const { data: post } = await db
     .from("forum_posts")
-    .select("id, is_locked")
+    .select("id, is_locked, is_hidden")
     .eq("slug", params.postSlug)
     .maybeSingle()
 
   if (!post) return { ok: false, error: "Post não encontrado.", status: 404 }
+  if (post.is_hidden) {
+    return { ok: false, error: "Este post está oculto e não aceita comentários.", status: 403 }
+  }
   if (post.is_locked) {
     return { ok: false, error: "Este post está fechado para comentários.", status: 403 }
   }
 
   let parentCommentId: string | null = null
   if (params.parentCommentId) {
-    // Só permite responder a um comentário raiz (sem parent) do mesmo post —
-    // mantém a thread em 1 nível, como no restante do fórum.
+    // Thread de até 4 níveis: sobe a cadeia de pais pra achar a profundidade.
+    // No limite (nível 4), a resposta é reancorada no avô (vira irmã, não
+    // filha) em vez de rejeitada — evita aninhamento ilimitado sem travar a
+    // conversa, mesma postura do Twitter ao "esgotar" uma thread.
     const { data: parent } = await db
       .from("forum_comments")
       .select("id, post_id, parent_comment_id")
@@ -729,7 +776,26 @@ export async function addForumComment(params: {
     if (!parent || parent.post_id !== post.id) {
       return { ok: false, error: "Comentário original não encontrado.", status: 404 }
     }
-    parentCommentId = parent.parent_comment_id ? parent.parent_comment_id : parent.id
+    parentCommentId = parent.id
+    if (parent.parent_comment_id) {
+      const { data: grandparent } = await db
+        .from("forum_comments")
+        .select("id, parent_comment_id")
+        .eq("id", parent.parent_comment_id)
+        .maybeSingle()
+      if (grandparent?.parent_comment_id) {
+        const { data: greatGrandparent } = await db
+          .from("forum_comments")
+          .select("id, parent_comment_id")
+          .eq("id", grandparent.parent_comment_id)
+          .maybeSingle()
+        if (greatGrandparent?.parent_comment_id) {
+          // `parent` já está no nível 4 (tem bisavô) — reancora no avô
+          // (nível 3), virando irmã do `parent` em vez de criar o nível 5.
+          parentCommentId = parent.parent_comment_id
+        }
+      }
+    }
   }
 
   const { error } = await db.from("forum_comments").insert({

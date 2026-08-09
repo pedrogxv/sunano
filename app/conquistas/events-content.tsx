@@ -86,7 +86,7 @@ export function EventsContent({
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 md:px-6 lg:px-8">
+    <div className="mx-auto max-w-5xl space-y-8 px-2 py-6 sm:px-4 md:px-6 lg:px-8">
       <div>
         <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
           Conquistas

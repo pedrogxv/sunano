@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ForumPostLoading() {
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-8 md:px-6">
+    <div className="mx-auto max-w-7xl space-y-6 px-2 py-8 sm:px-4 md:px-6">
       <Skeleton className="h-4 w-32" />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">

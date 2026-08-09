@@ -40,7 +40,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
         {/* Content area */}
         {isAdmin ? (
-          <div className="flex-1 min-w-0 bg-card mx-2 mt-2 mb-2 rounded-2xl md:ml-0">
+          <div className="flex-1 min-w-0 bg-card md:mx-2 md:mt-2 md:mb-2 rounded-none md:rounded-2xl md:ml-0">
             <TopBar />
             <ChangelogBanner />
             {isSelfPaddedAdminPage ? (
@@ -52,7 +52,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
         ) : (
-          <div className="flex-1 min-w-0 bg-card mx-2 mt-2 mb-2 rounded-2xl md:ml-0">
+          <div className="flex-1 min-w-0 bg-card md:mx-2 md:mt-2 md:mb-2 rounded-none md:rounded-2xl md:ml-0">
             <TopBar />
             <ChangelogBanner />
             <main>{children}</main>

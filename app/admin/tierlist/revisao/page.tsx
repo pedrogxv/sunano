@@ -33,6 +33,30 @@ interface ReviewPeripheral {
   specs: Record<string, unknown> | null
 }
 
+interface ReviewPeripheralApiRow {
+  id: string
+  name: string
+  brand_id: string
+  brands: { name: string } | { name: string }[] | null
+  category: Category
+  tier: Tier | null
+  image_url: string | null
+  specs: Record<string, unknown> | null
+}
+
+function toReviewPeripheral(row: ReviewPeripheralApiRow): ReviewPeripheral {
+  const brandRow = Array.isArray(row.brands) ? row.brands[0] : row.brands
+  return {
+    id: row.id,
+    name: row.name,
+    brand: brandRow?.name ?? "",
+    category: row.category,
+    tier: row.tier,
+    image_url: row.image_url,
+    specs: row.specs,
+  }
+}
+
 const CATEGORY_ORDER: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs"]
 
 const CATEGORY_LABELS: Record<Category, { pt: string; en: string }> = {
@@ -85,12 +109,12 @@ export default function TierlistReviewPage() {
     let cancelled = false
     setLoading(true)
     setError(null)
-    fetch("/api/admin/peripherals?columns=id,name,brand,category,tier,image_url,specs", { cache: "no-store" })
+    fetch("/api/admin/peripherals?columns=id,name,brand_id,brands(name),category,tier,image_url,specs", { cache: "no-store" })
       .then((res) => res.json().catch(() => null))
-      .then((json: { peripherals?: ReviewPeripheral[]; error?: string } | null) => {
+      .then((json: { peripherals?: ReviewPeripheralApiRow[]; error?: string } | null) => {
         if (cancelled) return
         if (!json?.peripherals) throw new Error(json?.error ?? t.admin.tierlistReview.failedToLoad)
-        setItems(json.peripherals)
+        setItems(json.peripherals.map(toReviewPeripheral))
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : t.admin.tierlistReview.failedToLoad)

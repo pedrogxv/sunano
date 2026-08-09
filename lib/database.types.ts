@@ -35,7 +35,7 @@ export type Database = {
         Row: {
           id: string
           name: string
-          brand: string
+          brand_id: string
           category: "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
           tier: "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
           price: number
@@ -47,6 +47,17 @@ export type Database = {
         }
         Insert: Omit<Database["public"]["Tables"]["peripherals"]["Row"], "id" | "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["peripherals"]["Insert"]>
+      }
+      brands: {
+        Relationships: []
+        Row: {
+          id: string
+          name: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["brands"]["Row"], "id" | "created_at" | "updated_at">
+        Update: Partial<Database["public"]["Tables"]["brands"]["Insert"]>
       }
       user_profiles: {
         Relationships: []
@@ -323,7 +334,7 @@ export type Database = {
           body_preview: string
           author_name: string
           user_id: string | null
-          /** Aponta sempre para um comentário raiz (nunca outra resposta) — thread de 1 nível. */
+          /** Aponta pro pai imediato — thread de até 4 níveis (raiz > resposta > resposta > resposta). */
           parent_comment_id: string | null
           is_hidden: boolean
           aura_count: number
@@ -396,7 +407,7 @@ export type Database = {
           body_preview: string
           author_name: string
           user_id: string | null
-          /** Aponta sempre para um comentário raiz (nunca outra resposta) — thread de 1 nível. */
+          /** Aponta pro pai imediato — thread de até 4 níveis (raiz > resposta > resposta > resposta). */
           parent_comment_id: string | null
           is_hidden: boolean
           aura_count: number

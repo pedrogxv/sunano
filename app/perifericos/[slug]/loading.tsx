@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function PeripheralDetailLoading() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-4 md:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl px-2 py-4 sm:px-4 md:px-6 lg:px-8">
       <Skeleton className="mb-3 h-5 w-40" />
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Galeria */}

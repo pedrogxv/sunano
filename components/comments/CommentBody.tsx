@@ -77,7 +77,7 @@ export function CommentBody({
   className?: string
 }) {
   return (
-    <p className={cn("whitespace-pre-wrap text-sm leading-relaxed text-foreground", className)}>
+    <p className={cn("whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground", className)}>
       {parseTextMarkdown(body).map((segment, index) => {
         if (segment.bold) {
           return (

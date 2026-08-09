@@ -233,7 +233,7 @@ export default async function NoticiasPage() {
   const rest = posts.filter((p) => !headlineIds.has(p.id))
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 md:px-6 space-y-8">
+    <div className="mx-auto max-w-3xl px-2 py-8 sm:px-4 md:px-6 space-y-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>

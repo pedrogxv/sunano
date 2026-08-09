@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ForumLoading() {
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:px-6">
+    <div className="mx-auto max-w-3xl space-y-6 px-2 py-8 sm:px-4 md:px-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
           <Skeleton className="h-9 w-32" />

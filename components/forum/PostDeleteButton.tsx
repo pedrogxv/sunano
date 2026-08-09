@@ -59,8 +59,9 @@ export function PostDeleteButton({
           className="h-7 gap-1.5 border-destructive/40 text-destructive text-xs hover:bg-destructive/10"
           title="Excluir post"
         >
-          <Trash2 className="size-3.5" />
-          Excluir post
+          <Trash2 className="size-3.5 shrink-0" />
+          <span className="hidden sm:inline">Excluir post</span>
+          <span className="sm:hidden">Excluir</span>
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

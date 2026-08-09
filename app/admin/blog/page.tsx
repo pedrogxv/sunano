@@ -26,6 +26,20 @@ type BlogPost = {
   peripherals?: { name: string; brand: string }[] | null
 }
 
+type BlogPostApiRow = Omit<BlogPost, "peripherals"> & {
+  peripherals?: { name: string; brand_id: string; brands: { name: string } | { name: string }[] | null }[] | null
+}
+
+function normalizeBlogPost(post: BlogPostApiRow): BlogPost {
+  return {
+    ...post,
+    peripherals: (post.peripherals ?? null)?.map((p) => {
+      const brandRow = Array.isArray(p.brands) ? p.brands[0] : p.brands
+      return { name: p.name, brand: brandRow?.name ?? "" }
+    }),
+  }
+}
+
 type FilterTab = "all" | "published" | "draft"
 type TypeTab = "all" | "news" | "review"
 
@@ -48,11 +62,11 @@ export default function AdminBlogPage() {
       setError(null)
 
       const res = await fetch("/api/admin/blog/posts", { cache: "no-store" })
-      const data = (await res.json().catch(() => null)) as { posts?: BlogPost[]; error?: string } | null
+      const data = (await res.json().catch(() => null)) as { posts?: BlogPostApiRow[]; error?: string } | null
       if (!res.ok || !data?.posts) {
         throw new Error(data?.error ?? t.admin.blog.failedToLoad)
       }
-      setPosts(data.posts)
+      setPosts(data.posts.map(normalizeBlogPost))
     } catch (err) {
       const message = err instanceof Error ? err.message : t.admin.blog.failedToLoad
       setError(message)

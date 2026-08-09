@@ -6,7 +6,7 @@ import { CommentImagesField } from "./CommentImagesField"
 import { MentionTextarea } from "./MentionTextarea"
 import type { CommentMention } from "./types"
 
-/** Formulário inline de resposta a um comentário raiz, aberto sob o comentário. */
+/** Formulário inline de resposta (a qualquer nível da thread), aberto sob o comentário. */
 export function ReplyForm({
   authUser,
   value,

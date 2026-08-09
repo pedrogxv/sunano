@@ -169,7 +169,7 @@ export function NoticiasPostContent({
   const commentCount = post.comment_count ?? 0
 
   return (
-    <article className="mx-auto max-w-3xl px-4 py-8 md:px-6">
+    <article className="mx-auto max-w-3xl px-2 py-8 sm:px-4 md:px-6">
       {/* Back */}
       <Link
         href="/noticias"
@@ -261,7 +261,7 @@ export function NoticiasPostContent({
       {/* Related news (via tags) */}
       <RelatedNews posts={related} />
 
-      {/* Comments — mesma lógica/visual do fórum (thread de 1 nível, Aura, badges de autor). */}
+      {/* Comments — mesma lógica/visual do fórum (thread de até 4 níveis, Aura, badges de autor). */}
       <section className="mt-10 pt-6 border-t border-border/40">
         <CommentsSection
           apiBasePath={`/api/blog/${encodeURIComponent(post.slug)}`}

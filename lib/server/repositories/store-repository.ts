@@ -178,12 +178,22 @@ export async function getStoreProductDetail(
         .maybeSingle(),
       db
         .from("peripherals")
-        .select("id, name, brand, image_url")
+        .select("id, name, brand_id, brands(name), image_url")
         .eq("id", detail.peripheral_id)
         .maybeSingle(),
     ])
     linkedProduct = (linked ?? null) as unknown as LinkedStoreItem | null
-    linkedPeripheral = (peripheral ?? null) as unknown as LinkedPeripheralRef | null
+    const peripheralRow = peripheral as unknown as
+      | { id: string; name: string; brand_id: string; brands: { name: string } | { name: string }[] | null; image_url: string | null }
+      | null
+    linkedPeripheral = peripheralRow
+      ? {
+          id: peripheralRow.id,
+          name: peripheralRow.name,
+          brand: (Array.isArray(peripheralRow.brands) ? peripheralRow.brands[0] : peripheralRow.brands)?.name ?? "",
+          image_url: peripheralRow.image_url,
+        }
+      : null
   }
 
   return { product: detail, linkedProduct, linkedPeripheral }

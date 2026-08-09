@@ -68,8 +68,9 @@ export function PostVisibilityButton({
         disabled={submitting}
         onClick={() => setHidden(false)}
       >
-        <Eye className="size-3.5" />
-        {submitting ? "Reativando…" : "Mostrar post"}
+        <Eye className="size-3.5 shrink-0" />
+        <span className="hidden sm:inline">{submitting ? "Reativando…" : "Mostrar post"}</span>
+        <span className="sm:hidden">{submitting ? "Reativando…" : "Mostrar"}</span>
       </Button>
     )
   }
@@ -84,8 +85,9 @@ export function PostVisibilityButton({
           className="h-7 gap-1.5 border-destructive/40 text-destructive text-xs hover:bg-destructive/10"
           title="Ocultar post"
         >
-          <EyeOff className="size-3.5" />
-          Ocultar post
+          <EyeOff className="size-3.5 shrink-0" />
+          <span className="hidden sm:inline">Ocultar post</span>
+          <span className="sm:hidden">Ocultar</span>
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent>

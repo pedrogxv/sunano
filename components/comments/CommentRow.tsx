@@ -62,6 +62,7 @@ export function CommentRow({
   onReactAura,
   onReply,
   replying,
+  canReply = true,
   compactAvatar = false,
   canEdit = false,
   editing = false,
@@ -89,6 +90,8 @@ export function CommentRow({
   onReactAura: (kind: "like" | "dislike") => void
   onReply: () => void
   replying: boolean
+  /** Falso quando o post está oculto/bloqueado — esconde o botão "Responder". */
+  canReply?: boolean
   compactAvatar?: boolean
   /** O usuário logado é o autor deste comentário (a janela de 15min é conferida aqui). */
   canEdit?: boolean
@@ -125,7 +128,7 @@ export function CommentRow({
           <UserAvatar name={comment.author_display_name} avatarUrl={comment.author_avatar_url} size={compactAvatar ? 7 : 8} />
         )}
       </MiniProfileHoverCard>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <MiniProfileHoverCard slug={comment.author_display_slug} side="right" align="start">
             {comment.author_display_slug ? (
@@ -194,7 +197,7 @@ export function CommentRow({
         )}
 
         {!editing && (
-          <div className="mt-2 flex items-center gap-3">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <AuraButton
               auraCount={comment.aura_count}
               reaction={auraReaction}
@@ -202,15 +205,17 @@ export function CommentRow({
               blockReason={auraBlockReason}
               onReact={onReactAura}
             />
-            <button
-              type="button"
-              onClick={onReply}
-              className={`text-xs font-medium transition-colors ${
-                replying ? "text-primary" : "text-muted-foreground hover:text-primary"
-              }`}
-            >
-              Responder
-            </button>
+            {canReply && (
+              <button
+                type="button"
+                onClick={onReply}
+                className={`text-xs font-medium transition-colors ${
+                  replying ? "text-primary" : "text-muted-foreground hover:text-primary"
+                }`}
+              >
+                Responder
+              </button>
+            )}
             {showEditButton && (
               <button
                 type="button"

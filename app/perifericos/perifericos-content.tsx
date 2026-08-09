@@ -862,7 +862,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   )
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 py-8 md:px-6 lg:px-8">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-2 py-8 sm:px-4 md:px-6 lg:px-8">
       {/* Hero banner */}
       <div className="relative overflow-hidden rounded-2xl border border-border/40 bg-card/60 px-6 pb-8 pt-10">
           {/* Top glow */}

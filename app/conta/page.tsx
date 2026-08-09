@@ -20,7 +20,7 @@ export default function ContaPage() {
     <div className="pb-16">
       <AccountPageHeader profile={profile} />
 
-      <div className="mx-auto max-w-4xl px-4 py-8 md:px-6">
+      <div className="mx-auto max-w-4xl px-2 py-8 sm:px-4 md:px-6">
         <AccountSection
           email={profile.email}
           lgpdConsentAt={profile.lgpd_consent_at ?? null}

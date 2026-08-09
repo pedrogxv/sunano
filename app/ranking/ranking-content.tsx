@@ -155,7 +155,7 @@ export function RankingContent({ peripherals }: { peripherals: RankedPeripheral[
   const filtered = peripherals.filter((p) => p.category === selected)
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-4xl px-2 py-6 sm:px-4 md:px-6 md:py-8">
       {/* Category tabs */}
       <div className="mb-2 flex flex-wrap gap-1.5">
         {categoriesWithData.map((cat) => (

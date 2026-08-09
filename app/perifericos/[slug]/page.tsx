@@ -59,12 +59,12 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   // todas as classificações desse produto na página, não só a da categoria
   // que originou esta URL.
   const classifications = allPeripherals
-    .filter((p) => p.name.trim().toLowerCase() === data.name.trim().toLowerCase() && p.brand === data.brand)
+    .filter((p) => p.name.trim().toLowerCase() === data.name.trim().toLowerCase() && p.brandId === data.brandId)
     .map((p) => ({ id: p.id, name: p.name, category: p.category, tier: p.tier }))
     .sort((a, b) => a.category.localeCompare(b.category))
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-4 md:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl px-2 py-4 sm:px-4 md:px-6 lg:px-8">
       <div className="mb-3">
         <BackButton />
       </div>

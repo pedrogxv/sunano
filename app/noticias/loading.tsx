@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function NoticiasLoading() {
   return (
-    <div className="mx-auto max-w-3xl space-y-8 px-4 py-8 md:px-6">
+    <div className="mx-auto max-w-3xl space-y-8 px-2 py-8 sm:px-4 md:px-6">
       <div className="space-y-2">
         <Skeleton className="h-9 w-40" />
         <Skeleton className="h-4 w-80" />

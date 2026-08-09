@@ -10,7 +10,7 @@ import { cascadeRerank, getRankingFromSpecs } from "@/lib/server/peripherals/ran
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-const DEFAULT_COLUMNS = "id, name, brand, category, tier, price, image_url, tags, specs, created_at"
+const DEFAULT_COLUMNS = "id, name, brand_id, brands(name), category, tier, price, image_url, tags, specs, created_at"
 const ALLOWED_COLUMNS = new Set(DEFAULT_COLUMNS.split(",").map((c) => c.trim()))
 
 /** Restringe `columns` a uma allowlist — evita que o parâmetro vindo da query
@@ -25,7 +25,7 @@ function sanitizeColumns(raw: string | null): string {
 
 const peripheralPayload = z.object({
   name: z.string().min(1, "Nome é obrigatório.").max(200, "Nome muito longo (máx. 200 caracteres)."),
-  brand: z.string().min(1, "Marca é obrigatória.").max(120, "Marca muito longa (máx. 120 caracteres)."),
+  brand_id: z.string().uuid("Selecione uma marca válida."),
   category: z.enum(ALLOWED_PERIPHERAL_CATEGORIES, {
     message: `Categoria inválida. Use uma das opções: ${ALLOWED_PERIPHERAL_CATEGORIES.join(", ")}.`,
   }),

@@ -9,7 +9,7 @@ export type CommentSort = "recent" | "aura"
 
 /**
  * Estado e handlers de comentários (listagem paginada, novo comentário,
- * resposta em thread de 1 nível, Aura e edição na janela de 15min) — mesma
+ * resposta em thread de até 4 níveis, Aura e edição na janela de 15min) — mesma
  * lógica do fórum, parametrizada só pelo prefixo de API (`/api/forum/posts/[slug]`
  * ou `/api/blog/[slug]`) para ser reaproveitada por notícias e futuras features.
  *

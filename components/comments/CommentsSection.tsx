@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { Clock, Flame, Lock, MessageCircle } from "lucide-react"
 
+import type { AuraBlockReason, Reaction } from "@/components/forum/AuraButton"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { CommentFormatHint } from "./CommentBody"
@@ -11,7 +12,7 @@ import { CommentRow } from "./CommentRow"
 import { MentionTextarea } from "./MentionTextarea"
 import { ReplyForm } from "./ReplyForm"
 import { useCommentsController, type CommentSort } from "./useCommentsController"
-import type { CommentItem, CommentsAuthUser } from "./types"
+import type { CommentItem, CommentMention, CommentsAuthUser } from "./types"
 
 const SORT_OPTIONS: { value: CommentSort; label: string; icon: typeof Clock }[] = [
   { value: "recent", label: "Mais Recente", icon: Clock },
@@ -26,8 +27,21 @@ function commentStaggerDelay(index: number) {
 }
 
 /**
+ * Recuo à esquerda por nível de thread (raiz = nível 0). Decrescente em vez
+ * de somar sempre o mesmo valor — como no Twitter/X — pra thread de 4
+ * níveis não "afunilar" o texto em telas estreitas.
+ */
+const REPLY_INDENT_CLASSES = [
+  "",
+  "ml-3 pl-2 sm:ml-11 sm:pl-4",
+  "ml-3 pl-2 sm:ml-8 sm:pl-3",
+  "ml-2 pl-2 sm:ml-6 sm:pl-3",
+  "ml-2 pl-2 sm:ml-5 sm:pl-2",
+] as const
+
+/**
  * Seção completa de comentários (form de novo comentário + lista com thread
- * de 1 nível + Aura) — mesma lógica/visual usada pelo fórum, reaproveitada
+ * de até 4 níveis + Aura) — mesma lógica/visual usada pelo fórum, reaproveitada
  * por notícias e por qualquer feature futura via `apiBasePath`/`auraLookupPath`.
  */
 export function CommentsSection({
@@ -40,6 +54,7 @@ export function CommentsSection({
   authUser,
   authLoading,
   isLocked = false,
+  isHidden = false,
   reportPostSlug,
 }: {
   /** Ex.: `/api/forum/posts/[slug]` ou `/api/blog/[slug]`. */
@@ -55,6 +70,8 @@ export function CommentsSection({
   authUser: CommentsAuthUser
   authLoading: boolean
   isLocked?: boolean
+  /** Post oculto/inativo — esconde o formulário de novo comentário (o backend também recusa). */
+  isHidden?: boolean
   /** Slug do post do fórum — habilita "Denunciar" nos comentários. Ausente no blog. */
   reportPostSlug?: string
 }) {
@@ -150,7 +167,7 @@ export function CommentsSection({
 
   return (
     <div className="space-y-6">
-      {!isLocked && (
+      {!isLocked && !isHidden && (
         <div>
           {!authLoading && !authUser ? (
             <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
@@ -207,12 +224,17 @@ export function CommentsSection({
         </div>
       )}
 
-      {isLocked && (
+      {isHidden ? (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
+          <Lock className="size-4 shrink-0" />
+          Este conteúdo está oculto e não aceita novos comentários.
+        </div>
+      ) : isLocked ? (
         <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-400">
           <Lock className="size-4 shrink-0" />
           Este tópico está bloqueado para novos comentários.
         </div>
-      )}
+      ) : null}
 
       <div
         id="comments"
@@ -250,71 +272,36 @@ export function CommentsSection({
           <div className="space-y-4">
             {comments
               .filter((comment) => !comment.parent_comment_id)
-              .map((comment, index) => {
-                const replies = comments.filter((c) => c.parent_comment_id === comment.id)
-                return (
-                  <div
-                    key={comment.id}
-                    className={`animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none ${commentStaggerDelay(index)}`}
-                  >
-                    <CommentRow
-                      comment={comment}
-                      auraReaction={commentReactions.get(comment.id) ?? null}
-                      authDisabled={!authUser}
-                      auraBlockReason={auraBlockReason(comment)}
-                      onReactAura={(kind) => reactToComment(comment, kind)}
-                      onReply={() => startReply(comment)}
-                      replying={replyingTo === comment.id}
-                      reportPostSlug={isAuthor(comment) ? undefined : reportPostSlug}
-                      {...editProps(comment)}
-                      {...deleteProps(comment)}
-                    />
-
-                    {replies.length > 0 && (
-                      <div className="ml-11 mt-3 space-y-3 border-l-2 border-border/40 pl-4">
-                        {replies.map((reply, replyIndex) => (
-                          <div
-                            key={reply.id}
-                            className={`animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none ${commentStaggerDelay(index + replyIndex + 1)}`}
-                          >
-                            <CommentRow
-                              comment={reply}
-                              auraReaction={commentReactions.get(reply.id) ?? null}
-                              authDisabled={!authUser}
-                              auraBlockReason={auraBlockReason(reply)}
-                              onReactAura={(kind) => reactToComment(reply, kind)}
-                              onReply={() => startReply(reply)}
-                              replying={replyingTo === comment.id}
-                              compactAvatar
-                              reportPostSlug={isAuthor(reply) ? undefined : reportPostSlug}
-                              {...editProps(reply)}
-                              {...deleteProps(reply)}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {replyingTo === comment.id && (
-                      <div className="ml-11 mt-3">
-                        <ReplyForm
-                          authUser={authUser}
-                          value={replyBody}
-                          onChange={setReplyBody}
-                          imageUrls={replyImageUrls}
-                          onImagesChange={setReplyImageUrls}
-                          mentionedUsers={replyMentionedUsers}
-                          onMentionedUsersChange={setReplyMentionedUsers}
-                          onCancel={() => cancelReply(comment.id)}
-                          onSubmit={() => submitReply(comment.id)}
-                          saving={replySaving}
-                          error={replyError}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              .map((comment, index) => (
+                <CommentThread
+                  key={comment.id}
+                  comment={comment}
+                  allComments={comments}
+                  depth={0}
+                  staggerIndex={index}
+                  commentReactions={commentReactions}
+                  authUser={authUser}
+                  reactToComment={reactToComment}
+                  auraBlockReason={auraBlockReason}
+                  isAuthor={isAuthor}
+                  canReply={!isLocked && !isHidden}
+                  reportPostSlug={reportPostSlug}
+                  editProps={editProps}
+                  deleteProps={deleteProps}
+                  replyingTo={replyingTo}
+                  startReply={startReply}
+                  cancelReply={cancelReply}
+                  replyBody={replyBody}
+                  setReplyBody={setReplyBody}
+                  replyImageUrls={replyImageUrls}
+                  setReplyImageUrls={setReplyImageUrls}
+                  replyMentionedUsers={replyMentionedUsers}
+                  setReplyMentionedUsers={setReplyMentionedUsers}
+                  replySaving={replySaving}
+                  replyError={replyError}
+                  submitReply={submitReply}
+                />
+              ))}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">Ainda não há comentários.</p>
@@ -328,6 +315,141 @@ export function CommentsSection({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Um comentário e sua subárvore de respostas (até o nível 4), renderizados
+ * recursivamente — cada nível recua um pouco menos que o anterior e ganha
+ * uma linha vertical conectando ao pai, estilo Twitter/X.
+ */
+function CommentThread({
+  comment,
+  allComments,
+  depth,
+  staggerIndex,
+  commentReactions,
+  authUser,
+  reactToComment,
+  auraBlockReason,
+  isAuthor,
+  canReply,
+  reportPostSlug,
+  editProps,
+  deleteProps,
+  replyingTo,
+  startReply,
+  cancelReply,
+  replyBody,
+  setReplyBody,
+  replyImageUrls,
+  setReplyImageUrls,
+  replyMentionedUsers,
+  setReplyMentionedUsers,
+  replySaving,
+  replyError,
+  submitReply,
+}: {
+  comment: CommentItem
+  allComments: CommentItem[]
+  depth: number
+  staggerIndex: number
+  commentReactions: Map<string, Reaction>
+  authUser: CommentsAuthUser
+  reactToComment: (comment: CommentItem, kind: "like" | "dislike") => void
+  auraBlockReason: (comment: CommentItem) => AuraBlockReason
+  isAuthor: (comment: CommentItem) => boolean
+  /** Falso quando o post está oculto/bloqueado — some com "Responder" em toda a thread. */
+  canReply: boolean
+  reportPostSlug?: string
+  editProps: (comment: CommentItem) => Record<string, unknown>
+  deleteProps: (comment: CommentItem) => Record<string, unknown>
+  replyingTo: string | null
+  startReply: (comment: CommentItem) => void
+  cancelReply: (commentId: string) => void
+  replyBody: string
+  setReplyBody: (value: string) => void
+  replyImageUrls: string[]
+  setReplyImageUrls: (urls: string[]) => void
+  replyMentionedUsers: CommentMention[]
+  setReplyMentionedUsers: (users: CommentMention[]) => void
+  replySaving: boolean
+  replyError: string | null
+  submitReply: (parentCommentId: string) => void
+}) {
+  const replies = allComments.filter((c) => c.parent_comment_id === comment.id)
+  const indentClass = REPLY_INDENT_CLASSES[Math.min(depth + 1, REPLY_INDENT_CLASSES.length - 1)]
+
+  return (
+    <div className={`animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none ${commentStaggerDelay(staggerIndex)}`}>
+      <CommentRow
+        comment={comment}
+        auraReaction={commentReactions.get(comment.id) ?? null}
+        authDisabled={!authUser}
+        auraBlockReason={auraBlockReason(comment)}
+        onReactAura={(kind) => reactToComment(comment, kind)}
+        onReply={() => startReply(comment)}
+        replying={replyingTo === comment.id}
+        canReply={canReply}
+        compactAvatar={depth > 0}
+        reportPostSlug={isAuthor(comment) ? undefined : reportPostSlug}
+        {...editProps(comment)}
+        {...deleteProps(comment)}
+      />
+
+      {replyingTo === comment.id && (
+        <div className={`mt-3 ${REPLY_INDENT_CLASSES[Math.min(depth + 1, REPLY_INDENT_CLASSES.length - 1)]}`}>
+          <ReplyForm
+            authUser={authUser}
+            value={replyBody}
+            onChange={setReplyBody}
+            imageUrls={replyImageUrls}
+            onImagesChange={setReplyImageUrls}
+            mentionedUsers={replyMentionedUsers}
+            onMentionedUsersChange={setReplyMentionedUsers}
+            onCancel={() => cancelReply(comment.id)}
+            onSubmit={() => submitReply(comment.id)}
+            saving={replySaving}
+            error={replyError}
+          />
+        </div>
+      )}
+
+      {replies.length > 0 && (
+        <div className={`mt-3 space-y-3 border-l-2 border-border/40 ${indentClass}`}>
+          {replies.map((reply, replyIndex) => (
+            <CommentThread
+              key={reply.id}
+              comment={reply}
+              allComments={allComments}
+              depth={depth + 1}
+              staggerIndex={staggerIndex + replyIndex + 1}
+              commentReactions={commentReactions}
+              authUser={authUser}
+              reactToComment={reactToComment}
+              auraBlockReason={auraBlockReason}
+              isAuthor={isAuthor}
+              canReply={canReply}
+              reportPostSlug={reportPostSlug}
+              editProps={editProps}
+              deleteProps={deleteProps}
+              replyingTo={replyingTo}
+              startReply={startReply}
+              cancelReply={cancelReply}
+              replyBody={replyBody}
+              setReplyBody={setReplyBody}
+              replyImageUrls={replyImageUrls}
+              setReplyImageUrls={setReplyImageUrls}
+              replyMentionedUsers={replyMentionedUsers}
+              setReplyMentionedUsers={setReplyMentionedUsers}
+              replySaving={replySaving}
+              replyError={replyError}
+              submitReply={submitReply}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

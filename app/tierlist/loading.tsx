@@ -4,7 +4,7 @@ const TIER_ROWS = 6
 
 export default function TierlistLoading() {
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 md:px-6 lg:px-8">
+    <div className="mx-auto max-w-6xl space-y-5 px-2 py-6 sm:px-4 md:px-6 lg:px-8">
       {/* Filtros de categoria */}
       <div className="flex flex-wrap gap-2">
         {Array.from({ length: 7 }).map((_, i) => (

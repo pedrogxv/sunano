@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function ProfilePublicoLoading() {
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-5xl px-2 py-6 sm:px-4 md:px-6 md:py-8">
       <div className="relative">
         <Skeleton className="h-44 w-full rounded-2xl sm:h-64 md:h-80" />
 

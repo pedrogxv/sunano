@@ -1424,6 +1424,20 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.2.6",
+          date: "9 de agosto",
+          title: "Comentários com mais níveis de resposta e telas mais aproveitadas no celular",
+          description: "Comentários agora suportam respostas aninhadas em mais níveis, e várias páginas ganharam ajustes de espaçamento e botões para caber melhor em telas pequenas.",
+          items: [
+            "Comentários agora aceitam até 4 níveis de resposta (antes só 1), com recuo decrescente para não espremer o texto em telas estreitas",
+            "Posts ocultos do fórum não mostram mais os botões de Responder e Compartilhar, e os comentários exibem um aviso de que o post não aceita mais respostas",
+            "Título de post do fórum agora quebra linha corretamente em vez de estourar o layout",
+            "Botões de ação do fórum (Excluir, Ocultar/Mostrar, Compartilhar) viram ícone em telas pequenas para dar mais espaço ao conteúdo",
+            "Menu de espaçamento das páginas principais ajustado para aproveitar melhor a tela no celular",
+            "Botão 'Esqueceu a senha?' na tela de login reposicionado para ficar mais fácil de encontrar",
+          ],
+        },
+        {
           version: "v0.2.5",
           date: "8 de agosto",
           title: "Conquistas, ofensiva diária e Eventos virou Conquistas",
@@ -2300,6 +2314,20 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.2.6",
+          date: "August 9",
+          title: "Deeper comment threads and better use of mobile screens",
+          description: "Comments now support nested replies at more levels, and several pages got spacing and button tweaks to fit small screens better.",
+          items: [
+            "Comments now support up to 4 levels of nested replies (up from 1), with decreasing indent so text doesn't get squeezed on narrow screens",
+            "Hidden forum posts no longer show the Reply and Share buttons, and their comments display a notice that the post no longer accepts replies",
+            "Forum post titles now wrap correctly instead of breaking the layout",
+            "Forum action buttons (Delete, Hide/Show, Share) collapse to icon-only on small screens to free up space for content",
+            "Spacing on the main pages tightened up to make better use of mobile screens",
+            "The 'Forgot your password?' button on the login screen moved to a spot that's easier to find",
+          ],
+        },
         {
           version: "v0.2.5",
           date: "August 8",

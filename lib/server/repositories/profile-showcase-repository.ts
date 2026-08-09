@@ -50,12 +50,13 @@ const PUBLIC_PROFILE_COLUMNS =
 // `specs` e `tags` só existem aqui para alimentar o hover/tooltip (ratings +
 // chips) reaproveitado da tierlist — a resposta pública (`ShowcasePeripheral`)
 // expõe só `ratings` já extraído, nunca o `specs` bruto.
-const PERIPHERAL_COLUMNS = "id, name, brand, category, image_url, tier, specs, tags"
+const PERIPHERAL_COLUMNS = "id, name, brand_id, brands(name), category, image_url, tier, specs, tags"
 
 type PeripheralRow = {
   id: string
   name: string
-  brand: string
+  brand_id: string
+  brands: { name: string } | { name: string }[] | null
   category: string
   image_url: string | null
   tier: string | null
@@ -64,10 +65,11 @@ type PeripheralRow = {
 }
 
 function toShowcasePeripheral(row: PeripheralRow): ShowcasePeripheral {
+  const brandRow = Array.isArray(row.brands) ? row.brands[0] : row.brands
   return {
     id: row.id,
     name: row.name,
-    brand: row.brand,
+    brand: brandRow?.name ?? "",
     category: row.category,
     image_url: row.image_url,
     tier: row.tier,

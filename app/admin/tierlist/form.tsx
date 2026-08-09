@@ -50,10 +50,9 @@ const peripheralSchema = z.object({
     .string()
     .min(1, "Informe o nome do periférico")
     .max(200, "Nome muito longo (máx. 200 caracteres)"),
-  brand: z
+  brand_id: z
     .string()
-    .min(1, "Selecione a marca")
-    .max(120, "Marca muito longa (máx. 120 caracteres)"),
+    .uuid("Selecione a marca"),
   category: z.enum(
     ["keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp"],
     { message: "Selecione uma das categorias disponíveis" }
@@ -442,162 +441,6 @@ function buildSpecsPayload(
     },
   }
 }
-
-const BRAND_OPTIONS = [
-  "Aeperion",
-  "AIM1",
-  "Aimstar",
-  "Alienware",
-  "Ajazz",
-  "Akko",
-  "Amicis",
-  "AOC",
-  "Angry Miao",
-  "ANTGAMER",
-  "Apple",
-  "Arbiter Studio",
-  "Artisan",
-  "Asus",
-  "Asus Rog",
-  "ATK",
-  "Attack Shark",
-  "Aula",
-  "Ausdom",
-  "Audeze",
-  "Audio-Technica",
-  "BenQ",
-  "Beyerdynamic",
-  "Black Canyon",
-  "Carotmas",
-  "Cooler Master",
-  "Corsair",
-  "CRDRACO",
-  "DareU",
-  "DARMOSHARK",
-  "Dell",
-  "D-Glow",
-  "DR.Office",
-  "Dornfinger",
-  "DrunkDeer",
-  "Ducky",
-  "Dunu",
-  "Endgame Gear",
-  "Epomaker",
-  "EspTiger",
-  "Everglide",
-  "EWEADN",
-  "Fantech",
-  "Philco",
-  "Finalmouse",
-  "FL Sports",
-  "Flydigi",
-  "FreeFall",
-  "FuryCube",
-  "Gamemax",
-  "Gateron",
-  "GK",
-  "GLSSWRKS",
-  "Glorious",
-  "Gravastar",
-  "G-Wolves",
-  "Hator",
-  "Huano",
-  "HyperX",
-  "Hystar",
-  "IceSoul",
-  "INCOTT",
-  "INZONE",
-  "IQUNIX",
-  "IROK",
-  "Ipi",
-  "Kailh",
-  "Kanami",
-  "Kefine",
-  "Keychron",
-  "Keyverse",
-  "Kibu",
-  "Kinera",
-  "KingJade",
-  "Kiwi Ears",
-  "Kurosun",
-  "Kysona",
-  "Lamzu",
-  "Leobog",
-  "Leopold",
-  "Lethal Gaming Gear",
-  "Lian Li",
-  "LG",
-  "Linsoul",
-  "Lock-On",
-  "Logitech",
-  "Luvinco",
-  "M.E.T.A",
-  "Mad Catz",
-  "Madlions",
-  "Mchose",
-  "Mechlands",
-  "MEETKB",
-  "Melgeek",
-  "Meow Gaming Gear",
-  "MIKIT",
-  "MM Studios",
-  "Mojak Hub",
-  "Morkblade",
-  "Msi",
-  "Nexus",
-  "NINJUTSO",
-  "Nollie",
-  "Nuphy",
-  "NZXT",
-  "Odin Gaming",
-  "Outemu",
-  "Phantum",
-  "Pulsar",
-  "PWNAGE",
-  "Rakka",
-  "Rapoo",
-  "Rawn",
-  "Razer",
-  "Reddragon",
-  "Roccat",
-  "Samsung",
-  "Scyrox",
-  "Sennheiser",
-  "SensoryBoost",
-  "SkyPad",
-  "Souleels",
-  "SteelSeries",
-  "Superbeings Lab",
-  "SuperFrame",
-  "Teevolution",
-  "Tekkusai",
-  "Tenta-X",
-  "TITAN",
-  "Titorion",
-  "TTC",
-  "Valkyrie",
-  "VANCER",
-  "Varmilo",
-  "VGN",
-  "VTER",
-  "VXE",
-  "Waizowl",
-  "Wallhack",
-  "Wob",
-  "Wooting",
-  "Wraith",
-  "WuQue Studios",
-  "Xiaomi",
-  "X-Raypad",
-  "Xtrfy",
-  "Yuki Aim",
-  "zaopin",
-  "Zirnex",
-  "Zowie",
-  "WLMouse",
-]
-
-const BRAND_COMBOBOX_OPTIONS = BRAND_OPTIONS.map((brand) => ({ value: brand, label: brand }))
 
 const COATING_OPTIONS = [
   "Emborrachado",
@@ -1007,6 +850,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [linkedBazaar, setLinkedBazaar] = useState<LinkedProduct | null>(null)
   const [linkedSwitch, setLinkedSwitch] = useState<LinkedSwitch | null>(null)
   const [rankedPeripherals, setRankedPeripherals] = useState<{ id: string; name: string; tier: string; ranking: number; score: number | null }[]>([])
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([])
+  const [loadingBrands, setLoadingBrands] = useState(true)
+  const [creatingBrand, setCreatingBrand] = useState(false)
   // Tiers por modo (adminTier_value, adminTier_magnetic, ...) só existem depois que o item
   // é ranqueado no board de drag-and-drop da Tierlist — o form não tem campo para editá-los,
   // então precisam ser preservados à parte para o preview ao vivo continuar mostrando o
@@ -1021,7 +867,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     resolver: zodResolver(peripheralSchema) as any,
     defaultValues: {
       name: "",
-      brand: "",
+      brand_id: "",
       category: "mouse",
       tier: "__none__",
       price: 0,
@@ -1065,7 +911,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const previewData = {
     id: peripheralId ?? "preview",
     name: watchedAll.name?.trim() || "Nome do periférico",
-    brand: watchedAll.brand?.trim() || "Marca",
+    brand: brands.find((b) => b.id === watchedAll.brand_id)?.name || "Marca",
     category: watchedAll.category,
     tier: watchedAll.tier === "__none__" ? null : watchedAll.tier,
     price: watchedAll.price ?? 0,
@@ -1142,6 +988,48 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [watchedCategory])
 
+  useEffect(() => {
+    let cancelled = false
+    setLoadingBrands(true)
+    fetch("/api/admin/brands", { cache: "no-store" })
+      .then((res) => res.json().catch(() => null))
+      .then((json: { brands?: { id: string; name: string }[] } | null) => {
+        if (cancelled) return
+        setBrands(json?.brands ?? [])
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingBrands(false)
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  const brandComboboxOptions = useMemo(
+    () => brands.map((brand) => ({ value: brand.id, label: brand.name })),
+    [brands]
+  )
+
+  async function handleCreateBrand(name: string) {
+    setCreatingBrand(true)
+    try {
+      const res = await fetch("/api/admin/brands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      })
+      const json = (await res.json().catch(() => null)) as { brand?: { id: string; name: string }; error?: string } | null
+      if (!res.ok || !json?.brand) throw new Error(json?.error ?? "Falha ao criar marca")
+      setBrands((prev) => [...prev, json.brand!].sort((a, b) => a.name.localeCompare(b.name)))
+      form.setValue("brand_id", json.brand.id, { shouldValidate: true })
+    } catch (err) {
+      toast.error("Falha ao criar marca", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setCreatingBrand(false)
+    }
+  }
+
   async function fetchUsdToBrl() {
     try {
       const res = await fetch("https://api.exchangerate.host/latest?base=USD&symbols=BRL")
@@ -1161,7 +1049,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         setOriginalUsdPrice(data.price)
         const displayedPrice = locale === "pt-BR" && usdToBrl ? Number((data.price * usdToBrl).toFixed(2)) : data.price
         form.reset({
-          name: data.name, brand: data.brand, category: data.category,
+          name: data.name, brand_id: data.brand_id, category: data.category,
           tier: data.tier ? mapTier(data.tier) : "__none__",
           price: displayedPrice,
           rankLabel: data.specs?.details?.rankLabel ?? "",
@@ -1328,7 +1216,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       }
 
       const peripheralData = {
-        name: data.name, brand: data.brand, category: data.category,
+        name: data.name, brand_id: data.brand_id, category: data.category,
         tier: data.tier === "__none__" ? null : data.tier,
         price: priceToSave, image_url: imageUrl, tags: selectedTag || [], specs,
       }
@@ -1789,18 +1677,21 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   {t.admin.tierlistForm.brand} <span className="text-red-400">*</span>
                 </label>
                 <Combobox
-                  options={BRAND_COMBOBOX_OPTIONS}
-                  value={form.watch("brand")}
-                  onValueChange={(value) => form.setValue("brand", value, { shouldValidate: true })}
-                  placeholder={t.admin.tierlistForm.selectBrand}
+                  options={brandComboboxOptions}
+                  value={form.watch("brand_id")}
+                  onValueChange={(value) => form.setValue("brand_id", value, { shouldValidate: true })}
+                  onCreateOption={handleCreateBrand}
+                  creating={creatingBrand}
+                  placeholder={loadingBrands ? "Carregando marcas..." : t.admin.tierlistForm.selectBrand}
                   searchPlaceholder={t.admin.tierlistForm.searchBrand}
                   className="border-border bg-background"
-                  aria-invalid={!!form.formState.errors.brand}
+                  disabled={loadingBrands}
+                  aria-invalid={!!form.formState.errors.brand_id}
                 />
                 <p className="text-[10px] text-muted-foreground/60">
                   {t.admin.tierlistForm.brandHint}
                 </p>
-                {form.formState.errors.brand && <p className="text-xs text-red-400">{form.formState.errors.brand.message}</p>}
+                {form.formState.errors.brand_id && <p className="text-xs text-red-400">{form.formState.errors.brand_id.message}</p>}
               </div>
             </div>
 

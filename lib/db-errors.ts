@@ -74,7 +74,7 @@ const CONSTRAINT_MAP: Record<string, { message: string; field?: string; status?:
 
 const NOT_NULL_FIELD_LABELS: Record<string, string> = {
   name: "nome",
-  brand: "marca",
+  brand_id: "marca",
   category: "categoria",
   price: "preço",
   price_cents: "preço",

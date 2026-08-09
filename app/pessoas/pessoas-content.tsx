@@ -119,7 +119,7 @@ export function PessoasContent({
   const metric: DirectoryMetric = TAB_METRIC[tab]
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-6xl px-2 py-6 sm:px-4 md:px-6 md:py-8">
       {/* Título + descrição da aba ativa fora do card, abas soltas embaixo —
           sem borda envolvendo os dois juntos. */}
       <div className="flex flex-col items-center gap-3 text-center">

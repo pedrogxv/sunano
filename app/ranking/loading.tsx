@@ -2,7 +2,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function RankingLoading() {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-4xl px-2 py-6 sm:px-4 md:px-6 md:py-8">
       <div className="mb-2 flex flex-wrap gap-1.5">
         {Array.from({ length: 8 }).map((_, i) => (
           <Skeleton key={i} className="h-7 w-20 rounded-lg" />

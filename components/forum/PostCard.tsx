@@ -277,7 +277,7 @@ export function PostCard({
             <CategoryBadge category={post.category} linked={!clickable} />
           </div>
 
-          <p className={`mt-2 font-semibold text-foreground ${compact ? "line-clamp-2" : ""}`}>
+          <p className={`mt-2 break-words font-semibold text-foreground ${compact ? "line-clamp-2" : ""}`}>
             {post.title}
           </p>
 
@@ -304,7 +304,7 @@ export function PostCard({
             </div>
           )}
 
-          <div className="relative z-10 mt-3 flex items-center gap-2 pointer-events-auto">
+          <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2 pointer-events-auto">
             <PostAuraButton postSlug={post.slug} authorId={post.user_id} initialCount={post.aura_count} />
             <Link
               href={clickable ? `/forum/${post.slug}#comments` : "#comments"}
@@ -314,7 +314,7 @@ export function PostCard({
               <MessageCircle className="size-3.5" />
               {post.comment_count}
             </Link>
-            <ShareMenu slug={post.slug} title={post.title} />
+            {!post.is_hidden && <ShareMenu slug={post.slug} title={post.title} />}
             {isOwner ? (
               <>
                 <PostVisibilityButton

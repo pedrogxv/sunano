@@ -340,7 +340,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         {/* Title — proeminente */}
         <div className="space-y-1.5">
           <Input
-            className="border-0 border-b border-border rounded-none bg-transparent px-0 text-2xl font-bold text-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 focus-visible:border-primary"
+            className="border-0 border-b border-border rounded-none bg-transparent px-2 text-2xl font-bold text-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 focus-visible:border-primary"
             placeholder={t.admin.blog.form.titlePlaceholder}
             {...form.register("title")}
           />

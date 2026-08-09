@@ -82,10 +82,10 @@ export function ShareMenu({ slug, title }: { slug: string; title: string }) {
         <button
           type="button"
           onClick={(event) => event.stopPropagation()}
-          className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
         >
-          <Share2 className="size-3.5" />
-          Compartilhar
+          <Share2 className="size-3.5 shrink-0" />
+          <span className="hidden sm:inline">Compartilhar</span>
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56 border-border bg-popover text-foreground shadow-xl">

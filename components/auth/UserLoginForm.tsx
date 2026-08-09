@@ -142,16 +142,7 @@ export function UserLoginForm() {
         </div>
 
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium text-foreground" htmlFor="password">Senha</label>
-            <button
-              type="button"
-              onClick={() => setMode("forgot")}
-              className="text-xs text-primary hover:underline"
-            >
-              Esqueceu a senha?
-            </button>
-          </div>
+          <label className="text-sm font-medium text-foreground" htmlFor="password">Senha</label>
           <Input
             id="password"
             name="password"
@@ -160,6 +151,16 @@ export function UserLoginForm() {
             placeholder="Sua senha"
             className="border-border bg-muted/20"
           />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setMode("forgot")}
+              className="text-xs text-primary hover:underline"
+            >
+              Esqueceu a senha?
+            </button>
+          </div>
         </div>
 
         {errorMessage && (

@@ -541,6 +541,7 @@ const BRAND_OPTIONS = [
   "Meow Gaming Gear",
   "MIKIT",
   "MM Studios",
+  "Mojak Hub",
   "Morkblade",
   "Msi",
   "Nexus",

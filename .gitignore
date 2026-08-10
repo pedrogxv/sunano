@@ -37,6 +37,7 @@ next-env.d.ts
 
 # logs de scripts one-off (ex.: scripts/normalize-peripheral-images.ts)
 /normalize-peripheral-images.*.json
+/cleanup-orphaned-tags.*.json
 
 # Config local do Claude Code (permissões aprovadas caminho a caminho, paths
 # absolutos desta máquina). Repo público: nada aqui deve ser publicado.

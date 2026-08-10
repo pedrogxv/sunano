@@ -19,6 +19,7 @@ import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
 import { formatBRL, formatCurrencyBRL } from "@/lib/stripe"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
+import type { Tag } from "@/lib/tag-options"
 
 export interface PeripheralDetailViewData {
   id: string
@@ -187,8 +188,6 @@ function formatCurrency(value: number) {
   }
 }
 
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "magnetico" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone"
-
 const TAG_LABELS: Record<Tag, string> = {
   competitive: "Competitivo",
   versatile: "Bomba",
@@ -220,7 +219,6 @@ const TAG_LABELS: Record<Tag, string> = {
   macio: "Macio",
   afetado_umidade: "Afetado por Umidade",
   ultrapassado: "Ultrapassado",
-  magnetico: "Magnético",
   raro: "Raro",
   fibra_carbono: "Fibra de Carbono",
   control: "Control",
@@ -237,6 +235,8 @@ const TAG_LABELS: Record<Tag, string> = {
   qhd: "QHD",
   "4k": "4K",
   headphone: "Headphone",
+  wired: "Com fio",
+  wireless: "Sem fio",
 }
 
 function formatTagLabel(tag: string, category?: string) {

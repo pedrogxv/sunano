@@ -39,7 +39,7 @@ import { useT } from "@/lib/use-t"
 import { removeBackground, fileToDataUrl, STRONG_REMOVAL_OPTIONS } from "@/lib/client/remove-background"
 import { SWITCH_PRICE_TIERS } from "@/lib/switch-price-tier"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
-import { getTagOptionsForCategory, type Category, type Tag } from "@/lib/tag-options"
+import { getTagOptionsForCategory, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
@@ -807,11 +807,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
   // Autolimpeza de tags órfãs: se uma tag foi removida da config de uma categoria (ver
   // lib/tag-options.ts) mas um item antigo ainda a carrega, ela nunca aparece como checkbox
-  // marcável abaixo — e sem esse filtro continuaria sendo resalva silenciosamente a cada edição.
-  // Abrir ou trocar a categoria de um item já basta pra soltar as tags que não existem mais.
+  // marcável abaixo. Antes isso só filtrava a tag órfã pra fora — se era a única tag do
+  // item, o campo (obrigatório) ficava vazio e travava o save até o admin escolher uma tag
+  // manualmente. Agora usa o mesmo fallback do resto do sistema (sanitizeTagsForCategory):
+  // cai pra primeira tag válida da categoria atual, já corrigida ao abrir o item.
   useEffect(() => {
-    const validTagKeys = getTagOptionsForCategory(watchedCategory).map((option) => option.key)
-    setSelectedTag((prev) => prev.filter((tag) => validTagKeys.includes(tag)))
+    setSelectedTag((prev) => sanitizeTagsForCategory(watchedCategory, prev))
   }, [watchedCategory])
 
   // O tipo de switch já diz se o teclado é magnético ou mecânico — usa esse sinal para manter

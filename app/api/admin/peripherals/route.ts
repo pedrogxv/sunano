@@ -6,6 +6,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions"
 import { ALLOWED_PERIPHERAL_CATEGORIES, ALLOWED_PERIPHERAL_TIERS, dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { cascadeRerank, getRankingFromSpecs } from "@/lib/server/peripherals/ranking-cascade"
+import { sanitizeTagsForCategory, type Category } from "@/lib/tag-options"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -90,9 +91,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // Sanitiza tags mesmo na criação: um payload montado fora do formulário de admin
+  // (ou um front desatualizado) pode enviar uma tag que já saiu da config da categoria.
+  const insertData = {
+    ...parsed.data,
+    tags: sanitizeTagsForCategory(parsed.data.category as Category, parsed.data.tags),
+  }
+
   const db = createSupabaseAdminClient()
   const { data, error } = await (db.from("peripherals") as any)
-    .insert([parsed.data])
+    .insert([insertData])
     .select(DEFAULT_COLUMNS)
     .single()
 

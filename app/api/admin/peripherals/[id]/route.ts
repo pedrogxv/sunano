@@ -6,6 +6,7 @@ import { hasAdminPermission } from "@/lib/admin-permissions"
 import { ALLOWED_PERIPHERAL_CATEGORIES, ALLOWED_PERIPHERAL_TIERS, dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { cascadeRerank, getRankingFromSpecs } from "@/lib/server/peripherals/ranking-cascade"
+import { sanitizeTagsForCategory, type Category } from "@/lib/tag-options"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -90,8 +91,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .eq("id", id)
     .single()
 
+  // Sanitiza tags contra a categoria efetiva do item (a nova, se estiver trocando de
+  // categoria neste mesmo PATCH; senão a atual) — mesmo self-heal do formulário de admin,
+  // aplicado aqui pra cobrir qualquer chamada à API que não passe pelo form.
+  const updateData: Record<string, unknown> = { ...parsed.data }
+  if (parsed.data.tags !== undefined && current) {
+    const effectiveCategory = (parsed.data.category ?? current.category) as Category
+    updateData.tags = sanitizeTagsForCategory(effectiveCategory, parsed.data.tags)
+  }
+
   const { data, error } = await (db.from("peripherals") as any)
-    .update(parsed.data)
+    .update(updateData)
     .eq("id", id)
     .select(DEFAULT_COLUMNS)
     .single()

@@ -154,3 +154,24 @@ export function getTagOptionsForCategory(category: Category): TagOption[] {
 export function getValidTagKeysForCategory(category: Category): Tag[] {
   return getTagOptionsForCategory(category).map((option) => option.key)
 }
+
+/**
+ * Self-heal de tags órfãs: remove da lista qualquer tag que não exista mais na config
+ * atual da categoria (ver comentário no topo do arquivo). O campo de tags é obrigatório
+ * — nunca pode ficar vazio numa troca por órfã —, então se TODAS as tags salvas eram
+ * órfãs, cai pra primeira tag válida da categoria atual em vez de zerar a lista. Um item
+ * que já estava sem nenhuma tag (`tags: []`) continua sem tag: essa função só substitui
+ * valor "preso", não força uma tag em item que nunca teve uma.
+ *
+ * Usada pelo formulário de admin (app/admin/tierlist/form.tsx), pelas rotas de admin
+ * (app/api/admin/peripherals) e pelo script retroativo (scripts/cleanup-orphaned-tags.ts)
+ * — mesma lógica nos três lugares pra não voltar a divergir.
+ */
+export function sanitizeTagsForCategory(category: Category, tags: readonly string[] | null | undefined): Tag[] {
+  const validKeys = getValidTagKeysForCategory(category)
+  const input = tags ?? []
+  const kept = input.filter((tag): tag is Tag => validKeys.includes(tag as Tag))
+  if (kept.length > 0 || input.length === 0) return kept
+  const fallback = validKeys[0]
+  return fallback ? [fallback] : kept
+}

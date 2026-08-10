@@ -54,6 +54,7 @@ export type BlogListPost = {
   cover_image_url: string | null
   cover_thumbnail_url: string | null
   video_url: string | null
+  content: string
   read_time_minutes: number | null
   created_at: string
   comment_count: number
@@ -111,7 +112,7 @@ export type BlogCommentDetail = {
 }
 
 const LIST_COLUMNS =
-  "id, title, slug, post_type, author_id, is_featured, excerpt, cover_image_url, cover_thumbnail_url, video_url, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
+  "id, title, slug, post_type, author_id, is_featured, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
 
 const DETAIL_COLUMNS =
   "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
@@ -241,10 +242,17 @@ export async function listAllBlogSlugsForSitemap(): Promise<{ slug: string; upda
   return (data ?? []).map((p) => ({ slug: p.slug, updated_at: p.created_at }))
 }
 
-/** Lista posts publicados, opcionalmente filtrando por periférico. */
-export async function listPublishedPosts(peripheralId?: string | null): Promise<BlogListPost[]> {
+/**
+ * Lista posts publicados, opcionalmente filtrando por periférico e/ou por
+ * `post_type` ("news"/"review") — sem o filtro de tipo, `/noticias` e `/blog`
+ * acabavam mostrando exatamente a mesma lista completa.
+ */
+export async function listPublishedPosts(
+  peripheralId?: string | null,
+  postType?: BlogPostType | null
+): Promise<BlogListPost[]> {
   const db = createSupabaseAdminClient()
-  const runQuery = (columns: string) => {
+  const runQuery = (columns: string, filterByType: boolean) => {
     let query = db
       .from("blog_posts")
       .select(columns)
@@ -254,19 +262,27 @@ export async function listPublishedPosts(peripheralId?: string | null): Promise<
       // cada carregamento de página conforme o volume de posts cresce.
       .limit(60)
     if (peripheralId) query = query.eq("peripheral_id", peripheralId)
+    // `post_type` não existe no codegen de `database.types.ts` (desatualizado,
+    // mesma situação de `is_featured`) — cast necessário para filtrar por ele.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (filterByType && postType) query = (query as any).eq("post_type", postType)
     return query
   }
 
   let columns = LIST_COLUMNS
-  let { data, error } = await runQuery(columns)
+  // Se a coluna `post_type` ainda não existe (migração pendente), o filtro por
+  // tipo também não pode ser aplicado — mesmo fallback usado para a coluna no select.
+  let filterByType = true
+  let { data, error } = await runQuery(columns, filterByType)
   if (error && isMissingPostType(error.message)) {
     columns = LIST_COLUMNS_LEGACY
-    ;({ data, error } = await runQuery(columns))
+    filterByType = false
+    ;({ data, error } = await runQuery(columns, filterByType))
   }
   // Fallback: migração `20260803_blog_featured_posts.sql` ainda não aplicada.
   if (error && isMissingColumn(error.message, "is_featured")) {
     columns = withoutColumn(columns, "is_featured")
-    ;({ data, error } = await runQuery(columns))
+    ;({ data, error } = await runQuery(columns, filterByType))
   }
   if (error) {
     console.error("[blog-repository] listPublishedPosts:", error)

@@ -13,9 +13,11 @@ export const revalidate = 30
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const peripheral = searchParams.get("peripheral")?.trim() || null
+  const typeParam = searchParams.get("type")
+  const postType = typeParam === "news" || typeParam === "review" ? typeParam : null
 
   try {
-    const posts = await listPublishedPosts(peripheral)
+    const posts = await listPublishedPosts(peripheral, postType)
     return NextResponse.json({ ok: true, posts })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar posts do blog." }, { status: 500 })

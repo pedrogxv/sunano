@@ -5,7 +5,6 @@ import Image from "next/image"
 import { ArrowRight, Clock, MessageCircle, Newspaper } from "lucide-react"
 
 import { getBlogImageWithFallback } from "@/lib/blog-images"
-import { truncateExcerpt } from "@/lib/blog-excerpt"
 import { extractFirstUrl } from "@/lib/extract-link"
 import { getVideoEmbedUrl } from "@/lib/video-embed"
 import { listPublishedPosts, type BlogListPost } from "@/lib/server/repositories/blog-repository"
@@ -93,7 +92,6 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
   const img = getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")
   const embedUrl = getVideoEmbedUrl(post.video_url)
   const { href, external } = getHeadlineHref(post)
-  const excerpt = post.excerpt ? truncateExcerpt(post.excerpt) : null
 
   const media = embedUrl ? (
     <div className="relative aspect-video w-full overflow-hidden bg-black">
@@ -118,27 +116,6 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
     </div>
   )
 
-  const body = (
-    <div className="space-y-3 p-4 sm:p-5">
-      <h2 className="font-display text-xl font-bold leading-tight text-foreground transition-colors group-hover:text-primary sm:text-2xl">
-        {post.title}
-      </h2>
-      {excerpt && (
-        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{excerpt.text}</p>
-      )}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-        <AuthorByline post={post} size="md" />
-        <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground/70">
-          <span>{timeAgo(post.created_at)}</span>
-          <span className="flex items-center gap-1">
-            <MessageCircle className="size-3" />
-            {post.comment_count ?? 0}
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-
   const cardClass =
     "group overflow-hidden rounded-2xl border border-border/50 bg-card/50 transition-colors hover:border-primary/30 hover:bg-card"
 
@@ -155,27 +132,40 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
 
   return (
     <div className={cardClass}>
+      {/* Só a foto/vídeo e o título são clicáveis — levam pro post (ou pro link
+          configurado na notícia). O corpo do texto nunca fica atrás de um clique:
+          já vem inteiro, sem "ler mais" e sem precisar navegar pra outra página. */}
       {/* O player de vídeo é interativo — fica fora do link pra tocar sem navegar. */}
-      {embedUrl && media}
-      {linkWrap(
-        <>
-          {!embedUrl && media}
-          {body}
-        </>
-      )}
-      {/* "Ler mais" fica fora do link do card: quando o texto cita uma URL o card
-          leva pra ela, mas a notícia completa continua acessível aqui. */}
-      {excerpt?.truncated && (
-        <div className="border-t border-border/40 px-4 py-3 sm:px-5">
-          <Link
-            href={`/noticias/${post.slug}`}
-            className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary/80"
-          >
-            Ler mais
-            <ArrowRight className="size-3.5" />
-          </Link>
+      {embedUrl ? media : linkWrap(media)}
+      <div className="space-y-3 p-4 sm:p-5">
+        <h2 className="font-display text-xl font-bold leading-tight sm:text-2xl">
+          {linkWrap(
+            <span className="text-foreground transition-colors group-hover:text-primary">{post.title}</span>
+          )}
+        </h2>
+        <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{post.content}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <AuthorByline post={post} size="md" />
+          <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground/70">
+            <span>{timeAgo(post.created_at)}</span>
+            <span className="flex items-center gap-1">
+              <MessageCircle className="size-3" />
+              {post.comment_count ?? 0}
+            </span>
+          </div>
         </div>
-      )}
+      </div>
+      {/* Sempre visível: dá acesso à página/comentários mesmo quando título e
+          foto levam pro link externo configurado na notícia. */}
+      <div className="border-t border-border/40 px-4 py-3 sm:px-5">
+        <Link
+          href={`/noticias/${post.slug}#comments`}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary/80"
+        >
+          Ver comentários
+          <ArrowRight className="size-3.5" />
+        </Link>
+      </div>
     </div>
   )
 }
@@ -240,11 +230,15 @@ function NewsListItem({ post }: { post: BlogListPost }) {
 }
 
 export default async function NoticiasPage() {
-  const posts = await listPublishedPosts(null)
+  // Só posts do tipo "news" — reviews (post_type "review") pertencem a /blog.
+  const posts = await listPublishedPosts(null, "news")
 
   // Manchetes: escolhidas manualmente no admin (toggle "Destacar no
   // header"), limitadas a 3 — as mais recentes primeiro em caso de empate.
-  const headlines = posts.filter((p) => p.is_featured).slice(0, MAX_HEADLINES)
+  // Sem nenhuma marcada, cai pra manchete automática com as mais recentes —
+  // assim a página nunca fica presa no formato compacto por padrão.
+  const featured = posts.filter((p) => p.is_featured).slice(0, MAX_HEADLINES)
+  const headlines = featured.length > 0 ? featured : posts.slice(0, MAX_HEADLINES)
   const headlineIds = new Set(headlines.map((p) => p.id))
   // Evita repetir na lista de baixo a mesma notícia já exibida como manchete.
   const rest = posts.filter((p) => !headlineIds.has(p.id))

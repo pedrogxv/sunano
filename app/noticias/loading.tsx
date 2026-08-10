@@ -8,14 +8,20 @@ export default function NoticiasLoading() {
         <Skeleton className="h-4 w-80" />
       </div>
 
-      {/* Em alta */}
-      <div className="space-y-3">
-        <Skeleton className="h-4 w-24" />
-        <div className="flex gap-3 overflow-hidden">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-28 w-44 shrink-0 rounded-xl" />
-          ))}
-        </div>
+      {/* Manchetes */}
+      <div className="space-y-4">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="overflow-hidden rounded-2xl border border-border/50 bg-card/50">
+            <Skeleton className="aspect-video w-full rounded-none" />
+            <div className="space-y-3 p-4 sm:p-5">
+              <Skeleton className="h-6 w-3/4" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-8 w-40 rounded-full" />
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Feed */}

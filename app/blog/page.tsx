@@ -27,7 +27,8 @@ export default async function BlogPage({
   searchParams: Promise<{ peripheral?: string }>
 }) {
   const { peripheral } = await searchParams
-  const posts = (await listPublishedPosts(peripheral?.trim() || null)) as BlogPost[]
+  // "Guias" mostra só reviews — posts do tipo "news" pertencem a /noticias.
+  const posts = (await listPublishedPosts(peripheral?.trim() || null, "review")) as BlogPost[]
 
   return <BlogContent initialPosts={posts} />
 }

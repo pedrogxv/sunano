@@ -93,18 +93,29 @@ export async function getVisitStats(): Promise<VisitStats> {
 
   // Hashes de hoje que já tinham visita em algum dia anterior — cada um
   // conta uma vez (Set), não por quantos dias passados apareceu.
-  const { data: seenBeforeRows, error: beforeError } = await db
-    .from("site_visits")
-    .select("visitor_hash")
-    .lt("visited_date", today)
-    .in("visitor_hash", todayHashes)
-
-  if (beforeError) {
-    console.error("[visits-repository] getVisitStats (before):", beforeError)
-    throw beforeError
+  //
+  // O `.in()` vai em lotes: em dias de tráfego alto, `todayHashes` inteiro
+  // não cabe numa única URL de query (limite do Supabase/proxy), o que
+  // derrubava essa query e, com ela, a seção inteira de visitantes no
+  // dashboard (o erro é engolido por app/api/admin/dashboard/route.ts).
+  const HASH_CHUNK_SIZE = 150
+  const chunks: string[][] = []
+  for (let i = 0; i < todayHashes.length; i += HASH_CHUNK_SIZE) {
+    chunks.push(todayHashes.slice(i, i + HASH_CHUNK_SIZE))
   }
 
-  const returningHashes = new Set((seenBeforeRows ?? []).map((row) => row.visitor_hash as string))
+  const chunkResults = await Promise.all(
+    chunks.map((chunk) => db.from("site_visits").select("visitor_hash").lt("visited_date", today).in("visitor_hash", chunk))
+  )
+
+  const returningHashes = new Set<string>()
+  for (const { data, error } of chunkResults) {
+    if (error) {
+      console.error("[visits-repository] getVisitStats (before):", error)
+      throw error
+    }
+    for (const row of data ?? []) returningHashes.add(row.visitor_hash as string)
+  }
 
   return {
     today: todayHashes.length,

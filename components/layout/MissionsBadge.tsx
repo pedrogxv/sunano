@@ -9,6 +9,7 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import { AURA_CHANGED_EVENT } from "@/lib/client/aura-events"
 import {
   DAILY_MISSION_KEYS,
+  DAILY_MISSION_REWARDS,
   EMPTY_DAILY_MISSIONS,
   countCompletedMissions,
   type DailyMissionKey,
@@ -127,7 +128,7 @@ export function MissionsBadge() {
                       <Check className="size-3" />
                     </span>
                     <span>{label}</span>
-                    <span className="ml-auto text-[11px] text-muted-foreground">+5 aura</span>
+                    <span className="ml-auto text-[11px] text-muted-foreground">+{DAILY_MISSION_REWARDS[key]} aura</span>
                   </div>
                 ) : (
                   <Link
@@ -139,7 +140,7 @@ export function MissionsBadge() {
                     </span>
                     <span className="text-foreground">{label}</span>
                     <span className="ml-auto flex items-center gap-1 text-[11px] text-muted-foreground">
-                      +5 aura
+                      +{DAILY_MISSION_REWARDS[key]} aura
                       <ArrowRight className="size-3 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
                     </span>
                   </Link>

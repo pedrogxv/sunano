@@ -371,8 +371,9 @@ $$;
 revoke execute on function public.toggle_forum_post_aura(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.toggle_forum_post_aura(uuid, uuid) to service_role;
 
--- 3c. complete_daily_mission — os dois créditos fixos (+5 por missão, +10 de
---     bônus ao fechar as 3) passam a levar o multiplicador. O avanço do
+-- 3c. complete_daily_mission — o crédito por missão (+5 post, +3 comentário,
+--     +1 aura — ver 20260811000000_daily_mission_reward_rebalance.sql — e o
+--     +10 de bônus ao fechar as 3) passa a levar o multiplicador. O avanço do
 --     streak em si (current_streak/longest_streak) não muda — o multiplicador
 --     é lido ANTES de avançar `user_streaks`, então o bônus do dia de hoje
 --     usa a ofensiva que o usuário TINHA ao entrar no dia (streak já contava
@@ -384,17 +385,24 @@ create or replace function public.complete_daily_mission(
 language plpgsql security definer
 set search_path = public as $$
 declare
-  v_date       date := (now() at time zone 'utc')::date;
-  v_before     public.daily_missions%rowtype;
-  v_after      public.daily_missions%rowtype;
-  v_prev_date  date;
-  v_prev_streak integer;
-  v_new_streak integer;
-  v_credited   integer;
+  v_date            date := (now() at time zone 'utc')::date;
+  v_before          public.daily_missions%rowtype;
+  v_after           public.daily_missions%rowtype;
+  v_prev_date       date;
+  v_prev_streak     integer;
+  v_new_streak      integer;
+  v_credited        integer;
+  v_mission_reward  integer;
 begin
   if p_mission not in ('post', 'aura', 'comment') then
     raise exception 'invalid mission';
   end if;
+
+  v_mission_reward := case p_mission
+    when 'post' then 5
+    when 'comment' then 3
+    when 'aura' then 1
+  end;
 
   insert into public.daily_missions (user_id, mission_date) values (p_user_id, v_date)
     on conflict (user_id, mission_date) do nothing;
@@ -413,7 +421,7 @@ begin
   if (p_mission = 'post' and not v_before.created_post and v_after.created_post)
      or (p_mission = 'comment' and not v_before.wrote_comment and v_after.wrote_comment)
      or (p_mission = 'aura' and not v_before.gave_aura and v_after.gave_aura) then
-    v_credited := public.apply_aura_gain(p_user_id, 5);
+    v_credited := public.apply_aura_gain(p_user_id, v_mission_reward);
     insert into public.aura_ledger (user_id, delta, reason) values (p_user_id, v_credited, 'daily_mission_completed');
   end if;
 

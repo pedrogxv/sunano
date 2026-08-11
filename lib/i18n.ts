@@ -275,6 +275,16 @@ type Translations = {
       statVisitorsTodayCaption: (unique: number, returning: number) => string
       statVisitorsMonth: string
       statVisitorsMonthCaption: string
+      statVisitorsCardTitle: string
+      statVisitorsTabDay: string
+      statVisitorsTabWeek: string
+      statVisitorsTabMonth: string
+      statVisitorsTabTotal: string
+      statVisitorsPreviousLabel: (period: "day" | "week" | "month") => string
+      statVisitorsNewLabel: string
+      statVisitorsCompareTitle: string
+      statVisitorsTodayLabel: string
+      statVisitorsYesterdayLabel: string
       attentionPendingReview: (count: number) => string
       attentionDrafts: (count: number) => string
       attentionOutOfStock: (count: number) => string
@@ -995,6 +1005,17 @@ export const translations: Record<LocaleCode, Translations> = {
         statVisitorsTodayCaption: (unique, returning) => `${unique} novo${unique === 1 ? "" : "s"} · ${returning} recorrente${returning === 1 ? "" : "s"}`,
         statVisitorsMonth: "Visitantes no mês",
         statVisitorsMonthCaption: "visitantes únicos",
+        statVisitorsCardTitle: "Visitantes",
+        statVisitorsTabDay: "Dia",
+        statVisitorsTabWeek: "Semana",
+        statVisitorsTabMonth: "Mês",
+        statVisitorsTabTotal: "Total",
+        statVisitorsPreviousLabel: (period) =>
+          period === "day" ? "vs. ontem" : period === "week" ? "vs. semana passada" : "vs. mês passado",
+        statVisitorsNewLabel: "novo",
+        statVisitorsCompareTitle: "Hoje vs. ontem",
+        statVisitorsTodayLabel: "Hoje",
+        statVisitorsYesterdayLabel: "Ontem",
         attentionPendingReview: (count) => `${count} periférico${count === 1 ? "" : "s"} pendente${count === 1 ? "" : "s"} de revisão`,
         attentionDrafts: (count) => `${count} rascunho${count === 1 ? "" : "s"} de blog aguardando publicação`,
         attentionOutOfStock: (count) => `${count} produto${count === 1 ? "" : "s"} fora de estoque`,
@@ -1901,6 +1922,17 @@ export const translations: Record<LocaleCode, Translations> = {
         statVisitorsTodayCaption: (unique, returning) => `${unique} new · ${returning} returning`,
         statVisitorsMonth: "Visitors this month",
         statVisitorsMonthCaption: "unique visitors",
+        statVisitorsCardTitle: "Visitors",
+        statVisitorsTabDay: "Day",
+        statVisitorsTabWeek: "Week",
+        statVisitorsTabMonth: "Month",
+        statVisitorsTabTotal: "Total",
+        statVisitorsPreviousLabel: (period) =>
+          period === "day" ? "vs. yesterday" : period === "week" ? "vs. last week" : "vs. last month",
+        statVisitorsNewLabel: "new",
+        statVisitorsCompareTitle: "Today vs. yesterday",
+        statVisitorsTodayLabel: "Today",
+        statVisitorsYesterdayLabel: "Yesterday",
         attentionPendingReview: (count) => `${count} peripheral${count === 1 ? "" : "s"} pending review`,
         attentionDrafts: (count) => `${count} blog draft${count === 1 ? "" : "s"} awaiting publish`,
         attentionOutOfStock: (count) => `${count} product${count === 1 ? "" : "s"} out of stock`,

@@ -25,6 +25,7 @@ import {
 
 import { AnimatedCounter } from "@/components/animated-counter"
 import { Skeleton } from "@/components/ui/skeleton"
+import { VisitorsStatCard, type VisitorsStats } from "@/components/admin/VisitorsStatCard"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { hasAdminPermission, isWebMaster, type AdminProfile } from "@/lib/admin-permissions"
@@ -36,7 +37,7 @@ type DashboardStats = {
   store: { total: number; active: number; outOfStock: number } | null
   offers: { active: number } | null
   banners: { total: number; active: number; max: number } | null
-  visits: { today: number; uniqueToday: number; returningToday: number; month: number } | null
+  visits: VisitorsStats | null
 }
 
 type ColorKey = "cyan" | "emerald" | "amber" | "violet" | "rose" | "sky" | "fuchsia" | "orange" | "slate"
@@ -280,6 +281,13 @@ export default function AdminPage() {
               })}
         </div>
       </div>
+
+      {/* Visitantes em detalhe — abas Dia/Semana/Mês/Total + comparativo hoje/ontem */}
+      {(loading || stats?.visits) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2">
+          <VisitorsStatCard stats={stats?.visits ?? null} loading={loading} />
+        </div>
+      )}
 
       {/* Precisa de atenção — só aparece quando há algo pendente de fato */}
       {!loading && attentionItems.length > 0 && (

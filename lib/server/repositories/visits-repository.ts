@@ -27,8 +27,29 @@ export function hashVisitor(ip: string, userAgent: string): string {
   return crypto.createHash("sha256").update(`${getVisitorSalt()}:${ip}:${userAgent}`).digest("hex")
 }
 
+// O site é 100% BR — "hoje" precisa fechar à meia-noite em Brasília, não em
+// UTC. `toISOString()` fecharia o dia às 21h de Brasília (meia-noite UTC),
+// adiantando o reset em 3h e fazendo o dia parecer "não resetar": o dashboard
+// ainda mostra o dia anterior por 3h depois da meia-noite local, e o contador
+// de "hoje" carrega 3h do dia anterior por baixo do capô.
+const SITE_TIMEZONE = "America/Sao_Paulo"
+
+function isoDateInTimeZone(date: Date, timeZone: string): string {
+  // en-CA formata como YYYY-MM-DD, o mesmo formato do tipo `date` do Postgres.
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date)
+}
+
 function todayIso() {
-  return new Date().toISOString().slice(0, 10)
+  return isoDateInTimeZone(new Date(), SITE_TIMEZONE)
+}
+
+// Desloca uma data ISO (YYYY-MM-DD) em N dias. Ancora em meio-dia UTC antes de
+// formatar de volta no fuso do site: como o Brasil não observa mais horário
+// de verão (fixo em UTC-3), meio-dia UTC nunca cruza a virada do dia local,
+// então a data resultante é sempre exata.
+function addDaysIso(dateIso: string, days: number): string {
+  const [year, month, day] = dateIso.split("-").map(Number)
+  return isoDateInTimeZone(new Date(Date.UTC(year, month - 1, day + days, 12)), SITE_TIMEZONE)
 }
 
 /**
@@ -52,43 +73,94 @@ export type VisitStats = {
   today: number
   uniqueToday: number
   returningToday: number
+  yesterday: number
+  week: number
+  weekPrevious: number
   month: number
+  monthPrevious: number
+  total: number
 }
 
 /**
  * Estatísticas para o dashboard: visitantes de hoje (total, únicos e
- * recorrentes) e visitantes distintos no mês corrente.
+ * recorrentes), mais os números usados pelo card de Visitantes com abas
+ * Dia/Semana/Mês/Total (cada aba com seu período anterior equivalente, pra
+ * variação percentual, e o par hoje/ontem pra barra comparativa).
  *
  * "Único hoje" = hash sem nenhuma visita registrada antes de hoje.
  * "Recorrente hoje" = hash que já tinha visita em algum dia anterior.
+ *
+ * Semana = 7 dias corridos terminando hoje (não semana ISO); a "anterior" são
+ * os 7 dias imediatamente antes. Mês = mês corrente até hoje; o "anterior" é
+ * o mesmo intervalo de dias (1..dia-do-mês) do mês passado, pra comparar
+ * períodos de mesmo tamanho (não o mês passado inteiro). Total é cumulativo
+ * desde que o rastreamento existe, sem período anterior — cada contagem aqui
+ * é linha por (visitante, dia), não visitante distinto no período (mesma
+ * definição que "month" já usava).
  */
 export async function getVisitStats(): Promise<VisitStats> {
   const db = createSupabaseAdminClient()
   const today = todayIso()
+  const yesterday = addDaysIso(today, -1)
+  const weekStart = addDaysIso(today, -6)
+  const weekPreviousStart = addDaysIso(today, -13)
+  const weekPreviousEnd = addDaysIso(today, -7)
   const monthStart = `${today.slice(0, 7)}-01`
+  const dayOfMonth = Number(today.slice(8, 10))
+  const monthPreviousLastDay = addDaysIso(monthStart, -1)
+  const monthPreviousStart = `${monthPreviousLastDay.slice(0, 7)}-01`
+  const monthPreviousEndDay = Math.min(dayOfMonth, Number(monthPreviousLastDay.slice(8, 10)))
+  const monthPreviousEnd = `${monthPreviousStart.slice(0, 7)}-${String(monthPreviousEndDay).padStart(2, "0")}`
 
-  const [{ data: todayRows, error: todayError }, { count: monthCount, error: monthError }] = await Promise.all([
+  const rangeCount = (from: string, to: string) =>
+    db.from("site_visits").select("visitor_hash", { count: "exact", head: true }).gte("visited_date", from).lte("visited_date", to)
+
+  const [
+    { data: todayRows, error: todayError },
+    { count: monthCount, error: monthError },
+    { count: yesterdayCount, error: yesterdayError },
+    { count: weekCount, error: weekError },
+    { count: weekPreviousCount, error: weekPreviousError },
+    { count: monthPreviousCount, error: monthPreviousError },
+    { count: totalCount, error: totalError },
+  ] = await Promise.all([
     db.from("site_visits").select("visitor_hash").eq("visited_date", today),
-    db
-      .from("site_visits")
-      .select("visitor_hash", { count: "exact", head: true })
-      .gte("visited_date", monthStart)
-      .lte("visited_date", today),
+    rangeCount(monthStart, today),
+    rangeCount(yesterday, yesterday),
+    rangeCount(weekStart, today),
+    rangeCount(weekPreviousStart, weekPreviousEnd),
+    rangeCount(monthPreviousStart, monthPreviousEnd),
+    db.from("site_visits").select("visitor_hash", { count: "exact", head: true }),
   ])
 
-  if (todayError) {
-    console.error("[visits-repository] getVisitStats (today):", todayError)
-    throw todayError
+  for (const [label, error] of [
+    ["today", todayError],
+    ["month", monthError],
+    ["yesterday", yesterdayError],
+    ["week", weekError],
+    ["weekPrevious", weekPreviousError],
+    ["monthPrevious", monthPreviousError],
+    ["total", totalError],
+  ] as const) {
+    if (error) {
+      console.error(`[visits-repository] getVisitStats (${label}):`, error)
+      throw error
+    }
   }
-  if (monthError) {
-    console.error("[visits-repository] getVisitStats (month):", monthError)
-    throw monthError
+
+  const periodCounts = {
+    yesterday: yesterdayCount ?? 0,
+    week: weekCount ?? 0,
+    weekPrevious: weekPreviousCount ?? 0,
+    month: monthCount ?? 0,
+    monthPrevious: monthPreviousCount ?? 0,
+    total: totalCount ?? 0,
   }
 
   const todayHashes = (todayRows ?? []).map((row) => row.visitor_hash as string)
 
   if (todayHashes.length === 0) {
-    return { today: 0, uniqueToday: 0, returningToday: 0, month: monthCount ?? 0 }
+    return { today: 0, uniqueToday: 0, returningToday: 0, ...periodCounts }
   }
 
   // Hashes de hoje que já tinham visita em algum dia anterior — cada um
@@ -121,6 +193,6 @@ export async function getVisitStats(): Promise<VisitStats> {
     today: todayHashes.length,
     uniqueToday: todayHashes.length - returningHashes.size,
     returningToday: returningHashes.size,
-    month: monthCount ?? 0,
+    ...periodCounts,
   }
 }

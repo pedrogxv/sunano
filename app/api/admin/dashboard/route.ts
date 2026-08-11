@@ -95,12 +95,7 @@ export async function GET() {
     safe("visits", async () => {
       if (!hasAdminPermission(profile, "dashboard_read")) return
       const visitStats = await getVisitStats()
-      stats.visits = {
-        today: visitStats.today,
-        uniqueToday: visitStats.uniqueToday,
-        returningToday: visitStats.returningToday,
-        month: visitStats.month,
-      }
+      stats.visits = { ...visitStats }
     }),
   ])
 

@@ -153,6 +153,16 @@ export const DAILY_MISSION_KEYS: Array<{ key: DailyMissionKey; label: string }> 
   { key: "gave_aura", label: "Dar aura em algo" },
 ]
 
+/** Aura creditada ao completar cada missão pela primeira vez no dia — espelha
+ * o `case p_mission` de `complete_daily_mission` (ver
+ * 20260811000000_daily_mission_reward_rebalance.sql); se o valor mudar no
+ * banco, atualizar aqui junto (é só exibição). */
+export const DAILY_MISSION_REWARDS: Record<DailyMissionKey, number> = {
+  created_post: 5,
+  wrote_comment: 3,
+  gave_aura: 1,
+}
+
 /** Quantas das 3 missões já foram cumpridas hoje. */
 export function countCompletedMissions(missions: DailyMissionsState): number {
   return DAILY_MISSION_KEYS.filter(({ key }) => missions[key]).length

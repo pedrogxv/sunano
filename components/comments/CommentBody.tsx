@@ -79,6 +79,19 @@ export function CommentBody({
   return (
     <p className={cn("whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground", className)}>
       {parseTextMarkdown(body).map((segment, index) => {
+        if (segment.href) {
+          return (
+            <a
+              key={index}
+              href={segment.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary"
+            >
+              {segment.text}
+            </a>
+          )
+        }
         if (segment.bold) {
           return (
             <strong key={index} className="font-semibold">
@@ -88,6 +101,9 @@ export function CommentBody({
         }
         if (segment.italic) {
           return <em key={index}>{segment.text}</em>
+        }
+        if (segment.underline) {
+          return <u key={index}>{segment.text}</u>
         }
         return (
           <Fragment key={index}>
@@ -106,8 +122,10 @@ export function CommentFormatHint() {
   return (
     <p className="text-xs text-muted-foreground">
       Use <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">**texto**</code> para
-      negrito e <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">*texto*</code> para
-      itálico.
+      negrito, <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">*texto*</code> para
+      itálico, <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">__texto__</code> para
+      sublinhado e <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">[texto](url)</code>{" "}
+      para link.
     </p>
   )
 }

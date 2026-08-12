@@ -12,7 +12,7 @@ import "server-only"
  */
 export const MAX_COMMENT_IMAGES = 2
 export const MAX_COMMENT_IMAGE_BYTES = 1024 * 1024
-export const ALLOWED_COMMENT_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"]
+export const ALLOWED_COMMENT_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 
 export const MAX_COMMENT_MENTIONS = 2
 

@@ -9,12 +9,18 @@ import { getUserProfile, getUserProfiles } from "@/lib/server/repositories/users
 
 export const dynamic = "force-dynamic"
 
-const commentSchema = z.object({
-  body: z.string().trim().min(4).max(2000),
-  parentCommentId: z.string().uuid().nullable().optional(),
-  imageUrls: z.array(z.string().url()).max(MAX_COMMENT_IMAGES).optional(),
-  mentionedUserIds: z.array(z.string().uuid()).max(MAX_COMMENT_MENTIONS).optional(),
-})
+const commentSchema = z
+  .object({
+    body: z.string().trim().max(2000),
+    parentCommentId: z.string().uuid().nullable().optional(),
+    imageUrls: z.array(z.string().url()).max(MAX_COMMENT_IMAGES).optional(),
+    mentionedUserIds: z.array(z.string().uuid()).max(MAX_COMMENT_MENTIONS).optional(),
+  })
+  // Texto continua exigindo 4+ caracteres, mas uma imagem/gif anexado também basta.
+  .refine((data) => data.body.length >= 4 || (data.imageUrls?.length ?? 0) > 0, {
+    message: "Escreva ao menos 4 caracteres ou anexe uma imagem.",
+    path: ["body"],
+  })
 
 /** Lista pública paginada dos comentários de uma notícia (`?page=1&sort=recent|aura`). */
 export async function GET(request: NextRequest, context: { params: Promise<{ slug: string }> }) {

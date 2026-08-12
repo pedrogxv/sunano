@@ -1,10 +1,13 @@
 "use client"
 
-import type { RefObject } from "react"
-import { Bold, CaseUpper, Italic } from "lucide-react"
+import { useState, type RefObject } from "react"
+import { Bold, CaseUpper, Italic, Link2, Underline } from "lucide-react"
+
+import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 /**
- * Aplica/remove um marcador (`**`/`*`) em volta do texto selecionado no
+ * Aplica/remove um marcador (`**`/`*`/`__`) em volta do texto selecionado no
  * textarea. Sem seleção, insere o par de marcadores no cursor e deixa o
  * cursor entre eles, pronto pra digitar.
  */
@@ -51,7 +54,90 @@ function toUppercase(textarea: HTMLTextAreaElement, onChange: (value: string) =>
   })
 }
 
-/** Barra compacta de formatação (negrito, itálico, maiúsculo) para um textarea controlado. */
+/** Envolve o texto selecionado (ou o próprio link) em `[texto](url)`, no formato aceito por `parseTextMarkdown`. */
+function insertLink(textarea: HTMLTextAreaElement, url: string, onChange: (value: string) => void) {
+  const { selectionStart, selectionEnd, value } = textarea
+  const selected = value.slice(selectionStart, selectionEnd)
+  const before = value.slice(0, selectionStart)
+  const after = value.slice(selectionEnd)
+  const inserted = `[${selected || url}](${url})`
+
+  onChange(`${before}${inserted}${after}`)
+  requestAnimationFrame(() => {
+    textarea.focus()
+    const cursor = before.length + inserted.length
+    textarea.setSelectionRange(cursor, cursor)
+  })
+}
+
+/** Botão de link com popover pra digitar a URL — só ele precisa de mais que um clique. */
+function LinkFormatButton({
+  textareaRef,
+  onChange,
+}: {
+  textareaRef: RefObject<HTMLTextAreaElement | null>
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [url, setUrl] = useState("")
+
+  function confirm() {
+    const textarea = textareaRef.current
+    const trimmed = url.trim()
+    if (!textarea || !trimmed) return
+    const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+    insertLink(textarea, normalized, onChange)
+    setOpen(false)
+  }
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (next) setUrl("")
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title="Link ([texto](url))"
+          className="rounded p-1.5 transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Link2 className="size-3.5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64">
+        <p className="mb-1.5 text-xs font-medium text-foreground">Inserir link</p>
+        <Input
+          autoFocus
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              confirm()
+            }
+          }}
+          placeholder="https://exemplo.com"
+          className="h-8 text-sm"
+        />
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={confirm}
+            disabled={!url.trim()}
+            className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            Inserir
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** Barra compacta de formatação (negrito, itálico, sublinhado, link, maiúsculo) para um textarea controlado. */
 export function TextFormatToolbar({
   textareaRef,
   value,
@@ -84,6 +170,15 @@ export function TextFormatToolbar({
       >
         <Italic className="size-3.5" />
       </button>
+      <button
+        type="button"
+        title="Sublinhado (__texto__)"
+        onClick={withTextarea((t) => toggleWrap(t, "__", onChange))}
+        className="rounded p-1.5 transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <Underline className="size-3.5" />
+      </button>
+      <LinkFormatButton textareaRef={textareaRef} onChange={onChange} />
       <button
         type="button"
         title="Maiúsculo"

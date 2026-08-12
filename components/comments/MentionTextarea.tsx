@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type RefObject } from "react"
 import { AtSign, Loader2, X } from "lucide-react"
 
 import { UserAvatar } from "@/components/ui/user-avatar"
@@ -43,6 +43,7 @@ export function MentionTextarea({
   placeholder,
   className,
   autoFocus,
+  textareaRef: externalTextareaRef,
 }: {
   value: string
   onChange: (value: string) => void
@@ -51,6 +52,8 @@ export function MentionTextarea({
   placeholder?: string
   className?: string
   autoFocus?: boolean
+  /** Ref externo pro `<textarea>` — usado pela `TextFormatToolbar` pra aplicar formatação na seleção. */
+  textareaRef?: RefObject<HTMLTextAreaElement | null>
 }) {
   const [suggestions, setSuggestions] = useState<PublicProfileSummary[]>([])
   // "idle" cobre "sem busca em andamento" e também o debounce antes do
@@ -59,7 +62,8 @@ export function MentionTextarea({
   const [searchStatus, setSearchStatus] = useState<"idle" | "done">("idle")
   const [mentionRange, setMentionRange] = useState<{ start: number; query: string } | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const internalTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRef = externalTextareaRef ?? internalTextareaRef
 
   const mentionLimitReached = mentionedUsers.length >= MAX_MENTIONS
   const open = mentionRange !== null

@@ -1,9 +1,11 @@
 "use client"
 
+import { useRef } from "react"
 import Link from "next/link"
 import { Clock, Flame, Lock, MessageCircle } from "lucide-react"
 
 import type { AuraBlockReason, Reaction } from "@/components/forum/AuraButton"
+import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { CommentFormatHint } from "./CommentBody"
@@ -131,6 +133,8 @@ export function CommentsSection({
     initialHasMore,
   })
 
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
+
   /**
    * Só o autor vê "Editar". O prazo de 15 minutos é conferido dentro do
    * `CommentRow` (que também o faz expirar sozinho) e, de novo, no servidor
@@ -184,8 +188,10 @@ export function CommentsSection({
                 </div>
               )}
 
+              <TextFormatToolbar textareaRef={bodyTextareaRef} value={body} onChange={setBody} />
               <MentionTextarea
                 autoFocus
+                textareaRef={bodyTextareaRef}
                 value={body}
                 onChange={setBody}
                 mentionedUsers={mentionedUsers}
@@ -205,7 +211,7 @@ export function CommentsSection({
                 <Button
                   size="sm"
                   onClick={() => submitComment()}
-                  disabled={saving || body.trim().length < 4}
+                  disabled={saving || (body.trim().length < 4 && imageUrls.length === 0)}
                 >
                   {saving ? "Enviando…" : "Comentar"}
                 </Button>

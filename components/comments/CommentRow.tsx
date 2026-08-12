@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -7,6 +7,7 @@ import { AuraButton, type AuraBlockReason, type Reaction } from "@/components/fo
 import { ImageLightbox } from "@/components/forum/ImageLightbox"
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
 import { ReportMenu } from "@/components/forum/ReportMenu"
+import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { StreakBadge } from "@/components/profile/StreakBadge"
 import {
@@ -116,6 +117,7 @@ export function CommentRow({
 }) {
   const withinEditWindow = useWithinEditWindow(comment.created_at)
   const showEditButton = canEdit && withinEditWindow && !editing
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null)
 
   return (
     <div className="flex gap-3">
@@ -157,8 +159,14 @@ export function CommentRow({
                 {editError}
               </div>
             )}
+            <TextFormatToolbar
+              textareaRef={editTextareaRef}
+              value={editValue}
+              onChange={(value) => onEditChange?.(value)}
+            />
             <MentionTextarea
               autoFocus
+              textareaRef={editTextareaRef}
               value={editValue}
               onChange={(value) => onEditChange?.(value)}
               mentionedUsers={editMentionedUsers}
@@ -179,7 +187,7 @@ export function CommentRow({
               <Button
                 size="sm"
                 onClick={onSubmitEdit}
-                disabled={editSaving || editValue.trim().length < 4}
+                disabled={editSaving || (editValue.trim().length < 4 && editImageUrls.length === 0)}
               >
                 {editSaving ? "Salvando…" : "Salvar"}
               </Button>

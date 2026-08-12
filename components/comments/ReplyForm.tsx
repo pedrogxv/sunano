@@ -1,5 +1,7 @@
+import { useRef } from "react"
 import Link from "next/link"
 
+import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { Button } from "@/components/ui/button"
 import { CommentFormatHint } from "./CommentBody"
 import { CommentImagesField } from "./CommentImagesField"
@@ -32,6 +34,8 @@ export function ReplyForm({
   saving: boolean
   error: string | null
 }) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
   if (!authUser) {
     return (
       <p className="text-xs text-muted-foreground">
@@ -48,8 +52,10 @@ export function ReplyForm({
           {error}
         </div>
       )}
+      <TextFormatToolbar textareaRef={textareaRef} value={value} onChange={onChange} />
       <MentionTextarea
         autoFocus
+        textareaRef={textareaRef}
         value={value}
         onChange={onChange}
         mentionedUsers={mentionedUsers}
@@ -63,7 +69,11 @@ export function ReplyForm({
         <Button size="sm" variant="ghost" onClick={onCancel}>
           Cancelar
         </Button>
-        <Button size="sm" onClick={onSubmit} disabled={saving || value.trim().length < 4}>
+        <Button
+          size="sm"
+          onClick={onSubmit}
+          disabled={saving || (value.trim().length < 4 && imageUrls.length === 0)}
+        >
           {saving ? "Enviando…" : "Responder"}
         </Button>
       </div>

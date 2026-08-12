@@ -9,11 +9,17 @@ import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 
 // Mesmos limites do POST de criação — o texto editado passa pelas mesmas
 // regras do original, senão dava pra escapar do mínimo/máximo editando depois.
-const editSchema = z.object({
-  body: z.string().trim().min(4).max(2000),
-  imageUrls: z.array(z.string().url()).max(MAX_COMMENT_IMAGES).optional(),
-  mentionedUserIds: z.array(z.string().uuid()).max(MAX_COMMENT_MENTIONS).optional(),
-})
+const editSchema = z
+  .object({
+    body: z.string().trim().max(2000),
+    imageUrls: z.array(z.string().url()).max(MAX_COMMENT_IMAGES).optional(),
+    mentionedUserIds: z.array(z.string().uuid()).max(MAX_COMMENT_MENTIONS).optional(),
+  })
+  // Mesma regra do POST de criação: texto de 4+ caracteres OU ao menos uma imagem/gif.
+  .refine((data) => data.body.length >= 4 || (data.imageUrls?.length ?? 0) > 0, {
+    message: "Escreva ao menos 4 caracteres ou anexe uma imagem.",
+    path: ["body"],
+  })
 
 /** Edita o próprio comentário, dentro da janela de 15 minutos (conferida no repositório). */
 export async function PATCH(

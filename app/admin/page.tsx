@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart2,
-  Eye,
   GalleryHorizontalEnd,
   Gift,
   LayoutGrid,
@@ -19,7 +18,6 @@ import {
   ShoppingBag,
   Trophy,
   Users,
-  UserCheck,
   Zap,
 } from "lucide-react"
 
@@ -155,29 +153,7 @@ export default function AdminPage() {
       caption: d.statBannersCaption(stats.banners.active, stats.banners.max),
       alert: false,
     },
-    stats?.visits && {
-      href: null,
-      key: "visitors-today",
-      icon: Eye,
-      color: "fuchsia" as ColorKey,
-      value: stats.visits.today,
-      label: d.statVisitorsToday,
-      caption: d.statVisitorsTodayCaption(stats.visits.uniqueToday, stats.visits.returningToday),
-      alert: false,
-    },
-    stats?.visits && {
-      href: null,
-      key: "visitors-month",
-      icon: UserCheck,
-      color: "orange" as ColorKey,
-      value: stats.visits.month,
-      label: d.statVisitorsMonth,
-      caption: d.statVisitorsMonthCaption,
-      alert: false,
-    },
-  ]
-    .filter((tile): tile is NonNullable<typeof tile> => Boolean(tile))
-    .map((tile) => ("key" in tile ? tile : { ...tile, key: tile.href }))
+  ].filter((tile): tile is NonNullable<typeof tile> => Boolean(tile))
 
   const attentionItems = [
     // /admin/tierlist/revisao permite aprovar/categorizar direto na página —
@@ -269,14 +245,10 @@ export default function AdminPage() {
                   styles.hover
                 )
 
-                return tile.href ? (
-                  <Link key={tile.key} href={tile.href} style={{ animationDelay: `${index * 60}ms` }} className={className}>
+                return (
+                  <Link key={tile.href} href={tile.href} style={{ animationDelay: `${index * 60}ms` }} className={className}>
                     {content}
                   </Link>
-                ) : (
-                  <div key={tile.key} style={{ animationDelay: `${index * 60}ms` }} className={className}>
-                    {content}
-                  </div>
                 )
               })}
         </div>

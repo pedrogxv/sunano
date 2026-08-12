@@ -271,10 +271,6 @@ type Translations = {
       statOffersCaption: string
       statBanners: string
       statBannersCaption: (active: number, max: number) => string
-      statVisitorsToday: string
-      statVisitorsTodayCaption: (unique: number, returning: number) => string
-      statVisitorsMonth: string
-      statVisitorsMonthCaption: string
       statVisitorsCardTitle: string
       statVisitorsTabDay: string
       statVisitorsTabWeek: string
@@ -1001,10 +997,6 @@ export const translations: Record<LocaleCode, Translations> = {
         statOffersCaption: "últimos 30 dias",
         statBanners: "Banners",
         statBannersCaption: (active, max) => `${active}/${max} ativos`,
-        statVisitorsToday: "Visitantes hoje",
-        statVisitorsTodayCaption: (unique, returning) => `${unique} novo${unique === 1 ? "" : "s"} · ${returning} recorrente${returning === 1 ? "" : "s"}`,
-        statVisitorsMonth: "Visitantes no mês",
-        statVisitorsMonthCaption: "visitantes únicos",
         statVisitorsCardTitle: "Visitantes",
         statVisitorsTabDay: "Dia",
         statVisitorsTabWeek: "Semana",
@@ -1918,10 +1910,6 @@ export const translations: Record<LocaleCode, Translations> = {
         statOffersCaption: "last 30 days",
         statBanners: "Banners",
         statBannersCaption: (active, max) => `${active}/${max} active`,
-        statVisitorsToday: "Visitors today",
-        statVisitorsTodayCaption: (unique, returning) => `${unique} new · ${returning} returning`,
-        statVisitorsMonth: "Visitors this month",
-        statVisitorsMonthCaption: "unique visitors",
         statVisitorsCardTitle: "Visitors",
         statVisitorsTabDay: "Day",
         statVisitorsTabWeek: "Week",

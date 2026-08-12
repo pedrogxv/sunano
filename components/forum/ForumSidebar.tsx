@@ -14,11 +14,11 @@ import { SOCIAL_LINKS } from "@/lib/social-links"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
 const RULES = [
-  "Não publique conteúdo ilegal, difamatório, obsceno, ameaçador ou discriminatório.",
-  "Nada de spam, flood ou publicidade não autorizada.",
-  "Não se passe por outros usuários ou pelo Sunano.",
-  "Não tente acessar áreas restritas ou sistemas sem autorização.",
-  "Respeite direitos autorais e propriedade intelectual de terceiros.",
+  "Proibido NSFW, discurso de ódio ou comportamento tóxico.",
+  "Sem spam, flood ou publicidade para benefício próprio sem autorização da moderação.",
+  "Não divulgue informações pessoais de outros membros — ações legais podem ser tomadas, com colaboração do site.",
+  "Respeite os demais membros do fórum.",
+  "Seja inscrito no canal do YouTube 🥹",
 ]
 
 const discordLink = SOCIAL_LINKS.find((l) => l.label === "Discord")

@@ -20,6 +20,8 @@ export type AdminPermissionKey =
   | "forum_write"
   | "store_read"
   | "store_write"
+  | "market_read"
+  | "market_write"
   | "banners_read"
   | "banners_write"
   | "events_read"
@@ -36,7 +38,7 @@ export type AdminProfile = {
   permissions: Record<string, boolean> | null
 }
 
-export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store" | "banners" | "events" | "brands"
+export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store" | "market" | "banners" | "events" | "brands"
 
 export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKey: AdminPermissionKey; writeKey: AdminPermissionKey }> = [
   { key: "dashboard", label: "Dashboard", readKey: "dashboard_read", writeKey: "dashboard_read" },
@@ -50,6 +52,7 @@ export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKe
   { key: "profile", label: "Perfil", readKey: "profile_read", writeKey: "profile_write" },
   { key: "offers", label: "Ofertas", readKey: "offers_read", writeKey: "offers_write" },
   { key: "store", label: "Loja / Bazar", readKey: "store_read", writeKey: "store_write" },
+  { key: "market", label: "Mercado", readKey: "market_read", writeKey: "market_write" },
   { key: "banners", label: "Banners da Home", readKey: "banners_read", writeKey: "banners_write" },
   { key: "events", label: "Conquistas", readKey: "events_read", writeKey: "events_write" },
 ]
@@ -74,6 +77,8 @@ export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [
   "offers_write",
   "store_read",
   "store_write",
+  "market_read",
+  "market_write",
   "banners_read",
   "banners_write",
   "events_read",

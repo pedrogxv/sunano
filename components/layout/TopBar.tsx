@@ -56,6 +56,9 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/tierlist":          { title: "Tierlist", description: "Ranking dos melhores periféricos por categoria." },
   "/blog":              { title: "Guias", description: "Guias completos para diversos assuntos, redigidos por especialistas do Sunano." },
   "/offers":            { title: "Promoções", description: "Promoções e descontos selecionados do Telegram." },
+  "/mercado":           { title: "Mercado", description: "Anúncios de produtos novos e usados publicados pela comunidade." },
+  "/mercado/novo":      { title: "Anunciar", description: "Publique um anúncio no Mercado." },
+  "/mercado/meus-anuncios": { title: "Meus anúncios", description: "Gerencie os anúncios que você publicou no Mercado." },
   "/forum":             { title: "Fórum", description: "Discussões e perguntas da comunidade." },
   "/pessoas":           { title: "Pessoas", description: "Encontre outros membros, veja os destaques e siga quem você curte." },
   "/conquistas":        { title: "Conquistas", description: "Medalhas e conquistas por tempo limitado." },
@@ -73,6 +76,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/users":       { title: "Usuários e permissões", description: "Controle quem pode ler ou editar cada seção." },
   "/admin/settings":    { title: "Configurações", description: "Gerencie seu perfil e preferências do sistema." },
   "/admin/store":       { title: "Loja & Bazar", description: "Gerencie os produtos da loja e os itens do bazar." },
+  "/admin/market":      { title: "Mercado", description: "Modere os anúncios publicados pela comunidade e gerencie banimentos." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
   "/admin/forum/denuncias": { title: "Denúncias", description: "Posts e comentários denunciados pela comunidade." },
   "/admin/eventos":     { title: "Conquistas", description: "Gerencie as conquistas que concedem medalhas automaticamente." },
@@ -129,6 +133,7 @@ function getPageDefaults(pathname: string): PageDefaults {
   if (pathname.startsWith("/forum/"))            return { title: "Fórum" }
   if (pathname.startsWith("/perifericos/"))      return { title: "Periférico" }
   if (pathname.startsWith("/perfil/"))           return { title: "Perfil", description: "Vitrine pública do membro." }
+  if (pathname.startsWith("/mercado/"))          return { title: "Anúncio" }
   return { title: "Sunano" }
 }
 

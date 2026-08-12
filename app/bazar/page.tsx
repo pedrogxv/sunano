@@ -1,13 +1,5 @@
-import { Recycle } from "lucide-react"
-import { ComingSoon } from "@/components/store/ComingSoon"
+import { redirect } from "next/navigation"
 
 export default function BazarPage() {
-  return (
-    <ComingSoon
-      icon={Recycle}
-      title="Bazar"
-      description="O Bazar com equipamentos usados e testados pelo Sunano está sendo preparado. Fique de olho nas redes para o lançamento."
-      accent="amber"
-    />
-  )
+  redirect("/mercado")
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getStripe } from "@/lib/server/integrations/stripe"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { markMarketFeeExpired, markMarketFeePaid } from "@/lib/server/repositories/market-repository"
 import Stripe from "stripe"
 
 export const runtime = "nodejs"
@@ -31,17 +32,25 @@ export async function POST(request: NextRequest) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
-        await handleCheckoutCompleted(session, db)
+        if (session.metadata?.kind === "market_fee") {
+          await markMarketFeePaid(session.id)
+        } else {
+          await handleCheckoutCompleted(session, db)
+        }
         break
       }
 
       case "checkout.session.expired": {
         const session = event.data.object as Stripe.Checkout.Session
-        await db
-          .from("store_orders")
-          .update({ status: "cancelled", updated_at: new Date().toISOString() })
-          .eq("stripe_session_id", session.id)
-          .eq("status", "pending")
+        if (session.metadata?.kind === "market_fee") {
+          await markMarketFeeExpired(session.id)
+        } else {
+          await db
+            .from("store_orders")
+            .update({ status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("stripe_session_id", session.id)
+            .eq("status", "pending")
+        }
         break
       }
 

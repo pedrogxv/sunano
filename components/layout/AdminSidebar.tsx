@@ -18,6 +18,7 @@ import {
   Settings,
   ShoppingBag,
   Tag,
+  Tags,
   Trophy,
   Users,
   Wrench,
@@ -97,6 +98,7 @@ export function AdminSidebar() {
       items: [
         { href: "/admin/offers", label: t.admin.sidebar.offers,         icon: Gift,       permission: "offers_read" },
         { href: "/admin/store",  label: t.admin.sidebar.storeAndBazar,  icon: ShoppingBag, permission: "store_read" },
+        { href: "/admin/market", label: "Mercado",                      icon: Tags,        permission: "market_read" },
       ],
     },
     {

@@ -100,6 +100,7 @@ type Translations = {
     videos: string
     forum: string
     store: string
+    market: string
     used: string
     offers: string
     people: string
@@ -783,6 +784,7 @@ export const translations: Record<LocaleCode, Translations> = {
       videos: "Vídeos e redes sociais",
       forum: "Fórum",
       store: "Loja",
+      market: "Mercado",
       used: "Usado",
       offers: "Promoções",
       people: "Usuários",
@@ -1703,6 +1705,7 @@ export const translations: Record<LocaleCode, Translations> = {
       videos: "Videos & socials",
       forum: "Forum",
       store: "Store",
+      market: "Market",
       used: "Used",
       offers: "Deals",
       people: "People",

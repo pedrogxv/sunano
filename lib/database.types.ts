@@ -98,6 +98,9 @@ export type Database = {
           tiktok_handle: string | null
           /** Incrementado só via RPC `increment_profile_views` — nunca escrito direto. */
           profile_views: number
+          /** Ban restrito ao Mercado — não impede login nem o resto da conta. */
+          market_banned_at: string | null
+          market_ban_reason: string | null
           created_at: string
           updated_at: string
         }
@@ -694,6 +697,93 @@ export type Database = {
           metadata?: Record<string, unknown>
           created_at?: string
           updated_at?: string
+        }
+      }
+      market_listings: {
+        Relationships: []
+        Row: {
+          id: string
+          seller_id: string
+          title: string
+          description: string | null
+          price_cents: number
+          initial_price_cents: number
+          olx_url: string
+          images: string[]
+          status: "pending_review" | "active" | "rejected" | "sold" | "removed"
+          fee_cents: number
+          fee_status: "waived" | "pending" | "paid"
+          is_free_vip_slot: boolean
+          stripe_session_id: string | null
+          rejection_reason: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          seller_id: string
+          title: string
+          description?: string | null
+          price_cents: number
+          initial_price_cents: number
+          olx_url: string
+          images?: string[]
+          status?: "pending_review" | "active" | "rejected" | "sold" | "removed"
+          fee_cents?: number
+          fee_status?: "waived" | "pending" | "paid"
+          is_free_vip_slot?: boolean
+          stripe_session_id?: string | null
+          rejection_reason?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          seller_id?: string
+          title?: string
+          description?: string | null
+          price_cents?: number
+          initial_price_cents?: number
+          olx_url?: string
+          images?: string[]
+          status?: "pending_review" | "active" | "rejected" | "sold" | "removed"
+          fee_cents?: number
+          fee_status?: "waived" | "pending" | "paid"
+          is_free_vip_slot?: boolean
+          stripe_session_id?: string | null
+          rejection_reason?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      market_listing_price_changes: {
+        Relationships: []
+        Row: {
+          id: string
+          listing_id: string
+          old_price_cents: number
+          new_price_cents: number
+          changed_at: string
+        }
+        Insert: {
+          id?: string
+          listing_id: string
+          old_price_cents: number
+          new_price_cents: number
+          changed_at?: string
+        }
+        Update: {
+          id?: string
+          listing_id?: string
+          old_price_cents?: number
+          new_price_cents?: number
+          changed_at?: string
         }
       }
       tierlist_meta: {

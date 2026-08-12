@@ -3,6 +3,7 @@ import "server-only"
 import crypto from "node:crypto"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { addDaysIso, todayIso } from "@/lib/server/time"
 
 /**
  * Repositório de contagem de visitantes — acesso à tabela `site_visits`.
@@ -25,31 +26,6 @@ function getVisitorSalt() {
 /** Hash irreversível de IP + User-Agent — identifica o visitante sem guardar dado pessoal. */
 export function hashVisitor(ip: string, userAgent: string): string {
   return crypto.createHash("sha256").update(`${getVisitorSalt()}:${ip}:${userAgent}`).digest("hex")
-}
-
-// O site é 100% BR — "hoje" precisa fechar à meia-noite em Brasília, não em
-// UTC. `toISOString()` fecharia o dia às 21h de Brasília (meia-noite UTC),
-// adiantando o reset em 3h e fazendo o dia parecer "não resetar": o dashboard
-// ainda mostra o dia anterior por 3h depois da meia-noite local, e o contador
-// de "hoje" carrega 3h do dia anterior por baixo do capô.
-const SITE_TIMEZONE = "America/Sao_Paulo"
-
-function isoDateInTimeZone(date: Date, timeZone: string): string {
-  // en-CA formata como YYYY-MM-DD, o mesmo formato do tipo `date` do Postgres.
-  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date)
-}
-
-function todayIso() {
-  return isoDateInTimeZone(new Date(), SITE_TIMEZONE)
-}
-
-// Desloca uma data ISO (YYYY-MM-DD) em N dias. Ancora em meio-dia UTC antes de
-// formatar de volta no fuso do site: como o Brasil não observa mais horário
-// de verão (fixo em UTC-3), meio-dia UTC nunca cruza a virada do dia local,
-// então a data resultante é sempre exata.
-function addDaysIso(dateIso: string, days: number): string {
-  const [year, month, day] = dateIso.split("-").map(Number)
-  return isoDateInTimeZone(new Date(Date.UTC(year, month - 1, day + days, 12)), SITE_TIMEZONE)
 }
 
 /**

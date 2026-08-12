@@ -278,9 +278,16 @@ type Translations = {
       statVisitorsTabTotal: string
       statVisitorsPreviousLabel: (period: "day" | "week" | "month") => string
       statVisitorsNewLabel: string
-      statVisitorsCompareTitle: string
-      statVisitorsTodayLabel: string
-      statVisitorsYesterdayLabel: string
+      performanceOverview: string
+      performanceCardTitle: string
+      performanceTabToday: string
+      performanceTabWeek: string
+      performanceInteractionsLabel: string
+      performanceAuraLabel: string
+      gaugeTitle: string
+      gaugeCaption: (approved: number, total: number) => string
+      gaugePendingLabel: (count: number) => string
+      gaugeEmptyLabel: string
       attentionPendingReview: (count: number) => string
       attentionDrafts: (count: number) => string
       attentionOutOfStock: (count: number) => string
@@ -1005,9 +1012,16 @@ export const translations: Record<LocaleCode, Translations> = {
         statVisitorsPreviousLabel: (period) =>
           period === "day" ? "vs. ontem" : period === "week" ? "vs. semana passada" : "vs. mês passado",
         statVisitorsNewLabel: "novo",
-        statVisitorsCompareTitle: "Hoje vs. ontem",
-        statVisitorsTodayLabel: "Hoje",
-        statVisitorsYesterdayLabel: "Ontem",
+        performanceOverview: "Visão geral de performance",
+        performanceCardTitle: "Atividade da comunidade",
+        performanceTabToday: "Hoje",
+        performanceTabWeek: "Semana",
+        performanceInteractionsLabel: "novos posts e comentários",
+        performanceAuraLabel: "de aura gerada no período",
+        gaugeTitle: "Periféricos revisados",
+        gaugeCaption: (approved, total) => `${approved} de ${total} aprovados`,
+        gaugePendingLabel: (count) => `${count} pendente${count === 1 ? "" : "s"}`,
+        gaugeEmptyLabel: "Nenhum periférico cadastrado",
         attentionPendingReview: (count) => `${count} periférico${count === 1 ? "" : "s"} pendente${count === 1 ? "" : "s"} de revisão`,
         attentionDrafts: (count) => `${count} rascunho${count === 1 ? "" : "s"} de blog aguardando publicação`,
         attentionOutOfStock: (count) => `${count} produto${count === 1 ? "" : "s"} fora de estoque`,
@@ -1918,9 +1932,16 @@ export const translations: Record<LocaleCode, Translations> = {
         statVisitorsPreviousLabel: (period) =>
           period === "day" ? "vs. yesterday" : period === "week" ? "vs. last week" : "vs. last month",
         statVisitorsNewLabel: "new",
-        statVisitorsCompareTitle: "Today vs. yesterday",
-        statVisitorsTodayLabel: "Today",
-        statVisitorsYesterdayLabel: "Yesterday",
+        performanceOverview: "Performance overview",
+        performanceCardTitle: "Community activity",
+        performanceTabToday: "Today",
+        performanceTabWeek: "Week",
+        performanceInteractionsLabel: "new posts and comments",
+        performanceAuraLabel: "aura earned in the period",
+        gaugeTitle: "Peripherals reviewed",
+        gaugeCaption: (approved, total) => `${approved} of ${total} approved`,
+        gaugePendingLabel: (count) => `${count} pending`,
+        gaugeEmptyLabel: "No peripherals yet",
         attentionPendingReview: (count) => `${count} peripheral${count === 1 ? "" : "s"} pending review`,
         attentionDrafts: (count) => `${count} blog draft${count === 1 ? "" : "s"} awaiting publish`,
         attentionOutOfStock: (count) => `${count} product${count === 1 ? "" : "s"} out of stock`,

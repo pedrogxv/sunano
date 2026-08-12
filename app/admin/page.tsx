@@ -23,7 +23,10 @@ import {
 
 import { AnimatedCounter } from "@/components/animated-counter"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PerformanceCard } from "@/components/admin/PerformanceCard"
+import { ReviewGaugeCard } from "@/components/admin/ReviewGaugeCard"
 import { VisitorsStatCard, type VisitorsStats } from "@/components/admin/VisitorsStatCard"
+import type { PerformanceSeries } from "@/lib/server/repositories/dashboard-performance-repository"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { hasAdminPermission, isWebMaster, type AdminProfile } from "@/lib/admin-permissions"
@@ -36,6 +39,7 @@ type DashboardStats = {
   offers: { active: number } | null
   banners: { total: number; active: number; max: number } | null
   visits: VisitorsStats | null
+  performance: PerformanceSeries | null
 }
 
 type ColorKey = "cyan" | "emerald" | "amber" | "violet" | "rose" | "sky" | "fuchsia" | "orange" | "slate"
@@ -155,6 +159,11 @@ export default function AdminPage() {
     },
   ].filter((tile): tile is NonNullable<typeof tile> => Boolean(tile))
 
+  // Mesma regra do link de pendências no bloco "Precisa de atenção": só manda
+  // pra tela de revisão quem tem permissão de escrita, senão cai no redirect
+  // do middleware. Sem essa permissão, aponta pra listagem de leitura.
+  const gaugeHref = hasAdminPermission(profile, "peripherals_write") ? "/admin/tierlist/revisao" : "/admin/perifericos"
+
   const attentionItems = [
     // /admin/tierlist/revisao permite aprovar/categorizar direto na página —
     // o middleware exige peripherals_write pra entrar lá, então só linkamos
@@ -254,10 +263,33 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Visitantes em detalhe — abas Dia/Semana/Mês/Total + comparativo hoje/ontem */}
-      {(loading || stats?.visits) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2">
-          <VisitorsStatCard stats={stats?.visits ?? null} loading={loading} />
+      {/* Visitantes — tira compacta com abas Dia/Semana/Mês/Total inline, mesmo
+          peso visual dos tiles acima em vez de um bloco grande separado */}
+      {(loading || stats?.visits) && <VisitorsStatCard stats={stats?.visits ?? null} loading={loading} />}
+
+      {/* Visão geral de performance — atividade da comunidade (gráfico com
+          toggle Hoje/Semana) ao lado do indicador circular de periféricos revisados */}
+      {(loading || stats?.performance || stats?.peripherals) && (
+        <div className="space-y-2">
+          <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <BarChart2 className="size-3.5" />
+            {d.performanceOverview}
+          </h2>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {(loading || stats?.performance) && (
+              <div className="lg:col-span-2">
+                <PerformanceCard data={stats?.performance ?? null} loading={loading} />
+              </div>
+            )}
+            {(loading || stats?.peripherals) && (
+              <ReviewGaugeCard
+                total={stats?.peripherals?.total ?? null}
+                pendingReview={stats?.peripherals?.pendingReview ?? null}
+                href={gaugeHref}
+                loading={loading}
+              />
+            )}
+          </div>
         </div>
       )}
 

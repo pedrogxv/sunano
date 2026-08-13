@@ -78,13 +78,15 @@ const NO_ACCESS_PATH = "/admin/sem-permissao"
 
 function getRequiredPermission(pathname: string): AdminPermissionKey | null {
   if (pathname === "/admin") return "dashboard_read"
-  if (
-    pathname.startsWith("/admin/tierlist/new") ||
-    /^\/admin\/tierlist\/[^/]+$/.test(pathname) ||
-    pathname.startsWith("/admin/perifericos/new") ||
-    /^\/admin\/perifericos\/[^/]+$/.test(pathname)
-  ) {
+  if (pathname.startsWith("/admin/tierlist/new") || pathname.startsWith("/admin/perifericos/new")) {
     return "peripherals_write"
+  }
+  if (/^\/admin\/tierlist\/[^/]+$/.test(pathname) || /^\/admin\/perifericos\/[^/]+$/.test(pathname)) {
+    // A edição em si (form's onSubmit / API PATCH) já exige peripherals_write —
+    // ver app/api/admin/peripherals/[id]/route.ts. Aqui basta peripherals_read
+    // pra deixar quem só tem leitura abrir a página em modo somente-leitura,
+    // em vez de ser barrado na rota inteira e mandado de volta pro dashboard.
+    return "peripherals_read"
   }
   if (pathname.startsWith("/admin/tierlist")) return "peripherals_read"
   if (pathname.startsWith("/admin/perifericos")) return "peripherals_read"

@@ -500,6 +500,8 @@ type Translations = {
       pickerNoItems: string
       failedLoadPeripheral: string
       selectTag: string
+      readOnlyBanner: string
+      readOnlyNoPermission: string
       failedUploadImage: string
       failedSave: string
       updated: string
@@ -1256,6 +1258,8 @@ export const translations: Record<LocaleCode, Translations> = {
         pickerNoItems: "Nenhum item encontrado.",
         failedLoadPeripheral: "Erro ao carregar periférico",
         selectTag: "Selecione uma tag",
+        readOnlyBanner: "Modo somente leitura: você só tem permissão para visualizar periféricos, não para editá-los.",
+        readOnlyNoPermission: "Você não tem permissão para editar periféricos.",
         failedUploadImage: "Erro ao enviar imagem",
         failedSave: "Erro ao salvar",
         updated: "Periférico atualizado",
@@ -2156,6 +2160,8 @@ export const translations: Record<LocaleCode, Translations> = {
         pickerNoItems: "No items found.",
         failedLoadPeripheral: "Failed to load peripheral",
         selectTag: "Select a tag",
+        readOnlyBanner: "Read-only mode: you only have permission to view peripherals, not edit them.",
+        readOnlyNoPermission: "You don't have permission to edit peripherals.",
         failedUploadImage: "Failed to upload image",
         failedSave: "Failed to save",
         updated: "Peripheral updated",

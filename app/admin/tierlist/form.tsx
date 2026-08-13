@@ -10,6 +10,7 @@ import { toast } from "sonner"
 import * as z from "zod"
 
 import { formatBRL } from "@/lib/stripe"
+import { hasAdminPermission, type AdminProfile } from "@/lib/admin-permissions"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
@@ -699,6 +700,25 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     [focusTarget]
   )
   const backHref = pathname?.startsWith("/admin/perifericos") ? "/admin/perifericos" : "/admin/tierlist"
+
+  // A rota permite entrar com peripherals_read (ver proxy.ts), mas salvar exige
+  // peripherals_write (ver PATCH em app/api/admin/peripherals/[id]/route.ts).
+  // Sem essa checagem no client, quem só tem leitura preenche tudo e só
+  // descobre que não pode salvar no fim, com um toast de erro genérico.
+  const [canWrite, setCanWrite] = useState(true)
+  useEffect(() => {
+    let isMounted = true
+    fetch("/api/admin/profile")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { profile?: AdminProfile } | null) => {
+        if (!isMounted || !data?.profile) return
+        setCanWrite(hasAdminPermission(data.profile, "peripherals_write"))
+      })
+      .catch(() => {})
+    return () => {
+      isMounted = false
+    }
+  }, [])
   const parentLabel = pathname?.startsWith("/admin/perifericos")
     ? t.admin.tierlistForm.parentPeripherals
     : t.admin.tierlistForm.parentTierlist
@@ -1051,6 +1071,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   async function onSubmit(data: PeripheralFormData): Promise<void> {
     try {
       setError(null)
+      if (!canWrite) {
+        toast.error(t.admin.tierlistForm.readOnlyNoPermission)
+        return
+      }
       if (!selectedTag || selectedTag.length === 0) {
         const msg = t.admin.tierlistForm.selectTag
         setError(msg)
@@ -1340,7 +1364,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>
       )}
 
+      {!canWrite && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+          {t.admin.tierlistForm.readOnlyBanner}
+        </div>
+      )}
+
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <fieldset disabled={!canWrite} className="contents">
 
         {/* SECTION 1: Imagem */}
         <FormSection title={t.admin.tierlistForm.sectionImage} icon={<ImageIcon className="size-4" />} defaultOpen>
@@ -2783,13 +2814,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             </div>
           </div>
         </FormSection>
+        </fieldset>
 
         {/* Footer actions */}
         <div className="flex gap-3 justify-end pt-2">
           <Link href={backHref}>
             <Button variant="outline">{t.admin.tierlistForm.cancel}</Button>
           </Link>
-          <Button disabled={uploading || removingBg || form.formState.isSubmitting} type="submit" className="min-w-28">
+          <Button disabled={!canWrite || uploading || removingBg || form.formState.isSubmitting} type="submit" className="min-w-28">
             {uploading || form.formState.isSubmitting
               ? t.admin.tierlistForm.saving
               : peripheralId

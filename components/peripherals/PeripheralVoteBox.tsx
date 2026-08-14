@@ -1,10 +1,12 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { ArrowBigDown, ArrowBigUp } from "lucide-react"
 import { toast } from "sonner"
 
-import { AuraButton, nextReaction, type Reaction } from "@/components/forum/AuraButton"
+import { nextReaction, type Reaction } from "@/components/forum/AuraButton"
 import { useAuthUser } from "@/components/providers/auth-context"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
 import { cn } from "@/lib/utils"
 
@@ -14,10 +16,9 @@ interface PeripheralVoteBoxProps {
 
 /**
  * "BOM OU BAGRE?" — voto binário da comunidade sobre o periférico (não sobre
- * um comentário), mesmo widget visual do `AuraButton` do fórum. Reagir aqui
- * credita Aura pra quem VOTA (não existe "autor" pra premiar, diferente de
- * curtir um comentário) — a missão diária "aura" é fechada no primeiro voto,
- * no servidor (`toggle_peripheral_vote`).
+ * um comentário). Reagir aqui credita Aura pra quem VOTA (não existe "autor"
+ * pra premiar, diferente de curtir um comentário) — a missão diária "aura" é
+ * fechada no primeiro voto, no servidor (`toggle_peripheral_vote`).
  */
 export function PeripheralVoteBox({ peripheralId }: PeripheralVoteBoxProps) {
   const { user: authUser } = useAuthUser()
@@ -85,39 +86,76 @@ export function PeripheralVoteBox({ peripheralId }: PeripheralVoteBoxProps) {
 
   const verdict = likes > dislikes ? "good" : dislikes > likes ? "bad" : "tie"
 
-  const verdictStyles: Record<typeof verdict, string> = {
-    good: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-    bad: "border-red-500/30 bg-red-500/10 text-red-300",
-    tie: "border-border bg-muted/40 text-muted-foreground",
+  const verdictCardStyles: Record<typeof verdict, string> = {
+    good: "border-emerald-500/40 bg-emerald-500/10",
+    bad: "border-red-500/40 bg-red-500/10",
+    tie: "border-border bg-card",
   }
 
-  const verdictText: Record<typeof verdict, string> = {
-    good: "Periférico bom, maior parte da comunidade julga esse periférico como bom",
-    bad: "Periférico de BAGRE: Maior parte da comunidade julga esse periférico como ruim ou não recomenda",
-    tie: "EMPATE: A comunidade ainda não votou o suficiente para determinar um lado",
+  const verdictCaption: Record<typeof verdict, string> = {
+    good: "Comunidade recomenda",
+    bad: "Comunidade não recomenda",
+    tie: "Empate — poucos votos ainda",
   }
+
+  const verdictTooltip: Record<typeof verdict, string> = {
+    good: "Periférico bom, maior parte da comunidade julga esse periférico como bom",
+    bad: "Periférico de BAGRE: maior parte da comunidade julga esse periférico como ruim ou não recomenda",
+    tie: "EMPATE: a comunidade ainda não votou o suficiente para determinar um lado",
+  }
+
+  const authTitle = !authUser ? "Entre na sua conta para votar" : undefined
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-bold tracking-tight text-foreground">BOM OU BAGRE?</h2>
-        <div className={cn("transition-opacity", loaded ? "opacity-100" : "pointer-events-none opacity-0")}>
-          <AuraButton
-            auraCount={likes - dislikes}
-            reaction={reaction}
-            disabled={!authUser}
-            onReact={handleReact}
-          />
-        </div>
+    <div className={cn("rounded-2xl border p-5 space-y-4 transition-colors", verdictCardStyles[verdict])}>
+      <h2 className="text-center text-lg font-bold tracking-tight text-foreground">BOM OU BAGRE?</h2>
+
+      <div className={cn("flex items-center justify-center gap-6 transition-opacity", loaded ? "opacity-100" : "pointer-events-none opacity-0")}>
+        <button
+          type="button"
+          onClick={() => handleReact("like")}
+          disabled={!authUser}
+          aria-pressed={reaction === "like"}
+          aria-label="Bom"
+          title={authTitle}
+          className={cn(
+            "flex size-14 items-center justify-center rounded-full border-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+            reaction === "like"
+              ? "border-emerald-500 bg-emerald-500/15 text-emerald-400"
+              : "border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-400"
+          )}
+        >
+          <ArrowBigUp className="size-8" fill={reaction === "like" ? "currentColor" : "none"} />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleReact("dislike")}
+          disabled={!authUser}
+          aria-pressed={reaction === "dislike"}
+          aria-label="Bagre"
+          title={authTitle}
+          className={cn(
+            "flex size-14 items-center justify-center rounded-full border-2 transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+            reaction === "dislike"
+              ? "border-red-500 bg-red-500/15 text-red-400"
+              : "border-border text-muted-foreground hover:border-red-500/50 hover:text-red-400"
+          )}
+        >
+          <ArrowBigDown className="size-8" fill={reaction === "dislike" ? "currentColor" : "none"} />
+        </button>
       </div>
 
-      <div className={cn("rounded-xl border px-4 py-3 text-sm font-medium", verdictStyles[verdict])}>
-        {verdictText[verdict]}
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        Se você já teve ou testou esse periférico, recomendamos deixar o seu feedback na parte dos comentários.
-      </p>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <p className="cursor-default text-center text-xs font-medium text-muted-foreground">
+            {verdictCaption[verdict]}
+          </p>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-56 text-center">
+          {verdictTooltip[verdict]}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }

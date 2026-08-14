@@ -742,6 +742,13 @@ export function PeripheralDetailView({
                 </CardContent>
               </Card>
 
+              <div className="space-y-2">
+                <PeripheralVoteBox peripheralId={data.id} />
+                <p className="px-1 text-xs text-muted-foreground">
+                  Se você já teve ou testou esse periférico, recomendamos deixar o seu feedback na parte dos comentários.
+                </p>
+              </div>
+
               {buyLinks.length > 0 && (
                 <Card className="border-border bg-card">
                   <CardHeader className="space-y-1">
@@ -1117,8 +1124,6 @@ export function PeripheralDetailView({
                     </div>
                   </CardContent>
                 </Card>
-
-              <PeripheralVoteBox peripheralId={data.id} />
 
               <Card className="border-border bg-card">
                 <CardHeader>

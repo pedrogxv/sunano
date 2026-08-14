@@ -72,6 +72,65 @@ export const VALUE_COLUMN_COLORS = {
   premium: "text-amber-300",
 } as const
 
+// Cores das faixas de preço da aba "Custo Benefício" — espectro dourado (mais caro) até
+// azul/índigo (mais barato), deliberadamente distinto da paleta de tier (violeta/vermelho/
+// laranja/âmbar/verde/azul/cinza) pra não passar a impressão de que faixa de preço é
+// qualidade. GOLPE quebra o espectro com vermelho/cinza-escuro — alerta, não faixa normal.
+export const PRICE_BAND_THEMES = {
+  "1000": { accent: "from-yellow-400 to-yellow-600", textColor: TIER_LABEL_TEXT_COLOR },
+  "750": { accent: "from-emerald-400 to-emerald-600", textColor: TIER_LABEL_TEXT_COLOR },
+  "500": { accent: "from-teal-400 to-teal-600", textColor: TIER_LABEL_TEXT_COLOR },
+  "300": { accent: "from-cyan-400 to-cyan-600", textColor: TIER_LABEL_TEXT_COLOR },
+  "200": { accent: "from-sky-400 to-sky-600", textColor: TIER_LABEL_TEXT_COLOR },
+  "100": { accent: "from-indigo-400 to-indigo-600", textColor: TIER_LABEL_TEXT_COLOR },
+  golpe: { accent: "from-red-700 to-zinc-900", textColor: "text-white" },
+} as const
+
+export const CARD_PRICE_BAND_STYLES = {
+  "1000": {
+    bg: "bg-black", text: "text-white", accent: "bg-[#EAB308]", ring: "ring-[#EAB308]/45",
+    border: "border-[#EAB308]/25", borderHover: "hover:border-[#EAB308]",
+    glow: "shadow-[0_0_12px_rgba(234,179,8,0.15)]",
+    glowHover: "hover:shadow-[0_0_10px_2px_rgba(234,179,8,0.85),0_0_28px_6px_rgba(234,179,8,0.6),0_0_60px_16px_rgba(234,179,8,0.35)]",
+  },
+  "750": {
+    bg: "bg-black", text: "text-white", accent: "bg-[#10B981]", ring: "ring-[#10B981]/45",
+    border: "border-[#10B981]/25", borderHover: "hover:border-[#10B981]",
+    glow: "shadow-[0_0_12px_rgba(16,185,129,0.15)]",
+    glowHover: "hover:shadow-[0_0_10px_2px_rgba(16,185,129,0.85),0_0_28px_6px_rgba(16,185,129,0.6),0_0_60px_16px_rgba(16,185,129,0.35)]",
+  },
+  "500": {
+    bg: "bg-black", text: "text-white", accent: "bg-[#14B8A6]", ring: "ring-[#14B8A6]/45",
+    border: "border-[#14B8A6]/25", borderHover: "hover:border-[#14B8A6]",
+    glow: "shadow-[0_0_12px_rgba(20,184,166,0.15)]",
+    glowHover: "hover:shadow-[0_0_10px_2px_rgba(20,184,166,0.85),0_0_28px_6px_rgba(20,184,166,0.6),0_0_60px_16px_rgba(20,184,166,0.35)]",
+  },
+  "300": {
+    bg: "bg-black", text: "text-white", accent: "bg-[#06B6D4]", ring: "ring-[#06B6D4]/45",
+    border: "border-[#06B6D4]/25", borderHover: "hover:border-[#06B6D4]",
+    glow: "shadow-[0_0_12px_rgba(6,182,212,0.15)]",
+    glowHover: "hover:shadow-[0_0_10px_2px_rgba(6,182,212,0.85),0_0_28px_6px_rgba(6,182,212,0.6),0_0_60px_16px_rgba(6,182,212,0.35)]",
+  },
+  "200": {
+    bg: "bg-black", text: "text-white", accent: "bg-[#0EA5E9]", ring: "ring-[#0EA5E9]/45",
+    border: "border-[#0EA5E9]/25", borderHover: "hover:border-[#0EA5E9]",
+    glow: "shadow-[0_0_12px_rgba(14,165,233,0.15)]",
+    glowHover: "hover:shadow-[0_0_10px_2px_rgba(14,165,233,0.85),0_0_28px_6px_rgba(14,165,233,0.6),0_0_60px_16px_rgba(14,165,233,0.35)]",
+  },
+  "100": {
+    bg: "bg-black", text: "text-white", accent: "bg-[#6366F1]", ring: "ring-[#6366F1]/45",
+    border: "border-[#6366F1]/25", borderHover: "hover:border-[#6366F1]",
+    glow: "shadow-[0_0_12px_rgba(99,102,241,0.15)]",
+    glowHover: "hover:shadow-[0_0_10px_2px_rgba(99,102,241,0.85),0_0_28px_6px_rgba(99,102,241,0.6),0_0_60px_16px_rgba(99,102,241,0.35)]",
+  },
+  golpe: {
+    bg: "bg-zinc-900", text: "text-white", accent: "bg-[#DC2626]", ring: "ring-[#DC2626]/60",
+    border: "border-[#DC2626]/50", borderHover: "hover:border-[#DC2626]",
+    glow: "shadow-[0_0_14px_rgba(220,38,38,0.3)]",
+    glowHover: "hover:shadow-[0_0_10px_2px_rgba(220,38,38,0.95),0_0_28px_6px_rgba(220,38,38,0.7),0_0_60px_16px_rgba(220,38,38,0.4)]",
+  },
+} as const
+
 export const RECOMMENDED_COLUMN_COLORS = {
   top: "text-amber-300",
   strong: "text-cyan-300",

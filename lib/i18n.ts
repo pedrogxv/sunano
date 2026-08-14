@@ -907,7 +907,7 @@ export const translations: Record<LocaleCode, Translations> = {
       categoriesTab: {
         title: "Categorias",
         p1: "Categorias são formas diferentes de se analisar os mesmo periféricos em contextos específicos",
-        p2: "São bem auto explicativos, por exemplo, uma categoria descrita como \"Custo Benefício\" terá foco maior naqueles periféricos que se destacam mais nessa área e por assim, seu Tier (Rank) será maior devido a importância desse fator ter aumentando sobre essa análise avaliativa",
+        p2: "São bem auto explicativos, por exemplo, a categoria \"Custo Benefício\" foge do padrão de Tier: em vez de GOAT/SS/S/A..., os periféricos são agrupados por faixa de preço, mostrando os melhores de cada faixa",
       },
       tagsTab: {
         title: "Tags",
@@ -946,7 +946,7 @@ export const translations: Record<LocaleCode, Translations> = {
       underReview: "Sob Revisão",
       tierDescriptions: { GOAT: "Elite - Referencia absoluta", SS: "Extremo - Quase perfeito", S: "Top - Otima escolha", A: "Muito bom - Consistente e forte", B: "Bom - Opção sólida", C: "Ok - Funciona bem com limites", L: "Inferior - Apenas para casos específicos" },
       tierSubtitles: { GOAT: "Apelão", SS: "Excepcional", S: "Muito bom", A: "Bom", B: "Decente", C: "Usável", L: "Veio Podi" },
-      modeDescriptions: { oled: "Mostrando painéis OLED", overall: "Ordenado por desempenho geral", value: "Ordenado por preço", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", ips_va: "Mostrando painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
+      modeDescriptions: { oled: "Mostrando painéis OLED", overall: "Ordenado por desempenho geral", value: "Agrupado por faixa de preço", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", ips_va: "Mostrando painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
     },
     peripherals: {
       title: "Periféricos",
@@ -1337,7 +1337,7 @@ export const translations: Record<LocaleCode, Translations> = {
         dropHereRemove: "Solte aqui para remover o tier",
         noUnassigned: "Nenhum periférico Sob Revisão",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "itens"}`,
-        modeDescriptions: { performance: "Ordenado por desempenho puro", value: "Ordenado por preço", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", oled: "Apenas painéis OLED", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", ips_va: "Apenas painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
+        modeDescriptions: { performance: "Ordenado por desempenho puro", value: "Agrupado por faixa de preço", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", oled: "Apenas painéis OLED", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", ips_va: "Apenas painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
       },
       tierlistReview: {
         pageTitle: "Revisão de Periféricos",
@@ -1837,7 +1837,7 @@ export const translations: Record<LocaleCode, Translations> = {
       categoriesTab: {
         title: "Categories",
         p1: "Categories are different ways of analyzing the same peripherals within specific contexts.",
-        p2: "They're pretty self-explanatory — for example, a category described as \"Cost-Benefit\" will focus more on peripherals that stand out in that area, and so its Tier (Rank) will be higher since that factor carries more weight in that particular evaluation.",
+        p2: "They're pretty self-explanatory — for example, the \"Cost-Benefit\" category breaks from the Tier pattern: instead of GOAT/SS/S/A..., peripherals are grouped by price range, showing the best of each range.",
       },
       tagsTab: {
         title: "Tags",
@@ -1876,7 +1876,7 @@ export const translations: Record<LocaleCode, Translations> = {
       underReview: "Under Review",
       tierDescriptions: { GOAT: "Elite - Absolute reference", SS: "Extreme - Almost perfect", S: "Top - Great choice", A: "Very good - Strong and consistent", B: "Good - Solid option", C: "Okay - Works well with tradeoffs", L: "Lower - Only for niche cases" },
       tierSubtitles: { GOAT: "", SS: "", S: "", A: "", B: "", C: "", L: "" },
-      modeDescriptions: { oled: "Showing OLED panels", overall: "Sorted by overall performance", value: "Sorted by price", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", recommended: "Suggested picks by Sunano, prioritizing overall balance", ips_va: "Showing IPS and VA panels", competitive: "Sorted by competitive performance" },
+      modeDescriptions: { oled: "Showing OLED panels", overall: "Sorted by overall performance", value: "Grouped by price range", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", recommended: "Suggested picks by Sunano, prioritizing overall balance", ips_va: "Showing IPS and VA panels", competitive: "Sorted by competitive performance" },
     },
     peripherals: {
       title: "Peripherals",
@@ -2267,7 +2267,7 @@ export const translations: Record<LocaleCode, Translations> = {
         dropHereRemove: "Drop here to remove tier",
         noUnassigned: "No peripherals without tier",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "items"}`,
-        modeDescriptions: { performance: "Sorted by pure performance", value: "Sorted by price", recommended: "Suggested picks by Sunano, prioritizing overall balance", oled: "Show only OLED panels", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", ips_va: "Show only IPS and VA panels", competitive: "Sorted by competitive performance" },
+        modeDescriptions: { performance: "Sorted by pure performance", value: "Grouped by price range", recommended: "Suggested picks by Sunano, prioritizing overall balance", oled: "Show only OLED panels", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", ips_va: "Show only IPS and VA panels", competitive: "Sorted by competitive performance" },
       },
       tierlistReview: {
         pageTitle: "Peripheral Review",

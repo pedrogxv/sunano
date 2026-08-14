@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { mapTier, NEW_TIERS } from "@/lib/tier-utils"
-import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
+import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
+import { GOLPE_KEY, PRICE_BAND_LABEL, getPriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
 import { PeripheralLikeToggle } from "@/components/peripherals/PeripheralLikeToggle"
@@ -564,10 +565,22 @@ export function PeripheralDetailView({
   // como aplicáveis (specs.tierlistCategories); sem esse campo (itens legados),
   // participa de todos, igual à Tierlist pública.
   const tierlistCategories = Array.isArray(specs.tierlistCategories) ? specs.tierlistCategories as string[] : null
+
+  // "value" ("Custo Benefício") vira faixa de preço em toda categoria, exceto
+  // mousepad/glasspad — lá "value" significa "Nacional", conceito sem relação com preço.
+  // Ver components/tierlist/TierlistGrid.tsx pra mesma regra na Tierlist pública.
+  const isPriceBandCategory = data.category !== "mousepad" && data.category !== "glasspad"
+  const golpeMotivo = typeof specs.golpeMotivo === "string" ? specs.golpeMotivo : undefined
+
   const rankingModes = (RANKING_MODES_BY_CATEGORY[data.category] ?? DEFAULT_RANKING_MODES)
     .filter((mode) => !tierlistCategories || tierlistCategories.includes(mode.key))
-    .map((mode) => ({ ...mode, tier: getRankingModeTier(data.category, data.tier, specs, mode.key) }))
-    .filter((mode) => mode.tier !== null)
+    .map((mode) => {
+      if (mode.key === "value" && isPriceBandCategory) {
+        return { ...mode, tier: null as string | null, priceGroup: getPriceGroupKey(data.price, specs.golpe as boolean | undefined) }
+      }
+      return { ...mode, tier: getRankingModeTier(data.category, data.tier, specs, mode.key), priceGroup: null as PriceGroupKey | null }
+    })
+    .filter((mode) => (mode.key === "value" && isPriceBandCategory ? mode.priceGroup !== null : mode.tier !== null))
 
   const defaultRankingMode = getDefaultRankingMode(data.category)
   const initialRankingMode = rankingModes.find((m) => m.key === defaultRankingMode) ?? rankingModes[0]
@@ -575,8 +588,12 @@ export function PeripheralDetailView({
   const activeRankingMode = rankingModes.find((m) => m.key === activeRankingModeKey) ?? initialRankingMode
 
   const hasMultipleRankingModes = rankingModes.length > 1
-  const activeTier = hasMultipleRankingModes ? activeRankingMode?.tier ?? null : data.tier
-  const tierStyle = activeTier ? TIER_THEMES[activeTier as keyof typeof TIER_THEMES] : null
+  const isActivePriceBand = Boolean(hasMultipleRankingModes && activeRankingMode?.key === "value" && isPriceBandCategory)
+  const activePriceGroup = isActivePriceBand ? activeRankingMode?.priceGroup ?? null : null
+  const activeTier = hasMultipleRankingModes ? (isActivePriceBand ? null : activeRankingMode?.tier ?? null) : data.tier
+  const tierStyle = isActivePriceBand
+    ? (activePriceGroup ? PRICE_BAND_THEMES[activePriceGroup] : null)
+    : (activeTier ? TIER_THEMES[activeTier as keyof typeof TIER_THEMES] : null)
 
   return (
     // @container/pdv: permite que este componente seja reaproveitado tanto na página
@@ -647,7 +664,16 @@ export function PeripheralDetailView({
                   <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">
                     {hasMultipleRankingModes ? activeRankingMode?.label : "Classificação"}
                   </p>
-                  <p className="text-3xl font-bold tracking-tight leading-none">{activeTier ? mapTier(activeTier) : "Sob Revisão"}</p>
+                  <p className="text-3xl font-bold tracking-tight leading-none">
+                    {isActivePriceBand
+                      ? (activePriceGroup ? PRICE_BAND_LABEL[activePriceGroup] : "—")
+                      : (activeTier ? mapTier(activeTier) : "Sob Revisão")}
+                  </p>
+                  {isActivePriceBand && activePriceGroup === GOLPE_KEY && golpeMotivo && (
+                    <p className="mx-auto mt-1 max-w-[220px] text-[11px] font-medium leading-snug opacity-90">
+                      {golpeMotivo}
+                    </p>
+                  )}
                   {hasMultipleRankingModes && (
                     <div className="mt-3 flex flex-wrap justify-center gap-1">
                       {rankingModes.map((mode) => (

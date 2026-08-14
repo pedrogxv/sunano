@@ -136,6 +136,8 @@ const peripheralSchema = z.object({
   priceTier: z.string().optional(),
   reviewCategory: z.enum(["performance", "store", "videoReview", "specsComments"]).nullable().optional(),
   reviewApproved: z.boolean().optional(),
+  golpe: z.boolean().optional(),
+  golpeMotivo: z.string().optional(),
 }).superRefine((data, ctx) => {
   // Switches usam faixa de preço (priceTier) no lugar de valor exato, então o
   // preço numérico fica em 0. Nas demais categorias, o preço tem que ser > 0.
@@ -291,6 +293,10 @@ function buildSpecsPayload(
     refreshRate: typeof data.refreshRate === "number" && !Number.isNaN(data.refreshRate) ? data.refreshRate : undefined,
     panelType: data.panelType || undefined,
     tierlistCategories: opts.selectedTierlistCategories,
+    // GOLPE tem prioridade sobre a faixa de preço calculada (ver lib/price-band.ts) — se
+    // desmarcado, o motivo é descartado junto pra não ficar "preso" num item não-golpe.
+    golpe: data.golpe || undefined,
+    golpeMotivo: data.golpe ? (data.golpeMotivo || undefined) : undefined,
     reviewCategory: data.reviewCategory ?? null,
     reviewApproved: data.reviewApproved ?? false,
     details: {
@@ -770,6 +776,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       price: 0,
       reviewCategory: null,
       reviewApproved: false,
+      golpe: false,
+      golpeMotivo: "",
       rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", soundUrl: "", guideUrl: "", wikiUrl: "",
       summary: "", highlights: "", pros: "", cons: "", gallery: "",
       softwareInfo: "", teamComments: "", switchPeripheralId: "", priceTier: "",
@@ -1572,6 +1580,45 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <p className="text-xs text-amber-400">Nenhuma categoria selecionada — este periférico não aparecerá na Tierlist pública.</p>
               )}
             </div>
+
+            {/* GOLPE — só faz sentido pra faixa de preço (Custo Benefício), e não existe
+                nas categorias onde "value" significa "Nacional" (mousepad/glasspad). */}
+            {selectedTierlistCategories.includes("value") && watchedCategory !== "mousepad" && watchedCategory !== "glasspad" && (
+              <div className="space-y-2 rounded-lg border border-border px-3 py-2.5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">GOLPE</p>
+                    <p className="text-xs text-muted-foreground">
+                      Periférico ruim/barato hypado por afiliados (youtubers/tiktokers) apesar de não valer a pena. Marcando, ele sai da faixa de preço normal na aba Custo Benefício e aparece só na faixa GOLPE, com o motivo abaixo.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => form.setValue("golpe", !form.watch("golpe"), { shouldDirty: true })}
+                    className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                      form.watch("golpe")
+                        ? "border-red-500/60 bg-red-500/15 text-red-300"
+                        : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
+                    }`}
+                  >
+                    {form.watch("golpe") ? "GOLPE" : "Normal"}
+                  </button>
+                </div>
+                {form.watch("golpe") && (
+                  <div className="space-y-1.5 pt-1">
+                    <label className="text-xs font-medium text-foreground">
+                      Motivo <span className="text-red-400">*</span>
+                    </label>
+                    <Textarea
+                      className="border-border bg-background text-sm"
+                      placeholder="Ex.: preço muito acima do que entrega, qualidade de construção ruim, promovido só por comissão de afiliado..."
+                      rows={3}
+                      {...form.register("golpeMotivo")}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1.5">

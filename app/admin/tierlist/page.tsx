@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Edit, Plus, Trash2, AlertCircle } from "lucide-react"
+import { Edit, Plus, Trash2, AlertCircle, AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -38,7 +38,10 @@ import {
   CARD_TAG_STYLES,
   CARD_TIER_STYLES,
   TIER_THEMES,
+  CARD_PRICE_BAND_STYLES,
+  PRICE_BAND_THEMES,
 } from "@/lib/tierlist-theme"
+import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, getPriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
 import { TierItemTooltipContent, type Ratings, type RatingKey } from "@/components/tierlist/TierItemTooltipContent"
 import { FilterBar } from "@/components/tierlist/FilterBar"
 import { TierlistMetaCard } from "@/components/admin/TierlistMetaCard"
@@ -524,6 +527,98 @@ function DraggablePeripheralCard({
           tier={item.tier}
           ratings={extractRatings(item)}
           tags={item.tags}
+        />
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+// Card de leitura pra faixa de preço (aba Custo Benefício) — a faixa é derivada de `price`,
+// então não faz sentido arrastar um item pra "mudar de faixa" (não persistiria nada). Preço
+// e GOLPE/motivo são editados no form (botão de editar abaixo), não aqui.
+function PriceBandPeripheralCard({
+  item,
+  priceGroup,
+  onDelete,
+}: {
+  item: Peripheral
+  priceGroup: PriceGroupKey
+  onDelete: (id: string) => void
+}) {
+  const bandStyle = CARD_PRICE_BAND_STYLES[priceGroup]
+  const isGolpe = priceGroup === GOLPE_KEY
+  const golpeMotivo = typeof item.specs?.golpeMotivo === "string" ? item.specs.golpeMotivo : undefined
+
+  const card = (
+    <div
+      className={cn(
+        "group relative overflow-hidden rounded-lg border border-border bg-card transition-all duration-200",
+        "hover:border-border hover:shadow-md hover:shadow-black/40",
+      )}
+    >
+      <div className={cn("absolute bottom-0 left-0 top-0 w-[3px]", bandStyle.accent)} />
+
+      {isGolpe && (
+        <div
+          className="absolute left-2 top-1 z-10 grid size-4 place-items-center rounded-full bg-red-600 text-white shadow"
+          title={golpeMotivo || "GOLPE — não recomendado"}
+        >
+          <AlertTriangle className="size-2.5" />
+        </div>
+      )}
+
+      <div className="absolute right-1 top-1 z-10 flex gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+        <Link href={`/admin/tierlist/${item.id}`}>
+          <Button size="icon" variant="ghost" className="size-6 bg-black/70 text-foreground/80 hover:text-foreground">
+            <Edit className="size-3" />
+          </Button>
+        </Link>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-6 bg-black/70 text-red-400 hover:text-red-300"
+          onClick={() => onDelete(item.id)}
+        >
+          <Trash2 className="size-3" />
+        </Button>
+      </div>
+
+      <div className="relative ml-[3px] h-12 overflow-hidden" style={{ background: "var(--card-image-bg)" }}>
+        {item.image_url ? (
+          <Image src={item.image_url} alt={item.name} width={120} height={48} className="h-full w-full object-contain p-0.5" />
+        ) : (
+          <div className={cn("flex h-full items-center justify-center text-[10px] font-black", bandStyle.bg, bandStyle.text)}>
+            {item.brand.slice(0, 2).toUpperCase()}
+          </div>
+        )}
+      </div>
+
+      <div className="ml-[3px] px-1.5 pb-1.5 pt-1">
+        <p className="line-clamp-2 text-[10px] font-bold leading-tight text-foreground">{item.name}</p>
+        <p className="mt-0.5 truncate text-[8px] text-muted-foreground">{item.brand}</p>
+      </div>
+    </div>
+  )
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{card}</TooltipTrigger>
+      <TooltipContent
+        className="rounded-xl border border-border bg-card p-4 shadow-2xl backdrop-blur-md"
+        sideOffset={12}
+        side="bottom"
+        align="center"
+      >
+        <TierItemTooltipContent
+          name={item.name}
+          brand={item.brand}
+          categoryLabel={item.category}
+          image_url={item.image_url}
+          tier={null}
+          ratings={extractRatings(item)}
+          tags={item.tags}
+          priceBand={PRICE_BAND_LABEL[priceGroup]}
+          golpeMotivo={golpeMotivo}
         />
       </TooltipContent>
     </Tooltip>
@@ -1217,6 +1312,10 @@ export default function AdminPeripheralsPage() {
   const modeConfig = MODE_CONFIGS[ratingMode]
   const modeDescription = t.admin.tierlistPage.modeDescriptions[ratingMode]
 
+  // Mesma regra da tierlist pública (components/tierlist/TierlistGrid.tsx): "value" vira
+  // faixa de preço em toda categoria, exceto mousepad/glasspad (lá é "Nacional").
+  const isPriceBandMode = ratingMode === "value" && selectedCategory !== "mousepad" && selectedCategory !== "glasspad"
+
   const itemsByTier = useMemo(
     () =>
       TIER_ROWS.map((tier) => {
@@ -1231,6 +1330,32 @@ export default function AdminPeripheralsPage() {
       }),
     [filtered, modeConfig, orderKey, allowLegacyFallback, tierKey]
   )
+
+  // Faixa derivada de `price`/GOLPE, nunca atribuída manualmente — mesma lógica da
+  // tierlist pública. Faixas vazias somem (sem fallback estático).
+  const priceGroupRows = useMemo(() => {
+    const groups = new Map<PriceGroupKey, Peripheral[]>()
+    for (const item of filtered) {
+      const group = getPriceGroupKey(item.price, item.specs?.golpe as boolean | undefined)
+      if (!group) continue
+      const bucket = groups.get(group) ?? []
+      bucket.push(item)
+      groups.set(group, bucket)
+    }
+
+    const order: PriceGroupKey[] = [...PRICE_BANDS.map((band) => band.key), GOLPE_KEY]
+    return order
+      .filter((key) => (groups.get(key)?.length ?? 0) > 0)
+      .map((key) => ({
+        key,
+        label: PRICE_BAND_LABEL[key],
+        accent: PRICE_BAND_THEMES[key].accent,
+        textColor: PRICE_BAND_THEMES[key].textColor,
+        items: [...(groups.get(key) ?? [])].sort(
+          (left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name),
+        ),
+      }))
+  }, [filtered])
 
   const handleCategoryChange = (category: Category) => {
     setSelectedCategory(category)
@@ -1328,6 +1453,40 @@ export default function AdminPeripheralsPage() {
         <div className="flex items-center justify-center py-14">
           <BoxLoader />
         </div>
+      ) : isPriceBandMode ? (
+        // Faixa é derivada de `price`, não arrastável — pré-visualização read-only.
+        // Preço e GOLPE/motivo se editam no form (ícone de lápis em cada card).
+        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+          {priceGroupRows.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              {t.tierlist.noItems}
+            </div>
+          ) : (
+            priceGroupRows.map((row) => (
+              <div
+                key={row.key}
+                className="grid border-b border-border last:border-b-0"
+                style={{ gridTemplateColumns: "70px 1fr" }}
+              >
+                <div className={`flex flex-col items-center justify-center bg-gradient-to-b ${row.accent} text-xl font-black ${row.textColor}`}>
+                  {row.label}
+                </div>
+                <div className="p-2">
+                  <div className="grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2">
+                    {row.items.map((item) => (
+                      <PriceBandPeripheralCard
+                        key={item.id}
+                        item={item}
+                        priceGroup={row.key}
+                        onDelete={(id) => setDeleteDialog({ open: true, id })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </section>
       ) : (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
           <section className="overflow-hidden rounded-xl border border-border bg-card shadow-lg">

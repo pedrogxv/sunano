@@ -5,7 +5,8 @@ import { useMemo, useState } from "react"
 import { PeripheralCard } from "./PeripheralCard"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
-import { TIER_THEMES } from "@/lib/tierlist-theme"
+import { TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
+import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, getPriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
@@ -53,7 +54,20 @@ interface Peripheral {
     profile?: string
     panelType?: string
     tierlistCategories?: string[]
+    golpe?: boolean
+    golpeMotivo?: string
   }
+}
+
+type DisplayItem = Peripheral & { priceGroup?: PriceGroupKey | null }
+
+interface DisplayRow {
+  key: string
+  label: string
+  subtitle?: string
+  gradient: string
+  textColor: string
+  items: DisplayItem[]
 }
 
 const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
@@ -274,6 +288,12 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   const tierKey = TIER_KEY_BY_MODE[ratingMode] ?? null
   const isComingSoon = COMING_SOON_CATEGORIES.includes(category)
 
+  // Modo Custo Benefício (value) agrupa por faixa de preço em vez de tier — exceto em
+  // mousepad/glasspad, onde "value" significa "Nacional" (conceito diferente, sem relação
+  // com preço) e o modo realmente rotulado "Custo Benefício" lá é "recommended" (score
+  // ponderado, compartilhado com iem/headset, fora de escopo deste modo).
+  const isPriceBandMode = ratingMode === "value" && category !== "mousepad" && category !== "glasspad"
+
   const tierRows: TierRow[] = [
     {
       key: "GOAT",
@@ -363,19 +383,20 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     [filtered, ratingMode]
   )
 
-  const itemsByTier = useMemo(
+  const itemsByTier: DisplayRow[] = useMemo(
     () =>
       tierRows.map((tier) => {
         let tierItems = visibleItems.filter((item) => getModeTier(item, tierKey) === tier.key)
         if (modeConfig.filterItem) tierItems = tierItems.filter(modeConfig.filterItem)
         return {
           ...tier,
+          subtitle: t.tierlist.tierSubtitles[tier.key],
           items: sortWithTierOrder(tierItems, orderKey, allowLegacyFallback, modeConfig.fallbackSort).map(
             (item) => ({ ...item, tier: tier.key }),
           ),
         }
       }),
-    [visibleItems, modeConfig, tierRows, orderKey, allowLegacyFallback, tierKey]
+    [visibleItems, modeConfig, tierRows, orderKey, allowLegacyFallback, tierKey, t]
   )
 
   const untieredItems = useMemo(() => {
@@ -387,7 +408,42 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     }))
   }, [visibleItems, modeConfig, orderKey, allowLegacyFallback, tierKey])
 
-  const hasItems = visibleItems.length > 0
+  // Faixa é sempre derivada de `price` (ou forçada pra GOLPE) — nunca atribuída manualmente.
+  // Itens abaixo de R$100 (e não-GOLPE) não têm faixa e ficam fora desta aba: sem faixa
+  // fictícia pra cobri-los. Dentro de cada faixa, ordena pelo tier base (qualidade geral)
+  // do item — os melhores daquela faixa de preço aparecem primeiro.
+  const priceGroupRows: DisplayRow[] = useMemo(() => {
+    const groups = new Map<PriceGroupKey, DisplayItem[]>()
+    for (const item of visibleItems) {
+      const group = getPriceGroupKey(item.price, item.specs?.golpe)
+      if (!group) continue
+      const bucket = groups.get(group) ?? []
+      bucket.push({ ...item, priceGroup: group })
+      groups.set(group, bucket)
+    }
+
+    const order: PriceGroupKey[] = [...PRICE_BANDS.map((band) => band.key), GOLPE_KEY]
+    return order
+      .filter((key) => (groups.get(key)?.length ?? 0) > 0)
+      .map((key) => {
+        const items = [...(groups.get(key) ?? [])].sort(
+          (left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name),
+        )
+        return {
+          key,
+          label: PRICE_BAND_LABEL[key],
+          gradient: PRICE_BAND_THEMES[key].accent,
+          textColor: PRICE_BAND_THEMES[key].textColor,
+          items,
+        }
+      })
+  }, [visibleItems])
+
+  const displayRows: DisplayRow[] = isPriceBandMode ? priceGroupRows : itemsByTier
+
+  const hasItems = isPriceBandMode
+    ? displayRows.some((row) => row.items.length > 0)
+    : visibleItems.length > 0
 
   const [previousCategory, setPreviousCategory] = useState(category)
   if (previousCategory !== category) {
@@ -461,10 +517,10 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
         <table className="hidden w-full border-collapse md:table">
           <tbody>
-            {itemsByTier.map((tierRow, tierIndex) => (
+            {displayRows.map((tierRow, tierIndex) => (
               <tr
                 key={tierRow.key}
-                className={cn(tierIndex < itemsByTier.length - 1 && "border-b border-border")}
+                className={cn(tierIndex < displayRows.length - 1 && "border-b border-border")}
               >
                 <td
                   className={cn(
@@ -473,9 +529,9 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                   )}
                 >
                   <div className={cn("py-3 text-2xl font-black", tierRow.textColor)}>{tierRow.label}</div>
-                  {t.tierlist.tierSubtitles[tierRow.key] && (
+                  {tierRow.subtitle && (
                     <div className={cn("pb-1 text-[10px] font-medium opacity-75", tierRow.textColor)}>
-                      {t.tierlist.tierSubtitles[tierRow.key]}
+                      {tierRow.subtitle}
                     </div>
                   )}
                 </td>
@@ -485,7 +541,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                     {tierRow.items.length > 0 ? (
                       <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
                         {tierRow.items.map((item) => (
-                          <PeripheralCard key={item.id} {...item} />
+                          <PeripheralCard key={item.id} {...item} golpeMotivo={item.specs?.golpeMotivo} />
                         ))}
                       </div>
                     ) : (
@@ -507,7 +563,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {itemsByTier.map((tierRow) => {
+              {displayRows.map((tierRow) => {
                 if (tierRow.items.length === 0) return null
 
                 return (
@@ -515,9 +571,9 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                     <div className={cn("mx-2 mt-2 flex items-center rounded-[11px] bg-gradient-to-b px-3 py-2", tierRow.gradient)}>
                       <div className="flex min-w-0 items-baseline gap-2.5">
                         <span className={cn("text-2xl font-black leading-none", tierRow.textColor)}>{tierRow.label}</span>
-                        {t.tierlist.tierSubtitles[tierRow.key] && (
+                        {tierRow.subtitle && (
                           <span className={cn("truncate text-sm font-medium opacity-75", tierRow.textColor)}>
-                            {t.tierlist.tierSubtitles[tierRow.key]}
+                            {tierRow.subtitle}
                           </span>
                         )}
                       </div>
@@ -529,7 +585,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                     <div className="p-2">
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
                         {tierRow.items.map((item) => (
-                          <PeripheralCard key={item.id} {...item} />
+                          <PeripheralCard key={item.id} {...item} golpeMotivo={item.specs?.golpeMotivo} />
                         ))}
                       </div>
                     </div>
@@ -540,7 +596,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
           )}
         </div>
 
-        {untieredItems.length > 0 && (
+        {!isPriceBandMode && untieredItems.length > 0 && (
           <div className="border-t border-border bg-muted/10">
             <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
               <div className="flex items-center gap-3">

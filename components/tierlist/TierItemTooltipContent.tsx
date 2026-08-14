@@ -2,6 +2,8 @@
 
 import Image from "next/image"
 
+import { AlertTriangle } from "lucide-react"
+
 import { cn } from "@/lib/utils"
 import { CARD_TAG_STYLES, CARD_TIER_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { useLocale } from "@/components/providers/locale-context"
@@ -97,7 +99,11 @@ export interface TierItemTooltipContentProps {
   tags?: Tag[]
   specs?: Array<{ label: string; value: string }>
   displayPrice?: string
+  // Presentes quando o item vem do agrupamento por faixa de preço (aba Custo
+  // Benefício) — nesse caso `tier` vem null e o badge de rank é substituído
+  // pelo badge de faixa (e, se for GOLPE, por um aviso com o motivo).
   priceBand?: string
+  golpeMotivo?: string
 }
 
 function formatLabel(value: string) {
@@ -150,12 +156,14 @@ export function TierItemTooltipContent({
   specs,
   displayPrice,
   priceBand,
+  golpeMotivo,
 }: TierItemTooltipContentProps) {
   const { locale } = useLocale()
   const en = locale === "en-US"
   const tierStyle = tier ? CARD_TIER_STYLES[tier] : CARD_TIER_STYLES.L
   const tierTheme = tier ? TIER_THEMES[tier] : TIER_THEMES.L
   const tierLabel = tier ?? (en ? "Under Review" : "Sob Revisão")
+  const isGolpe = Boolean(golpeMotivo)
 
   const labels = en ? RATING_LABELS_EN : RATING_LABELS_PT
   const batteryLabel = categoryLabel === "keyboard"
@@ -203,26 +211,40 @@ export function TierItemTooltipContent({
         </div>
       </div>
 
-      {/* Rank (tier badge) */}
+      {/* Rank (tier badge) — em modo faixa de preço, o badge de tier some e vira o
+          badge da própria faixa (ou um aviso, se for GOLPE). */}
       <div className="flex items-center gap-2">
-        <span
-          className={cn(
-            "rounded-md bg-gradient-to-r px-2.5 py-1 text-[11px] font-black",
-            tierTheme.accent,
-            tierTheme.textColor,
-          )}
-        >
-          {tierLabel}
-        </span>
+        {priceBand ? (
+          <span
+            className={cn(
+              "rounded-md px-2.5 py-1 text-[11px] font-black",
+              isGolpe ? "bg-red-600 text-white" : cn("bg-gradient-to-r", tierTheme.accent, tierTheme.textColor),
+            )}
+          >
+            {priceBand}
+          </span>
+        ) : (
+          <span
+            className={cn(
+              "rounded-md bg-gradient-to-r px-2.5 py-1 text-[11px] font-black",
+              tierTheme.accent,
+              tierTheme.textColor,
+            )}
+          >
+            {tierLabel}
+          </span>
+        )}
         {displayPrice && (
           <span className="text-sm font-bold text-emerald-400">{displayPrice}</span>
         )}
-        {priceBand && (
-          <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase text-muted-foreground">
-            {priceBand}
-          </span>
-        )}
       </div>
+
+      {isGolpe && golpeMotivo && (
+        <div className="flex items-start gap-2 rounded-md border border-red-600/40 bg-red-600/10 px-2.5 py-2">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-red-400" />
+          <p className="text-[11px] leading-snug text-red-300">{golpeMotivo}</p>
+        </div>
+      )}
 
       {/* Tags */}
       {tags && tags.length > 0 && (

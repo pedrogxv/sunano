@@ -2,11 +2,13 @@
 
 import Link from "next/link"
 import Image from "next/image"
+import { AlertTriangle } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { cn } from "@/lib/utils"
-import { CARD_TAG_STYLES, CARD_TIER_STYLES } from "@/lib/tierlist-theme"
+import { CARD_TAG_STYLES, CARD_TIER_STYLES, CARD_PRICE_BAND_STYLES } from "@/lib/tierlist-theme"
+import { PRICE_BAND_LABEL, GOLPE_KEY, type PriceGroupKey } from "@/lib/price-band"
 import { TierItemTooltipContent, type Ratings } from "./TierItemTooltipContent"
 import type { Tag } from "@/lib/tag-options"
 
@@ -23,6 +25,11 @@ interface PeripheralCardProps {
   category: string
   tags: Tag[]
   ratings?: Ratings
+  // Presentes só quando o card é renderizado dentro do agrupamento por faixa de
+  // preço (aba Custo Benefício) — nesses casos a estilização e o tooltip usam a
+  // faixa em vez do tier.
+  priceGroup?: PriceGroupKey | null
+  golpeMotivo?: string
   specs: {
     mouseShape?: "symmetrical" | "ergonomic"
     keyboardLayout?: string
@@ -35,10 +42,15 @@ interface PeripheralCardProps {
 }
 
 export function PeripheralCard({ ...item }: PeripheralCardProps) {
-  const tierStyle = item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L
+  const isGolpe = item.priceGroup === GOLPE_KEY
+  const tierStyle = item.priceGroup
+    ? CARD_PRICE_BAND_STYLES[item.priceGroup]
+    : item.tier
+      ? CARD_TIER_STYLES[item.tier]
+      : CARD_TIER_STYLES.L
   const primaryTag = item.tags[0]
   const tagStyle = primaryTag ? CARD_TAG_STYLES[primaryTag] : null
-  const isGoat = item.tier === "GOAT"
+  const isGoat = !item.priceGroup && item.tier === "GOAT"
   const href = `/perifericos/${buildPeripheralSlug(item.name, item.id)}`
 
   return (
@@ -60,8 +72,17 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
             tierStyle.glowHover,
           )}
         >
-          {/* Tier accent bar */}
+          {/* Tier / price-band accent bar */}
           <div className={cn("absolute bottom-0 left-0 top-0 w-1.5", tierStyle.accent)} />
+
+          {isGolpe && (
+            <div
+              className="absolute right-1 top-1 z-10 grid size-4 place-items-center rounded-full bg-red-600 text-white shadow"
+              title={item.golpeMotivo || "GOLPE — não recomendado"}
+            >
+              <AlertTriangle className="size-2.5" />
+            </div>
+          )}
 
           {/* Image area */}
           <div
@@ -120,9 +141,11 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
             brand={item.brand}
             categoryLabel={item.category}
             image_url={item.image_url}
-            tier={item.tier}
+            tier={item.priceGroup ? null : item.tier}
             ratings={item.ratings ?? {}}
             tags={item.tags}
+            priceBand={item.priceGroup ? PRICE_BAND_LABEL[item.priceGroup] : undefined}
+            golpeMotivo={isGolpe ? item.golpeMotivo : undefined}
           />
         </Link>
       </TooltipContent>

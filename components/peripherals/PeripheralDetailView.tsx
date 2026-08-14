@@ -569,16 +569,12 @@ export function PeripheralDetailView({
   // A 1ª linha de specsTable é sempre o preço (specsBase) — vira uma tag
   // própria, maior, perto do nome/marca, em vez de disputar espaço com as
   // outras specs nos chips de destaque.
-  const [priceHeadline, ...restSpecsTable] = specsTable
+  const [priceHeadline] = specsTable
   const priceDisplay = formatSpecValue(priceHeadline.value)
 
-  const headlineSpecs = restSpecsTable
-    .map((spec) => ({ ...spec, display: formatSpecValue(spec.value) }))
-    .filter((spec) => spec.display !== "-")
-    .slice(0, 3)
-
   const isMouse = data.category === "mouse"
-  const specsRows = specsTable.filter((row) => row.group === "specs")
+  // "Preço médio" já aparece em destaque perto do nome — não repetir nas Especificações.
+  const specsRows = specsTable.filter((row) => row.group === "specs" && row !== priceHeadline)
   const performanceRows = specsTable.filter((row) => row.group === "performance")
 
   const showGrip = isMouse
@@ -593,8 +589,24 @@ export function PeripheralDetailView({
   const shapeDimensions = details.dimensions ?? specs.dimensions
   const shapeImageUrl = typeof (details.shapeImage ?? specs.shapeImage) === "string" ? (details.shapeImage ?? specs.shapeImage) : null
 
+  // "Dimensões (CxLxA)" = comprimento x largura x altura, ex: "125 x 63.5 x 40 mm".
+  // O container do Shape usa escala real (mm→px) do mouse visto de cima, então
+  // mouses maiores renderizam fisicamente maiores que mouses menores, mantendo
+  // consistência entre páginas de perifs diferentes. Só escala pra baixo se
+  // estourar o card; nunca escala pra cima.
+  const SHAPE_MM_TO_PX = 1.5
+  const SHAPE_MAX_SIDE_PX = 200
+  const { shapeBoxWidth, shapeBoxHeight } = (() => {
+    const numbers = typeof shapeDimensions === "string" ? shapeDimensions.match(/\d+(\.\d+)?/g) : null
+    const [length, width] = numbers && numbers.length >= 2 ? numbers.map(Number) : [120, 66]
+    const rawHeight = (length || 120) * SHAPE_MM_TO_PX
+    const rawWidth = (width || 66) * SHAPE_MM_TO_PX
+    const scale = Math.min(1, SHAPE_MAX_SIDE_PX / Math.max(rawHeight, rawWidth))
+    return { shapeBoxWidth: Math.round(rawWidth * scale), shapeBoxHeight: Math.round(rawHeight * scale) }
+  })()
+
   const specCardCount =
-    1 + (performanceRows.length > 0 ? 1 : 0) + (showShape ? 1 : 0) + (showGrip ? 1 : 0) + (isSwitch ? 1 : 0)
+    1 + (performanceRows.length > 0 ? 1 : 0) + (showShape ? 1 : 0) + (isSwitch ? 1 : 0)
 
   const classificationsList = classifications.length > 0
     ? classifications
@@ -709,16 +721,18 @@ export function PeripheralDetailView({
                   <RatingRow label="Geral" rating={ratings.overall} />
                   {/* PCB avulsa: construção e digitação dependem do plate/case/switch que
                       quem monta escolhe depois, então essas notas não se aplicam aqui. */}
-                  {data.category !== "pcb" && (
-                    <RatingRow label={data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />
-                  )}
-                  <RatingRow label={data.category === "mousepad" ? "Base" : "Software"} rating={ratings.software} />
-                  {data.category !== "pcb" && (
-                    <RatingRow label={data.category === "keyboard" ? "Digitação" : data.category === "mousepad" ? "Costura" : "Bateria"} rating={ratings.battery} />
-                  )}
-                  <RatingRow label="Performance" rating={ratings.performance} />
-                  <RatingRow label="QC" rating={ratings.qc} />
-                  <RatingRow label="Custo-beneficio" rating={ratings.value} />
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                    {data.category !== "pcb" && (
+                      <RatingRow label={data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />
+                    )}
+                    <RatingRow label={data.category === "mousepad" ? "Base" : "Software"} rating={ratings.software} />
+                    {data.category !== "pcb" && (
+                      <RatingRow label={data.category === "keyboard" ? "Digitação" : data.category === "mousepad" ? "Costura" : "Bateria"} rating={ratings.battery} />
+                    )}
+                    <RatingRow label="Performance" rating={ratings.performance} />
+                    <RatingRow label="QC" rating={ratings.qc} />
+                    <RatingRow label="Custo-beneficio" rating={ratings.value} />
+                  </div>
                 </CardContent>
               </Card>
 
@@ -853,36 +867,17 @@ export function PeripheralDetailView({
                     })}
                   </div>
                 ) : null}
-
-                {headlineSpecs.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    {headlineSpecs.map((spec) => (
-                      <div
-                        key={spec.label}
-                        className="rounded-md border border-border bg-muted/30 px-2 py-1"
-                      >
-                        <span className="font-medium text-foreground/80">{spec.label}:</span>{" "}
-                        {spec.href ? (
-                          <Link href={spec.href} className="font-semibold text-primary underline-offset-2 hover:underline">{spec.display}</Link>
-                        ) : (
-                          <span className="font-semibold text-foreground">{spec.display}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
               </div>
 
-              <div className={cn("grid gap-4", specCardCount > 1 && "@2xl/col:grid-cols-2")}>
-                <Card className="border-border bg-card">
+              <div className={cn("grid items-start gap-4", specCardCount > 1 && "@2xl/col:grid-cols-2")}>
+                <Card size="sm" className="border-border bg-card">
                   <CardHeader>
                     <CardTitle className="text-sm">{isSwitch ? "Especificações Técnicas" : "Especificações"}</CardTitle>
                     {!isMouse && (
                       <CardDescription className="text-xs">Principais dados do produto.</CardDescription>
                     )}
                   </CardHeader>
-                  <CardContent className="space-y-2 text-sm text-muted-foreground">
+                  <CardContent className="space-y-1.5 text-sm text-muted-foreground">
                     {specsRows.map((row) => (
                       <div key={row.label} className="flex items-start justify-between gap-3">
                         <span>{row.label}</span>
@@ -947,43 +942,28 @@ export function PeripheralDetailView({
                         <span>Dimensões (CxLxA)</span>
                         <span className="text-right font-semibold break-words text-foreground">{formatSpecValue(shapeDimensions)}</span>
                       </div>
-                      {shapeImageUrl ? (
-                        <div className="relative mt-2 aspect-[4/3] overflow-hidden rounded-xl border border-border bg-black">
+                      <div
+                        className="relative mx-auto mt-2 overflow-hidden rounded-xl border border-border bg-[#2a2a2a]"
+                        style={{ width: shapeBoxWidth, height: shapeBoxHeight }}
+                      >
+                        {/* Eixos de referência: dão noção de proporção/simetria sobre o shape. */}
+                        <div className="pointer-events-none absolute inset-0">
+                          <div className="absolute top-1/2 right-0 left-0 h-px -translate-y-1/2 bg-white/25" />
+                          <div className="absolute top-0 bottom-0 left-1/2 w-px -translate-x-1/2 bg-white/25" />
+                        </div>
+                        {shapeImageUrl ? (
                           <Image
                             src={shapeImageUrl}
                             alt={`Formato de ${data.name} visto de cima`}
                             fill
-                            sizes="(min-width: 1024px) 400px, 100vw"
+                            sizes={`${shapeBoxWidth}px`}
                             className="object-contain p-4"
                           />
-                        </div>
-                      ) : (
-                        <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-dashed border-border bg-black/90 text-center text-xs text-muted-foreground">
-                          Foto do shape não cadastrada.
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {showGrip && (
-                  <Card className="border-border bg-card">
-                    <CardHeader>
-                      <CardTitle className="text-sm">Pegada</CardTitle>
-                      <CardDescription className="text-xs">Recomendacao por tamanho de mao.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="divide-y divide-border text-sm text-muted-foreground">
-                      {gripInfo.map((row) => (
-                        <div
-                          key={row.label}
-                          className="flex items-center justify-between gap-4 px-3 py-2"
-                        >
-                          <span className="text-foreground/80">{row.label}</span>
-                          <span className="font-semibold text-foreground">{formatSpecValue(row.value)}</span>
-                        </div>
-                      ))}
-                      <div className="pt-3">
-                        <GripArchitectureImage />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
+                            Foto do shape não cadastrada.
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1020,7 +1000,31 @@ export function PeripheralDetailView({
                 )}
               </div>
 
-              <Card className="border-border bg-card">
+              <div className={cn("grid items-stretch gap-4", showGrip && "@2xl/col:grid-cols-2")}>
+                {showGrip && (
+                  <Card className="flex h-full flex-col border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-sm">Pegada</CardTitle>
+                      <CardDescription className="text-xs">Recomendacao por tamanho de mao.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="divide-y divide-border text-sm text-muted-foreground">
+                      {gripInfo.map((row) => (
+                        <div
+                          key={row.label}
+                          className="flex items-center justify-between gap-4 px-3 py-2"
+                        >
+                          <span className="text-foreground/80">{row.label}</span>
+                          <span className="font-semibold text-foreground">{formatSpecValue(row.value)}</span>
+                        </div>
+                      ))}
+                      <div className="pt-3">
+                        <GripArchitectureImage />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                <Card className="flex h-full flex-col border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-sm">Review no Youtube</CardTitle>
                 </CardHeader>
@@ -1092,7 +1096,8 @@ export function PeripheralDetailView({
                     </p>
                   )}
                 </CardContent>
-              </Card>
+                </Card>
+              </div>
 
               <Card className="border-border bg-card">
                 <CardContent className="pt-0 text-base text-muted-foreground lg:max-h-80 lg:overflow-auto">
@@ -1125,14 +1130,35 @@ export function PeripheralDetailView({
                   </CardContent>
                 </Card>
 
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-lg">Comentários</CardTitle>
-                </CardHeader>
-                <CardContent className="text-base text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
-                  {generalComments || "Sem comentarios adicionais."}
-                </CardContent>
-              </Card>
+              <div className="grid items-start gap-4 @2xl/col:grid-cols-2">
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Comentários</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-base text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
+                    {generalComments || "Sem comentarios adicionais."}
+                  </CardContent>
+                </Card>
+
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Comentários da comunidade</CardTitle>
+                    <CardDescription className="text-xs">Experiências e opiniões de quem usa (ou já usou) este periférico.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <CommentsSection
+                      apiBasePath={`/api/peripherals/${data.id}`}
+                      auraLookupPath="/api/peripherals/aura"
+                      comments={comments}
+                      onCommentsChange={setComments}
+                      initialHasMore={hasMoreComments}
+                      totalCount={commentCount}
+                      authUser={authUser}
+                      authLoading={authLoading}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
 
               {(linkedStore || linkedBazaar) && (
                 <Card className="border-border bg-card">
@@ -1194,25 +1220,6 @@ export function PeripheralDetailView({
                   </CardContent>
                 </Card>
               )}
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-lg">Comentários da comunidade</CardTitle>
-                  <CardDescription className="text-xs">Experiências e opiniões de quem usa (ou já usou) este periférico.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <CommentsSection
-                    apiBasePath={`/api/peripherals/${data.id}`}
-                    auraLookupPath="/api/peripherals/aura"
-                    comments={comments}
-                    onCommentsChange={setComments}
-                    initialHasMore={hasMoreComments}
-                    totalCount={commentCount}
-                    authUser={authUser}
-                    authLoading={authLoading}
-                  />
-                </CardContent>
-              </Card>
 
             </div>
     </div>

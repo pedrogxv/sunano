@@ -26,6 +26,7 @@ export function PeripheralVoteBox({ peripheralId }: PeripheralVoteBoxProps) {
   const [likes, setLikes] = useState(0)
   const [dislikes, setDislikes] = useState(0)
   const [loaded, setLoaded] = useState(false)
+  const [verdictTooltipOpen, setVerdictTooltipOpen] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -92,10 +93,16 @@ export function PeripheralVoteBox({ peripheralId }: PeripheralVoteBoxProps) {
     tie: "border-border bg-card",
   }
 
-  const verdictCaption: Record<typeof verdict, string> = {
-    good: "Comunidade recomenda",
-    bad: "Comunidade não recomenda",
-    tie: "Empate — poucos votos ainda",
+  const verdictTitle: Record<typeof verdict, string> = {
+    good: "PERIFÉRICO BOM",
+    bad: "PERIFÉRICO DE BAGRE",
+    tie: "EMPATE",
+  }
+
+  const verdictTitleColor: Record<typeof verdict, string> = {
+    good: "text-emerald-400",
+    bad: "text-red-400",
+    tie: "text-muted-foreground",
   }
 
   const verdictTooltip: Record<typeof verdict, string> = {
@@ -146,16 +153,30 @@ export function PeripheralVoteBox({ peripheralId }: PeripheralVoteBoxProps) {
         </button>
       </div>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <p className="cursor-default text-center text-xs font-medium text-muted-foreground">
-            {verdictCaption[verdict]}
-          </p>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" className="max-w-56 text-center">
-          {verdictTooltip[verdict]}
-        </TooltipContent>
-      </Tooltip>
+      <div className="flex flex-col items-center gap-1.5">
+        {/* Radix Tooltip só abre em hover/focus por padrão — sem suporte a toque no
+            mobile. Controla `open` manualmente pra abrir também com tap. */}
+        <Tooltip open={verdictTooltipOpen} onOpenChange={setVerdictTooltipOpen}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setVerdictTooltipOpen((open) => !open)}
+              className={cn(
+                "cursor-default text-center text-sm font-bold uppercase tracking-wide",
+                verdictTitleColor[verdict],
+              )}
+            >
+              {verdictTitle[verdict]}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-56 text-center">
+            {verdictTooltip[verdict]}
+          </TooltipContent>
+        </Tooltip>
+        <p className="text-xs font-medium text-muted-foreground">
+          👍 {likes} · 👎 {dislikes}
+        </p>
+      </div>
     </div>
   )
 }

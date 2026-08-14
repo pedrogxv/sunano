@@ -1465,6 +1465,24 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.2.8",
+          date: "13 de agosto",
+          title: "Mercado, comentários e votação nos periféricos, e faixa de preço na Tierlist",
+          description: "O Bazar virou Mercado (marketplace entre usuários), periféricos ganharam comentários e a votação \"BOM OU BAGRE?\", a página de cada Mouse foi reorganizada, e a Tierlist ganhou a faixa \"Custo Benefício\" por preço em vez de tier fixo.",
+          items: [
+            "Mercado: novo marketplace peer-to-peer que substitui o Bazar — qualquer membro anuncia seu próprio item com link da OLX",
+            "Comentários nos periféricos: cada página de periférico agora tem uma seção de comentários (mesmo padrão de thread/Aura do Fórum) pra deixar experiência e opinião sobre o produto",
+            "Votação \"BOM OU BAGRE?\": vote se recomenda ou não um periférico — a comunidade decide, e votar credita Aura pra você",
+            "Página de Mouse reorganizada: \"Preço médio\" em destaque, especificações reordenadas (Latência, Switch, Sensor, Polling Rate, Coating, Trimode, Bateria, Autonomia), e novo bloco \"Shape\" com tamanho, dimensões e foto do formato",
+            "Cards do banco de periféricos simplificados: só tags e preço em destaque, sem poluir com specs secundárias",
+            "Tierlist: aba \"Custo Benefício\" agora agrupa por faixa de preço (Barato/Médio/Caro) em vez de tier fixo, com prioridade pra itens marcados como GOLPE",
+            "Corrigido: a Tierlist perdia a aba selecionada ao voltar da página de detalhe de um periférico (resetava pra Teclado) — agora a aba fica salva e volta certinho",
+            "Suporte a GIFs em comentários, além das imagens",
+            "Upload de imagem de capa e miniatura nos posts do Blog",
+            "Regras da comunidade atualizadas na barra lateral do Fórum",
+          ],
+        },
+        {
           version: "v0.2.7 · Index Librorum Prohibitorum",
           date: "10 de agosto",
           title: "Filtro de conteúdo ofensivo, bônus de Aura da ofensiva e Changelog público",
@@ -2394,6 +2412,24 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.2.8",
+          date: "August 13",
+          title: "Market, peripheral comments and voting, and Tierlist price bands",
+          description: "Bazar became Mercado (a peer-to-peer marketplace), peripherals got comments and \"GOOD OR TRASH?\" voting, the Mouse detail page was reorganized, and the Tierlist's Value tab now groups by price band instead of a fixed tier.",
+          items: [
+            "Mercado: new peer-to-peer marketplace replacing Bazar — any member can list their own item with an OLX link",
+            "Peripheral comments: every peripheral page now has a comments section (same thread/Aura pattern as the Forum) to share your experience and opinion about the product",
+            "\"GOOD OR TRASH?\" voting: vote whether you'd recommend a peripheral — the community decides, and voting credits you Aura",
+            "Mouse detail page reorganized: \"Average price\" front and center, specs reordered (Latency, Switch, Sensor, Polling Rate, Coating, Trimode, Battery, Battery life), and a new \"Shape\" block with size, dimensions, and a shape photo",
+            "Peripheral catalog cards simplified: just tags and the highlighted price, without secondary specs cluttering the card",
+            "Tierlist: the \"Value\" tab now groups by price band (Budget/Mid/Premium) instead of a fixed tier, prioritizing items flagged as a SCAM",
+            "Fixed: the Tierlist lost its selected tab when going back from a peripheral's detail page (it reset to Keyboard) — the tab now sticks and restores correctly",
+            "GIF support in comments, alongside images",
+            "Cover and thumbnail image upload for Blog posts",
+            "Updated community rules in the Forum sidebar",
+          ],
+        },
         {
           version: "v0.2.7 · Index Librorum Prohibitorum",
           date: "August 10",

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { usePathname } from "next/navigation"
+import { useMemo, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { FilterBar } from "./FilterBar"
 import { TierlistGrid } from "./TierlistGrid"
 
@@ -60,10 +60,25 @@ function getPriceBand(price: number): Exclude<PriceBand, "all"> | null {
   return null
 }
 
+const CATEGORY_VALUES: Category[] = [
+  "all", "keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp",
+]
+
 export function TierlistContent({ initialData, categoryLabels }: TierlistContentProps) {
   const pathname = usePathname()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+
+  // A aba/categoria vive na URL (`?categoria=`), não em estado local — é o
+  // que faz o botão/gesto de voltar do navegador (ao vir da página de
+  // detalhe do periférico) restaurar a aba certa em vez de resetar pra
+  // "Teclado": o histórico do navegador já guarda a URL de cada troca de aba
+  // (via router.replace abaixo), então back() simplesmente relê essa URL.
+  const categoryParam = searchParams.get("categoria")
+  const selectedCategory: Category =
+    categoryParam && CATEGORY_VALUES.includes(categoryParam as Category) ? (categoryParam as Category) : "keyboard"
+
   const [query, setQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<Category>("keyboard")
   const [selectedBrand, setSelectedBrand] = useState("all")
   const [selectedPriceBand, setSelectedPriceBand] = useState<PriceBand>("all")
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
@@ -71,17 +86,20 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
 
   const categoryLabel = categoryLabels[selectedCategory]
 
-  useEffect(() => {
-    if (pathname === "/tierlist") {
-      setSelectedCategory("keyboard")
-      setSelectedBrand("all")
-      setSelectedMouseShape("all")
-      setSelectedKeyboardLayout("all")
-    }
-  }, [pathname])
-
   const handleCategoryChange = (category: Category) => {
-    setSelectedCategory(category)
+    const params = new URLSearchParams(searchParams.toString())
+    if (category === "keyboard") {
+      params.delete("categoria")
+    } else {
+      params.set("categoria", category)
+    }
+    const queryString = params.toString()
+    // replace (não push): trocar de aba não deve empilhar histórico — senão
+    // "voltar" ficaria desfazendo troca de aba por troca de aba em vez de
+    // sair da Tierlist. Cada troca substitui a URL atual, então o botão
+    // voltar de dentro da página de detalhe do periférico cai direto na
+    // última aba selecionada.
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
     setSelectedBrand("all")
     setSelectedMouseShape("all")
     setSelectedKeyboardLayout("all")

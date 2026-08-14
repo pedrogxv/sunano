@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 
 import { listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { getTierlistMeta } from "@/lib/server/repositories/tierlist-meta-repository"
@@ -78,7 +79,9 @@ export default async function TierlistPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-2 py-5 sm:px-3 md:px-6 md:py-6 lg:px-8 space-y-4 md:space-y-5">
-      <TierlistContent initialData={items as any} categoryLabels={CATEGORY_LABELS} />
+      <Suspense fallback={null}>
+        <TierlistContent initialData={items as any} categoryLabels={CATEGORY_LABELS} />
+      </Suspense>
       <TierlistInfo latestUpdate={tierlistMeta} />
     </div>
   )

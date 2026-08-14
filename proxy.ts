@@ -147,6 +147,18 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Mercado desativado temporariamente — bloqueia a rota pública inteira.
+  if (pathname === "/mercado" || pathname.startsWith("/mercado/")) {
+    if (pathname.startsWith("/api")) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 })
+    }
+
+    const homeUrl = request.nextUrl.clone()
+    homeUrl.pathname = "/"
+    homeUrl.search = ""
+    return NextResponse.redirect(homeUrl)
+  }
+
   // Visitante anônimo em rota pública (sem manutenção): nada a verificar.
   // O cookie de sessão é a única condição que exige resolver a sessão aqui —
   // necessário para aplicar o 2FA também fora do /admin.

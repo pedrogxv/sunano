@@ -13,7 +13,6 @@ import {
   Mouse,
   Newspaper,
   PlaySquare,
-  Recycle,
   ShoppingBag,
   ShoppingCart,
   Trophy,
@@ -229,30 +228,6 @@ export function PublicSidebar() {
                   {!isCollapsed && <ShoppingCart className="size-2.5" />}
                   {cartCount > 9 ? "9+" : cartCount}
                 </button>
-              )}
-            </Link>
-
-            {/* Mercado */}
-            <Link
-              href="/mercado"
-              onClick={close}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                isCollapsed && "justify-center",
-                isActive("/mercado")
-                  ? "bg-amber-600 text-white shadow-sm shadow-amber-900/40"
-                  : "border border-amber-500/40 bg-amber-500/10 text-amber-700 hover:border-amber-500/60 hover:bg-amber-500/20 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
-              )}
-            >
-              <Recycle className="size-[18px] shrink-0" />
-              <span className={cn("flex-1", isCollapsed && "hidden")}>{t.nav.market}</span>
-              {!isCollapsed && (
-                <span className={cn(
-                  "rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide",
-                  isActive("/mercado") ? "bg-white/25 text-white" : "bg-amber-500/25 text-amber-800 dark:text-amber-200"
-                )}>
-                  {t.nav.used}
-                </span>
               )}
             </Link>
 

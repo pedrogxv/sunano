@@ -8,7 +8,7 @@ import { AnimatedCounter } from "@/components/animated-counter"
 import { useLocale } from "@/components/providers/locale-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ChartTooltip, hourLabel, monthLabel, weekdayLabel } from "@/components/admin/dashboard-chart-utils"
+import { ChartTooltip, hourLabel, makeValueLabel, monthLabel, weekdayLabel } from "@/components/admin/dashboard-chart-utils"
 import type { VisitSeries } from "@/lib/server/repositories/visits-repository"
 import { useT } from "@/lib/use-t"
 
@@ -68,6 +68,8 @@ export function VisitorsStatCard({ data, loading }: { data: VisitSeries | null; 
   }))
 
   const total = points.reduce((sum, p) => sum + p.count, 0)
+  const peakCount = points.reduce((max, p) => Math.max(max, p.count), 0)
+  const showAllLabels = chartData.length <= 8
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border border-border bg-card p-4 duration-300">
@@ -127,6 +129,7 @@ export function VisitorsStatCard({ data, loading }: { data: VisitSeries | null; 
                 strokeWidth={2}
                 fill="url(#visitorsFill)"
                 activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }}
+                label={makeValueLabel(showAllLabels, peakCount)}
               />
             </AreaChart>
           </ResponsiveContainer>

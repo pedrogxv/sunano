@@ -1467,10 +1467,9 @@ export const translations: Record<LocaleCode, Translations> = {
         {
           version: "v0.2.8",
           date: "13 de agosto",
-          title: "Mercado, comentários e votação nos periféricos, e faixa de preço na Tierlist",
-          description: "O Bazar virou Mercado (marketplace entre usuários), periféricos ganharam comentários e a votação \"BOM OU BAGRE?\", a página de cada Mouse foi reorganizada, e a Tierlist ganhou a faixa \"Custo Benefício\" por preço em vez de tier fixo.",
+          title: "Comentários e votação nos periféricos, e faixa de preço na Tierlist",
+          description: "Periféricos ganharam comentários e a votação \"BOM OU BAGRE?\", a página de cada Mouse foi reorganizada, e a Tierlist ganhou a faixa \"Custo Benefício\" por preço em vez de tier fixo.",
           items: [
-            "Mercado: novo marketplace peer-to-peer que substitui o Bazar — qualquer membro anuncia seu próprio item com link da OLX",
             "Comentários nos periféricos: cada página de periférico agora tem uma seção de comentários (mesmo padrão de thread/Aura do Fórum) pra deixar experiência e opinião sobre o produto",
             "Votação \"BOM OU BAGRE?\": vote se recomenda ou não um periférico — a comunidade decide, e votar credita Aura pra você",
             "Página de Mouse reorganizada: \"Preço médio\" em destaque, especificações reordenadas (Latência, Switch, Sensor, Polling Rate, Coating, Trimode, Bateria, Autonomia), e novo bloco \"Shape\" com tamanho, dimensões e foto do formato",

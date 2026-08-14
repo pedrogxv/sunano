@@ -24,6 +24,26 @@ export function monthLabel(key: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { month: "short", timeZone: SITE_TIMEZONE }).format(date).replace(".", "")
 }
 
+// Rótulo fixo de valor sobre cada ponto do gráfico (além do tooltip on hover).
+// `showAll` quando há poucos pontos (dia/semana); com muitos pontos (ex. ano,
+// 12 meses) mostra só o valor de pico pra não poluir o gráfico.
+export type ValueLabelProps = {
+  x?: number | string
+  y?: number | string
+  value?: number | string | boolean | null
+}
+
+export function makeValueLabel(showAll: boolean, peakValue: number) {
+  return function ValueLabel({ x, y, value }: ValueLabelProps) {
+    if (typeof value !== "number" || (!showAll && value !== peakValue)) return null
+    return (
+      <text x={x} y={Number(y ?? 0) - 8} textAnchor="middle" fontSize={10} fontWeight={600} fill="var(--foreground)">
+        {value.toLocaleString("pt-BR")}
+      </text>
+    )
+  }
+}
+
 export type TooltipPayloadItem = { value?: number; payload?: { label?: string } }
 
 export function ChartTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayloadItem[] }) {

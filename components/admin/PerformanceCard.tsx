@@ -8,7 +8,7 @@ import { AnimatedCounter } from "@/components/animated-counter"
 import { useLocale } from "@/components/providers/locale-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ChartTooltip, hourLabel, weekdayLabel } from "@/components/admin/dashboard-chart-utils"
+import { ChartTooltip, hourLabel, makeValueLabel, weekdayLabel } from "@/components/admin/dashboard-chart-utils"
 import type { PerformanceSeries } from "@/lib/server/repositories/dashboard-performance-repository"
 import { useT } from "@/lib/use-t"
 
@@ -48,6 +48,8 @@ export function PerformanceCard({ data, loading }: { data: PerformanceSeries | n
 
   const totalInteractions = points.reduce((sum, p) => sum + p.interactions, 0)
   const totalAura = points.reduce((sum, p) => sum + p.aura, 0)
+  const peakInteractions = points.reduce((max, p) => Math.max(max, p.interactions), 0)
+  const showAllLabels = chartData.length <= 8
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border border-border bg-card p-4 duration-300">
@@ -107,6 +109,7 @@ export function PerformanceCard({ data, loading }: { data: PerformanceSeries | n
               strokeWidth={2}
               fill="url(#performanceFill)"
               activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--card)" }}
+              label={makeValueLabel(showAllLabels, peakInteractions)}
             />
           </AreaChart>
         </ResponsiveContainer>

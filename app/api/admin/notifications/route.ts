@@ -46,7 +46,7 @@ export async function GET() {
 
 const sendSchema = z.object({
   title: z.string().trim().min(1, "Escreva um título.").max(80, "Título muito longo (máx. 80)."),
-  body: z.string().trim().min(1, "Escreva a mensagem.").max(280, "Mensagem muito longa (máx. 280)."),
+  body: z.string().trim().min(1, "Escreva a mensagem.").max(120, "Mensagem muito longa (máx. 120)."),
   // Caminho interno do próprio site — link externo aqui viraria vetor de
   // phishing dentro de uma notificação que o usuário confia por ser "do sistema".
   link: z

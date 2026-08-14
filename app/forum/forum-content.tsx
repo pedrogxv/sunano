@@ -10,7 +10,7 @@ import { PostMediaField } from "@/components/forum/PostMediaField"
 import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { ForumSidebar, ForumSidebarMobileTrigger } from "@/components/forum/ForumSidebar"
 import type { PublicProfileSummary } from "@/lib/user-directory"
-import { CommentBody, CommentFormatHint } from "@/components/comments/CommentBody"
+import { CommentBody } from "@/components/comments/CommentBody"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -387,8 +387,7 @@ export function ForumContent({
                 <CommentBody body={body} />
               </div>
             )}
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <CommentFormatHint />
+            <div className="flex items-center justify-end text-[10px] text-muted-foreground">
               <span>{body.length}/{MAX_BODY}</span>
             </div>
           </div>

@@ -39,7 +39,9 @@ type SentNotice = {
 type Target = { id: string; name: string }
 
 const TITLE_MAX = 80
-const BODY_MAX = 280
+// Mensagem é exibida truncada em 2 linhas (line-clamp-2) no sino de notificações —
+// 120 caracteres é o teto que ainda cabe inteiro sem cortar em "...".
+const BODY_MAX = 120
 
 /** Valor do <Select> que representa "todo mundo" — string vazia não serve ao Radix. */
 const EVERYONE = "__all__"

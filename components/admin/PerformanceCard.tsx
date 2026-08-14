@@ -8,24 +8,11 @@ import { AnimatedCounter } from "@/components/animated-counter"
 import { useLocale } from "@/components/providers/locale-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ChartTooltip, hourLabel, weekdayLabel } from "@/components/admin/dashboard-chart-utils"
 import type { PerformanceSeries } from "@/lib/server/repositories/dashboard-performance-repository"
 import { useT } from "@/lib/use-t"
 
 type RangeKey = "today" | "week"
-
-const SITE_TIMEZONE = "America/Sao_Paulo"
-
-function hourLabel(key: string): string {
-  return `${key.padStart(2, "0")}h`
-}
-
-// `key` de um ponto diário é uma data ISO (YYYY-MM-DD); ancorado em meio-dia
-// UTC pra formatar o dia da semana sem risco de cair no dia anterior por
-// causa do fuso.
-function weekdayLabel(key: string, locale: string): string {
-  const date = new Date(`${key}T12:00:00Z`)
-  return new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: SITE_TIMEZONE }).format(date).replace(".", "")
-}
 
 function PerformanceCardSkeleton() {
   return (
@@ -33,22 +20,6 @@ function PerformanceCardSkeleton() {
       <Skeleton className="h-5 w-40" />
       <Skeleton className="mt-4 h-8 w-28" />
       <Skeleton className="mt-6 h-[180px] w-full rounded-lg" />
-    </div>
-  )
-}
-
-type TooltipPayloadItem = { value?: number; payload?: { label?: string } }
-
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayloadItem[] }) {
-  if (!active || !payload?.length) return null
-  const point = payload[0]
-  return (
-    <div className="rounded-lg border border-border bg-popover px-2.5 py-1.5 text-xs shadow-lg">
-      <p className="text-muted-foreground">{point.payload?.label}</p>
-      <p className="mt-0.5 flex items-center gap-1.5 font-semibold text-foreground">
-        <span className="inline-block h-0.5 w-3 rounded-full bg-violet-400" />
-        {point.value?.toLocaleString("pt-BR")}
-      </p>
     </div>
   )
 }

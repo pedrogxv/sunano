@@ -276,9 +276,10 @@ type Translations = {
       statVisitorsTabDay: string
       statVisitorsTabWeek: string
       statVisitorsTabMonth: string
-      statVisitorsTabTotal: string
-      statVisitorsPreviousLabel: (period: "day" | "week" | "month") => string
-      statVisitorsNewLabel: string
+      statVisitorsTabYear: string
+      statVisitorsCaption: (period: "day" | "week" | "month" | "year") => string
+      statVisitorsWeekOfMonth: (n: number) => string
+      statVisitorsEmpty: string
       performanceOverview: string
       performanceCardTitle: string
       performanceTabToday: string
@@ -1012,10 +1013,17 @@ export const translations: Record<LocaleCode, Translations> = {
         statVisitorsTabDay: "Dia",
         statVisitorsTabWeek: "Semana",
         statVisitorsTabMonth: "Mês",
-        statVisitorsTabTotal: "Total",
-        statVisitorsPreviousLabel: (period) =>
-          period === "day" ? "vs. ontem" : period === "week" ? "vs. semana passada" : "vs. mês passado",
-        statVisitorsNewLabel: "novo",
+        statVisitorsTabYear: "Ano",
+        statVisitorsCaption: (period) =>
+          period === "day"
+            ? "visitantes hoje"
+            : period === "week"
+              ? "visitantes nos últimos 7 dias"
+              : period === "month"
+                ? "visitantes no mês"
+                : "visitantes no ano",
+        statVisitorsWeekOfMonth: (n) => `Sem ${n}`,
+        statVisitorsEmpty: "Nenhuma visita registrada nesse período",
         performanceOverview: "Visão geral de performance",
         performanceCardTitle: "Atividade da comunidade",
         performanceTabToday: "Hoje",
@@ -1935,10 +1943,17 @@ export const translations: Record<LocaleCode, Translations> = {
         statVisitorsTabDay: "Day",
         statVisitorsTabWeek: "Week",
         statVisitorsTabMonth: "Month",
-        statVisitorsTabTotal: "Total",
-        statVisitorsPreviousLabel: (period) =>
-          period === "day" ? "vs. yesterday" : period === "week" ? "vs. last week" : "vs. last month",
-        statVisitorsNewLabel: "new",
+        statVisitorsTabYear: "Year",
+        statVisitorsCaption: (period) =>
+          period === "day"
+            ? "visitors today"
+            : period === "week"
+              ? "visitors in the last 7 days"
+              : period === "month"
+                ? "visitors this month"
+                : "visitors this year",
+        statVisitorsWeekOfMonth: (n) => `Wk ${n}`,
+        statVisitorsEmpty: "No visits recorded in this period",
         performanceOverview: "Performance overview",
         performanceCardTitle: "Community activity",
         performanceTabToday: "Today",

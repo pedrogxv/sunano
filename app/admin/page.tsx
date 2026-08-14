@@ -25,8 +25,9 @@ import { AnimatedCounter } from "@/components/animated-counter"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PerformanceCard } from "@/components/admin/PerformanceCard"
 import { ReviewGaugeCard } from "@/components/admin/ReviewGaugeCard"
-import { VisitorsStatCard, type VisitorsStats } from "@/components/admin/VisitorsStatCard"
+import { VisitorsStatCard } from "@/components/admin/VisitorsStatCard"
 import type { PerformanceSeries } from "@/lib/server/repositories/dashboard-performance-repository"
+import type { VisitSeries } from "@/lib/server/repositories/visits-repository"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { hasAdminPermission, isWebMaster, type AdminProfile } from "@/lib/admin-permissions"
@@ -38,7 +39,7 @@ type DashboardStats = {
   store: { total: number; active: number; outOfStock: number } | null
   offers: { active: number } | null
   banners: { total: number; active: number; max: number } | null
-  visits: VisitorsStats | null
+  visits: VisitSeries | null
   performance: PerformanceSeries | null
 }
 
@@ -263,9 +264,9 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Visitantes — tira compacta com abas Dia/Semana/Mês/Total inline, mesmo
-          peso visual dos tiles acima em vez de um bloco grande separado */}
-      {(loading || stats?.visits) && <VisitorsStatCard stats={stats?.visits ?? null} loading={loading} />}
+      {/* Visitantes — gráfico com abas Dia/Semana/Mês/Ano, mesmo estilo visual
+          do gráfico de atividade da comunidade logo abaixo */}
+      {(loading || stats?.visits) && <VisitorsStatCard data={stats?.visits ?? null} loading={loading} />}
 
       {/* Visão geral de performance — atividade da comunidade (gráfico com
           toggle Hoje/Semana) ao lado do indicador circular de periféricos revisados */}

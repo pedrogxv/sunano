@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getTelegramOffers } from "@/lib/server/integrations/telegram-offers"
 import { countActiveBanners, MAX_ACTIVE_BANNERS } from "@/lib/server/repositories/banners-repository"
 import { getPerformanceSeries, type PerformanceSeries } from "@/lib/server/repositories/dashboard-performance-repository"
-import { getVisitStats } from "@/lib/server/repositories/visits-repository"
+import { getVisitSeries, type VisitSeries } from "@/lib/server/repositories/visits-repository"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -23,7 +23,7 @@ export async function GET() {
   const profile = auth.profile
   const db = createSupabaseAdminClient()
 
-  const stats: Record<string, SectionStats | null> & { visits: SectionStats | null; performance: PerformanceSeries | null } = {
+  const stats: Record<string, SectionStats | null> & { visits: VisitSeries | null; performance: PerformanceSeries | null } = {
     peripherals: null,
     blog: null,
     forum: null,
@@ -96,8 +96,7 @@ export async function GET() {
     }),
     safe("visits", async () => {
       if (!hasAdminPermission(profile, "dashboard_read")) return
-      const visitStats = await getVisitStats()
-      stats.visits = { ...visitStats }
+      stats.visits = await getVisitSeries()
     }),
     safe("performance", async () => {
       // Cruza dados de fórum, blog e aura — gate no dashboard_read (visão

@@ -57,6 +57,7 @@ export default async function TierlistPage() {
         adminTier_mechanical?: "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L" | null
         adminTier_pcb?: "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L" | null
         tierlistCategories?: string[]
+        golpe?: boolean
       },
     }
   })

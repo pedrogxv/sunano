@@ -195,7 +195,7 @@ function getRatingModeLabel(mode: RatingMode, category: string, locale: string):
   return locale === "en-US" ? (mode_obj?.en || "") : (mode_obj?.pt || "")
 }
 
-type PriceBand = "all" | "budget" | "mid" | "premium"
+type PriceBand = "all" | "budget" | "mid" | "premium" | "golpe"
 const LEGACY_TIER_ORDER_SPEC_KEY = "adminTierOrder"
 const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
   performance: "adminTierOrder_performance",
@@ -1268,7 +1268,9 @@ export default function AdminPeripheralsPage() {
         .toLowerCase()
       const matchesQuery = query.trim() === "" || searchable.includes(query.trim().toLowerCase())
       const matchesBrand = selectedBrand === "all" || item.brand === selectedBrand
-      const matchesPrice = selectedPriceBand === "all" || getPriceBand(item.price) === selectedPriceBand
+      const matchesPrice =
+        selectedPriceBand === "all" ||
+        (selectedPriceBand === "golpe" ? specs.golpe === true : getPriceBand(item.price) === selectedPriceBand)
 
       const matchesMouseShape =
         selectedCategory !== "mouse" ||

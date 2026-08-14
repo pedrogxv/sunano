@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 
 type MouseShape = "symmetrical" | "ergonomic"
 type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
-type PriceBand = "all" | "budget" | "mid" | "premium"
+type PriceBand = "all" | "budget" | "mid" | "premium" | "golpe"
 type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 
 const KEYBOARD_LAYOUTS: KeyboardLayout[] = ["60%", "75%", "tkl", "full-size"]
@@ -191,6 +191,10 @@ export function FilterBar({
                       <SelectItem value="budget">{t.filters.budgetBand}</SelectItem>
                       <SelectItem value="mid">Mid (R$300 até R$500)</SelectItem>
                       <SelectItem value="premium">High End (R$1000+)</SelectItem>
+                      <div className="my-1 h-px bg-border" />
+                      <SelectItem value="golpe" className="font-semibold text-destructive focus:text-destructive">
+                        {t.filters.golpeBand}
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -293,8 +297,16 @@ export function FilterBar({
         )}
 
         {selectedPriceBand !== "all" && (
-          <Badge variant="outline" className="gap-1.5 rounded-full border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-700 dark:text-amber-300">
-            {formatLabel(selectedPriceBand)}
+          <Badge
+            variant="outline"
+            className={cn(
+              "gap-1.5 rounded-full px-3 py-1 text-xs",
+              selectedPriceBand === "golpe"
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+            )}
+          >
+            {selectedPriceBand === "golpe" ? t.filters.golpeBand : formatLabel(selectedPriceBand)}
             <button
               onClick={() => onPriceBandChange("all")}
               aria-label={`${t.common.price}: ${t.common.clear}`}

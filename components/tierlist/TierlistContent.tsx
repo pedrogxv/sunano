@@ -10,7 +10,7 @@ type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
 type MouseShape = "symmetrical" | "ergonomic"
 type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
-type PriceBand = "all" | "budget" | "mid" | "premium"
+type PriceBand = "all" | "budget" | "mid" | "premium" | "golpe"
 type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone"
 
 type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
@@ -45,6 +45,7 @@ type Peripheral = {
     adminTier_mechanical?: TierValue
     adminTier_pcb?: TierValue
     tierlistCategories?: string[]
+    golpe?: boolean
   }
 }
 
@@ -121,7 +122,9 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
         .toLowerCase()
       const matchesQuery = query.trim() === "" || searchable.includes(query.trim().toLowerCase())
       const matchesBrand = selectedBrand === "all" || item.brand === selectedBrand
-      const matchesPrice = selectedPriceBand === "all" || getPriceBand(item.price) === selectedPriceBand
+      const matchesPrice =
+        selectedPriceBand === "all" ||
+        (selectedPriceBand === "golpe" ? item.specs.golpe === true : getPriceBand(item.price) === selectedPriceBand)
 
       const matchesMouseShape =
         selectedCategory !== "mouse" ||

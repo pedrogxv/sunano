@@ -325,6 +325,132 @@ export async function listAuraLedger(userId: string, limit = 50): Promise<AuraLe
   }))
 }
 
+// ── Periféricos: comentários (peripheral_aura) e voto "BOM OU BAGRE" (peripheral_votes) ──
+
+/** Dá, troca ou remove (toggle) a reação do usuário atual num comentário de periférico. */
+export async function togglePeripheralCommentAura(
+  giverId: string,
+  commentId: string,
+  kind: ReactionKind
+): Promise<ToggleAuraResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db.rpc("toggle_peripheral_comment_aura", {
+    p_giver_id: giverId,
+    p_comment_id: commentId,
+    p_kind: kind,
+  })
+
+  if (error) {
+    if (error.message?.includes("self_aura_not_allowed")) {
+      return { ok: false, error: "Você não pode reagir no seu próprio comentário.", code: "self_reaction", status: 400 }
+    }
+    if (error.message?.includes("target not found")) {
+      return { ok: false, error: "Comentário não encontrado.", code: "not_found", status: 404 }
+    }
+    if (error.message?.includes("daily_aura_limit_reached")) {
+      return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
+    }
+    console.error("[aura-repository] togglePeripheralCommentAura:", error)
+    return { ok: false, error: "Erro ao reagir.", code: "unknown", status: 400 }
+  }
+
+  const result = data?.[0]
+  if (!result) {
+    return { ok: false, error: "Erro ao reagir.", code: "unknown", status: 400 }
+  }
+  return { ok: true, reaction: result.reaction as ReactionKind | null, auraCount: result.aura_count }
+}
+
+/**
+ * Credita +5 de aura ao autor por comentar num periférico, no máximo 1x por
+ * periférico (ver `credit_peripheral_comment_creation_aura`). Best-effort:
+ * erros são logados mas não impedem o comentário em si.
+ */
+export async function creditPeripheralCommentCreationAura(userId: string, peripheralId: string): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const { error } = await db.rpc("credit_peripheral_comment_creation_aura", {
+    p_user_id: userId,
+    p_peripheral_id: peripheralId,
+  })
+  if (error) {
+    console.error("[aura-repository] creditPeripheralCommentCreationAura:", error)
+  }
+}
+
+/** Quais comentários de periférico (dentre os informados) o usuário atual já curtiu/descurtiu. */
+export async function getUserPeripheralCommentAuraGiven(userId: string, commentIds: string[]): Promise<ReactionSets> {
+  const reactions: ReactionSets = { liked: new Set(), disliked: new Set() }
+  if (commentIds.length === 0) return reactions
+
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("peripheral_aura")
+    .select("comment_id, kind")
+    .eq("giver_id", userId)
+    .in("comment_id", commentIds)
+
+  for (const row of data ?? []) {
+    ;(row.kind === "dislike" ? reactions.disliked : reactions.liked).add(row.comment_id)
+  }
+  return reactions
+}
+
+export type ToggleVoteResult =
+  | { ok: true; reaction: ReactionKind | null; likes: number; dislikes: number }
+  | { ok: false; error: string; status: number }
+
+/** Dá, troca ou remove (toggle) o voto "BOM OU BAGRE" do usuário atual num periférico. */
+export async function togglePeripheralVote(
+  voterId: string,
+  peripheralId: string,
+  kind: ReactionKind
+): Promise<ToggleVoteResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db.rpc("toggle_peripheral_vote", {
+    p_voter_id: voterId,
+    p_peripheral_id: peripheralId,
+    p_kind: kind,
+  })
+
+  if (error) {
+    if (error.message?.includes("target not found")) {
+      return { ok: false, error: "Periférico não encontrado.", status: 404 }
+    }
+    console.error("[aura-repository] togglePeripheralVote:", error)
+    return { ok: false, error: "Erro ao votar.", status: 400 }
+  }
+
+  const result = data?.[0]
+  if (!result) {
+    return { ok: false, error: "Erro ao votar.", status: 400 }
+  }
+  return { ok: true, reaction: result.reaction as ReactionKind | null, likes: result.likes, dislikes: result.dislikes }
+}
+
+/** Voto atual do usuário + contagem agregada — usado pra hidratar a caixa "BOM OU BAGRE". */
+export async function getPeripheralVoteState(
+  peripheralId: string,
+  userId?: string | null
+): Promise<{ reaction: ReactionKind | null; likes: number; dislikes: number }> {
+  const db = createSupabaseAdminClient()
+
+  const [{ count: likes }, { count: dislikes }, ownReaction] = await Promise.all([
+    db.from("peripheral_votes").select("id", { count: "exact", head: true }).eq("peripheral_id", peripheralId).eq("kind", "like"),
+    db.from("peripheral_votes").select("id", { count: "exact", head: true }).eq("peripheral_id", peripheralId).eq("kind", "dislike"),
+    userId
+      ? db.from("peripheral_votes").select("kind").eq("peripheral_id", peripheralId).eq("voter_id", userId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
+
+  return {
+    reaction: (ownReaction?.data?.kind as ReactionKind | undefined) ?? null,
+    likes: likes ?? 0,
+    dislikes: dislikes ?? 0,
+  }
+}
+
 /** Um comentário por (like, dislike) — conjuntos sempre mutuamente exclusivos. */
 export type ReactionSets = { liked: Set<string>; disliked: Set<string> }
 

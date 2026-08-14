@@ -25,6 +25,7 @@ import { AnimatedCounter } from "@/components/animated-counter"
 import { LikeButton } from "@/components/peripherals/LikeButton"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
+import { formatCurrencyBRL } from "@/lib/stripe"
 import { cn } from "@/lib/utils"
 
 type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
@@ -1069,16 +1070,6 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {filtered.map((item) => {
                 const isSelected = selectedIds.includes(item.id)
-                const specChips = [
-                  item.specs.connectivity ? formatLabel(item.specs.connectivity) : null,
-                  item.specs.driver ?? null,
-                  item.specs.keyboardLayout ? item.specs.keyboardLayout.toUpperCase() : null,
-                  item.specs.keyboardType ? (item.specs.keyboardType === "mechanical" ? (t.filters.mechanical) : (t.filters.magnetic)) : null,
-                  item.specs.surface ? formatLabel(item.specs.surface) : null,
-                  item.specs.mouseShape ? formatLabel(item.specs.mouseShape) : null,
-                  item.specs.refreshRate ? `${item.specs.refreshRate}Hz` : null,
-                  item.specs.panelType ? String(item.specs.panelType).toUpperCase() : null,
-                ].filter(Boolean) as string[]
 
                 const cardHref = showAdminActions
                   ? `/admin/perifericos/${item.id}`
@@ -1143,6 +1134,10 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                         <p className="mt-0.5 text-xs text-muted-foreground">{item.brand}</p>
                       </div>
 
+                      <span className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-sm font-bold text-emerald-300">
+                        {formatCurrencyBRL(item.price)}
+                      </span>
+
                       {item.tags?.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {item.tags.map((tag) => (
@@ -1157,19 +1152,6 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                             >
                               <span className={cn("size-1.5 rounded-full", CARD_TAG_STYLES[tag].dot)} />
                               {formatTagLabel(tag, item.category)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {specChips.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {specChips.slice(0, 3).map((chip) => (
-                            <span
-                              key={chip}
-                              className="rounded-md bg-muted/40 px-1.5 py-0.5 text-[10px] text-muted-foreground"
-                            >
-                              {chip}
                             </span>
                           ))}
                         </div>

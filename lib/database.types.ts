@@ -489,6 +489,61 @@ export type Database = {
           Partial<Pick<Database["public"]["Tables"]["forum_aura"]["Row"], "kind">>
         Update: Partial<Database["public"]["Tables"]["forum_aura"]["Insert"]>
       }
+      peripheral_comments: {
+        Relationships: []
+        Row: {
+          id: string
+          peripheral_id: string
+          body: string
+          /** Coluna gerada (`left(body, 140)`) — nunca enviada no Insert/Update. */
+          body_preview: string
+          author_name: string
+          user_id: string | null
+          /** Aponta pro pai imediato — thread de até 4 níveis (raiz > resposta > resposta > resposta). */
+          parent_comment_id: string | null
+          is_hidden: boolean
+          aura_count: number
+          /** Até 2 URLs do bucket `comments` — limite também travado por CHECK no banco. */
+          image_urls: string[]
+          /** Até 2 ids de usuário @mencionados. */
+          mentioned_user_ids: string[]
+          /** Última edição do texto pelo autor (janela de 15min). Null = nunca editado. */
+          edited_at: string | null
+          /** Coluna gerada (`edited_at is not null`) — nunca enviada no Insert/Update. */
+          is_edited: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<
+          Database["public"]["Tables"]["peripheral_comments"]["Row"],
+          "id" | "body_preview" | "is_edited" | "edited_at" | "created_at" | "updated_at"
+        > & { edited_at?: string | null }
+        Update: Partial<Database["public"]["Tables"]["peripheral_comments"]["Insert"]>
+      }
+      peripheral_aura: {
+        Relationships: []
+        Row: {
+          id: string
+          giver_id: string
+          comment_id: string
+          kind: "like" | "dislike"
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["peripheral_aura"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["peripheral_aura"]["Insert"]>
+      }
+      peripheral_votes: {
+        Relationships: []
+        Row: {
+          id: string
+          peripheral_id: string
+          voter_id: string
+          kind: "like" | "dislike"
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["peripheral_votes"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["peripheral_votes"]["Insert"]>
+      }
       user_aura_wallet: {
         Relationships: []
         Row: {
@@ -529,10 +584,17 @@ export type Database = {
             | "daily_mission_completed"
             | "daily_streak_bonus"
             | "achievement_unlocked"
+            | "peripheral_comment_aura_received"
+            | "peripheral_comment_aura_removed"
+            | "peripheral_comment_aura_disliked"
+            | "peripheral_comment_aura_undisliked"
+            | "peripheral_comment_created"
           source_post_id: string | null
           source_comment_id: string | null
           source_blog_post_id: string | null
           source_blog_comment_id: string | null
+          source_peripheral_id: string | null
+          source_peripheral_comment_id: string | null
           giver_id: string | null
           created_at: string
         }
@@ -939,6 +1001,18 @@ export type Database = {
       complete_daily_mission: {
         Args: { p_user_id: string; p_mission: "post" | "aura" | "comment" }
         Returns: { all_completed: boolean; streak: number }[]
+      }
+      toggle_peripheral_comment_aura: {
+        Args: { p_giver_id: string; p_comment_id: string; p_kind?: "like" | "dislike" }
+        Returns: { reaction: "like" | "dislike" | null; aura_count: number }[]
+      }
+      credit_peripheral_comment_creation_aura: {
+        Args: { p_user_id: string; p_peripheral_id: string }
+        Returns: boolean
+      }
+      toggle_peripheral_vote: {
+        Args: { p_voter_id: string; p_peripheral_id: string; p_kind: "like" | "dislike" }
+        Returns: { reaction: "like" | "dislike" | null; likes: number; dislikes: number }[]
       }
     }
   }

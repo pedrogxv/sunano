@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Package, ShoppingBag, Trophy } from "lucide-react"
@@ -11,12 +11,15 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { mapTier, NEW_TIERS } from "@/lib/tier-utils"
-import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
-import { GOLPE_KEY, PRICE_BAND_LABEL, getPriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
+import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
 import { PeripheralLikeToggle } from "@/components/peripherals/PeripheralLikeToggle"
+import { PeripheralVoteBox } from "@/components/peripherals/PeripheralVoteBox"
 import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
+import { CommentsSection } from "@/components/comments/CommentsSection"
+import { useAuthUser } from "@/components/providers/auth-context"
+import type { CommentItem } from "@/components/comments/types"
 import { formatBRL, formatCurrencyBRL } from "@/lib/stripe"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
@@ -408,6 +411,31 @@ export function PeripheralDetailView({
   classifications = [],
   rankingHref = "/ranking",
 }: PeripheralDetailViewProps) {
+  const { user: rawAuthUser, loading: authLoading } = useAuthUser()
+  const authUser = rawAuthUser
+    ? { id: rawAuthUser.id, display_name: rawAuthUser.displayName, avatar_url: rawAuthUser.avatarUrl }
+    : null
+
+  const [comments, setComments] = useState<CommentItem[]>([])
+  const [commentCount, setCommentCount] = useState(0)
+  const [hasMoreComments, setHasMoreComments] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    fetch(`/api/peripherals/${data.id}/comments?page=1&sort=recent`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json: { comments?: CommentItem[]; hasMore?: boolean; totalCount?: number }) => {
+        if (!active) return
+        setComments(json.comments ?? [])
+        setHasMoreComments(json.hasMore ?? false)
+        setCommentCount(json.totalCount ?? 0)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [data.id])
+
   const specs = (data.specs ?? {}) as Record<string, any>
   const details = (specs.details ?? {}) as Record<string, any>
 
@@ -453,7 +481,7 @@ export function PeripheralDetailView({
   // Switches usam faixa de preço (priceTier) em vez de valor exato.
   const specsBase = data.category === "switches"
     ? [{ label: "Valor médio", value: SWITCH_PRICE_TIER_LABEL[String(details.priceTier)] ?? "—", group: "specs" as const }]
-    : [{ label: "Preco base", value: formatCurrency(data.price), group: "specs" as const }]
+    : [{ label: "Preço médio", value: formatCurrency(data.price), group: "specs" as const }]
 
   // Linha "Switch": vira link quando há um Switch cadastrado vinculado; senão, texto livre.
   const switchRow = (group: "specs" | "performance") =>
@@ -465,12 +493,14 @@ export function PeripheralDetailView({
     switch (data.category) {
       case "mouse":
         return [...specsBase,
-          { label: "Sensor", value: specs.driver ?? details.sensor, group: "specs" },
-          { label: "Peso", value: details.weight ?? specs.weight, group: "specs" },
+          { label: "Latência", value: details.latency ?? specs.latency, group: "specs" },
           switchRow("specs"),
-          { label: "Shape", value: details.shape ?? specs.mouseShape, group: "specs" },
+          { label: "Sensor", value: specs.driver ?? details.sensor, group: "specs" },
+          { label: "Polling Rate", value: details.pollingRate ?? specs.pollingRate, group: "specs" },
           { label: "Coating", value: details.coating ?? specs.coating, group: "specs" },
-          { label: "Latencia", value: details.latency ?? specs.latency, group: "performance" },
+          { label: "Trimode", value: formatTrimode(specs.trimode), group: "specs" },
+          { label: "Bateria", value: details.battery ?? specs.battery, group: "specs" },
+          { label: "Autonomia", value: details.batteryLife ?? specs.batteryLife, group: "specs" },
         ]
       case "keyboard":
         return [...specsBase,
@@ -536,23 +566,35 @@ export function PeripheralDetailView({
     }
   })()
 
-  const headlineSpecs = specsTable
+  // A 1ª linha de specsTable é sempre o preço (specsBase) — vira uma tag
+  // própria, maior, perto do nome/marca, em vez de disputar espaço com as
+  // outras specs nos chips de destaque.
+  const [priceHeadline, ...restSpecsTable] = specsTable
+  const priceDisplay = formatSpecValue(priceHeadline.value)
+
+  const headlineSpecs = restSpecsTable
     .map((spec) => ({ ...spec, display: formatSpecValue(spec.value) }))
     .filter((spec) => spec.display !== "-")
     .slice(0, 3)
 
+  const isMouse = data.category === "mouse"
   const specsRows = specsTable.filter((row) => row.group === "specs")
   const performanceRows = specsTable.filter((row) => row.group === "performance")
 
-  const showGrip = data.category === "mouse"
+  const showGrip = isMouse
   const gripInfo = [
     { label: "Mao pequena", value: details.gripSmall || "Claw/Palm" },
     { label: "Mao media", value: details.gripMedium || "Claw/Palm" },
     { label: "Mao grande", value: details.gripLarge || "Claw/Finger" },
   ]
 
+  const showShape = isMouse
+  const shapeSize = specs.size ?? details.size
+  const shapeDimensions = details.dimensions ?? specs.dimensions
+  const shapeImageUrl = typeof (details.shapeImage ?? specs.shapeImage) === "string" ? (details.shapeImage ?? specs.shapeImage) : null
+
   const specCardCount =
-    1 + (performanceRows.length > 0 ? 1 : 0) + (showGrip ? 1 : 0) + (isSwitch ? 1 : 0)
+    1 + (performanceRows.length > 0 ? 1 : 0) + (showShape ? 1 : 0) + (showGrip ? 1 : 0) + (isSwitch ? 1 : 0)
 
   const classificationsList = classifications.length > 0
     ? classifications
@@ -561,39 +603,22 @@ export function PeripheralDetailView({
 
   // Dentro da própria categoria (ex.: mouse), o mesmo produto pode ser ranqueado
   // em mais de um "modo" (Geral, Magnético, Custo-Benefício...), cada um com seu
-  // tier — ver RANKING_MODES_BY_CATEGORY. Filtra pelos modos que o admin marcou
-  // como aplicáveis (specs.tierlistCategories); sem esse campo (itens legados),
-  // participa de todos, igual à Tierlist pública.
+  // tier — ver RANKING_MODES_BY_CATEGORY. A página de detalhe mostra só o modo
+  // padrão da categoria (Geral, ou Magnético pra teclado/OLED pra monitor) —
+  // os demais modos continuam disponíveis na Tierlist pública, evitando um
+  // seletor de modo redundante aqui. Filtra pelos modos que o admin marcou como
+  // aplicáveis (specs.tierlistCategories); sem esse campo (itens legados),
+  // cai no modo padrão da categoria.
   const tierlistCategories = Array.isArray(specs.tierlistCategories) ? specs.tierlistCategories as string[] : null
-
-  // "value" ("Custo Benefício") vira faixa de preço em toda categoria, exceto
-  // mousepad/glasspad — lá "value" significa "Nacional", conceito sem relação com preço.
-  // Ver components/tierlist/TierlistGrid.tsx pra mesma regra na Tierlist pública.
-  const isPriceBandCategory = data.category !== "mousepad" && data.category !== "glasspad"
-  const golpeMotivo = typeof specs.golpeMotivo === "string" ? specs.golpeMotivo : undefined
-
-  const rankingModes = (RANKING_MODES_BY_CATEGORY[data.category] ?? DEFAULT_RANKING_MODES)
-    .filter((mode) => !tierlistCategories || tierlistCategories.includes(mode.key))
-    .map((mode) => {
-      if (mode.key === "value" && isPriceBandCategory) {
-        return { ...mode, tier: null as string | null, priceGroup: getPriceGroupKey(data.price, specs.golpe as boolean | undefined) }
-      }
-      return { ...mode, tier: getRankingModeTier(data.category, data.tier, specs, mode.key), priceGroup: null as PriceGroupKey | null }
-    })
-    .filter((mode) => (mode.key === "value" && isPriceBandCategory ? mode.priceGroup !== null : mode.tier !== null))
-
   const defaultRankingMode = getDefaultRankingMode(data.category)
-  const initialRankingMode = rankingModes.find((m) => m.key === defaultRankingMode) ?? rankingModes[0]
-  const [activeRankingModeKey, setActiveRankingModeKey] = useState(initialRankingMode?.key ?? defaultRankingMode)
-  const activeRankingMode = rankingModes.find((m) => m.key === activeRankingModeKey) ?? initialRankingMode
-
-  const hasMultipleRankingModes = rankingModes.length > 1
-  const isActivePriceBand = Boolean(hasMultipleRankingModes && activeRankingMode?.key === "value" && isPriceBandCategory)
-  const activePriceGroup = isActivePriceBand ? activeRankingMode?.priceGroup ?? null : null
-  const activeTier = hasMultipleRankingModes ? (isActivePriceBand ? null : activeRankingMode?.tier ?? null) : data.tier
-  const tierStyle = isActivePriceBand
-    ? (activePriceGroup ? PRICE_BAND_THEMES[activePriceGroup] : null)
-    : (activeTier ? TIER_THEMES[activeTier as keyof typeof TIER_THEMES] : null)
+  const availableRankingModes = (RANKING_MODES_BY_CATEGORY[data.category] ?? DEFAULT_RANKING_MODES)
+    .filter((mode) => !tierlistCategories || tierlistCategories.includes(mode.key))
+  const effectiveRankingMode =
+    availableRankingModes.find((mode) => mode.key === defaultRankingMode)?.key
+    ?? availableRankingModes[0]?.key
+    ?? defaultRankingMode
+  const activeTier = getRankingModeTier(data.category, data.tier, specs, effectiveRankingMode)
+  const tierStyle = activeTier ? TIER_THEMES[activeTier as keyof typeof TIER_THEMES] : null
 
   return (
     // @container/pdv: permite que este componente seja reaproveitado tanto na página
@@ -661,40 +686,10 @@ export function PeripheralDetailView({
                 </div>
               ) : tierStyle ? (
                 <div className={cn("rounded-2xl bg-gradient-to-br px-4 py-3 text-center", tierStyle.accent, tierStyle.textColor)}>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">
-                    {hasMultipleRankingModes ? activeRankingMode?.label : "Classificação"}
-                  </p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">Classificação</p>
                   <p className="text-3xl font-bold tracking-tight leading-none">
-                    {isActivePriceBand
-                      ? (activePriceGroup ? PRICE_BAND_LABEL[activePriceGroup] : "—")
-                      : (activeTier ? mapTier(activeTier) : "Sob Revisão")}
+                    {activeTier ? mapTier(activeTier) : "Sob Revisão"}
                   </p>
-                  {isActivePriceBand && activePriceGroup === GOLPE_KEY && golpeMotivo && (
-                    <p className="mx-auto mt-1 max-w-[220px] text-[11px] font-medium leading-snug opacity-90">
-                      {golpeMotivo}
-                    </p>
-                  )}
-                  {hasMultipleRankingModes && (
-                    <div className="mt-3 flex flex-wrap justify-center gap-1">
-                      {rankingModes.map((mode) => (
-                        <button
-                          key={mode.key}
-                          type="button"
-                          onClick={() => setActiveRankingModeKey(mode.key)}
-                          aria-pressed={mode.key === activeRankingModeKey}
-                          className={cn(
-                            "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
-                            mode.key === activeRankingModeKey
-                              ? "bg-background/90 text-foreground"
-                              : "bg-background/20 text-current/80 hover:bg-background/40",
-                          )}
-                        >
-                          <span className={cn("size-1.5 shrink-0 rounded-full", mode.color)} />
-                          {mode.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="rounded-2xl border border-border bg-muted/40 px-4 py-3 text-center">
@@ -815,7 +810,13 @@ export function PeripheralDetailView({
                 <h1 className="mt-1 font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                   {data.name}
                 </h1>
-                <p className="text-sm text-muted-foreground">{data.brand}</p>
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <p className="text-sm text-muted-foreground">{data.brand}</p>
+                  <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-emerald-300/80">{priceHeadline.label}</span>
+                    <span className="text-sm font-bold text-emerald-300">{priceDisplay}</span>
+                  </span>
+                </div>
 
                 {data.tags?.length ? (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -870,7 +871,9 @@ export function PeripheralDetailView({
                 <Card className="border-border bg-card">
                   <CardHeader>
                     <CardTitle className="text-sm">{isSwitch ? "Especificações Técnicas" : "Especificações"}</CardTitle>
-                    <CardDescription className="text-xs">Principais dados do produto.</CardDescription>
+                    {!isMouse && (
+                      <CardDescription className="text-xs">Principais dados do produto.</CardDescription>
+                    )}
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm text-muted-foreground">
                     {specsRows.map((row) => (
@@ -918,6 +921,40 @@ export function PeripheralDetailView({
                           </span>
                         </div>
                       ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {showShape && (
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="text-sm">Shape</CardTitle>
+                      <CardDescription className="text-xs">Formato e dimensões do mouse.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm text-muted-foreground">
+                      <div className="flex items-start justify-between gap-3">
+                        <span>Tamanho</span>
+                        <span className="text-right font-semibold text-foreground">{formatSpecValue(shapeSize)}</span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span>Dimensões (CxLxA)</span>
+                        <span className="text-right font-semibold break-words text-foreground">{formatSpecValue(shapeDimensions)}</span>
+                      </div>
+                      {shapeImageUrl ? (
+                        <div className="relative mt-2 aspect-[4/3] overflow-hidden rounded-xl border border-border bg-black">
+                          <Image
+                            src={shapeImageUrl}
+                            alt={`Formato de ${data.name} visto de cima`}
+                            fill
+                            sizes="(min-width: 1024px) 400px, 100vw"
+                            className="object-contain p-4"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex aspect-[4/3] items-center justify-center rounded-xl border border-dashed border-border bg-black/90 text-center text-xs text-muted-foreground">
+                          Foto do shape não cadastrada.
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
@@ -1081,6 +1118,8 @@ export function PeripheralDetailView({
                   </CardContent>
                 </Card>
 
+              <PeripheralVoteBox peripheralId={data.id} />
+
               <Card className="border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-lg">Comentários</CardTitle>
@@ -1150,6 +1189,25 @@ export function PeripheralDetailView({
                   </CardContent>
                 </Card>
               )}
+
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">Comentários da comunidade</CardTitle>
+                  <CardDescription className="text-xs">Experiências e opiniões de quem usa (ou já usou) este periférico.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <CommentsSection
+                    apiBasePath={`/api/peripherals/${data.id}`}
+                    auraLookupPath="/api/peripherals/aura"
+                    comments={comments}
+                    onCommentsChange={setComments}
+                    initialHasMore={hasMoreComments}
+                    totalCount={commentCount}
+                    authUser={authUser}
+                    authLoading={authLoading}
+                  />
+                </CardContent>
+              </Card>
 
             </div>
     </div>

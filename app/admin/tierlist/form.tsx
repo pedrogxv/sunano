@@ -92,6 +92,10 @@ const peripheralSchema = z.object({
   housing: z.string().optional(),
   stemType: z.string().optional(),
   shape: z.string().optional(),
+  pollingRate: z.string().optional(),
+  battery: z.string().optional(),
+  batteryLife: z.string().optional(),
+  dimensions: z.string().optional(),
   gripSmall: z.string().optional(),
   gripMedium: z.string().optional(),
   gripLarge: z.string().optional(),
@@ -262,7 +266,7 @@ function findBuyLinkUrl(buyLinks: unknown, needles: string[]): string {
 // de mapeamento do onSubmit — sem isso, preview e dado salvo podiam divergir com o tempo.
 function buildSpecsPayload(
   data: PeripheralFormData,
-  opts: { selectedTierlistCategories: TierlistMode[]; gallery: string[] }
+  opts: { selectedTierlistCategories: TierlistMode[]; gallery: string[]; shapeImage?: string | null }
 ) {
   const splitLines = (value?: string) =>
     value ? value.split("\n").map((l) => l.trim()).filter(Boolean) : []
@@ -321,6 +325,9 @@ function buildSpecsPayload(
       stemType: data.stemType || undefined,
       shape: data.shape || undefined, gripSmall: data.gripSmall || undefined,
       gripMedium: data.gripMedium || undefined, gripLarge: data.gripLarge || undefined,
+      pollingRate: data.pollingRate || undefined, battery: data.battery || undefined,
+      batteryLife: data.batteryLife || undefined, dimensions: data.dimensions || undefined,
+      shapeImage: opts.shapeImage || undefined,
       ratings: Object.keys(cleanedRatings).length > 0 ? cleanedRatings : undefined,
     },
   }
@@ -764,6 +771,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [galleryFiles, setGalleryFiles] = useState<File[]>([])
   const [galleryPreviews, setGalleryPreviews] = useState<string[]>([])
   const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>([])
+  // Foto 2D do mouse (fundo preto, estilo eloshapes) — usada no bloco "Shape" da página
+  // pública. Upload único, sem remoção de fundo (o admin já sobe a foto pronta).
+  const [shapeImageFile, setShapeImageFile] = useState<File | null>(null)
+  const [shapeImagePreview, setShapeImagePreview] = useState<string | null>(null)
 
   const form = useForm<PeripheralFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -784,6 +795,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       buyLinkAliexpress: "", buyLinkMercadoLivre: "", buyLinkAmazon: "", buyLinkShopee: "",
       compatibility: "", comparisons: "",
       weight: "", latency: "", switchType: "", coating: "", shape: "",
+      pollingRate: "", battery: "", batteryLife: "", dimensions: "",
       actuationForce: "", totalTravel: "", magneticFlux: "", housing: "", stemType: "",
       gripSmall: "", gripMedium: "", gripLarge: "",
       ratingOverall: undefined, ratingBuild: undefined, ratingSoftware: undefined,
@@ -824,7 +836,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     image_url: imagePreview,
     specs: {
       ...existingModeTiers,
-      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery }),
+      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview }),
     },
   }
 
@@ -1004,6 +1016,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           housing: data.specs?.details?.housing ?? "",
           stemType: data.specs?.details?.stemType ?? "",
           shape: data.specs?.details?.shape ?? "",
+          pollingRate: data.specs?.details?.pollingRate ?? "",
+          battery: data.specs?.details?.battery ?? "",
+          batteryLife: data.specs?.details?.batteryLife ?? "",
+          dimensions: data.specs?.details?.dimensions ?? "",
           gripSmall: data.specs?.details?.gripSmall ?? "",
           gripMedium: data.specs?.details?.gripMedium ?? "",
           gripLarge: data.specs?.details?.gripLarge ?? "",
@@ -1041,6 +1057,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         if (data.image_url) setImagePreview(data.image_url)
         const galleryArr = Array.isArray(data.specs?.details?.gallery) ? data.specs.details.gallery : []
         setExistingGalleryUrls(galleryArr.filter(Boolean))
+        setShapeImagePreview(data.specs?.details?.shapeImage ?? null)
+        setShapeImageFile(null)
 
         const switchId = data.specs?.details?.switchPeripheralId
         if (switchId) {
@@ -1126,7 +1144,23 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       }
       const finalGallery = [...existingGalleryUrls, ...uploadedGalleryUrls]
 
-      const specs = buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery })
+      let shapeImageUrl = shapeImagePreview
+      if (shapeImageFile) {
+        setUploading(true)
+        const shapeForm = new FormData()
+        shapeForm.set("file", shapeImageFile)
+        const shapeRes = await fetch("/api/admin/peripherals/upload-image", {
+          method: "POST",
+          body: shapeForm,
+        })
+        const shapeData = (await shapeRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
+        if (!shapeRes.ok || !shapeData?.publicUrl) {
+          throw new Error(shapeData?.error ?? "Falha ao enviar a foto do shape")
+        }
+        shapeImageUrl = shapeData.publicUrl
+      }
+
+      const specs = buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl })
 
       // Switches usam faixa de preço (priceTier); o valor numérico fica em 0.
       let priceToSave = data.category === "switches" ? 0 : data.price
@@ -1315,6 +1349,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
   const removeExistingGalleryImage = (index: number) => {
     setExistingGalleryUrls((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleShapeImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    const preview = await fileToDataUrl(file)
+    setShapeImageFile(file)
+    setShapeImagePreview(preview)
+  }
+
+  const removeShapeImage = () => {
+    setShapeImageFile(null)
+    setShapeImagePreview(null)
   }
 
   const toggleTag = (tag: Tag) =>
@@ -1958,6 +2006,45 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Polling Rate"}</label>
+                  <Input className="border-border bg-background" placeholder="8000Hz" {...form.register("pollingRate")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Bateria"}</label>
+                  <Input className="border-border bg-background" placeholder="500mAh" {...form.register("battery")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Autonomia"}</label>
+                  <Input className="border-border bg-background" placeholder="70h" {...form.register("batteryLife")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Dimensões (CxLxA)"}</label>
+                  <Input className="border-border bg-background" placeholder="125 x 63.5 x 40 mm" {...form.register("dimensions")} />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Foto do Shape (fundo preto)"}</label>
+                  <p className="text-[10px] text-muted-foreground/60">{"Foto 2D do mouse visto de cima, em fundo preto — padrão estilo eloshapes, pensada para comparação entre mouses."}</p>
+                  {shapeImagePreview ? (
+                    <div className="relative group w-32 h-24 rounded-lg overflow-hidden border border-border bg-black">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={shapeImagePreview} alt="Shape" className="w-full h-full object-contain p-2" />
+                      <button
+                        type="button"
+                        onClick={removeShapeImage}
+                        className="absolute top-0.5 right-0.5 size-5 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex w-fit items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border p-3 hover:border-primary/40 hover:bg-muted/10 transition">
+                      <input accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleShapeImageSelect} type="file" />
+                      <Upload className="size-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">{"Enviar foto"}</span>
+                    </label>
+                  )}
                 </div>
                 <div className="md:col-span-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
                   {[

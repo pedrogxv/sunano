@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import type { ReactNode } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowRight, Clock, MessageCircle, Newspaper } from "lucide-react"
+import { Clock, MessageCircle, Newspaper } from "lucide-react"
 
 import { getBlogImageWithFallback } from "@/lib/blog-images"
 import { extractFirstUrl } from "@/lib/extract-link"
@@ -146,25 +146,19 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
         <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{post.content}</p>
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <AuthorByline post={post} size="md" />
-          <div className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground/70">
+          {/* Sempre leva pros comentários, mesmo quando título e foto levam
+              pro link externo configurado na notícia. */}
+          <Link
+            href={`/noticias/${post.slug}#comments`}
+            className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground/70 transition-colors hover:text-primary"
+          >
             <span>{timeAgo(post.created_at)}</span>
             <span className="flex items-center gap-1">
               <MessageCircle className="size-3" />
               {post.comment_count ?? 0}
             </span>
-          </div>
+          </Link>
         </div>
-      </div>
-      {/* Sempre visível: dá acesso à página/comentários mesmo quando título e
-          foto levam pro link externo configurado na notícia. */}
-      <div className="border-t border-border/40 px-4 py-3 sm:px-5">
-        <Link
-          href={`/noticias/${post.slug}#comments`}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary/80"
-        >
-          Ver comentários
-          <ArrowRight className="size-3.5" />
-        </Link>
       </div>
     </div>
   )

@@ -352,7 +352,97 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
           )}
         </div>
 
-        {/* Excerpt */}
+        {/* Images */}
+        <div className="space-y-3">
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t.admin.blog.form.coverImages}
+          </label>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* Header */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-foreground">{t.admin.blog.form.articleHeader}</span>
+                <Badge variant="secondary" className="text-[10px]">
+                  {BLOG_IMAGE_STANDARDS.header.width}×{BLOG_IMAGE_STANDARDS.header.height} · {BLOG_IMAGE_STANDARDS.header.aspectRatio}
+                </Badge>
+              </div>
+              {selectedHeaderUrl ? (
+                <div className="group relative overflow-hidden rounded-xl border border-border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={selectedHeaderUrl} alt="Header" className="aspect-video w-full object-cover" />
+                  <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+                    <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "header")} type="file" />
+                    <div className="flex flex-col items-center gap-1 text-white">
+                      <Upload className="size-5" />
+                      <span className="text-xs">{t.admin.blog.form.changeImage}</span>
+                    </div>
+                  </label>
+                </div>
+              ) : (
+                <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/10 transition hover:border-primary/40 hover:bg-muted/20">
+                  <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "header")} type="file" />
+                  <ImageIcon className="size-8 text-muted-foreground/40" />
+                  <span className="text-xs text-muted-foreground">{t.admin.blog.form.clickToUpload}</span>
+                  <span className="text-[10px] text-muted-foreground/60">{t.admin.blog.form.optionalAdapts}</span>
+                </label>
+              )}
+            </div>
+
+            {/* Thumbnail */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-foreground">{t.admin.blog.form.cardThumbnail}</span>
+                <Badge variant="secondary" className="text-[10px]">
+                  {BLOG_IMAGE_STANDARDS.thumbnail.width}×{BLOG_IMAGE_STANDARDS.thumbnail.height} · {BLOG_IMAGE_STANDARDS.thumbnail.aspectRatio}
+                </Badge>
+              </div>
+              {selectedThumbnailUrl ? (
+                <div className="group relative overflow-hidden rounded-xl border border-border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={selectedThumbnailUrl} alt="Thumbnail" className="aspect-video w-full object-cover" />
+                  <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
+                    <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "thumbnail")} type="file" />
+                    <div className="flex flex-col items-center gap-1 text-white">
+                      <Upload className="size-5" />
+                      <span className="text-xs">{t.admin.blog.form.changeImage}</span>
+                    </div>
+                  </label>
+                </div>
+              ) : (
+                <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/10 transition hover:border-primary/40 hover:bg-muted/20">
+                  <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "thumbnail")} type="file" />
+                  <ImageIcon className="size-8 text-muted-foreground/40" />
+                  <span className="text-xs text-muted-foreground">{t.admin.blog.form.clickToUpload}</span>
+                  <span className="text-[10px] text-muted-foreground/60">{t.admin.blog.form.recommendedShown}</span>
+                </label>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <FileText className="size-3.5" />
+              {t.admin.blog.form.articleContent}
+            </label>
+            <span className="text-[10px] text-muted-foreground">
+              {watchedContent?.length ?? 0} {t.admin.blog.form.chars}
+            </span>
+          </div>
+          <Textarea
+            className="min-h-80 resize-y border-border bg-card/40 font-mono text-sm leading-7"
+            placeholder={t.admin.blog.form.contentPlaceholder}
+            {...form.register("content")}
+          />
+          {form.formState.errors.content && (
+            <p className="text-xs text-red-400">{form.formState.errors.content.message}</p>
+          )}
+        </div>
+
+        {/* Excerpt — só reviews têm resumo; notícias vão direto pro corpo do texto */}
+        {isReview && (
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t.admin.blog.form.summaryLabel}
@@ -376,6 +466,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
             </p>
           )}
         </div>
+        )}
 
         {/* Featured — entra no header de manchetes de /noticias */}
         <div className="flex items-center justify-between gap-3 rounded-xl border border-border/40 bg-card/40 p-3.5">
@@ -468,74 +559,6 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
         </div>
         )}
 
-        {/* Images */}
-        <div className="space-y-3">
-          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t.admin.blog.form.coverImages}
-          </label>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {/* Header */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground">{t.admin.blog.form.articleHeader}</span>
-                <Badge variant="secondary" className="text-[10px]">
-                  {BLOG_IMAGE_STANDARDS.header.width}×{BLOG_IMAGE_STANDARDS.header.height} · {BLOG_IMAGE_STANDARDS.header.aspectRatio}
-                </Badge>
-              </div>
-              {selectedHeaderUrl ? (
-                <div className="group relative overflow-hidden rounded-xl border border-border">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={selectedHeaderUrl} alt="Header" className="aspect-video w-full object-cover" />
-                  <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                    <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "header")} type="file" />
-                    <div className="flex flex-col items-center gap-1 text-white">
-                      <Upload className="size-5" />
-                      <span className="text-xs">{t.admin.blog.form.changeImage}</span>
-                    </div>
-                  </label>
-                </div>
-              ) : (
-                <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/10 transition hover:border-primary/40 hover:bg-muted/20">
-                  <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "header")} type="file" />
-                  <ImageIcon className="size-8 text-muted-foreground/40" />
-                  <span className="text-xs text-muted-foreground">{t.admin.blog.form.clickToUpload}</span>
-                  <span className="text-[10px] text-muted-foreground/60">{t.admin.blog.form.optionalAdapts}</span>
-                </label>
-              )}
-            </div>
-
-            {/* Thumbnail */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-foreground">{t.admin.blog.form.cardThumbnail}</span>
-                <Badge variant="secondary" className="text-[10px]">
-                  {BLOG_IMAGE_STANDARDS.thumbnail.width}×{BLOG_IMAGE_STANDARDS.thumbnail.height} · {BLOG_IMAGE_STANDARDS.thumbnail.aspectRatio}
-                </Badge>
-              </div>
-              {selectedThumbnailUrl ? (
-                <div className="group relative overflow-hidden rounded-xl border border-border">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={selectedThumbnailUrl} alt="Thumbnail" className="aspect-video w-full object-cover" />
-                  <label className="absolute inset-0 flex cursor-pointer items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                    <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "thumbnail")} type="file" />
-                    <div className="flex flex-col items-center gap-1 text-white">
-                      <Upload className="size-5" />
-                      <span className="text-xs">{t.admin.blog.form.changeImage}</span>
-                    </div>
-                  </label>
-                </div>
-              ) : (
-                <label className="flex aspect-video cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/10 transition hover:border-primary/40 hover:bg-muted/20">
-                  <input accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e, "thumbnail")} type="file" />
-                  <ImageIcon className="size-8 text-muted-foreground/40" />
-                  <span className="text-xs text-muted-foreground">{t.admin.blog.form.clickToUpload}</span>
-                  <span className="text-[10px] text-muted-foreground/60">{t.admin.blog.form.recommendedShown}</span>
-                </label>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* Video URL */}
         <div className="space-y-1.5">
           <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -552,27 +575,6 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
           </div>
           {form.formState.errors.video_url && (
             <p className="text-xs text-red-400">{form.formState.errors.video_url.message}</p>
-          )}
-        </div>
-
-        {/* Content */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <FileText className="size-3.5" />
-              {t.admin.blog.form.articleContent}
-            </label>
-            <span className="text-[10px] text-muted-foreground">
-              {watchedContent?.length ?? 0} {t.admin.blog.form.chars}
-            </span>
-          </div>
-          <Textarea
-            className="min-h-80 resize-y border-border bg-card/40 font-mono text-sm leading-7"
-            placeholder={t.admin.blog.form.contentPlaceholder}
-            {...form.register("content")}
-          />
-          {form.formState.errors.content && (
-            <p className="text-xs text-red-400">{form.formState.errors.content.message}</p>
           )}
         </div>
 

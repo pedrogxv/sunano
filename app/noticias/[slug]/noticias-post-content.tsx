@@ -162,7 +162,10 @@ export function NoticiasPostContent({
     )
   }
 
-  const coverImg = getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")
+  const hasCoverImage = Boolean(post.cover_image_url?.trim() || post.cover_thumbnail_url?.trim())
+  const coverImg = hasCoverImage
+    ? getBlogImageWithFallback(post.cover_image_url, post.cover_thumbnail_url, "header")
+    : null
   const authorName = getAuthorName(post)
   const brandName = post.peripherals?.[0]?.brand ?? null
   const tags = buildTags(post)
@@ -178,18 +181,6 @@ export function NoticiasPostContent({
         <ArrowLeft className="size-4" />
         Notícias
       </Link>
-
-      {/* Cover image */}
-      <div className="relative mb-8 w-full overflow-hidden rounded-2xl bg-muted/30" style={{ aspectRatio: "16/9" }}>
-        <Image
-          src={coverImg}
-          alt={post.title}
-          fill
-          priority
-          sizes="(max-width: 768px) 100vw, 768px"
-          className="object-cover"
-        />
-      </div>
 
       {/* Brand */}
       {brandName && (
@@ -233,6 +224,20 @@ export function NoticiasPostContent({
           </div>
         </div>
       </div>
+
+      {/* Cover image — sem placeholder estático: sem imagem, pula direto pro corpo do texto */}
+      {coverImg && (
+        <div className="relative mb-8 w-full overflow-hidden rounded-2xl bg-muted/30" style={{ aspectRatio: "16/9" }}>
+          <Image
+            src={coverImg}
+            alt={post.title}
+            fill
+            priority
+            sizes="(max-width: 768px) 100vw, 768px"
+            className="object-cover"
+          />
+        </div>
+      )}
 
       {/* Excerpt */}
       {post.excerpt && (

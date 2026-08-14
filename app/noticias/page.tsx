@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import type { ReactNode } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Clock, MessageCircle, Newspaper } from "lucide-react"
@@ -94,7 +93,8 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
   const { href, external } = getHeadlineHref(post)
 
   const media = embedUrl ? (
-    <div className="relative aspect-video w-full overflow-hidden bg-black">
+    // z-20: fica acima do link "esticado" do card pra continuar interativo (tocar sem navegar).
+    <div className="relative z-20 aspect-video w-full overflow-hidden bg-black">
       <iframe
         src={embedUrl}
         title={post.title}
@@ -117,44 +117,47 @@ function HeadlineCard({ post }: { post: BlogListPost }) {
   )
 
   const cardClass =
-    "group overflow-hidden rounded-2xl border border-border/50 bg-card/50 transition-colors hover:border-primary/30 hover:bg-card"
+    "group relative overflow-hidden rounded-2xl border border-border/50 bg-card/50 transition-colors hover:border-primary/30 hover:bg-card"
 
-  const linkWrap = (children: ReactNode) =>
-    external ? (
-      <a href={href} target="_blank" rel="noopener noreferrer" className="block">
-        {children}
-      </a>
-    ) : (
-      <Link href={href} className="block">
-        {children}
-      </Link>
-    )
+  // Link "esticado" cobrindo o card inteiro (evita <a> aninhado dentro do
+  // link de comentários). z-10: fica abaixo do vídeo e do link de comentários,
+  // que têm z-20 e continuam clicáveis separadamente por cima.
+  const cardLink = external ? (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="absolute inset-0 z-10"
+      aria-label={post.title}
+    />
+  ) : (
+    <Link href={href} className="absolute inset-0 z-10" aria-label={post.title} />
+  )
 
   return (
     <div className={cardClass}>
-      {/* Só a foto/vídeo e o título são clicáveis — levam pro post (ou pro link
-          configurado na notícia). O corpo do texto nunca fica atrás de um clique:
-          já vem inteiro, sem "ler mais" e sem precisar navegar pra outra página. */}
-      {/* O player de vídeo é interativo — fica fora do link pra tocar sem navegar. */}
-      {embedUrl ? media : linkWrap(media)}
+      {/* O card inteiro é clicável e leva pro post (ou pro link externo
+          configurado na notícia). Comentários e vídeo ficam por cima
+          (z-20) pra continuarem clicáveis/interativos sem conflitar. */}
+      {cardLink}
+      {media}
       <div className="space-y-3 p-4 sm:p-5">
-        <h2 className="font-display text-xl font-bold leading-tight sm:text-2xl">
-          {linkWrap(
-            <span className="text-foreground transition-colors group-hover:text-primary">{post.title}</span>
-          )}
+        <h2 className="font-display text-xl font-bold leading-tight sm:text-2xl text-foreground transition-colors group-hover:text-primary">
+          {post.title}
         </h2>
         <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{post.content}</p>
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <AuthorByline post={post} size="md" />
-          {/* Sempre leva pros comentários, mesmo quando título e foto levam
-              pro link externo configurado na notícia. */}
+          {/* Sempre leva pros comentários, mesmo quando o resto do card leva
+              pro link externo configurado na notícia. Área de toque maior
+              (padding + ícone/texto maiores) pra facilitar o clique no mobile. */}
           <Link
             href={`/noticias/${post.slug}#comments`}
-            className="flex shrink-0 items-center gap-3 text-[11px] text-muted-foreground/70 transition-colors hover:text-primary"
+            className="relative z-20 -m-2 flex shrink-0 items-center gap-3 rounded-full px-3 py-2 text-xs text-muted-foreground/70 transition-colors hover:bg-muted/60 hover:text-primary"
           >
             <span>{timeAgo(post.created_at)}</span>
-            <span className="flex items-center gap-1">
-              <MessageCircle className="size-3" />
+            <span className="flex items-center gap-1.5">
+              <MessageCircle className="size-4" />
               {post.comment_count ?? 0}
             </span>
           </Link>

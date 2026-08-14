@@ -9,6 +9,8 @@ import { getVideoEmbedUrl } from "@/lib/video-embed"
 import { listPublishedPosts, type BlogListPost } from "@/lib/server/repositories/blog-repository"
 import { PersonAvatar } from "@/components/people/PersonAvatar"
 import { RoleBadge } from "@/components/people/RoleBadge"
+import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
+import { profilePath } from "@/lib/profile-name"
 import { NewNewsButton } from "./new-news-button"
 
 // ISR: renderizado no servidor e revalidado em background, sem o fetch
@@ -75,12 +77,32 @@ function AuthorByline({ post, size = "sm" }: { post: BlogListPost; size?: "xs" |
     display_slug: post.author_profile?.display_slug ?? null,
   }
   const role = post.admin_profiles?.role
+  const slug = avatarProfile.display_slug
 
   return (
     <div className="flex items-center gap-2 min-w-0">
-      <PersonAvatar profile={avatarProfile} size={size} />
+      <MiniProfileHoverCard slug={slug} side="right" align="start">
+        {slug ? (
+          <Link href={profilePath(slug)} className="relative z-20 shrink-0">
+            <PersonAvatar profile={avatarProfile} size={size} />
+          </Link>
+        ) : (
+          <PersonAvatar profile={avatarProfile} size={size} />
+        )}
+      </MiniProfileHoverCard>
       <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0">
-        <span className="text-xs font-medium text-foreground truncate">{name}</span>
+        <MiniProfileHoverCard slug={slug} side="right" align="start">
+          {slug ? (
+            <Link
+              href={profilePath(slug)}
+              className="relative z-20 text-xs font-medium text-foreground truncate hover:underline"
+            >
+              {name}
+            </Link>
+          ) : (
+            <span className="text-xs font-medium text-foreground truncate">{name}</span>
+          )}
+        </MiniProfileHoverCard>
         {role && <RoleBadge role={role} className="h-4 px-1.5 text-[9px]" />}
       </div>
     </div>
@@ -172,10 +194,11 @@ function NewsListItem({ post }: { post: BlogListPost }) {
   const tag = post.peripherals?.[0]?.brand ?? null
 
   return (
-    <Link
-      href={`/noticias/${post.slug}`}
-      className="group flex gap-3 rounded-xl border border-border/50 bg-card/50 p-3 transition-colors hover:border-primary/30 hover:bg-card"
-    >
+    <div className="group relative flex gap-3 rounded-xl border border-border/50 bg-card/50 p-3 transition-colors hover:border-primary/30 hover:bg-card">
+      {/* Link "esticado" cobrindo o item inteiro — o autor precisa de z-20 por
+          cima pra continuar levando pro perfil em vez do post (mesmo padrão do HeadlineCard). */}
+      <Link href={`/noticias/${post.slug}`} className="absolute inset-0 z-10" aria-label={post.title} />
+
       {/* Thumbnail */}
       <div className="relative flex-shrink-0 w-32 h-20 rounded-lg overflow-hidden bg-muted/30">
         <Image
@@ -222,7 +245,7 @@ function NewsListItem({ post }: { post: BlogListPost }) {
           </span>
         </div>
       </div>
-    </Link>
+    </div>
   )
 }
 

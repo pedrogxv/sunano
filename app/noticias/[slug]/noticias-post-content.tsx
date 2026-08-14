@@ -8,8 +8,10 @@ import { ArrowLeft, Clock, MessageCircle, Newspaper } from "lucide-react"
 import { CommentsSection } from "@/components/comments/CommentsSection"
 import type { CommentItem } from "@/components/comments/types"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
+import { profilePath } from "@/lib/profile-name"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -28,6 +30,7 @@ export type NewsPost = {
   created_at: string
   comment_count?: number
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
+  author_profile?: { display_slug: string | null } | null
   peripherals?: PeripheralRef[] | null
 }
 
@@ -196,9 +199,28 @@ export function NoticiasPostContent({
 
       {/* Author / meta row */}
       <div className="mb-6 flex items-center gap-3 border-b border-border/40 pb-6">
-        <UserAvatar name={authorName} avatarUrl={post.admin_profiles?.avatar_url} size={8} />
+        <MiniProfileHoverCard slug={post.author_profile?.display_slug ?? null} side="right" align="start">
+          {post.author_profile?.display_slug ? (
+            <Link href={profilePath(post.author_profile.display_slug)} className="shrink-0">
+              <UserAvatar name={authorName} avatarUrl={post.admin_profiles?.avatar_url} size={8} />
+            </Link>
+          ) : (
+            <UserAvatar name={authorName} avatarUrl={post.admin_profiles?.avatar_url} size={8} />
+          )}
+        </MiniProfileHoverCard>
         <div className="flex flex-col">
-          <span className="text-sm font-medium text-foreground">{authorName}</span>
+          <MiniProfileHoverCard slug={post.author_profile?.display_slug ?? null} side="right" align="start">
+            {post.author_profile?.display_slug ? (
+              <Link
+                href={profilePath(post.author_profile.display_slug)}
+                className="text-sm font-medium text-foreground hover:underline"
+              >
+                {authorName}
+              </Link>
+            ) : (
+              <span className="text-sm font-medium text-foreground">{authorName}</span>
+            )}
+          </MiniProfileHoverCard>
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground/70">
             <span>
               {new Date(post.created_at).toLocaleDateString("pt-BR", {

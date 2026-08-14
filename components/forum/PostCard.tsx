@@ -21,6 +21,7 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
 import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
+import { profilePath } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
 import type { ForumCategoryInfo } from "@/lib/server/repositories/forum-repository"
 
@@ -250,13 +251,35 @@ export function PostCard({
             clique — mas a foto do autor precisa continuar reagindo ao cursor
             para abrir o Mini Perfil. */}
         <MiniProfileHoverCard slug={post.author_display_slug} side="right" align="start">
-          <span className="pointer-events-auto shrink-0">
-            <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
-          </span>
+          {post.author_display_slug ? (
+            <Link
+              href={profilePath(post.author_display_slug)}
+              onClick={(event) => event.stopPropagation()}
+              className="pointer-events-auto relative z-10 shrink-0"
+            >
+              <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
+            </Link>
+          ) : (
+            <span className="pointer-events-auto shrink-0">
+              <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
+            </span>
+          )}
         </MiniProfileHoverCard>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">{post.author_display_name}</span>
+            <MiniProfileHoverCard slug={post.author_display_slug} side="right" align="start">
+              {post.author_display_slug ? (
+                <Link
+                  href={profilePath(post.author_display_slug)}
+                  onClick={(event) => event.stopPropagation()}
+                  className="pointer-events-auto relative z-10 font-semibold text-foreground hover:underline"
+                >
+                  {post.author_display_name}
+                </Link>
+              ) : (
+                <span className="pointer-events-auto font-semibold text-foreground">{post.author_display_name}</span>
+              )}
+            </MiniProfileHoverCard>
             <AuthorTierBadge tier={post.author_account_tier} />
             <AuthorSpecialTagBadge slug={post.author_display_slug} />
             <span>·</span>

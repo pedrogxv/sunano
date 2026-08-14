@@ -79,6 +79,7 @@ export type BlogPostDetail = {
   created_at: string
   comment_count: number
   admin_profiles: BlogAuthor
+  author_profile: AuthorPublicProfile
   peripherals: BlogPeripheralRef[] | null
 }
 
@@ -331,12 +332,16 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPostDeta
   if (!data) return null
 
   const post = data as unknown as BlogPostDetail
-  const counts = await countCommentsByPost([post.id])
+  const [counts, authorProfiles] = await Promise.all([
+    countCommentsByPost([post.id]),
+    getAuthorProfiles(post.author_id ? [post.author_id] : []),
+  ])
   return stripAuthorEmail(
     normalizePeripheralRefs({
       ...post,
       post_type: post.post_type ?? "review",
       comment_count: counts[post.id] ?? 0,
+      author_profile: (post.author_id && authorProfiles[post.author_id]) || null,
     })
   )
 }

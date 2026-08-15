@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Package, ShoppingBag, Trophy } from "lucide-react"
@@ -18,9 +17,6 @@ import { PeripheralLikeToggle } from "@/components/peripherals/PeripheralLikeTog
 import { PeripheralReviewsList } from "@/components/peripherals/PeripheralReviewsList"
 import { PeripheralVoteBox } from "@/components/peripherals/PeripheralVoteBox"
 import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
-import { CommentsSection } from "@/components/comments/CommentsSection"
-import { useAuthUser } from "@/components/providers/auth-context"
-import type { CommentItem } from "@/components/comments/types"
 import { formatBRL, formatCurrencyBRL } from "@/lib/stripe"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
@@ -412,31 +408,6 @@ export function PeripheralDetailView({
   classifications = [],
   rankingHref = "/ranking",
 }: PeripheralDetailViewProps) {
-  const { user: rawAuthUser, loading: authLoading } = useAuthUser()
-  const authUser = rawAuthUser
-    ? { id: rawAuthUser.id, display_name: rawAuthUser.displayName, avatar_url: rawAuthUser.avatarUrl }
-    : null
-
-  const [comments, setComments] = useState<CommentItem[]>([])
-  const [commentCount, setCommentCount] = useState(0)
-  const [hasMoreComments, setHasMoreComments] = useState(false)
-
-  useEffect(() => {
-    let active = true
-    fetch(`/api/peripherals/${data.id}/comments?page=1&sort=recent`, { cache: "no-store" })
-      .then((res) => res.json())
-      .then((json: { comments?: CommentItem[]; hasMore?: boolean; totalCount?: number }) => {
-        if (!active) return
-        setComments(json.comments ?? [])
-        setHasMoreComments(json.hasMore ?? false)
-        setCommentCount(json.totalCount ?? 0)
-      })
-      .catch(() => {})
-    return () => {
-      active = false
-    }
-  }, [data.id])
-
   const specs = (data.specs ?? {}) as Record<string, any>
   const details = (specs.details ?? {}) as Record<string, any>
 
@@ -1121,35 +1092,14 @@ export function PeripheralDetailView({
                   </CardContent>
                 </Card>
 
-              <div className="grid items-start gap-4 @2xl/col:grid-cols-2">
-                <Card className="border-border bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Comentários do Sunano</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-base text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
-                    {generalComments || "Sem comentarios adicionais."}
-                  </CardContent>
-                </Card>
-
-                <Card className="border-border bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-lg">Comentários da comunidade</CardTitle>
-                    <CardDescription className="text-xs">Experiências e opiniões de quem usa (ou já usou) este periférico</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <CommentsSection
-                      apiBasePath={`/api/peripherals/${data.id}`}
-                      auraLookupPath="/api/peripherals/aura"
-                      comments={comments}
-                      onCommentsChange={setComments}
-                      initialHasMore={hasMoreComments}
-                      totalCount={commentCount}
-                      authUser={authUser}
-                      authLoading={authLoading}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle className="text-lg">Comentários do Sunano</CardTitle>
+                </CardHeader>
+                <CardContent className="text-base text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
+                  {generalComments || "Sem comentarios adicionais."}
+                </CardContent>
+              </Card>
 
               {(linkedStore || linkedBazaar) && (
                 <Card className="border-border bg-card">

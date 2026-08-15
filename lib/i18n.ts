@@ -1467,6 +1467,19 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.2.9",
+          date: "15 de agosto",
+          title: "Reviews com estrelas nos periféricos, substituindo o BOM OU BAGRE",
+          description: "A votação binária \"BOM OU BAGRE?\" saiu de cena — agora periféricos são avaliados com nota de 1 a 5 estrelas, e o veredito na página do produto passa a ser calculado pela média das avaliações da comunidade.",
+          items: [
+            "Nova aba \"Meus Reviews\" no perfil: avalie qualquer periférico do banco com nota (1 a 5 estrelas) e comentário opcional",
+            "Termo de integridade: antes do primeiro review, é preciso aceitar que só avaliou o produto porque de fato o usou — quem for pego avaliando de achismo pode perder Aura e reviews removidos pela Staff",
+            "Criar um review credita Aura pra você, com proteção contra farm de excluir e recriar a mesma review",
+            "Página do periférico ganhou lista de reviews da comunidade, com nota, comentário, autor e badges de tier/ofensiva, priorizando quem tem mais Aura",
+            "\"BOM OU BAGRE?\" deixou de ser voto binário e agora mostra o veredito calculado pela média das estrelas (bom, de bagre, ou empate)",
+          ],
+        },
+        {
           version: "v0.2.8",
           date: "13 de agosto",
           title: "Comentários e votação nos periféricos, e faixa de preço na Tierlist",
@@ -2414,6 +2427,19 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.2.9",
+          date: "August 15",
+          title: "Star-rating reviews for peripherals, replacing GOOD OR TRASH",
+          description: "The binary \"GOOD OR TRASH?\" vote is gone — peripherals are now rated 1 to 5 stars, and the verdict on the product page is calculated from the community's average rating.",
+          items: [
+            "New \"My Reviews\" tab in your profile: rate any peripheral in the catalog (1 to 5 stars) with an optional comment",
+            "Integrity term: before your first review, you must confirm you actually used the product you're rating — anyone caught rating on hearsay can lose Aura and have reviews removed by Staff",
+            "Creating a review credits you Aura, with protection against farming by deleting and recreating the same review",
+            "The peripheral page now shows a list of community reviews with rating, comment, author, and tier/streak badges, prioritizing reviewers with more Aura",
+            "\"GOOD OR TRASH?\" is no longer a binary vote — it now shows the verdict calculated from the average star rating (good, trash, or tie)",
+          ],
+        },
         {
           version: "v0.2.8",
           date: "August 13",

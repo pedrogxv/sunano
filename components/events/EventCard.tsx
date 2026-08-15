@@ -1,9 +1,20 @@
 import Image from "next/image"
 import Link from "next/link"
-import { Award, CheckCircle2, Loader2, Lock } from "lucide-react"
+import { Award, CheckCircle2, Flame, Loader2, Lock } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { MEDAL_RARITY_BAR, MEDAL_RARITY_GLOW, MEDAL_RARITY_STYLES } from "@/lib/profile-showcase"
 import type { EventDisplay } from "@/lib/events"
 import { cn } from "@/lib/utils"
@@ -62,15 +73,74 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim
   if (event.criteriaType === "aura_redeem" && isLoggedIn && auraBalance < (event.auraCost ?? 0)) {
     const missing = (event.auraCost ?? 0) - auraBalance
     return (
-      <Button size="sm" variant="outline" disabled className="w-full gap-1.5 text-xs">
-        <Lock className="size-3.5" />
-        Faltam {missing} Aura
-      </Button>
+      <div className="flex w-full flex-col items-center gap-1.5">
+        <Button size="sm" variant="outline" disabled className="w-full gap-1.5 text-xs">
+          <Lock className="size-3.5" />
+          Faltam {missing} Aura para resgatar
+        </Button>
+        <p className="text-[10px] leading-snug text-muted-foreground/80">
+          Vamos pedir sua confirmação antes de gastar a Aura
+        </p>
+      </div>
     )
   }
 
   const label =
-    event.criteriaType === "aura_redeem" && isLoggedIn ? `Resgatar (${event.auraCost} Aura)` : "Resgatar"
+    event.criteriaType === "aura_redeem" && isLoggedIn ? `Gastar ${event.auraCost} Aura para resgatar` : "Resgatar"
+
+  // aura_redeem cobra Aura pra resgatar — pede confirmação explícita antes de
+  // debitar, pra ninguém ser cobrado sem saber (o custo já aparece no label
+  // do botão e na tag do card, mas isso sozinho não é aviso suficiente).
+  if (event.criteriaType === "aura_redeem" && isLoggedIn) {
+    return (
+      <AlertDialog>
+        <div className="flex w-full flex-col items-center gap-1.5">
+          <AlertDialogTrigger asChild>
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+              }}
+              disabled={pending}
+              className="w-full gap-1.5 text-xs"
+            >
+              {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {pending ? "Resgatando..." : label}
+            </Button>
+          </AlertDialogTrigger>
+          {!pending && (
+            <p className="text-[10px] leading-snug text-muted-foreground/80">
+              Vamos pedir sua confirmação antes de gastar a Aura
+            </p>
+          )}
+        </div>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gastar {event.auraCost} Aura para resgatar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você vai <strong className="text-foreground">perder {event.auraCost} de Aura</strong> do
+              seu saldo para pegar a medalha &quot;{event.name}&quot;. Seu saldo atual é {auraBalance}{" "}
+              Aura. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onClaim()
+              }}
+              disabled={pending}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    )
+  }
 
   return (
     <Button
@@ -136,6 +206,13 @@ export function EventCard(props: EventCardProps) {
             </div>
 
             <p className="font-semibold text-foreground">{event.name}</p>
+
+            {event.criteriaType === "aura_redeem" && !claimed && event.auraCost ? (
+              <span className="flex items-center gap-1 rounded-full bg-orange-500/10 px-2.5 py-1 text-[11px] font-semibold text-orange-400">
+                <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
+                Gasta {event.auraCost} Aura para resgatar
+              </span>
+            ) : null}
 
             <div className="w-full space-y-1">
               {percent !== null ? (

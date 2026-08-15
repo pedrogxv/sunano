@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import { EventCard } from "@/components/events/EventCard"
 import { AchievementsGrid } from "@/components/profile/AchievementsGrid"
+import { notifyAuraChanged } from "@/lib/client/aura-events"
 import type { EventDisplay } from "@/lib/events"
 import type { AchievementTrack, ShowcaseAchievement } from "@/lib/achievements"
 
@@ -76,6 +77,7 @@ export function EventsContent({
       setClaimedMedalIds((prev) => new Set(prev).add(event.medalId))
       if (event.criteriaType === "aura_redeem" && event.auraCost) {
         setAuraBalance((prev) => prev - event.auraCost!)
+        notifyAuraChanged()
       }
       toast.success("Medalha resgatada!", { description: event.name })
     } catch {

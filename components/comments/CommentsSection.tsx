@@ -8,7 +8,6 @@ import type { AuraBlockReason, Reaction } from "@/components/forum/AuraButton"
 import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
-import { CommentFormatHint } from "./CommentBody"
 import { CommentImagesField } from "./CommentImagesField"
 import { CommentRow } from "./CommentRow"
 import { MentionTextarea } from "./MentionTextarea"
@@ -201,8 +200,6 @@ export function CommentsSection({
               />
 
               <CommentImagesField imageUrls={imageUrls} onImagesChange={setImageUrls} disabled={saving} />
-
-              <CommentFormatHint />
 
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={cancelComment}>

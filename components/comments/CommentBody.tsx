@@ -116,16 +116,3 @@ export function CommentBody({
     </p>
   )
 }
-
-/** Dica de formatação exibida sob os campos de texto de comentário/resposta. */
-export function CommentFormatHint() {
-  return (
-    <p className="text-xs text-muted-foreground">
-      Use <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">**texto**</code> para
-      negrito, <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">*texto*</code> para
-      itálico, <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">__texto__</code> para
-      sublinhado e <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">[texto](url)</code>{" "}
-      para link.
-    </p>
-  )
-}

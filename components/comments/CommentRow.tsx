@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { canEditComment, commentEditDeadline } from "@/lib/comment-edit"
 import { profilePath } from "@/lib/profile-name"
-import { CommentBody, CommentFormatHint } from "./CommentBody"
+import { CommentBody } from "./CommentBody"
 import { CommentImagesField } from "./CommentImagesField"
 import { MentionTextarea } from "./MentionTextarea"
 import type { CommentItem, CommentMention } from "./types"
@@ -179,7 +179,6 @@ export function CommentRow({
               onImagesChange={(urls) => onEditImagesChange?.(urls)}
               disabled={editSaving}
             />
-            <CommentFormatHint />
             <div className="flex justify-end gap-2">
               <Button size="sm" variant="ghost" onClick={onCancelEdit}>
                 Cancelar

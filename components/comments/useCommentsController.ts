@@ -328,11 +328,11 @@ export function useCommentsController({
   function startReply(comment: CommentItem) {
     setReplyingTo((current) => {
       if (current === comment.id) return null
-      // Pré-preenche a resposta com o autor já mencionado, como em qualquer
-      // rede social — só quando o comentário tem autor de conta (perfis
+      // O autor já mencionado vira só a pill acima do campo — o campo em si
+      // começa vazio e focado, sem repetir "@Nome" como texto (perfis
       // deletados/anônimos não têm user_id pra montar a menção).
+      setReplyBody("")
       if (comment.user_id) {
-        setReplyBody(`@${comment.author_display_name} `)
         setReplyMentionedUsers([
           {
             id: comment.user_id,
@@ -342,7 +342,6 @@ export function useCommentsController({
           },
         ])
       } else {
-        setReplyBody("")
         setReplyMentionedUsers([])
       }
       return comment.id

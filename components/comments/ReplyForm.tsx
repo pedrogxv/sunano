@@ -3,7 +3,6 @@ import Link from "next/link"
 
 import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { Button } from "@/components/ui/button"
-import { CommentFormatHint } from "./CommentBody"
 import { CommentImagesField } from "./CommentImagesField"
 import { MentionTextarea } from "./MentionTextarea"
 import type { CommentMention } from "./types"
@@ -64,7 +63,6 @@ export function ReplyForm({
         placeholder="Escreva sua resposta... (@ para mencionar)"
       />
       <CommentImagesField imageUrls={imageUrls} onImagesChange={onImagesChange} disabled={saving} />
-      <CommentFormatHint />
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>
           Cancelar

@@ -719,8 +719,6 @@ export function PeripheralDetailView({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <RatingRow label="Geral" rating={ratings.overall} />
-                  {/* PCB avulsa: construção e digitação dependem do plate/case/switch que
-                      quem monta escolhe depois, então essas notas não se aplicam aqui. */}
                   <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                     {data.category !== "pcb" && (
                       <RatingRow label={data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />

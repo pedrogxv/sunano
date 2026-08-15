@@ -1143,7 +1143,7 @@ export function PeripheralDetailView({
                 <Card className="border-border bg-card">
                   <CardHeader>
                     <CardTitle className="text-lg">Comentários da comunidade</CardTitle>
-                    <CardDescription className="text-xs">Experiências e opiniões de quem usa (ou já usou) este periférico.</CardDescription>
+                    <CardDescription className="text-xs">Experiências e opiniões de quem usa (ou já usou) este periférico</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <CommentsSection

@@ -1133,7 +1133,7 @@ export function PeripheralDetailView({
               <div className="grid items-start gap-4 @2xl/col:grid-cols-2">
                 <Card className="border-border bg-card">
                   <CardHeader>
-                    <CardTitle className="text-lg">Comentários</CardTitle>
+                    <CardTitle className="text-lg">Comentários do Sunano</CardTitle>
                   </CardHeader>
                   <CardContent className="text-base text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
                     {generalComments || "Sem comentarios adicionais."}

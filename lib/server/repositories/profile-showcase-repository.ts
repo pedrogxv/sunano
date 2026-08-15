@@ -9,13 +9,22 @@ import { DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { getUserAuraBalance, getUserAuraRank } from "@/lib/server/repositories/aura-repository"
 import { getUserActivityRank } from "@/lib/server/repositories/users-repository"
 import { getUserAchievements, getUserStreak } from "@/lib/server/repositories/achievements-repository"
-import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 import {
   coerceAccountTier,
   selectVisibleFavorites,
   selectVisibleMedals,
   type AccountTier,
 } from "@/lib/account-tier"
+import {
+  PERIPHERAL_SHOWCASE_COLUMNS,
+  toShowcasePeripheral,
+  type PeripheralShowcaseRow,
+} from "@/lib/server/repositories/peripheral-showcase-mapping"
+import {
+  getReviewedPeripheralIds,
+  getUserReviewsByCategory,
+  countUserReviews,
+} from "@/lib/server/repositories/peripheral-reviews-repository"
 import {
   SETUP_SLOTS as SLOTS,
   type ProfileShowcase,
@@ -45,38 +54,13 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle, created_at, profile_views"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at"
 
-// `specs` e `tags` só existem aqui para alimentar o hover/tooltip (ratings +
-// chips) reaproveitado da tierlist — a resposta pública (`ShowcasePeripheral`)
-// expõe só `ratings` já extraído, nunca o `specs` bruto.
-const PERIPHERAL_COLUMNS = "id, name, brand_id, brands(name), category, image_url, tier, specs, tags"
+const PERIPHERAL_COLUMNS = PERIPHERAL_SHOWCASE_COLUMNS
+type PeripheralRow = PeripheralShowcaseRow
 
-type PeripheralRow = {
-  id: string
-  name: string
-  brand_id: string
-  brands: { name: string } | { name: string }[] | null
-  category: string
-  image_url: string | null
-  tier: string | null
-  specs: Record<string, unknown> | null
-  tags: string[] | null
-}
-
-function toShowcasePeripheral(row: PeripheralRow): ShowcasePeripheral {
-  const brandRow = Array.isArray(row.brands) ? row.brands[0] : row.brands
-  return {
-    id: row.id,
-    name: row.name,
-    brand: brandRow?.name ?? "",
-    category: row.category,
-    image_url: row.image_url,
-    tier: row.tier,
-    tags: row.tags ?? [],
-    ratings: extractPeripheralRatings(row.specs),
-  }
-}
+/** Cap fixo (não por tier) de reviews mostradas por bloco de categoria na mini-vitrine do perfil — sem menção a gating por tier no spec. */
+const MINI_REVIEWS_PER_CATEGORY_LIMIT = 6
 
 function defaultNameFrom(id: string) {
   return `Membro ${id.slice(0, 6)}`
@@ -114,6 +98,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     tiktok_handle: string | null
     created_at: string
     profile_views: number | null
+    reviews_integrity_accepted_at: string | null
   }
 
   const tier = coerceAccountTier(row.account_tier)
@@ -130,6 +115,9 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     activityRank,
     achievements,
     streak,
+    reviewsByCategory,
+    reviewsTotal,
+    reviewedPeripheralIds,
   ] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
@@ -142,6 +130,9 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     getUserActivityRank(userId),
     getUserAchievements(userId),
     getUserStreak(userId),
+    getUserReviewsByCategory(userId, { limitPerCategory: MINI_REVIEWS_PER_CATEGORY_LIMIT }),
+    countUserReviews(userId),
+    getReviewedPeripheralIds(userId),
   ])
 
   return {
@@ -171,6 +162,10 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     streak,
     favorites: selectVisibleFavorites(favorites, tier).map((f) => f.peripheral),
     favorites_total: favorites.length,
+    reviewsByCategory,
+    reviews_total: reviewsTotal,
+    reviews_integrity_accepted_at: row.reviews_integrity_accepted_at,
+    reviewed_peripheral_ids: reviewedPeripheralIds,
   }
 }
 

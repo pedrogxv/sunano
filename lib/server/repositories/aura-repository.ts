@@ -451,6 +451,29 @@ export async function getPeripheralVoteState(
   }
 }
 
+/**
+ * Credita +10 de aura fixo ao autor por criar uma mini review (perfil), no
+ * máximo 1x por (usuário, periférico) pra sempre — ver
+ * `credit_peripheral_review_creation_aura` pra por que a idempotência
+ * sobrevive a excluir+recriar a review. Best-effort: erros são logados mas
+ * não impedem a review em si.
+ */
+export async function creditPeripheralReviewCreationAura(
+  userId: string,
+  peripheralId: string,
+  reviewId: string
+): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const { error } = await db.rpc("credit_peripheral_review_creation_aura", {
+    p_user_id: userId,
+    p_peripheral_id: peripheralId,
+    p_review_id: reviewId,
+  })
+  if (error) {
+    console.error("[aura-repository] creditPeripheralReviewCreationAura:", error)
+  }
+}
+
 /** Um comentário por (like, dislike) — conjuntos sempre mutuamente exclusivos. */
 export type ReactionSets = { liked: Set<string>; disliked: Set<string> }
 

@@ -101,6 +101,8 @@ export type Database = {
           /** Ban restrito ao Mercado — não impede login nem o resto da conta. */
           market_banned_at: string | null
           market_ban_reason: string | null
+          /** Aceite do termo de integridade das mini reviews (item 1.2) — registrado 1x, nunca reexibido depois. */
+          reviews_integrity_accepted_at: string | null
           created_at: string
           updated_at: string
         }
@@ -544,6 +546,32 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["peripheral_votes"]["Row"], "id" | "created_at">
         Update: Partial<Database["public"]["Tables"]["peripheral_votes"]["Insert"]>
       }
+      peripheral_reviews: {
+        Relationships: []
+        Row: {
+          id: string
+          peripheral_id: string
+          user_id: string
+          /** 1.0-5.0 em passos de meia estrela. */
+          rating: number
+          body: string | null
+          /** Coluna gerada (`left(body, 140)`) — nunca enviada no Insert/Update. */
+          body_preview: string | null
+          /** Coluna gerada (`body is not null and length(btrim(body)) > 0`) — nunca enviada no Insert/Update. */
+          has_text: boolean
+          is_hidden: boolean
+          edited_at: string | null
+          /** Coluna gerada (`edited_at is not null`) — nunca enviada no Insert/Update. */
+          is_edited: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<
+          Database["public"]["Tables"]["peripheral_reviews"]["Row"],
+          "id" | "body_preview" | "has_text" | "is_edited" | "edited_at" | "created_at" | "updated_at"
+        > & { edited_at?: string | null }
+        Update: Partial<Database["public"]["Tables"]["peripheral_reviews"]["Insert"]>
+      }
       user_aura_wallet: {
         Relationships: []
         Row: {
@@ -589,12 +617,14 @@ export type Database = {
             | "peripheral_comment_aura_disliked"
             | "peripheral_comment_aura_undisliked"
             | "peripheral_comment_created"
+            | "peripheral_review_created"
           source_post_id: string | null
           source_comment_id: string | null
           source_blog_post_id: string | null
           source_blog_comment_id: string | null
           source_peripheral_id: string | null
           source_peripheral_comment_id: string | null
+          source_peripheral_review_id: string | null
           giver_id: string | null
           created_at: string
         }
@@ -1013,6 +1043,10 @@ export type Database = {
       toggle_peripheral_vote: {
         Args: { p_voter_id: string; p_peripheral_id: string; p_kind: "like" | "dislike" }
         Returns: { reaction: "like" | "dislike" | null; likes: number; dislikes: number }[]
+      }
+      credit_peripheral_review_creation_aura: {
+        Args: { p_user_id: string; p_peripheral_id: string; p_review_id: string }
+        Returns: boolean
       }
     }
   }

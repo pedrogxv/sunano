@@ -8,6 +8,7 @@
 
 import type { Ratings } from "@/components/tierlist/TierItemTooltipContent"
 import type { ShowcaseAchievement, UserStreak } from "@/lib/achievements"
+import type { ReviewCategoryKey } from "@/lib/peripheral-review-categories"
 
 export const SETUP_SLOTS = ["mouse", "keyboard", "headset", "monitor", "mousepad"] as const
 
@@ -72,6 +73,25 @@ export type SetupItem = {
 /** 'event' = concedida por campanha em /admin/eventos (ex.: "ERA TUDO MATO"); 'general' = catálogo fixo (pioneiro, colecionador etc). */
 export type MedalCategory = "general" | "event"
 
+/** Uma mini review criada no perfil ("Meus Reviews") ou lida a partir dele. */
+export type ShowcaseReview = {
+  id: string
+  /** 1.0-5.0 em passos de meia estrela. */
+  rating: number
+  /** Comentário opcional (até 400 chars) — `null` quando a review só tem nota. */
+  body: string | null
+  createdAt: string
+  editedAt: string | null
+  peripheral: ShowcasePeripheral
+}
+
+/** Um bloco de categoria de "Meus Reviews" — só emitido quando `reviews.length > 0`. */
+export type ShowcaseReviewCategoryBlock = {
+  key: ReviewCategoryKey
+  label: string
+  reviews: ShowcaseReview[]
+}
+
 export type ShowcaseMedal = {
   id: string
   slug: string
@@ -128,6 +148,13 @@ export type ProfileShowcase = {
   /** Favoritos já filtrados pelo limite do tier. */
   favorites: ShowcasePeripheral[]
   favorites_total: number
+  /** Só as categorias com pelo menos 1 review, na ordem fixa de `REVIEW_CATEGORY_GROUPS` — capado por categoria (mini-vitrine do perfil). */
+  reviewsByCategory: ShowcaseReviewCategoryBlock[]
+  reviews_total: number
+  /** Data/hora do aceite do termo de integridade (item 1.2) — só relevante quando `isOwner`, presente sempre por simplicidade. */
+  reviews_integrity_accepted_at: string | null
+  /** Ids de todos os periféricos já avaliados pelo usuário, sem cap — fecha o picker de criação de review não sugerir um já avaliado (o `reviewsByCategory` acima é capado). */
+  reviewed_peripheral_ids: string[]
   /** Handle sem "@" — link exibido como ícone clicável no perfil público. */
   youtube_handle: string | null
   tiktok_handle: string | null

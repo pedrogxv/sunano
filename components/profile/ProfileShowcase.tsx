@@ -10,8 +10,10 @@ import { EstatisticasGrid, formatCount } from "./EstatisticasGrid"
 import { FavoritosGrid } from "./FavoritosGrid"
 import { InfoBasica } from "./InfoBasica"
 import { MedalhasGrid } from "./MedalhasGrid"
+import { MeusReviewsGrid } from "./MeusReviewsGrid"
 import { SetupGrid } from "./SetupGrid"
 import { SocialLinks } from "./SocialLinks"
+import { profilePath } from "@/lib/profile-name"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
 
 /**
@@ -156,6 +158,14 @@ export function ProfileShowcase({
           favorites={profile.favorites}
           tier={profile.account_tier}
           isOwner={isOwner}
+        />
+
+        <MeusReviewsGrid
+          reviewsByCategory={profile.reviewsByCategory}
+          reviewsIntegrityAcceptedAt={profile.reviews_integrity_accepted_at}
+          reviewedPeripheralIds={profile.reviewed_peripheral_ids}
+          isOwner={isOwner}
+          reviewsPageHref={`${profilePath(profile.display_slug ?? profile.id)}/reviews`}
         />
       </div>
     </div>

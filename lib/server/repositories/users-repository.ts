@@ -1149,6 +1149,27 @@ export async function recordLgpdConsent(params: {
 }
 
 /**
+ * Registra o aceite do termo de integridade das mini reviews (item 1.2) —
+ * idempotente (só grava se ainda não tinha aceitado) e nunca reexibido depois.
+ */
+export async function acceptReviewsIntegrityTerm(userId: string): Promise<string> {
+  const db = createSupabaseAdminClient()
+  const acceptedAt = new Date().toISOString()
+  await db
+    .from("user_profiles")
+    .update({ reviews_integrity_accepted_at: acceptedAt })
+    .eq("id", userId)
+    .is("reviews_integrity_accepted_at", null)
+
+  const { data } = await db
+    .from("user_profiles")
+    .select("reviews_integrity_accepted_at")
+    .eq("id", userId)
+    .maybeSingle()
+  return (data as { reviews_integrity_accepted_at: string | null } | null)?.reviews_integrity_accepted_at ?? acceptedAt
+}
+
+/**
  * Exclui todos os dados pessoais do usuário e registra a operação no audit_log.
  * Anonimiza fórum e pedidos via função SQL para preservar integridade referencial.
  * A conta de autenticação (Supabase Auth) deve ser removida separadamente.

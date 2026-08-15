@@ -135,7 +135,6 @@ const peripheralSchema = z.object({
   surfaceMaterial: z.string().optional(),
   hasBattery: z.boolean().optional(),
   softwareInfo: z.string().optional(),
-  teamComments: z.string().optional(),
   switchPeripheralId: z.string().optional(),
   priceTier: z.string().optional(),
   reviewCategory: z.enum(["performance", "store", "videoReview", "specsComments"]).nullable().optional(),
@@ -313,7 +312,6 @@ function buildSpecsPayload(
       buyLinks, compatibility: data.compatibility || undefined,
       comparisons: splitLines(data.comparisons),
       softwareInfo: data.softwareInfo || undefined,
-      teamComments: data.teamComments || undefined,
       switchPeripheralId: data.switchPeripheralId || undefined,
       priceTier: data.priceTier || undefined,
       weight: data.weight || undefined, latency: data.latency || undefined,
@@ -791,7 +789,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       golpeMotivo: "",
       rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", soundUrl: "", guideUrl: "", wikiUrl: "",
       summary: "", highlights: "", pros: "", cons: "", gallery: "",
-      softwareInfo: "", teamComments: "", switchPeripheralId: "", priceTier: "",
+      softwareInfo: "", switchPeripheralId: "", priceTier: "",
       buyLinkAliexpress: "", buyLinkMercadoLivre: "", buyLinkAmazon: "", buyLinkShopee: "",
       compatibility: "", comparisons: "",
       weight: "", latency: "", switchType: "", coating: "", shape: "",
@@ -988,7 +986,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           wikiUrl: data.specs?.details?.wikiUrl ?? "",
           summary: data.specs?.details?.summary ?? "",
           softwareInfo: data.specs?.details?.softwareInfo ?? "",
-          teamComments: data.specs?.details?.teamComments ?? "",
           switchPeripheralId: data.specs?.details?.switchPeripheralId ?? "",
           priceTier: data.specs?.details?.priceTier ?? "",
           highlights: Array.isArray(data.specs?.details?.highlights) ? data.specs.details.highlights.join("\n") : data.specs?.details?.highlights ?? "",
@@ -2821,11 +2818,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Software"}</label>
               <Textarea className="border-border bg-background resize-none" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{"Sobre as notas"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={"Justificativa interna das notas atribuídas (build, performance, etc.)"} rows={3} {...form.register("teamComments")} />
             </div>
 
             <div className="space-y-1.5">

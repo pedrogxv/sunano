@@ -6,6 +6,8 @@ import { checkRateLimit } from "@/lib/server/rate-limit"
 import {
   addPeripheralReview,
   deleteOwnPeripheralReview,
+  getPeripheralReviewsWithStats,
+  PERIPHERAL_REVIEWS_PAGE_SIZE,
   updateOwnPeripheralReview,
 } from "@/lib/server/repositories/peripheral-reviews-repository"
 
@@ -15,6 +17,27 @@ import {
  * do usuário autenticado, sem precisar de um segundo segmento de id (diferente
  * de `/comments`, que permite N comentários por periférico).
  */
+
+const MAX_LIMIT = 50
+
+/** Lista paginada dos reviews de um periférico + média/contagem, ordenada por Aura do autor (`?page=1&limit=4`). */
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params
+  const searchParams = request.nextUrl.searchParams
+  const page = Math.max(1, Number(searchParams.get("page")) || 1)
+  const limitParam = Number(searchParams.get("limit"))
+  const limit =
+    Number.isFinite(limitParam) && limitParam > 0
+      ? Math.min(Math.floor(limitParam), MAX_LIMIT)
+      : PERIPHERAL_REVIEWS_PAGE_SIZE
+
+  try {
+    const stats = await getPeripheralReviewsWithStats(id, { page, limit })
+    return NextResponse.json({ ok: true, ...stats })
+  } catch {
+    return NextResponse.json({ error: "Erro ao carregar avaliações." }, { status: 500 })
+  }
+}
 
 const ratingSchema = z
   .number()

@@ -1,5 +1,6 @@
 import "server-only"
 
+import type { AccountTier } from "@/lib/account-tier"
 import { reviewCategoryKeyFor, REVIEW_CATEGORY_GROUPS } from "@/lib/peripheral-review-categories"
 import type { ShowcaseReview, ShowcaseReviewCategoryBlock } from "@/lib/profile-showcase"
 import { creditPeripheralReviewCreationAura } from "@/lib/server/repositories/aura-repository"
@@ -8,6 +9,7 @@ import {
   toShowcasePeripheral,
   type PeripheralShowcaseRow,
 } from "@/lib/server/repositories/peripheral-showcase-mapping"
+import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -234,4 +236,127 @@ export async function getReviewedPeripheralIds(userId: string): Promise<string[]
     return []
   }
   return (data ?? []).map((r) => (r as { peripheral_id: string }).peripheral_id)
+}
+
+/** Review de um periférico já enriquecida com dados do autor — pra lista de reviews da página do periférico (Parte 2). */
+export type PeripheralReviewDetail = {
+  id: string
+  rating: number
+  body: string | null
+  created_at: string
+  edited_at: string | null
+  is_edited: boolean
+  user_id: string
+  author_display_name: string
+  author_avatar_url: string | null
+  author_account_tier: AccountTier
+  author_display_slug: string | null
+  author_streak: number
+}
+
+export type PeripheralReviewStats = {
+  reviews: PeripheralReviewDetail[]
+  /** Média das notas (1 casa decimal) de todos os reviews visíveis, ou `null` se não houver nenhum. */
+  average: number | null
+  totalCount: number
+  hasMore: boolean
+}
+
+export const PERIPHERAL_REVIEWS_PAGE_SIZE = 4
+
+/**
+ * Reviews visíveis de um periférico + média/contagem, ordenadas por Aura do
+ * autor (desc, empate por mais recente). PostgREST não ordena por coluna de
+ * tabela relacionada, então a ordenação é feita em duas etapas: busca todas
+ * as linhas (colunas mínimas) + saldo de Aura de cada autor, ordena em JS, aí
+ * sim busca os dados completos só da página pedida — mesma estratégia de
+ * `getTopAuraProfiles` (users-repository.ts).
+ */
+export async function getPeripheralReviewsWithStats(
+  peripheralId: string,
+  { page = 1, limit = PERIPHERAL_REVIEWS_PAGE_SIZE }: { page?: number; limit?: number } = {}
+): Promise<PeripheralReviewStats> {
+  const db = createSupabaseAdminClient()
+
+  const { data: allRows, error } = await db
+    .from("peripheral_reviews")
+    .select("id, user_id, rating, created_at")
+    .eq("peripheral_id", peripheralId)
+    .eq("is_hidden", false)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("[peripheral-reviews-repository] getPeripheralReviewsWithStats:", error)
+    return { reviews: [], average: null, totalCount: 0, hasMore: false }
+  }
+
+  const rows = (allRows ?? []) as Array<{ id: string; user_id: string; rating: number; created_at: string }>
+  const totalCount = rows.length
+  if (totalCount === 0) {
+    return { reviews: [], average: null, totalCount: 0, hasMore: false }
+  }
+
+  const average = Math.round((rows.reduce((sum, r) => sum + r.rating, 0) / totalCount) * 10) / 10
+
+  const userIds = [...new Set(rows.map((r) => r.user_id))]
+  const { data: wallets } = await db.from("user_aura_wallet").select("user_id, balance").in("user_id", userIds)
+  const auraByUser = new Map(
+    ((wallets ?? []) as Array<{ user_id: string; balance: number }>).map((w) => [w.user_id, w.balance])
+  )
+
+  const sorted = [...rows].sort((a, b) => {
+    const auraDiff = (auraByUser.get(b.user_id) ?? 0) - (auraByUser.get(a.user_id) ?? 0)
+    if (auraDiff !== 0) return auraDiff
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  })
+
+  const from = (page - 1) * limit
+  const pageIds = sorted.slice(from, from + limit).map((r) => r.id)
+  const hasMore = from + limit < totalCount
+
+  if (pageIds.length === 0) {
+    return { reviews: [], average, totalCount, hasMore: false }
+  }
+
+  const { data: pageRows, error: pageError } = await db
+    .from("peripheral_reviews")
+    .select("id, user_id, rating, body, created_at, edited_at, is_edited")
+    .in("id", pageIds)
+
+  if (pageError) {
+    console.error("[peripheral-reviews-repository] getPeripheralReviewsWithStats (page):", pageError)
+    return { reviews: [], average, totalCount, hasMore }
+  }
+
+  type PageRow = {
+    id: string
+    user_id: string
+    rating: number
+    body: string | null
+    created_at: string
+    edited_at: string | null
+    is_edited: boolean
+  }
+  const rowById = new Map(((pageRows ?? []) as PageRow[]).map((r) => [r.id, r]))
+  const profileMap = await buildProfileMap(pageIds.map((id) => rowById.get(id)?.user_id ?? null))
+
+  const reviews = pageIds
+    .map((id) => rowById.get(id))
+    .filter((r): r is PageRow => Boolean(r))
+    .map((r) => ({
+      id: r.id,
+      rating: r.rating,
+      body: r.body,
+      created_at: r.created_at,
+      edited_at: r.edited_at,
+      is_edited: r.is_edited ?? false,
+      user_id: r.user_id,
+      author_display_name: profileMap[r.user_id]?.display_name ?? "Usuário",
+      author_avatar_url: profileMap[r.user_id]?.avatar_url ?? null,
+      author_account_tier: profileMap[r.user_id]?.account_tier ?? "common",
+      author_display_slug: profileMap[r.user_id]?.display_slug ?? null,
+      author_streak: profileMap[r.user_id]?.streak ?? 0,
+    }))
+
+  return { reviews, average, totalCount, hasMore }
 }

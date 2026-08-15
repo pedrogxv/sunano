@@ -15,6 +15,7 @@ import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlis
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
 import { PeripheralLikeToggle } from "@/components/peripherals/PeripheralLikeToggle"
+import { PeripheralReviewsList } from "@/components/peripherals/PeripheralReviewsList"
 import { PeripheralVoteBox } from "@/components/peripherals/PeripheralVoteBox"
 import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
 import { CommentsSection } from "@/components/comments/CommentsSection"
@@ -457,7 +458,6 @@ export function PeripheralDetailView({
   const reviewUrl = details.reviewUrl
   const youtubeId = getYoutubeEmbedId(reviewUrl)
   const softwareInfo = details.softwareInfo
-  const teamComments = details.teamComments
   const generalComments = details.summary
 
   const isSwitch = data.category === "switches"
@@ -734,17 +734,6 @@ export function PeripheralDetailView({
                 </CardContent>
               </Card>
 
-              {!isSwitch && (
-                <Card className="border-border bg-card">
-                  <CardHeader>
-                    <CardTitle className="text-sm">Sobre as notas</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-sm text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
-                    {teamComments || "Sem observacoes adicionais."}
-                  </CardContent>
-                </Card>
-              )}
-
               <Card className="border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-sm">Software do Periférico</CardTitle>
@@ -754,12 +743,16 @@ export function PeripheralDetailView({
                 </CardContent>
               </Card>
 
-              <div className="space-y-2">
-                <PeripheralVoteBox peripheralId={data.id} />
-                <p className="px-1 text-xs text-muted-foreground">
-                  Se você já teve ou testou esse periférico, recomendamos deixar o seu feedback na parte dos comentários.
-                </p>
-              </div>
+              <PeripheralVoteBox peripheralId={data.id} />
+
+              <Card className="border-border bg-card">
+                <CardHeader>
+                  <CardTitle className="text-sm">Reviews da comunidade</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <PeripheralReviewsList peripheralId={data.id} />
+                </CardContent>
+              </Card>
 
               {buyLinks.length > 0 && (
                 <Card className="border-border bg-card">

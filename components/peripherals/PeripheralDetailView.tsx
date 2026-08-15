@@ -991,9 +991,9 @@ export function PeripheralDetailView({
                 )}
               </div>
 
-              <div className={cn("grid items-stretch gap-4", showGrip && "@2xl/col:grid-cols-2")}>
+              <div className={cn("grid items-start gap-4", showGrip && "@2xl/col:grid-cols-2")}>
                 {showGrip && (
-                  <Card className="flex h-full flex-col border-border bg-card">
+                  <Card className="border-border bg-card">
                     <CardHeader>
                       <CardTitle className="text-sm">Pegada</CardTitle>
                       <CardDescription className="text-xs">Recomendacao por tamanho de mao.</CardDescription>
@@ -1015,7 +1015,7 @@ export function PeripheralDetailView({
                   </Card>
                 )}
 
-                <Card className="flex h-full flex-col border-border bg-card">
+                <Card className="border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-sm">Review no Youtube</CardTitle>
                 </CardHeader>

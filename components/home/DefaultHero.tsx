@@ -62,8 +62,8 @@ export default function DefaultHero({
           </h1>
 
           <p className="max-w-xl text-base text-muted-foreground md:text-lg">
-            A tierlist definitiva, reviews honestos, comunidade ativa e uma loja com itens
-            selecionados pelo Sunano.
+            Veja a tierlist com nota de verdade, reviews reais da comunidade e curadoria do
+            Sunano antes de comprar.
           </p>
 
           <div className="flex flex-wrap gap-3 pt-2">

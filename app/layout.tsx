@@ -34,7 +34,7 @@ const caveat = Caveat({
 })
 
 const SITE_TITLE = "Sunano | Tierlist de Periféricos"
-const SITE_DESCRIPTION = "A tierlist definitiva de periféricos gamers. Compare mouses, teclados, headsets e mais com filtros avancados e reviews detalhadas."
+const SITE_DESCRIPTION = "Mouse, teclado ou headset? Veja a tierlist com nota de verdade, reviews reais da comunidade e curadoria do Sunano antes de comprar."
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

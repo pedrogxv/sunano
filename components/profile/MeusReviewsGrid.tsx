@@ -26,7 +26,7 @@ interface MeusReviewsGridProps {
 /**
  * Seção "Meus Reviews" do perfil — um bloco de CATEGORIA visível por vez
  * (não um review por vez), setas/swipe trocam de categoria na ordem fixa de
- * `REVIEW_CATEGORY_GROUPS`. "Carregar todos os Reviews" abre a página cheia,
+ * `REVIEW_CATEGORY_GROUPS`. "Carregar Reviews Completos" abre a página cheia,
  * sem cap, com scroll normal.
  */
 export function MeusReviewsGrid({
@@ -129,6 +129,7 @@ export function MeusReviewsGrid({
                   isOwner={isOwner}
                   onEdit={isOwner ? handleEdit : undefined}
                   onDelete={isOwner ? handleDelete : undefined}
+                  compact
                 />
               </div>
 
@@ -164,7 +165,7 @@ export function MeusReviewsGrid({
           </div>
 
           <Link href={reviewsPageHref} className="block text-center text-xs font-medium text-primary hover:underline">
-            Carregar todos os Reviews →
+            Carregar Reviews Completos →
           </Link>
         </>
       )}

@@ -201,6 +201,8 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const isAdminRoute = pathname.startsWith("/admin")
   const isLoginRoute = pathname === "/admin/login"
   const maintenanceMode = isMaintenanceEnabled()
+  const isStoreOrderWritePath = STORE_ORDER_WRITE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
+  const storeMaintenanceMode = isStoreMaintenanceEnabled() && isStoreOrderWritePath
 
   if (pathname === "/maintenance") {
     const redirectUrl = request.nextUrl.clone()
@@ -212,7 +214,10 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // padrão: mesmo se o pathname mudar de forma inesperada, o método não-GET
   // sozinho já não seria suficiente pra passar). Navegação/admin/cadastro
   // seguem liberados; /loja mostra "em breve" sozinha (ver app/loja/**).
-  if (isStoreMaintenanceEnabled() && STORE_ORDER_WRITE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+  // Anônimo (sem cookie de sessão) é recusado aqui mesmo, sem consultar o
+  // banco — só quando existe sessão a checagem espera o perfil ser resolvido
+  // abaixo, para que um WEB MASTER logado possa passar direto.
+  if (storeMaintenanceMode && !hasSupabaseSession(request)) {
     return NextResponse.json(
       { error: "A Loja está temporariamente indisponível para novos pedidos." },
       { status: 503 }
@@ -242,8 +247,19 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   }
 
   const { response, user, profile, aal, needsLgpdConsent } = await updateSession(request, {
-    needProfile: isAdminRoute || maintenanceMode,
+    needProfile: isAdminRoute || maintenanceMode || storeMaintenanceMode,
   })
+
+  // Loja em manutenção, mas há sessão: só o WEB MASTER passa. Qualquer outro
+  // usuário logado (ou perfil ausente) continua recusado.
+  if (storeMaintenanceMode && !isWebMaster(profile)) {
+    const apiResponse = NextResponse.json(
+      { error: "A Loja está temporariamente indisponível para novos pedidos." },
+      { status: 503 }
+    )
+    copyCookies(response, apiResponse)
+    return apiResponse
+  }
   // Cobre também o caminho autenticado (visitante com sessão clicando num
   // link de afiliado) — o cookie é copiado adiante em todo `redirectResponse`
   // via `copyCookies`, então gravar aqui é suficiente para os dois casos.

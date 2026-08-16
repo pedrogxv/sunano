@@ -10,6 +10,7 @@ import { dbErrorResponse } from "@/lib/db-errors"
 import { getVariantsForCheckout } from "@/lib/server/repositories/store-repository"
 import { PIX_EXPIRATION_MINUTES } from "@/lib/server/repositories/orders-repository"
 import { getAffiliateByCode } from "@/lib/server/repositories/affiliates-repository"
+import { isWebMaster } from "@/lib/admin-permissions"
 import type { Database } from "@/lib/database.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -85,22 +86,29 @@ async function revertDecrements(db: SupabaseClient<Database>, lines: Decremented
 }
 
 export async function POST(request: NextRequest) {
-  // Segunda checagem da mesma flag que o proxy já aplica (proxy.ts) — fechado
-  // por padrão, caso o matcher/lógica do proxy mude e essa rota deixe de
-  // passar por lá.
-  const storeMaintenance = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE
-  if (storeMaintenance === "true") {
-    return NextResponse.json(
-      { error: "A Loja está temporariamente indisponível para novos pedidos." },
-      { status: 503 }
-    )
-  }
-
   // Declarado fora do try para o catch externo conseguir reverter reservas
   // de estoque já aplicadas mesmo se uma exceção (ex. chamada ao gateway)
   // interromper o fluxo antes do insert do pedido.
   const decrementedLines: DecrementedLine[] = []
   const db = createSupabaseAdminClient()
+
+  // Segunda checagem da mesma flag que o proxy já aplica (proxy.ts) — fechado
+  // por padrão, caso o matcher/lógica do proxy mude e essa rota deixe de
+  // passar por lá. WEB MASTER ignora a manutenção, igual no proxy.
+  const storeMaintenance = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE
+  if (storeMaintenance === "true") {
+    const maintenanceUser = await getRequestUser(request)
+    const { data: maintenanceProfile } = maintenanceUser
+      ? await db.from("admin_profiles").select("id, role, permissions").eq("id", maintenanceUser.id).maybeSingle()
+      : { data: null }
+
+    if (!isWebMaster(maintenanceProfile)) {
+      return NextResponse.json(
+        { error: "A Loja está temporariamente indisponível para novos pedidos." },
+        { status: 503 }
+      )
+    }
+  }
 
   try {
     // Toda requisição de compra é limitada por IP para impedir spam de

@@ -28,6 +28,13 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+	// Typecheck roda no GitHub Actions (.github/workflows/typecheck.yml) em
+	// paralelo ao build, não dentro dele — evita pagar os ~25s de `tsc` a
+	// cada deploy na Vercel. Sem isso, é a única rede de segurança contra
+	// erro de tipo indo pro ar, então não desativar sem CI equivalente.
+	typescript: {
+		ignoreBuildErrors: true,
+	},
 	images: {
 		// Redimensionamento sai do otimizador da Vercel e passa a ser feito pelo
 		// Supabase Storage — ver lib/image-loader.ts. A cota de transformações da

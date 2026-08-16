@@ -3,6 +3,8 @@ import { ShoppingBag } from "lucide-react"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { StoreContent } from "@/components/store/StoreContent"
 import { ComingSoon } from "@/components/store/ComingSoon"
+import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
+import { isWebMaster } from "@/lib/admin-permissions"
 
 export const revalidate = 60
 
@@ -25,14 +27,18 @@ function isStoreMaintenanceEnabled() {
 
 export default async function LojaPage({ searchParams }: LojaPageProps) {
   if (isStoreMaintenanceEnabled()) {
-    return (
-      <ComingSoon
-        icon={ShoppingBag}
-        title="Mercado"
-        description="O Mercado, com produtos selecionados pelo Sunano, está sendo preparado. Fique de olho nas redes para o lançamento."
-        accent="emerald"
-      />
-    )
+    // WEB MASTER ignora o modo de manutenção da Loja e continua vendo tudo.
+    const { profile } = await getAuthorizedProfile()
+    if (!isWebMaster(profile)) {
+      return (
+        <ComingSoon
+          icon={ShoppingBag}
+          title="Mercado"
+          description="O Mercado, com produtos selecionados pelo Sunano, está sendo preparado. Fique de olho nas redes para o lançamento."
+          accent="emerald"
+        />
+      )
+    }
   }
 
   const { type: typeParam } = await searchParams

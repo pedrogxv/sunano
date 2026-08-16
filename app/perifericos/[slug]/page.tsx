@@ -10,7 +10,7 @@ interface PerifericoPageProps {
   params: Promise<{ slug: string }>
 }
 
-export const revalidate = 30
+export const revalidate = 120
 
 export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const resolvedParams = await params

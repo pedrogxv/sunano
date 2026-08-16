@@ -1,5 +1,7 @@
 import "server-only"
 
+import { cache } from "react"
+import { unstable_cache } from "next/cache"
 import { coerceAccountTier } from "@/lib/account-tier"
 import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
@@ -189,27 +191,20 @@ async function getAuraByUser(userIds: string[]): Promise<Record<string, number>>
  * de fora: `blog_posts.author_id` aponta para `admin_profiles`, não para
  * membros comuns — só o comentário ali é atividade de usuário de verdade.
  * Itens ocultos pela moderação não contam, mesmo padrão de `countForumActivity`.
+ *
+ * Reaproveita o mapa global cacheado de `getActivityCounts` (5 min) em vez de
+ * rodar 3 queries próprias filtradas por `userIds` — `withCounters` chama
+ * isto para CADA card do diretório de pessoas (Aura, Visitados, Seguidores,
+ * Seguindo, Streak), então essas 3 queries eram refeitas a cada troca de aba
+ * mesmo já existindo o agregado cacheado.
  */
 async function countActivityByUser(userIds: string[]): Promise<Record<string, number>> {
   const counts: Record<string, number> = {}
   if (userIds.length === 0) return counts
 
-  const db = createSupabaseAdminClient()
-  const [posts, comments, blogComments] = await Promise.all([
-    db.from("forum_posts").select("user_id").eq("is_hidden", false).in("user_id", userIds),
-    db.from("forum_comments").select("user_id").eq("is_hidden", false).in("user_id", userIds),
-    db.from("blog_comments").select("user_id").eq("is_hidden", false).in("user_id", userIds),
-  ])
-
-  for (const res of [posts, comments, blogComments]) {
-    if (res.error) {
-      console.error("[users-repository] countActivityByUser:", res.error)
-      continue
-    }
-    for (const row of (res.data ?? []) as Array<{ user_id: string | null }>) {
-      if (!row.user_id) continue
-      counts[row.user_id] = (counts[row.user_id] ?? 0) + 1
-    }
+  const allCounts = await getActivityCounts()
+  for (const id of userIds) {
+    counts[id] = allCounts[id] ?? 0
   }
   return counts
 }
@@ -219,28 +214,39 @@ async function countActivityByUser(userIds: string[]): Promise<Record<string, nu
  * pelo ranking "Mais Ativos" e pela posição do usuário nele. Sem view/função
  * de agregação (ver `getMostFollowedProfiles`), então soma em JS; compensa
  * enquanto a base de membros for pequena.
+ *
+ * `unstable_cache` (5 min): esta é a query mais cara do diretório — 3 full
+ * scans (`forum_posts`, `forum_comments`, `blog_comments`) sem filtro nem
+ * limite. Era refeita a cada troca de aba em `/pessoas` (sem cache nenhum,
+ * `force-dynamic`) e a cada visita de qualquer perfil (via
+ * `getUserActivityRank`). Um ranking de atividade não precisa de segundo a
+ * segundo — 5 min de defasagem é imperceptível e corta a maior parte da carga.
  */
-async function getActivityCounts(): Promise<Record<string, number>> {
-  const db = createSupabaseAdminClient()
-  const [posts, comments, blogComments] = await Promise.all([
-    db.from("forum_posts").select("user_id").eq("is_hidden", false),
-    db.from("forum_comments").select("user_id").eq("is_hidden", false),
-    db.from("blog_comments").select("user_id").eq("is_hidden", false),
-  ])
+const getActivityCounts = unstable_cache(
+  async (): Promise<Record<string, number>> => {
+    const db = createSupabaseAdminClient()
+    const [posts, comments, blogComments] = await Promise.all([
+      db.from("forum_posts").select("user_id").eq("is_hidden", false),
+      db.from("forum_comments").select("user_id").eq("is_hidden", false),
+      db.from("blog_comments").select("user_id").eq("is_hidden", false),
+    ])
 
-  const counts: Record<string, number> = {}
-  for (const res of [posts, comments, blogComments]) {
-    if (res.error) {
-      console.error("[users-repository] getActivityCounts:", res.error)
-      continue
+    const counts: Record<string, number> = {}
+    for (const res of [posts, comments, blogComments]) {
+      if (res.error) {
+        console.error("[users-repository] getActivityCounts:", res.error)
+        continue
+      }
+      for (const row of (res.data ?? []) as Array<{ user_id: string | null }>) {
+        if (!row.user_id) continue
+        counts[row.user_id] = (counts[row.user_id] ?? 0) + 1
+      }
     }
-    for (const row of (res.data ?? []) as Array<{ user_id: string | null }>) {
-      if (!row.user_id) continue
-      counts[row.user_id] = (counts[row.user_id] ?? 0) + 1
-    }
-  }
-  return counts
-}
+    return counts
+  },
+  ["users-repository:getActivityCounts"],
+  { revalidate: 300 }
+)
 
 /**
  * Filtro compartilhado por TODAS as abas do diretório de pessoas (Aura,
@@ -571,6 +577,35 @@ export async function getFollowerProfiles(
 }
 
 /**
+ * Contagem agregada de `user_follows` (quantos seguidores cada `following_id`
+ * tem), para o ranking "Mais Seguidos".
+ *
+ * `unstable_cache` (5 min): sem coluna/view de agregação, a única forma de
+ * ordenar por número de seguidores é trazer TODA a tabela `user_follows` e
+ * somar em JS. Cachear evita repetir esse full scan a cada troca de aba no
+ * diretório `/pessoas` — mesmo raciocínio de `getActivityCounts`.
+ */
+const getFollowCounts = unstable_cache(
+  async (): Promise<Record<string, number>> => {
+    const db = createSupabaseAdminClient()
+    const { data: followRows, error } = await db.from("user_follows").select("following_id")
+
+    if (error) {
+      console.error("[users-repository] getFollowCounts:", error)
+      return {}
+    }
+
+    const counts: Record<string, number> = {}
+    for (const row of (followRows ?? []) as Array<{ following_id: string }>) {
+      counts[row.following_id] = (counts[row.following_id] ?? 0) + 1
+    }
+    return counts
+  },
+  ["users-repository:getFollowCounts"],
+  { revalidate: 300 }
+)
+
+/**
  * Perfis com mais seguidores.
  *
  * A ordenação acontece aqui e não no banco porque o contador não é uma
@@ -584,17 +619,7 @@ export async function getFollowerProfiles(
  */
 export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
-  const { data: followRows, error } = await db.from("user_follows").select("following_id")
-
-  if (error) {
-    console.error("[users-repository] getMostFollowedProfiles:", error)
-    return []
-  }
-
-  const counts: Record<string, number> = {}
-  for (const row of (followRows ?? []) as Array<{ following_id: string }>) {
-    counts[row.following_id] = (counts[row.following_id] ?? 0) + 1
-  }
+  const counts = await getFollowCounts()
 
   const topIds = Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
@@ -730,7 +755,7 @@ const ACTIVITY_RANK_TOP_CUTOFF = 100
  * O dono do site não participa deste ranking público, mesmo critério de
  * `getUserAuraRank`.
  */
-export async function getUserActivityRank(userId: string): Promise<number | null> {
+export const getUserActivityRank = cache(async (userId: string): Promise<number | null> => {
   const ownerId = await findUserIdByDisplaySlug(SITE_OWNER_SLUG)
   if (userId === ownerId) return null
 
@@ -744,7 +769,7 @@ export async function getUserActivityRank(userId: string): Promise<number | null
     if (count > activity) rank += 1
   }
   return rank <= ACTIVITY_RANK_TOP_CUTOFF ? rank : null
-}
+})
 
 /**
  * Registra uma visita ao perfil público. Via RPC (`increment_profile_views`)
@@ -885,7 +910,10 @@ export async function resolveAvailableDisplayName(
 }
 
 /** Id do usuário dono de um slug de perfil (`/perfil/<slug>`). */
-export async function findUserIdByDisplaySlug(slug: string): Promise<string | null> {
+// `React.cache`: chamada por `resolveUserId` em `/perfil/[handle]` (2x:
+// generateMetadata + página) e de novo dentro de `getUserActivityRank`
+// (via `getSiteOwnerId`) na mesma requisição — dedupe por (slug).
+export const findUserIdByDisplaySlug = cache(async (slug: string): Promise<string | null> => {
   const normalized = slugifyDisplayName(slug)
   if (!normalized) return null
 
@@ -896,7 +924,7 @@ export async function findUserIdByDisplaySlug(slug: string): Promise<string | nu
     .eq("display_slug", normalized)
     .maybeSingle()
   return (data as { id: string } | null)?.id ?? null
-}
+})
 
 /**
  * Dados do cartão de preview rápido ("Mini Perfil"), resolvidos por slug.

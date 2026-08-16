@@ -1,7 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { parseSlug } from "@/lib/stripe"
+import { parseSlug } from "@/lib/format"
 import type { MedalRarity } from "@/lib/profile-showcase"
 import type { EventCriteriaType, EventDisplay } from "@/lib/events"
 
@@ -294,9 +294,12 @@ export async function awardEligibleEventMedals(userId: string): Promise<void> {
 
     if (error || !events || events.length === 0) return
 
-    for (const event of events) {
-      await db.rpc("claim_event_medal", { p_event_id: event.id, p_user_id: userId })
-    }
+    // `claim_event_medal` é atômica e idempotente por evento — eventos
+    // diferentes não compartilham estado entre si, então rodam em paralelo
+    // em vez de round-trip por round-trip a cada login/cadastro.
+    await Promise.all(
+      events.map((event) => db.rpc("claim_event_medal", { p_event_id: event.id, p_user_id: userId }))
+    )
   } catch (err) {
     console.error("[events-repository] awardEligibleEventMedals:", err)
   }

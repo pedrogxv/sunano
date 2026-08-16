@@ -17,16 +17,35 @@ interface StoreProduct {
   stock: number
   images: string[]
   category: string | null
+  brand: string | null
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   is_active: boolean
+  features?: string[]
+  video_url?: string | null
+}
+
+interface StoreProductSpec {
+  id?: string
+  label: string
+  value: string
+}
+
+interface StoreProductVariant {
+  id?: string
+  label: string
+  price_cents_override: number | null
+  stock: number
 }
 
 export default function EditProductPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
   const [product, setProduct] = useState<StoreProduct | null>(null)
+  const [specs, setSpecs] = useState<StoreProductSpec[]>([])
+  const [variants, setVariants] = useState<StoreProductVariant[]>([])
+  const [peripheralIds, setPeripheralIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,9 +53,18 @@ export default function EditProductPage() {
     async function load() {
       try {
         const res = await fetch(`/api/admin/store/products/${id}`)
-        const data = (await res.json()) as { product?: StoreProduct; error?: string }
+        const data = (await res.json()) as {
+          product?: StoreProduct
+          specs?: StoreProductSpec[]
+          variants?: StoreProductVariant[]
+          peripheralIds?: string[]
+          error?: string
+        }
         if (!res.ok || !data.product) throw new Error(data.error ?? "Produto não encontrado")
         setProduct(data.product)
+        setSpecs(data.specs ?? [])
+        setVariants(data.variants ?? [])
+        setPeripheralIds(data.peripheralIds ?? [])
       } catch (err) {
         const message = err instanceof Error ? err.message : "Erro ao carregar"
         setError(message)
@@ -57,8 +85,8 @@ export default function EditProductPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
-        <BackBreadcrumb href="/admin/store" parentLabel="Loja & Bazar" currentLabel={currentLabel} />
+      <div className="mx-auto max-w-4xl space-y-6">
+        <BackBreadcrumb href="/admin/store" parentLabel="Loja" currentLabel={currentLabel} />
         <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card/40 py-20">
           <BoxLoader />
           <div className="text-center">
@@ -72,8 +100,8 @@ export default function EditProductPage() {
 
   if (error || !product) {
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
-        <BackBreadcrumb href="/admin/store" parentLabel="Loja & Bazar" />
+      <div className="mx-auto max-w-4xl space-y-6">
+        <BackBreadcrumb href="/admin/store" parentLabel="Loja" />
         <div className="flex flex-col items-center justify-center gap-2 py-14 text-center">
           <p className="text-sm text-red-400">{error ?? "Produto não encontrado"}</p>
         </div>
@@ -82,11 +110,14 @@ export default function EditProductPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <BackBreadcrumb href="/admin/store" parentLabel="Loja & Bazar" currentLabel={product.name} />
+    <div className="mx-auto max-w-4xl space-y-6">
+      <BackBreadcrumb href="/admin/store" parentLabel="Loja" currentLabel={product.name} />
       <div className="rounded-xl border border-border bg-card p-6">
         <StoreProductForm
           product={product}
+          initialSpecs={specs}
+          initialVariants={variants}
+          initialPeripheralIds={peripheralIds}
           onSuccess={() => router.push("/admin/store")}
           onCancel={() => router.push("/admin/store")}
         />

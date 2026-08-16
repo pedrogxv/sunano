@@ -77,7 +77,7 @@ export default function PrivacidadePage() {
           <ul>
             <li>Histórico de compras: produtos, valores, status do pagamento.</li>
             <li>
-              Identificadores do Stripe (<code>session_id</code>, <code>payment_intent_id</code>).
+              Identificadores da MisticPay (<code>transactionId</code>, código E2E do PIX).
             </li>
             <li>E-mail e nome associados ao pagamento.</li>
           </ul>
@@ -158,13 +158,14 @@ export default function PrivacidadePage() {
             .
           </p>
 
-          <h3>Stripe (pagamentos)</h3>
+          <h3>MisticPay (pagamentos)</h3>
           <p>
-            Processa pagamentos com cartão e Pix. Recebe seu e-mail e nome para emissão de recibo.
-            O Sunano nunca armazena dados de cartão de crédito — eles são processados exclusivamente
-            pelo Stripe. Política:{" "}
-            <a href="https://stripe.com/br/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-              stripe.com/br/privacy
+            Processa pagamentos via Pix. Recebe seu nome, CPF e e-mail para geração da cobrança e
+            emissão de recibo. O Sunano nunca armazena dados sensíveis de pagamento além dos
+            identificadores da transação — eles são processados exclusivamente pela MisticPay.
+            Política:{" "}
+            <a href="https://misticpay.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              misticpay.com
             </a>
             .
           </p>
@@ -237,6 +238,12 @@ export default function PrivacidadePage() {
             <li>
               <strong>Cookie de preferências (localStorage):</strong> tema visual e idioma,
               armazenados localmente no seu navegador.
+            </li>
+            <li>
+              <strong>Carrinho de compras (localStorage):</strong> os itens adicionados à loja ou ao
+              bazar ficam salvos localmente no seu navegador para não se perderem entre páginas.
+              Nenhum dado de pagamento fica nesse armazenamento — nome, e-mail e CPF de compras sem
+              conta são enviados apenas no momento da finalização, direto para gerar a cobrança PIX.
             </li>
             <li>
               <strong>Cookie de dispositivo confiável (HTTPOnly, Secure, opcional):</strong> gravado

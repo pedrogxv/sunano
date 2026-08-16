@@ -56,6 +56,8 @@ export async function GET(request: NextRequest) {
       ? (tabParam as ForumTab)
       : "recent"
     const categoryId = url.searchParams.get("categoryId") ?? undefined
+    const pageParam = Number(url.searchParams.get("page") ?? "1")
+    const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
 
     let userId: string | undefined
     if (tab === "mine") {
@@ -74,8 +76,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const posts = await listForumPosts({ tab, categoryId, userId })
-    return NextResponse.json({ ok: true, posts })
+    const { posts, hasMore } = await listForumPosts({ tab, categoryId, userId, page })
+    return NextResponse.json({ ok: true, posts, hasMore })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar posts do forum." }, { status: 500 })
   }

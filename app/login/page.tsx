@@ -1,5 +1,11 @@
 import { AuthBackground } from "@/components/auth/AuthBackground"
 import { UserLoginForm } from "@/components/auth/UserLoginForm"
+import {
+  AuthMotionHeader,
+  AuthMotionBanner,
+  AuthMotionCard,
+  ContinueWithoutAccountLink,
+} from "@/components/auth/AuthPageMotion"
 
 export default async function LoginPage({
   searchParams,
@@ -17,56 +23,72 @@ export default async function LoginPage({
     <div className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
       <AuthBackground />
       <div className="w-full max-w-md">
-        <div className="mb-8 text-center">
-          <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
-            Entrar na conta
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Acesse o fórum, salve preferências e participe da comunidade.
-          </p>
-        </div>
+        <AuthMotionHeader>
+          <div className="mb-8 text-center">
+            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground">
+              Entrar na conta
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Acesse o fórum, salve preferências e participe da comunidade.
+            </p>
+          </div>
+        </AuthMotionHeader>
 
         {accountDeleted && (
-          <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
-            Sua conta foi excluída com sucesso. Nenhum e-mail de confirmação é enviado — a
-            exclusão é imediata.
-          </div>
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+              Sua conta foi excluída com sucesso. Nenhum e-mail de confirmação é enviado — a
+              exclusão é imediata.
+            </div>
+          </AuthMotionBanner>
         )}
 
         {passwordUpdated && (
-          <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
-            Senha atualizada com sucesso! Faça login com sua nova senha.
-          </div>
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+              Senha atualizada com sucesso! Faça login com sua nova senha.
+            </div>
+          </AuthMotionBanner>
         )}
 
         {emailConfirmed && (
-          <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
-            E-mail confirmado com sucesso! Faça login para continuar.
-          </div>
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+              E-mail confirmado com sucesso! Faça login para continuar.
+            </div>
+          </AuthMotionBanner>
         )}
 
         {isRecoveryError && (
-          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Link de redefinição inválido ou expirado.{" "}
-            <a href="/forgot-password" className="underline">
-              Solicite um novo.
-            </a>
-          </div>
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Link de redefinição inválido ou expirado.{" "}
+              <a href="/forgot-password" className="underline">
+                Solicite um novo.
+              </a>
+            </div>
+          </AuthMotionBanner>
         )}
 
         {isConfirmationError && (
-          <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            Link de confirmação inválido ou expirado.{" "}
-            <a href="/register" className="underline">
-              Cadastre-se novamente
-            </a>{" "}
-            ou solicite um novo e-mail de confirmação.
-          </div>
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Link de confirmação inválido ou expirado.{" "}
+              <a href="/register" className="underline">
+                Cadastre-se novamente
+              </a>{" "}
+              ou solicite um novo e-mail de confirmação.
+            </div>
+          </AuthMotionBanner>
         )}
 
-        <div className="rounded-2xl border border-border bg-card p-8 shadow-xl shadow-black/30">
-          <UserLoginForm />
-        </div>
+        <AuthMotionCard>
+          <div className="rounded-2xl border border-border bg-card p-8 shadow-xl shadow-black/30">
+            <UserLoginForm />
+          </div>
+        </AuthMotionCard>
+
+        <ContinueWithoutAccountLink />
       </div>
     </div>
   )

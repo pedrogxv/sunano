@@ -9,6 +9,7 @@ import { CategoryPickerCompact } from "@/components/forum/CategoryPicker"
 import { PostMediaField } from "@/components/forum/PostMediaField"
 import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { ForumSidebar, ForumSidebarMobileTrigger } from "@/components/forum/ForumSidebar"
+import { InfiniteScrollSentinel } from "@/components/forum/InfiniteScrollSentinel"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 import { CommentBody } from "@/components/comments/CommentBody"
 import BoxLoader from "@/components/ui/box-loader"
@@ -16,6 +17,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuthUser } from "@/components/providers/auth-context"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 export type ForumPost = PostCardData
 
@@ -34,16 +37,21 @@ const MAX_BODY = 5000
 
 export function ForumContent({
   initialPosts,
+  initialHasMore,
   topActive,
   moderators,
 }: {
   initialPosts: ForumPost[]
+  initialHasMore: boolean
   topActive: PublicProfileSummary[]
   moderators: PublicProfileSummary[]
 }) {
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [posts, setPosts] = useState<ForumPost[]>(initialPosts)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(initialHasMore)
   const { user: contextUser, loading: authLoading } = useAuthUser()
   const authUser: AuthUser = useMemo(
     () =>
@@ -88,22 +96,37 @@ export function ForumContent({
       .catch(() => setHasOwnPosts(false))
   }, [authUser])
 
-  const loadPosts = useCallback(async (tab: Tab, categoryId: string) => {
+  // `reset = true` troca de aba/categoria (substitui a lista, volta pra
+  // página 1); `reset = false` é o scroll infinito (acrescenta a próxima
+  // página no fim da lista já carregada).
+  const loadPosts = useCallback(async (tab: Tab, categoryId: string, targetPage: number, reset: boolean) => {
     try {
-      setLoading(true)
+      if (reset) {
+        setLoading(true)
+      } else {
+        setLoadingMore(true)
+      }
       setError(null)
-      const params = new URLSearchParams({ tab })
+      const params = new URLSearchParams({ tab, page: String(targetPage) })
       if (tab === "category" && categoryId) params.set("categoryId", categoryId)
       const res = await fetch(`/api/forum/posts?${params}`)
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.posts) throw new Error(data?.error ?? "Erro ao carregar posts")
-      setPosts(data.posts as ForumPost[])
+      setPosts((prev) => (reset ? (data.posts as ForumPost[]) : [...prev, ...(data.posts as ForumPost[])]))
+      setHasMore(Boolean(data.hasMore))
+      setPage(targetPage)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar posts")
     } finally {
       setLoading(false)
+      setLoadingMore(false)
     }
   }, [])
+
+  const loadMore = useCallback(() => {
+    if (loading || loadingMore || !hasMore) return
+    loadPosts(activeTab, activeCategoryId, page + 1, false)
+  }, [loading, loadingMore, hasMore, activeTab, activeCategoryId, page, loadPosts])
 
   /**
    * Atualiza a lista na hora quando o dono oculta/reativa um post, sem
@@ -138,7 +161,7 @@ export function ForumContent({
       isFirstLoadRef.current = false
       return
     }
-    loadPosts(activeTab, activeCategoryId)
+    loadPosts(activeTab, activeCategoryId, 1, true)
   }, [activeTab, activeCategoryId, loadPosts])
 
   // Se a aba "Meus Posts" deixa de existir (deslogou, ou excluiu o último
@@ -175,7 +198,7 @@ export function ForumContent({
       setMediaVideoUrl(null)
       setShowForm(false)
       setHasOwnPosts(true)
-      await loadPosts(activeTab, activeCategoryId)
+      await loadPosts(activeTab, activeCategoryId, 1, true)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao criar post")
     } finally {
@@ -245,7 +268,7 @@ export function ForumContent({
 
       {/* Tab bar */}
       <div className="space-y-3">
-        <div className="flex items-center gap-1 rounded-xl border border-border bg-card p-1">
+        <div className={cn("flex items-center gap-1 rounded-xl p-1", CARD_SURFACE)}>
           {(
             [
               { value: "recent" as Tab,   label: "Recente",   icon: Clock },
@@ -281,7 +304,7 @@ export function ForumContent({
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                   !activeRoot
                     ? "border-primary bg-primary/15 text-primary"
-                    : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                    : "border-border/60 bg-secondary/50 text-muted-foreground hover:border-border hover:bg-secondary/80 hover:text-foreground"
                 }`}
               >
                 Todos
@@ -295,7 +318,7 @@ export function ForumContent({
                   className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                     activeRoot === c.id
                       ? "border-primary bg-primary/15 text-primary"
-                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      : "border-border/60 bg-secondary/50 text-muted-foreground hover:border-border hover:bg-secondary/80 hover:text-foreground"
                   }`}
                 >
                   {c.name}
@@ -320,7 +343,7 @@ export function ForumContent({
                   className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                     activeCategoryId === activeRootOption.id
                       ? "border-primary/60 bg-primary/10 text-primary"
-                      : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                      : "border-border/60 bg-secondary/40 text-muted-foreground hover:border-border hover:bg-secondary/70 hover:text-foreground"
                   }`}
                 >
                   Todas
@@ -333,7 +356,7 @@ export function ForumContent({
                     className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                       activeCategoryId === child.id
                         ? "border-primary/60 bg-primary/10 text-primary"
-                        : "border-border/60 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        : "border-border/60 bg-secondary/40 text-muted-foreground hover:border-border hover:bg-secondary/70 hover:text-foreground"
                     }`}
                   >
                     {child.name}
@@ -347,7 +370,7 @@ export function ForumContent({
 
       {/* New post form */}
       {showForm && authUser && (
-        <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div className={cn("rounded-xl p-4 space-y-3", CARD_SURFACE)}>
           {formError && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {formError}
@@ -432,7 +455,7 @@ export function ForumContent({
           <BoxLoader />
         </div>
       ) : posts.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card p-12 text-center">
+        <div className={cn("rounded-2xl p-12 text-center", CARD_SURFACE)}>
           <p className="text-sm text-muted-foreground">{emptyMessage}</p>
           {!authUser && (
             <Link href="/login">
@@ -451,11 +474,17 @@ export function ForumContent({
               onOwnPostDeleted={handleOwnPostDeleted}
             />
           ))}
+          {hasMore && <InfiniteScrollSentinel onIntersect={loadMore} />}
+          {loadingMore && (
+            <div className="flex items-center justify-center py-6">
+              <BoxLoader />
+            </div>
+          )}
         </div>
       )}
 
       {!authLoading && !authUser && !loading && posts.length > 0 && (
-        <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
+        <div className={cn("rounded-xl p-6 text-center", CARD_SURFACE)}>
           <p className="text-sm text-muted-foreground">
             <Link href="/login" className="font-medium text-primary hover:underline">Entre na sua conta</Link>
             {" "}para criar tópicos, comentar e dar aura.

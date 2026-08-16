@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 import { coerceAccountTier } from "@/lib/account-tier"
 import { calculateListingFee } from "@/lib/market-fees"
 
@@ -119,15 +119,15 @@ export function MarketListingForm() {
         ok?: boolean
         error?: string
         requiresPayment?: boolean
-        checkoutUrl?: string
+        listingId?: string
       }
 
       if (!res.ok || !data.ok) {
         throw new Error(data.error ?? "Erro ao criar anúncio")
       }
 
-      if (data.requiresPayment && data.checkoutUrl) {
-        window.location.href = data.checkoutUrl
+      if (data.requiresPayment && data.listingId) {
+        router.push(`/mercado/pagar?listingId=${data.listingId}`)
         return
       }
 

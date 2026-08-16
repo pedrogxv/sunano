@@ -5,7 +5,7 @@ import { BlogContent, type BlogPost } from "./blog-content"
 
 // ISR: os posts são renderizados no servidor e revalidados em background,
 // eliminando o fetch client-side (que mostrava um spinner a cada visita).
-export const revalidate = 30
+export const revalidate = 120
 
 export const metadata: Metadata = {
   // Sem o sufixo "| Sunano": o `title.template` do layout raiz já o acrescenta,

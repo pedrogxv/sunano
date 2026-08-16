@@ -7,6 +7,9 @@ import type { Database } from "@/lib/database.types"
 
 type StoreProductUpdate = Database["public"]["Tables"]["store_products"]["Update"]
 
+const MAX_PRODUCT_IMAGES = 8
+const MAX_STOCK = 999_999
+
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthorizedProfile()
   if (auth.error || !auth.profile) {
@@ -18,15 +21,34 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   const { id } = await context.params
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("store_products")
-    .select("*")
-    .eq("id", id)
-    .single()
+  const [{ data, error }, { data: specs }, { data: variants }, { data: peripherals }] = await Promise.all([
+    db.from("store_products").select("*").eq("id", id).single(),
+    db
+      .from("store_product_specs")
+      .select("id, label, value, position")
+      .eq("product_id", id)
+      .order("position", { ascending: true }),
+    db
+      .from("store_product_variants")
+      .select("id, label, price_cents_override, stock, position")
+      .eq("product_id", id)
+      .eq("is_active", true)
+      .order("position", { ascending: true }),
+    db
+      .from("store_product_peripherals")
+      .select("peripheral_id, position")
+      .eq("product_id", id)
+      .order("position", { ascending: true }),
+  ])
 
   if (error) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
 
-  return NextResponse.json({ product: data })
+  return NextResponse.json({
+    product: data,
+    specs: specs ?? [],
+    variants: variants ?? [],
+    peripheralIds: (peripherals ?? []).map((row) => row.peripheral_id),
+  })
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -43,11 +65,25 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   const allowed: (keyof StoreProductUpdate)[] = [
     "name", "description", "price_cents", "stock", "images",
-    "category", "type", "condition", "condition_notes", "is_active",
+    "category", "brand", "type", "condition", "condition_notes", "is_active",
+    "features", "video_url",
   ]
   const patch: StoreProductUpdate = {}
   for (const key of allowed) {
     if (key in body) (patch as Record<string, unknown>)[key] = body[key]
+  }
+
+  if (Array.isArray(patch.images) && patch.images.length > MAX_PRODUCT_IMAGES) {
+    return NextResponse.json(
+      { error: `Máximo de ${MAX_PRODUCT_IMAGES} imagens por produto.` },
+      { status: 400 }
+    )
+  }
+  if (typeof patch.stock === "number" && (patch.stock < 0 || patch.stock > MAX_STOCK)) {
+    return NextResponse.json(
+      { error: `Estoque deve estar entre 0 e ${MAX_STOCK}.` },
+      { status: 400 }
+    )
   }
 
   const db = createSupabaseAdminClient()

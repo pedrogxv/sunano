@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
   const status = VALID_STATUSES.includes(statusParam as MarketListingStatus)
     ? (statusParam as MarketListingStatus)
     : "pending_review"
+  const page = Number(url.searchParams.get("page")) || 1
+  const pageSize = Number(url.searchParams.get("pageSize")) || 24
 
-  const listings = await listMarketListingsForModeration(status)
-  return NextResponse.json({ ok: true, listings })
+  const { listings, total, hasMore } = await listMarketListingsForModeration(status, page, pageSize)
+  return NextResponse.json({ ok: true, listings, total, hasMore })
 }

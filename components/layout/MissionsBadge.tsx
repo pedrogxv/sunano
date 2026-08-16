@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ArrowRight, Bird, Check, MessageSquare, Sparkles, SquarePen, Target } from "lucide-react"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { AURA_CHANGED_EVENT } from "@/lib/client/aura-events"
 import {
@@ -72,7 +73,11 @@ export function MissionsBadge() {
     }
   }, [user, load])
 
-  if (!user || !missions) return null
+  if (!user) return null
+
+  if (!missions) {
+    return <Skeleton className="size-11 shrink-0 rounded-lg sm:h-8 sm:w-16" />
+  }
 
   const completed = countCompletedMissions(missions)
   const allDone = completed === DAILY_MISSION_KEYS.length
@@ -84,7 +89,7 @@ export function MissionsBadge() {
           type="button"
           aria-label={allDone ? `Missões diárias completas — ofensiva de ${streak.current} dias` : `Missões diárias: ${completed}/${DAILY_MISSION_KEYS.length}`}
           className={cn(
-            "relative flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3",
+            "animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3",
             allDone && "border-amber-400/40"
           )}
         >

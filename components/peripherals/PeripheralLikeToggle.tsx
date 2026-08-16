@@ -1,8 +1,11 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
+import { Heart } from "lucide-react"
 
 import { LikeButton } from "./LikeButton"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { cn } from "@/lib/utils"
 
 interface PeripheralLikeToggleProps {
@@ -19,6 +22,7 @@ interface PeripheralLikeToggleProps {
  * manter em sincronia nem remontagem por filtro.
  */
 export function PeripheralLikeToggle({ peripheralId, className }: PeripheralLikeToggleProps) {
+  const { user } = useAuthUser()
   const [liked, setLiked] = useState(false)
   const [loaded, setLoaded] = useState(false)
 
@@ -41,15 +45,27 @@ export function PeripheralLikeToggle({ peripheralId, className }: PeripheralLike
   }, [peripheralId])
 
   return (
-    <LikeButton
-      peripheralId={peripheralId}
-      liked={liked}
-      onLikedChange={(_id, next) => setLiked(next)}
-      className={cn(
-        "size-10 transition-opacity duration-200",
-        loaded ? "opacity-100" : "pointer-events-none opacity-0",
-        className
+    <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1">
+      <LikeButton
+        peripheralId={peripheralId}
+        liked={liked}
+        onLikedChange={(_id, next) => setLiked(next)}
+        className={cn(
+          "size-10 transition-opacity duration-200",
+          loaded ? "opacity-100" : "pointer-events-none opacity-0",
+          className
+        )}
+      />
+
+      {loaded && liked && user && (
+        <Link
+          href={`/perfil/${user.id}`}
+          className="flex shrink-0 basis-full items-center justify-end gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary @[420px]/col:basis-auto"
+        >
+          <Heart className="size-3.5 shrink-0 fill-current text-red-500" />
+          Ver meus favoritos
+        </Link>
       )}
-    />
+    </div>
   )
 }

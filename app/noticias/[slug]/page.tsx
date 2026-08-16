@@ -8,7 +8,7 @@ import { NoticiasPostContent, type NewsPost } from "./noticias-post-content"
 // ISR: post, relacionados e comentários são renderizados no servidor e
 // revalidados em background, eliminando o fetch client-side (que mostrava
 // um spinner a cada visita).
-export const revalidate = 30
+export const revalidate = 120
 
 export default async function NoticiasSlugPage({
   params,

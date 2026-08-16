@@ -1,5 +1,6 @@
 import "server-only"
 
+import { cache } from "react"
 import type { AccountTier } from "@/lib/account-tier"
 import { canEditComment } from "@/lib/comment-edit"
 import type { CommentMention } from "@/components/comments/types"
@@ -71,6 +72,13 @@ export type ForumCommentDetail = {
 
 export type ForumTab = "recent" | "hot" | "category" | "mine" | "user"
 
+export const FORUM_POSTS_PAGE_SIZE = 20
+
+export type PaginatedForumPosts = {
+  posts: ForumListPost[]
+  hasMore: boolean
+}
+
 // ── Helpers de enriquecimento ────────────────────────────────────────────────
 
 type CategoryRow = { id: string; slug: string; name: string; parent_id: string | null }
@@ -126,22 +134,36 @@ export async function listAllForumSlugsForSitemap(): Promise<{ slug: string; upd
 
 // ── Leitura pública ──────────────────────────────────────────────────────────
 
-/** Lista posts visíveis do fórum, conforme a aba selecionada. */
+/**
+ * Lista posts visíveis do fórum, conforme a aba selecionada — paginado por
+ * `page` (1-based), `FORUM_POSTS_PAGE_SIZE` por vez, via `range()` no banco
+ * (nunca traz o fórum inteiro pra depois cortar em JS).
+ *
+ * Exceção é a aba "hot": o `comment_count` que decide a ordenação é montado
+ * em JS (segunda query, não é coluna de `forum_posts`), então a ordenação
+ * por engajamento também é em JS — sobre a janela dos últimos 30 dias,
+ * paginada por `created_at` como as demais abas. Ou seja, cada página é
+ * reordenada por popularidade dentro dela mesma, não globalmente; é a mesma
+ * limitação que já existia quando a aba trazia só os 50 mais recentes.
+ */
 export async function listForumPosts(params: {
   tab: ForumTab
   categoryId?: string
   /** Obrigatório quando `tab` é `"mine"` ou `"user"` — ignorado nas demais abas. */
   userId?: string
-}): Promise<ForumListPost[]> {
+  /** 1-based. Default 1. */
+  page?: number
+}): Promise<PaginatedForumPosts> {
   const db = createSupabaseAdminClient()
-  const { tab, categoryId, userId } = params
+  const { tab, categoryId, userId, page = 1 } = params
 
-  if ((tab === "mine" || tab === "user") && !userId) return []
+  if ((tab === "mine" || tab === "user") && !userId) return { posts: [], hasMore: false }
 
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, title, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, aura_count"
+      "id, slug, title, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, aura_count",
+      { count: "exact" }
     )
 
   // Em "Meus Posts" o dono também vê o que ocultou (pra poder reativar); em
@@ -169,17 +191,19 @@ export async function listForumPosts(params: {
   // a ordenação continua só por engajamento/data, sem o pin sobrepor o critério.
   if (tab === "recent") query = query.order("is_pinned", { ascending: false })
   query = query.order("created_at", { ascending: false })
-  // Sem paginação na UI ainda — limita para não trazer o fórum inteiro a
-  // cada carregamento de página conforme o volume de posts cresce.
-  query = query.limit(50)
 
-  const { data: posts, error } = await query
+  const from = (page - 1) * FORUM_POSTS_PAGE_SIZE
+  const to = from + FORUM_POSTS_PAGE_SIZE - 1
+  query = query.range(from, to)
+
+  const { data: posts, error, count } = await query
   if (error) {
     console.error("[forum-repository] listForumPosts:", error)
     throw error
   }
 
   const rows = posts ?? []
+  const hasMore = from + rows.length < (count ?? rows.length)
   const postIds = rows.map((p) => p.id)
 
   const commentCounts: Record<string, number> = {}
@@ -219,13 +243,11 @@ export async function listForumPosts(params: {
     author_display_slug: p.user_id ? profileMap[p.user_id]?.display_slug ?? null : null,
   }))
 
-  // "Em Alta" = mais discutido. O `comment_count` é montado aqui em JS (vem de
-  // uma segunda consulta, não é coluna de `forum_posts`), então a ordenação
-  // também é em JS — sobre os 50 posts mais recentes dos últimos 30 dias já
-  // recortados acima, que é o mesmo universo que a aba mostrava antes.
+  // "Em Alta" = mais discutido dentro desta página (ver comentário no topo
+  // da função sobre a limitação de paginar uma ordenação calculada em JS).
   if (tab === "hot") list.sort((a, b) => b.comment_count - a.comment_count)
 
-  return list
+  return { posts: list, hasMore }
 }
 
 export type ForumUserComment = {
@@ -237,6 +259,13 @@ export type ForumUserComment = {
   post_title: string
 }
 
+export const USER_COMMENTS_PAGE_SIZE = 20
+
+export type PaginatedForumUserComments = {
+  comments: ForumUserComment[]
+  hasMore: boolean
+}
+
 /**
  * Comentários visíveis de um usuário, com o post ao qual cada um pertence —
  * modal "Comentários" na vitrine pública do perfil dele. Mesmo padrão em
@@ -244,17 +273,32 @@ export type ForumUserComment = {
  * correspondentes numa segunda query) em vez de relação embutida do
  * Supabase. Comentário cujo post está oculto fica de fora — pro mesmo
  * visitante que não pode ver o post, o link também não deveria aparecer.
+ *
+ * Paginada como `listForumPosts`: como comentários de post oculto são
+ * filtrados depois do range(), uma página pode vir com menos de
+ * `USER_COMMENTS_PAGE_SIZE` itens mesmo com `hasMore: true` — é o mesmo
+ * trade-off aceito ali em troca de não precisar de post/join no banco.
  */
-export async function listForumCommentsByUser(userId: string): Promise<ForumUserComment[]> {
+export async function listForumCommentsByUser(
+  userId: string,
+  page = 1
+): Promise<PaginatedForumUserComments> {
   const db = createSupabaseAdminClient()
 
-  const { data: comments, error } = await db
+  const from = (page - 1) * USER_COMMENTS_PAGE_SIZE
+  const to = from + USER_COMMENTS_PAGE_SIZE - 1
+
+  const {
+    data: comments,
+    error,
+    count,
+  } = await db
     .from("forum_comments")
-    .select("id, body, created_at, aura_count, post_id")
+    .select("id, body, created_at, aura_count, post_id", { count: "exact" })
     .eq("user_id", userId)
     .eq("is_hidden", false)
     .order("created_at", { ascending: false })
-    .limit(50)
+    .range(from, to)
 
   if (error) {
     console.error("[forum-repository] listForumCommentsByUser:", error)
@@ -262,8 +306,9 @@ export async function listForumCommentsByUser(userId: string): Promise<ForumUser
   }
 
   const rows = comments ?? []
+  const hasMore = from + rows.length < (count ?? rows.length)
   const postIds = [...new Set(rows.map((c) => c.post_id))]
-  if (postIds.length === 0) return []
+  if (postIds.length === 0) return { comments: [], hasMore }
 
   const { data: posts } = await db
     .from("forum_posts")
@@ -271,7 +316,7 @@ export async function listForumCommentsByUser(userId: string): Promise<ForumUser
     .in("id", postIds)
   const postMap = new Map((posts ?? []).map((p) => [p.id, p]))
 
-  return rows
+  const list = rows
     .map((c): ForumUserComment | null => {
       const post = postMap.get(c.post_id)
       if (!post || post.is_hidden) return null
@@ -285,6 +330,8 @@ export async function listForumCommentsByUser(userId: string): Promise<ForumUser
       }
     })
     .filter((c): c is ForumUserComment => c !== null)
+
+  return { comments: list, hasMore }
 }
 
 /**
@@ -292,10 +339,16 @@ export async function listForumCommentsByUser(userId: string): Promise<ForumUser
  * dela — base da página `/forum/categoria/[slug]`, indexável por periférico
  * (ex: "mouses", "teclados").
  */
-export async function getForumPostsByCategorySlug(slug: string): Promise<{
+// `React.cache`: `generateMetadata` e a página de categoria chamam com o
+// mesmo (slug, page) na mesma requisição — dedupe evita rodar 2x.
+export const getForumPostsByCategorySlug = cache(async (
+  slug: string,
+  page = 1
+): Promise<{
   category: ForumCategoryInfo
   posts: ForumListPost[]
-} | null> {
+  hasMore: boolean
+} | null> => {
   const db = createSupabaseAdminClient()
   const { data: category } = await db
     .from("forum_categories")
@@ -310,9 +363,9 @@ export async function getForumPostsByCategorySlug(slug: string): Promise<{
   const categoryInfo = resolveCategoryInfo(category.id, categoryMap)
   if (!categoryInfo) return null
 
-  const posts = await listForumPosts({ tab: "category", categoryId: category.id })
-  return { category: categoryInfo, posts }
-}
+  const { posts, hasMore } = await listForumPosts({ tab: "category", categoryId: category.id, page })
+  return { category: categoryInfo, posts, hasMore }
+})
 
 export type ForumSidebarData = {
   totalPosts: number
@@ -551,15 +604,18 @@ export async function listForumComments(
  * Post oculto (`is_hidden`) só é retornado pro próprio dono (`viewerId` bate
  * com `user_id`) — pra ele conseguir reativar o próprio post pela página de
  * detalhe. Pra qualquer outro visitante, oculto continua como se não existisse.
+ *
+ * `React.cache`: `generateMetadata` e a página chamam com o mesmo (slug,
+ * viewerId) na mesma requisição — dedupe evita rodar 2x.
  */
-export async function getForumPostBySlug(
+export const getForumPostBySlug = cache(async (
   slug: string,
   viewerId?: string | null
 ): Promise<{
   post: ForumPostDetail
   comments: ForumCommentDetail[]
   hasMoreComments: boolean
-} | null> {
+} | null> => {
   const db = createSupabaseAdminClient()
 
   const { data: post, error } = await db
@@ -614,7 +670,7 @@ export async function getForumPostBySlug(
   }
 
   return { post: enrichedPost, comments: commentsPage.comments, hasMoreComments: commentsPage.hasMore }
-}
+})
 
 // ── Escrita pública ──────────────────────────────────────────────────────────
 

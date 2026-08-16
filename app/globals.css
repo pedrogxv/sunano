@@ -28,7 +28,7 @@
   --destructive: oklch(0.6 0.2 25);
   --destructive-foreground: #FFFFFF;
   --border: #333333;
-  --input: #0a0a0a;
+  --input: #333333;
   --ring: oklch(0.68 0.12 220);
   --radius: 0.625rem;
   
@@ -45,6 +45,11 @@
 
   /* Backdrop behind product photos (PeripheralCard image area) */
   --card-image-bg: #1a1a1a;
+
+  /* Altura total da pilha sticky do topo (TopBar + ChangelogBanner quando visível).
+     TopBar sozinha = 4rem (min-h-16). ChangelogBanner ajusta este valor via JS
+     (ResizeObserver) quando está montado, pois sua altura varia com o conteúdo. */
+  --sticky-header-h: 4rem;
 }
 
 :root[data-theme="light"] {
@@ -64,7 +69,7 @@
   --accent: #ececec;
   --accent-foreground: #000000;
   --border: #d0d0d0;
-  --input: #f5f5f5;
+  --input: #d0d0d0;
   --ring: oklch(0.58 0.16 220);
 
   /* Espelha o modo escuro: lá o card é #0a0a0a e a área da imagem #1a1a1a —
@@ -92,7 +97,7 @@
   --destructive: oklch(0.6 0.2 25);
   --destructive-foreground: #FFFFFF;
   --border: #333333;
-  --input: #0a0a0a;
+  --input: #333333;
   --ring: oklch(0.68 0.12 220);
 }
 
@@ -170,6 +175,84 @@ h3,
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
+}
+
+/* Esconde as setas nativas de input[type=number] para usar um stepper custom. */
+.no-spinner::-webkit-outer-spin-button,
+.no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-spinner {
+  -moz-appearance: textfield;
+}
+
+/* Entrada padrão do site: qualquer coisa que monta depois da primeira pintura
+   (badges client-only da TopBar, conteúdo que chega via fetch, etc.) usa isso
+   em vez de simplesmente aparecer. `--fade-in-delay` permite escalonar itens
+   irmãos (ver `.stagger-children`). */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--fade-in-delay, 0s);
+}
+
+.stagger-children > * {
+  animation: fade-in-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 40ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 80ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 120ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 160ms; }
+.stagger-children > *:nth-child(n+6) { animation-delay: 200ms; }
+
+/* Sweep diagonal de shimmer sobre o `animate-pulse` padrão do Skeleton —
+   dá a sensação de "carregando ativamente" em vez de só piscar opacidade. */
+@keyframes skeleton-shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+
+.animate-shimmer {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    var(--foreground) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  opacity: 0.06;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .stagger-children > * {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .animate-shimmer {
+    animation: none;
+  }
 }
 
 /* Tier badge styles */

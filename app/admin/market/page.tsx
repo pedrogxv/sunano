@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 
 type ModerationListing = {
   id: string

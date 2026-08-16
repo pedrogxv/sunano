@@ -5,7 +5,10 @@ import { MarketListingCard } from "@/components/market/MarketListingCard"
 import { listActiveMarketListings } from "@/lib/server/repositories/market-repository"
 
 export default async function MercadoPage() {
-  const listings = await listActiveMarketListings()
+  // Sem UI de "carregar mais" ainda — limite alto o bastante para não cortar
+  // a listagem na prática, mas com teto real (antes não tinha nenhum),
+  // seguindo `listActiveMarketListings` já paginado no repositório.
+  const { listings } = await listActiveMarketListings(1, 60)
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10">

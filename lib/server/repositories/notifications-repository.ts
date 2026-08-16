@@ -19,6 +19,8 @@ export type Notification = {
   type: NotificationType
   actorName: string | null
   entityType: NotificationEntityType | null
+  /** Id da linha referida (ex.: comentário) — usado pelo front pra rolar até ela dentro de `link`. */
+  entityId: string | null
   link: string | null
   title: string | null
   body: string | null
@@ -58,7 +60,7 @@ export async function listNotifications(
   const [list, unread] = await Promise.all([
     db
       .from("notifications")
-      .select("id, type, actor_name, entity_type, link, title, body, amount, is_read, created_at")
+      .select("id, type, actor_name, entity_type, entity_id, link, title, body, amount, is_read, created_at")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .range(safeOffset, safeOffset + safeLimit),
@@ -86,6 +88,7 @@ export async function listNotifications(
       type: row.type,
       actorName: row.actor_name,
       entityType: row.entity_type,
+      entityId: row.entity_id,
       link: row.link,
       title: row.title,
       body: row.body,
@@ -195,6 +198,58 @@ export async function broadcastSystemNotification(params: {
     throw error
   }
   return data ?? 0
+}
+
+/**
+ * Label em português de cada status de pedido notificável. Duplica
+ * (pequeno) o texto que `/conta/pedidos` já usa em `STATUS_LABEL` — não
+ * importa de lá porque é um arquivo de front-end, e não importa o tipo
+ * `OrderStatus` de `orders-repository.ts` para evitar dependência circular
+ * entre os dois repositories.
+ */
+const ORDER_STATUS_LABEL: Record<string, string> = {
+  paid: "Pago",
+  awaiting_shipping_info: "Aguardando dados de entrega",
+  shipped: "Enviado",
+  delivered: "Entregue",
+  refunded: "Reembolsado",
+}
+
+/**
+ * Notifica o dono de um pedido que o status mudou. Chamada explícita (não
+ * trigger) a partir de orders-repository.ts — pedidos de convidado
+ * (metadata.user_id null) simplesmente não chamam isto.
+ *
+ * Diferente dos outros tipos, grava `title`/`body` já formatados em
+ * português no momento da criação (mesmo padrão do tipo `system`) em vez de
+ * montar a frase no client: pedidos já são 100% PT-BR em todo o resto do
+ * site, então não há necessidade de respeitar troca de idioma aqui.
+ *
+ * Best-effort: nunca lança. Uma falha aqui não pode derrubar a resposta da
+ * API que avançou/estornou o pedido.
+ */
+export async function notifyOrderStatusChange(params: {
+  userId: string
+  orderId: string
+  status: string
+}): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const shortId = params.orderId.slice(0, 8).toUpperCase()
+  const statusLabel = ORDER_STATUS_LABEL[params.status] ?? params.status
+
+  const { error } = await db.from("notifications").insert({
+    user_id: params.userId,
+    type: "order_status",
+    entity_type: "order",
+    entity_id: params.orderId,
+    link: "/conta/pedidos",
+    title: `Pedido #${shortId} atualizado`,
+    body: statusLabel,
+  })
+
+  if (error) {
+    console.error("[notifications-repository] notifyOrderStatusChange:", error)
+  }
 }
 
 export type SentSystemNotice = {

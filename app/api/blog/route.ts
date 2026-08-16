@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { listPublishedPosts } from "@/lib/server/repositories/blog-repository"
 
-export const revalidate = 30
+export const revalidate = 120
 
 /**
  * Endpoint público de listagem do blog.

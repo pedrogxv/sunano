@@ -11,7 +11,8 @@ import { sanitizeTagsForCategory, type Category } from "@/lib/tag-options"
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-const DEFAULT_COLUMNS = "id, name, brand_id, brands(name), category, tier, price, image_url, tags, specs, created_at"
+const DEFAULT_COLUMNS =
+  "id, name, brand_id, brands(name), category, tier, price, image_url, tags, specs, created_at, weight_g, connectivity, mouse_shape, keyboard_layout, surface, profile, panel_type, refresh_rate, tier_rank"
 const ALLOWED_COLUMNS = new Set(DEFAULT_COLUMNS.split(",").map((c) => c.trim()))
 
 /** Restringe `columns` a uma allowlist — evita que o parâmetro vindo da query
@@ -35,6 +36,15 @@ const peripheralPayload = z.object({
   image_url: z.string().nullable().optional(),
   tags: z.array(z.string()).optional(),
   specs: z.record(z.string(), z.unknown()).optional(),
+  weight_g: z.number().int().positive().nullable().optional(),
+  connectivity: z.string().max(50).nullable().optional(),
+  mouse_shape: z.string().max(50).nullable().optional(),
+  keyboard_layout: z.string().max(50).nullable().optional(),
+  surface: z.string().max(50).nullable().optional(),
+  profile: z.string().max(50).nullable().optional(),
+  panel_type: z.string().max(50).nullable().optional(),
+  refresh_rate: z.number().int().positive().nullable().optional(),
+  tier_rank: z.number().int().min(0).max(99).nullable().optional(),
 })
 
 export async function GET(request: NextRequest) {

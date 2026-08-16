@@ -13,11 +13,16 @@ import {
 import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
 import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 
-type AuthState = { error: string | null }
+type AuthState = { error: string | null; success?: boolean; mfaNext?: string }
 
 export async function loginUserAction(_: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") || "").trim()
   const password = String(formData.get("password") || "")
+  // O modal de auth (AuthModal) envia este campo oculto: em vez do
+  // `redirect()` de servidor de sempre, ele quer fechar o modal e continuar
+  // na página atual (ex.: não perder o carrinho no checkout). Sem isso, todo
+  // login pelo modal arrancaria a pessoa da página em que estava.
+  const skipRedirect = formData.get("skip_redirect") === "1"
 
   if (!email || !password) {
     return { error: "missing_credentials" }
@@ -71,10 +76,15 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
   if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
     const trustedToken = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value
     if (!(await isTrustedDevice(authData.user.id, trustedToken))) {
-      redirect(`/2fa?next=${encodeURIComponent(destination)}`)
+      const next = `/2fa?next=${encodeURIComponent(destination)}`
+      // 2FA pendente sempre precisa da tela dedicada, modal ou não — não dá
+      // para verificar o segundo fator dentro do popup de login.
+      if (skipRedirect) return { error: null, success: true, mfaNext: next }
+      redirect(next)
     }
   }
 
+  if (skipRedirect) return { error: null, success: true }
   redirect(destination)
 }
 

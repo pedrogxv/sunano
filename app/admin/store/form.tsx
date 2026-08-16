@@ -1,7 +1,18 @@
 "use client"
 
-import { useState } from "react"
-import { Loader2, Plus, Trash2, Upload } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import { restrictToParentElement } from "@dnd-kit/modifiers"
+import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { CheckCircle2, GripVertical, Loader2, Minus, Plus, Trash2, Upload, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,8 +25,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { MultiCombobox, type ComboboxOption } from "@/components/ui/combobox"
 import { cn } from "@/lib/utils"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
+import { isValidYoutubeUrl } from "@/lib/youtube-url"
+import { encodeFeature, featureLabel, isGoodFeature } from "@/lib/store-features"
+import { compressImageFile } from "@/lib/client/compress-image"
+
+interface StoreProductSpec {
+  id?: string
+  label: string
+  value: string
+}
+
+interface StoreProductVariantInput {
+  id?: string
+  label: string
+  price_cents_override: number | null
+  stock: number
+}
+
+interface StoreProductVariantRow {
+  id?: string
+  label: string
+  price_override_brl: string
+  stock: string
+}
 
 interface StoreProduct {
   id: string
@@ -26,17 +61,29 @@ interface StoreProduct {
   stock: number
   images: string[]
   category: string | null
+  brand: string | null
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   is_active: boolean
+  features?: string[]
+  video_url?: string | null
 }
 
 interface StoreProductFormProps {
   product?: StoreProduct
+  initialSpecs?: StoreProductSpec[]
+  initialVariants?: StoreProductVariantInput[]
+  initialPeripheralIds?: string[]
   defaultType?: "store" | "bazaar"
   onSuccess: (product: StoreProduct) => void
   onCancel: () => void
+}
+
+interface PeripheralOption {
+  id: string
+  name: string
+  brand: string
 }
 
 const CATEGORIES = [
@@ -56,8 +103,73 @@ const CATEGORIES = [
 ]
 
 const NO_CATEGORY = "__none__"
+const MAX_STOCK = 999_999
+const MAX_IMAGES = 8
+const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
+const IMAGE_COMPRESS_OPTIONS = {
+  maxDimension: 2000,
+  targetBytes: 1.5 * 1024 * 1024,
+  skipBelowBytes: 800 * 1024,
+}
 
-export function StoreProductForm({ product, defaultType = "store", onSuccess, onCancel }: StoreProductFormProps) {
+function SortableImageThumb({
+  url,
+  index,
+  onRemove,
+}: {
+  url: string
+  index: number
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: url,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        "group relative size-24 overflow-hidden rounded-xl border border-border bg-muted/30",
+        isDragging && "z-10 border-primary/40 shadow-lg"
+      )}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt={`Imagem ${index + 1}`} className="h-full w-full object-contain p-1" />
+      <button
+        type="button"
+        aria-label="Reordenar imagem"
+        className="absolute left-1 top-1 flex size-5 cursor-grab touch-none items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-3" />
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-red-500/80 opacity-0 transition-opacity group-hover:opacity-100"
+      >
+        <Trash2 className="size-2.5 text-white" />
+      </button>
+      {index === 0 && (
+        <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 py-0.5 text-[8px] font-semibold text-white">
+          Principal
+        </span>
+      )}
+    </div>
+  )
+}
+
+export function StoreProductForm({
+  product,
+  initialSpecs,
+  initialVariants,
+  initialPeripheralIds,
+  defaultType = "store",
+  onSuccess,
+  onCancel,
+}: StoreProductFormProps) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -68,16 +180,114 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
     price_brl: product ? (product.price_cents / 100).toFixed(2) : "",
     stock: product?.stock?.toString() ?? "1",
     category: product?.category ?? "",
+    brand: product?.brand ?? "",
     type: product?.type ?? defaultType,
     condition: product?.condition ?? (defaultType === "bazaar" ? "used" : "new"),
     condition_notes: product?.condition_notes ?? "",
     is_active: product?.is_active !== false,
+    video_url: product?.video_url ?? "",
   })
 
   const [images, setImages] = useState<string[]>(product?.images ?? [])
+  const [features, setFeatures] = useState<string[]>(product?.features ?? [])
+  const [featureInput, setFeatureInput] = useState("")
+  const [featureIsGood, setFeatureIsGood] = useState(true)
+  const featureInputRef = useRef<HTMLInputElement>(null)
+  const [specs, setSpecs] = useState<StoreProductSpec[]>(
+    initialSpecs && initialSpecs.length > 0 ? initialSpecs : [{ label: "", value: "" }]
+  )
+  const [variants, setVariants] = useState<StoreProductVariantRow[]>(
+    (initialVariants ?? []).map((v) => ({
+      id: v.id,
+      label: v.label,
+      price_override_brl: v.price_cents_override != null ? (v.price_cents_override / 100).toFixed(2) : "",
+      stock: v.stock.toString(),
+    }))
+  )
+  const [peripheralIds, setPeripheralIds] = useState<string[]>(initialPeripheralIds ?? [])
+  const [peripheralOptions, setPeripheralOptions] = useState<PeripheralOption[]>([])
+
+  useEffect(() => {
+    let mounted = true
+    fetch("/api/peripherals?limit=1000", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data: { peripherals?: PeripheralOption[] }) => {
+        if (mounted) setPeripheralOptions(data.peripherals ?? [])
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  const imageSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  function handleImageDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setImages((prev) => {
+      const oldIndex = prev.indexOf(active.id as string)
+      const newIndex = prev.indexOf(over.id as string)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
+
+  function addFeature() {
+    const value = featureInput.trim()
+    if (!value) return
+    setFeatures((prev) => [...prev, encodeFeature(value, featureIsGood)])
+    setFeatureInput("")
+    featureInputRef.current?.focus()
+  }
+
+  function updateSpec(index: number, field: "label" | "value", value: string) {
+    setSpecs((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)))
+  }
+
+  function addSpecRow() {
+    setSpecs((prev) => [...prev, { label: "", value: "" }])
+  }
+
+  function removeSpecRow(index: number) {
+    setSpecs((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function updateVariant(index: number, field: "label" | "price_override_brl" | "stock", value: string) {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)))
+  }
+
+  function addVariantRow() {
+    setVariants((prev) => [...prev, { label: "", price_override_brl: "", stock: "0" }])
+  }
+
+  function removeVariantRow(index: number) {
+    setVariants((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function bumpVariantStock(index: number, delta: number) {
+    setVariants((prev) =>
+      prev.map((v, i) => {
+        if (i !== index) return v
+        const current = parseInt(v.stock, 10)
+        const base = isNaN(current) ? 0 : current
+        const next = Math.min(MAX_STOCK, Math.max(0, base + delta))
+        return { ...v, stock: next.toString() }
+      })
+    )
+  }
 
   function set(field: string, value: string | boolean) {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function bumpStock(delta: number) {
+    setFormData((prev) => {
+      const current = parseInt(prev.stock, 10)
+      const base = isNaN(current) ? 0 : current
+      const next = Math.min(MAX_STOCK, Math.max(0, base + delta))
+      return { ...prev, stock: next.toString() }
+    })
   }
 
   async function uploadImage(file: File): Promise<string> {
@@ -95,10 +305,24 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
     const file = e.target.files?.[0]
     if (!file) return
 
+    if (images.length >= MAX_IMAGES) {
+      toast.error("Limite de imagens atingido", {
+        description: `Cada produto pode ter no máximo ${MAX_IMAGES} imagens.`,
+      })
+      e.target.value = ""
+      return
+    }
+
     setUploading(true)
     setError(null)
     try {
-      const url = await uploadImage(file)
+      const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
+      if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+        throw new Error(
+          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após compressão).`
+        )
+      }
+      const url = await uploadImage(compressed)
       setImages((prev) => [...prev, url])
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
@@ -125,8 +349,31 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
         throw new Error("Preço inválido. Use um valor maior que zero (ex: 159,90).")
       }
       const stockValue = parseInt(formData.stock, 10)
-      if (isNaN(stockValue) || stockValue < 0) {
-        throw new Error("Estoque inválido. Use um número inteiro maior ou igual a zero.")
+      if (isNaN(stockValue) || stockValue < 0 || stockValue > MAX_STOCK) {
+        throw new Error(`Estoque inválido. Use um número inteiro entre 0 e ${MAX_STOCK.toLocaleString("pt-BR")}.`)
+      }
+
+      const videoUrl = formData.video_url.trim()
+      if (videoUrl && !isValidYoutubeUrl(videoUrl)) {
+        throw new Error("URL de vídeo precisa ser um link do YouTube.")
+      }
+
+      const cleanVariants: Array<{ id?: string; label: string; price_cents_override: number | null; stock: number }> = []
+      for (const v of variants) {
+        const label = v.label.trim()
+        if (!label) continue
+        const variantStock = parseInt(v.stock, 10)
+        if (isNaN(variantStock) || variantStock < 0 || variantStock > MAX_STOCK) {
+          throw new Error(`Estoque inválido na variante "${label}".`)
+        }
+        let priceOverride: number | null = null
+        if (v.price_override_brl.trim()) {
+          priceOverride = Math.round(parseFloat(v.price_override_brl.replace(",", ".")) * 100)
+          if (isNaN(priceOverride) || priceOverride <= 0) {
+            throw new Error(`Preço inválido na variante "${label}".`)
+          }
+        }
+        cleanVariants.push({ id: v.id, label, price_cents_override: priceOverride, stock: variantStock })
       }
 
       const payload = {
@@ -136,10 +383,13 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
         stock: stockValue,
         images,
         category: formData.category || null,
+        brand: formData.brand.trim() || null,
         type: formData.type,
         condition: formData.condition,
         condition_notes: formData.condition_notes.trim() || null,
         is_active: formData.is_active,
+        features,
+        video_url: videoUrl || null,
       }
 
       const url = product
@@ -157,6 +407,46 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
 
       if (!res.ok || !data.product) {
         throw new Error(data.error ?? "Erro ao salvar produto")
+      }
+
+      const cleanSpecs = specs
+        .map((s) => ({ label: s.label.trim(), value: s.value.trim() }))
+        .filter((s) => s.label && s.value)
+
+      const specsRes = await fetch(`/api/admin/store/products/${data.product.id}/specs`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specs: cleanSpecs }),
+      })
+      if (!specsRes.ok) {
+        const specsData = (await specsRes.json()) as { error?: string }
+        toast.error("Produto salvo, mas houve erro nas especificações", {
+          description: specsData.error,
+        })
+      }
+
+      const variantsRes = await fetch(`/api/admin/store/products/${data.product.id}/variants`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variants: cleanVariants }),
+      })
+      if (!variantsRes.ok) {
+        const variantsData = (await variantsRes.json()) as { error?: string }
+        toast.error("Produto salvo, mas houve erro nas variantes", {
+          description: variantsData.error,
+        })
+      }
+
+      const peripheralsRes = await fetch(`/api/admin/store/products/${data.product.id}/peripherals`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ peripheral_ids: peripheralIds }),
+      })
+      if (!peripheralsRes.ok) {
+        const peripheralsData = (await peripheralsRes.json()) as { error?: string }
+        toast.error("Produto salvo, mas houve erro nos periféricos vinculados", {
+          description: peripheralsData.error,
+        })
       }
 
       toast.success(product ? "Produto atualizado" : "Produto criado", {
@@ -191,7 +481,7 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
         <div className="space-y-2">
           <Label>Tipo</Label>
           <Select value={formData.type} onValueChange={(v) => set("type", v)}>
-            <SelectTrigger>
+            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -204,7 +494,7 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
         <div className="space-y-2">
           <Label>Condição</Label>
           <Select value={formData.condition} onValueChange={(v) => set("condition", v)}>
-            <SelectTrigger>
+            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -233,9 +523,9 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
         </div>
       )}
 
-      {/* Name + Category */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
+      {/* Name + Category + Brand */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="space-y-2 md:col-span-2">
           <Label>Nome do produto *</Label>
           <Input
             required
@@ -249,22 +539,52 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
         </div>
 
         <div className="space-y-2">
-          <Label>Categoria</Label>
-          <Select
-            value={formData.category || NO_CATEGORY}
-            onValueChange={(v) => set("category", v === NO_CATEGORY ? "" : v)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecionar..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NO_CATEGORY}>Sem categoria</SelectItem>
-              {CATEGORIES.map((c) => (
-                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label>Marca</Label>
+          <Input
+            maxLength={80}
+            value={formData.brand}
+            onChange={(e) => set("brand", e.target.value)}
+            placeholder="Ex: Logitech"
+          />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Categoria</Label>
+        <Select
+          value={formData.category || NO_CATEGORY}
+          onValueChange={(v) => set("category", v === NO_CATEGORY ? "" : v)}
+        >
+          <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+            <SelectValue placeholder="Selecionar..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_CATEGORY}>Sem categoria</SelectItem>
+            {CATEGORIES.map((c) => (
+              <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Periféricos vinculados */}
+      <div className="space-y-2">
+        <Label>Periféricos vinculados</Label>
+        <p className="text-[10px] text-muted-foreground/60">
+          Associe este produto a um ou mais periféricos do catálogo (ex: um kit com mouse + mousepad).
+        </p>
+        <MultiCombobox
+          options={peripheralOptions.map<ComboboxOption>((p) => ({
+            value: p.id,
+            label: p.brand ? `${p.name} — ${p.brand}` : p.name,
+          }))}
+          values={peripheralIds}
+          onValuesChange={setPeripheralIds}
+          placeholder="Nenhum periférico vinculado"
+          searchPlaceholder="Buscar periférico..."
+          emptyText="Nenhum periférico encontrado."
+          allLabel="Nenhum"
+        />
       </div>
 
       {/* Description */}
@@ -307,15 +627,41 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
 
         <div className="space-y-2">
           <Label>Estoque *</Label>
-          <Input
-            required
-            type="number"
-            min={0}
-            step={1}
-            value={formData.stock}
-            onChange={(e) => set("stock", e.target.value)}
-            placeholder="1"
-          />
+          <div className="flex items-stretch gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 shrink-0"
+              onClick={() => bumpStock(-1)}
+              disabled={parseInt(formData.stock, 10) <= 0}
+              aria-label="Diminuir estoque"
+            >
+              <Minus className="size-3.5" />
+            </Button>
+            <Input
+              required
+              type="number"
+              min={0}
+              max={MAX_STOCK}
+              step={1}
+              value={formData.stock}
+              onChange={(e) => set("stock", e.target.value)}
+              placeholder="1"
+              className="no-spinner text-center"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 shrink-0"
+              onClick={() => bumpStock(1)}
+              disabled={parseInt(formData.stock, 10) >= MAX_STOCK}
+              aria-label="Aumentar estoque"
+            >
+              <Plus className="size-3.5" />
+            </Button>
+          </div>
           {isBazaar && parseInt(formData.stock) > 1 && (
             <p className="text-[10px] text-amber-400">Bazar normalmente tem estoque 1</p>
           )}
@@ -327,7 +673,7 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
             value={formData.is_active ? "active" : "inactive"}
             onValueChange={(v) => set("is_active", v === "active")}
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -338,52 +684,250 @@ export function StoreProductForm({ product, defaultType = "store", onSuccess, on
         </div>
       </div>
 
-      {/* Images */}
-      <div className="space-y-3">
-        <Label>Imagens</Label>
-        <div className="flex flex-wrap gap-3">
-          {images.map((url, idx) => (
-            <div key={url} className="group relative size-24 overflow-hidden rounded-xl border border-border bg-muted/30">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Imagem ${idx + 1}`} className="h-full w-full object-contain p-1" />
-              <button
+      {/* Variantes */}
+      <div className="space-y-2">
+        <Label>Variantes (opcional)</Label>
+        <p className="text-[10px] text-muted-foreground/60">
+          Se o produto tem variações (cor, modelo, etc.), cadastre aqui — cada uma com seu próprio
+          estoque e, se quiser, um preço diferente do preço base acima.
+        </p>
+        <div className="space-y-2">
+          {variants.map((variant, idx) => (
+            <div key={variant.id ?? idx} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/10 p-2">
+              <Input
+                value={variant.label}
+                onChange={(e) => updateVariant(idx, "label", e.target.value)}
+                placeholder="Ex: Preto"
+                className="min-w-[140px] flex-1 text-sm"
+              />
+              <div className="relative w-28 shrink-0">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={variant.price_override_brl}
+                  onChange={(e) => updateVariant(idx, "price_override_brl", e.target.value)}
+                  placeholder="Preço base"
+                  className="pl-7 text-sm"
+                />
+              </div>
+              <div className="flex items-stretch gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 shrink-0"
+                  onClick={() => bumpVariantStock(idx, -1)}
+                  disabled={parseInt(variant.stock, 10) <= 0}
+                  aria-label="Diminuir estoque da variante"
+                >
+                  <Minus className="size-3.5" />
+                </Button>
+                <Input
+                  type="number"
+                  min={0}
+                  max={MAX_STOCK}
+                  step={1}
+                  value={variant.stock}
+                  onChange={(e) => updateVariant(idx, "stock", e.target.value)}
+                  className="no-spinner w-16 text-center text-sm"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 shrink-0"
+                  onClick={() => bumpVariantStock(idx, 1)}
+                  disabled={parseInt(variant.stock, 10) >= MAX_STOCK}
+                  aria-label="Aumentar estoque da variante"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+              </div>
+              <Button
                 type="button"
-                onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
-                className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-red-500/80 opacity-0 transition-opacity group-hover:opacity-100"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground hover:text-red-400"
+                onClick={() => removeVariantRow(idx)}
               >
-                <Trash2 className="size-2.5 text-white" />
-              </button>
-              {idx === 0 && (
-                <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 py-0.5 text-[8px] font-semibold text-white">
-                  Principal
-                </span>
-              )}
+                <Trash2 className="size-3.5" />
+              </Button>
             </div>
           ))}
+        </div>
+        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addVariantRow}>
+          <Plus className="size-3.5" />
+          Adicionar variante
+        </Button>
+      </div>
 
-          <label className={cn(
-            "flex size-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-border hover:text-foreground/80",
-            uploading && "cursor-wait opacity-50"
-          )}>
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageAdd}
-              disabled={uploading}
-            />
-            {uploading ? (
-              <Loader2 className="size-5 animate-spin" />
-            ) : (
-              <>
-                <Plus className="size-5" />
-                <span className="text-[9px]">Adicionar</span>
-              </>
+      {/* Características */}
+      <div className="space-y-2">
+        <Label>Características</Label>
+        <p className="text-[10px] text-muted-foreground/60">
+          Lista de destaques do produto (ex: &quot;Sensor óptico de 26.000 DPI&quot;).
+        </p>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className={cn(
+              "shrink-0",
+              featureIsGood ? "border-emerald-500/40 text-emerald-400" : "border-red-500/40 text-red-400"
             )}
-          </label>
+            onClick={() => setFeatureIsGood((prev) => !prev)}
+            title={featureIsGood ? "Característica positiva (clique para marcar como negativa)" : "Característica negativa (clique para marcar como positiva)"}
+          >
+            {featureIsGood ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
+          </Button>
+          <Input
+            ref={featureInputRef}
+            value={featureInput}
+            onChange={(e) => setFeatureInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault()
+                addFeature()
+              }
+            }}
+            placeholder="Ex: Bateria com 95h de duração"
+            className="text-sm"
+          />
+          <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={addFeature}>
+            <Plus className="size-4" />
+          </Button>
+        </div>
+        {features.length > 0 && (
+          <ul className="space-y-1.5">
+            {features.map((feature, idx) => (
+              <li
+                key={idx}
+                className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-1.5 text-sm"
+              >
+                <span className="flex items-center gap-2 text-foreground/90">
+                  {isGoodFeature(feature) ? (
+                    <CheckCircle2 className="size-3.5 shrink-0 text-emerald-400" />
+                  ) : (
+                    <XCircle className="size-3.5 shrink-0 text-red-400" />
+                  )}
+                  {featureLabel(feature)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFeatures((prev) => prev.filter((_, i) => i !== idx))}
+                  className="text-muted-foreground hover:text-red-400"
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Especificação Técnica */}
+      <div className="space-y-2">
+        <Label>Especificação Técnica</Label>
+        <p className="text-[10px] text-muted-foreground/60">Tabela de campo/valor (ex: &quot;Sensor&quot; → &quot;PixArt PAW3395&quot;).</p>
+        <div className="space-y-2">
+          {specs.map((spec, idx) => (
+            <div key={spec.id ?? idx} className="flex gap-2">
+              <Input
+                value={spec.label}
+                onChange={(e) => updateSpec(idx, "label", e.target.value)}
+                placeholder="Campo (ex: Sensor)"
+                className="text-sm"
+              />
+              <Input
+                value={spec.value}
+                onChange={(e) => updateSpec(idx, "value", e.target.value)}
+                placeholder="Valor (ex: PixArt PAW3395)"
+                className="text-sm"
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="shrink-0 text-muted-foreground hover:text-red-400"
+                onClick={() => removeSpecRow(idx)}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            </div>
+          ))}
+        </div>
+        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addSpecRow}>
+          <Plus className="size-3.5" />
+          Adicionar campo
+        </Button>
+      </div>
+
+      {/* Vídeo de análise */}
+      <div className="space-y-2">
+        <Label>Vídeo de análise (YouTube)</Label>
+        <Input
+          value={formData.video_url}
+          onChange={(e) => set("video_url", e.target.value)}
+          placeholder="https://www.youtube.com/watch?v=..."
+          className="text-sm"
+        />
+        <p className="text-[10px] text-muted-foreground/60">Opcional. Aparece embutido na página do produto.</p>
+      </div>
+
+      {/* Images */}
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <Label>Imagens</Label>
+          <span className="text-[10px] text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <DndContext
+            sensors={imageSensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToParentElement]}
+            onDragEnd={handleImageDragEnd}
+          >
+            <SortableContext items={images} strategy={rectSortingStrategy}>
+              {images.map((url, idx) => (
+                <SortableImageThumb
+                  key={url}
+                  url={url}
+                  index={idx}
+                  onRemove={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+
+          {images.length < MAX_IMAGES && (
+            <label className={cn(
+              "flex size-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-border hover:text-foreground/80",
+              uploading && "cursor-wait opacity-50"
+            )}>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageAdd}
+                disabled={uploading}
+              />
+              {uploading ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : (
+                <>
+                  <Plus className="size-5" />
+                  <span className="text-[9px]">Adicionar</span>
+                </>
+              )}
+            </label>
+          )}
         </div>
         <p className="text-[10px] text-muted-foreground">
-          A primeira imagem é a principal. Recomendado: fundo branco ou transparente.
+          Arraste pelo ícone no canto para reordenar. A primeira imagem é a principal. Até{" "}
+          {MAX_IMAGES} imagens, {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada
+          (comprimida automaticamente se maior). Recomendado: fundo branco ou transparente.
         </p>
       </div>
 

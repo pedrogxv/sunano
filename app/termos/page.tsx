@@ -111,10 +111,14 @@ export default function TermosPage() {
           <h2>6. Compras na Loja</h2>
           <ul>
             <li>Os preços são exibidos em Reais (BRL) e incluem impostos quando aplicável.</li>
-            <li>Pagamentos são processados com segurança pelo Stripe.</li>
+            <li>Pagamentos são processados com segurança via Pix pela MisticPay.</li>
             <li>
-              Pedidos confirmados geram obrigação de pagamento. Cancelamentos e reembolsos seguem
-              a política de cancelamento disponível na página do produto.
+              Pedidos confirmados geram obrigação de pagamento. Cancelamentos, trocas e reembolsos
+              seguem a{" "}
+              <Link href="/trocas-e-devolucoes" className="text-primary hover:underline">
+                Política de Trocas e Devoluções
+              </Link>
+              , incluindo o direito de arrependimento de 7 dias.
             </li>
             <li>
               O Sunano se reserva o direito de cancelar pedidos em caso de erro de preço, fraude

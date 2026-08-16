@@ -2,7 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { ArrowLeft, ExternalLink, Package, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 import { getMarketListingDetail } from "@/lib/server/repositories/market-repository"
 
 export default async function MercadoListingPage({ params }: { params: Promise<{ id: string }> }) {

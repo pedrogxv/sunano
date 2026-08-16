@@ -36,12 +36,27 @@ function buildShareText(title: string): string {
 const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function"
 
 /**
- * Menu de compartilhar de um post (estilo Reddit): copiar link, incorporar
+ * Menu de compartilhar (estilo Reddit): copiar link, incorporar
  * (placeholder), X, WhatsApp e — quando o browser/dispositivo suporta — a
  * Web Share API nativa via "Mais opções".
+ *
+ * Por padrão monta a URL a partir de `slug` (posts do fórum); passe `url`
+ * para compartilhar uma página arbitrária (ex: comparativo de periféricos).
+ * Passe `showEmbed={false}` para ocultar a opção "Incorporar" (placeholder).
  */
-export function ShareMenu({ slug, title }: { slug: string; title: string }) {
+export function ShareMenu({
+  slug,
+  title,
+  url,
+  showEmbed = true,
+}: {
+  slug?: string
+  title: string
+  url?: string
+  showEmbed?: boolean
+}) {
   function getUrl() {
+    if (url) return url
     return `${window.location.origin}/forum/${slug}`
   }
 
@@ -93,11 +108,13 @@ export function ShareMenu({ slug, title }: { slug: string; title: string }) {
           <Link2 className="size-4" />
           Copiar link
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleEmbed} className="gap-2.5 text-muted-foreground">
-          <Code2 className="size-4" />
-          Incorporar
-          <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground/70">em breve</span>
-        </DropdownMenuItem>
+        {showEmbed && (
+          <DropdownMenuItem onSelect={handleEmbed} className="gap-2.5 text-muted-foreground">
+            <Code2 className="size-4" />
+            Incorporar
+            <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground/70">em breve</span>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleShareX} className="gap-2.5">
           <XIcon className="size-4" />

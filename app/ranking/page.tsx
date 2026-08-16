@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { getRankedPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { RankingContent } from "./ranking-content"
 
-export const revalidate = 30
+export const revalidate = 120
 
 export const metadata: Metadata = {
   title: "Ranking",

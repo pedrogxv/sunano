@@ -1,18 +1,15 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
-import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
+import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
 import { StreakBadge } from "@/components/profile/StreakBadge"
 import { Button } from "@/components/ui/button"
 import { StarRating } from "@/components/ui/star-rating"
-import { UserAvatar } from "@/components/ui/user-avatar"
 import type { AccountTier } from "@/lib/account-tier"
-import { profilePath } from "@/lib/profile-name"
 
 interface PeripheralReviewsListProps {
   peripheralId: string
@@ -24,6 +21,7 @@ type PeripheralReviewRow = {
   body: string | null
   created_at: string
   is_edited: boolean
+  user_id: string
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
@@ -99,29 +97,16 @@ export function PeripheralReviewsList({ peripheralId }: PeripheralReviewsListPro
     <div className="space-y-4">
       {reviews.map((review) => (
         <div key={review.id} className="flex gap-3 border-b border-border pb-4 last:border-0 last:pb-0">
-          <MiniProfileHoverCard slug={review.author_display_slug} side="right" align="start">
-            {review.author_display_slug ? (
-              <Link href={profilePath(review.author_display_slug)} className="shrink-0">
-                <UserAvatar name={review.author_display_name} avatarUrl={review.author_avatar_url} size={8} />
-              </Link>
-            ) : (
-              <UserAvatar name={review.author_display_name} avatarUrl={review.author_avatar_url} size={8} />
-            )}
-          </MiniProfileHoverCard>
+          <AuthorAvatarLink
+            author={{ userId: review.user_id, displayName: review.author_display_name, displaySlug: review.author_display_slug }}
+            avatarUrl={review.author_avatar_url}
+            size={8}
+          />
           <div className="min-w-0 flex-1 space-y-1">
             <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-              <MiniProfileHoverCard slug={review.author_display_slug} side="right" align="start">
-                {review.author_display_slug ? (
-                  <Link
-                    href={profilePath(review.author_display_slug)}
-                    className="font-medium text-foreground hover:underline"
-                  >
-                    {review.author_display_name}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-foreground">{review.author_display_name}</span>
-                )}
-              </MiniProfileHoverCard>
+              <AuthorNameLink
+                author={{ userId: review.user_id, displayName: review.author_display_name, displaySlug: review.author_display_slug }}
+              />
               <AuthorTierBadge tier={review.author_account_tier} />
               <AuthorSpecialTagBadge slug={review.author_display_slug} />
               <StreakBadge days={review.author_streak} size="sm" />

@@ -15,7 +15,7 @@ import { NewNewsButton } from "./new-news-button"
 
 // ISR: renderizado no servidor e revalidado em background, sem o fetch
 // client-side que exibia um spinner a cada acesso.
-export const revalidate = 30
+export const revalidate = 120
 
 // Sem isto a página herdava título e canonical da home, então o Google via
 // duas URLs distintas se declarando a mesma página e indexava só uma.

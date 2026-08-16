@@ -13,6 +13,8 @@ import { getSpecialTag } from "@/lib/special-tag"
 import { MEDAL_RARITY_STYLES } from "@/lib/profile-showcase"
 import type { ProfileShowcase } from "@/lib/profile-showcase"
 import type { ForumCategoryInfo, ForumSidebarData } from "@/lib/server/repositories/forum-repository"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 function formatCount(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
@@ -52,10 +54,10 @@ export function ForumPostSidebar({
   const categoryLabel = category ? (category.parent ? `${category.parent.name} / ${category.name}` : category.name) : null
 
   return (
-    <aside className="lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto">
+    <aside className="lg:sticky lg:top-[var(--sticky-header-h)] lg:max-h-[calc(100vh-var(--sticky-header-h)-1rem)] lg:self-start lg:overflow-y-auto">
       <div className="space-y-4 pb-1">
       {/* Card da categoria — equivalente ao "r/keyboards" do Reddit */}
-      <div className="rounded-xl border border-border bg-card p-4">
+      <div className={cn("rounded-xl p-4", CARD_SURFACE)}>
         <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <Tag className="size-4 text-primary" />
           {categoryLabel ?? "Fórum Sunano"}
@@ -66,7 +68,7 @@ export function ForumPostSidebar({
             : "Compartilhe dicas, tire dúvidas e discuta periféricos."}
         </p>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4 text-center">
+        <div className="mt-4 grid grid-cols-2 gap-3 border-t border-border/60 pt-4 text-center">
           <div>
             <p className="text-lg font-bold text-foreground">{stats.totalPosts}</p>
             <p className="text-[11px] text-muted-foreground">Tópicos no fórum</p>
@@ -88,7 +90,7 @@ export function ForumPostSidebar({
       </div>
 
       {/* Autor — equivalente ao "USER FLAIR" do Reddit, com aura/seguidores/medalhas */}
-      <div className="rounded-xl border border-border bg-card p-4">
+      <div className={cn("rounded-xl p-4", CARD_SURFACE)}>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Autor</p>
 
         <Link
@@ -123,7 +125,7 @@ export function ForumPostSidebar({
               <p className="mt-3 line-clamp-2 text-xs leading-snug text-muted-foreground">{authorProfile.bio}</p>
             )}
 
-            <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-center">
+            <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3 text-center">
               <div>
                 <p className="flex items-center justify-center gap-1 text-sm font-bold text-orange-400">
                   <span className="aura-stat-icon-holder inline-flex">
@@ -150,7 +152,7 @@ export function ForumPostSidebar({
             </div>
 
             {authorProfile.medals.length > 0 && (
-              <div className="mt-3 border-t border-border pt-3">
+              <div className="mt-3 border-t border-border/60 pt-3">
                 <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
                   <Award className="size-3" />
                   {authorProfile.medals_total} medalha{authorProfile.medals_total === 1 ? "" : "s"}
@@ -195,7 +197,7 @@ export function ForumPostSidebar({
 
       {/* Tópicos recentes da mesma categoria */}
       {stats.relatedPosts.length > 0 && (
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className={cn("rounded-xl p-4", CARD_SURFACE)}>
           <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             <MessagesSquare className="size-3.5" />
             Tópicos relacionados

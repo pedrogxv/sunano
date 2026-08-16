@@ -2,8 +2,34 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { ArrowLeftRight, Check, ChevronDown, Edit, Gem, Keyboard, Layers, LayoutGrid, Monitor, Mouse, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import {
+  ArrowLeftRight,
+  Check,
+  ChevronDown,
+  CircuitBoard,
+  Cpu,
+  Edit,
+  Footprints,
+  Gem,
+  Headphones,
+  Keyboard,
+  Layers,
+  LayoutGrid,
+  Loader2,
+  Monitor,
+  Mouse,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Sofa,
+  SquareDashedBottom,
+  ToggleLeft,
+  Trash2,
+  X,
+  Youtube,
+} from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -25,11 +51,30 @@ import { AnimatedCounter } from "@/components/animated-counter"
 import { LikeButton } from "@/components/peripherals/LikeButton"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
-import { formatCurrencyBRL } from "@/lib/stripe"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { formatCurrencyBRL } from "@/lib/format"
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { cn } from "@/lib/utils"
+import type { PeripheralFilterOptions, RankedPeripheral } from "@/lib/server/repositories/peripherals-repository"
 
 type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
 type CategoryFilter = Category | "outros"
+
+/** Ícone + cor de destaque do card por categoria — reforça o "escaneio visual" da grade. */
+const CATEGORY_CARD_STYLE: Record<Category, { icon: typeof Mouse; text: string; glow: string }> = {
+  keyboard: { icon: Keyboard, text: "text-sky-400", glow: "bg-sky-400" },
+  pcb: { icon: CircuitBoard, text: "text-sky-400", glow: "bg-sky-400" },
+  mouse: { icon: Mouse, text: "text-emerald-400", glow: "bg-emerald-400" },
+  mousepad: { icon: SquareDashedBottom, text: "text-amber-400", glow: "bg-amber-400" },
+  glasspad: { icon: SquareDashedBottom, text: "text-cyan-400", glow: "bg-cyan-400" },
+  iem: { icon: Headphones, text: "text-fuchsia-400", glow: "bg-fuchsia-400" },
+  headset: { icon: Headphones, text: "text-fuchsia-400", glow: "bg-fuchsia-400" },
+  feet: { icon: Footprints, text: "text-orange-400", glow: "bg-orange-400" },
+  chairs: { icon: Sofa, text: "text-rose-400", glow: "bg-rose-400" },
+  monitors: { icon: Monitor, text: "text-violet-400", glow: "bg-violet-400" },
+  switches: { icon: ToggleLeft, text: "text-lime-400", glow: "bg-lime-400" },
+  dac_amp: { icon: Cpu, text: "text-teal-400", glow: "bg-teal-400" },
+}
 type SortKey = "recent" | "rank" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type MouseShape = "symmetrical" | "ergonomic"
@@ -50,6 +95,7 @@ type Peripheral = {
   price: number
   ranking?: number
   score?: number
+  hasYoutubeReview?: boolean
   tags: Tag[]
   specs: {
     mouseShape?: "symmetrical" | "ergonomic"
@@ -73,6 +119,11 @@ const PRICE_MIN = 0
 
 interface PerifericosContentProps {
   initialData: Peripheral[]
+  initialTotal: number
+  initialCategory: CategoryFilter
+  initialFilterOptions: PeripheralFilterOptions
+  initialTopRanked: RankedPeripheral[]
+  pageSize: number
   showAdminActions?: boolean
 }
 
@@ -93,8 +144,6 @@ const HERO_ICONS: Record<string, React.ComponentType<{ className?: string }>> = 
   monitors: Monitor,
   outros: LayoutGrid,
 }
-
-const TIER_ORDER: Record<string, number> = { GOAT: 0, SS: 1, S: 2, A: 3, B: 4, C: 5, L: 6 }
 
 function formatLabel(value: string) {
   return value.split("-").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ")
@@ -222,29 +271,35 @@ function FilterSection({ title, children, defaultOpen = false }: { title: string
   )
 }
 
-export function PerifericosContent({ initialData: initialDataProp, showAdminActions }: PerifericosContentProps) {
+export function PerifericosContent({
+  initialData,
+  initialTotal,
+  initialCategory,
+  initialFilterOptions,
+  initialTopRanked,
+  pageSize,
+  showAdminActions,
+}: PerifericosContentProps) {
   const t = useT()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
-  const [initialData, setInitialData] = useState<Peripheral[]>(initialDataProp)
+  const [items, setItems] = useState<Peripheral[]>(initialData)
+  const [total, setTotal] = useState(initialTotal)
+  const [isFetching, setIsFetching] = useState(false)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: "", name: "" })
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [weightRange, setWeightRange] = useState<[number, number]>([WEIGHT_MIN_G, WEIGHT_MAX_G])
-
-  useEffect(() => {
-    setInitialData(initialDataProp)
-  }, [initialDataProp])
+  const [page, setPage] = useState(1)
 
   // Favoritos do usuário. O estado vive aqui (e não em cada `LikeButton`)
   // porque os cards desmontam ao trocar de categoria/filtro — se cada botão
   // guardasse o próprio estado, voltar à categoria remontaria o coração com
   // o valor da carga inicial e o like sumiria da tela.
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
-  // A página é ISR (`revalidate = 30`), então o HTML é compartilhado entre
-  // usuários e não pode trazer os favoritos embutidos. Buscá-los no cliente
-  // significa que, por um instante, todo coração apareceria vazio — inclusive
-  // os curtidos. Os botões só entram em cena depois desta resposta.
   const [likesLoaded, setLikesLoaded] = useState(false)
   useEffect(() => {
     let active = true
@@ -253,9 +308,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       .then((data: { ids?: string[] }) => {
         if (active) setLikedIds(new Set(data.ids ?? []))
       })
-      .catch(() => {
-        // Sem os ids os corações ficam vazios; o clique ainda funciona.
-      })
+      .catch(() => {})
       .finally(() => {
         if (active) setLikesLoaded(true)
       })
@@ -274,30 +327,30 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   }, [])
 
   const [query, setQuery] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>("mouse")
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
-  const [priceRange, setPriceRange] = useState<[number, number]>([PRICE_MIN, 0])
+  const debouncedQuery = useDebouncedValue(query, 400)
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>(initialCategory)
+  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([])
+  const [priceRangeOverride, setPriceRangeOverride] = useState<[number, number] | null>(null)
   const [selectedConnectivity, setSelectedConnectivity] = useState("all")
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
   const [selectedKeyboardLayout, setSelectedKeyboardLayout] = useState<KeyboardLayout | "all">("all")
-  const [selectedKeyboardType, setSelectedKeyboardType] = useState<KeyboardType | "all">("all")
   const [selectedSurface, setSelectedSurface] = useState<Surface | "all">("all")
   const [selectedProfile, setSelectedProfile] = useState<string | "all">("all")
-  const [selectedPadType, setSelectedPadType] = useState<PadType | "all">("all")
   const [selectedRefreshRate, setSelectedRefreshRate] = useState<string | "all">("all")
   const [selectedPanelType, setSelectedPanelType] = useState<PanelType | "all">("all")
   const [selectedTags, setSelectedTags] = useState<Tag[]>([])
+  const [onlyWithYoutubeReview, setOnlyWithYoutubeReview] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>("recent")
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
+
+  // Itens selecionados pro comparador: guarda os dados mínimos no momento do
+  // clique (não só o id) porque, com paginação, o item selecionado pode não
+  // estar mais presente em `items` quando o usuário troca de página/filtro.
+  const [selectedItems, setSelectedItems] = useState<{ id: string; category: Category; name: string; image_url: string | null }[]>([])
 
   const categoryLabels = t.categories.labels
   const categoryDescriptions = t.categories.descriptions
 
-  const lockedCategory = useMemo(() => {
-    if (selectedIds.length === 0) return null
-    return initialData.find((i) => i.id === selectedIds[0])?.category ?? null
-  }, [initialData, selectedIds])
-
+  const lockedCategory = selectedItems.length > 0 ? selectedItems[0].category : null
   const effectiveCategory = lockedCategory ?? selectedCategory
 
   const showConnectivityFilter = useMemo(() => {
@@ -310,231 +363,202 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
   const showKeyboardLayoutFilter = effectiveCategory === "keyboard"
   const showSurfaceFilter = effectiveCategory === "mousepad" || effectiveCategory === "glasspad"
   const showProfileFilter = effectiveCategory === "mousepad" || effectiveCategory === "glasspad"
-
-  const availableBrands = useMemo(() => {
-    const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
-    return Array.from(new Set(base.map((i) => i.brand))).sort((a, b) => a.localeCompare(b))
-  }, [initialData, effectiveCategory])
-
-  const brandOptions = useMemo(
-    () => availableBrands.map((brand) => ({ value: brand, label: brand })),
-    [availableBrands]
-  )
-
-  useEffect(() => {
-    setSelectedBrands((prev) => prev.filter((brand) => availableBrands.includes(brand)))
-  }, [availableBrands])
-
-  const availableTags = useMemo(() => {
-    const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
-    const values = new Set<Tag>()
-    base.forEach((item) => item.tags?.forEach((tag) => values.add(tag)))
-    return Array.from(values)
-  }, [initialData, effectiveCategory])
-
-  useEffect(() => {
-    setSelectedTags((prev) => prev.filter((tag) => availableTags.includes(tag)))
-  }, [availableTags])
-
-  const maxPrice = useMemo(() => {
-    const base = effectiveCategory ? initialData.filter((i) => categoryMatches(i.category, effectiveCategory)) : initialData
-    const max = Math.max(...base.map((i) => i.price), 0)
-    return Math.ceil(max / 10) * 10
-  }, [initialData, effectiveCategory])
-
-  useEffect(() => {
-    setPriceRange([PRICE_MIN, maxPrice])
-  }, [maxPrice])
-
-  const availableMouseShapes = useMemo(() => {
-    if (!showMouseShapeFilter) return [] as MouseShape[]
-    const values = new Set<MouseShape>()
-    initialData
-      .filter((item) => item.category === "mouse")
-      .forEach((item) => { if (item.specs.mouseShape) values.add(item.specs.mouseShape) })
-    return Array.from(values)
-  }, [initialData, showMouseShapeFilter])
-
-  const availableKeyboardLayouts = useMemo(() => {
-    if (!showKeyboardLayoutFilter) return [] as KeyboardLayout[]
-    const values = new Set<KeyboardLayout>()
-    initialData
-      .filter((item) => item.category === "keyboard")
-      .forEach((item) => { if (item.specs.keyboardLayout) values.add(item.specs.keyboardLayout as KeyboardLayout) })
-    return Array.from(values)
-  }, [initialData, showKeyboardLayoutFilter])
-
-  const showKeyboardTypeFilter = effectiveCategory === "keyboard"
-  const showPadTypeFilter = effectiveCategory === "mousepad"
   const showMonitorFilters = effectiveCategory === "monitors"
 
-  const availableKeyboardTypes = useMemo(() => {
-    if (!showKeyboardTypeFilter) return [] as KeyboardType[]
-    const values = new Set<KeyboardType>()
-    initialData
-      .filter((item) => item.category === "keyboard")
-      .forEach((item) => { if (item.specs.keyboardType) values.add(item.specs.keyboardType) })
-    return Array.from(values)
-  }, [initialData, showKeyboardTypeFilter])
-
-  const availablePadTypes = useMemo(() => {
-    if (!showPadTypeFilter) return [] as PadType[]
-    const values = new Set<PadType>()
-    initialData
-      .filter((item) => item.category === "mousepad")
-      .forEach((item) => { if (item.specs.padType) values.add(item.specs.padType) })
-    return Array.from(values)
-  }, [initialData, showPadTypeFilter])
-
-  const availableRefreshRates = useMemo(() => {
-    if (!showMonitorFilters) return [] as string[]
-    const rates = new Set<number>()
-    initialData
-      .filter((item) => item.category === "monitors")
-      .forEach((item) => { if (typeof item.specs.refreshRate === "number") rates.add(item.specs.refreshRate) })
-    const common = [144, 165, 240, 360, 480, 600]
-    const found = Array.from(rates).sort((a, b) => a - b)
-    return Array.from(new Set([...found, ...common])).map(String)
-  }, [initialData, showMonitorFilters])
-
-  const availablePanelTypes = useMemo(() => {
-    if (!showMonitorFilters) return [] as PanelType[]
-    const values = new Set<PanelType>()
-    initialData
-      .filter((item) => item.category === "monitors")
-      .forEach((item) => { if (item.specs.panelType) values.add(item.specs.panelType) })
-    return Array.from(values)
-  }, [initialData, showMonitorFilters])
-
-  const availableSurfaces = useMemo(() => {
-    if (!showSurfaceFilter || !effectiveCategory) return [] as Surface[]
-    const values = new Set<Surface>()
-    initialData
-      .filter((item) => item.category === effectiveCategory)
-      .forEach((item) => { if (item.specs.surface) values.add(item.specs.surface) })
-    return Array.from(values)
-  }, [initialData, effectiveCategory, showSurfaceFilter])
-
-  const availableProfiles = useMemo(() => {
-    if (!showProfileFilter || !effectiveCategory) return [] as string[]
-    const values = new Set<string>()
-    initialData
-      .filter((item) => item.category === effectiveCategory)
-      .forEach((item) => { if (item.specs.profile) values.add(String(item.specs.profile)) })
-    return Array.from(values)
-  }, [initialData, effectiveCategory, showProfileFilter])
-
-  const isWeightFiltered = showWeightFilter && (weightRange[0] > WEIGHT_MIN_G || weightRange[1] < WEIGHT_MAX_G)
-  const isPriceFiltered = priceRange[0] > PRICE_MIN || priceRange[1] < maxPrice
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const results = initialData.filter((item) => {
-      if (lockedCategory && item.category !== lockedCategory) return false
-      if (!categoryMatches(item.category, selectedCategory)) return false
-      const searchable = [item.name, item.brand, item.specs.driver ?? "", item.specs.profile ?? "", item.specs.keyboardLayout ?? ""]
-        .join(" ").toLowerCase()
-      return (
-        (q === "" || searchable.includes(q)) &&
-        (selectedBrands.length === 0 || selectedBrands.includes(item.brand)) &&
-        (!isPriceFiltered || (item.price >= priceRange[0] && item.price <= priceRange[1])) &&
-        (!showConnectivityFilter || selectedConnectivity === "all" || item.specs.connectivity === selectedConnectivity) &&
-        (!showMouseShapeFilter || selectedMouseShape === "all" || item.specs.mouseShape === selectedMouseShape) &&
-        (!showKeyboardLayoutFilter || selectedKeyboardLayout === "all" || item.specs.keyboardLayout === selectedKeyboardLayout) &&
-        (!showKeyboardTypeFilter || selectedKeyboardType === "all" || item.specs.keyboardType === selectedKeyboardType) &&
-        (!showSurfaceFilter || selectedSurface === "all" || item.specs.surface === selectedSurface) &&
-        (!showPadTypeFilter || selectedPadType === "all" || item.specs.padType === selectedPadType) &&
-        (!showProfileFilter || selectedProfile === "all" || item.specs.profile === selectedProfile) &&
-        (!showMonitorFilters || selectedRefreshRate === "all" || Number(item.specs.refreshRate) === Number(selectedRefreshRate)) &&
-        (!showMonitorFilters || selectedPanelType === "all" || item.specs.panelType === selectedPanelType) &&
-        (!isWeightFiltered || item.specs.weightG === undefined || (item.specs.weightG >= weightRange[0] && item.specs.weightG <= weightRange[1])) &&
-        (selectedTags.length === 0 || selectedTags.some((tag) => item.tags?.includes(tag)))
-      )
-    })
-
-    const sorted = [...results]
-    switch (sortKey) {
-      case "rank":       sorted.sort((a, b) => (TIER_ORDER[a.tier ?? ""] ?? 99) - (TIER_ORDER[b.tier ?? ""] ?? 99) || a.name.localeCompare(b.name)); break
-      case "name-asc":   sorted.sort((a, b) => a.name.localeCompare(b.name)); break
-      case "name-desc":  sorted.sort((a, b) => b.name.localeCompare(a.name)); break
-      case "price-asc":  sorted.sort((a, b) => a.price - b.price || a.name.localeCompare(b.name)); break
-      case "price-desc": sorted.sort((a, b) => b.price - a.price || a.name.localeCompare(b.name)); break
+  // Opções de filtro (marcas/specs) pré-computadas pelo servidor — filtradas
+  // pela categoria atual, recarregadas por troca de categoria (não a cada
+  // keystroke). Aceita ficar levemente desatualizada entre janelas de cache
+  // em troca de não escanear o dataset a cada filtro.
+  const [filterOptions, setFilterOptions] = useState<PeripheralFilterOptions>(initialFilterOptions)
+  useEffect(() => {
+    if (!effectiveCategory || effectiveCategory === "outros") {
+      setFilterOptions((prev) => ({ ...prev, brands: [], mouseShapes: [], keyboardLayouts: [], surfaces: [], profiles: [], refreshRates: [], panelTypes: [] }))
+      return
     }
-    return sorted
-  }, [
-    initialData, query, selectedCategory, selectedBrands, selectedConnectivity,
-    selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedSurface, selectedProfile,
-    selectedPadType, selectedRefreshRate, selectedPanelType, selectedTags, sortKey, lockedCategory,
-    showConnectivityFilter, showMouseShapeFilter, showKeyboardLayoutFilter, showKeyboardTypeFilter,
-    showSurfaceFilter, showProfileFilter, showPadTypeFilter, showMonitorFilters,
-    isWeightFiltered, weightRange, isPriceFiltered, priceRange,
-  ])
+    fetch(`/api/peripherals/filter-options?category=${effectiveCategory}`)
+      .then((res) => res.json())
+      .then((data: PeripheralFilterOptions) => setFilterOptions((prev) => ({ ...data, categoryCounts: prev.categoryCounts })))
+      .catch(() => {})
+  }, [effectiveCategory])
 
-  const activeFiltersCount = useMemo(() =>
-    [selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType]
-      .filter((v) => v !== "all").length + selectedBrands.length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0) + (isPriceFiltered ? 1 : 0) + selectedTags.length,
-    [query, selectedBrands, selectedCategory, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedKeyboardType, selectedPadType, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered, isPriceFiltered, selectedTags]
+  // Contagem por categoria pros hero cards — sempre sobre TODAS as
+  // categorias (sem filtro), independente da categoria selecionada. Busca
+  // uma vez ao montar; não recarrega a cada troca de categoria porque não
+  // muda com o filtro atual.
+  useEffect(() => {
+    fetch("/api/peripherals/filter-options")
+      .then((res) => res.json())
+      .then((data: PeripheralFilterOptions) => setFilterOptions((prev) => ({ ...prev, categoryCounts: data.categoryCounts })))
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const brandOptions = useMemo(
+    () => filterOptions.brands.map(({ id, name }) => ({ value: id, label: name })),
+    [filterOptions.brands]
   )
 
-  const heroCategoryStats = useMemo(() => {
-    const counts = CATEGORIES.reduce<Record<string, number>>((acc, cat) => {
-      acc[cat] = initialData.filter((i) => i.category === cat).length
-      return acc
-    }, {})
-    const othersCount = HERO_OTHER_CATEGORIES.reduce((sum, cat) => sum + (counts[cat] ?? 0), 0)
-    return [
-      ...HERO_MAIN_CATEGORIES.map((cat) => ({ key: cat as CategoryFilter, label: categoryLabels[cat], count: counts[cat] ?? 0 })),
-      { key: "outros" as CategoryFilter, label: t.categories.others, count: othersCount },
-    ]
-  }, [initialData, categoryLabels])
+  useEffect(() => {
+    setSelectedBrandIds((prev) => prev.filter((id) => filterOptions.brands.some((b) => b.id === id)))
+    setSelectedTags((prev) => prev.filter((tag) => filterOptions.tags.includes(tag)))
+  }, [filterOptions])
 
-  const resetFilters = () => {
-    setQuery("")
-    setSelectedCategory("mouse")
-    setSelectedBrands([])
-    setPriceRange([PRICE_MIN, maxPrice])
-    setSelectedConnectivity("all")
-    setSelectedMouseShape("all")
-    setSelectedKeyboardLayout("all")
-    setSelectedKeyboardType("all")
-    setSelectedSurface("all")
-    setSelectedProfile("all")
-    setSelectedPadType("all")
-    setSelectedRefreshRate("all")
-    setSelectedPanelType("all")
-    setSelectedTags([])
-    setWeightRange([WEIGHT_MIN_G, WEIGHT_MAX_G])
-    setSortKey("recent")
-  }
+  const maxPrice = useMemo(() => Math.ceil((filterOptions.priceMax || 0) / 10) * 10, [filterOptions.priceMax])
+  useEffect(() => {
+    setPriceRangeOverride(null)
+  }, [maxPrice])
+  const priceRange = priceRangeOverride ?? [PRICE_MIN, maxPrice]
+  const setPriceRange = setPriceRangeOverride
+  const isPriceFiltered = priceRange[0] > PRICE_MIN || priceRange[1] < maxPrice
+  const isWeightFiltered = showWeightFilter && (weightRange[0] > WEIGHT_MIN_G || weightRange[1] < WEIGHT_MAX_G)
 
   useEffect(() => {
     if (!showConnectivityFilter) setSelectedConnectivity("all")
     if (!showMouseShapeFilter) setSelectedMouseShape("all")
     if (!showKeyboardLayoutFilter) setSelectedKeyboardLayout("all")
-    if (!showKeyboardTypeFilter) setSelectedKeyboardType("all")
     if (!showSurfaceFilter) setSelectedSurface("all")
     if (!showProfileFilter) setSelectedProfile("all")
-    if (!showPadTypeFilter) setSelectedPadType("all")
     if (!showMonitorFilters) { setSelectedRefreshRate("all"); setSelectedPanelType("all") }
     if (!showWeightFilter) setWeightRange([WEIGHT_MIN_G, WEIGHT_MAX_G])
-  }, [showConnectivityFilter, showMouseShapeFilter, showKeyboardLayoutFilter, showKeyboardTypeFilter, showSurfaceFilter, showProfileFilter, showPadTypeFilter, showMonitorFilters, showWeightFilter])
+  }, [showConnectivityFilter, showMouseShapeFilter, showKeyboardLayoutFilter, showSurfaceFilter, showProfileFilter, showMonitorFilters, showWeightFilter])
 
-  const toggleSelection = (id: string, category: Category) => {
-    setSelectedIds((prev) => {
-      if (prev.includes(id)) {
-        const next = prev.filter((i) => i !== id)
-        if (next.length === 0) setSelectedCategory("mouse")
-        return next
+  // Top ranking por categoria — vem do servidor (endpoint dedicado), não
+  // depende de `items` (que agora é só a página atual).
+  const [topRanked, setTopRanked] = useState<RankedPeripheral[]>(initialTopRanked)
+  useEffect(() => {
+    if (!effectiveCategory || effectiveCategory === "outros") {
+      setTopRanked([])
+      return
+    }
+    fetch(`/api/peripherals/ranked?category=${effectiveCategory}&limit=3`)
+      .then((res) => res.json())
+      .then((data: { items: RankedPeripheral[] }) => setTopRanked(data.items ?? []))
+      .catch(() => {})
+  }, [effectiveCategory])
+
+  const activeFiltersCount = useMemo(() =>
+    [selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType]
+      .filter((v) => v !== "all").length + selectedBrandIds.length + (query.trim() ? 1 : 0) + (isWeightFiltered ? 1 : 0) + (isPriceFiltered ? 1 : 0) + selectedTags.length + (onlyWithYoutubeReview ? 1 : 0),
+    [query, selectedBrandIds, selectedConnectivity, selectedMouseShape, selectedKeyboardLayout, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, isWeightFiltered, isPriceFiltered, selectedTags, onlyWithYoutubeReview]
+  )
+
+  const heroCategoryStats = useMemo(() => {
+    const counts = filterOptions.categoryCounts
+    const othersCount = HERO_OTHER_CATEGORIES.reduce((sum, cat) => sum + (counts[cat] ?? 0), 0)
+    return [
+      ...HERO_MAIN_CATEGORIES.map((cat) => ({ key: cat as CategoryFilter, label: categoryLabels[cat], count: counts[cat] ?? 0 })),
+      { key: "outros" as CategoryFilter, label: t.categories.others, count: othersCount },
+    ]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterOptions.categoryCounts, categoryLabels])
+
+  const resetFilters = () => {
+    setQuery("")
+    setSelectedBrandIds([])
+    setPriceRangeOverride(null)
+    setSelectedConnectivity("all")
+    setSelectedMouseShape("all")
+    setSelectedKeyboardLayout("all")
+    setSelectedSurface("all")
+    setSelectedProfile("all")
+    setSelectedRefreshRate("all")
+    setSelectedPanelType("all")
+    setSelectedTags([])
+    setOnlyWithYoutubeReview(false)
+    setWeightRange([WEIGHT_MIN_G, WEIGHT_MAX_G])
+    setSortKey("recent")
+  }
+
+  const toggleSelection = (item: Peripheral) => {
+    setSelectedItems((prev) => {
+      if (prev.some((i) => i.id === item.id)) {
+        return prev.filter((i) => i.id !== item.id)
       }
-      if (prev.length === 0) setSelectedCategory(category)
-      return [...prev, id]
+      if (prev.length > 0 && prev[0].category !== item.category) return prev
+      return [...prev, { id: item.id, category: item.category, name: item.name, image_url: item.image_url }]
     })
   }
 
-  const clearSelection = () => {
-    setSelectedIds([])
-    setSelectedCategory("mouse")
-  }
+  const clearSelection = () => setSelectedItems([])
+
+  // Volta pra página 1 sempre que um filtro (não a página em si) muda.
+  const filterKey = [
+    selectedCategory, debouncedQuery, selectedBrandIds.join(","), selectedConnectivity, selectedMouseShape,
+    selectedKeyboardLayout, selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType,
+    selectedTags.join(","), onlyWithYoutubeReview, sortKey, priceRange[0], priceRange[1], weightRange[0], weightRange[1],
+  ].join("|")
+  const prevFilterKey = useRef(filterKey)
+  useEffect(() => {
+    if (prevFilterKey.current !== filterKey) {
+      prevFilterKey.current = filterKey
+      setPage(1)
+    }
+  }, [filterKey])
+
+  const isFirstRun = useRef(true)
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (selectedCategory !== "outros") params.set("category", selectedCategory)
+    else if (HERO_OTHER_CATEGORIES.length > 0) params.set("category", HERO_OTHER_CATEGORIES.join(","))
+    if (debouncedQuery.trim()) params.set("search", debouncedQuery.trim())
+    if (selectedBrandIds.length > 0) params.set("brandIds", selectedBrandIds.join(","))
+    if (isPriceFiltered) { params.set("priceMin", String(priceRange[0])); params.set("priceMax", String(priceRange[1])) }
+    if (selectedConnectivity !== "all") params.set("connectivity", selectedConnectivity)
+    if (selectedMouseShape !== "all") params.set("mouseShape", selectedMouseShape)
+    if (isWeightFiltered) { params.set("weightMin", String(weightRange[0])); params.set("weightMax", String(weightRange[1])) }
+    if (selectedKeyboardLayout !== "all") params.set("keyboardLayout", selectedKeyboardLayout)
+    if (selectedSurface !== "all") params.set("surface", selectedSurface)
+    if (selectedProfile !== "all") params.set("profile", selectedProfile)
+    if (selectedRefreshRate !== "all") params.set("refreshRate", selectedRefreshRate)
+    if (selectedPanelType !== "all") params.set("panelType", selectedPanelType)
+    if (selectedTags.length > 0) params.set("tags", selectedTags.join(","))
+    if (sortKey !== "recent") params.set("sort", sortKey)
+    params.set("page", String(page))
+    params.set("pageSize", String(pageSize))
+
+    if (isFirstRun.current) {
+      isFirstRun.current = false
+      if (selectedCategory === initialCategory && page === 1 && !debouncedQuery && activeFiltersCount === 0) {
+        return
+      }
+    }
+
+    setIsFetching(true)
+    const controller = new AbortController()
+    fetch(`/api/peripherals/list?${params}`, { signal: controller.signal })
+      .then((res) => res.json())
+      .then((data: { items: Peripheral[]; total: number }) => {
+        setItems(data.items)
+        setTotal(data.total)
+      })
+      .catch((err) => {
+        if (err?.name !== "AbortError") setItems([])
+      })
+      .finally(() => setIsFetching(false))
+
+    // Filtro de youtube review não tem coluna dedicada — filtra client-side
+    // sobre a página já carregada (custo baixo, não motiva coluna extra).
+    return () => controller.abort()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory, debouncedQuery, selectedBrandIds.join(","), isPriceFiltered, priceRange[0], priceRange[1],
+      selectedConnectivity, selectedMouseShape, isWeightFiltered, weightRange[0], weightRange[1], selectedKeyboardLayout,
+      selectedSurface, selectedProfile, selectedRefreshRate, selectedPanelType, selectedTags.join(","), sortKey, page, pageSize])
+
+  // Reflete a categoria selecionada na URL (compartilhável), sem recarregar.
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set("category", selectedCategory)
+    const next = params.toString()
+    if (next !== searchParams.toString()) {
+      router.replace(`${pathname}?${next}`, { scroll: false })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory])
+
+  const visibleItems = useMemo(() => {
+    if (!onlyWithYoutubeReview) return items
+    return items.filter((item) => item.hasYoutubeReview === true)
+  }, [items, onlyWithYoutubeReview])
 
   async function handleConfirmDelete() {
     if (!deleteDialog.id) return
@@ -545,8 +569,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       const res = await fetch(`/api/admin/peripherals/${deleteDialog.id}`, { method: "DELETE" })
       const data = (await res.json().catch(() => null)) as { error?: string } | null
       if (!res.ok) throw new Error(data?.error ?? (t.peripherals.delete.failed))
-      setInitialData((prev) => prev.filter((p) => p.id !== deleteDialog.id))
-      setSelectedIds((prev) => prev.filter((sid) => sid !== deleteDialog.id))
+      setItems((prev) => prev.filter((p) => p.id !== deleteDialog.id))
+      setTotal((prev) => Math.max(0, prev - 1))
+      setSelectedItems((prev) => prev.filter((sid) => sid.id !== deleteDialog.id))
       setDeleteDialog({ open: false, id: "", name: "" })
       toast.success(t.peripherals.delete.success, { description: name })
     } catch (err) {
@@ -563,6 +588,8 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
     t.peripherals.subtitle
   )
 
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
   const sidebarFilters = (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       {/* Category selector */}
@@ -573,7 +600,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
         <Select
           value={selectedCategory}
           onValueChange={(v) => setSelectedCategory(v as CategoryFilter)}
-          disabled={selectedIds.length > 0 && lockedCategory !== null}
+          disabled={selectedItems.length > 0 && lockedCategory !== null}
         >
           <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
             <SelectValue />
@@ -583,12 +610,12 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
               <SelectItem
                 key={cat}
                 value={cat}
-                disabled={selectedIds.length > 0 && lockedCategory !== null && cat !== lockedCategory}
+                disabled={selectedItems.length > 0 && lockedCategory !== null && cat !== lockedCategory}
               >
                 {categoryLabels[cat]}
               </SelectItem>
             ))}
-            <SelectItem value="outros" disabled={selectedIds.length > 0 && lockedCategory !== null}>
+            <SelectItem value="outros" disabled={selectedItems.length > 0 && lockedCategory !== null}>
               {t.categories.others}
             </SelectItem>
           </SelectContent>
@@ -633,8 +660,8 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       <FilterSection title={t.common.brand}>
         <MultiCombobox
           options={brandOptions}
-          values={selectedBrands}
-          onValuesChange={setSelectedBrands}
+          values={selectedBrandIds}
+          onValuesChange={setSelectedBrandIds}
           placeholder={t.filters.allBrands}
           searchPlaceholder={t.filters.searchBrand}
           allLabel={t.filters.allBrands}
@@ -664,7 +691,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       )}
 
       {/* Mouse shape */}
-      {showMouseShapeFilter && availableMouseShapes.length > 0 && (
+      {showMouseShapeFilter && filterOptions.mouseShapes.length > 0 && (
         <FilterSection title={t.filters.shape}>
           <Select value={selectedMouseShape} onValueChange={(v) => setSelectedMouseShape(v as MouseShape | "all")}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
@@ -672,9 +699,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t.common.any}</SelectItem>
-              {availableMouseShapes.map((shape) => (
+              {filterOptions.mouseShapes.map((shape) => (
                 <SelectItem key={shape} value={shape}>
-                  {shape === "symmetrical" ? t.filters.symmetrical : t.filters.ergonomic}
+                  {shape === "symmetrical" ? t.filters.symmetrical : shape === "ergonomic" ? t.filters.ergonomic : formatLabel(shape)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -690,7 +717,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       )}
 
       {/* Keyboard layout */}
-      {showKeyboardLayoutFilter && availableKeyboardLayouts.length > 0 && (
+      {showKeyboardLayoutFilter && filterOptions.keyboardLayouts.length > 0 && (
         <FilterSection title="Layout">
           <Select value={selectedKeyboardLayout} onValueChange={(v) => setSelectedKeyboardLayout(v as KeyboardLayout | "all")}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
@@ -698,7 +725,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t.common.any}</SelectItem>
-              {availableKeyboardLayouts.map((layout) => (
+              {filterOptions.keyboardLayouts.map((layout) => (
                 <SelectItem key={layout} value={layout}>{layout.toUpperCase()}</SelectItem>
               ))}
             </SelectContent>
@@ -706,27 +733,8 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
         </FilterSection>
       )}
 
-      {/* Keyboard type */}
-      {showKeyboardTypeFilter && availableKeyboardTypes.length > 0 && (
-        <FilterSection title={t.common.type}>
-          <Select value={selectedKeyboardType} onValueChange={(v) => setSelectedKeyboardType(v as KeyboardType | "all")}>
-            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t.common.any}</SelectItem>
-              {availableKeyboardTypes.map((kbType) => (
-                <SelectItem key={kbType} value={kbType}>
-                  {kbType === "mechanical" ? t.filters.mechanical : kbType === "magnetic" ? t.filters.magnetic : t.filters.optical}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterSection>
-      )}
-
       {/* Surface */}
-      {showSurfaceFilter && availableSurfaces.length > 0 && (
+      {showSurfaceFilter && filterOptions.surfaces.length > 0 && (
         <FilterSection title={t.filters.surface}>
           <Select value={selectedSurface} onValueChange={(v) => setSelectedSurface(v as Surface | "all")}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
@@ -734,28 +742,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t.common.any}</SelectItem>
-              {availableSurfaces.map((surface) => (
+              {filterOptions.surfaces.map((surface) => (
                 <SelectItem key={surface} value={surface}>
-                  {surface === "cloth" ? t.filters.cloth : surface === "glass" ? t.filters.glass : t.filters.hybrid}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterSection>
-      )}
-
-      {/* Pad type */}
-      {showPadTypeFilter && availablePadTypes.length > 0 && (
-        <FilterSection title={t.filters.padType}>
-          <Select value={selectedPadType} onValueChange={(v) => setSelectedPadType(v as PadType | "all")}>
-            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t.common.any}</SelectItem>
-              {availablePadTypes.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p === "speed" ? "Speed" : p === "control" ? "Control" : t.filters.hybrid}
+                  {surface === "cloth" ? t.filters.cloth : surface === "glass" ? t.filters.glass : surface === "hybrid" ? t.filters.hybrid : formatLabel(surface)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -764,7 +753,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       )}
 
       {/* Profile */}
-      {showProfileFilter && availableProfiles.length > 0 && (
+      {showProfileFilter && filterOptions.profiles.length > 0 && (
         <FilterSection title={t.filters.profile}>
           <Select value={selectedProfile} onValueChange={setSelectedProfile}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
@@ -772,7 +761,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">{t.common.any}</SelectItem>
-              {availableProfiles.map((profile) => (
+              {filterOptions.profiles.map((profile) => (
                 <SelectItem key={profile} value={profile}>{formatLabel(profile)}</SelectItem>
               ))}
             </SelectContent>
@@ -790,8 +779,8 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t.common.any}</SelectItem>
-                {availableRefreshRates.map((r) => (
-                  <SelectItem key={r} value={r}>{r} Hz</SelectItem>
+                {filterOptions.refreshRates.map((r) => (
+                  <SelectItem key={r} value={String(r)}>{r} Hz</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -804,7 +793,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t.common.any}</SelectItem>
-                {availablePanelTypes.map((p) => (
+                {filterOptions.panelTypes.map((p) => (
                   <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                 ))}
               </SelectContent>
@@ -814,19 +803,20 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       )}
 
       {/* Tags */}
-      {availableTags.length > 0 && (
+      {filterOptions.tags.length > 0 && (
         <FilterSection title={t.filters.tags}>
           <div className="flex flex-wrap gap-1.5">
-            {availableTags.map((tag) => {
-              const active = selectedTags.includes(tag)
-              const style = CARD_TAG_STYLES[tag]
+            {filterOptions.tags.map((tag) => {
+              const active = selectedTags.includes(tag as Tag)
+              const style = CARD_TAG_STYLES[tag as Tag]
+              if (!style) return null
               return (
                 <button
                   key={tag}
                   type="button"
                   onClick={() =>
                     setSelectedTags((prev) =>
-                      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+                      prev.includes(tag as Tag) ? prev.filter((t) => t !== tag) : [...prev, tag as Tag]
                     )
                   }
                   className={cn(
@@ -837,13 +827,30 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                   )}
                 >
                   <span className={cn("size-1.5 rounded-full", active ? style.dot : "bg-muted-foreground/40")} />
-                  {formatTagLabel(tag, effectiveCategory ?? undefined)}
+                  {formatTagLabel(tag as Tag, effectiveCategory ?? undefined)}
                 </button>
               )
             })}
           </div>
         </FilterSection>
       )}
+
+      {/* Review no Youtube */}
+      <div className="border-b border-border p-4">
+        <button
+          type="button"
+          onClick={() => setOnlyWithYoutubeReview((v) => !v)}
+          className={cn(
+            "flex w-full items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors",
+            onlyWithYoutubeReview
+              ? "border-red-500/40 bg-red-500/10 text-red-400"
+              : "border-border bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          )}
+        >
+          <Youtube className="size-4" />
+          {t.filters.youtubeReview}
+        </button>
+      </div>
 
       {/* Clear filters */}
       {activeFiltersCount > 0 && (
@@ -953,7 +960,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       {/* Mobile filter toggle */}
       <div className="flex items-center justify-between md:hidden">
         <p className="text-xs text-muted-foreground">
-          {t.filters.productCount(filtered.length)}
+          {t.filters.productCount(total)}
         </p>
         <Button
           variant="outline"
@@ -977,7 +984,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
       {/* Two-column layout */}
       <div className="flex items-start gap-8">
         {/* Left sidebar — desktop only */}
-        <aside className="hidden w-[260px] shrink-0 md:block md:sticky md:top-4">
+        <aside className="hidden w-[260px] shrink-0 md:block md:sticky md:top-[var(--sticky-header-h)]">
           {sidebarFilters}
         </aside>
 
@@ -993,71 +1000,59 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
             </p>
             <div className="mt-4 flex items-center gap-3">
               <span className="text-sm font-medium text-muted-foreground">
-                {t.filters.productCount(filtered.length)}
+                {t.filters.productCount(total)}
               </span>
               {activeFiltersCount > 0 && (
                 <span className="text-xs text-muted-foreground/60">
                   · {activeFiltersCount} {t.filters.activeFilters}
                 </span>
               )}
+              {isFetching && <Loader2 className="size-3.5 animate-spin text-muted-foreground/60" />}
             </div>
           </div>
 
           {/* Ranking list */}
-          {(() => {
-            const ranked = initialData
-              .filter((p) => categoryMatches(p.category, selectedCategory) && typeof p.score === "number" && (p.score as number) > 0)
-              .sort((a, b) => (b.score as number) - (a.score as number))
-              .slice(0, 3)
-            if (ranked.length === 0) return null
-            return (
-              <div className="mb-8">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                  {t.peripherals.ranking}
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {ranked.map((item, index) => {
-                    const href = `/perifericos/${buildPeripheralSlug(item.name, item.id)}`
-                    return (
-                      <Link
-                        key={item.id}
-                        href={href}
-                        className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 transition-all hover:bg-muted/40"
+          {topRanked.length > 0 && (
+            <div className="mb-8">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {t.peripherals.ranking}
+              </p>
+              <div className="flex flex-col gap-1.5">
+                {topRanked.map((item, index) => {
+                  const href = `/perifericos/${buildPeripheralSlug(item.name, item.id)}`
+                  return (
+                    <Link
+                      key={item.id}
+                      href={href}
+                      className="flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2 transition-all hover:bg-muted/40"
+                    >
+                      <span
+                        className={cn(
+                          "w-7 text-center text-lg font-black tabular-nums",
+                          index === 0
+                            ? "text-yellow-400"
+                            : index === 1
+                            ? "text-zinc-300"
+                            : "text-amber-600"
+                        )}
                       >
-                        <span
-                          className={cn(
-                            "w-7 text-center text-lg font-black tabular-nums",
-                            index === 0
-                              ? "text-yellow-400"
-                              : index === 1
-                              ? "text-zinc-300"
-                              : "text-amber-600"
-                          )}
-                        >
-                          #{index + 1}
-                        </span>
-                        {item.image_url && (
-                          <Image src={item.image_url} alt={item.name} width={36} height={36} className="size-9 rounded-lg bg-muted/30 object-contain p-0.5" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
-                          <p className="text-xs text-muted-foreground">{item.brand}</p>
-                        </div>
-                        {item.tier && (
-                          <span className="rounded-md bg-muted/50 px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
-                            {item.tier}
-                          </span>
-                        )}
-                      </Link>
-                    )
-                  })}
-                </div>
+                        #{index + 1}
+                      </span>
+                      {item.image_url && (
+                        <Image src={item.image_url} alt={item.name} width={36} height={36} className="size-9 rounded-lg bg-muted/30 object-contain p-0.5" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
-            )
-          })()}
+            </div>
+          )}
 
           {/* Grid */}
-          {filtered.length === 0 ? (
+          {visibleItems.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-12 text-center">
               <p className="text-sm text-muted-foreground">
                 {t.peripherals.notFound}
@@ -1067,9 +1062,11 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
               </p>
             </div>
           ) : (
-            <div className="grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {filtered.map((item) => {
-                const isSelected = selectedIds.includes(item.id)
+            <div className={cn("grid items-start gap-3 sm:grid-cols-2 xl:grid-cols-3 transition-opacity", isFetching && "opacity-60")}>
+              {visibleItems.map((item) => {
+                const isSelected = selectedItems.some((i) => i.id === item.id)
+                const categoryStyle = CATEGORY_CARD_STYLE[item.category]
+                const CategoryIcon = categoryStyle.icon
 
                 const cardHref = showAdminActions
                   ? `/admin/perifericos/${item.id}`
@@ -1080,15 +1077,23 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                     key={item.id}
                     href={cardHref}
                     className={cn(
-                      "group relative flex flex-col rounded-xl border bg-card transition-all duration-200",
-                      "hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/30",
-                      isSelected
-                        ? "border-primary/50 ring-1 ring-primary/25 shadow-lg shadow-primary/5"
-                        : "border-border hover:border-border/70"
+                      "group relative flex flex-col overflow-hidden rounded-xl border transition-all duration-200",
+                      CARD_SURFACE,
+                      "hover:-translate-y-1 hover:shadow-xl hover:shadow-black/30",
+                      isSelected && "border-primary/50 ring-1 ring-primary/25 shadow-lg shadow-primary/5"
                     )}
                   >
+                    {/* Glow sutil na cor da categoria, só visível no hover — reforça a identidade sem competir com o conteúdo. */}
+                    <div
+                      aria-hidden="true"
+                      className={cn(
+                        "pointer-events-none absolute inset-0 rounded-xl opacity-0 transition-opacity duration-300 group-hover:opacity-[0.07]",
+                        "[mask-image:radial-gradient(120%_60%_at_50%_0%,black,transparent)]",
+                        categoryStyle.glow
+                      )}
+                    />
                     {/* Image area */}
-                    <div className="relative overflow-hidden rounded-t-xl border-b border-border bg-muted/10">
+                    <div className="relative overflow-hidden rounded-t-xl border-b border-border/60 bg-background/40">
                       {/* A listagem do admin é de gestão do catálogo, não de
                           consumo — favoritar ali não faz sentido. */}
                       {!showAdminActions && (
@@ -1128,10 +1133,15 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                     </div>
 
                     {/* Content */}
-                    <div className="flex flex-1 flex-col gap-3 p-4">
+                    <div className="relative flex flex-1 flex-col gap-3 p-4">
                       <div>
-                        <h3 className="truncate text-sm font-semibold leading-tight text-foreground">{item.name}</h3>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{item.brand}</p>
+                        <h3 className="flex items-center gap-1.5 truncate text-xs font-bold uppercase tracking-wide leading-tight text-foreground">
+                          <CategoryIcon
+                            className={cn("size-3.5 shrink-0 transition-colors duration-200", categoryStyle.text)}
+                          />
+                          <span className="truncate">{item.name}</span>
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">{item.brand}</p>
                       </div>
 
                       <span className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-sm font-bold text-emerald-300">
@@ -1182,7 +1192,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                           onClick={(e) => {
                             e.preventDefault()
                             e.stopPropagation()
-                            toggleSelection(item.id, item.category)
+                            toggleSelection(item)
                           }}
                           className={cn(
                             "flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all",
@@ -1204,33 +1214,54 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
               })}
             </div>
           )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="mt-6 flex items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page <= 1 || isFetching}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                Anterior
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Página {page} de {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages || isFetching}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                Próxima
+              </Button>
+            </div>
+          )}
         </main>
       </div>
 
       {/* Floating compare bar */}
-      {selectedIds.length > 0 && (
+      {selectedItems.length > 0 && (
         <div className="fixed bottom-[calc(1.5rem_+_env(safe-area-inset-bottom))] left-1/2 z-50 w-full max-w-[calc(100vw-1rem)] -translate-x-1/2 px-4 sm:w-auto">
           <div className="flex items-center justify-center gap-3 rounded-2xl border border-border/60 bg-card/95 px-4 py-3 shadow-2xl shadow-black/50 backdrop-blur-md">
             <div className="flex items-center gap-1.5">
-              {selectedIds.slice(0, 3).map((id) => {
-                const item = initialData.find((i) => i.id === id)
-                if (!item) return null
-                return (
-                  <div key={id} className="size-8 overflow-hidden rounded-lg border border-border bg-muted/40">
-                    {item.image_url ? (
-                      <Image src={item.image_url} alt={item.name} width={32} height={32} className="h-full w-full object-contain p-0.5" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">
-                        {item.brand.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
+              {selectedItems.slice(0, 3).map((item) => (
+                <div key={item.id} className="size-8 overflow-hidden rounded-lg border border-border bg-muted/40">
+                  {item.image_url ? (
+                    <Image src={item.image_url} alt={item.name} width={32} height={32} className="h-full w-full object-contain p-0.5" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">
+                      {item.name.slice(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
             <span className="whitespace-nowrap text-xs text-muted-foreground">
-              {selectedIds.length} {t.common.selected}
+              {selectedItems.length} {t.common.selected}
             </span>
 
             <div className="flex items-center gap-2">
@@ -1243,9 +1274,9 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
                 <X className="size-3.5" />
               </button>
 
-              {selectedIds.length >= 2 && (
+              {selectedItems.length >= 2 && (
                 <Link
-                  href={`/perifericos/comparar?ids=${selectedIds.join(",")}`}
+                  href={`/perifericos/comparar?ids=${selectedItems.map((i) => i.id).join(",")}`}
                   className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 md:h-8"
                 >
                   <ArrowLeftRight className="size-3.5" />
@@ -1257,7 +1288,7 @@ export function PerifericosContent({ initialData: initialDataProp, showAdminActi
         </div>
       )}
 
-      {selectedIds.length > 0 && <div className="h-16" />}
+      {selectedItems.length > 0 && <div className="h-16" />}
 
       {/* Delete confirmation dialog */}
       {showAdminActions && (

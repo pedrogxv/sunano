@@ -15,9 +15,11 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return NextResponse.json({ error: "Usuário não informado." }, { status: 400 })
     }
+    const pageParam = Number(url.searchParams.get("page") ?? "1")
+    const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1
 
-    const comments = await listForumCommentsByUser(userId)
-    return NextResponse.json({ ok: true, comments })
+    const { comments, hasMore } = await listForumCommentsByUser(userId, page)
+    return NextResponse.json({ ok: true, comments, hasMore })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar comentários do usuário." }, { status: 500 })
   }

@@ -3,6 +3,7 @@ import "server-only"
 import { coerceAccountTier } from "@/lib/account-tier"
 import { calculateListingFee, isPriceChangeAllowed } from "@/lib/market-fees"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
 
 /**
  * Repositório do Mercado — única porta de acesso a `market_listings` e
@@ -29,7 +30,11 @@ export type MarketListingRow = {
   fee_cents: number
   fee_status: MarketFeeStatus
   is_free_vip_slot: boolean
-  stripe_session_id: string | null
+  asaas_payment_id: string | null
+  asaas_customer_id: string | null
+  pix_copy_paste: string | null
+  pix_qr_code_base64: string | null
+  pix_expires_at: string | null
   rejection_reason: string | null
   reviewed_by: string | null
   reviewed_at: string | null
@@ -38,7 +43,7 @@ export type MarketListingRow = {
 }
 
 const LISTING_COLUMNS =
-  "id, seller_id, title, description, price_cents, initial_price_cents, olx_url, images, status, fee_cents, fee_status, is_free_vip_slot, stripe_session_id, rejection_reason, reviewed_by, reviewed_at, created_at, updated_at"
+  "id, seller_id, title, description, price_cents, initial_price_cents, olx_url, images, status, fee_cents, fee_status, is_free_vip_slot, asaas_payment_id, asaas_customer_id, pix_copy_paste, pix_qr_code_base64, pix_expires_at, rejection_reason, reviewed_by, reviewed_at, created_at, updated_at"
 
 /** Tier e status de ban do vendedor — usado para calcular a taxa e bloquear criação. */
 export async function getSellerMarketStatus(userId: string) {
@@ -55,26 +60,62 @@ export async function getSellerMarketStatus(userId: string) {
   }
 }
 
-/** Anúncios ativos, visíveis a qualquer visitante. */
-export async function listActiveMarketListings(): Promise<MarketListingRow[]> {
+/**
+ * Anúncios ativos, visíveis a qualquer visitante.
+ *
+ * Paginado (`.range()` + `count: "exact"`) no mesmo padrão de
+ * `orders-repository.ts`/`_shared.ts` — sem paginação, o Mercado inteiro era
+ * trazido a cada carregamento de `/mercado`, sem limite conforme o número de
+ * anúncios ativos cresce.
+ */
+export async function listActiveMarketListings(
+  page = 1,
+  pageSize = 24
+): Promise<{ listings: MarketListingRow[]; total: number; hasMore: boolean }> {
   const db = createSupabaseAdminClient()
-  const { data } = await db
+  const currentPage = clampPage(page)
+  const size = clampPageSize(pageSize, 60, 24)
+  const { data, count } = await db
     .from("market_listings")
-    .select(LISTING_COLUMNS)
+    .select(LISTING_COLUMNS, { count: "exact" })
     .eq("status", "active")
     .order("created_at", { ascending: false })
-  return (data ?? []) as MarketListingRow[]
+    .range(...rangeFor(currentPage, size))
+  const total = count ?? 0
+  return {
+    listings: (data ?? []) as MarketListingRow[],
+    total,
+    hasMore: currentPage * size < total,
+  }
 }
 
-/** Todos os anúncios do próprio vendedor, qualquer status. */
-export async function listMyMarketListings(userId: string): Promise<MarketListingRow[]> {
+/**
+ * Todos os anúncios do próprio vendedor, qualquer status.
+ *
+ * Paginado pelo mesmo motivo de `listActiveMarketListings` — um vendedor
+ * antigo com muitos anúncios (vendidos/removidos incluídos) não deve trazer
+ * o histórico inteiro em "Meus anúncios" de uma vez.
+ */
+export async function listMyMarketListings(
+  userId: string,
+  page = 1,
+  pageSize = 24
+): Promise<{ listings: MarketListingRow[]; total: number; hasMore: boolean }> {
   const db = createSupabaseAdminClient()
-  const { data } = await db
+  const currentPage = clampPage(page)
+  const size = clampPageSize(pageSize, 60, 24)
+  const { data, count } = await db
     .from("market_listings")
-    .select(LISTING_COLUMNS)
+    .select(LISTING_COLUMNS, { count: "exact" })
     .eq("seller_id", userId)
     .order("created_at", { ascending: false })
-  return (data ?? []) as MarketListingRow[]
+    .range(...rangeFor(currentPage, size))
+  const total = count ?? 0
+  return {
+    listings: (data ?? []) as MarketListingRow[],
+    total,
+    hasMore: currentPage * size < total,
+  }
 }
 
 /** Detalhe público (só `active`) ou do próprio dono (qualquer status). */
@@ -89,8 +130,8 @@ export async function getMarketListingDetail(id: string, viewerId?: string): Pro
 
 /**
  * Cota a taxa de publicação antes de criar qualquer registro — a rota usa
- * isto para decidir se abre um checkout do Stripe antes de gravar o anúncio
- * (evitando um anúncio "pendente" sem `stripe_session_id` associada).
+ * isto para decidir se abre uma cobrança PIX (Asaas) antes de gravar o
+ * anúncio (evitando um anúncio "pendente" sem `asaas_payment_id` associado).
  */
 export async function quoteMarketListingFee(sellerId: string, priceCents: number): Promise<
   | { ok: true; feeCents: number; isFreeVipSlot: boolean }
@@ -122,8 +163,8 @@ export async function quoteMarketListingFee(sellerId: string, priceCents: number
  * Insere o anúncio como `pending_review`, com a taxa já cotada por
  * `quoteMarketListingFee`. Quando `feeCents` é zero, `fee_status` já nasce
  * `waived` e o anúncio entra direto na fila de moderação; caso contrário fica
- * `pending` até o webhook do Stripe confirmar o pagamento
- * (`markMarketFeePaid`) — só aí aparece para o admin revisar.
+ * `pending` até o webhook do Asaas confirmar o PIX (`markMarketFeePaid`) —
+ * só aí aparece para o admin revisar.
  */
 export async function insertMarketListing(params: {
   sellerId: string
@@ -134,7 +175,11 @@ export async function insertMarketListing(params: {
   images: string[]
   feeCents: number
   isFreeVipSlot: boolean
-  stripeSessionId: string | null
+  asaasPaymentId: string | null
+  asaasCustomerId: string | null
+  pixCopyPaste: string | null
+  pixQrCodeBase64: string | null
+  pixExpiresAt: string | null
 }): Promise<{ ok: true; listingId: string } | { ok: false; error: string; status: number }> {
   const db = createSupabaseAdminClient()
 
@@ -151,7 +196,11 @@ export async function insertMarketListing(params: {
       fee_cents: params.feeCents,
       fee_status: params.isFreeVipSlot ? "waived" : "pending",
       is_free_vip_slot: params.isFreeVipSlot,
-      stripe_session_id: params.stripeSessionId,
+      asaas_payment_id: params.asaasPaymentId,
+      asaas_customer_id: params.asaasCustomerId,
+      pix_copy_paste: params.pixCopyPaste,
+      pix_qr_code_base64: params.pixQrCodeBase64,
+      pix_expires_at: params.pixExpiresAt,
     })
     .select("id")
     .single()
@@ -163,24 +212,29 @@ export async function insertMarketListing(params: {
   return { ok: true, listingId: data.id }
 }
 
-/** Chamado pelo webhook do Stripe quando a taxa é paga — idempotente. */
-export async function markMarketFeePaid(stripeSessionId: string): Promise<void> {
+/** Chamado pelo webhook do Asaas quando o PIX é pago — idempotente. */
+export async function markMarketFeePaid(asaasPaymentId: string): Promise<void> {
   const db = createSupabaseAdminClient()
   await db
     .from("market_listings")
     .update({ fee_status: "paid" })
-    .eq("stripe_session_id", stripeSessionId)
+    .eq("asaas_payment_id", asaasPaymentId)
     .neq("fee_status", "paid")
 }
 
-/** Chamado pelo webhook quando a checkout session expira sem pagamento. */
-export async function markMarketFeeExpired(stripeSessionId: string): Promise<void> {
+/** Detalhe do próprio anúncio para a tela de pagamento (polling de status). */
+export async function getOwnMarketListingForPayment(
+  id: string,
+  userId: string
+): Promise<MarketListingRow | null> {
   const db = createSupabaseAdminClient()
-  await db
+  const { data } = await db
     .from("market_listings")
-    .update({ status: "removed" })
-    .eq("stripe_session_id", stripeSessionId)
-    .eq("fee_status", "pending")
+    .select(LISTING_COLUMNS)
+    .eq("id", id)
+    .eq("seller_id", userId)
+    .maybeSingle()
+  return data as MarketListingRow | null
 }
 
 /**
@@ -296,21 +350,32 @@ export type ModerationListingRow = MarketListingRow & {
 /**
  * Fila de moderação. Anúncios com `fee_status = 'pending'` (taxa ainda não
  * confirmada pelo Stripe) nunca aparecem aqui — são só rascunhos.
+ *
+ * Paginada pelo mesmo motivo das listagens públicas: o histórico de
+ * `sold`/`removed`/`rejected` cresce sem limite, e a fila hoje trazia tudo
+ * de uma vez para filtrar/rolar no cliente.
  */
 export async function listMarketListingsForModeration(
-  status: MarketListingStatus = "pending_review"
-): Promise<ModerationListingRow[]> {
+  status: MarketListingStatus = "pending_review",
+  page = 1,
+  pageSize = 24
+): Promise<{ listings: ModerationListingRow[]; total: number; hasMore: boolean }> {
   const db = createSupabaseAdminClient()
-  const { data } = await db
+  const currentPage = clampPage(page)
+  const size = clampPageSize(pageSize, 60, 24)
+  const { data, count } = await db
     .from("market_listings")
-    .select(LISTING_COLUMNS)
+    .select(LISTING_COLUMNS, { count: "exact" })
     .eq("status", status)
     .in("fee_status", ["waived", "paid"])
     .order("created_at", { ascending: false })
+    .range(...rangeFor(currentPage, size))
 
   const listings = (data ?? []) as MarketListingRow[]
+  const total = count ?? 0
+  const hasMore = currentPage * size < total
   const sellerIds = [...new Set(listings.map((l) => l.seller_id))]
-  if (sellerIds.length === 0) return []
+  if (sellerIds.length === 0) return { listings: [], total, hasMore }
 
   const { data: sellers } = await db
     .from("user_profiles")
@@ -319,11 +384,15 @@ export async function listMarketListingsForModeration(
 
   const sellerMap = new Map((sellers ?? []).map((s) => [s.id, s]))
 
-  return listings.map((listing) => ({
-    ...listing,
-    seller_display_name: sellerMap.get(listing.seller_id)?.display_name ?? null,
-    seller_market_banned_at: sellerMap.get(listing.seller_id)?.market_banned_at ?? null,
-  }))
+  return {
+    listings: listings.map((listing) => ({
+      ...listing,
+      seller_display_name: sellerMap.get(listing.seller_id)?.display_name ?? null,
+      seller_market_banned_at: sellerMap.get(listing.seller_id)?.market_banned_at ?? null,
+    })),
+    total,
+    hasMore,
+  }
 }
 
 export async function approveMarketListing(id: string, adminId: string): Promise<RepositoryResult> {

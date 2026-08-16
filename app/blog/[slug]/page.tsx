@@ -7,7 +7,7 @@ import { SITE_URL } from "@/lib/site-url"
 
 // ISR: o post é renderizado no servidor e revalidado em background,
 // eliminando o fetch client-side (que mostrava um spinner a cada visita).
-export const revalidate = 30
+export const revalidate = 120
 
 export async function generateMetadata({
   params,

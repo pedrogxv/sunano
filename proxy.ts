@@ -11,6 +11,17 @@ function isMaintenanceEnabled() {
   return value === "true"
 }
 
+// Bloqueia SOMENTE a Loja pública — admin, login/cadastro e o resto do site
+// continuam normais. As páginas /loja mostram "em breve" sozinhas (ver
+// app/loja/page.tsx e app/loja/[slug]/page.tsx); aqui só falta recusar,
+// fechado por padrão, qualquer requisição que crie um pedido novo.
+function isStoreMaintenanceEnabled() {
+  const value = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE
+  return value === "true"
+}
+
+const STORE_ORDER_WRITE_PATHS = ["/api/store/checkout"]
+
 // Rotas públicas de autenticação que continuam acessíveis mesmo em manutenção,
 // para que usuários comuns possam entrar / redefinir senha / concluir o 2FA.
 function isPublicAuthRoute(pathname: string) {
@@ -51,14 +62,63 @@ function copyCookies(source: NextResponse, destination: NextResponse) {
   })
 }
 
+// Cookie de atribuição do sistema de afiliados: se `?ref=CODIGO` estiver
+// presente, grava por 30 dias — se o checkout acontecer dentro dessa janela,
+// a venda é atribuída ao afiliado mesmo sem clicar de novo no link. Sem
+// validar o código contra o banco aqui (custo zero por pageview, mesmo
+// raciocínio de `trackVisit`); a validação real (existe? está aprovado?)
+// acontece no checkout, que é o único lugar que lê este cookie de volta.
+// Comportamento last-click-wins: um `?ref=` novo sempre substitui o cookie
+// anterior e reseta a janela — padrão de mercado, mais simples de auditar.
+const AFFILIATE_REF_COOKIE = "sn_aff_ref"
+const AFFILIATE_REF_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+const AFFILIATE_CODE_PATTERN = /^[A-Za-z0-9]{4,20}$/
+
+function captureAffiliateRef(request: NextRequest, response: NextResponse) {
+  const ref = request.nextUrl.searchParams.get("ref")
+  if (!ref || !AFFILIATE_CODE_PATTERN.test(ref)) return
+
+  response.cookies.set(
+    AFFILIATE_REF_COOKIE,
+    JSON.stringify({ code: ref, clickedAt: Date.now() }),
+    {
+      maxAge: AFFILIATE_REF_MAX_AGE_SECONDS,
+      sameSite: "lax",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+    }
+  )
+}
+
+// Nome + valor do cookie que marca "já contabilizado hoje" nesta sessão de
+// navegador. `recordVisit` já é idempotente por dia (upsert com
+// `ignoreDuplicates`), mas sem esse cookie cada pageview do mesmo visitante
+// dispararia um fetch/invocação de function novo só para o Supabase
+// descartar a linha duplicada — o cookie evita esse round-trip redundante.
+const VISIT_TRACKED_COOKIE = "sn_visit_tracked"
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 // Dispara o registro de visita (dashboard admin) sem bloquear a navegação:
 // `event.waitUntil` deixa o fetch terminar em segundo plano depois da
 // resposta já ter sido enviada, sem atrasar o visitante nem arriscar ser
 // cancelado ao fim da função (diferente de um fetch solto sem await). Só
 // para navegação de página (não API, não asset) de visitante anônimo em
 // rota pública — é o cenário que este arquivo já isola no early-return.
-function trackVisit(request: NextRequest, event: NextFetchEvent) {
+function trackVisit(request: NextRequest, event: NextFetchEvent, response: NextResponse) {
   if (request.method !== "GET" || request.nextUrl.pathname.startsWith("/api")) return
+
+  const today = todayIso()
+  if (request.cookies.get(VISIT_TRACKED_COOKIE)?.value === today) return
+
+  response.cookies.set(VISIT_TRACKED_COOKIE, today, {
+    maxAge: 60 * 60 * 24,
+    sameSite: "lax",
+    httpOnly: true,
+  })
 
   event.waitUntil(
     fetch(new URL("/api/track-visit", request.url), {
@@ -105,6 +165,7 @@ function getRequiredPermission(pathname: string): AdminPermissionKey | null {
     return "store_write"
   }
   if (pathname.startsWith("/admin/store")) return "store_read"
+  if (pathname.startsWith("/admin/afiliados")) return "affiliates_read"
   if (pathname === NO_ACCESS_PATH) return null
   if (pathname.startsWith("/admin/users")) return null
   if (pathname.startsWith("/admin/settings")) return "settings_read"
@@ -147,6 +208,17 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Loja em manutenção — recusa qualquer criação de pedido novo (fechado por
+  // padrão: mesmo se o pathname mudar de forma inesperada, o método não-GET
+  // sozinho já não seria suficiente pra passar). Navegação/admin/cadastro
+  // seguem liberados; /loja mostra "em breve" sozinha (ver app/loja/**).
+  if (isStoreMaintenanceEnabled() && STORE_ORDER_WRITE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
+    return NextResponse.json(
+      { error: "A Loja está temporariamente indisponível para novos pedidos." },
+      { status: 503 }
+    )
+  }
+
   // Mercado desativado temporariamente — bloqueia a rota pública inteira.
   if (pathname === "/mercado" || pathname.startsWith("/mercado/")) {
     if (pathname.startsWith("/api")) {
@@ -163,13 +235,19 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // O cookie de sessão é a única condição que exige resolver a sessão aqui —
   // necessário para aplicar o 2FA também fora do /admin.
   if (!maintenanceMode && !isAdminRoute && !hasSupabaseSession(request)) {
-    trackVisit(request, event)
-    return NextResponse.next()
+    const response = NextResponse.next()
+    trackVisit(request, event, response)
+    captureAffiliateRef(request, response)
+    return response
   }
 
   const { response, user, profile, aal, needsLgpdConsent } = await updateSession(request, {
     needProfile: isAdminRoute || maintenanceMode,
   })
+  // Cobre também o caminho autenticado (visitante com sessão clicando num
+  // link de afiliado) — o cookie é copiado adiante em todo `redirectResponse`
+  // via `copyCookies`, então gravar aqui é suficiente para os dois casos.
+  captureAffiliateRef(request, response)
 
   // ── Aplicação do 2FA (vale para QUALQUER usuário autenticado) ──
   // Sessão em aal1 com fator verificado pendente: a sessão existe mas ainda

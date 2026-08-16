@@ -82,6 +82,10 @@ type Translations = {
     mention: string
     /** `{name}` = quem postou. */
     newPost: string
+    orderStatusFallback: string
+    viewAll: string
+    historyTitle: string
+    historySubtitle: string
     loadMore: string
     loadingMore: string
     clearAll: string
@@ -145,6 +149,7 @@ type Translations = {
     priceRange: string
     mouseShape: string
     keyboardLayout: string
+    youtubeReview: string
     clearFilters: (count: number) => string
     itemCount: (count: number) => string
     searchBadge: string
@@ -668,6 +673,7 @@ type Translations = {
   auth: {
     myProfile: string
     accountSettings: string
+    myOrders: string
     adminPanel: string
     signOut: string
     settings: string
@@ -770,6 +776,10 @@ export const translations: Record<LocaleCode, Translations> = {
       newFollower: "{name} começou a seguir você",
       mention: "{name} mencionou você em um comentário",
       newPost: "{name} publicou um novo post",
+      orderStatusFallback: "Seu pedido foi atualizado",
+      viewAll: "Ver histórico completo",
+      historyTitle: "Histórico de notificações",
+      historySubtitle: "Todas as suas notificações, das mais recentes às mais antigas.",
       loadMore: "Carregar mais",
       loadingMore: "Carregando...",
       clearAll: "Limpar",
@@ -897,6 +907,7 @@ export const translations: Record<LocaleCode, Translations> = {
       budgetBand: "Budget (até R$300)",
       golpeBand: "GOLPE",
       tags: "Tags",
+      youtubeReview: "Com Review no Youtube",
     },
     tierlist: {
       info: "Informações da Tierlist",
@@ -981,7 +992,7 @@ export const translations: Record<LocaleCode, Translations> = {
         users: "Usuários",
         settings: "Configurações",
         offers: "Ofertas",
-        storeAndBazar: "Loja & Bazar",
+        storeAndBazar: "Loja",
         newsAndReviews: "Notícias & Reviews",
         forum: "Fórum",
         actions: "Ações",
@@ -1005,7 +1016,7 @@ export const translations: Record<LocaleCode, Translations> = {
         statBlogCaption: (count) => `${count} rascunho${count === 1 ? "" : "s"}`,
         statForum: "Fórum",
         statForumCaption: (count) => `${count} oculto${count === 1 ? "" : "s"}`,
-        statStore: "Loja & Bazar",
+        statStore: "Loja",
         statStoreCaption: (count) => (count === 0 ? "estoque ok" : `${count} sem estoque`),
         statOffers: "Ofertas",
         statOffersCaption: "últimos 30 dias",
@@ -1413,6 +1424,7 @@ export const translations: Record<LocaleCode, Translations> = {
     auth: {
       myProfile: "Meu Perfil",
       accountSettings: "Configurações da conta",
+      myOrders: "Meus Pedidos",
       adminPanel: "Painel admin",
       signOut: "Sair",
       settings: "Configurações",
@@ -1466,6 +1478,30 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
+        {
+          version: "v0.3.0",
+          date: "16 de agosto",
+          title: "Sunano entra em fase Beta: loja com reviews, lista de compras e pagamento via PIX",
+          description: "A maior leva de novidades até agora — a loja ganhou reviews de compra verificada, variantes de produto, lista de compras compartilhável e um checkout novo com PIX. O fórum ficou mais fluido, o login virou um modal rápido, e o Sunano deixa a fase Alpha para entrar em Beta.",
+          items: [
+            "Fase Beta: o selo no topo do site trocou de Alpha para Beta — o Sunano segue em construção ativa, mas a base já está mais estável",
+            "Reviews de produto: quem comprou pode avaliar com nota de 1 a 5 estrelas, título e comentário, com selo de \"Compra verificada\" — a página do produto mostra a média e a lista de avaliações da comunidade",
+            "Análise do Sunano: produtos podem ganhar uma avaliação oficial da equipe, com nota, texto e vídeo, exibida em destaque acima dos reviews da comunidade",
+            "Variantes de produto: produtos com mais de uma opção (cor, versão etc.) agora mostram os botões de escolha na página, com preço e estoque atualizando conforme a variante selecionada",
+            "Lista de compras: crie várias listas com nomes próprios, salve produtos com um clique no card ou na página do produto, e marque uma lista como pública para compartilhar um link com quem quiser ver (inclusive sem login)",
+            "Lista de compras pode aparecer direto no seu perfil público, com um botão para mostrar ou esconder dos visitantes",
+            "Checkout novo: compra com PIX direto pela loja, com tela de QR Code e confirmação automática assim que o pagamento cai",
+            "Compra exige login: para finalizar um pedido (loja ou bazar) agora é preciso estar logado — ao tentar comprar sem conta, abre o mesmo modal rápido de login/cadastro",
+            "Nova página \"Meus pedidos\" na conta, com status de cada compra (pago, enviado, entregue etc.)",
+            "Loja com busca, ordenação e filtro por marca, além do filtro \"só na minha lista de compras\"",
+            "Fórum com rolagem infinita: as páginas de categoria e o feed principal carregam mais posts automaticamente conforme você rola a tela, sem precisar clicar em \"carregar mais\"",
+            "Login e cadastro agora abrem em um modal rápido, sem sair da página onde você estava",
+            "Indicador de força de senha ao criar conta ou trocar senha, mostrando em tempo real o que ainda falta (minúscula, maiúscula, número, símbolo)",
+            "\"Meus Reviews\" no perfil ganhou um modo compacto (grade com foto e nota) no carrossel",
+            "Resgatar uma medalha que custa Aura agora pede confirmação antes de descontar o saldo",
+            "Resposta a comentário não vem mais pré-preenchida com @Nome no texto — a menção aparece como uma etiqueta separada, com o campo livre para digitar",
+          ],
+        },
         {
           version: "v0.2.9",
           date: "15 de agosto",
@@ -1665,11 +1701,11 @@ export const translations: Record<LocaleCode, Translations> = {
         {
           version: "Maio 2026",
           date: "31 de maio",
-          title: "Fórum, Loja & Bazar e reformulação visual",
+          title: "Fórum, Mercado e reformulação visual",
           description: "O mês que trouxe as bases de várias seções que hoje sustentam o site.",
           items: [
             "Fórum da comunidade com posts e comentários",
-            "Loja e Bazar de periféricos usados",
+            "Mercado com periféricos novos e usados",
             "Sistema de tiers reformulado (GOAT, SS, S, A, B, C, L)",
             "Integração com Telegram para ofertas",
             "Tema escuro",
@@ -1731,6 +1767,10 @@ export const translations: Record<LocaleCode, Translations> = {
       newFollower: "{name} started following you",
       mention: "{name} mentioned you in a comment",
       newPost: "{name} published a new post",
+      orderStatusFallback: "Your order was updated",
+      viewAll: "View full history",
+      historyTitle: "Notification history",
+      historySubtitle: "All your notifications, from newest to oldest.",
       loadMore: "Load more",
       loadingMore: "Loading...",
       clearAll: "Clear",
@@ -1744,7 +1784,7 @@ export const translations: Record<LocaleCode, Translations> = {
       home: "Home",
       peripherals: "Peripherals",
       content: "Community",
-      shop: "Shop",
+      shop: "Store",
       news: "News",
       videos: "Videos & socials",
       forum: "Forum",
@@ -1858,6 +1898,7 @@ export const translations: Record<LocaleCode, Translations> = {
       budgetBand: "Budget (up to R$300)",
       golpeBand: "GOLPE",
       tags: "Tags",
+      youtubeReview: "Has Youtube Review",
     },
     tierlist: {
       info: "Tierlist Information",
@@ -1942,7 +1983,7 @@ export const translations: Record<LocaleCode, Translations> = {
         users: "Users",
         settings: "Settings",
         offers: "Offers",
-        storeAndBazar: "Store & Bazar",
+        storeAndBazar: "Marketplace",
         newsAndReviews: "News & Reviews",
         forum: "Forum",
         actions: "Actions",
@@ -1966,7 +2007,7 @@ export const translations: Record<LocaleCode, Translations> = {
         statBlogCaption: (count) => `${count} draft${count === 1 ? "" : "s"}`,
         statForum: "Forum",
         statForumCaption: (count) => `${count} hidden`,
-        statStore: "Store & Bazaar",
+        statStore: "Marketplace",
         statStoreCaption: (count) => (count === 0 ? "stock ok" : `${count} out of stock`),
         statOffers: "Offers",
         statOffersCaption: "last 30 days",
@@ -2374,6 +2415,7 @@ export const translations: Record<LocaleCode, Translations> = {
     auth: {
       myProfile: "My Profile",
       accountSettings: "Account settings",
+      myOrders: "My Orders",
       adminPanel: "Admin panel",
       signOut: "Sign out",
       settings: "Settings",
@@ -2427,6 +2469,30 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.3.0",
+          date: "August 16",
+          title: "Sunano enters Beta: store reviews, wishlists, and PIX checkout",
+          description: "The biggest batch of updates yet — the store got verified-purchase reviews, product variants, shareable wishlists, and a new PIX-powered checkout. The forum got smoother, login is now a quick modal, and Sunano moves from Alpha into Beta.",
+          items: [
+            "Beta phase: the badge at the top of the site switched from Alpha to Beta — Sunano is still under active construction, but the foundation is more stable now",
+            "Product reviews: buyers can now rate purchases 1 to 5 stars with a title and comment, marked with a \"Verified purchase\" badge — the product page shows the average rating and the community's review list",
+            "Sunano's own review: products can get an official review from the team, with a rating, write-up, and video, shown front and center above community reviews",
+            "Product variants: products with more than one option (color, version, etc.) now show pickable buttons on the page, with price and stock updating for the selected variant",
+            "Wishlists: create multiple named lists, save products with one click from the card or product page, and make a list public to share a link with anyone (even without an account)",
+            "Your wishlist can show up right on your public profile, with a toggle to show or hide it from visitors",
+            "New checkout: pay with PIX straight from the store, with a QR code screen and automatic confirmation as soon as payment lands",
+            "Login required to buy: finishing an order (store or bazaar) now requires an account — trying to check out without one opens the same quick login/sign-up modal",
+            "New \"My Orders\" page in your account, showing the status of every purchase (paid, shipped, delivered, etc.)",
+            "Store search, sorting, and brand filter, plus a \"wishlist only\" filter",
+            "Infinite scroll in the forum: category pages and the main feed now load more posts automatically as you scroll, no more clicking \"load more\"",
+            "Login and sign-up now open in a quick modal instead of taking you to a new page",
+            "Password strength meter when creating an account or changing your password, showing in real time what's still missing (lowercase, uppercase, number, symbol)",
+            "\"My Reviews\" on your profile got a compact mode (photo + rating grid) in the carousel",
+            "Redeeming a medal that costs Aura now asks for confirmation before deducting your balance",
+            "Replying to a comment no longer pre-fills the text with @Name — the mention now shows as a separate tag, leaving the field empty and ready to type",
+          ],
+        },
         {
           version: "v0.2.9",
           date: "August 15",
@@ -2627,11 +2693,11 @@ export const translations: Record<LocaleCode, Translations> = {
         {
           version: "May 2026",
           date: "May 31",
-          title: "Forum, Store & Bazaar, and a visual overhaul",
+          title: "Forum, Marketplace, and a visual overhaul",
           description: "The month that laid the groundwork for several sections the site still runs on today.",
           items: [
             "Community forum with posts and comments",
-            "Store and Bazaar for used peripherals",
+            "Marketplace with new and used peripherals",
             "Reworked tier system (GOAT, SS, S, A, B, C, L)",
             "Telegram integration for offers",
             "Dark theme",

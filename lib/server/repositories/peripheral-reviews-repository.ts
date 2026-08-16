@@ -284,6 +284,11 @@ export async function getPeripheralReviewsWithStats(
     .eq("peripheral_id", peripheralId)
     .eq("is_hidden", false)
     .order("created_at", { ascending: false })
+    // Defesa contra periférico com volume anormal de reviews — a ordenação
+    // por Aura do autor só é possível em memória (ver comentário da função),
+    // então precisa de todas as linhas da página de ranking, mas não precisa
+    // de mais que isso.
+    .limit(2000)
 
   if (error) {
     console.error("[peripheral-reviews-repository] getPeripheralReviewsWithStats:", error)

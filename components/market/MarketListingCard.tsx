@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { Package } from "lucide-react"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 
 export interface MarketListingCardData {
   id: string

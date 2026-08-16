@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DiscordIcon, GoogleIcon } from "@/components/auth/provider-icons"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 type ProviderKey = "google" | "discord"
 
@@ -79,8 +81,8 @@ export function LinkedAccountsTab() {
   }
 
   return (
-    <Card className="border-border bg-card/90">
-      <CardHeader className="border-b border-border">
+    <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
+      <CardHeader className="border-b border-border/60">
         <CardTitle className="flex items-center gap-2 text-base">
           <Link2 className="size-4 text-primary" />
           Contas vinculadas
@@ -96,7 +98,7 @@ export function LinkedAccountsTab() {
             return (
               <div
                 key={key}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/10 p-3"
+                className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/40 p-3 transition-colors hover:bg-background/70"
               >
                 <div className="flex items-center gap-3">
                   <span className="flex size-9 items-center justify-center rounded-lg border border-border bg-background">

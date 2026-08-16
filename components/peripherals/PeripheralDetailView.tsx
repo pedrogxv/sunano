@@ -1,8 +1,9 @@
 "use client"
 
+import type { ComponentType, ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Package, ShoppingBag, Trophy } from "lucide-react"
+import { Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube } from "lucide-react"
 import { FaAmazon } from "react-icons/fa"
 import { SiShopee } from "react-icons/si"
 
@@ -17,7 +18,7 @@ import { PeripheralLikeToggle } from "@/components/peripherals/PeripheralLikeTog
 import { PeripheralReviewsList } from "@/components/peripherals/PeripheralReviewsList"
 import { PeripheralVoteBox } from "@/components/peripherals/PeripheralVoteBox"
 import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
-import { formatBRL, formatCurrencyBRL } from "@/lib/stripe"
+import { formatBRL, formatCurrencyBRL } from "@/lib/format"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
 import type { Tag } from "@/lib/tag-options"
@@ -33,12 +34,25 @@ export interface PeripheralDetailViewData {
   image_url: string | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   specs: Record<string, any> | null
+  /** Colunas migradas de `specs` (ver peripherals-repository.ts) — têm
+   * prioridade sobre o valor equivalente dentro de `specs` durante a
+   * transição (dual-write). */
+  weightG?: number | null
+  connectivity?: string | null
+  mouseShape?: string | null
+  keyboardLayout?: string | null
+  surface?: string | null
+  profile?: string | null
+  panelType?: string | null
+  refreshRate?: number | null
 }
 
 export interface PeripheralDetailViewLinkedProduct {
   slug: string
   name: string
   price_cents: number
+  price_cents_min?: number | null
+  price_cents_max?: number | null
   images?: string[] | null
   stock?: number | null
 }
@@ -296,6 +310,46 @@ function RatingRow({ label, rating }: { label: string; rating: number }) {
   )
 }
 
+// Header padronizado dos cards de "informação estrutural" do periférico
+// (Especificações, Performance, Shape, Pegada, Software, Review) — cada bloco
+// ganha um ícone próprio numa cor de destaque, no mesmo espírito do glow por
+// categoria usado nos cards de listagem de /perifericos.
+type InfoAccent = "sky" | "purple" | "violet" | "amber" | "emerald" | "rose" | "indigo" | "cyan" | "teal" | "lime" | "fuchsia"
+
+const INFO_ACCENT_STYLES: Record<InfoAccent, { icon: string; iconBg: string }> = {
+  sky: { icon: "text-sky-400", iconBg: "bg-sky-400/10" },
+  purple: { icon: "text-purple-400", iconBg: "bg-purple-400/10" },
+  violet: { icon: "text-violet-400", iconBg: "bg-violet-400/10" },
+  amber: { icon: "text-amber-400", iconBg: "bg-amber-400/10" },
+  emerald: { icon: "text-emerald-400", iconBg: "bg-emerald-400/10" },
+  rose: { icon: "text-rose-400", iconBg: "bg-rose-400/10" },
+  indigo: { icon: "text-indigo-400", iconBg: "bg-indigo-400/10" },
+  cyan: { icon: "text-cyan-400", iconBg: "bg-cyan-400/10" },
+  teal: { icon: "text-teal-400", iconBg: "bg-teal-400/10" },
+  lime: { icon: "text-lime-400", iconBg: "bg-lime-400/10" },
+  fuchsia: { icon: "text-fuchsia-400", iconBg: "bg-fuchsia-400/10" },
+}
+
+function InfoCardTitle({
+  icon: Icon,
+  accent,
+  children,
+}: {
+  icon: ComponentType<{ className?: string }>
+  accent: InfoAccent
+  children: ReactNode
+}) {
+  const style = INFO_ACCENT_STYLES[accent]
+  return (
+    <CardTitle className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+      <span className={cn("flex size-6 shrink-0 items-center justify-center rounded-lg", style.iconBg)}>
+        <Icon className={cn("size-3.5", style.icon)} />
+      </span>
+      {children}
+    </CardTitle>
+  )
+}
+
 function getYoutubeEmbedId(url?: string | null) {
   if (!url) return null
   try {
@@ -410,6 +464,16 @@ export function PeripheralDetailView({
 }: PeripheralDetailViewProps) {
   const specs = (data.specs ?? {}) as Record<string, any>
   const details = (specs.details ?? {}) as Record<string, any>
+  // Colunas migradas (weight_g, connectivity, ...) têm prioridade; `specs`
+  // continua servindo de fallback para registros ainda não regravados desde
+  // a migration — ver PeripheralDetailViewData acima.
+  const weightDisplay = data.weightG != null ? `${data.weightG}g` : (details.weight ?? specs.weight)
+  const connectivityValue = data.connectivity ?? specs.connectivity
+  const keyboardLayoutValue = data.keyboardLayout ?? specs.keyboardLayout
+  const surfaceValue = data.surface ?? specs.surface ?? details.surface
+  const profileValue = data.profile ?? specs.profile ?? details.profile
+  const panelTypeValue = data.panelType ?? specs.panelType
+  const refreshRateValue = data.refreshRate ?? specs.refreshRate
 
   const gallery = Array.isArray(details.gallery) ? details.gallery : splitLines(details.gallery)
   const pros = Array.isArray(details.pros) ? details.pros : splitLines(details.pros)
@@ -475,10 +539,10 @@ export function PeripheralDetailView({
         ]
       case "keyboard":
         return [...specsBase,
-          { label: "Layout", value: specs.keyboardLayout, group: "specs" },
+          { label: "Layout", value: keyboardLayoutValue, group: "specs" },
           { label: "Tipo", value: formatKeyboardType(specs.keyboardType), group: "specs" },
-          { label: "Conectividade", value: formatConnectivity(specs.connectivity), group: "specs" },
-          { label: "Peso", value: details.weight ?? specs.weight, group: "specs" },
+          { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
+          { label: "Peso", value: weightDisplay, group: "specs" },
           switchRow("performance"),
           { label: "Latencia", value: details.latency ?? specs.latency, group: "performance" },
           { label: "Deadzone", value: details.deadzone, group: "performance" },
@@ -489,10 +553,10 @@ export function PeripheralDetailView({
         // PCB avulsa: mesmas specs do teclado, sem a linha de Switch — a PCB é vendida
         // sem switches, quem monta o teclado escolhe e instala depois.
         return [...specsBase,
-          { label: "Layout", value: specs.keyboardLayout, group: "specs" },
+          { label: "Layout", value: keyboardLayoutValue, group: "specs" },
           { label: "Tipo", value: formatKeyboardType(specs.keyboardType), group: "specs" },
-          { label: "Conectividade", value: formatConnectivity(specs.connectivity), group: "specs" },
-          { label: "Peso", value: details.weight ?? specs.weight, group: "specs" },
+          { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
+          { label: "Peso", value: weightDisplay, group: "specs" },
           { label: "Latencia", value: details.latency ?? specs.latency, group: "performance" },
           { label: "Deadzone", value: details.deadzone, group: "performance" },
           { label: "RT Minimo", value: details.rtMin, group: "performance" },
@@ -501,25 +565,25 @@ export function PeripheralDetailView({
       case "mousepad":
       case "glasspad":
         return [...specsBase,
-          { label: "Superficie", value: specs.surface ?? details.surface, group: "specs" },
+          { label: "Superficie", value: surfaceValue, group: "specs" },
           { label: "Tipo", value: specs.padType ?? details.padType, group: "specs" },
           { label: "Tamanho", value: specs.size ?? details.size, group: "specs" },
-          { label: "Profile", value: specs.profile ?? details.profile, group: "specs" },
+          { label: "Profile", value: profileValue, group: "specs" },
         ]
       case "monitors":
         return [...specsBase,
-          { label: "Painel", value: specs.panelType, group: "specs" },
-          { label: "Taxa de atualizacao", value: specs.refreshRate ? `${specs.refreshRate}Hz` : undefined, group: "performance" },
+          { label: "Painel", value: panelTypeValue, group: "specs" },
+          { label: "Taxa de atualizacao", value: refreshRateValue ? `${refreshRateValue}Hz` : undefined, group: "performance" },
         ]
       case "headset":
       case "iem":
         return [...specsBase,
-          { label: "Conectividade", value: formatConnectivity(specs.connectivity), group: "specs" },
+          { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
           { label: "Compatibilidade", value: details.compatibility, group: "specs" },
         ]
       case "dac_amp":
         return [...specsBase,
-          { label: "Conectividade", value: formatConnectivity(specs.connectivity), group: "specs" },
+          { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
           { label: "Trimode", value: formatTrimode(specs.trimode), group: "specs" },
         ]
       case "switches":
@@ -683,9 +747,9 @@ export function PeripheralDetailView({
 
               <PeripheralGallery images={[data.image_url, ...gallery]} alt={data.name} />
 
-              <Card className="border-border bg-card">
+              <Card size="sm" className="border-border/60 bg-secondary/50">
                 <CardHeader className="space-y-1">
-                  <CardTitle className="text-sm">Notas gerais</CardTitle>
+                  <InfoCardTitle icon={Star} accent="indigo">Notas gerais</InfoCardTitle>
                   <CardDescription className="text-sm">Escala de 0 a 6 (GOAT = 6)</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
@@ -705,33 +769,66 @@ export function PeripheralDetailView({
                 </CardContent>
               </Card>
 
-              <Card className="border-border bg-card">
+              <Card className="border-border/60 bg-secondary/50">
                 <CardHeader>
-                  <CardTitle className="text-sm">Software do Periférico</CardTitle>
+                  <InfoCardTitle icon={Package} accent="sky">Software do Periférico</InfoCardTitle>
                 </CardHeader>
                 <CardContent className="text-sm text-muted-foreground break-words whitespace-pre-wrap">
-                  {softwareInfo ? linkifyText(softwareInfo) : "Informacao de compatibilidade nao cadastrada."}
+                  {softwareInfo ? linkifyText(softwareInfo) : "Informacao de compatibilidade não cadastrada."}
                 </CardContent>
               </Card>
 
               <PeripheralVoteBox peripheralId={data.id} />
 
-              <Card className="border-border bg-card">
+              <Card size="sm" className="border-border/60 bg-secondary/50">
                 <CardHeader>
-                  <CardTitle className="text-sm">Reviews da comunidade</CardTitle>
+                  <InfoCardTitle icon={MessageSquareText} accent="cyan">Reviews da comunidade</InfoCardTitle>
                 </CardHeader>
                 <CardContent>
                   <PeripheralReviewsList peripheralId={data.id} />
                 </CardContent>
               </Card>
 
-              {buyLinks.length > 0 && (
-                <Card className="border-border bg-card">
+              {(buyLinks.length > 0 || linkedStore) && (
+                <Card size="sm" className="border-border/60 bg-secondary/50">
                   <CardHeader className="space-y-1">
-                    <CardTitle className="text-sm">Onde comprar</CardTitle>
+                    <InfoCardTitle icon={ShoppingBag} accent="teal">Onde comprar</InfoCardTitle>
                     <CardDescription className="text-xs">Links oficiais e lojas recomendadas.</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-2 lg:max-h-40 lg:overflow-auto">
+                  <CardContent className="space-y-2 lg:max-h-64 lg:overflow-auto">
+                    {linkedStore && (
+                      <Link
+                        href={`/loja/${linkedStore.slug}`}
+                        className="flex items-center gap-3 rounded-lg border border-emerald-400/40 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 px-3 py-2.5 text-xs font-medium text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)] transition hover:from-emerald-500/25 hover:to-emerald-500/10"
+                      >
+                        <div className="relative size-9 shrink-0 overflow-hidden rounded-md border border-emerald-400/30 bg-black/20">
+                          {linkedStore.images?.[0] ? (
+                            <Image alt={linkedStore.name} fill sizes="36px" className="object-contain p-0.5" src={linkedStore.images[0]} />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-emerald-300">
+                              <ShoppingBag className="size-4" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5">
+                            <span className="rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-950">
+                              Sunano
+                            </span>
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">Loja oficial</span>
+                          </span>
+                          <span className="mt-0.5 block text-sm font-semibold text-white">
+                            {linkedStore.price_cents_min != null &&
+                            linkedStore.price_cents_max != null &&
+                            linkedStore.price_cents_max > linkedStore.price_cents_min
+                              ? `A partir de ${formatBRL(linkedStore.price_cents_min)}`
+                              : formatBRL(linkedStore.price_cents_min ?? linkedStore.price_cents)}
+                            {linkedStore.stock === 0 && <span className="ml-2 font-normal text-rose-300">Esgotado</span>}
+                          </span>
+                        </span>
+                        <span className="text-emerald-300">→</span>
+                      </Link>
+                    )}
                     {buyLinks.map((link: { label: string; url: string }) => {
                       const style = getBuyLinkStyle(link.label)
                       const Icon = getBuyLinkIcon(link.label)
@@ -831,10 +928,18 @@ export function PeripheralDetailView({
                 ) : null}
               </div>
 
-              <div className={cn("grid items-start gap-4", specCardCount > 1 && "@2xl/col:grid-cols-2")}>
-                <Card size="sm" className="border-border bg-card">
+              {/* Layout tipo masonry: colunas CSS em vez de grid, pra cards de altura
+                  diferente (ex.: Especificações alto ao lado de Shape mais curto) não
+                  deixarem buraco vazio embaixo do card menor. Especificações...Review
+                  ficam todos no mesmo container de colunas (não um por seção) pra um
+                  card curto (ex.: Review sem vídeo) poder subir e preencher ao lado de
+                  outro card curto (ex.: Shape), em vez de ficar preso "for de posição". */}
+              <div className="@2xl/col:columns-2 @2xl/col:gap-3">
+                <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                   <CardHeader>
-                    <CardTitle className="text-sm">{isSwitch ? "Especificações Técnicas" : "Especificações"}</CardTitle>
+                    <InfoCardTitle icon={ListChecks} accent="sky">
+                      {isSwitch ? "Especificações Técnicas" : "Especificações"}
+                    </InfoCardTitle>
                     {!isMouse && (
                       <CardDescription className="text-xs">Principais dados do produto.</CardDescription>
                     )}
@@ -856,9 +961,9 @@ export function PeripheralDetailView({
                 </Card>
 
                 {performanceRows.length > 0 && (
-                  <Card className="border-border bg-card">
+                  <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <CardTitle className="text-sm">Performance</CardTitle>
+                      <InfoCardTitle icon={Gauge} accent="purple">Performance</InfoCardTitle>
                       <CardDescription className="text-xs">Métricas de resposta.</CardDescription>
                       {rankBadge && (
                         <CardAction>
@@ -890,9 +995,9 @@ export function PeripheralDetailView({
                 )}
 
                 {showShape && (
-                  <Card className="border-border bg-card">
+                  <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <CardTitle className="text-sm">Shape</CardTitle>
+                      <InfoCardTitle icon={Ruler} accent="violet">Shape</InfoCardTitle>
                       <CardDescription className="text-xs">Formato e dimensões do mouse.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm text-muted-foreground">
@@ -932,9 +1037,9 @@ export function PeripheralDetailView({
                 )}
 
                 {isSwitch && (
-                  <Card className="border-border bg-card">
+                  <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <CardTitle className="text-sm">Som do Switch</CardTitle>
+                      <InfoCardTitle icon={Volume2} accent="amber">Som do Switch</InfoCardTitle>
                       <CardDescription className="text-xs">Veja e ouça o switch em ação.</CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -960,13 +1065,11 @@ export function PeripheralDetailView({
                     </CardContent>
                   </Card>
                 )}
-              </div>
 
-              <div className={cn("grid items-start gap-4", showGrip && "@2xl/col:grid-cols-2")}>
                 {showGrip && (
-                  <Card className="border-border bg-card">
+                  <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <CardTitle className="text-sm">Pegada</CardTitle>
+                      <InfoCardTitle icon={Hand} accent="emerald">Pegada</InfoCardTitle>
                       <CardDescription className="text-xs">Recomendacao por tamanho de mao.</CardDescription>
                     </CardHeader>
                     <CardContent className="divide-y divide-border text-sm text-muted-foreground">
@@ -986,9 +1089,9 @@ export function PeripheralDetailView({
                   </Card>
                 )}
 
-                <Card className="border-border bg-card">
+                <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                 <CardHeader>
-                  <CardTitle className="text-sm">Review no Youtube</CardTitle>
+                  <InfoCardTitle icon={Youtube} accent="rose">Review no Youtube</InfoCardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {youtubeId ? (
@@ -1061,11 +1164,16 @@ export function PeripheralDetailView({
                 </Card>
               </div>
 
-              <Card className="border-border bg-card">
-                <CardContent className="pt-0 text-base text-muted-foreground lg:max-h-80 lg:overflow-auto">
+              <Card size="sm" className="border-border/60 bg-secondary/50">
+                <CardContent className="text-base text-muted-foreground lg:max-h-80 lg:overflow-auto">
                     <div className="grid gap-6 @2xl/col:grid-cols-2">
                       <div>
-                        <p className="mb-3 text-lg font-bold text-green-500">Pontos positivos</p>
+                        <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-green-500">
+                          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-green-500/10">
+                            <ThumbsUp className="size-3.5 text-green-500" />
+                          </span>
+                          Pontos positivos
+                        </p>
                         {pros.length > 0 ? (
                           <ul className="list-disc space-y-2 pl-5 text-base">
                             {pros.map((item: string) => (
@@ -1077,7 +1185,12 @@ export function PeripheralDetailView({
                         )}
                       </div>
                       <div>
-                        <p className="mb-3 text-lg font-bold text-red-500">Pontos negativos</p>
+                        <p className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-red-500">
+                          <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
+                            <ThumbsDown className="size-3.5 text-red-500" />
+                          </span>
+                          Pontos negativos
+                        </p>
                         {cons.length > 0 ? (
                           <ul className="list-disc space-y-2 pl-5 text-base">
                             {cons.map((item: string) => (
@@ -1092,72 +1205,45 @@ export function PeripheralDetailView({
                   </CardContent>
                 </Card>
 
-              <Card className="border-border bg-card">
+              <Card size="sm" className="border-border/60 bg-secondary/50">
                 <CardHeader>
-                  <CardTitle className="text-lg">Comentários do Sunano</CardTitle>
+                  <InfoCardTitle icon={MessageSquare} accent="fuchsia">Comentários do Sunano</InfoCardTitle>
                 </CardHeader>
                 <CardContent className="text-base text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
                   {generalComments || "Sem comentarios adicionais."}
                 </CardContent>
               </Card>
 
-              {(linkedStore || linkedBazaar) && (
-                <Card className="border-border bg-card">
+              {linkedBazaar && (
+                <Card size="sm" className="border-border/60 bg-secondary/50">
                   <CardHeader>
-                    <CardTitle className="text-sm">Disponível para comprar</CardTitle>
-                    <CardDescription className="text-xs">Itens relacionados na Loja e no Bazar.</CardDescription>
+                    <InfoCardTitle icon={ShoppingBag} accent="lime">Disponível para comprar</InfoCardTitle>
+                    <CardDescription className="text-xs">Item relacionado no Bazar.</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-3 @2xl/col:grid-cols-2">
-                    {linkedStore && (
-                      <Link
-                        href={`/loja/${linkedStore.slug}`}
-                        className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 text-sm text-foreground transition hover:bg-muted/40"
-                      >
-                        <div className="relative size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
-                          {linkedStore.images?.[0] ? (
-                            <Image alt={linkedStore.name} fill sizes="48px" className="object-contain p-0.5" src={linkedStore.images[0]} />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                              <ShoppingBag className="size-4" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-300">🛒 Loja</p>
-                          <p className="truncate text-sm font-medium text-foreground">{linkedStore.name}</p>
-                          <p className="text-xs text-emerald-400">
-                            {formatBRL(linkedStore.price_cents)}
-                            {linkedStore.stock === 0 && <span className="ml-2 text-rose-300">Esgotado</span>}
-                          </p>
-                        </div>
-                        <span className="text-primary">→</span>
-                      </Link>
-                    )}
-                    {linkedBazaar && (
-                      <Link
-                        href={`/bazar/${linkedBazaar.slug}`}
-                        className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-foreground transition hover:bg-amber-500/10"
-                      >
-                        <div className="relative size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
-                          {linkedBazaar.images?.[0] ? (
-                            <Image alt={linkedBazaar.name} fill sizes="48px" className="object-contain p-0.5" src={linkedBazaar.images[0]} />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                              <Package className="size-4" />
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">♻️ Bazar</p>
-                          <p className="truncate text-sm font-medium text-foreground">{linkedBazaar.name}</p>
-                          <p className="text-xs text-emerald-400">
-                            {formatBRL(linkedBazaar.price_cents)}
-                            {linkedBazaar.stock === 0 && <span className="ml-2 text-rose-300">Esgotado</span>}
-                          </p>
-                        </div>
-                        <span className="text-primary">→</span>
-                      </Link>
-                    )}
+                    <Link
+                      href={`/bazar/${linkedBazaar.slug}`}
+                      className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-foreground transition hover:bg-amber-500/10"
+                    >
+                      <div className="relative size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
+                        {linkedBazaar.images?.[0] ? (
+                          <Image alt={linkedBazaar.name} fill sizes="48px" className="object-contain p-0.5" src={linkedBazaar.images[0]} />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                            <Package className="size-4" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">♻️ Bazar</p>
+                        <p className="truncate text-sm font-medium text-foreground">{linkedBazaar.name}</p>
+                        <p className="text-xs text-emerald-400">
+                          {formatBRL(linkedBazaar.price_cents)}
+                          {linkedBazaar.stock === 0 && <span className="ml-2 text-rose-300">Esgotado</span>}
+                        </p>
+                      </div>
+                      <span className="text-primary">→</span>
+                    </Link>
                   </CardContent>
                 </Card>
               )}

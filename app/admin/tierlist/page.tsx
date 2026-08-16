@@ -66,6 +66,10 @@ interface Peripheral {
   tags: Tag[]
   specs: Record<string, string | number | boolean | string[] | undefined>
   created_at: string
+  // Colunas migradas de `specs` — têm prioridade sobre o valor equivalente
+  // dentro de `specs` durante a transição (dual-write).
+  mouse_shape?: string | null
+  keyboard_layout?: string | null
 }
 
 interface PeripheralApiRow extends Omit<Peripheral, "brand"> {
@@ -1275,12 +1279,12 @@ export default function AdminPeripheralsPage() {
       const matchesMouseShape =
         selectedCategory !== "mouse" ||
         selectedMouseShape === "all" ||
-        specs.mouseShape === selectedMouseShape
+        (item.mouse_shape ?? specs.mouseShape) === selectedMouseShape
 
       const matchesKeyboardLayout =
         selectedCategory !== "keyboard" ||
         selectedKeyboardLayout === "all" ||
-        specs.keyboardLayout === selectedKeyboardLayout
+        (item.keyboard_layout ?? specs.keyboardLayout) === selectedKeyboardLayout
 
       const matchesTierlistMode = participatesInMode(item, ratingMode)
 

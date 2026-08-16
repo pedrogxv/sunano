@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { LayoutDashboard, LogIn, LogOut, MoreVertical, Settings, ShieldCheck, User } from "lucide-react"
+import { LayoutDashboard, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -12,8 +12,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Skeleton } from "@/components/ui/skeleton"
 import { signOutSafely } from "@/lib/client/supabase-auth"
 import { useAuthUser } from "@/components/providers/auth-context"
+import { useAuthModal } from "@/components/providers/auth-modal-context"
+import { useUserOrders } from "@/lib/hooks/use-user-orders"
+import { formatBRL } from "@/lib/format"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 
@@ -41,8 +45,13 @@ interface AuthUserProps {
 export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", variant = "admin", layout = "sidebar", mobileExtraItems }: AuthUserProps) {
   const t = useT()
   const { user: authUser, loading } = useAuthUser()
+  const { openLogin } = useAuthModal()
+  const { pendingOrder } = useUserOrders()
   const ready = !loading
   const isAdmin = authUser?.isAdmin ?? false
+  // Só a topbar pública abre o modal — a sidebar de admin (/admin/login) segue
+  // navegando de verdade, já que aquele login não é o alvo deste modal.
+  const useModal = variant === "public" && layout === "topbar"
   const user = authUser ? { name: authUser.displayName, email: authUser.email, avatar: authUser.avatarUrl || "" } : null
   // Vitrine pública do próprio usuário. `/perfil/[handle]` resolve UUID e
   // redireciona para o slug canônico quando existir (ver app/perfil/[handle]/page.tsx).
@@ -50,7 +59,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
 
   if (!ready) {
     if (layout === "topbar") {
-      return <div className="size-8 shrink-0 rounded-lg bg-muted/40 animate-pulse" />
+      return <Skeleton className="size-8 shrink-0 rounded-lg" />
     }
     return (
       <div
@@ -59,11 +68,11 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
           isCollapsed ? "justify-center px-0" : "gap-3"
         )}
       >
-        <div className="size-8 shrink-0 rounded-lg bg-muted/40 animate-pulse" />
+        <Skeleton className="size-8 shrink-0 rounded-lg" />
         {!isCollapsed && (
           <div className="flex flex-1 flex-col gap-1.5">
-            <div className="h-3 w-20 rounded bg-muted/40 animate-pulse" />
-            <div className="h-2.5 w-28 rounded bg-muted/40 animate-pulse" />
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-2.5 w-28" />
           </div>
         )}
       </div>
@@ -72,13 +81,24 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
 
   if (!user) {
     if (layout === "topbar") {
-      return (
-        <Link
-          href={loginHref}
-          className="flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card/70 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
-        >
+      const className =
+        "animate-fade-in-up flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card/70 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
+      const content = (
+        <>
           <LogIn className="size-[15px] text-primary" />
           <span className="hidden sm:inline">Login</span>
+        </>
+      )
+      if (useModal) {
+        return (
+          <button type="button" onClick={() => openLogin()} className={className}>
+            {content}
+          </button>
+        )
+      }
+      return (
+        <Link href={loginHref} className={className}>
+          {content}
         </Link>
       )
     }
@@ -105,7 +125,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
           <button
             type="button"
             aria-label={user.name}
-            className="flex size-11 shrink-0 items-center justify-center rounded-lg transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:size-8"
+            className="animate-fade-in-up flex size-11 shrink-0 items-center justify-center rounded-lg transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:size-8"
           >
             <Avatar className="size-8 rounded-lg ring-1 ring-border">
               <AvatarImage src={user.avatar} alt={user.name} />
@@ -164,6 +184,24 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
 
         <DropdownMenuSeparator className="bg-border" />
 
+        {variant === "public" && pendingOrder && (
+          <>
+            <DropdownMenuItem asChild>
+              <Link
+                href={`/checkout/pix?orderId=${pendingOrder.id}`}
+                className="flex cursor-pointer items-center gap-2.5 rounded-sm bg-amber-500/10 focus:bg-amber-500/20 focus:text-foreground"
+              >
+                <QrCode className="size-4 shrink-0 text-amber-400" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm font-medium text-foreground">Pedido aguardando pagamento</span>
+                  <span className="text-xs text-muted-foreground">{formatBRL(pendingOrder.total_cents)} · concluir com PIX</span>
+                </div>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-border" />
+          </>
+        )}
+
         {mobileExtraItems && (
           <>
             <div className="sm:hidden">{mobileExtraItems}</div>
@@ -189,6 +227,15 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               >
                 <ShieldCheck className="size-4 text-muted-foreground" />
                 {t.auth.accountSettings}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/conta/pedidos"
+                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
+              >
+                <PackageSearch className="size-4 text-muted-foreground" />
+                {t.auth.myOrders}
               </Link>
             </DropdownMenuItem>
             {isAdmin && (

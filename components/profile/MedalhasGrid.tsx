@@ -48,7 +48,7 @@ export function MedalhasGrid({ medals, className }: MedalhasGridProps) {
                 )}
               </div>
             </TooltipTrigger>
-            <TooltipContent>
+            <TooltipContent className="flex-col items-start gap-0.5">
               <p className="flex items-center gap-1.5 font-semibold">
                 {medal.name}
                 {medal.category === "event" && (

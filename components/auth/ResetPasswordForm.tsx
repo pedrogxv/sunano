@@ -3,9 +3,10 @@
 import { useActionState, useEffect, useState } from "react"
 import { useFormStatus } from "react-dom"
 import { resetPasswordAction } from "@/app/reset-password/actions"
+import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { STRONG_PASSWORD_HINT, isLocalhostHost } from "@/lib/password-policy"
+import { isLocalhostHost } from "@/lib/password-policy"
 
 const initialState = { error: null as string | null }
 
@@ -21,6 +22,7 @@ function SubmitButton() {
 export function ResetPasswordForm() {
   const [state, formAction] = useActionState(resetPasswordAction, initialState)
   const [relaxed, setRelaxed] = useState(false)
+  const [password, setPassword] = useState("")
 
   useEffect(() => {
     setRelaxed(isLocalhostHost(window.location.host))
@@ -43,10 +45,10 @@ export function ResetPasswordForm() {
           className="border-border bg-muted/20"
           required
           minLength={minLength}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
         />
-        {!relaxed && (
-          <p className="text-xs text-muted-foreground">{STRONG_PASSWORD_HINT}</p>
-        )}
+        <PasswordStrengthMeter password={password} minLength={minLength} />
       </div>
 
       <div className="space-y-1.5">

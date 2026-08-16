@@ -18,7 +18,7 @@ import HeroHighlightsBar from "@/components/home/HeroHighlightsBar"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getHomeData } from "@/lib/server/repositories/home-repository"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 import { mapTier } from "@/lib/tier-utils"
 import { CARD_TIER_STYLES } from "@/lib/tierlist-theme"
 import { cn } from "@/lib/utils"
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 }
 
 // TODO: reativar quando Loja/Bazar estiverem prontos para lançamento.
-// Enquanto false, a seção "Loja & Bazar" fica oculta na Home (o menu lateral
+// Enquanto false, a seção "Mercado" fica oculta na Home (o menu lateral
 // e as rotas /loja e /bazar continuam funcionando normalmente).
 const SHOW_STORE_SECTION = false
 
@@ -190,12 +190,12 @@ export default async function HomePage() {
       {/* ============ CONQUISTAS EM DESTAQUE ============ */}
       {events.length > 0 && <EventsShowcase events={events} />}
 
-      {/* ============ LOJA & BAZAR ============ */}
+      {/* ============ MERCADO ============ */}
       {SHOW_STORE_SECTION && products.length > 0 && (
         <section>
           <SectionHeader
             icon={ShoppingBag}
-            title="Loja & Bazar"
+            title="Mercado"
             subtitle="Produtos novos e itens usados pelo Sunano"
             href="/loja"
             linkLabel="Ver loja"
@@ -261,7 +261,7 @@ export default async function HomePage() {
               <ArrowRight className="size-4 text-emerald-400 transition-transform group-hover:translate-x-0.5" />
             </Link>
             <Link
-              href="/bazar"
+              href="/loja?type=bazaar"
               className="group flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 transition-all hover:border-amber-500/40 hover:bg-amber-500/10"
             >
               <div className="flex items-center gap-3">

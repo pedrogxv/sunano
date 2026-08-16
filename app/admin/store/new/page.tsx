@@ -19,10 +19,10 @@ function NewProductPage() {
   )
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <BackBreadcrumb
         href="/admin/store"
-        parentLabel="Loja & Bazar"
+        parentLabel="Loja"
         currentLabel={type === "bazaar" ? "Novo item do Bazar" : "Novo produto"}
       />
 

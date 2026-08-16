@@ -1,5 +1,6 @@
 import "server-only"
 
+import { cache } from "react"
 import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
 import { canEditComment } from "@/lib/comment-edit"
 import type { CommentMention } from "@/components/comments/types"
@@ -112,8 +113,12 @@ export type BlogCommentDetail = {
   author_streak: number
 }
 
+// `/blog` (post_type "review") só exibe `excerpt` no card — `content` (corpo
+// inteiro do artigo) não é usado ali e sai da query. `/noticias` (post_type
+// "news") ainda renderiza o texto completo no card, então precisa de `content`.
 const LIST_COLUMNS =
   "id, title, slug, post_type, author_id, is_featured, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
+const LIST_COLUMNS_NO_CONTENT = LIST_COLUMNS.replace("content, ", "")
 
 const DETAIL_COLUMNS =
   "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
@@ -270,7 +275,10 @@ export async function listPublishedPosts(
     return query
   }
 
-  let columns = LIST_COLUMNS
+  // `/blog` (post_type "review") não renderiza `content` no card, só
+  // `excerpt` — evita trazer o corpo inteiro de todo post publicado a cada
+  // carregamento da listagem.
+  let columns = postType === "review" ? LIST_COLUMNS_NO_CONTENT : LIST_COLUMNS
   // Se a coluna `post_type` ainda não existe (migração pendente), o filtro por
   // tipo também não pode ser aplicado — mesmo fallback usado para a coluna no select.
   let filterByType = true
@@ -299,6 +307,9 @@ export async function listPublishedPosts(
     stripAuthorEmail(
       normalizePeripheralRefs({
         ...p,
+        // Omitido da query para "review" (ver `LIST_COLUMNS_NO_CONTENT`) —
+        // volta como string vazia, nunca `undefined`, pro shape bater com o tipo.
+        content: p.content ?? "",
         post_type: p.post_type ?? "review",
         is_featured: p.is_featured ?? false,
         comment_count: counts[p.id] ?? 0,
@@ -308,8 +319,14 @@ export async function listPublishedPosts(
   )
 }
 
-/** Busca um post publicado pelo slug. */
-export async function getPublishedPostBySlug(slug: string): Promise<BlogPostDetail | null> {
+/**
+ * Busca um post publicado pelo slug.
+ *
+ * `React.cache`: `generateMetadata` e o componente da página (`/blog/[slug]`)
+ * chamam esta função com o mesmo slug na mesma requisição — sem isso, cada
+ * visita disparava a query (+ contagem de comentários + perfis de autor) 2x.
+ */
+export const getPublishedPostBySlug = cache(async (slug: string): Promise<BlogPostDetail | null> => {
   const db = createSupabaseAdminClient()
   const runQuery = (columns: string) =>
     db
@@ -344,7 +361,7 @@ export async function getPublishedPostBySlug(slug: string): Promise<BlogPostDeta
       author_profile: (post.author_id && authorProfiles[post.author_id]) || null,
     })
   )
-}
+})
 
 /** Posts publicados relacionados a um periférico (página de detalhe). */
 export async function listPublishedPostsByPeripheral(peripheralId: string): Promise<RelatedBlogPost[]> {

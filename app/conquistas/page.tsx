@@ -1,4 +1,4 @@
-import { getUserAuraBalance } from "@/lib/server/repositories/aura-repository"
+import { getUserAuraBalance, getUserAuraTotalEarned } from "@/lib/server/repositories/aura-repository"
 import { getClaimedMedalIds, listActiveEventsForDisplay } from "@/lib/server/repositories/events-repository"
 import { getUserAchievements } from "@/lib/server/repositories/achievements-repository"
 import { countForumActivity } from "@/lib/server/repositories/profile-showcase-repository"
@@ -6,21 +6,23 @@ import { countFollowers } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { EventsContent } from "./events-content"
 
-export const revalidate = 30
+export const revalidate = 120
 
 export default async function ConquistasPage() {
   const supabase = await createSupabaseServerClient()
   const { data: authData } = await supabase.auth.getUser()
   const userId = authData.user?.id ?? null
 
-  const [events, claimedMedalIds, auraBalance, achievements, forumActivity, followers] = await Promise.all([
-    listActiveEventsForDisplay(),
-    userId ? getClaimedMedalIds(userId) : Promise.resolve([]),
-    userId ? getUserAuraBalance(userId) : Promise.resolve(0),
-    userId ? getUserAchievements(userId) : Promise.resolve([]),
-    userId ? countForumActivity(userId) : Promise.resolve({ posts: 0, comments: 0 }),
-    userId ? countFollowers(userId) : Promise.resolve(0),
-  ])
+  const [events, claimedMedalIds, auraBalance, auraTotalEarned, achievements, forumActivity, followers] =
+    await Promise.all([
+      listActiveEventsForDisplay(),
+      userId ? getClaimedMedalIds(userId) : Promise.resolve([]),
+      userId ? getUserAuraBalance(userId) : Promise.resolve(0),
+      userId ? getUserAuraTotalEarned(userId) : Promise.resolve(0),
+      userId ? getUserAchievements(userId) : Promise.resolve([]),
+      userId ? countForumActivity(userId) : Promise.resolve({ posts: 0, comments: 0 }),
+      userId ? countFollowers(userId) : Promise.resolve(0),
+    ])
 
   return (
     <EventsContent
@@ -29,7 +31,12 @@ export default async function ConquistasPage() {
       initialAuraBalance={auraBalance}
       isLoggedIn={Boolean(userId)}
       achievements={achievements}
-      achievementCounts={{ posts: forumActivity.posts, comments: forumActivity.comments, followers }}
+      achievementCounts={{
+        posts: forumActivity.posts,
+        comments: forumActivity.comments,
+        followers,
+        aura_earned: auraTotalEarned,
+      }}
     />
   )
 }

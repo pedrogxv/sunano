@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
 
 export default function BazarPage() {
-  redirect("/mercado")
+  redirect("/loja?type=bazaar")
 }

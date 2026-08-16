@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react"
-import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -8,7 +7,8 @@ import { ImageLightbox } from "@/components/forum/ImageLightbox"
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
 import { ReportMenu } from "@/components/forum/ReportMenu"
 import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
-import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
+import { SCROLL_TO_COMMENT_EVENT } from "@/components/notifications/notification-row"
+import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
 import { StreakBadge } from "@/components/profile/StreakBadge"
 import {
   AlertDialog,
@@ -22,9 +22,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { UserAvatar } from "@/components/ui/user-avatar"
 import { canEditComment, commentEditDeadline } from "@/lib/comment-edit"
-import { profilePath } from "@/lib/profile-name"
+import { cn } from "@/lib/utils"
 import { CommentBody } from "./CommentBody"
 import { CommentImagesField } from "./CommentImagesField"
 import { MentionTextarea } from "./MentionTextarea"
@@ -52,6 +51,48 @@ function useWithinEditWindow(createdAt: string) {
   }, [createdAt])
 
   return !expired && canEditComment(createdAt)
+}
+
+/** Duração do destaque visual ao chegar num comentário via link de notificação. */
+const HIGHLIGHT_MS = 2600
+
+/**
+ * Escuta o pedido de rolagem disparado por um clique em notificação
+ * (`requestScrollToCommentHash`) e, se for deste comentário, rola até ele e
+ * acende um destaque temporário — tanto pra quem chega numa página nova
+ * quanto pra quem clica numa notificação de um post que já está aberto.
+ */
+function useScrollHighlight(commentId: string) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [highlighted, setHighlighted] = useState(false)
+
+  useEffect(() => {
+    const scrollAndHighlight = () => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+      setHighlighted(true)
+      window.setTimeout(() => setHighlighted(false), HIGHLIGHT_MS)
+    }
+
+    // Primeira carga: a página já abre com `#comment-<id>` na URL.
+    if (typeof window !== "undefined" && window.location.hash === `#comment-${commentId}`) {
+      const timer = window.setTimeout(scrollAndHighlight, 150)
+      return () => window.clearTimeout(timer)
+    }
+  }, [commentId])
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const targetId = (event as CustomEvent<string>).detail
+      if (targetId !== commentId) return
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+      setHighlighted(true)
+      window.setTimeout(() => setHighlighted(false), HIGHLIGHT_MS)
+    }
+    window.addEventListener(SCROLL_TO_COMMENT_EVENT, handler)
+    return () => window.removeEventListener(SCROLL_TO_COMMENT_EVENT, handler)
+  }, [commentId])
+
+  return { ref, highlighted }
 }
 
 /** Uma linha de comentário (raiz ou resposta) com avatar, autor, corpo e ações. */
@@ -118,32 +159,27 @@ export function CommentRow({
   const withinEditWindow = useWithinEditWindow(comment.created_at)
   const showEditButton = canEdit && withinEditWindow && !editing
   const editTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const { ref: highlightRef, highlighted } = useScrollHighlight(comment.id)
 
   return (
-    <div className="flex gap-3">
-      <MiniProfileHoverCard slug={comment.author_display_slug} side="right" align="start">
-        {comment.author_display_slug ? (
-          <Link href={profilePath(comment.author_display_slug)} className="shrink-0">
-            <UserAvatar name={comment.author_display_name} avatarUrl={comment.author_avatar_url} size={compactAvatar ? 7 : 8} />
-          </Link>
-        ) : (
-          <UserAvatar name={comment.author_display_name} avatarUrl={comment.author_avatar_url} size={compactAvatar ? 7 : 8} />
-        )}
-      </MiniProfileHoverCard>
+    <div
+      id={`comment-${comment.id}`}
+      ref={highlightRef}
+      className={cn(
+        "flex gap-3 rounded-xl transition-colors duration-700 ease-out",
+        highlighted && "bg-primary/10 ring-1 ring-primary/30"
+      )}
+    >
+      <AuthorAvatarLink
+        author={{ userId: comment.user_id, displayName: comment.author_display_name, displaySlug: comment.author_display_slug }}
+        avatarUrl={comment.author_avatar_url}
+        size={compactAvatar ? 7 : 8}
+      />
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <MiniProfileHoverCard slug={comment.author_display_slug} side="right" align="start">
-            {comment.author_display_slug ? (
-              <Link
-                href={profilePath(comment.author_display_slug)}
-                className="font-medium text-foreground hover:underline"
-              >
-                {comment.author_display_name}
-              </Link>
-            ) : (
-              <span className="font-medium text-foreground">{comment.author_display_name}</span>
-            )}
-          </MiniProfileHoverCard>
+          <AuthorNameLink
+            author={{ userId: comment.user_id, displayName: comment.author_display_name, displaySlug: comment.author_display_slug }}
+          />
           <AuthorTierBadge tier={comment.author_account_tier} />
           <AuthorSpecialTagBadge slug={comment.author_display_slug} />
           <StreakBadge days={comment.author_streak} size="sm" />

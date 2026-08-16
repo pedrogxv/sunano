@@ -11,7 +11,7 @@ import { SITE_URL } from "@/lib/site-url"
 // ISR: o post e os comentários são renderizados no servidor — essencial para
 // SEO, já que a busca por um periférico específico precisa encontrar o HTML
 // da discussão, não um shell vazio esperando fetch client-side.
-export const revalidate = 30
+export const revalidate = 120
 
 function truncate(text: string, max: number): string {
   const clean = text.replace(/\s+/g, " ").trim()

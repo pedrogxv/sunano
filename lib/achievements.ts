@@ -5,33 +5,39 @@
  * Módulo puro (sem I/O, sem `server-only`) — importável tanto pelos
  * repositórios quanto por Client Components, mesmo padrão de
  * `lib/profile-showcase.ts` e `lib/account-tier.ts`. Os limiares/nomes aqui
- * espelham o seed de `20260808_achievements_streak.sql`; se o seed mudar,
- * atualizar aqui junto (é só exibição — quem decide o que foi conquistado é
- * sempre o banco).
+ * espelham os seeds de `20260808_achievements_streak.sql` (posts/comments/
+ * followers) e `20260919000000_aura_earned_achievements.sql` (aura_earned);
+ * se um seed mudar, atualizar aqui junto (é só exibição — quem decide o que
+ * foi conquistado é sempre o banco).
  */
 
-export const ACHIEVEMENT_TRACKS = ["posts", "comments", "followers"] as const
+export const ACHIEVEMENT_TRACKS = ["posts", "comments", "followers", "aura_earned"] as const
 export type AchievementTrack = (typeof ACHIEVEMENT_TRACKS)[number]
 
 export const ACHIEVEMENT_TIERS = ["bronze", "silver", "gold", "platinum", "diamond"] as const
 export type AchievementTier = (typeof ACHIEVEMENT_TIERS)[number]
 
-/** Limiares dos 5 níveis — mesma progressão nas 3 trilhas. */
-export const ACHIEVEMENT_THRESHOLDS: Record<AchievementTier, number> = {
-  bronze: 1,
-  silver: 10,
-  gold: 50,
-  platinum: 100,
-  diamond: 1000,
+/**
+ * Limiares dos 5 níveis por trilha — posts/comments/followers compartilham a
+ * mesma progressão (1/10/50/100/1000); aura_earned (total histórico de Aura
+ * ganha, ver `user_aura_wallet.total_earned`) tem a sua própria
+ * (10/300/1000/10000/50000).
+ */
+export const ACHIEVEMENT_THRESHOLDS: Record<AchievementTrack, Record<AchievementTier, number>> = {
+  posts: { bronze: 1, silver: 10, gold: 50, platinum: 100, diamond: 1000 },
+  comments: { bronze: 1, silver: 10, gold: 50, platinum: 100, diamond: 1000 },
+  followers: { bronze: 1, silver: 10, gold: 50, platinum: 100, diamond: 1000 },
+  aura_earned: { bronze: 10, silver: 300, gold: 1000, platinum: 10000, diamond: 50000 },
 }
 
 export const ACHIEVEMENT_TRACK_LABELS: Record<AchievementTrack, string> = {
   posts: "Posts",
   comments: "Comentários",
   followers: "Seguidores",
+  aura_earned: "Aura farmada",
 }
 
-/** Nome de cada nível por trilha — posts/comentários usam rótulo genérico; seguidores tem nomes temáticos. */
+/** Nome de cada nível por trilha — posts/comentários usam rótulo genérico; seguidores e aura_earned têm nomes temáticos. */
 export const ACHIEVEMENT_TIER_NAMES: Record<AchievementTrack, Record<AchievementTier, string>> = {
   posts: {
     bronze: "Nível Bronze",
@@ -53,6 +59,13 @@ export const ACHIEVEMENT_TIER_NAMES: Record<AchievementTrack, Record<Achievement
     gold: "Famosinho",
     platinum: "Celebridade",
     diamond: "Lenda",
+  },
+  aura_earned: {
+    bronze: "Brasa",
+    silver: "Chama",
+    gold: "Fogueira",
+    platinum: "Incêndio",
+    diamond: "Supernova",
   },
 }
 
@@ -125,7 +138,7 @@ export function buildTrackProgress(
       count,
       currentTier,
       nextTier,
-      nextThreshold: nextTier ? ACHIEVEMENT_THRESHOLDS[nextTier] : null,
+      nextThreshold: nextTier ? ACHIEVEMENT_THRESHOLDS[track][nextTier] : null,
     }
   })
 }

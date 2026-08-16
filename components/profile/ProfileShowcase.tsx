@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Eye, Settings } from "lucide-react"
+import { Eye, Heart, Settings } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { cn } from "@/lib/utils"
@@ -14,6 +14,7 @@ import { MeusReviewsGrid } from "./MeusReviewsGrid"
 import { SetupGrid } from "./SetupGrid"
 import { SocialLinks } from "./SocialLinks"
 import { profilePath } from "@/lib/profile-name"
+import { WishlistShowcase } from "./WishlistShowcase"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
 
 /**
@@ -149,7 +150,12 @@ export function ProfileShowcase({
       <div className="mt-3 space-y-8">
         <AchievementsGrid
           achievements={profile.achievements}
-          counts={{ posts: profile.forum_posts, comments: profile.forum_comments, followers: profile.followers }}
+          counts={{
+            posts: profile.forum_posts,
+            comments: profile.forum_comments,
+            followers: profile.followers,
+            aura_earned: profile.aura_total_earned,
+          }}
         />
 
         <SetupGrid setup={profile.setup} isOwner={isOwner} />
@@ -167,6 +173,31 @@ export function ProfileShowcase({
           isOwner={isOwner}
           reviewsPageHref={`${profilePath(profile.display_slug ?? profile.id)}/reviews`}
         />
+
+        {profile.public_wishlists.length > 0 && (
+          <div>
+            <h2 className="mb-3 text-sm font-black uppercase tracking-wide text-muted-foreground">
+              Listas de compras públicas
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {profile.public_wishlists.map((list) => (
+                <Link
+                  key={list.id}
+                  href={`/lista-de-desejos/${list.share_token}`}
+                  className="flex items-center gap-2 rounded-full border border-border bg-muted/10 px-4 py-2 text-sm font-semibold text-foreground/90 transition-colors hover:border-foreground/20"
+                >
+                  <Heart className="size-3.5 text-red-500" />
+                  {list.name}
+                  <span className="text-xs text-muted-foreground">({list.item_count})</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {profile.default_wishlist && (
+          <WishlistShowcase wishlist={profile.default_wishlist} isOwner={isOwner} />
+        )}
       </div>
     </div>
   )

@@ -1,11 +1,24 @@
 "use client"
 
-import { useState } from "react"
-import { Minus, Plus, ShoppingCart, Trash2, X, Loader2 } from "lucide-react"
+import { useEffect } from "react"
+import Link from "next/link"
+import { Minus, Package, Plus, Recycle, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/providers/cart-context"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
+
+const CONDITION_LABEL: Record<string, string> = {
+  new: "Novo",
+  opened: "Emb. aberta",
+  used: "Usado",
+}
+
+const CONDITION_STYLE: Record<string, string> = {
+  new: "bg-emerald-500/15 text-emerald-400",
+  opened: "bg-amber-500/15 text-amber-400",
+  used: "bg-orange-500/15 text-orange-400",
+}
 
 export function CartButton() {
   const { count, setOpen } = useCart()
@@ -13,12 +26,12 @@ export function CartButton() {
   return (
     <button
       onClick={() => setOpen(true)}
-      className="relative flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:text-foreground"
+      aria-label="Abrir carrinho"
+      className="relative flex h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
     >
-      <ShoppingCart className="size-4" />
-      <span className="hidden sm:inline">Carrinho</span>
+      <ShoppingCart className="size-[15px]" />
       {count > 0 && (
-        <span className="flex size-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">
+        <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-white ring-2 ring-card">
           {count > 9 ? "9+" : count}
         </span>
       )}
@@ -28,46 +41,21 @@ export function CartButton() {
 
 export function CartDrawer() {
   const { items, count, remove, increment, decrement, clear, isOpen, setOpen } = useCart()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
 
-  async function handleCheckout() {
-    if (items.length === 0) return
-    setLoading(true)
-    setError(null)
-
-    try {
-      const res = await fetch("/api/store/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          items: items.map((i) => ({
-            productId: i.productId,
-            quantity: i.quantity,
-          })),
-        }),
-      })
-
-      // Comprar exige conta: leva ao login quando não autenticado.
-      if (res.status === 401) {
-        window.location.href = "/login"
-        return
-      }
-
-      const data = (await res.json()) as { url?: string; error?: string }
-
-      if (!res.ok || !data.url) {
-        throw new Error(data.error ?? "Erro ao iniciar checkout")
-      }
-
-      window.location.href = data.url
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao iniciar checkout")
-      setLoading(false)
+  useEffect(() => {
+    if (!isOpen) return
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false)
     }
-  }
+    document.addEventListener("keydown", onKeyDown)
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.removeEventListener("keydown", onKeyDown)
+      document.body.style.overflow = ""
+    }
+  }, [isOpen, setOpen])
 
   if (!isOpen) return null
 
@@ -75,12 +63,17 @@ export function CartDrawer() {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-40 animate-in fade-in-0 duration-200 bg-black/60 backdrop-blur-sm"
         onClick={() => setOpen(false)}
       />
 
       {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col border-l border-border bg-popover shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Carrinho de compras"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm animate-in slide-in-from-right fade-in-0 duration-300 ease-out flex-col border-l border-border bg-popover shadow-2xl"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2.5">
@@ -94,7 +87,8 @@ export function CartDrawer() {
           </div>
           <button
             onClick={() => setOpen(false)}
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Fechar carrinho"
+            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <X className="size-4" />
           </button>
@@ -103,67 +97,93 @@ export function CartDrawer() {
         {/* Items */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {items.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-              <ShoppingCart className="size-10 text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Seu carrinho está vazio</p>
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+              <div className="flex size-16 items-center justify-center rounded-2xl bg-muted/40">
+                <ShoppingBag className="size-7 text-muted-foreground" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">Seu carrinho está vazio</p>
+                <p className="text-xs text-muted-foreground">Adicione produtos da loja ou do bazar</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setOpen(false)} asChild>
+                <Link href="/loja">Explorar loja</Link>
+              </Button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               {items.map((item) => (
                 <div
-                  key={item.productId}
-                  className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 p-3"
+                  key={`${item.productId}:${item.variantId ?? "base"}`}
+                  className="group flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
                 >
                   {/* Image */}
-                  <div className="size-14 shrink-0 overflow-hidden rounded-lg bg-muted">
+                  <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                     {item.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1" />
                     ) : (
-                      <div className="flex h-full items-center justify-center text-[10px] font-bold text-muted-foreground">
-                        {item.name.slice(0, 2).toUpperCase()}
-                      </div>
+                      <Package className="size-5 text-muted-foreground" />
                     )}
                   </div>
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {item.name}
+                      {item.variantLabel && (
+                        <span className="text-muted-foreground"> — {item.variantLabel}</span>
+                      )}
+                    </p>
                     <p className="mt-0.5 text-xs font-bold text-emerald-400">{formatBRL(item.priceCents)}</p>
-                    {item.type === "bazaar" && (
-                      <span className="mt-1 inline-flex items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-amber-300">
-                        Usado
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className={cn(
+                        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                        item.type === "bazaar" ? "bg-amber-500/15 text-amber-300" : "bg-sky-500/15 text-sky-300"
+                      )}>
+                        {item.type === "bazaar" ? <Recycle className="size-2.5" /> : <ShoppingBag className="size-2.5" />}
+                        {item.type === "bazaar" ? "Bazar" : "Loja"}
                       </span>
-                    )}
+                      <span className={cn(
+                        "inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
+                        CONDITION_STYLE[item.condition]
+                      )}>
+                        {CONDITION_LABEL[item.condition]}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Qty */}
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-col items-end gap-1.5">
                     <button
-                      onClick={() => decrement(item.productId)}
-                      className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground"
+                      onClick={() => remove(item.productId, item.variantId)}
+                      aria-label={`Remover ${item.name}`}
+                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
                     >
-                      <Minus className="size-3" />
+                      <Trash2 className="size-3.5" />
                     </button>
-                    <span className="w-5 text-center text-sm font-bold text-foreground">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() => increment(item.productId)}
-                      disabled={item.quantity >= item.stock}
-                      className={cn(
-                        "flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground hover:border-foreground/20 hover:text-foreground",
-                        item.quantity >= item.stock && "cursor-not-allowed opacity-40"
-                      )}
-                    >
-                      <Plus className="size-3" />
-                    </button>
-                    <button
-                      onClick={() => remove(item.productId)}
-                      className="ml-1 flex size-6 items-center justify-center rounded-md text-muted-foreground hover:text-red-400"
-                    >
-                      <Trash2 className="size-3" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => decrement(item.productId, item.variantId)}
+                        aria-label="Diminuir quantidade"
+                        className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+                      >
+                        <Minus className="size-3" />
+                      </button>
+                      <span className="w-5 text-center text-sm font-bold text-foreground">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => increment(item.productId, item.variantId)}
+                        disabled={item.quantity >= item.stock}
+                        aria-label="Aumentar quantidade"
+                        className={cn(
+                          "flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground",
+                          item.quantity >= item.stock && "cursor-not-allowed opacity-40"
+                        )}
+                      >
+                        <Plus className="size-3" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -173,38 +193,25 @@ export function CartDrawer() {
 
         {/* Footer */}
         {items.length > 0 && (
-          <div className="border-t border-border px-5 py-4 space-y-3">
-            {error && (
-              <p className="rounded-lg bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
-            )}
-
+          <div className="space-y-3 border-t border-border px-5 py-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Total</span>
               <span className="text-lg font-black text-foreground">{formatBRL(total)}</span>
             </div>
 
             <p className="text-[10px] text-muted-foreground">
-              Pagamento via cartão de crédito ou PIX · Processado pela Stripe
+              Pagamento via PIX
             </p>
 
-            <Button
-              className="w-full gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
-              onClick={handleCheckout}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Redirecionando...
-                </>
-              ) : (
-                "Finalizar Compra"
-              )}
+            <Button className="w-full gap-2 bg-emerald-600 text-white hover:bg-emerald-500" asChild>
+              <Link href="/checkout" onClick={() => setOpen(false)}>
+                Finalizar Compra
+              </Link>
             </Button>
 
             <button
               onClick={clear}
-              className="w-full text-center text-xs text-muted-foreground hover:text-foreground"
+              className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               Limpar carrinho
             </button>

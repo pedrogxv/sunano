@@ -28,6 +28,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 interface PrivacidadeTabProps {
   email: string | null
@@ -97,10 +99,10 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
     : null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Consentimento */}
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
+      <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
+        <CardHeader className="border-b border-border/60">
           <CardTitle className="flex items-center gap-2 text-base">
             <ShieldCheck className="size-4 text-primary" />
             Consentimento LGPD
@@ -142,8 +144,8 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
       </Card>
 
       {/* Seus Direitos */}
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
+      <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
+        <CardHeader className="border-b border-border/60">
           <CardTitle className="flex items-center gap-2 text-base">
             <Shield className="size-4 text-primary" />
             Seus Direitos (LGPD Art. 18)
@@ -205,8 +207,8 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
       </Card>
 
       {/* Exportar dados */}
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
+      <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
+        <CardHeader className="border-b border-border/60">
           <CardTitle className="flex items-center gap-2 text-base">
             <Download className="size-4 text-primary" />
             Exportar meus dados
@@ -229,7 +231,7 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
       </Card>
 
       {/* Excluir conta */}
-      <Card className="border-border bg-card/90 border-red-500/20">
+      <Card className="border-red-500/25 bg-red-500/[0.06] shadow-sm transition-shadow duration-300 hover:border-red-500/40 hover:bg-red-500/[0.09] hover:shadow-lg hover:shadow-red-950/10">
         <CardHeader className="border-b border-red-500/20">
           <CardTitle className="flex items-center gap-2 text-base text-red-400">
             <Trash2 className="size-4" />

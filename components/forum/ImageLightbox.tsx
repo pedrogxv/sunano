@@ -44,17 +44,16 @@ export function ImageLightbox({ srcs, alt }: { srcs: string[]; alt: string }) {
         <button
           type="button"
           onClick={(event) => event.stopPropagation()}
-          className="group/lightbox relative z-10 mt-3 block w-full overflow-hidden rounded-lg border border-border/50 pointer-events-auto"
+          className="group/lightbox relative z-10 mt-3 block aspect-[16/10] w-full max-h-[420px] overflow-hidden rounded-lg border border-border/50 bg-muted pointer-events-auto"
         >
           <Image
             key={srcs[index]}
             src={srcs[index]}
             alt={alt}
-            width={640}
-            height={400}
+            fill
             unoptimized
             onLoad={() => setLoadedThumb(index)}
-            className={`max-h-[420px] w-full object-cover transition-opacity duration-150 ${
+            className={`object-contain transition-opacity duration-150 ${
               thumbLoading ? "opacity-0" : "opacity-100"
             }`}
           />
@@ -112,17 +111,16 @@ export function ImageLightbox({ srcs, alt }: { srcs: string[]; alt: string }) {
           <button
             type="button"
             onClick={() => setZoomed((z) => !z)}
-            className={`relative max-h-[85vh] w-full overflow-auto rounded-lg ${zoomed ? "cursor-zoom-out" : "cursor-zoom-in"}`}
+            className={`relative mx-auto h-[85vh] w-full overflow-hidden rounded-lg ${zoomed ? "cursor-zoom-out" : "cursor-zoom-in"}`}
           >
             <Image
               key={srcs[index]}
               src={srcs[index]}
               alt={alt}
-              width={1600}
-              height={1000}
+              fill
               unoptimized
               onLoad={() => setLoadedDialog(index)}
-              className={`h-auto w-full transition-[opacity,transform] duration-200 ${zoomed ? "scale-[2]" : "scale-100"} ${
+              className={`object-contain transition-[opacity,transform] duration-200 ${zoomed ? "scale-[2]" : "scale-100"} ${
                 dialogLoading ? "opacity-0" : "opacity-100"
               }`}
             />

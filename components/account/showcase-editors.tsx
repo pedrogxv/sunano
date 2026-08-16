@@ -27,6 +27,7 @@ import {
   type ShowcaseMedal,
   type ShowcasePeripheral,
 } from "@/lib/profile-showcase"
+import { CARD_SURFACE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
 
 /** Categorias do catálogo aceitas por cada slot do setup. */
@@ -53,7 +54,7 @@ export function SetupEditor({
   const [editing, setEditing] = useState<SetupSlot | null>(null)
 
   return (
-    <Card className="border-border bg-card/90">
+    <Card className={cn(CARD_SURFACE)}>
       <CardHeader className="border-b border-border">
         <CardTitle className="text-base">Meu setup</CardTitle>
         <CardDescription>
@@ -173,7 +174,7 @@ export function FavoritosEditor({
   }
 
   return (
-    <Card className="border-border bg-card/90">
+    <Card className={cn(CARD_SURFACE)}>
       <CardHeader className="border-b border-border">
         <CardTitle className="text-base">Periféricos favoritos</CardTitle>
         <CardDescription>
@@ -284,7 +285,7 @@ export function MedalhasEditor({
   }
 
   return (
-    <Card className="border-border bg-card/90">
+    <Card className={cn(CARD_SURFACE)}>
       <CardHeader className="border-b border-border">
         <CardTitle className="text-base">Medalhas em destaque</CardTitle>
         <CardDescription>

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import type { ReactNode } from "react"
+import { motion } from "framer-motion"
 
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 
@@ -55,15 +56,18 @@ export function OAuthButton({ provider, label, next = "/forum", icon }: OAuthBut
 
   return (
     <div className="space-y-2">
-      <button
+      <motion.button
         type="button"
         onClick={handleClick}
         disabled={loading}
+        whileHover={{ scale: 1.015 }}
+        whileTap={{ scale: 0.985 }}
+        transition={{ duration: 0.15, ease: "easeOut" }}
         className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {icon}
         {loading ? "Conectando…" : label}
-      </button>
+      </motion.button>
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">

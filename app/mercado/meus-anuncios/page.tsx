@@ -17,7 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useAuthUser } from "@/components/providers/auth-context"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 type MyListing = {

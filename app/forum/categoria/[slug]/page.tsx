@@ -4,13 +4,16 @@ import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
 import { getForumPostsByCategorySlug } from "@/lib/server/repositories/forum-repository"
-import { PostCard, type PostCardData } from "@/components/forum/PostCard"
+import type { PostCardData } from "@/components/forum/PostCard"
+import { CategoryPostsList } from "./category-posts-list"
 import { SITE_URL } from "@/lib/site-url"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 
 // ISR: página de categoria é conteúdo público e estável — vale a pena ficar
 // indexável e cacheada, igual à listagem principal do fórum.
-export const revalidate = 30
+export const revalidate = 120
 
 export async function generateMetadata({
   params,
@@ -44,7 +47,7 @@ export default async function ForumCategoryPage({
   const result = await getForumPostsByCategorySlug(slug)
   if (!result) notFound()
 
-  const { category, posts } = result
+  const { category, posts, hasMore } = result
   const label = category.parent ? `${category.parent.name} — ${category.name}` : category.name
 
   return (
@@ -67,15 +70,15 @@ export default async function ForumCategoryPage({
       </div>
 
       {posts.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card p-12 text-center">
+        <div className={cn("rounded-2xl p-12 text-center", CARD_SURFACE)}>
           <p className="text-sm text-muted-foreground">Nenhum tópico em {label} ainda.</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {posts.map((post) => (
-            <PostCard key={post.id} post={post as PostCardData} />
-          ))}
-        </div>
+        <CategoryPostsList
+          categorySlug={category.slug}
+          initialPosts={posts as PostCardData[]}
+          initialHasMore={hasMore}
+        />
       )}
     </div>
   )

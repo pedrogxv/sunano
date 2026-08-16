@@ -41,6 +41,7 @@ import {
   type ShowcaseMedal,
   type ShowcasePeripheral,
 } from "@/lib/profile-showcase"
+import { CARD_SURFACE } from "@/lib/ui-styles"
 import { profileAccentHue } from "@/lib/user-directory"
 import { cn } from "@/lib/utils"
 
@@ -390,7 +391,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     <div className="space-y-8">
       {/* ── Identidade ── */}
       <section className="space-y-4">
-        <Card className="border-border bg-card/90 overflow-hidden">
+        <Card className={cn(CARD_SURFACE, "overflow-hidden")}>
           <CardContent className="space-y-6 pt-6">
             {/* Banner grande: preview da página de perfil inteira — a capa
                 aparece no contexto real, com a foto sobreposta. */}
@@ -610,7 +611,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       </section>
 
       {/* Barra de salvamento — identidade e vitrine vão juntas. */}
-      <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-xl border border-border bg-card/95 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:p-4">
+      <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-xl border border-border bg-secondary/90 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <p className="text-xs text-muted-foreground">
           Identidade e vitrine são salvas de uma vez só.
         </p>

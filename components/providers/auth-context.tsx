@@ -16,9 +16,17 @@ export type AuthContextUser = {
 type AuthContextValue = {
   user: AuthContextUser | null
   loading: boolean
+  /**
+   * Reconsulta `/api/auth/me` imediatamente. Necessário para o login pelo
+   * modal (ver AuthModal): sem `redirect()` do servidor, nem o pathname muda
+   * nem o `onAuthStateChange` do navegador dispara (a sessão nasceu de uma
+   * server action, não de uma chamada do `supabaseAuth` no client) — sem este
+   * método a topbar continuaria mostrando "Login" até a próxima navegação.
+   */
+  refresh: () => void
 }
 
-const AuthContext = createContext<AuthContextValue>({ user: null, loading: true })
+const AuthContext = createContext<AuthContextValue>({ user: null, loading: true, refresh: () => {} })
 
 /** Teto para `/api/auth/me`. Um fetch pendurado sem limite deixaria o avatar da
  *  topbar em skeleton e o sino invisível para sempre. */
@@ -205,7 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resolve()
   }, [pathname, resolve])
 
-  const value = useMemo(() => ({ user, loading }), [user, loading])
+  const value = useMemo(() => ({ user, loading, refresh: resolve }), [user, loading, resolve])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -17,6 +17,7 @@ import { useLocale } from "@/components/providers/locale-context"
 import { useTheme } from "@/components/providers/theme-context"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 import { LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
+import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
 
 const THEME_ICONS = { dark: Moon, light: Sun } as const
@@ -66,10 +67,10 @@ export function PreferencesTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* ── Aparência ── */}
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
+      <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
+        <CardHeader className="border-b border-border/60">
           <CardTitle className="flex items-center gap-2 text-base">
             <Palette className="size-4 text-primary" />
             Aparência e idioma
@@ -132,8 +133,8 @@ export function PreferencesTab() {
       </Card>
 
       {/* ── Sessões ── */}
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
+      <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
+        <CardHeader className="border-b border-border/60">
           <CardTitle className="flex items-center gap-2 text-base">
             <LogOut className="size-4 text-primary" />
             Sessões

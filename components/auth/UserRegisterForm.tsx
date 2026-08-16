@@ -13,9 +13,10 @@ import {
 } from "@/app/register/actions"
 import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
+import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { STRONG_PASSWORD_HINT, isLocalhostHost } from "@/lib/password-policy"
+import { isLocalhostHost } from "@/lib/password-policy"
 import { DISPLAY_NAME_MAX_LENGTH } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
 
@@ -98,6 +99,31 @@ function ResendConfirmationForm({ email }: { email: string }) {
   )
 }
 
+function LoginLink({
+  embedded,
+  onSwitchToLogin,
+  className,
+  children,
+}: {
+  embedded: boolean
+  onSwitchToLogin?: () => void
+  className?: string
+  children: React.ReactNode
+}) {
+  if (embedded && onSwitchToLogin) {
+    return (
+      <button type="button" onClick={onSwitchToLogin} className={className}>
+        {children}
+      </button>
+    )
+  }
+  return (
+    <Link href="/login" className={className}>
+      {children}
+    </Link>
+  )
+}
+
 function Field({
   id,
   label,
@@ -114,11 +140,19 @@ function Field({
   )
 }
 
-export function UserRegisterForm() {
+interface UserRegisterFormProps {
+  /** Usado dentro do AuthModal: troca os `<Link href="/login">` por um callback que muda de aba no próprio modal. */
+  embedded?: boolean
+  next?: string
+  onSwitchToLogin?: () => void
+}
+
+export function UserRegisterForm({ embedded = false, next = "/forum", onSwitchToLogin }: UserRegisterFormProps = {}) {
   const [state, action] = useActionState(registerUserAction, initialState)
   const [showPurchase, setShowPurchase] = useState(false)
   const [lgpdConsent, setLgpdConsent] = useState(false)
   const [relaxed, setRelaxed] = useState(false)
+  const [password, setPassword] = useState("")
 
   // `<form action={fn}>` reseta os campos não controlados assim que a action
   // termina, mesmo em erro (comportamento do React, não um bug do form). Para
@@ -134,6 +168,7 @@ export function UserRegisterForm() {
       return
     }
     setFormKey((key) => key + 1)
+    setPassword("")
   }, [state])
 
   useEffect(() => {
@@ -149,9 +184,9 @@ export function UserRegisterForm() {
         <div className="rounded-lg border border-border bg-muted/20 px-4 py-4 text-sm text-foreground">
           Já existe uma conta com esse email. Faça login, ou use &quot;Esqueci minha senha&quot; se não lembrar a senha.
         </div>
-        <Link href="/login" className="block">
+        <LoginLink embedded={embedded} onSwitchToLogin={onSwitchToLogin} className="block">
           <Button className="w-full">Ir para o login</Button>
-        </Link>
+        </LoginLink>
       </div>
     )
   }
@@ -163,17 +198,21 @@ export function UserRegisterForm() {
           Conta criada! Enviamos um email de confirmação — confirme seu endereço e depois faça login.
         </div>
         {state.values?.email && <ResendConfirmationForm email={state.values.email} />}
-        <Link href="/login" className="block text-center text-sm text-primary hover:underline">
+        <LoginLink
+          embedded={embedded}
+          onSwitchToLogin={onSwitchToLogin}
+          className="block text-center text-sm text-primary hover:underline"
+        >
           Ir para o login
-        </Link>
+        </LoginLink>
       </div>
     )
   }
 
   return (
     <div className="space-y-5">
-      <GoogleAuthButton label="Cadastrar com Google" next="/forum" />
-      <DiscordAuthButton label="Cadastrar com Discord" next="/forum" />
+      <GoogleAuthButton label="Cadastrar com Google" next={next} />
+      <DiscordAuthButton label="Cadastrar com Discord" next={next} />
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
@@ -222,10 +261,10 @@ export function UserRegisterForm() {
             className="border-border bg-muted/20"
             required
             minLength={minLength}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
-          {!relaxed && (
-            <p className="text-xs text-muted-foreground">{STRONG_PASSWORD_HINT}</p>
-          )}
+          <PasswordStrengthMeter password={password} minLength={minLength} />
         </div>
         <Field
           id="confirm_password"
@@ -283,9 +322,9 @@ export function UserRegisterForm() {
 
       <p className="text-center text-xs text-muted-foreground">
         Já tem conta?{" "}
-        <Link href="/login" className="text-primary hover:underline">
+        <LoginLink embedded={embedded} onSwitchToLogin={onSwitchToLogin} className="text-primary hover:underline">
           Entrar
-        </Link>
+        </LoginLink>
       </p>
     </div>
   )

@@ -10,6 +10,7 @@ import { FollowButton } from "@/components/people/FollowButton"
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
 import { CommentBody } from "@/components/comments/CommentBody"
 import { Contador, type Estatistica } from "@/components/profile/EstatisticasContador"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -227,8 +228,11 @@ export function PostsStatTrigger({
 
   const [postsOpen, setPostsOpen] = useState(false)
   const [postsLoading, setPostsLoading] = useState(false)
+  const [postsLoadingMore, setPostsLoadingMore] = useState(false)
   const [postsLoaded, setPostsLoaded] = useState(false)
   const [posts, setPosts] = useState<PostCardData[]>([])
+  const [postsPage, setPostsPage] = useState(1)
+  const [postsHasMore, setPostsHasMore] = useState(false)
 
   async function handlePostsOpenChange(next: boolean) {
     setPostsOpen(next)
@@ -236,19 +240,42 @@ export function PostsStatTrigger({
 
     setPostsLoading(true)
     try {
-      const res = await fetch(`/api/forum/posts?tab=user&userId=${userId}`)
-      const data = (await res.json()) as { ok?: boolean; posts?: PostCardData[] }
-      if (data.ok) setPosts(data.posts ?? [])
+      const res = await fetch(`/api/forum/posts?tab=user&userId=${userId}&page=1`)
+      const data = (await res.json()) as { ok?: boolean; posts?: PostCardData[]; hasMore?: boolean }
+      if (data.ok) {
+        setPosts(data.posts ?? [])
+        setPostsPage(1)
+        setPostsHasMore(data.hasMore ?? false)
+      }
     } finally {
       setPostsLoading(false)
       setPostsLoaded(true)
     }
   }
 
+  async function loadMorePosts() {
+    const nextPage = postsPage + 1
+    setPostsLoadingMore(true)
+    try {
+      const res = await fetch(`/api/forum/posts?tab=user&userId=${userId}&page=${nextPage}`)
+      const data = (await res.json()) as { ok?: boolean; posts?: PostCardData[]; hasMore?: boolean }
+      if (data.ok) {
+        setPosts((prev) => [...prev, ...(data.posts ?? [])])
+        setPostsPage(nextPage)
+        setPostsHasMore(data.hasMore ?? false)
+      }
+    } finally {
+      setPostsLoadingMore(false)
+    }
+  }
+
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentsLoadingMore, setCommentsLoadingMore] = useState(false)
   const [commentsLoaded, setCommentsLoaded] = useState(false)
   const [comments, setComments] = useState<ForumUserComment[]>([])
+  const [commentsPage, setCommentsPage] = useState(1)
+  const [commentsHasMore, setCommentsHasMore] = useState(false)
 
   async function handleCommentsOpenChange(next: boolean) {
     setCommentsOpen(next)
@@ -256,12 +283,32 @@ export function PostsStatTrigger({
 
     setCommentsLoading(true)
     try {
-      const res = await fetch(`/api/forum/comments?userId=${userId}`)
-      const data = (await res.json()) as { ok?: boolean; comments?: ForumUserComment[] }
-      if (data.ok) setComments(data.comments ?? [])
+      const res = await fetch(`/api/forum/comments?userId=${userId}&page=1`)
+      const data = (await res.json()) as { ok?: boolean; comments?: ForumUserComment[]; hasMore?: boolean }
+      if (data.ok) {
+        setComments(data.comments ?? [])
+        setCommentsPage(1)
+        setCommentsHasMore(data.hasMore ?? false)
+      }
     } finally {
       setCommentsLoading(false)
       setCommentsLoaded(true)
+    }
+  }
+
+  async function loadMoreComments() {
+    const nextPage = commentsPage + 1
+    setCommentsLoadingMore(true)
+    try {
+      const res = await fetch(`/api/forum/comments?userId=${userId}&page=${nextPage}`)
+      const data = (await res.json()) as { ok?: boolean; comments?: ForumUserComment[]; hasMore?: boolean }
+      if (data.ok) {
+        setComments((prev) => [...prev, ...(data.comments ?? [])])
+        setCommentsPage(nextPage)
+        setCommentsHasMore(data.hasMore ?? false)
+      }
+    } finally {
+      setCommentsLoadingMore(false)
     }
   }
 
@@ -287,6 +334,19 @@ export function PostsStatTrigger({
               emptyLabel="Nenhum post ainda."
             />
             {!postsLoading && posts.map((post) => <PostCard key={post.id} post={post} />)}
+            {!postsLoading && postsHasMore && (
+              <div className="flex justify-center pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-border"
+                  onClick={loadMorePosts}
+                  disabled={postsLoadingMore}
+                >
+                  {postsLoadingMore ? "Carregando…" : "Carregar mais posts"}
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -313,6 +373,19 @@ export function PostsStatTrigger({
               emptyLabel="Nenhum comentário ainda."
             />
             {!commentsLoading && comments.map((comment) => <CommentRow key={comment.id} comment={comment} />)}
+            {!commentsLoading && commentsHasMore && (
+              <div className="flex justify-center pt-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-border"
+                  onClick={loadMoreComments}
+                  disabled={commentsLoadingMore}
+                >
+                  {commentsLoadingMore ? "Carregando…" : "Carregar mais comentários"}
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

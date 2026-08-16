@@ -6,8 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Check, ExternalLink, Plus, Search, Trophy, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { formatCurrencyBRL } from "@/lib/stripe"
+import { formatCurrencyBRL } from "@/lib/format"
+import { CARD_SURFACE } from "@/lib/ui-styles"
 import BoxLoader from "@/components/ui/box-loader"
+import { ShareMenu } from "@/components/forum/ShareMenu"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -21,6 +23,16 @@ type PeripheralRow = {
   image_url: string | null
   tags: string[]
   specs: Record<string, string | number | undefined> | null
+  // Colunas migradas de `specs` — têm prioridade sobre o valor equivalente
+  // dentro de `specs` durante a transição (dual-write).
+  weightG?: number | null
+  connectivity?: string | null
+  mouseShape?: string | null
+  keyboardLayout?: string | null
+  surface?: string | null
+  profile?: string | null
+  panelType?: string | null
+  refreshRate?: number | null
 }
 
 type SearchResult = {
@@ -127,7 +139,10 @@ const ROWS: RowDef[] = [
   {
     key: "connectivity",
     label: "Conectividade",
-    getValue: (item) => item.specs?.connectivity ? formatLabel(String(item.specs.connectivity)) : null,
+    getValue: (item) => {
+      const v = item.connectivity ?? item.specs?.connectivity
+      return v ? formatLabel(String(v)) : null
+    },
   },
   {
     key: "driver",
@@ -137,7 +152,10 @@ const ROWS: RowDef[] = [
   {
     key: "keyboardLayout",
     label: "Layout",
-    getValue: (item) => item.specs?.keyboardLayout ? String(item.specs.keyboardLayout).toUpperCase() : null,
+    getValue: (item) => {
+      const v = item.keyboardLayout ?? item.specs?.keyboardLayout
+      return v ? String(v).toUpperCase() : null
+    },
   },
   {
     key: "keyboardType",
@@ -147,7 +165,10 @@ const ROWS: RowDef[] = [
   {
     key: "surface",
     label: "Superfície",
-    getValue: (item) => item.specs?.surface ? formatLabel(String(item.specs.surface)) : null,
+    getValue: (item) => {
+      const v = item.surface ?? item.specs?.surface
+      return v ? formatLabel(String(v)) : null
+    },
   },
   {
     key: "size",
@@ -157,27 +178,40 @@ const ROWS: RowDef[] = [
   {
     key: "mouseShape",
     label: "Formato",
-    getValue: (item) => item.specs?.mouseShape ? formatLabel(String(item.specs.mouseShape)) : null,
+    getValue: (item) => {
+      const v = item.mouseShape ?? item.specs?.mouseShape
+      return v ? formatLabel(String(v)) : null
+    },
   },
   {
     key: "refreshRate",
     label: "Taxa de Atualização",
-    getValue: (item) => item.specs?.refreshRate ? `${item.specs.refreshRate}Hz` : null,
+    getValue: (item) => {
+      const v = item.refreshRate ?? item.specs?.refreshRate
+      return v ? `${v}Hz` : null
+    },
     getBest: (items) => {
-      const max = Math.max(...items.map((i) => Number(i.specs?.refreshRate ?? 0)))
+      const rate = (i: PeripheralRow) => Number(i.refreshRate ?? i.specs?.refreshRate ?? 0)
+      const max = Math.max(...items.map(rate))
       if (!max) return null
-      return items.find((i) => Number(i.specs?.refreshRate) === max)?.id ?? null
+      return items.find((i) => rate(i) === max)?.id ?? null
     },
   },
   {
     key: "panelType",
     label: "Painel",
-    getValue: (item) => item.specs?.panelType ? String(item.specs.panelType).toUpperCase() : null,
+    getValue: (item) => {
+      const v = item.panelType ?? item.specs?.panelType
+      return v ? String(v).toUpperCase() : null
+    },
   },
   {
     key: "profile",
     label: "Perfil",
-    getValue: (item) => item.specs?.profile ? String(item.specs.profile) : null,
+    getValue: (item) => {
+      const v = item.profile ?? item.specs?.profile
+      return v ? String(v) : null
+    },
   },
   {
     key: "tags",
@@ -209,6 +243,9 @@ export function ComparePageClient() {
   const searchPanelRef = useRef<HTMLDivElement>(null)
 
   const category = items.length > 0 ? items[0].category : null
+  const shareUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/perifericos/comparar?ids=${ids.join(",")}`
+    : undefined
 
   // Fetch peripherals when ids change — via endpoint /api/peripherals.
   useEffect(() => {
@@ -394,17 +431,28 @@ export function ComparePageClient() {
           <ArrowLeft className="size-4" />
           Voltar para periféricos
         </Link>
-        <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
-          Comparativo
-        </h1>
-        {!loading && items.length > 0 && (
-          <p className="mt-1 text-sm text-muted-foreground">
-            {items.length} {categoryLabel.toLowerCase()}{items.length !== 1 ? "s" : ""}
-            {hasEnough && categoriesMatch && differentRows.length > 0
-              ? ` · ${differentRows.length} ${differentRows.length !== 1 ? "diferenciais" : "diferencial"}`
-              : ""}
-          </p>
-        )}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-display text-3xl font-bold tracking-tight text-foreground md:text-4xl">
+              Comparativo
+            </h1>
+            {!loading && items.length > 0 && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {items.length} {categoryLabel.toLowerCase()}{items.length !== 1 ? "s" : ""}
+                {hasEnough && categoriesMatch && differentRows.length > 0
+                  ? ` · ${differentRows.length} ${differentRows.length !== 1 ? "diferenciais" : "diferencial"}`
+                  : ""}
+              </p>
+            )}
+          </div>
+          {!loading && items.length > 0 && (
+            <ShareMenu
+              url={shareUrl}
+              title={`Comparativo: ${items.map((i) => i.name).join(" vs ")}`}
+              showEmbed={false}
+            />
+          )}
+        </div>
       </div>
 
       {/* Product cards + Add slot */}
@@ -427,10 +475,11 @@ export function ComparePageClient() {
               <div
                 key={item.id}
                 className={cn(
-                  "group relative flex snap-start flex-col rounded-2xl border bg-gradient-to-b from-card to-card/60 p-5 pt-7 text-center transition-all duration-300",
+                  "group relative flex snap-start flex-col rounded-2xl border p-5 pt-7 text-center transition-all duration-300",
+                  CARD_SURFACE,
                   isWinner && !isSwapping
                     ? "border-primary/40 shadow-[0_0_0_1px_rgba(var(--primary-rgb,250_204_21),0.15),0_20px_50px_-15px_rgba(0,0,0,0.5)]"
-                    : "border-border hover:border-border/80",
+                    : "hover:border-border",
                   isSwapping && "border-primary ring-2 ring-primary/40"
                 )}
               >
@@ -547,7 +596,7 @@ export function ComparePageClient() {
                 "group flex min-h-[260px] snap-start flex-col items-center justify-center gap-3 rounded-2xl border border-dashed transition-all duration-200",
                 activeSearch === "add"
                   ? "border-primary/60 bg-primary/5 text-primary"
-                  : "border-border/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/[0.03] hover:text-primary"
+                  : "border-border/70 bg-secondary/20 text-muted-foreground hover:border-primary/40 hover:bg-primary/[0.03] hover:text-primary"
               )}
             >
               <div className={cn(
@@ -571,7 +620,7 @@ export function ComparePageClient() {
       {activeSearch !== null && (
         <div
           ref={searchPanelRef}
-          className="overflow-hidden rounded-xl border border-primary/30 bg-card shadow-lg shadow-black/20"
+          className="overflow-hidden rounded-xl border border-primary/30 bg-secondary/50 shadow-lg shadow-black/20"
         >
           {/* Panel header */}
           <div className="flex items-center gap-3 border-b border-border px-4 py-3">
@@ -678,14 +727,14 @@ export function ComparePageClient() {
 
       {/* Not enough items */}
       {!loading && !hasEnough && items.length > 0 && (
-        <div className="rounded-xl border border-border bg-card/50 p-6 text-center">
+        <div className={cn("rounded-xl border p-6 text-center", CARD_SURFACE)}>
           <p className="text-sm font-medium text-foreground">Adicione mais um periférico para comparar</p>
           <p className="mt-1 text-xs text-muted-foreground">Clique em "+ Adicionar" acima ou volte para a lista.</p>
         </div>
       )}
 
       {!loading && items.length === 0 && (
-        <div className="rounded-2xl border border-border bg-card p-10 text-center space-y-3">
+        <div className={cn("rounded-2xl border p-10 text-center space-y-3", CARD_SURFACE)}>
           <p className="text-base font-semibold text-foreground">Nenhum periférico selecionado</p>
           <p className="text-sm text-muted-foreground">Volte para a lista e marque os itens que deseja comparar.</p>
           <Link
@@ -723,7 +772,7 @@ export function ComparePageClient() {
                 </span>
               </div>
 
-              <div className="overflow-x-auto overflow-y-hidden rounded-2xl border border-border bg-card/40 backdrop-blur-sm">
+              <div className={cn("overflow-x-auto overflow-y-hidden rounded-2xl border", CARD_SURFACE)}>
                 {differentRows.map((row, idx) => {
                   const bestId = row.getBest?.(items) ?? null
                   const values = items.map((i) => row.getValue(i))
@@ -737,7 +786,7 @@ export function ComparePageClient() {
                       )}
                       style={{ gridTemplateColumns: `170px repeat(${items.length}, minmax(130px, 1fr))` }}
                     >
-                      <div className="sticky left-0 z-10 flex items-center border-r border-border/50 bg-card px-5 py-4">
+                      <div className="sticky left-0 z-10 flex items-center border-r border-border/50 bg-secondary/80 px-5 py-4">
                         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80">{row.label}</span>
                       </div>
 
@@ -801,7 +850,7 @@ export function ComparePageClient() {
                 </span>
               </div>
 
-              <div className="overflow-hidden rounded-2xl border border-border/50 bg-muted/[0.02]">
+              <div className="overflow-hidden rounded-2xl border border-border/50 bg-secondary/20">
                 {sameRows.map((row, idx) => {
                   const value = row.getValue(items[0])
                   return (
@@ -830,7 +879,7 @@ export function ComparePageClient() {
 
           {/* Score summary */}
           {maxWins > 0 && (
-            <div className="overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-card/40 p-5">
+            <div className={cn("overflow-hidden rounded-2xl border p-5", CARD_SURFACE)}>
               <div className="mb-4 flex items-center gap-2">
                 <Trophy className="size-3.5 text-primary/80" />
                 <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">

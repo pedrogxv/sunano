@@ -40,23 +40,45 @@ export async function updateSession(
 
   const { data } = await supabase.auth.getUser()
 
-  // Nível de garantia da sessão (1 fator vs. 2FA concluído). É computado a
-  // partir do JWT já validado por `getUser` + dos fatores embutidos na sessão,
-  // sem chamada de rede adicional.
+  // Nível de garantia da sessão (1 fator vs. 2FA concluído). Antes chamava
+  // `supabase.auth.mfa.getAuthenticatorAssuranceLevel()`, mas essa função
+  // internamente refaz um `getUser()` contra a rede — round-trip duplicado
+  // em toda requisição admin. O JWT já foi validado pela chamada acima, e
+  // `getSession()` só lê do cookie (sem rede) — decodifica localmente o
+  // claim `aal` e usa `data.user.factors`, que já veio populado.
   let aal: AssuranceLevel = { current: null, next: null }
-  if (data.user) {
-    const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
-    aal = { current: aalData?.currentLevel ?? null, next: aalData?.nextLevel ?? null }
-  }
-
-  const { data: profile } =
+  const profilePromise =
     data.user && needProfile
-      ? await supabase
+      ? supabase
           .from("admin_profiles")
           .select("id, email, display_name, avatar_url, role, permissions")
           .eq("id", data.user.id)
           .maybeSingle()
-      : { data: null }
+      : Promise.resolve({ data: null })
+
+  const [{ data: profile }] = await Promise.all([
+    profilePromise,
+    (async () => {
+      if (!data.user) return
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) return
+
+      let currentLevel: AssuranceLevel["current"] = null
+      try {
+        const payloadSegment = accessToken.split(".")[1]
+        const payload = JSON.parse(Buffer.from(payloadSegment, "base64").toString("utf-8"))
+        currentLevel = payload.aal ?? null
+      } catch {
+        return
+      }
+
+      const hasVerifiedFactor = (data.user!.factors ?? []).some((factor) => factor.status === "verified")
+      const nextLevel = hasVerifiedFactor ? "aal2" : currentLevel
+
+      aal = { current: currentLevel, next: nextLevel }
+    })(),
+  ])
 
   // Consentimento LGPD: só se aplica a contas puramente públicas. A ideia
   // original era usar a ausência de `user_profiles` como sinal de "é só

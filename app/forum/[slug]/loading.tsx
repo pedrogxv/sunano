@@ -1,4 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 export default function ForumPostLoading() {
   return (
@@ -8,7 +10,7 @@ export default function ForumPostLoading() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 space-y-6">
           {/* Post */}
-          <div className="rounded-xl border border-border bg-card p-4">
+          <div className={cn("rounded-xl p-4", CARD_SURFACE)}>
             <div className="flex items-start gap-3">
               <Skeleton className="size-9 shrink-0 rounded-full" />
               <div className="min-w-0 flex-1 space-y-2">
@@ -59,22 +61,22 @@ export default function ForumPostLoading() {
         </div>
 
         <aside className="space-y-4">
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className={cn("rounded-xl p-4 space-y-3", CARD_SURFACE)}>
             <Skeleton className="h-4 w-28" />
             <Skeleton className="h-3 w-full" />
-            <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
+            <div className="grid grid-cols-2 gap-3 border-t border-border/60 pt-4">
               <Skeleton className="mx-auto h-6 w-10" />
               <Skeleton className="mx-auto h-6 w-10" />
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+          <div className={cn("rounded-xl p-4 space-y-3", CARD_SURFACE)}>
             <Skeleton className="h-3 w-12" />
             <div className="flex items-center gap-2.5">
               <Skeleton className="size-9 shrink-0 rounded-full" />
               <Skeleton className="h-4 w-24" />
             </div>
-            <div className="grid grid-cols-3 gap-2 border-t border-border pt-3">
+            <div className="grid grid-cols-3 gap-2 border-t border-border/60 pt-3">
               <Skeleton className="mx-auto h-6 w-8" />
               <Skeleton className="mx-auto h-6 w-8" />
               <Skeleton className="mx-auto h-6 w-8" />

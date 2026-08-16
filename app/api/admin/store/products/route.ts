@@ -4,19 +4,32 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { parseSlug } from "@/lib/stripe"
+import { listStoreProductsPaginated, type StoreProductListFilters } from "@/lib/server/repositories/store-repository"
+import { parseSlug } from "@/lib/format"
+import { isValidYoutubeUrl } from "@/lib/youtube-url"
+
+const MAX_PRODUCT_IMAGES = 8
+const MAX_STOCK = 999_999
 
 const createProductSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).optional().nullable(),
   price_cents: z.number().int().positive(),
-  stock: z.number().int().min(0).optional().default(0),
-  images: z.array(z.string().url()).optional().default([]),
+  stock: z.number().int().min(0).max(MAX_STOCK).optional().default(0),
+  images: z.array(z.string().url()).max(MAX_PRODUCT_IMAGES).optional().default([]),
   category: z.string().trim().max(50).optional().nullable(),
+  brand: z.string().trim().max(80).optional().nullable(),
   type: z.enum(["store", "bazaar"]),
   condition: z.enum(["new", "used", "opened"]).optional().default("new"),
   condition_notes: z.string().trim().max(1000).optional().nullable(),
   is_active: z.boolean().optional().default(true),
+  features: z.array(z.string().trim().min(1).max(200)).max(30).optional().default([]),
+  video_url: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || isValidYoutubeUrl(v), "URL de vídeo precisa ser um link do YouTube.")
+    .optional()
+    .nullable(),
 })
 
 export async function GET(request: NextRequest) {
@@ -29,25 +42,32 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const type = searchParams.get("type") // 'store' | 'bazaar' | null = all
+  const typeParam = searchParams.get("type") // 'store' | 'bazaar' | null = all
+  const type = typeParam === "store" || typeParam === "bazaar" ? typeParam : undefined
 
-  const db = createSupabaseAdminClient()
-  let query = db
-    .from("store_products")
-    .select("*")
-    .order("created_at", { ascending: false })
-
-  if (type === "store" || type === "bazaar") {
-    query = query.eq("type", type)
+  function parseNumber(value: string | null): number | undefined {
+    if (!value) return undefined
+    const n = Number(value)
+    return Number.isFinite(n) ? n : undefined
   }
 
-  const { data, error } = await query
-  if (error) {
-    const { body, status } = dbErrorResponse(error, "Erro ao listar produtos.")
-    return NextResponse.json(body, { status })
+  const filters: StoreProductListFilters = {
+    type,
+    includeInactive: true,
+    search: searchParams.get("search")?.trim() || undefined,
+    categories: searchParams.get("category")?.trim() ? [searchParams.get("category")!.trim()] : undefined,
+    outOfStockOnly: searchParams.get("outOfStock") === "1",
+    page: parseNumber(searchParams.get("page")),
+    pageSize: parseNumber(searchParams.get("pageSize")) ?? 100,
   }
 
-  return NextResponse.json({ products: data })
+  const { items, total } = await listStoreProductsPaginated(filters)
+  return NextResponse.json({
+    products: items,
+    total,
+    page: Math.max(1, filters.page ?? 1),
+    pageSize: filters.pageSize,
+  })
 }
 
 export async function POST(request: NextRequest) {
@@ -66,8 +86,10 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     )
   }
-  const { name, description, price_cents, stock, images, category, type, condition, condition_notes, is_active } =
-    parsed.data
+  const {
+    name, description, price_cents, stock, images, category, brand, type, condition, condition_notes, is_active,
+    features, video_url,
+  } = parsed.data
 
   // Generate unique slug
   const db = createSupabaseAdminClient()
@@ -91,10 +113,13 @@ export async function POST(request: NextRequest) {
       stock,
       images,
       category: category ?? null,
+      brand: brand ?? null,
       type,
       condition,
       condition_notes: condition_notes ?? null,
       is_active,
+      features,
+      video_url: video_url || null,
     })
     .select()
     .single()

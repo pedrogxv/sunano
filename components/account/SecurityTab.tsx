@@ -15,41 +15,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 interface SecurityTabProps {
   email: string | null
-}
-
-function PasswordStrength({ password }: { password: string }) {
-  const score = [
-    password.length >= 8,
-    /[A-Z]/.test(password),
-    /[0-9]/.test(password),
-    /[^A-Za-z0-9]/.test(password),
-    password.length >= 12,
-  ].filter(Boolean).length
-
-  const labels = ["", "Fraca", "Razoável", "Boa", "Forte", "Muito forte"]
-  const colors = ["", "bg-red-500", "bg-orange-400", "bg-yellow-400", "bg-emerald-400", "bg-emerald-500"]
-
-  if (!password) return null
-
-  return (
-    <div className="space-y-1">
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= score ? colors[score] : "bg-muted"}`} />
-        ))}
-      </div>
-      <p className={`text-[10px] font-medium ${score >= 4 ? "text-emerald-400" : score >= 2 ? "text-yellow-400" : "text-red-400"}`}>
-        {labels[score]}
-      </p>
-    </div>
-  )
 }
 
 export function SecurityTab({ email }: SecurityTabProps) {
@@ -232,10 +207,10 @@ export function SecurityTab({ email }: SecurityTabProps) {
   const passwordsMismatch = Boolean(confirmPassword) && confirmPassword !== newPassword
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* ── Senha ── */}
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
+      <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
+        <CardHeader className="border-b border-border/60">
           <CardTitle className="flex items-center gap-2 text-base">
             <KeyRound className="size-4 text-primary" />
             Senha
@@ -264,7 +239,6 @@ export function SecurityTab({ email }: SecurityTabProps) {
                 className="border-border bg-background"
                 placeholder="Mín. 8 caracteres"
               />
-              <PasswordStrength password={newPassword} />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Confirmar senha</label>
@@ -278,8 +252,9 @@ export function SecurityTab({ email }: SecurityTabProps) {
               {passwordsMismatch && <p className="text-[10px] text-red-400">As senhas não conferem</p>}
             </div>
           </div>
+          <PasswordStrengthMeter password={newPassword} />
 
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border pt-4">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-border/60 pt-4">
             <Button variant="outline" onClick={sendResetEmail} disabled={sendingReset || !email} className="gap-2" size="sm">
               <Mail className="size-4" />
               {sendingReset ? "Enviando..." : "Enviar link por email"}
@@ -293,8 +268,8 @@ export function SecurityTab({ email }: SecurityTabProps) {
       </Card>
 
       {/* ── 2FA ── */}
-      <Card className="border-border bg-card/90">
-        <CardHeader className="border-b border-border">
+      <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
+        <CardHeader className="border-b border-border/60">
           <CardTitle className="flex items-center gap-2 text-base">
             <Smartphone className="size-4 text-primary" />
             Autenticação em dois fatores (2FA)
@@ -339,7 +314,7 @@ export function SecurityTab({ email }: SecurityTabProps) {
                   </div>
                 </div>
               </div>
-              <div className="flex justify-end gap-2 border-t border-border pt-4">
+              <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
                 <Button variant="ghost" onClick={cancelEnroll} disabled={busyMfa} size="sm">
                   Cancelar
                 </Button>

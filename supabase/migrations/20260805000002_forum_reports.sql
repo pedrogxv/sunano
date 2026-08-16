@@ -23,14 +23,23 @@ create table if not exists public.forum_reports (
   constraint forum_reports_target_shape check (
     (target_type = 'post' and comment_id is null) or
     (target_type = 'comment' and comment_id is not null)
-  ),
-  -- Um usuário só denuncia o mesmo alvo uma vez. `coalesce` porque `comment_id`
-  -- é null em denúncia de post, e colunas null nunca colidem num índice único.
-  unique (target_type, post_id, coalesce(comment_id, '00000000-0000-0000-0000-000000000000'::uuid), reporter_user_id)
+  )
 );
 
 create index if not exists idx_forum_reports_status_created
   on public.forum_reports (status, created_at desc);
+
+-- Um usuário só denuncia o mesmo alvo uma vez. Índice único parcial (em vez de
+-- `unique` na tabela) porque a chave usa `coalesce(comment_id, ...)` — expressão
+-- não permitida em table constraint — e porque `comment_id` é null em denúncia
+-- de post, onde colunas null nunca colidem num índice único comum.
+create unique index if not exists forum_reports_target_reporter_unique
+  on public.forum_reports (
+    target_type,
+    post_id,
+    coalesce(comment_id, '00000000-0000-0000-0000-000000000000'::uuid),
+    reporter_user_id
+  );
 
 comment on column public.forum_reports.post_id is
   'Post denunciado, ou post-pai do comentário denunciado — sempre presente, mesmo para target_type = comment.';

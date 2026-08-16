@@ -13,16 +13,15 @@ import { PostDeleteButton } from "@/components/forum/PostDeleteButton"
 import { ImageLightbox } from "@/components/forum/ImageLightbox"
 import { ReportMenu } from "@/components/forum/ReportMenu"
 import { ShareMenu } from "@/components/forum/ShareMenu"
-import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
+import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
 import { CommentBody } from "@/components/comments/CommentBody"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { UserAvatar } from "@/components/ui/user-avatar"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
 import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
-import { profilePath } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
+import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import type { ForumCategoryInfo } from "@/lib/server/repositories/forum-repository"
 
 export type PostCardData = {
@@ -233,13 +232,14 @@ export function PostCard({
 
   return (
     <div
-      className={`group relative rounded-xl border bg-card transition-all ${
-        clickable ? "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20" : ""
-      } ${post.is_hidden ? "opacity-60" : ""} ${
+      className={cn(
+        "group relative rounded-xl border transition-all",
+        clickable && "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/20",
+        post.is_hidden && "opacity-60",
         post.is_pinned
-          ? "border-primary/40 bg-primary/[0.03] ring-1 ring-primary/15 hover:border-primary/60"
-          : "border-border hover:border-border/70"
-      }`}
+          ? "border-primary/40 bg-primary/[0.06] ring-1 ring-primary/15 hover:border-primary/60"
+          : CARD_SURFACE_INTERACTIVE,
+      )}
     >
       {clickable && (
         <Link href={`/forum/${post.slug}`} aria-label="Ver post" className="absolute inset-0 z-0 rounded-xl" />
@@ -250,36 +250,20 @@ export function PostCard({
             clicável, a camada acima o desliga para o link de fundo receber o
             clique — mas a foto do autor precisa continuar reagindo ao cursor
             para abrir o Mini Perfil. */}
-        <MiniProfileHoverCard slug={post.author_display_slug} side="right" align="start">
-          {post.author_display_slug ? (
-            <Link
-              href={profilePath(post.author_display_slug)}
-              onClick={(event) => event.stopPropagation()}
-              className="pointer-events-auto relative z-10 shrink-0"
-            >
-              <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
-            </Link>
-          ) : (
-            <span className="pointer-events-auto shrink-0">
-              <UserAvatar name={post.author_display_name} avatarUrl={post.author_avatar_url} size={9} />
-            </span>
-          )}
-        </MiniProfileHoverCard>
+        <AuthorAvatarLink
+          author={{ userId: post.user_id, displayName: post.author_display_name, displaySlug: post.author_display_slug }}
+          avatarUrl={post.author_avatar_url}
+          size={9}
+          onClick={(event) => event.stopPropagation()}
+          className="pointer-events-auto relative z-10"
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <MiniProfileHoverCard slug={post.author_display_slug} side="right" align="start">
-              {post.author_display_slug ? (
-                <Link
-                  href={profilePath(post.author_display_slug)}
-                  onClick={(event) => event.stopPropagation()}
-                  className="pointer-events-auto relative z-10 font-semibold text-foreground hover:underline"
-                >
-                  {post.author_display_name}
-                </Link>
-              ) : (
-                <span className="pointer-events-auto font-semibold text-foreground">{post.author_display_name}</span>
-              )}
-            </MiniProfileHoverCard>
+            <AuthorNameLink
+              author={{ userId: post.user_id, displayName: post.author_display_name, displaySlug: post.author_display_slug }}
+              onClick={(event) => event.stopPropagation()}
+              className="pointer-events-auto relative z-10 font-semibold"
+            />
             <AuthorTierBadge tier={post.author_account_tier} />
             <AuthorSpecialTagBadge slug={post.author_display_slug} />
             <span>·</span>

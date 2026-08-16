@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { profilePath } from "@/lib/profile-name"
 import { SOCIAL_LINKS } from "@/lib/social-links"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
 const RULES = [
@@ -25,7 +27,7 @@ const discordLink = SOCIAL_LINKS.find((l) => l.label === "Discord")
 
 function DescriptionCard() {
   return (
-    <section className="rounded-2xl border border-border bg-card p-4">
+    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
       <div className="mb-2 flex items-center gap-2">
         <Flame className="size-4 shrink-0 text-orange-500" fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
         <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Fórum</h2>
@@ -66,7 +68,7 @@ function ProfileRow({ profile, place }: { profile: PublicProfileSummary; place?:
 function ActiveUsersCard({ profiles }: { profiles: PublicProfileSummary[] }) {
   if (profiles.length === 0) return null
   return (
-    <section className="rounded-2xl border border-border bg-card p-4">
+    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
       <div className="mb-3 flex items-center gap-2">
         <Activity className="size-4 shrink-0 text-emerald-400" aria-hidden="true" />
         <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Mais Ativos</h2>
@@ -87,7 +89,7 @@ function ActiveUsersCard({ profiles }: { profiles: PublicProfileSummary[] }) {
 
 function RulesCard() {
   return (
-    <section className="rounded-2xl border border-border bg-card p-4">
+    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
       <div className="mb-3 flex items-center gap-2">
         <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
         <h2 className="font-display text-sm font-bold tracking-tight text-foreground">
@@ -115,7 +117,7 @@ function RulesCard() {
 function ModeratorsCard({ moderators }: { moderators: PublicProfileSummary[] }) {
   if (moderators.length === 0) return null
   return (
-    <section className="rounded-2xl border border-border bg-card p-4">
+    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
       <div className="mb-3 flex items-center gap-2">
         <UserCog className="size-4 shrink-0 text-primary" aria-hidden="true" />
         <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Moderadores</h2>
@@ -134,7 +136,7 @@ function ModeratorsCard({ moderators }: { moderators: PublicProfileSummary[] }) 
 function CommunityCard() {
   if (!discordLink) return null
   return (
-    <section className="rounded-2xl border border-border bg-card p-4">
+    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
       <div className="mb-2 flex items-center gap-2">
         <DiscordIcon className="size-4 shrink-0" />
         <h2 className="font-display text-sm font-bold tracking-tight text-foreground">
@@ -171,7 +173,7 @@ type ForumSidebarProps = {
  */
 export function ForumSidebar({ topActive, moderators }: ForumSidebarProps) {
   return (
-    <aside className="hidden w-72 shrink-0 lg:sticky lg:top-6 lg:block lg:max-h-[calc(100vh-3rem)] lg:self-start lg:overflow-y-auto">
+    <aside className="hidden w-72 shrink-0 lg:sticky lg:top-[var(--sticky-header-h)] lg:block lg:max-h-[calc(100vh-var(--sticky-header-h)-1rem)] lg:self-start lg:overflow-y-auto">
       <div className="space-y-4 pb-1">
         <DescriptionCard />
         <ActiveUsersCard profiles={topActive} />

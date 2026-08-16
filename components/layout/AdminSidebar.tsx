@@ -5,15 +5,18 @@ import { usePathname } from "next/navigation"
 import {
   BarChart2,
   BookOpen,
+  ChevronDown,
   Eye,
   GalleryHorizontalEnd,
   Gift,
+  Handshake,
   Home,
   Medal,
   Megaphone,
   MessageSquare,
   Mouse,
   Newspaper,
+  Package,
   PlaySquare,
   Settings,
   ShoppingBag,
@@ -43,6 +46,7 @@ interface NavItem {
   icon: React.ElementType
   permission?: AdminPermissionKey
   requiresWebMaster?: boolean
+  children?: NavItem[]
 }
 
 interface NavGroup {
@@ -66,6 +70,7 @@ export function AdminSidebar() {
 
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+  const [expandedHref, setExpandedHref] = useState<string | null>(null)
 
   const navGroups: NavGroup[] = [
     {
@@ -97,16 +102,43 @@ export function AdminSidebar() {
       label: t.admin.sidebar.shop,
       items: [
         { href: "/admin/offers", label: t.admin.sidebar.offers,         icon: Gift,       permission: "offers_read" },
-        { href: "/admin/store",  label: t.admin.sidebar.storeAndBazar,  icon: ShoppingBag, permission: "store_read" },
+        {
+          href: "/admin/store",
+          label: t.admin.sidebar.storeAndBazar,
+          icon: ShoppingBag,
+          permission: "store_read",
+          children: [
+            { href: "/admin/store",        label: "Produtos", icon: ShoppingBag, permission: "store_read" },
+            { href: "/admin/store/orders", label: "Pedidos",  icon: Package,     permission: "store_read" },
+          ],
+        },
         { href: "/admin/market", label: "Mercado",                      icon: Tags,        permission: "market_read" },
+        {
+          href: "/admin/afiliados",
+          label: "Afiliados",
+          icon: Handshake,
+          permission: "affiliates_read",
+          children: [
+            { href: "/admin/afiliados",           label: "Solicitações", icon: Handshake, permission: "affiliates_read" },
+            { href: "/admin/afiliados/saques",    label: "Saques",       icon: Package,   permission: "affiliates_read" },
+            { href: "/admin/afiliados/comissoes", label: "Comissões",    icon: BarChart2, permission: "affiliates_read" },
+          ],
+        },
       ],
     },
     {
       label: t.admin.sidebar.system,
       items: [
-        { href: "/admin/users",         label: t.admin.sidebar.users,     icon: Users,    requiresWebMaster: true },
-        { href: "/admin/notificacoes",  label: "Avisos do sistema",       icon: Megaphone, requiresWebMaster: true },
-        { href: "/admin/settings",      label: t.admin.sidebar.settings,  icon: Settings, permission: "settings_read" },
+        {
+          href: "/admin/users",
+          label: t.admin.sidebar.system,
+          icon: Wrench,
+          children: [
+            { href: "/admin/users",        label: t.admin.sidebar.users,    icon: Users,     requiresWebMaster: true },
+            { href: "/admin/notificacoes", label: "Avisos do sistema",      icon: Megaphone, requiresWebMaster: true },
+            { href: "/admin/settings",     label: t.admin.sidebar.settings, icon: Settings,  permission: "settings_read" },
+          ],
+        },
       ],
     },
   ]
@@ -138,13 +170,25 @@ export function AdminSidebar() {
     return pathname.startsWith(href)
   }
 
+  /** Rota ativa dentre os filhos — usada tanto para abrir o grupo quanto para destacar o filho certo. */
+  const activeChildHref = (children: NavItem[]) => {
+    // Ordena pelo href mais específico primeiro (evita /admin/store "vencer" /admin/store/orders).
+    const sorted = [...children].sort((a, b) => b.href.length - a.href.length)
+    return sorted.find((child) => isActive(child.href))?.href ?? null
+  }
+
+  function canSee(item: NavItem) {
+    if (item.requiresWebMaster) return isWebMaster(profile)
+    if (!item.permission) return true
+    return hasAdminPermission(profile, item.permission)
+  }
+
   function filterItems(items: NavItem[]) {
     if (!profile) return []
-    return items.filter((item) => {
-      if (item.requiresWebMaster) return isWebMaster(profile)
-      if (!item.permission) return true
-      return hasAdminPermission(profile, item.permission)
-    })
+    return items
+      .filter(canSee)
+      .map((item) => (item.children ? { ...item, children: item.children.filter(canSee) } : item))
+      .filter((item) => !item.children || item.children.length > 0)
   }
 
   const close = () => setAdminMobileOpen(false)
@@ -207,6 +251,70 @@ export function AdminSidebar() {
                   <div className="space-y-1">
                     {visible.map((item) => {
                       const Icon = item.icon
+
+                      if (item.children && item.children.length > 0) {
+                        const activeChild = activeChildHref(item.children)
+                        const open = expandedHref === item.href || activeChild !== null
+
+                        return (
+                          <div key={item.href}>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedHref((prev) => (prev === item.href ? null : item.href))}
+                              aria-expanded={open}
+                              className={cn(
+                                "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                                isCollapsed && "justify-center",
+                                activeChild
+                                  ? "text-foreground"
+                                  : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                              )}
+                            >
+                              <Icon className="size-[18px] shrink-0" />
+                              <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>{item.label}</span>
+                              <ChevronDown
+                                className={cn(
+                                  "size-3.5 shrink-0 transition-transform duration-200",
+                                  isCollapsed && "hidden",
+                                  open && "rotate-180"
+                                )}
+                              />
+                            </button>
+                            {!isCollapsed && (
+                              <div
+                                className="grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out"
+                                style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+                              >
+                                <div className="min-h-0">
+                                  <div className="ml-4 mt-1 space-y-1 border-l border-border pl-3">
+                                    {item.children.map((child) => {
+                                      const ChildIcon = child.icon
+                                      const childActiveState = child.href === activeChild
+                                      return (
+                                        <Link
+                                          key={child.href}
+                                          href={child.href}
+                                          onClick={close}
+                                          className={cn(
+                                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                                            childActiveState
+                                              ? "bg-primary text-primary-foreground"
+                                              : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+                                          )}
+                                        >
+                                          <ChildIcon className="size-4 shrink-0" />
+                                          <span>{child.label}</span>
+                                        </Link>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+
                       const active = isActive(item.href)
                       return (
                         <Link

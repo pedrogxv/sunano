@@ -19,6 +19,7 @@ export type NotificationType =
   | "system"
   | "mention"
   | "new_post"
+  | "order_status"
 
 export type NotificationEntityType =
   | "forum_post"
@@ -26,6 +27,7 @@ export type NotificationEntityType =
   | "blog_post"
   | "blog_comment"
   | "user"
+  | "order"
 
 export type Database = {
   public: {
@@ -45,6 +47,23 @@ export type Database = {
           specs: Record<string, unknown>
           /** Sem CHECK constraint no banco — valores válidos vivem em lib/tag-options.ts. */
           tags: string[]
+          /**
+           * Campos extraídos de `specs` para colunas reais indexáveis (ver
+           * migration 20260917000001_peripherals_columns_and_indexes.sql).
+           * Sem CHECK/enum ainda — mesma justificativa de `tags` acima.
+           * `specs` continua sendo gravado em paralelo (dual-write) até os
+           * consumidores migrarem por completo.
+           */
+          weight_g: number | null
+          connectivity: string | null
+          mouse_shape: string | null
+          keyboard_layout: string | null
+          surface: string | null
+          profile: string | null
+          panel_type: string | null
+          refresh_rate: number | null
+          /** Ordem numérica auxiliar de `tier` (GOAT=0 ... L=6), para ORDER BY. */
+          tier_rank: number | null
         }
         Insert: Omit<Database["public"]["Tables"]["peripherals"]["Row"], "id" | "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["peripherals"]["Insert"]>
@@ -103,6 +122,8 @@ export type Database = {
           market_ban_reason: string | null
           /** Aceite do termo de integridade das mini reviews (item 1.2) — registrado 1x, nunca reexibido depois. */
           reviews_integrity_accepted_at: string | null
+          /** Cache do id de cliente no Asaas — evita recriar o customer a cada compra. */
+          asaas_customer_id: string | null
           created_at: string
           updated_at: string
         }
@@ -147,7 +168,7 @@ export type Database = {
         Row: {
           id: string
           slug: string
-          track: "posts" | "comments" | "followers"
+          track: "posts" | "comments" | "followers" | "aura_earned"
           tier: "bronze" | "silver" | "gold" | "platinum" | "diamond"
           threshold: number
           name: string
@@ -577,6 +598,7 @@ export type Database = {
         Row: {
           user_id: string
           balance: number
+          total_earned: number
           updated_at: string
         }
         Insert: Database["public"]["Tables"]["user_aura_wallet"]["Row"]
@@ -703,11 +725,14 @@ export type Database = {
           stock: number
           images: string[]
           category: string | null
+          brand: string | null
           type: "store" | "bazaar"
           condition: "new" | "used" | "opened"
           condition_notes: string | null
           is_active: boolean
           peripheral_id: string | null
+          features: string[]
+          video_url: string | null
           created_at: string
           updated_at: string
         }
@@ -720,11 +745,14 @@ export type Database = {
           stock?: number
           images?: string[]
           category?: string | null
+          brand?: string | null
           type: "store" | "bazaar"
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
           is_active?: boolean
           peripheral_id?: string | null
+          features?: string[]
+          video_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -737,13 +765,238 @@ export type Database = {
           stock?: number
           images?: string[]
           category?: string | null
+          brand?: string | null
           type?: "store" | "bazaar"
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
           is_active?: boolean
           peripheral_id?: string | null
+          features?: string[]
+          video_url?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      store_product_specs: {
+        Relationships: []
+        Row: {
+          id: string
+          product_id: string
+          label: string
+          value: string
+          position: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          label: string
+          value: string
+          position?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          label?: string
+          value?: string
+          position?: number
+          created_at?: string
+        }
+      }
+      store_product_peripherals: {
+        Relationships: []
+        Row: {
+          product_id: string
+          peripheral_id: string
+          position: number
+          created_at: string
+        }
+        Insert: {
+          product_id: string
+          peripheral_id: string
+          position?: number
+          created_at?: string
+        }
+        Update: {
+          product_id?: string
+          peripheral_id?: string
+          position?: number
+          created_at?: string
+        }
+      }
+      store_product_variants: {
+        Relationships: []
+        Row: {
+          id: string
+          product_id: string
+          label: string
+          price_cents_override: number | null
+          stock: number
+          position: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          label: string
+          price_cents_override?: number | null
+          stock?: number
+          position?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          label?: string
+          price_cents_override?: number | null
+          stock?: number
+          position?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      store_product_reviews: {
+        Relationships: []
+        Row: {
+          id: string
+          product_id: string
+          user_id: string
+          order_id: string | null
+          rating: number
+          title: string | null
+          body: string
+          is_verified_purchase: boolean
+          status: "published" | "hidden"
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          user_id: string
+          order_id?: string | null
+          rating: number
+          title?: string | null
+          body: string
+          is_verified_purchase?: boolean
+          status?: "published" | "hidden"
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          user_id?: string
+          order_id?: string | null
+          rating?: number
+          title?: string | null
+          body?: string
+          is_verified_purchase?: boolean
+          status?: "published" | "hidden"
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      store_product_sunano_reviews: {
+        Relationships: []
+        Row: {
+          id: string
+          product_id: string
+          rating: number | null
+          title: string
+          body: string
+          video_url: string | null
+          author_admin_id: string | null
+          published: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          rating?: number | null
+          title: string
+          body: string
+          video_url?: string | null
+          author_admin_id?: string | null
+          published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          rating?: number | null
+          title?: string
+          body?: string
+          video_url?: string | null
+          author_admin_id?: string | null
+          published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      store_wishlists: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          is_default: boolean
+          is_public: boolean
+          share_token: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name?: string
+          is_default?: boolean
+          is_public?: boolean
+          share_token?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          is_default?: boolean
+          is_public?: boolean
+          share_token?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      store_wishlist_items: {
+        Relationships: []
+        Row: {
+          id: string
+          wishlist_id: string
+          product_id: string
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          wishlist_id: string
+          product_id: string
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          wishlist_id?: string
+          product_id?: string
+          note?: string | null
+          created_at?: string
         }
       }
       store_orders: {
@@ -752,13 +1005,31 @@ export type Database = {
           id: string
           stripe_session_id: string | null
           stripe_payment_intent_id: string | null
+          misticpay_transaction_id: string | null
+          misticpay_e2e: string | null
+          asaas_payment_id: string | null
+          asaas_customer_id: string | null
+          asaas_receipt_url: string | null
+          pix_copy_paste: string | null
+          pix_qr_code_base64: string | null
+          pix_expires_at: string | null
+          access_token: string | null
           customer_email: string | null
           customer_name: string | null
           items: Record<string, unknown>[]
           total_cents: number
-          status: "pending" | "paid" | "cancelled" | "refunded"
+          status: "pending" | "paid" | "awaiting_shipping_info" | "shipped" | "delivered" | "cancelled" | "refunded" | "expired"
           payment_method: string | null
           metadata: Record<string, unknown>
+          tracking_code: string | null
+          carrier: string | null
+          shipped_at: string | null
+          delivered_at: string | null
+          refunded_cents: number
+          refund_reason: string | null
+          refunded_at: string | null
+          affiliate_id: string | null
+          affiliate_code: string | null
           created_at: string
           updated_at: string
         }
@@ -766,13 +1037,31 @@ export type Database = {
           id?: string
           stripe_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          misticpay_transaction_id?: string | null
+          misticpay_e2e?: string | null
+          asaas_payment_id?: string | null
+          asaas_customer_id?: string | null
+          asaas_receipt_url?: string | null
+          pix_copy_paste?: string | null
+          pix_qr_code_base64?: string | null
+          pix_expires_at?: string | null
+          access_token?: string | null
           customer_email?: string | null
           customer_name?: string | null
           items: Record<string, unknown>[]
           total_cents: number
-          status?: "pending" | "paid" | "cancelled" | "refunded"
+          status?: "pending" | "paid" | "awaiting_shipping_info" | "shipped" | "delivered" | "cancelled" | "refunded" | "expired"
           payment_method?: string | null
           metadata?: Record<string, unknown>
+          tracking_code?: string | null
+          carrier?: string | null
+          shipped_at?: string | null
+          delivered_at?: string | null
+          refunded_cents?: number
+          refund_reason?: string | null
+          refunded_at?: string | null
+          affiliate_id?: string | null
+          affiliate_code?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -780,13 +1069,31 @@ export type Database = {
           id?: string
           stripe_session_id?: string | null
           stripe_payment_intent_id?: string | null
+          misticpay_transaction_id?: string | null
+          misticpay_e2e?: string | null
+          asaas_payment_id?: string | null
+          asaas_customer_id?: string | null
+          asaas_receipt_url?: string | null
+          pix_copy_paste?: string | null
+          pix_qr_code_base64?: string | null
+          pix_expires_at?: string | null
+          access_token?: string | null
           customer_email?: string | null
           customer_name?: string | null
           items?: Record<string, unknown>[]
           total_cents?: number
-          status?: "pending" | "paid" | "cancelled" | "refunded"
+          status?: "pending" | "paid" | "awaiting_shipping_info" | "shipped" | "delivered" | "cancelled" | "refunded" | "expired"
           payment_method?: string | null
           metadata?: Record<string, unknown>
+          tracking_code?: string | null
+          carrier?: string | null
+          shipped_at?: string | null
+          delivered_at?: string | null
+          refunded_cents?: number
+          refund_reason?: string | null
+          refunded_at?: string | null
+          affiliate_id?: string | null
+          affiliate_code?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -806,7 +1113,11 @@ export type Database = {
           fee_cents: number
           fee_status: "waived" | "pending" | "paid"
           is_free_vip_slot: boolean
-          stripe_session_id: string | null
+          asaas_payment_id: string | null
+          asaas_customer_id: string | null
+          pix_copy_paste: string | null
+          pix_qr_code_base64: string | null
+          pix_expires_at: string | null
           rejection_reason: string | null
           reviewed_by: string | null
           reviewed_at: string | null
@@ -826,7 +1137,11 @@ export type Database = {
           fee_cents?: number
           fee_status?: "waived" | "pending" | "paid"
           is_free_vip_slot?: boolean
-          stripe_session_id?: string | null
+          asaas_payment_id?: string | null
+          asaas_customer_id?: string | null
+          pix_copy_paste?: string | null
+          pix_qr_code_base64?: string | null
+          pix_expires_at?: string | null
           rejection_reason?: string | null
           reviewed_by?: string | null
           reviewed_at?: string | null
@@ -846,7 +1161,11 @@ export type Database = {
           fee_cents?: number
           fee_status?: "waived" | "pending" | "paid"
           is_free_vip_slot?: boolean
-          stripe_session_id?: string | null
+          asaas_payment_id?: string | null
+          asaas_customer_id?: string | null
+          pix_copy_paste?: string | null
+          pix_qr_code_base64?: string | null
+          pix_expires_at?: string | null
           rejection_reason?: string | null
           reviewed_by?: string | null
           reviewed_at?: string | null
@@ -976,15 +1295,166 @@ export type Database = {
         }
         Update: { is_read?: boolean }
       }
+      affiliates: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          code: string | null
+          status: "pending" | "approved" | "rejected" | "suspended"
+          commission_bps: number
+          balance_cents: number
+          pix_key: string | null
+          pix_key_type: "cpf" | "cnpj" | "email" | "phone" | "random" | null
+          rejection_reason: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          approved_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          code?: string | null
+          status?: "pending" | "approved" | "rejected" | "suspended"
+          commission_bps?: number
+          balance_cents?: number
+          pix_key?: string | null
+          pix_key_type?: "cpf" | "cnpj" | "email" | "phone" | "random" | null
+          rejection_reason?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          approved_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          code?: string | null
+          status?: "pending" | "approved" | "rejected" | "suspended"
+          commission_bps?: number
+          balance_cents?: number
+          pix_key?: string | null
+          pix_key_type?: "cpf" | "cnpj" | "email" | "phone" | "random" | null
+          rejection_reason?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          approved_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      affiliate_commission_events: {
+        Relationships: []
+        Row: {
+          id: string
+          affiliate_id: string
+          order_id: string
+          type: "credit" | "refund_debit" | "adjustment"
+          amount_cents: number
+          order_total_cents: number
+          commission_bps: number
+          related_event_id: string | null
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          affiliate_id: string
+          order_id: string
+          type: "credit" | "refund_debit" | "adjustment"
+          amount_cents: number
+          order_total_cents: number
+          commission_bps: number
+          related_event_id?: string | null
+          note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          affiliate_id?: string
+          order_id?: string
+          type?: "credit" | "refund_debit" | "adjustment"
+          amount_cents?: number
+          order_total_cents?: number
+          commission_bps?: number
+          related_event_id?: string | null
+          note?: string | null
+          created_at?: string
+        }
+      }
+      affiliate_payout_requests: {
+        Relationships: []
+        Row: {
+          id: string
+          affiliate_id: string
+          amount_cents: number
+          status: "requested" | "paid" | "rejected" | "cancelled"
+          pix_key: string
+          pix_key_type: "cpf" | "cnpj" | "email" | "phone" | "random"
+          admin_note: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          paid_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          affiliate_id: string
+          amount_cents: number
+          status?: "requested" | "paid" | "rejected" | "cancelled"
+          pix_key: string
+          pix_key_type: "cpf" | "cnpj" | "email" | "phone" | "random"
+          admin_note?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          paid_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          affiliate_id?: string
+          amount_cents?: number
+          status?: "requested" | "paid" | "rejected" | "cancelled"
+          pix_key?: string
+          pix_key_type?: "cpf" | "cnpj" | "email" | "phone" | "random"
+          admin_note?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          paid_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: Record<string, never>
     Functions: {
+      count_orders_by_status: {
+        Args: Record<string, never>
+        Returns: { status: string; count: number }[]
+      }
       broadcast_system_notification: {
         Args: { p_title: string; p_body: string; p_link?: string | null; p_user_id?: string | null }
         Returns: number
       }
       decrement_store_stock: {
         Args: { p_product_id: string; p_quantity: number }
+        Returns: boolean
+      }
+      decrement_variant_stock: {
+        Args: { p_variant_id: string; p_quantity: number }
+        Returns: boolean
+      }
+      increment_store_stock: {
+        Args: { p_product_id: string; p_quantity: number }
+        Returns: boolean
+      }
+      increment_variant_stock: {
+        Args: { p_variant_id: string; p_quantity: number }
         Returns: boolean
       }
       anonymize_user_data: {
@@ -1025,7 +1495,7 @@ export type Database = {
         Returns: boolean
       }
       check_and_award_track_achievements: {
-        Args: { p_user_id: string; p_track: "posts" | "comments" | "followers"; p_count: number }
+        Args: { p_user_id: string; p_track: "posts" | "comments" | "followers" | "aura_earned"; p_count: number }
         Returns: undefined
       }
       complete_daily_mission: {
@@ -1047,6 +1517,23 @@ export type Database = {
       credit_peripheral_review_creation_aura: {
         Args: { p_user_id: string; p_peripheral_id: string; p_review_id: string }
         Returns: boolean
+      }
+      apply_affiliate_commission_event: {
+        Args: {
+          p_affiliate_id: string
+          p_order_id: string
+          p_delta_cents: number
+          p_type: "credit" | "refund_debit" | "adjustment"
+          p_order_total_cents: number
+          p_commission_bps: number
+          p_related_event_id?: string | null
+          p_note?: string | null
+        }
+        Returns: string | null
+      }
+      request_affiliate_payout: {
+        Args: { p_affiliate_id: string; p_amount_cents: number; p_pix_key: string; p_pix_key_type: string }
+        Returns: string | null
       }
     }
   }

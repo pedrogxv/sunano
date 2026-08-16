@@ -3,6 +3,7 @@
 import { Search, SlidersHorizontal, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Combobox } from "@/components/ui/combobox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -160,18 +161,17 @@ export function FilterBar({
                   <label className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
                     {t.common.brand}
                   </label>
-                  <Select onValueChange={onBrandChange} value={selectedBrand}>
-                    <SelectTrigger className="border-border bg-muted/30">
-                      <SelectValue placeholder={t.common.brand} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableBrands.map((brand) => (
-                        <SelectItem key={brand} value={brand}>
-                          {brand === "all" ? t.common.allFem : formatLabel(brand)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Combobox
+                    options={availableBrands.map((brand) => ({
+                      value: brand,
+                      label: brand === "all" ? t.common.allFem : formatLabel(brand),
+                    }))}
+                    value={selectedBrand}
+                    onValueChange={onBrandChange}
+                    placeholder={t.common.brand}
+                    searchPlaceholder={t.common.brand}
+                    className="border-border bg-muted/30"
+                  />
                 </div>
 
                 {/* Price Filter */}

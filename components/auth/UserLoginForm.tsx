@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useActionState } from "react"
 import { useFormStatus } from "react-dom"
 import Link from "next/link"
@@ -11,6 +11,7 @@ import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useAuthUser } from "@/components/providers/auth-context"
 
 const LOGIN_ERRORS: Record<string, string> = {
   missing_credentials: "Informe email e senha.",
@@ -102,9 +103,31 @@ function ForgotMode({ onBack }: { onBack: () => void }) {
   )
 }
 
-export function UserLoginForm() {
+interface UserLoginFormProps {
+  /**
+   * Quando usado dentro do AuthModal: envia `skip_redirect` para a action (o
+   * modal fica na página atual em vez de navegar) e troca os links `<Link
+   * href="/register">` por callbacks que trocam de aba dentro do próprio
+   * modal, sem navegação.
+   */
+  embedded?: boolean
+  next?: string
+  onSuccess?: (mfaNext?: string) => void
+  onSwitchToRegister?: () => void
+}
+
+export function UserLoginForm({ embedded = false, next = "/forum", onSuccess, onSwitchToRegister }: UserLoginFormProps = {}) {
   const [mode, setMode] = useState<"login" | "forgot">("login")
   const [loginState, loginAction] = useActionState(loginUserAction, { error: null })
+  const { refresh } = useAuthUser()
+
+  useEffect(() => {
+    if (embedded && loginState.success) {
+      refresh()
+      onSuccess?.(loginState.mfaNext)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loginState])
 
   const errorMessage = loginState.error
     ? (LOGIN_ERRORS[loginState.error] ?? loginState.error)
@@ -116,8 +139,8 @@ export function UserLoginForm() {
 
   return (
     <div className="space-y-5">
-      <GoogleAuthButton label="Continuar com Google" next="/forum" />
-      <DiscordAuthButton label="Continuar com Discord" next="/forum" />
+      <GoogleAuthButton label="Continuar com Google" next={next} />
+      <DiscordAuthButton label="Continuar com Discord" next={next} />
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
@@ -129,6 +152,7 @@ export function UserLoginForm() {
       </div>
 
       <form action={loginAction} className="space-y-4">
+        {embedded && <input type="hidden" name="skip_redirect" value="1" />}
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground" htmlFor="email">Email</label>
           <Input
@@ -174,9 +198,15 @@ export function UserLoginForm() {
 
       <p className="text-center text-xs text-muted-foreground">
         Não tem conta?{" "}
-        <Link href="/register" className="text-primary hover:underline">
-          Cadastre-se
-        </Link>
+        {embedded && onSwitchToRegister ? (
+          <button type="button" onClick={onSwitchToRegister} className="text-primary hover:underline">
+            Cadastre-se
+          </button>
+        ) : (
+          <Link href="/register" className="text-primary hover:underline">
+            Cadastre-se
+          </Link>
+        )}
       </p>
     </div>
   )

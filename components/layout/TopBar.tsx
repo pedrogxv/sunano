@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Skeleton } from "@/components/ui/skeleton"
 
 // Code-split: o AuthUser puxa o cliente Supabase (@supabase/ssr), pesado e
 // desnecessário para a primeira pintura. Carregá-lo sob demanda tira esse
@@ -15,7 +16,7 @@ const AuthUser = dynamic(
   () => import("@/components/auth/auth-user").then((m) => m.AuthUser),
   {
     ssr: false,
-    loading: () => <div className="size-8 shrink-0 rounded-lg bg-muted/40 animate-pulse md:size-8" />,
+    loading: () => <Skeleton className="size-8 shrink-0 rounded-lg md:size-8" />,
   }
 )
 // Mesmo motivo do AuthUser: o sino só interessa a quem está logado e puxa
@@ -45,6 +46,7 @@ const MissionsBadge = dynamic(
 import { useTheme } from "@/components/providers/theme-context"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
+import { CartButton } from "@/components/store/CartDrawer"
 import { cn } from "@/lib/utils"
 
 type PageDefaults = { title: string; description?: string }
@@ -86,9 +88,9 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
 }
 
 /**
- * Selo permanente de fase Alpha — visível em toda página (via `TopBar`,
+ * Selo permanente de fase Beta — visível em toda página (via `TopBar`,
  * renderizado globalmente pelo `LayoutShell`), independente do título da
- * rota. Leva pro changelog: é o lugar que explica o que "alpha" significa
+ * rota. Leva pro changelog: é o lugar que explica o que "beta" significa
  * e o que já mudou.
  */
 function AlphaBadge() {
@@ -103,12 +105,12 @@ function AlphaBadge() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
             <span className="relative inline-flex size-1.5 rounded-full bg-violet-400" />
           </span>
-          Alpha
+          Beta
         </Link>
       </TooltipTrigger>
       <TooltipContent>
         <p className="max-w-[220px] text-xs">
-          O Sunano está em fase Alpha: em construção ativa. Clique pra ver o changelog.
+          O Sunano está em fase Beta: em construção ativa. Clique pra ver o changelog.
         </p>
       </TooltipContent>
     </Tooltip>
@@ -153,6 +155,9 @@ export function TopBar() {
 
   const isLight = theme === "light"
   const isAdmin = pathname?.startsWith("/admin")
+  // No checkout o carrinho já está todo listado na própria página — mostrar o
+  // botão/badge aqui só distrai (ou pior, deixa reabrir a gaveta por cima do QR code do PIX).
+  const isCheckout = pathname?.startsWith("/checkout")
   const isCollapsed = isAdmin ? adminCollapsed : publicCollapsed
   const toggleCollapsed = isAdmin ? toggleAdmin : togglePublic
 
@@ -220,6 +225,9 @@ export function TopBar() {
               <Sun className="size-[15px] text-primary" />
             )}
           </button>
+
+          {/* Carrinho — só na área pública, é onde a loja/bazar vivem. Some no checkout. */}
+          {!isAdmin && !isCheckout && <CartButton />}
 
           {/* Notificações — vale também no admin, onde não há AuthUser aqui. */}
           <NotificationBell />

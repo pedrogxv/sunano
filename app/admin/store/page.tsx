@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, Edit, Plus, Store, Tag, Trash2 } from "lucide-react"
+import { AlertCircle, AlertTriangle, Edit, LayoutGrid, MessageSquare, Plus, ShoppingCart, Store, Tag, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
+import { AnimatedCounter } from "@/components/animated-counter"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -18,7 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 
 interface StoreProduct {
   id: string
@@ -46,11 +47,58 @@ const CONDITION_COLOR: Record<string, string> = {
   used: "text-orange-400 bg-orange-500/10 border-orange-500/30",
 }
 
+/* ── Stat chip — também funciona como atalho de filtro ─── */
+function StatChip({
+  icon: Icon,
+  value,
+  label,
+  colorClass,
+  active,
+  hoverClass,
+  onClick,
+}: {
+  icon: React.ElementType
+  value: number
+  label: string
+  colorClass: string
+  active: boolean
+  hoverClass: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        "rounded-xl border p-3 text-left transition-all duration-200",
+        "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5",
+        active ? "border-primary/50 bg-primary/10" : "border-border bg-card/60",
+        hoverClass
+      )}
+    >
+      <div className={cn("flex size-7 items-center justify-center rounded-lg", colorClass)}>
+        <Icon className="size-3.5" />
+      </div>
+      <p className="mt-2 text-xl font-bold tabular-nums text-foreground">
+        <AnimatedCounter value={value} duration={800} />
+      </p>
+      <p className="truncate text-[11px] text-muted-foreground">{label}</p>
+    </button>
+  )
+}
+
+const PAGE_SIZE = 50
+
 export default function AdminStorePage() {
   const [products, setProducts] = useState<StoreProduct[]>([])
+  const [total, setTotal] = useState(0)
+  const [counts, setCounts] = useState({ all: 0, store: 0, bazaar: 0, outOfStock: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<"all" | "store" | "bazaar">("all")
+  const [outOfStockOnly, setOutOfStockOnly] = useState(false)
+  const [page, setPage] = useState(1)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
   const [deleting, setDeleting] = useState(false)
 
@@ -58,11 +106,14 @@ export default function AdminStorePage() {
     setLoading(true)
     setError(null)
     try {
-      const url = filter === "all" ? "/api/admin/store/products" : `/api/admin/store/products?type=${filter}`
-      const res = await fetch(url)
-      const data = (await res.json()) as { products?: StoreProduct[]; error?: string }
+      const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
+      if (filter !== "all") params.set("type", filter)
+      if (outOfStockOnly) params.set("outOfStock", "1")
+      const res = await fetch(`/api/admin/store/products?${params}`)
+      const data = (await res.json()) as { products?: StoreProduct[]; total?: number; error?: string }
       if (!res.ok) throw new Error(data.error ?? "Erro ao carregar")
       setProducts(data.products ?? [])
+      setTotal(data.total ?? 0)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao carregar"
       setError(message)
@@ -70,9 +121,29 @@ export default function AdminStorePage() {
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [filter, page, outOfStockOnly])
 
   useEffect(() => { load() }, [load])
+
+  // Contadores dos StatChips (Todos/Loja/Bazar) — vêm do total real de cada
+  // filtro no banco, não do array da página atual (que só tem PAGE_SIZE itens).
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      fetch("/api/admin/store/products?pageSize=1").then((r) => r.json()),
+      fetch("/api/admin/store/products?type=store&pageSize=1").then((r) => r.json()),
+      fetch("/api/admin/store/products?type=bazaar&pageSize=1").then((r) => r.json()),
+      fetch("/api/admin/store/products?outOfStock=1&pageSize=1").then((r) => r.json()),
+    ])
+      .then(([all, store, bazaar, outOfStock]) => {
+        if (cancelled) return
+        setCounts({ all: all.total ?? 0, store: store.total ?? 0, bazaar: bazaar.total ?? 0, outOfStock: outOfStock.total ?? 0 })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [total])
+
+  useEffect(() => { setPage(1) }, [filter, outOfStockOnly])
 
   async function handleDelete() {
     if (!deleteDialog.id) return
@@ -93,10 +164,12 @@ export default function AdminStorePage() {
     }
   }
 
-  const storeCount = products.filter((p) => p.type === "store").length
-  const bazaarCount = products.filter((p) => p.type === "bazaar").length
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  // O filtro "sem estoque" já é aplicado no banco (query `outOfStockOnly`),
+  // então `products` chega pronto — sem filtro adicional em memória.
+  const visibleProducts = products
 
-  usePageHeader("Loja & Bazar", "Gerencie os produtos da loja e os itens do bazar (usados pelo Sunano).")
+  usePageHeader("Loja", "Gerencie os produtos da loja e os itens do bazar (usados pelo Sunano).")
 
   return (
     <div className="space-y-6">
@@ -118,50 +191,44 @@ export default function AdminStorePage() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats — também funcionam como atalho de filtro */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Todos", value: products.length, key: "all" as const },
-          { label: "Loja", value: storeCount, key: "store" as const },
-          { label: "Bazar", value: bazaarCount, key: "bazaar" as const },
-          {
-            label: "Sem estoque",
-            value: products.filter((p) => p.stock === 0).length,
-            key: "all" as const,
-          },
-        ].map((stat) => (
-          <button
-            key={stat.label}
-            onClick={() => setFilter(stat.key)}
-            className={cn(
-              "rounded-xl border p-4 text-left transition-all",
-              filter === stat.key && stat.key !== "all"
-                ? "border-primary/40 bg-primary/10"
-                : "border-border bg-muted/30 hover:border-border"
-            )}
-          >
-            <p className="text-2xl font-black text-foreground">{stat.value}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{stat.label}</p>
-          </button>
-        ))}
-      </div>
-
-      {/* Filter tabs */}
-      <div className="flex rounded-lg border border-border bg-muted/30 p-1 w-fit">
-        {(["all", "store", "bazaar"] as const).map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={cn(
-              "rounded-md px-4 py-2 text-sm font-medium transition-all",
-              filter === f
-                ? "bg-primary/20 text-primary"
-                : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-            )}
-          >
-            {f === "all" ? "Todos" : f === "store" ? "🛒 Loja" : "♻️ Bazar"}
-          </button>
-        ))}
+        <StatChip
+          icon={LayoutGrid}
+          value={counts.all}
+          label="Todos"
+          colorClass="bg-primary/15 text-primary"
+          active={filter === "all" && !outOfStockOnly}
+          hoverClass="hover:border-primary/40 hover:bg-primary/5"
+          onClick={() => { setFilter("all"); setOutOfStockOnly(false) }}
+        />
+        <StatChip
+          icon={ShoppingCart}
+          value={counts.store}
+          label="Loja"
+          colorClass="bg-blue-500/15 text-blue-300"
+          active={filter === "store"}
+          hoverClass="hover:border-blue-400/40 hover:bg-blue-500/5"
+          onClick={() => { setFilter((prev) => (prev === "store" ? "all" : "store")); setOutOfStockOnly(false) }}
+        />
+        <StatChip
+          icon={Tag}
+          value={counts.bazaar}
+          label="Bazar"
+          colorClass="bg-amber-500/15 text-amber-300"
+          active={filter === "bazaar"}
+          hoverClass="hover:border-amber-400/40 hover:bg-amber-500/5"
+          onClick={() => { setFilter((prev) => (prev === "bazaar" ? "all" : "bazaar")); setOutOfStockOnly(false) }}
+        />
+        <StatChip
+          icon={AlertTriangle}
+          value={counts.outOfStock}
+          label="Sem estoque"
+          colorClass="bg-red-500/15 text-red-400"
+          active={outOfStockOnly}
+          hoverClass="hover:border-red-400/40 hover:bg-red-500/5"
+          onClick={() => setOutOfStockOnly((prev) => !prev)}
+        />
       </div>
 
       {error && (
@@ -175,6 +242,11 @@ export default function AdminStorePage() {
       {loading ? (
         <div className="flex justify-center py-14">
           <BoxLoader />
+        </div>
+      ) : products.length === 0 && outOfStockOnly ? (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border py-16 text-center">
+          <AlertTriangle className="size-8 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">Nenhum produto sem estoque</p>
         </div>
       ) : products.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-border py-16 text-center">
@@ -202,7 +274,7 @@ export default function AdminStorePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {products.map((p) => (
+              {visibleProducts.map((p) => (
                 <tr key={p.id} className="transition-colors hover:bg-muted/40">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -272,6 +344,11 @@ export default function AdminStorePage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
+                      <Link href={`/admin/store/${p.id}/reviews`}>
+                        <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
+                          <MessageSquare className="size-3.5" />
+                        </Button>
+                      </Link>
                       <Link href={`/admin/store/${p.id}`}>
                         <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
                           <Edit className="size-3.5" />
@@ -291,6 +368,19 @@ export default function AdminStorePage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2">
+          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+            Anterior
+          </Button>
+          <span className="text-xs text-muted-foreground">Página {page} de {totalPages}</span>
+          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+            Próxima
+          </Button>
         </div>
       )}
 

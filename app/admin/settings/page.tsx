@@ -7,6 +7,7 @@ import { toast } from "sonner"
 
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
+import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,34 +28,6 @@ function getNameFallback(email: string | null | undefined) {
   if (!email) return "Admin"
   const [localPart] = email.split("@")
   return localPart || "Admin"
-}
-
-function PasswordStrength({ password }: { password: string }) {
-  const score = [
-    password.length >= 8,
-    /[A-Z]/.test(password),
-    /[0-9]/.test(password),
-    /[^A-Za-z0-9]/.test(password),
-    password.length >= 12,
-  ].filter(Boolean).length
-
-  const labels = ["", "Fraca", "Razoável", "Boa", "Forte", "Muito forte"]
-  const colors = ["", "bg-red-500", "bg-orange-400", "bg-yellow-400", "bg-emerald-400", "bg-emerald-500"]
-
-  if (!password) return null
-
-  return (
-    <div className="space-y-1">
-      <div className="flex gap-1">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className={`h-1 flex-1 rounded-full transition-colors ${i <= score ? colors[score] : "bg-muted"}`} />
-        ))}
-      </div>
-      <p className={`text-[10px] font-medium ${score >= 4 ? "text-emerald-400" : score >= 2 ? "text-yellow-400" : "text-red-400"}`}>
-        {labels[score]}
-      </p>
-    </div>
-  )
 }
 
 export default function SettingsPage() {
@@ -353,7 +326,6 @@ export default function SettingsPage() {
                   placeholder={t.settings.minChars}
                   type="password"
                 />
-                <PasswordStrength password={newPassword} />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.settings.confirmPassword}</label>
@@ -369,6 +341,7 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
+            <PasswordStrengthMeter password={newPassword} />
 
             <div className="flex justify-end border-t border-amber-500/20 pt-4">
               <Button

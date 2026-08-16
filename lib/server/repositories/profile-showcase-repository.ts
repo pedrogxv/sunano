@@ -1,14 +1,16 @@
 import "server-only"
 
+import { cache } from "react"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   countFollowers,
   getMediaAdjustmentsByUser,
 } from "@/lib/server/repositories/users-repository"
 import { DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
-import { getUserAuraBalance, getUserAuraRank } from "@/lib/server/repositories/aura-repository"
+import { getUserAuraBalance, getUserAuraRank, getUserAuraTotalEarned } from "@/lib/server/repositories/aura-repository"
 import { getUserActivityRank } from "@/lib/server/repositories/users-repository"
 import { getUserAchievements, getUserStreak } from "@/lib/server/repositories/achievements-repository"
+import { getDefaultWishlistShowcase, listPublicWishlistsForUser } from "@/lib/server/repositories/wishlists-repository"
 import {
   coerceAccountTier,
   selectVisibleFavorites,
@@ -69,8 +71,13 @@ function defaultNameFrom(id: string) {
 /**
  * Monta o perfil público completo de um usuário.
  * Retorna `null` quando o perfil não existe.
+ *
+ * `React.cache`: dispara ~17 queries em paralelo. `generateMetadata` e a
+ * página (`/perfil/[handle]` e `/perfil/[handle]/reviews`) chamam com o
+ * mesmo `userId` na mesma requisição — sem isso, toda visita a um perfil
+ * público dobrava essa carga inteira.
  */
-export async function getProfileShowcase(userId: string): Promise<ProfileShowcase | null> {
+export const getProfileShowcase = cache(async (userId: string): Promise<ProfileShowcase | null> => {
   const db = createSupabaseAdminClient()
 
   const { data: profile, error } = await db
@@ -109,6 +116,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     favorites,
     followers,
     aura,
+    auraTotalEarned,
     auraRank,
     settings,
     forumActivity,
@@ -118,12 +126,15 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     reviewsByCategory,
     reviewsTotal,
     reviewedPeripheralIds,
+    publicWishlists,
+    defaultWishlist,
   ] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
     getUserFavorites(userId),
     countFollowers(userId),
     getUserAuraBalance(userId),
+    getUserAuraTotalEarned(userId),
     getUserAuraRank(userId),
     getMediaAdjustmentsByUser([userId]),
     countForumActivity(userId),
@@ -133,6 +144,8 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     getUserReviewsByCategory(userId, { limitPerCategory: MINI_REVIEWS_PER_CATEGORY_LIMIT }),
     countUserReviews(userId),
     getReviewedPeripheralIds(userId),
+    listPublicWishlistsForUser(userId),
+    getDefaultWishlistShowcase(userId),
   ])
 
   return {
@@ -151,6 +164,7 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     profile_views: row.profile_views ?? 0,
     followers,
     aura,
+    aura_total_earned: auraTotalEarned,
     aura_rank: auraRank,
     forum_posts: forumActivity.posts,
     forum_comments: forumActivity.comments,
@@ -166,8 +180,21 @@ export async function getProfileShowcase(userId: string): Promise<ProfileShowcas
     reviews_total: reviewsTotal,
     reviews_integrity_accepted_at: row.reviews_integrity_accepted_at,
     reviewed_peripheral_ids: reviewedPeripheralIds,
+    public_wishlists: publicWishlists
+      .filter((w) => w.share_token)
+      .map((w) => ({ id: w.id, name: w.name, share_token: w.share_token as string, item_count: w.item_count ?? 0 })),
+    default_wishlist: defaultWishlist
+      ? {
+          id: defaultWishlist.id,
+          name: defaultWishlist.name,
+          is_public: defaultWishlist.is_public,
+          items: defaultWishlist.items.flatMap((item) =>
+            item.product ? [{ id: item.id, product: item.product }] : []
+          ),
+        }
+      : null,
   }
-}
+})
 
 /** Setup do usuário, sempre com os 5 slots (vazios inclusive). */
 /**
@@ -415,6 +442,11 @@ export async function replaceFavorites(userId: string, peripheralIds: string[]):
 /**
  * Define quais medalhas ficam fixadas no perfil, na ordem informada.
  * Medalhas não conquistadas são ignoradas (o update só atinge as do usuário).
+ *
+ * O reset precisa terminar antes dos updates de fixação (senão ele
+ * sobrescreveria o que acabou de ser gravado), mas os N updates de
+ * `pinned_order` por medalha são independentes entre si — rodam em paralelo
+ * em vez de round-trip por round-trip.
  */
 export async function setPinnedMedals(userId: string, medalIds: string[]): Promise<void> {
   const db = createSupabaseAdminClient()
@@ -424,11 +456,13 @@ export async function setPinnedMedals(userId: string, medalIds: string[]): Promi
     .update({ pinned: false, pinned_order: null })
     .eq("user_id", userId)
 
-  for (const [index, medalId] of medalIds.entries()) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (db.from("user_medals") as any)
-      .update({ pinned: true, pinned_order: index })
-      .eq("user_id", userId)
-      .eq("medal_id", medalId)
-  }
+  await Promise.all(
+    medalIds.map((medalId, index) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.from("user_medals") as any)
+        .update({ pinned: true, pinned_order: index })
+        .eq("user_id", userId)
+        .eq("medal_id", medalId)
+    )
+  )
 }

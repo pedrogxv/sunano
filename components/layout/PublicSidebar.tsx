@@ -105,6 +105,11 @@ export function PublicSidebar() {
   const close = () => setMobileOpen(false)
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname?.startsWith(href)
+  // Loja e Bazar agora vivem na mesma rota (/loja?type=bazaar) — sem
+  // useSearchParams aqui pra não forçar a sidebar (presente em toda página)
+  // para client-side rendering. Ambos os itens ficam ativos juntos em /loja;
+  // o filtro de tipo dentro da página é que reflete a seleção real.
+  const isLojaActive = isActive("/loja")
 
   const peripheralItems: NavItem[] = [
     { href: "/tierlist",    label: "Tierlist",           icon: Trophy },
@@ -197,17 +202,17 @@ export function PublicSidebar() {
             ))}
           </div>
 
-          {/* Loja */}
+          {/* Mercado */}
           <SectionLabel label={t.nav.shop} collapsed={isCollapsed} />
           <div className="space-y-1">
-            {/* Loja */}
+            {/* Mercado (Loja + Bazar) */}
             <Link
               href="/loja"
               onClick={close}
               className={cn(
                 "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                 isCollapsed && "justify-center",
-                isActive("/loja")
+                isLojaActive
                   ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/40"
                   : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:border-emerald-500/60 hover:bg-emerald-500/20 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
               )}
@@ -278,6 +283,18 @@ export function PublicSidebar() {
                 className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
               >
                 Termos
+              </Link>
+              <Link
+                href="/trocas-e-devolucoes"
+                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Trocas e Devoluções
+              </Link>
+              <Link
+                href="/quem-somos"
+                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Quem Somos
               </Link>
               <span className="text-[11px] text-muted-foreground">LGPD</span>
             </div>

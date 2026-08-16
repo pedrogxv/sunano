@@ -28,6 +28,8 @@ export type AdminPermissionKey =
   | "events_write"
   | "brands_read"
   | "brands_write"
+  | "affiliates_read"
+  | "affiliates_write"
 
 export type AdminProfile = {
   id: string
@@ -38,7 +40,7 @@ export type AdminProfile = {
   permissions: Record<string, boolean> | null
 }
 
-export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store" | "market" | "banners" | "events" | "brands"
+export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store" | "market" | "banners" | "events" | "brands" | "affiliates"
 
 export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKey: AdminPermissionKey; writeKey: AdminPermissionKey }> = [
   { key: "dashboard", label: "Dashboard", readKey: "dashboard_read", writeKey: "dashboard_read" },
@@ -55,6 +57,7 @@ export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKe
   { key: "market", label: "Mercado", readKey: "market_read", writeKey: "market_write" },
   { key: "banners", label: "Banners da Home", readKey: "banners_read", writeKey: "banners_write" },
   { key: "events", label: "Conquistas", readKey: "events_read", writeKey: "events_write" },
+  { key: "affiliates", label: "Afiliados", readKey: "affiliates_read", writeKey: "affiliates_write" },
 ]
 
 export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [
@@ -85,6 +88,8 @@ export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [
   "events_write",
   "brands_read",
   "brands_write",
+  "affiliates_read",
+  "affiliates_write",
 ]
 
 export function createFullPermissions() {

@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/lgpd-cleanup",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/expire-pending-orders",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

@@ -42,3 +42,5 @@ next-env.d.ts
 # Config local do Claude Code (permissões aprovadas caminho a caminho, paths
 # absolutos desta máquina). Repo público: nada aqui deve ser publicado.
 .claude/
+.vercel
+.env*

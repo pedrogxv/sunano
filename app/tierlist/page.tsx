@@ -10,7 +10,7 @@ import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 
 // ISR: serve do cache e revalida em background a cada 30s, em vez de
 // re-renderizar (com nova query ao banco) em toda requisição.
-export const revalidate = 30
+export const revalidate = 120
 
 export const metadata: Metadata = {
   title: "Tierlist",
@@ -40,7 +40,17 @@ export default async function TierlistPage() {
       price: p.price,
       tags: (p.tags || []) as ("competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80")[],
       ratings,
-      specs: specs as {
+      // Colunas migradas (p.mouseShape, p.connectivity, ...) têm prioridade
+      // sobre o valor equivalente dentro de `specs`, ainda presente por
+      // dual-write durante a transição.
+      specs: {
+        ...specs,
+        mouseShape: p.mouseShape ?? specs.mouseShape,
+        keyboardLayout: p.keyboardLayout ?? specs.keyboardLayout,
+        connectivity: p.connectivity ?? specs.connectivity,
+        surface: p.surface ?? specs.surface,
+        profile: p.profile ?? specs.profile,
+      } as {
         mouseShape?: "symmetrical" | "ergonomic"
         keyboardLayout?: string
         connectivity?: "wired" | "wireless"

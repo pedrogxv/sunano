@@ -9,7 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import * as z from "zod"
 
-import { formatBRL } from "@/lib/stripe"
+import { formatBRL } from "@/lib/format"
 import { hasAdminPermission, type AdminProfile } from "@/lib/admin-permissions"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import BoxLoader from "@/components/ui/box-loader"
@@ -35,6 +35,7 @@ import {
 import { useLocale } from "@/components/providers/locale-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { mapTier } from "@/lib/tier-utils"
+import { parseWeightToGrams } from "@/lib/peripheral-weight"
 import { RATING_LEVEL_COLORS } from "@/lib/tierlist-theme"
 import { useT } from "@/lib/use-t"
 import { removeBackground, fileToDataUrl, STRONG_REMOVAL_OPTIONS } from "@/lib/client/remove-background"
@@ -44,6 +45,11 @@ import { getTagOptionsForCategory, sanitizeTagsForCategory, type Category, type 
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
+
+/** Ordem numérica auxiliar de `tier`, espelha o CASE da migration
+ * 20260917000001_peripherals_columns_and_indexes.sql — mantida em sincronia
+ * pelo form sempre que `tier` for salvo. */
+const TIER_RANK: Record<Tier, number> = { GOAT: 0, SS: 1, S: 2, A: 3, B: 4, C: 5, L: 6 }
 
 const peripheralSchema = z.object({
   name: z
@@ -328,6 +334,27 @@ function buildSpecsPayload(
       shapeImage: opts.shapeImage || undefined,
       ratings: Object.keys(cleanedRatings).length > 0 ? cleanedRatings : undefined,
     },
+  }
+}
+
+/**
+ * Campos migrados de `specs` para colunas reais (ver migration
+ * 20260917000001_peripherals_columns_and_indexes.sql). Dual-write: estes
+ * valores também continuam dentro do payload de `buildSpecsPayload` acima,
+ * até os consumidores de `specs` migrarem por completo para ler daqui.
+ */
+function buildPeripheralColumnsPayload(data: PeripheralFormData) {
+  const weightG = parseWeightToGrams(data.weight)
+  return {
+    weight_g: weightG ?? null,
+    connectivity: data.connectivity || null,
+    mouse_shape: data.mouseShape || null,
+    keyboard_layout: data.keyboardLayout || null,
+    surface: data.surface || null,
+    profile: data.profile || null,
+    panel_type: data.panelType || null,
+    refresh_rate: typeof data.refreshRate === "number" && !Number.isNaN(data.refreshRate) ? data.refreshRate : null,
+    tier_rank: data.tier !== "__none__" ? TIER_RANK[data.tier] : null,
   }
 }
 
@@ -1000,7 +1027,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           ),
           compatibility: data.specs?.details?.compatibility ?? "",
           comparisons: Array.isArray(data.specs?.details?.comparisons) ? data.specs.details.comparisons.join("\n") : data.specs?.details?.comparisons ?? "",
-          weight: data.specs?.details?.weight ?? "",
           latency: data.specs?.details?.latency ?? "",
           deadzone: data.specs?.details?.deadzone ?? "",
           rtMin: data.specs?.details?.rtMin ?? "",
@@ -1036,7 +1062,19 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             ? (data.specs?.reviewCategory as "performance" | "store" | "videoReview" | "specsComments")
             : null,
           reviewApproved: data.specs?.reviewApproved === true,
+          // O spread de `specs` vem ANTES dos campos migrados abaixo: specs
+          // ainda contém esses 8 campos (dual-write), mas a coluna real tem
+          // prioridade — se viesse depois do spread, sobrescreveria o valor
+          // já lido da coluna nova de volta pro legado.
           ...data.specs,
+          weight: data.weight_g != null ? String(data.weight_g) : (data.specs?.details?.weight ?? ""),
+          connectivity: data.connectivity ?? data.specs?.connectivity ?? "",
+          mouseShape: data.mouse_shape ?? data.specs?.mouseShape ?? "",
+          keyboardLayout: data.keyboard_layout ?? data.specs?.keyboardLayout ?? "",
+          surface: data.surface ?? data.specs?.surface ?? "",
+          profile: data.profile ?? data.specs?.profile ?? "",
+          panelType: data.panel_type ?? data.specs?.panelType ?? "",
+          refreshRate: data.refresh_rate ?? data.specs?.refreshRate ?? undefined,
         })
         setSelectedTag(data.tags ?? [])
         setExistingModeTiers(
@@ -1169,6 +1207,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         name: data.name, brand_id: data.brand_id, category: data.category,
         tier: data.tier === "__none__" ? null : data.tier,
         price: priceToSave, image_url: imageUrl, tags: selectedTag || [], specs,
+        ...buildPeripheralColumnsPayload(data),
       }
 
       let savedId: string | null = peripheralId ?? null

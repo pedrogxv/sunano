@@ -1,4 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 export default function ForumLoading() {
   return (
@@ -15,7 +17,7 @@ export default function ForumLoading() {
 
       <div className="space-y-3">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
+          <div key={i} className={cn("flex items-start gap-3 rounded-xl p-4", CARD_SURFACE)}>
             <Skeleton className="size-9 shrink-0 rounded-full" />
             <div className="min-w-0 flex-1 space-y-2">
               <div className="flex items-center gap-1.5">

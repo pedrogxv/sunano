@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type CSSProperties } from "react"
 import { Flame, Snowflake } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { AURA_CHANGED_EVENT } from "@/lib/client/aura-events"
 
@@ -85,7 +86,11 @@ function useAuraUsage() {
 export function AuraBalanceBadge() {
   const { user, usage, now } = useAuraUsage()
 
-  if (!user || !usage) return null
+  if (!user) return null
+
+  if (!usage) {
+    return <Skeleton className="hidden h-8 w-16 shrink-0 rounded-lg sm:block" />
+  }
 
   const frozen = usage.limitReached
   const remaining = Math.max(usage.limit - usage.givenToday, 0)
@@ -105,7 +110,7 @@ export function AuraBalanceBadge() {
     <Tooltip>
       <TooltipTrigger asChild>
         <div
-          className={`aura-balance-badge hidden shrink-0 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold tabular-nums transition-all sm:flex sm:h-8 sm:w-auto sm:justify-start sm:px-3 ${
+          className={`aura-balance-badge animate-fade-in-up hidden shrink-0 items-center justify-center gap-1.5 rounded-lg text-sm font-semibold tabular-nums transition-all sm:flex sm:h-8 sm:w-auto sm:justify-start sm:px-3 ${
             frozen
               ? "border-sky-400/40 bg-sky-500/10 text-sky-300"
               : "border-border bg-card/70 text-foreground"

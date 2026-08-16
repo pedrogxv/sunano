@@ -169,6 +169,23 @@ export async function getUserAuraBalance(userId: string): Promise<number> {
   return data?.balance ?? 0
 }
 
+/**
+ * Total histórico de Aura já ganha por um usuário — ao contrário de
+ * `balance`, nunca cai (nem ao resgatar medalhas via `aura_redeem`, ver
+ * 20260816_aura_redeem_events.sql). Mantido por trigger em `aura_ledger`
+ * (ver 20260919000000_aura_earned_achievements.sql); usado pela trilha de
+ * conquistas "Aura farmada".
+ */
+export async function getUserAuraTotalEarned(userId: string): Promise<number> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_aura_wallet")
+    .select("total_earned")
+    .eq("user_id", userId)
+    .maybeSingle()
+  return data?.total_earned ?? 0
+}
+
 /** Mesmas `reason`s que `toggle_forum_aura` conta pro limite diário de "dados" (ver 20260804120000_aura_rebalance.sql). */
 const DAILY_LIMIT_REASONS: AuraLedgerReason[] = [
   "post_aura_received", "comment_aura_received", "blog_post_aura_received", "blog_comment_aura_received",

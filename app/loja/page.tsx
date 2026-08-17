@@ -14,10 +14,6 @@ export const metadata: Metadata = {
   alternates: { canonical: "/loja" },
 }
 
-interface LojaPageProps {
-  searchParams: Promise<{ type?: string }>
-}
-
 const PAGE_SIZE = 24
 
 function isStoreMaintenanceEnabled() {
@@ -25,7 +21,7 @@ function isStoreMaintenanceEnabled() {
   return value === "true"
 }
 
-export default async function LojaPage({ searchParams }: LojaPageProps) {
+export default async function LojaPage() {
   if (isStoreMaintenanceEnabled()) {
     // WEB MASTER ignora o modo de manutenção da Loja e continua vendo tudo.
     const { profile } = await getAuthorizedProfile()
@@ -41,19 +37,16 @@ export default async function LojaPage({ searchParams }: LojaPageProps) {
     }
   }
 
-  const { type: typeParam } = await searchParams
-  const initialType = typeParam === "bazaar" || typeParam === "store" ? typeParam : "all"
-
   const [{ items, total }, filterOptions] = await Promise.all([
     listStoreProductsPaginated({
-      type: initialType === "all" ? undefined : initialType,
+      type: "store",
       page: 1,
       pageSize: PAGE_SIZE,
     }),
     getStoreFilterOptions(),
   ])
 
-  if (total === 0 && filterOptions.countByType.all === 0) {
+  if (total === 0 && filterOptions.countByType.store === 0) {
     return (
       <ComingSoon
         icon={ShoppingBag}
@@ -68,7 +61,6 @@ export default async function LojaPage({ searchParams }: LojaPageProps) {
     <StoreContent
       initialItems={items}
       initialTotal={total}
-      initialType={initialType}
       initialFilterOptions={filterOptions}
       pageSize={PAGE_SIZE}
     />

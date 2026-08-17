@@ -722,7 +722,8 @@ export type Database = {
           name: string
           description: string | null
           price_cents: number
-          stock: number
+          promo_price_cents: number | null
+          stock: number | null
           images: string[]
           category: string | null
           brand: string | null
@@ -742,7 +743,8 @@ export type Database = {
           name: string
           description?: string | null
           price_cents: number
-          stock?: number
+          promo_price_cents?: number | null
+          stock?: number | null
           images?: string[]
           category?: string | null
           brand?: string | null
@@ -762,7 +764,8 @@ export type Database = {
           name?: string
           description?: string | null
           price_cents?: number
-          stock?: number
+          promo_price_cents?: number | null
+          stock?: number | null
           images?: string[]
           category?: string | null
           brand?: string | null
@@ -832,9 +835,13 @@ export type Database = {
           product_id: string
           label: string
           price_cents_override: number | null
-          stock: number
+          promo_price_cents: number | null
+          stock: number | null
           position: number
           is_active: boolean
+          color: string | null
+          icon: string | null
+          image_url: string | null
           created_at: string
           updated_at: string
         }
@@ -843,9 +850,13 @@ export type Database = {
           product_id: string
           label: string
           price_cents_override?: number | null
-          stock?: number
+          promo_price_cents?: number | null
+          stock?: number | null
           position?: number
           is_active?: boolean
+          color?: string | null
+          icon?: string | null
+          image_url?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -854,11 +865,69 @@ export type Database = {
           product_id?: string
           label?: string
           price_cents_override?: number | null
-          stock?: number
+          promo_price_cents?: number | null
+          stock?: number | null
           position?: number
           is_active?: boolean
+          color?: string | null
+          icon?: string | null
+          image_url?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      store_product_variant_images: {
+        Relationships: []
+        Row: {
+          id: string
+          variant_id: string
+          url: string
+          position: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          variant_id: string
+          url: string
+          position?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          variant_id?: string
+          url?: string
+          position?: number
+          created_at?: string
+        }
+      }
+      store_product_price_history: {
+        Relationships: []
+        Row: {
+          id: string
+          product_id: string
+          variant_id: string | null
+          price_cents: number
+          promo_price_cents: number | null
+          final_price_cents: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          variant_id?: string | null
+          price_cents: number
+          promo_price_cents?: number | null
+          final_price_cents: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          variant_id?: string | null
+          price_cents?: number
+          promo_price_cents?: number | null
+          final_price_cents?: number
+          created_at?: string
         }
       }
       store_product_reviews: {
@@ -1030,6 +1099,7 @@ export type Database = {
           refunded_at: string | null
           affiliate_id: string | null
           affiliate_code: string | null
+          user_id: string | null
           created_at: string
           updated_at: string
         }
@@ -1062,6 +1132,7 @@ export type Database = {
           refunded_at?: string | null
           affiliate_id?: string | null
           affiliate_code?: string | null
+          user_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1094,6 +1165,7 @@ export type Database = {
           refunded_at?: string | null
           affiliate_id?: string | null
           affiliate_code?: string | null
+          user_id?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1456,6 +1528,10 @@ export type Database = {
       increment_variant_stock: {
         Args: { p_variant_id: string; p_quantity: number }
         Returns: boolean
+      }
+      get_recent_product_purchase_quantity: {
+        Args: { p_user_id: string; p_product_id: string; p_since: string }
+        Returns: number
       }
       anonymize_user_data: {
         Args: { p_user_id: string }

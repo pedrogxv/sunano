@@ -9,6 +9,7 @@ import { loginUserAction } from "@/app/login/actions"
 import { forgotPasswordAction } from "@/app/forgot-password/actions"
 import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
+import { LoginSubmitButton } from "@/components/auth/LoginSubmitButton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuthUser } from "@/components/providers/auth-context"
@@ -17,15 +18,6 @@ const LOGIN_ERRORS: Record<string, string> = {
   missing_credentials: "Informe email e senha.",
   invalid_credentials: "Email ou senha incorretos.",
   too_many_attempts: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
-}
-
-function LoginSubmitButton() {
-  const { pending } = useFormStatus()
-  return (
-    <Button className="w-full" disabled={pending} type="submit">
-      {pending ? "Entrando…" : "Entrar"}
-    </Button>
-  )
 }
 
 function ForgotSubmitButton() {

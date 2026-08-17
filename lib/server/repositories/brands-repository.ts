@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
 
 /**
  * Repositório de marcas de periféricos (`brands`). Fonte da verdade para o
@@ -42,6 +43,35 @@ export async function listBrands(): Promise<Brand[]> {
     throw error
   }
   return (data ?? []).map(toBrand)
+}
+
+export type BrandListFilters = {
+  search?: string
+  page?: number
+  pageSize?: number
+}
+
+/** Marcas paginadas com busca por nome — usadas nos comboboxes de busca (ex: form de produto da loja). */
+export async function listBrandsPaginated(filters: BrandListFilters): Promise<{ items: Brand[]; total: number }> {
+  const page = clampPage(filters.page)
+  const pageSize = clampPageSize(filters.pageSize)
+  const db = createSupabaseAdminClient()
+
+  let query = db.from("brands").select(COLUMNS, { count: "exact" }).order("name", { ascending: true })
+
+  const search = filters.search?.trim()
+  if (search) {
+    query = query.ilike("name", `%${search}%`)
+  }
+
+  const [from, to] = rangeFor(page, pageSize)
+  const { data, error, count } = await query.range(from, to)
+
+  if (error) {
+    console.error("[brands-repository] listBrandsPaginated:", error)
+    throw error
+  }
+  return { items: (data ?? []).map(toBrand), total: count ?? 0 }
 }
 
 export async function createBrand(name: string): Promise<BrandResult> {

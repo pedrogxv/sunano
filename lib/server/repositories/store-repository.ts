@@ -3,6 +3,7 @@ import "server-only"
 import { cache } from "react"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
+import { getPeripheralRankById, type PeripheralRank } from "@/lib/server/repositories/peripherals-repository"
 
 /**
  * Repositório da Loja / Bazar — única porta de acesso à tabela `store_products`
@@ -14,7 +15,9 @@ export type StoreProductCard = {
   slug: string
   name: string
   price_cents: number
-  stock: number
+  promo_price_cents: number | null
+  /** `null` = sem controle de estoque (nunca esgota). */
+  stock: number | null
   images: string[]
   category: string | null
   brand: string | null
@@ -30,8 +33,14 @@ export type StoreProductVariant = {
   id: string
   label: string
   price_cents_override: number | null
-  stock: number
+  promo_price_cents: number | null
+  /** `null` = sem controle de estoque (nunca esgota). */
+  stock: number | null
   position: number
+  color: string | null
+  icon: string | null
+  image_url: string | null
+  images: string[]
 }
 
 export type FeaturedProduct = {
@@ -55,12 +64,13 @@ export type LinkedProduct = {
   /** Maior preço entre as variantes ativas (ou `price_cents` se não houver variantes). */
   price_cents_max: number
   images: string[]
-  stock: number
+  /** `null` = sem controle de estoque (nunca esgota). */
+  stock: number | null
   is_active: boolean
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, created_at, variants:store_product_variants(count)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, created_at, variants:store_product_variants(count)"
 
 type RawCardRow = Omit<StoreProductCard, "has_variants"> & {
   variants: { count: number }[] | null
@@ -239,14 +249,14 @@ export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<
   }
 }
 
-/** Produtos em destaque para a home (ativos e com estoque). */
+/** Produtos em destaque para a home (ativos e com estoque, ou sem controle de estoque). */
 export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("store_products")
     .select("id, slug, name, price_cents, images, type, condition")
     .eq("is_active", true)
-    .gt("stock", 0)
+    .or("stock.is.null,stock.gt.0")
     .order("created_at", { ascending: false })
     .limit(limit)
 
@@ -303,7 +313,9 @@ export type StoreProductDetail = {
   name: string
   description: string | null
   price_cents: number
-  stock: number
+  promo_price_cents: number | null
+  /** `null` = sem controle de estoque (nunca esgota). */
+  stock: number | null
   images: string[]
   category: string | null
   type: "store" | "bazaar"
@@ -327,7 +339,8 @@ export type LinkedStoreItem = {
   name: string
   price_cents: number
   images: string[]
-  stock: number
+  /** `null` = sem controle de estoque (nunca esgota). */
+  stock: number | null
   condition: "new" | "used" | "opened"
   condition_notes: string | null
 }
@@ -337,6 +350,7 @@ export type LinkedPeripheralRef = {
   name: string
   brand: string
   image_url: string | null
+  rank: PeripheralRank | null
 }
 
 export type StoreProductDetailResult = {
@@ -364,7 +378,7 @@ export const getStoreProductDetail = cache(async (
   const { data: product, error } = await db
     .from("store_products")
     .select(
-      "id, slug, name, description, price_cents, stock, images, category, type, condition, condition_notes, peripheral_id, features, video_url"
+      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, type, condition, condition_notes, peripheral_id, features, video_url"
     )
     .eq("slug", slug)
     .eq("type", type)
@@ -389,7 +403,9 @@ export const getStoreProductDetail = cache(async (
       .order("position", { ascending: true }),
     db
       .from("store_product_variants")
-      .select("id, label, price_cents_override, stock, position")
+      .select(
+        "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, variant_images:store_product_variant_images(url, position)"
+      )
       .eq("product_id", detail.id)
       .eq("is_active", true)
       .order("position", { ascending: true }),
@@ -421,31 +437,52 @@ export const getStoreProductDetail = cache(async (
   ])
 
   const specs = (specsResult.data ?? []) as unknown as StoreProductSpec[]
-  const variants = (variantsResult.data ?? []) as unknown as StoreProductVariant[]
+  type RawVariantRow = Omit<StoreProductVariant, "images"> & {
+    variant_images: { url: string; position: number }[] | null
+  }
+  const variants = ((variantsResult.data ?? []) as unknown as RawVariantRow[]).map(
+    ({ variant_images, ...rest }): StoreProductVariant => ({
+      ...rest,
+      images: [...(variant_images ?? [])].sort((a, b) => a.position - b.position).map((img) => img.url),
+    })
+  )
 
   type PeripheralJoinRow = {
     peripherals: { id: string; name: string; brand_id: string; brands: { name: string } | { name: string }[] | null; image_url: string | null } | null
   }
-  const linkedPeripherals = ((peripheralsResult.data ?? []) as unknown as PeripheralJoinRow[])
+  const linkedPeripheralRows = ((peripheralsResult.data ?? []) as unknown as PeripheralJoinRow[])
     .map((row) => row.peripherals)
     .filter((p): p is NonNullable<PeripheralJoinRow["peripherals"]> => p !== null)
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      brand: (Array.isArray(p.brands) ? p.brands[0] : p.brands)?.name ?? "",
-      image_url: p.image_url,
-    }))
 
   linkedProduct = (linkedResult.linked ?? null) as unknown as LinkedStoreItem | null
   const peripheralRow = linkedResult.peripheral as unknown as
     | { id: string; name: string; brand_id: string; brands: { name: string } | { name: string }[] | null; image_url: string | null }
     | null
+
+  // Ranking de cada periférico vinculado (M:N + o FK único, se houver e não
+  // duplicar um já presente na lista M:N) buscados em paralelo.
+  const idsToRank = Array.from(
+    new Set([...linkedPeripheralRows.map((p) => p.id), ...(peripheralRow ? [peripheralRow.id] : [])])
+  )
+  const ranks = new Map<string, PeripheralRank | null>(
+    await Promise.all(idsToRank.map(async (id) => [id, await getPeripheralRankById(id)] as const))
+  )
+
+  const linkedPeripherals = linkedPeripheralRows.map((p) => ({
+    id: p.id,
+    name: p.name,
+    brand: (Array.isArray(p.brands) ? p.brands[0] : p.brands)?.name ?? "",
+    image_url: p.image_url,
+    rank: ranks.get(p.id) ?? null,
+  }))
+
   linkedPeripheral = peripheralRow
     ? {
         id: peripheralRow.id,
         name: peripheralRow.name,
         brand: (Array.isArray(peripheralRow.brands) ? peripheralRow.brands[0] : peripheralRow.brands)?.name ?? "",
         image_url: peripheralRow.image_url,
+        rank: ranks.get(peripheralRow.id) ?? null,
       }
     : null
 
@@ -460,7 +497,9 @@ export async function listProductVariants(
   const db = createSupabaseAdminClient()
   let query = db
     .from("store_product_variants")
-    .select("id, label, price_cents_override, stock, position")
+    .select(
+      "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, variant_images:store_product_variant_images(url, position)"
+    )
     .eq("product_id", productId)
     .order("position", { ascending: true })
 
@@ -473,7 +512,15 @@ export async function listProductVariants(
     console.error("[store-repository] listProductVariants:", error)
     return []
   }
-  return (data ?? []) as unknown as StoreProductVariant[]
+  type RawVariantRow = Omit<StoreProductVariant, "images"> & {
+    variant_images: { url: string; position: number }[] | null
+  }
+  return ((data ?? []) as unknown as RawVariantRow[]).map(
+    ({ variant_images, ...rest }): StoreProductVariant => ({
+      ...rest,
+      images: [...(variant_images ?? [])].sort((a, b) => a.position - b.position).map((img) => img.url),
+    })
+  )
 }
 
 export type CheckoutVariant = {
@@ -481,7 +528,8 @@ export type CheckoutVariant = {
   product_id: string
   label: string
   price_cents_override: number | null
-  stock: number
+  /** `null` = sem controle de estoque (nunca esgota). */
+  stock: number | null
   is_active: boolean
 }
 
@@ -501,6 +549,104 @@ export async function getVariantsForCheckout(variantIds: string[]): Promise<Chec
   return (data ?? []) as unknown as CheckoutVariant[]
 }
 
+/** Limite diário (janela de 24h corridas) de unidades por produto e por usuário,
+ * aplicado só a produtos sem controle de estoque (ver checkout/route.ts). */
+export const DAILY_PURCHASE_LIMIT_NO_STOCK = 15
+
+/**
+ * Quantidade já comprada por um usuário de um produto específico nas
+ * últimas 24h, via RPC (soma o campo `quantity` dentro de `store_orders.items`,
+ * ignorando pedidos cancelados/expirados — ver
+ * 20260921000009_store_daily_purchase_limit.sql). Usada pelo checkout só
+ * para produtos sem estoque cadastrado, onde não há outro teto natural.
+ */
+export async function getRecentProductPurchaseQuantity(userId: string, productId: string): Promise<number> {
+  const db = createSupabaseAdminClient()
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await db.rpc("get_recent_product_purchase_quantity", {
+    p_user_id: userId,
+    p_product_id: productId,
+    p_since: since,
+  })
+
+  if (error) {
+    console.error("[store-repository] getRecentProductPurchaseQuantity:", error)
+    return 0
+  }
+  return data ?? 0
+}
+
+export type PriceHistoryPoint = {
+  id: string
+  variant_id: string | null
+  price_cents: number
+  promo_price_cents: number | null
+  final_price_cents: number
+  created_at: string
+}
+
+/**
+ * Grava um snapshot no histórico de preço (produto ou variante, conforme
+ * `variantId`) só quando o preço final (`promoPriceCents ?? priceCents`)
+ * difere do último snapshot gravado — evita duplicar linha idêntica a cada
+ * save do admin que não mexeu em preço. Usada tanto pela rota PATCH do
+ * produto (variantId null) quanto por `replaceProductVariants` (por variante).
+ */
+export async function recordPriceHistoryIfChanged(
+  productId: string,
+  variantId: string | null,
+  priceCents: number,
+  promoPriceCents: number | null
+): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const finalPriceCents = promoPriceCents ?? priceCents
+
+  let lastQuery = db
+    .from("store_product_price_history")
+    .select("final_price_cents")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+  lastQuery = variantId ? lastQuery.eq("variant_id", variantId) : lastQuery.is("variant_id", null)
+
+  const { data: last, error: lastError } = await lastQuery.maybeSingle()
+  if (lastError) {
+    console.error("[store-repository] recordPriceHistoryIfChanged read:", lastError)
+    return
+  }
+  if (last && last.final_price_cents === finalPriceCents) return
+
+  const { error: insertError } = await db.from("store_product_price_history").insert({
+    product_id: productId,
+    variant_id: variantId,
+    price_cents: priceCents,
+    promo_price_cents: promoPriceCents,
+    final_price_cents: finalPriceCents,
+  })
+  if (insertError) {
+    console.error("[store-repository] recordPriceHistoryIfChanged insert:", insertError)
+  }
+}
+
+/** Histórico de preço de um produto (base + variantes), para o gráfico admin. */
+export async function getPriceHistory(productId: string): Promise<PriceHistoryPoint[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_product_price_history")
+    .select("id, variant_id, price_cents, promo_price_cents, final_price_cents, created_at")
+    .eq("product_id", productId)
+    .order("created_at", { ascending: true })
+
+  if (error) {
+    console.error("[store-repository] getPriceHistory:", error)
+    return []
+  }
+  return (data ?? []) as unknown as PriceHistoryPoint[]
+}
+
+const MAX_VARIANTS_PER_PRODUCT = 12
+const MAX_IMAGES_PER_VARIANT = 3
+
 /**
  * Substitui as variantes de um produto (usado pela API admin ao salvar).
  * Diferente de replaceProductSpecs: faz upsert-com-diff (não delete-then-
@@ -509,12 +655,33 @@ export async function getVariantsForCheckout(variantIds: string[]): Promise<Chec
  * Variantes removidas da lista são soft-deleted (is_active = false), nunca
  * apagadas de fato. Ao final, mantém store_products.stock como a soma dos
  * estoques das variantes ativas (fallback usado por telas que só conhecem
- * o produto, ex. listagem/dashboard admin).
+ * o produto, ex. listagem/dashboard admin) — ou null se QUALQUER variante
+ * ativa estiver sem controle de estoque, já que nesse caso o total deixa de
+ * ser um número confiável.
  */
 export async function replaceProductVariants(
   productId: string,
-  variants: Array<{ id?: string; label: string; price_cents_override: number | null; stock: number }>
+  variants: Array<{
+    id?: string
+    label: string
+    price_cents_override: number | null
+    promo_price_cents: number | null
+    stock: number | null
+    color: string | null
+    icon: string | null
+    image_url: string | null
+    images: string[]
+  }>
 ): Promise<void> {
+  if (variants.length > MAX_VARIANTS_PER_PRODUCT) {
+    throw new Error(`Cada produto pode ter no máximo ${MAX_VARIANTS_PER_PRODUCT} variantes.`)
+  }
+  for (const v of variants) {
+    if (v.images.length > MAX_IMAGES_PER_VARIANT) {
+      throw new Error(`Cada variante pode ter no máximo ${MAX_IMAGES_PER_VARIANT} imagens.`)
+    }
+  }
+
   const db = createSupabaseAdminClient()
 
   const { data: existing, error: existingError } = await db
@@ -543,9 +710,13 @@ export async function replaceProductVariants(
       .update({
         label: v.label,
         price_cents_override: v.price_cents_override,
+        promo_price_cents: v.promo_price_cents,
         stock: v.stock,
         position: v.position,
         is_active: true,
+        color: v.color,
+        icon: v.icon,
+        image_url: v.image_url,
       })
       .eq("id", v.id)
     if (error) {
@@ -554,19 +725,25 @@ export async function replaceProductVariants(
     }
   }
 
+  let insertedIds: string[] = []
   if (toInsert.length > 0) {
     const rows = toInsert.map((v) => ({
       product_id: productId,
       label: v.label,
       price_cents_override: v.price_cents_override,
+      promo_price_cents: v.promo_price_cents,
       stock: v.stock,
       position: v.position,
+      color: v.color,
+      icon: v.icon,
+      image_url: v.image_url,
     }))
-    const { error } = await db.from("store_product_variants").insert(rows)
+    const { data: inserted, error } = await db.from("store_product_variants").insert(rows).select("id")
     if (error) {
       console.error("[store-repository] replaceProductVariants insert:", error)
       throw new Error("Erro ao atualizar variantes.")
     }
+    insertedIds = (inserted ?? []).map((row) => row.id as string)
   }
 
   if (toDeactivate.length > 0) {
@@ -577,6 +754,35 @@ export async function replaceProductVariants(
     if (error) {
       console.error("[store-repository] replaceProductVariants deactivate:", error)
       throw new Error("Erro ao atualizar variantes.")
+    }
+  }
+
+  // Sincroniza as imagens extras (galeria) de cada variante com id conhecido
+  // — delete-then-insert por variante, mesmo padrão de replaceProductSpecs.
+  // Variantes novas (sem id ainda no momento do update acima) usam o id
+  // recém-inserido, na mesma ordem de toInsert.
+  const variantsWithImages = [
+    ...toUpdate,
+    ...toInsert.map((v, i) => ({ ...v, id: insertedIds[i] as string | undefined })),
+  ].filter((v): v is typeof v & { id: string } => Boolean(v.id))
+
+  for (const v of variantsWithImages) {
+    const { error: deleteImagesError } = await db
+      .from("store_product_variant_images")
+      .delete()
+      .eq("variant_id", v.id)
+    if (deleteImagesError) {
+      console.error("[store-repository] replaceProductVariants delete images:", deleteImagesError)
+      throw new Error("Erro ao atualizar imagens da variante.")
+    }
+    if (v.images.length > 0) {
+      const { error: insertImagesError } = await db.from("store_product_variant_images").insert(
+        v.images.map((url, position) => ({ variant_id: v.id, url, position }))
+      )
+      if (insertImagesError) {
+        console.error("[store-repository] replaceProductVariants insert images:", insertImagesError)
+        throw new Error("Erro ao atualizar imagens da variante.")
+      }
     }
   }
 
@@ -591,7 +797,10 @@ export async function replaceProductVariants(
   }
 
   if ((activeVariants ?? []).length > 0) {
-    const totalStock = (activeVariants ?? []).reduce((sum, row) => sum + (row.stock as number), 0)
+    const hasUnlimitedVariant = (activeVariants ?? []).some((row) => row.stock === null)
+    const totalStock = hasUnlimitedVariant
+      ? null
+      : (activeVariants ?? []).reduce((sum, row) => sum + (row.stock as number), 0)
     const { error: stockError } = await db
       .from("store_products")
       .update({ stock: totalStock })
@@ -600,6 +809,29 @@ export async function replaceProductVariants(
       console.error("[store-repository] replaceProductVariants sync stock:", stockError)
       throw new Error("Erro ao atualizar variantes.")
     }
+  }
+
+  // Histórico de preço por variante — grava só se o preço final mudou (ver
+  // recordPriceHistoryIfChanged). "De" de uma variante é o override, se
+  // houver, senão o price_cents base do produto.
+  const variantsWithId = [
+    ...toUpdate,
+    ...toInsert.map((v, i) => ({ ...v, id: insertedIds[i] as string | undefined })),
+  ].filter((v): v is typeof v & { id: string } => Boolean(v.id))
+
+  if (variantsWithId.length > 0) {
+    const { data: product } = await db
+      .from("store_products")
+      .select("price_cents")
+      .eq("id", productId)
+      .maybeSingle()
+    const basePriceCents = (product?.price_cents as number | undefined) ?? 0
+
+    await Promise.all(
+      variantsWithId.map((v) =>
+        recordPriceHistoryIfChanged(productId, v.id, v.price_cents_override ?? basePriceCents, v.promo_price_cents)
+      )
+    )
   }
 }
 

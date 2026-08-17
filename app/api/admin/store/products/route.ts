@@ -4,18 +4,24 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { listStoreProductsPaginated, type StoreProductListFilters } from "@/lib/server/repositories/store-repository"
+import {
+  listStoreProductsPaginated,
+  recordPriceHistoryIfChanged,
+  type StoreProductListFilters,
+} from "@/lib/server/repositories/store-repository"
 import { parseSlug } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
 
 const MAX_PRODUCT_IMAGES = 8
 const MAX_STOCK = 999_999
+const MIN_PRICE_CENTS = 600
 
 const createProductSchema = z.object({
   name: z.string().trim().min(1).max(200),
   description: z.string().trim().max(5000).optional().nullable(),
-  price_cents: z.number().int().positive(),
-  stock: z.number().int().min(0).max(MAX_STOCK).optional().default(0),
+  price_cents: z.number().int().min(MIN_PRICE_CENTS, "Preço mínimo de R$6,00."),
+  promo_price_cents: z.number().int().positive().nullable().optional(),
+  stock: z.number().int().min(0).max(MAX_STOCK).nullable().optional(),
   images: z.array(z.string().url()).max(MAX_PRODUCT_IMAGES).optional().default([]),
   category: z.string().trim().max(50).optional().nullable(),
   brand: z.string().trim().max(80).optional().nullable(),
@@ -87,9 +93,16 @@ export async function POST(request: NextRequest) {
     )
   }
   const {
-    name, description, price_cents, stock, images, category, brand, type, condition, condition_notes, is_active,
-    features, video_url,
+    name, description, price_cents, promo_price_cents, stock, images, category, brand, type, condition,
+    condition_notes, is_active, features, video_url,
   } = parsed.data
+
+  if (promo_price_cents != null && promo_price_cents >= price_cents) {
+    return NextResponse.json(
+      { error: "Preço promocional deve ser menor que o preço base." },
+      { status: 400 }
+    )
+  }
 
   // Generate unique slug
   const db = createSupabaseAdminClient()
@@ -110,7 +123,8 @@ export async function POST(request: NextRequest) {
       name,
       description: description ?? null,
       price_cents,
-      stock,
+      promo_price_cents: promo_price_cents ?? null,
+      stock: stock ?? null,
       images,
       category: category ?? null,
       brand: brand ?? null,
@@ -128,6 +142,8 @@ export async function POST(request: NextRequest) {
     const { body, status } = dbErrorResponse(error, "Erro ao criar produto.")
     return NextResponse.json(body, { status })
   }
+
+  await recordPriceHistoryIfChanged(data.id as string, null, price_cents, promo_price_cents ?? null)
 
   return NextResponse.json({ product: data })
 }

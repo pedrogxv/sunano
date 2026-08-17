@@ -7,7 +7,11 @@ import { getRequestUser } from "@/lib/server/auth/current-user"
 import { parsePayerInfo } from "@/lib/server/validation/guest-checkout"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
-import { getVariantsForCheckout } from "@/lib/server/repositories/store-repository"
+import {
+  getVariantsForCheckout,
+  getRecentProductPurchaseQuantity,
+  DAILY_PURCHASE_LIMIT_NO_STOCK,
+} from "@/lib/server/repositories/store-repository"
 import { PIX_EXPIRATION_MINUTES } from "@/lib/server/repositories/orders-repository"
 import { getAffiliateByCode } from "@/lib/server/repositories/affiliates-repository"
 import { isWebMaster } from "@/lib/admin-permissions"
@@ -240,6 +244,47 @@ export async function POST(request: NextRequest) {
       }
 
       validatedLines.push({ product, variant: variant ?? null, quantity: cartItem.quantity })
+    }
+
+    // Limite de 15un/produto/usuário a cada 24h — só para produtos SEM
+    // controle de estoque (stock null), onde não há outro teto natural
+    // fechando a compra (produto com estoque real já é limitado pelo
+    // próprio estoque + o MAX_QUANTITY_PER_LINE acima). Sem essa política a
+    // loja não tem como impedir alguém de "levar tudo" de um item digital/
+    // sem estoque numa única conta. Agrega por produto (não por linha) —
+    // duas variantes sem estoque do mesmo produto competem pelo mesmo teto.
+    const unlimitedStockQuantityByProduct = new Map<string, number>()
+    for (const line of validatedLines) {
+      const effectiveStock = line.variant ? line.variant.stock : line.product.stock
+      if (effectiveStock !== null) continue
+      unlimitedStockQuantityByProduct.set(
+        line.product.id,
+        (unlimitedStockQuantityByProduct.get(line.product.id) ?? 0) + line.quantity
+      )
+    }
+    if (unlimitedStockQuantityByProduct.size > 0) {
+      const checks = await Promise.all(
+        [...unlimitedStockQuantityByProduct.entries()].map(async ([productId, quantity]) => {
+          const alreadyBought = await getRecentProductPurchaseQuantity(user.id, productId)
+          return { productId, quantity, alreadyBought }
+        })
+      )
+      const exceeded = checks.find(
+        (c) => c.alreadyBought + c.quantity > DAILY_PURCHASE_LIMIT_NO_STOCK
+      )
+      if (exceeded) {
+        const product = products.find((p) => p.id === exceeded.productId)
+        const remaining = Math.max(0, DAILY_PURCHASE_LIMIT_NO_STOCK - exceeded.alreadyBought)
+        return NextResponse.json(
+          {
+            error:
+              remaining > 0
+                ? `Limite diário atingido para "${product?.name ?? "produto"}": restam ${remaining} unidade(s) hoje.`
+                : `Limite diário de ${DAILY_PURCHASE_LIMIT_NO_STOCK} unidades para "${product?.name ?? "produto"}" já foi atingido hoje.`,
+          },
+          { status: 400 }
+        )
+      }
     }
 
     // Reserva de estoque real (não só leitura): decrementa via RPC atômica

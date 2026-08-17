@@ -3,12 +3,14 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { recordPriceHistoryIfChanged } from "@/lib/server/repositories/store-repository"
 import type { Database } from "@/lib/database.types"
 
 type StoreProductUpdate = Database["public"]["Tables"]["store_products"]["Update"]
 
 const MAX_PRODUCT_IMAGES = 8
 const MAX_STOCK = 999_999
+const MIN_PRICE_CENTS = 600
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthorizedProfile()
@@ -30,7 +32,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
       .order("position", { ascending: true }),
     db
       .from("store_product_variants")
-      .select("id, label, price_cents_override, stock, position")
+      .select("id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url")
       .eq("product_id", id)
       .eq("is_active", true)
       .order("position", { ascending: true }),
@@ -64,7 +66,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const body = await request.json()
 
   const allowed: (keyof StoreProductUpdate)[] = [
-    "name", "description", "price_cents", "stock", "images",
+    "name", "description", "price_cents", "promo_price_cents", "stock", "images",
     "category", "brand", "type", "condition", "condition_notes", "is_active",
     "features", "video_url",
   ]
@@ -85,8 +87,33 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       { status: 400 }
     )
   }
+  if (typeof patch.price_cents === "number" && patch.price_cents < MIN_PRICE_CENTS) {
+    return NextResponse.json(
+      { error: "Preço mínimo de R$6,00." },
+      { status: 400 }
+    )
+  }
 
   const db = createSupabaseAdminClient()
+
+  if ("promo_price_cents" in patch) {
+    const effectivePriceCents =
+      typeof patch.price_cents === "number"
+        ? patch.price_cents
+        : (await db.from("store_products").select("price_cents").eq("id", id).single()).data?.price_cents
+
+    if (
+      patch.promo_price_cents != null &&
+      typeof effectivePriceCents === "number" &&
+      patch.promo_price_cents >= effectivePriceCents
+    ) {
+      return NextResponse.json(
+        { error: "Preço promocional deve ser menor que o preço base." },
+        { status: 400 }
+      )
+    }
+  }
+
   const { data, error } = await db
     .from("store_products")
     .update(patch)
@@ -97,6 +124,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (error) {
     const { body, status } = dbErrorResponse(error, "Erro ao atualizar produto.")
     return NextResponse.json(body, { status })
+  }
+
+  if (typeof data.price_cents === "number") {
+    await recordPriceHistoryIfChanged(id, null, data.price_cents, data.promo_price_cents ?? null)
   }
 
   return NextResponse.json({ product: data })

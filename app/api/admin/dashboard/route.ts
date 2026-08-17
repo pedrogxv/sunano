@@ -80,7 +80,8 @@ export async function GET() {
       stats.store = {
         total: rows.length,
         active: rows.filter((p) => p.is_active).length,
-        outOfStock: rows.filter((p) => (p.stock ?? 0) <= 0).length,
+        // stock null = sem controle de estoque (nunca esgota), não conta como esgotado.
+        outOfStock: rows.filter((p) => p.stock !== null && p.stock <= 0).length,
       }
     }),
     safe("offers", async () => {

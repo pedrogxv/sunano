@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { getVariantIcon } from "@/lib/variant-icons"
 
 const CONDITION_LABEL: Record<string, string> = {
   new: "Novo",
@@ -23,6 +24,8 @@ const CONDITION_STYLE: Record<string, string> = {
 export function CartButton() {
   const { count, setOpen } = useCart()
 
+  if (count === 0) return null
+
   return (
     <button
       onClick={() => setOpen(true)}
@@ -30,11 +33,9 @@ export function CartButton() {
       className="relative flex h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
     >
       <ShoppingCart className="size-[15px]" />
-      {count > 0 && (
-        <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-white ring-2 ring-card">
-          {count > 9 ? "9+" : count}
-        </span>
-      )}
+      <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-white ring-2 ring-card">
+        {count > 9 ? "9+" : count}
+      </span>
     </button>
   )
 }
@@ -128,11 +129,30 @@ export function CartDrawer() {
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-foreground">
-                      {item.name}
-                      {item.variantLabel && (
-                        <span className="text-muted-foreground"> — {item.variantLabel}</span>
-                      )}
+                    <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+                      <span className="truncate">
+                        {item.name}
+                        {item.variantLabel && (
+                          <span className="text-muted-foreground"> — {item.variantLabel}</span>
+                        )}
+                      </span>
+                      {(() => {
+                        const VariantIcon = getVariantIcon(item.variantIcon)
+                        if (!item.variantColor && !VariantIcon) return null
+                        return (
+                          <span
+                            className="flex size-3.5 shrink-0 items-center justify-center rounded-full border border-black/10"
+                            style={{ backgroundColor: item.variantColor ?? "transparent" }}
+                          >
+                            {VariantIcon && (
+                              <VariantIcon
+                                className="size-2"
+                                style={{ color: item.variantColor ? "#fff" : undefined }}
+                              />
+                            )}
+                          </span>
+                        )
+                      })()}
                     </p>
                     <p className="mt-0.5 text-xs font-bold text-emerald-400">{formatBRL(item.priceCents)}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -174,11 +194,11 @@ export function CartDrawer() {
                       </span>
                       <button
                         onClick={() => increment(item.productId, item.variantId)}
-                        disabled={item.quantity >= item.stock}
+                        disabled={item.stock !== null && item.quantity >= item.stock}
                         aria-label="Aumentar quantidade"
                         className={cn(
                           "flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground",
-                          item.quantity >= item.stock && "cursor-not-allowed opacity-40"
+                          item.stock !== null && item.quantity >= item.stock && "cursor-not-allowed opacity-40"
                         )}
                       >
                         <Plus className="size-3" />

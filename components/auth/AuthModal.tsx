@@ -2,11 +2,15 @@
 
 import { useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
+import { XIcon } from "lucide-react"
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import { UserLoginForm } from "@/components/auth/UserLoginForm"
 import { UserRegisterForm } from "@/components/auth/UserRegisterForm"
+import { AuthModalGlow } from "@/components/auth/AuthModalGlow"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
+import { cn } from "@/lib/utils"
 
 const TITLES = {
   login: "Entrar",
@@ -59,44 +63,94 @@ export function AuthModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <div className="relative overflow-hidden">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.div
-                key={mode}
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-              >
-                <DialogTitle>{TITLES[mode]}</DialogTitle>
-                <DialogDescription>{DESCRIPTIONS[mode]}</DialogDescription>
-              </motion.div>
-            </AnimatePresence>
-          </div>
-        </DialogHeader>
+      <DialogContent
+        showCloseButton={false}
+        className={cn(
+          "max-h-[calc(100vh-2rem)] overflow-y-auto overflow-x-hidden sm:max-w-md",
+          "border-0 bg-gradient-to-b from-card via-card to-background p-0 ring-1 ring-foreground/10",
+          "shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_20px_60px_-15px_rgba(0,0,0,0.6)]"
+        )}
+      >
+        <div className="relative px-6 pt-6 pb-5">
+          <AuthModalGlow />
 
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={mode}
-            initial={{ opacity: 0, x: mode === "register" ? 16 : -16 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: mode === "register" ? -16 : 16 }}
-            transition={{ duration: 0.25, ease: "easeOut" }}
-          >
-            {mode === "login" ? (
-              <UserLoginForm
-                embedded
-                next={next}
-                onSuccess={handleLoginSuccess}
-                onSwitchToRegister={() => setMode("register")}
+          <DialogClose asChild>
+            <Button variant="ghost" size="icon-sm" className="absolute top-3 right-3 z-20">
+              <XIcon />
+              <span className="sr-only">Fechar</span>
+            </Button>
+          </DialogClose>
+
+          <div className="mb-5 flex justify-center">
+            <div className="relative grid w-64 grid-cols-2 rounded-full border border-border bg-muted/30 p-1 text-xs font-semibold">
+              <motion.div
+                className="absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-full bg-primary shadow-sm"
+                initial={false}
+                animate={{ x: mode === "login" ? 0 : "100%" }}
+                transition={{ type: "spring", stiffness: 400, damping: 32 }}
               />
-            ) : (
-              <UserRegisterForm embedded next={next} onSwitchToLogin={() => setMode("login")} />
-            )}
-          </motion.div>
-        </AnimatePresence>
+              <button
+                type="button"
+                onClick={() => setMode("login")}
+                className={cn(
+                  "relative z-10 rounded-full px-4 py-1.5 text-center transition-colors",
+                  mode === "login" ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Entrar
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("register")}
+                className={cn(
+                  "relative z-10 rounded-full px-4 py-1.5 text-center transition-colors",
+                  mode === "register" ? "text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Criar conta
+              </button>
+            </div>
+          </div>
+
+          <DialogHeader className="text-center">
+            <div className="relative overflow-hidden">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={mode}
+                  initial={{ opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                >
+                  <DialogTitle className="font-display text-xl">{TITLES[mode]}</DialogTitle>
+                  <DialogDescription className="mx-auto">{DESCRIPTIONS[mode]}</DialogDescription>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </DialogHeader>
+
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={mode}
+              className="mt-5"
+              initial={{ opacity: 0, x: mode === "register" ? 16 : -16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: mode === "register" ? -16 : 16 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+              {mode === "login" ? (
+                <UserLoginForm
+                  embedded
+                  next={next}
+                  onSuccess={handleLoginSuccess}
+                  onSwitchToRegister={() => setMode("register")}
+                />
+              ) : (
+                <UserRegisterForm embedded next={next} onSwitchToLogin={() => setMode("login")} />
+              )}
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </DialogContent>
     </Dialog>
   )

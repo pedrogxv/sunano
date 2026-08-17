@@ -1,9 +1,9 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { Bookmark, ChevronDown, Loader2, PackageSearch, Recycle, Search, ShoppingBag, SlidersHorizontal, X } from "lucide-react"
+import { Bookmark, ChevronDown, Loader2, PackageSearch, Search, SlidersHorizontal, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { ProductCard } from "@/components/store/ProductCard"
@@ -19,12 +19,10 @@ import type { StoreProductCard, StoreFilterOptions } from "@/lib/server/reposito
 interface StoreContentProps {
   initialItems: StoreProductCard[]
   initialTotal: number
-  initialType?: TypeFilter
   initialFilterOptions: StoreFilterOptions
   pageSize: number
 }
 
-type TypeFilter = "all" | "store" | "bazaar"
 type ConditionFilter = "all" | "new" | "used" | "opened"
 type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 
@@ -78,9 +76,7 @@ function FilterSection({ title, children, defaultOpen = false }: { title: string
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialType = "all", initialFilterOptions, pageSize }: StoreContentProps) {
-  const router = useRouter()
-  const pathname = usePathname()
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, pageSize }: StoreContentProps) {
   const searchParams = useSearchParams()
   const { user } = useAuthUser()
   const userId = user?.id ?? null
@@ -120,7 +116,6 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
 
   const [query, setQuery] = useState(searchParams.get("q") ?? "")
   const debouncedQuery = useDebouncedValue(query, 400)
-  const [selectedType, setSelectedType] = useState<TypeFilter>(initialType)
   const [selectedCondition, setSelectedCondition] = useState<ConditionFilter>("all")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
@@ -131,12 +126,12 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
   const [filterOptions, setFilterOptions] = useState<StoreFilterOptions>(initialFilterOptions)
   useEffect(() => {
     const params = new URLSearchParams()
-    if (selectedType !== "all") params.set("type", selectedType)
+    params.set("type", "store")
     fetch(`/api/store/filter-options?${params}`)
       .then((res) => res.json())
       .then((data: StoreFilterOptions) => setFilterOptions(data))
       .catch(() => {})
-  }, [selectedType])
+  }, [])
 
   const maxPriceCents = filterOptions.priceMaxCents || 0
   const maxPrice = Math.ceil(maxPriceCents / 100 / 10) * 10
@@ -175,7 +170,7 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
   // Volta pra página 1 sempre que um filtro (não a página em si) muda.
   useEffect(() => {
     setPage(1)
-  }, [selectedType, selectedCondition, selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey, onlyWishlisted])
+  }, [selectedCondition, selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey, onlyWishlisted])
 
   useEffect(() => {
     if (onlyWishlisted && wishlistedIds && wishlistedIds.size === 0) {
@@ -185,7 +180,7 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
     }
 
     const params = new URLSearchParams()
-    if (selectedType !== "all") params.set("type", selectedType)
+    params.set("type", "store")
     if (selectedCondition !== "all") params.set("condition", selectedCondition)
     if (selectedCategories.length > 0) params.set("categories", selectedCategories.join(","))
     if (selectedBrands.length > 0) params.set("brands", selectedBrands.join(","))
@@ -203,7 +198,7 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
     // filtros padrão — evita um fetch redundante assim que a página monta.
     if (isFirstRun.current) {
       isFirstRun.current = false
-      if (selectedType === initialType && page === 1 && !debouncedQuery && !onlyWishlisted) {
+      if (page === 1 && !debouncedQuery && !onlyWishlisted) {
         return
       }
     }
@@ -222,23 +217,9 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
       .finally(() => setIsFetching(false))
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedType, selectedCondition, selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, page, pageSize, onlyWishlisted, wishlistedIds])
-
-  // Reflete o filtro de tipo na URL (compartilhável), sem recarregar a página.
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (selectedType === "all") params.delete("type")
-    else params.set("type", selectedType)
-    const next = params.toString()
-    const current = searchParams.toString()
-    if (next !== current) {
-      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedType])
+  }, [selectedCondition, selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, page, pageSize, onlyWishlisted, wishlistedIds])
 
   const activeFiltersCount =
-    (selectedType !== "all" ? 1 : 0) +
     (selectedCondition !== "all" ? 1 : 0) +
     selectedCategories.length +
     selectedBrands.length +
@@ -247,16 +228,12 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
 
   const resetFilters = () => {
     setQuery("")
-    setSelectedType("all")
     setSelectedCondition("all")
     setSelectedCategories([])
     setSelectedBrands([])
     setPriceRange(null)
     setSortKey("recent")
   }
-
-  const storeCount = filterOptions.countByType.store
-  const bazaarCount = filterOptions.countByType.bazaar
 
   const sidebarFilters = (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -292,20 +269,6 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
           </SelectContent>
         </Select>
       </div>
-
-      {/* Type: Loja / Bazar */}
-      <FilterSection title="Tipo" defaultOpen>
-        <Select value={selectedType} onValueChange={(v) => setSelectedType(v as TypeFilter)}>
-          <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Loja + Bazar</SelectItem>
-            <SelectItem value="store">🛒 Loja (novo)</SelectItem>
-            <SelectItem value="bazaar">♻️ Bazar (usado)</SelectItem>
-          </SelectContent>
-        </Select>
-      </FilterSection>
 
       {/* Condition / Estado */}
       <FilterSection title="Estado">
@@ -428,81 +391,6 @@ export function StoreContent({ initialItems, initialTotal, initialType = "all", 
           </p>
         </div>
 
-        <div className="relative mt-4 grid grid-cols-3 gap-2 sm:gap-2.5">
-          {([
-            {
-              key: "all",
-              label: "Todos",
-              count: filterOptions.countByType.all,
-              icon: SlidersHorizontal,
-              activeClasses: "border-primary/40 bg-primary/[0.09] shadow-md shadow-primary/15 ring-1 ring-primary/20",
-              iconActiveClasses: "bg-primary/20 text-primary",
-              countActiveClasses: "text-primary",
-              labelActiveClasses: "text-primary/70",
-              glow: "from-transparent via-primary/60 to-transparent",
-            },
-            {
-              key: "store",
-              label: "Loja",
-              count: storeCount,
-              icon: ShoppingBag,
-              activeClasses: "border-sky-500/40 bg-sky-500/[0.09] shadow-md shadow-sky-500/15 ring-1 ring-sky-500/20",
-              iconActiveClasses: "bg-sky-500/20 text-sky-400",
-              countActiveClasses: "text-sky-400",
-              labelActiveClasses: "text-sky-400/80",
-              glow: "from-transparent via-sky-500/60 to-transparent",
-            },
-            {
-              key: "bazaar",
-              label: "Bazar",
-              count: bazaarCount,
-              icon: Recycle,
-              activeClasses: "border-amber-500/40 bg-amber-500/[0.09] shadow-md shadow-amber-500/15 ring-1 ring-amber-500/20",
-              iconActiveClasses: "bg-amber-500/20 text-amber-400",
-              countActiveClasses: "text-amber-400",
-              labelActiveClasses: "text-amber-400/80",
-              glow: "from-transparent via-amber-500/60 to-transparent",
-            },
-          ] as const).map(({ key, label, count, icon: Icon, activeClasses, iconActiveClasses, countActiveClasses, labelActiveClasses, glow }) => {
-            const isActive = selectedType === key
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSelectedType(key)}
-                aria-pressed={isActive}
-                className={cn(
-                  "group relative flex flex-row items-center justify-center gap-2 rounded-xl border px-2 py-2.5 transition-all duration-200",
-                  isActive
-                    ? activeClasses
-                    : "border-border/35 bg-muted/[0.06] hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-muted/15 hover:shadow-lg hover:shadow-black/20"
-                )}
-              >
-                {isActive && (
-                  <span className={cn("absolute inset-x-4 top-0 h-px bg-gradient-to-r", glow)} />
-                )}
-                <div className={cn(
-                  "flex size-7 shrink-0 items-center justify-center rounded-lg transition-all duration-200",
-                  isActive ? iconActiveClasses : "bg-muted/25 text-muted-foreground/70 group-hover:bg-primary/10 group-hover:text-primary/80"
-                )}>
-                  <Icon className="size-3.5" />
-                </div>
-                <span className={cn(
-                  "text-base font-black leading-none tabular-nums transition-colors duration-200",
-                  isActive ? countActiveClasses : "text-foreground"
-                )}>
-                  {count}
-                </span>
-                <span className={cn(
-                  "text-[11px] font-medium transition-colors duration-200 md:text-xs",
-                  isActive ? labelActiveClasses : "text-muted-foreground"
-                )}>
-                  {label}
-                </span>
-              </button>
-            )
-          })}
-        </div>
       </div>
 
       {/* Mobile filter toggle */}

@@ -40,6 +40,16 @@ interface ComboboxProps {
   onCreateOption?: (label: string) => void
   createOptionLabel?: (label: string) => string
   creating?: boolean
+  /**
+   * Ativa busca assíncrona (server-side): a busca digitada é repassada aqui em vez de
+   * filtrar `options` no client. Use junto com `loading`/`onLoadMore` para paginação.
+   */
+  onSearchChange?: (search: string) => void
+  loading?: boolean
+  /** Exibido como último item da lista quando há mais páginas a carregar. */
+  onLoadMore?: () => void
+  loadingMore?: boolean
+  hasMore?: boolean
 }
 
 export function Combobox({
@@ -55,24 +65,38 @@ export function Combobox({
   onCreateOption,
   createOptionLabel = (label) => `Criar "${label}"`,
   creating = false,
+  onSearchChange,
+  loading = false,
+  onLoadMore,
+  loadingMore = false,
+  hasMore = false,
   ...props
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [search, setSearch] = React.useState("")
   const selected = options.find((option) => option.value === value)
+  const isAsync = Boolean(onSearchChange)
 
   const trimmedSearch = search.trim()
   const hasExactMatch = options.some(
     (option) => option.label.toLowerCase() === trimmedSearch.toLowerCase()
   )
-  const canOffercreate = Boolean(onCreateOption) && trimmedSearch.length > 0 && !hasExactMatch
+  const canOffercreate = Boolean(onCreateOption) && trimmedSearch.length > 0 && !hasExactMatch && !loading
+
+  function handleSearchChange(next: string) {
+    setSearch(next)
+    onSearchChange?.(next)
+  }
 
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (!next) setSearch("")
+        if (!next) {
+          setSearch("")
+          onSearchChange?.("")
+        }
       }}
     >
       <PopoverTrigger asChild>
@@ -97,10 +121,13 @@ export function Combobox({
         align="start"
         className={cn("w-(--radix-popover-trigger-width) flex-col gap-0 p-0", contentClassName)}
       >
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={setSearch} />
+        <Command shouldFilter={!isAsync}>
+          <CommandInput placeholder={searchPlaceholder} value={search} onValueChange={handleSearchChange} />
           <CommandList>
-            {!canOffercreate && <CommandEmpty>{emptyText}</CommandEmpty>}
+            {!loading && !canOffercreate && <CommandEmpty>{emptyText}</CommandEmpty>}
+            {loading && (
+              <div className="py-6 text-center text-sm text-muted-foreground">Buscando...</div>
+            )}
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
@@ -115,6 +142,16 @@ export function Combobox({
                   {option.label}
                 </CommandItem>
               ))}
+              {isAsync && hasMore && !loading && (
+                <CommandItem
+                  value={`__load-more__${trimmedSearch}`}
+                  disabled={loadingMore}
+                  onSelect={() => onLoadMore?.()}
+                  className="justify-center text-muted-foreground"
+                >
+                  {loadingMore ? "Carregando..." : "Carregar mais"}
+                </CommandItem>
+              )}
               {canOffercreate && (
                 <CommandItem
                   value={`__create__${trimmedSearch}`}

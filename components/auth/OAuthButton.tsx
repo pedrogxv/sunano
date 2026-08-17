@@ -60,10 +60,10 @@ export function OAuthButton({ provider, label, next = "/forum", icon }: OAuthBut
         type="button"
         onClick={handleClick}
         disabled={loading}
-        whileHover={{ scale: 1.015 }}
-        whileTap={{ scale: 0.985 }}
+        whileHover={{ scale: 1.015, y: -1 }}
+        whileTap={{ scale: 0.985, y: 0 }}
         transition={{ duration: 0.15, ease: "easeOut" }}
-        className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-muted/20 px-4 py-2.5 text-sm font-medium text-foreground shadow-sm transition-colors hover:border-foreground/20 hover:bg-muted/40 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
       >
         {icon}
         {loading ? "Conectando…" : label}

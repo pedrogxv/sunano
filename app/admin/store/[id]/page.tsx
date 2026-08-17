@@ -7,6 +7,7 @@ import BoxLoader from "@/components/ui/box-loader"
 import { StoreProductForm } from "../form"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import { usePageHeader } from "@/components/providers/page-header-context"
+import { ProductPriceHistoryChart, type PriceHistoryPoint } from "@/components/admin/store/ProductPriceHistoryChart"
 
 interface StoreProduct {
   id: string
@@ -14,7 +15,8 @@ interface StoreProduct {
   name: string
   description: string | null
   price_cents: number
-  stock: number
+  promo_price_cents?: number | null
+  stock: number | null
   images: string[]
   category: string | null
   brand: string | null
@@ -36,7 +38,12 @@ interface StoreProductVariant {
   id?: string
   label: string
   price_cents_override: number | null
-  stock: number
+  promo_price_cents: number | null
+  stock: number | null
+  color: string | null
+  icon: string | null
+  image_url: string | null
+  images?: string[]
 }
 
 export default function EditProductPage() {
@@ -46,13 +53,17 @@ export default function EditProductPage() {
   const [specs, setSpecs] = useState<StoreProductSpec[]>([])
   const [variants, setVariants] = useState<StoreProductVariant[]>([])
   const [peripheralIds, setPeripheralIds] = useState<string[]>([])
+  const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/admin/store/products/${id}`)
+        const [res, historyRes] = await Promise.all([
+          fetch(`/api/admin/store/products/${id}`),
+          fetch(`/api/admin/store/products/${id}/price-history`),
+        ])
         const data = (await res.json()) as {
           product?: StoreProduct
           specs?: StoreProductSpec[]
@@ -65,6 +76,11 @@ export default function EditProductPage() {
         setSpecs(data.specs ?? [])
         setVariants(data.variants ?? [])
         setPeripheralIds(data.peripheralIds ?? [])
+
+        if (historyRes.ok) {
+          const historyData = (await historyRes.json()) as { history?: PriceHistoryPoint[] }
+          setPriceHistory(historyData.history ?? [])
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : "Erro ao carregar"
         setError(message)
@@ -109,6 +125,10 @@ export default function EditProductPage() {
     )
   }
 
+  const variantLabels = Object.fromEntries(
+    variants.filter((v): v is StoreProductVariant & { id: string } => Boolean(v.id)).map((v) => [v.id, v.label])
+  )
+
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <BackBreadcrumb href="/admin/store" parentLabel="Loja" currentLabel={product.name} />
@@ -122,6 +142,7 @@ export default function EditProductPage() {
           onCancel={() => router.push("/admin/store")}
         />
       </div>
+      <ProductPriceHistoryChart history={priceHistory} variantLabels={variantLabels} />
     </div>
   )
 }

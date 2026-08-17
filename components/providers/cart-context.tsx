@@ -6,12 +6,15 @@ export interface CartItem {
   productId: string
   variantId: string | null
   variantLabel: string | null
+  variantColor: string | null
+  variantIcon: string | null
   slug: string
   name: string
   priceCents: number
   quantity: number
   image: string | null
-  stock: number
+  /** `null` = sem controle de estoque (nunca esgota). */
+  stock: number | null
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
 }
@@ -43,12 +46,14 @@ function isCartItem(value: unknown): value is CartItem {
     typeof i.productId === "string" &&
     (i.variantId === undefined || i.variantId === null || typeof i.variantId === "string") &&
     (i.variantLabel === undefined || i.variantLabel === null || typeof i.variantLabel === "string") &&
+    (i.variantColor === undefined || i.variantColor === null || typeof i.variantColor === "string") &&
+    (i.variantIcon === undefined || i.variantIcon === null || typeof i.variantIcon === "string") &&
     typeof i.slug === "string" &&
     typeof i.name === "string" &&
     typeof i.priceCents === "number" &&
     typeof i.quantity === "number" &&
     i.quantity > 0 &&
-    typeof i.stock === "number" &&
+    (i.stock === null || typeof i.stock === "number") &&
     (i.image === null || typeof i.image === "string") &&
     (i.type === "store" || i.type === "bazaar") &&
     (i.condition === "new" || i.condition === "used" || i.condition === "opened")
@@ -64,7 +69,13 @@ function loadCart(): CartItem[] {
     if (!Array.isArray(parsed)) return []
     return parsed
       .filter(isCartItem)
-      .map((i) => ({ ...i, variantId: i.variantId ?? null, variantLabel: i.variantLabel ?? null }))
+      .map((i) => ({
+        ...i,
+        variantId: i.variantId ?? null,
+        variantLabel: i.variantLabel ?? null,
+        variantColor: i.variantColor ?? null,
+        variantIcon: i.variantIcon ?? null,
+      }))
   } catch {
     return []
   }
@@ -102,8 +113,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) => {
       const existing = prev.find((i) => isSameLine(i, item.productId, item.variantId))
       if (existing) {
-        // Respect stock limit
-        const nextQty = Math.min(existing.quantity + 1, item.stock)
+        // Respeita o limite de estoque — stock null = sem controle, nunca trava aqui
+        // (o limite diário para esses casos é aplicado no checkout, não no cliente).
+        const nextQty = item.stock === null ? existing.quantity + 1 : Math.min(existing.quantity + 1, item.stock)
         return prev.map((i) =>
           isSameLine(i, item.productId, item.variantId) ? { ...i, quantity: nextQty } : i
         )
@@ -119,7 +131,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const increment = useCallback((productId: string, variantId: string | null) => {
     setItems((prev) =>
       prev.map((i) =>
-        isSameLine(i, productId, variantId) && i.quantity < i.stock
+        isSameLine(i, productId, variantId) && (i.stock === null || i.quantity < i.stock)
           ? { ...i, quantity: i.quantity + 1 }
           : i
       )

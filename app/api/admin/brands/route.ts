@@ -3,7 +3,7 @@ import * as z from "zod"
 
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
-import { createBrand, listBrands } from "@/lib/server/repositories/brands-repository"
+import { createBrand, listBrands, listBrandsPaginated } from "@/lib/server/repositories/brands-repository"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -12,7 +12,7 @@ const brandPayload = z.object({
   name: z.string().min(1, "Nome é obrigatório.").max(120, "Nome muito longo (máx. 120 caracteres)."),
 })
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const auth = await getAuthorizedProfile()
   if (auth.error || !auth.profile) {
     return NextResponse.json({ error: auth.error }, { status: auth.status })
@@ -21,8 +21,25 @@ export async function GET() {
     return NextResponse.json({ error: "Sem permissão para ler marcas." }, { status: 403 })
   }
 
-  const brands = await listBrands()
-  return NextResponse.json({ brands })
+  const { searchParams } = new URL(request.url)
+  const search = searchParams.get("search")?.trim() || undefined
+  const pageParam = searchParams.get("page")
+  const pageSizeParam = searchParams.get("pageSize")
+
+  if (!search && !pageParam && !pageSizeParam) {
+    const brands = await listBrands()
+    return NextResponse.json({ brands })
+  }
+
+  const page = pageParam ? Number(pageParam) : undefined
+  const pageSize = pageSizeParam ? Number(pageSizeParam) : undefined
+  const { items, total } = await listBrandsPaginated({ search, page, pageSize })
+  return NextResponse.json({
+    brands: items,
+    total,
+    page: page ?? 1,
+    pageSize: pageSize ?? 24,
+  })
 }
 
 export async function POST(request: NextRequest) {

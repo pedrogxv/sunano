@@ -16,7 +16,9 @@ interface ProductCardProps {
   slug: string
   name: string
   price_cents: number
-  stock: number
+  promo_price_cents?: number | null
+  /** `null` = sem controle de estoque (nunca esgota). */
+  stock: number | null
   images: string[]
   category: string | null
   brand?: string | null
@@ -47,9 +49,14 @@ export function ProductCard(props: ProductCardProps) {
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const wishlisted = props.wishlisted ?? false
   const href = `/${props.type === "bazaar" ? "bazar" : "loja"}/${props.slug}`
-  const outOfStock = props.stock === 0
+  const outOfStock = props.stock !== null && props.stock === 0
   const hasVariants = props.has_variants ?? false
   const image = props.images?.[0] ?? null
+  const hasDiscount = props.promo_price_cents != null && props.promo_price_cents < props.price_cents
+  const effectivePriceCents = hasDiscount ? (props.promo_price_cents as number) : props.price_cents
+  const discountPercent = hasDiscount
+    ? Math.round((1 - (props.promo_price_cents as number) / props.price_cents) * 100)
+    : null
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
@@ -62,9 +69,11 @@ export function ProductCard(props: ProductCardProps) {
       productId: props.id,
       variantId: null,
       variantLabel: null,
+      variantColor: null,
+      variantIcon: null,
       slug: props.slug,
       name: props.name,
-      priceCents: props.price_cents,
+      priceCents: effectivePriceCents,
       image,
       stock: props.stock,
       type: props.type,
@@ -124,33 +133,6 @@ export function ProductCard(props: ProductCardProps) {
           )}
         />
 
-        {/* Type ribbon */}
-        <div className={cn(
-          "absolute left-3 top-3 z-10 flex items-center gap-1 rounded-full border px-2 py-1 shadow-sm backdrop-blur-sm",
-          props.type === "bazaar"
-            ? "border-amber-500/40 bg-amber-500/20 text-amber-300"
-            : "border-sky-500/40 bg-sky-500/20 text-sky-300"
-        )}>
-          <span className="text-[9px] font-bold uppercase tracking-wider">
-            {props.type === "bazaar" ? "♻️ Bazar" : "🛒 Loja"}
-          </span>
-        </div>
-
-        {/* Wishlist quick toggle */}
-        <button
-          onClick={handleToggleWishlist}
-          disabled={wishlistLoading}
-          aria-label={wishlisted ? "Remover da lista de compras" : "Adicionar na lista de compras"}
-          className={cn(
-            "absolute right-3 top-3 z-10 flex size-7 items-center justify-center rounded-full border shadow-sm backdrop-blur-sm transition-all",
-            wishlisted
-              ? "border-primary/40 bg-primary/20 text-primary"
-              : "border-border/60 bg-card/70 text-muted-foreground hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-          )}
-        >
-          <Bookmark className={cn("size-3.5", wishlisted && "fill-current")} />
-        </button>
-
         {/* Out of stock overlay */}
         {outOfStock && (
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50">
@@ -205,25 +187,50 @@ export function ProductCard(props: ProductCardProps) {
           </div>
 
           <div>
-            <p className="text-lg font-black text-emerald-400">{formatBRL(props.price_cents)}</p>
-            {props.stock > 0 && props.stock <= 3 && (
+            {hasDiscount ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-lg font-black text-emerald-400">{formatBRL(effectivePriceCents)}</p>
+                <p className="text-xs text-muted-foreground line-through">{formatBRL(props.price_cents)}</p>
+                <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">
+                  -{discountPercent}%
+                </span>
+              </div>
+            ) : (
+              <p className="text-lg font-black text-emerald-400">{formatBRL(props.price_cents)}</p>
+            )}
+            {props.stock !== null && props.stock > 0 && props.stock <= 3 && (
               <p className="text-[10px] text-amber-400">Últimas {props.stock} unidades!</p>
             )}
           </div>
 
-          <button
-            onClick={handleAddToCart}
-            disabled={outOfStock}
-            className={cn(
-              "flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-all",
-              "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-              "hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:shadow-md hover:shadow-emerald-500/10",
-              outOfStock && "cursor-not-allowed opacity-50 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:shadow-none"
-            )}
-          >
-            <ShoppingCart className="size-3.5" />
-            {hasVariants ? "Ver opções" : "Comprar"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleAddToCart}
+              disabled={outOfStock}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-all",
+                "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+                "hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:shadow-md hover:shadow-emerald-500/10",
+                outOfStock && "cursor-not-allowed opacity-50 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:shadow-none"
+              )}
+            >
+              <ShoppingCart className="size-3.5" />
+              {hasVariants ? "Ver opções" : "Comprar"}
+            </button>
+            <button
+              onClick={handleToggleWishlist}
+              disabled={wishlistLoading}
+              aria-label={wishlisted ? "Remover da lista de compras" : "Adicionar na lista de compras"}
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-lg border transition-all",
+                wishlisted
+                  ? "border-primary/60 bg-primary text-primary-foreground"
+                  : "border-border bg-card/95 text-foreground/80 hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+              )}
+            >
+              <Bookmark className={cn("size-3.5", wishlisted && "fill-current")} />
+            </button>
+          </div>
         </div>
       </div>
     </Link>

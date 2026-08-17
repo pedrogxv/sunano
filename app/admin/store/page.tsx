@@ -26,7 +26,7 @@ interface StoreProduct {
   slug: string
   name: string
   price_cents: number
-  stock: number
+  stock: number | null
   images: string[]
   category: string | null
   type: "store" | "bazaar"
@@ -322,11 +322,11 @@ export default function AdminStorePage() {
                       "rounded-full px-2 py-0.5 text-xs font-bold",
                       p.stock === 0
                         ? "bg-red-500/15 text-red-400"
-                        : p.stock <= 3
+                        : p.stock !== null && p.stock <= 3
                           ? "bg-amber-500/15 text-amber-300"
                           : "bg-muted text-foreground/80"
                     )}>
-                      {p.stock === 0 ? "Esgotado" : `${p.stock} un.`}
+                      {p.stock === null ? "Sem controle" : p.stock === 0 ? "Esgotado" : `${p.stock} un.`}
                     </span>
                   </td>
                   <td className="px-4 py-3">

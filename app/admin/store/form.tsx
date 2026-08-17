@@ -12,7 +12,7 @@ import {
 import { restrictToParentElement } from "@dnd-kit/modifiers"
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { CheckCircle2, GripVertical, Loader2, Minus, Plus, Trash2, Upload, XCircle } from "lucide-react"
+import { CheckCircle2, GripVertical, Loader2, Minus, Plus, Sparkles, Trash2, Upload, X, XCircle } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,12 +25,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { MultiCombobox, type ComboboxOption } from "@/components/ui/combobox"
+import { Combobox, MultiCombobox, type ComboboxOption } from "@/components/ui/combobox"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
 import { encodeFeature, featureLabel, isGoodFeature } from "@/lib/store-features"
 import { compressImageFile } from "@/lib/client/compress-image"
+import { VARIANT_ICONS, VARIANT_ICON_NAMES } from "@/lib/variant-icons"
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 
 interface StoreProductSpec {
   id?: string
@@ -42,14 +44,25 @@ interface StoreProductVariantInput {
   id?: string
   label: string
   price_cents_override: number | null
-  stock: number
+  promo_price_cents: number | null
+  stock: number | null
+  color: string | null
+  icon: string | null
+  image_url: string | null
+  images?: string[]
 }
 
 interface StoreProductVariantRow {
   id?: string
   label: string
   price_override_brl: string
+  promo_price_brl: string
   stock: string
+  hasStock: boolean
+  color: string | null
+  icon: string | null
+  image_url: string | null
+  images: string[]
 }
 
 interface StoreProduct {
@@ -58,7 +71,8 @@ interface StoreProduct {
   name: string
   description: string | null
   price_cents: number
-  stock: number
+  promo_price_cents?: number | null
+  stock: number | null
   images: string[]
   category: string | null
   brand: string | null
@@ -86,6 +100,145 @@ interface PeripheralOption {
   brand: string
 }
 
+/** Formato retornado por `GET /api/peripherals?full=1` — ver `PeripheralSummary`
+ * em lib/server/repositories/peripherals-repository.ts. Só os campos usados
+ * pelo autofill estão listados aqui. */
+interface PeripheralFullData {
+  id: string
+  name: string
+  brand: string
+  category: string
+  price?: number
+  image_url: string | null
+  tags?: string[]
+  weightG?: number | null
+  connectivity?: string | null
+  mouseShape?: string | null
+  keyboardLayout?: string | null
+  surface?: string | null
+  profile?: string | null
+  panelType?: string | null
+  refreshRate?: number | null
+  specs?: {
+    details?: {
+      summary?: string
+      highlights?: string[]
+      pros?: string[]
+      cons?: string[]
+      gallery?: string[]
+      weight?: string
+      latency?: string
+      switchType?: string
+      coating?: string
+      actuationForce?: string
+      totalTravel?: string
+      magneticFlux?: string
+      housing?: string
+      stemType?: string
+      pollingRate?: string
+      battery?: string
+      batteryLife?: string
+      dimensions?: string
+      deadzone?: string
+      rtMin?: string
+      features?: string
+    }
+  }
+}
+
+/** Categoria do periférico -> categoria da loja. Os valores coincidem na maior
+ * parte (ver CATEGORIES abaixo); "pcb" não tem equivalente direto na loja. */
+const PERIPHERAL_TO_STORE_CATEGORY: Record<string, string> = {
+  mouse: "mouse",
+  keyboard: "keyboard",
+  mousepad: "mousepad",
+  glasspad: "glasspad",
+  headset: "headset",
+  iem: "iem",
+  monitors: "monitors",
+  switches: "switches",
+  chairs: "chairs",
+  dac_amp: "dac_amp",
+  feet: "feet",
+}
+
+type PeripheralDetails = NonNullable<NonNullable<PeripheralFullData["specs"]>["details"]>
+
+/** Rótulos em pt-BR pros mesmos campos exibidos na página pública do periférico
+ * (ver components/peripherals/PeripheralDetailView.tsx) — reaproveitados aqui
+ * pra montar a tabela de Especificação Técnica do produto da loja. */
+const PERIPHERAL_SPEC_LABELS: Array<{ key: keyof PeripheralDetails; label: string }> = [
+  { key: "weight", label: "Peso" },
+  { key: "latency", label: "Latência" },
+  { key: "switchType", label: "Switch" },
+  { key: "coating", label: "Coating" },
+  { key: "actuationForce", label: "Força de atuação" },
+  { key: "totalTravel", label: "Curso total" },
+  { key: "magneticFlux", label: "Fluxo magnético" },
+  { key: "housing", label: "Carcaça" },
+  { key: "stemType", label: "Tipo do Stem" },
+  { key: "pollingRate", label: "Polling Rate" },
+  { key: "battery", label: "Bateria" },
+  { key: "batteryLife", label: "Autonomia" },
+  { key: "dimensions", label: "Dimensões (CxLxA)" },
+  { key: "deadzone", label: "Deadzone" },
+  { key: "rtMin", label: "RT Mínimo" },
+  { key: "features", label: "Features" },
+]
+
+function buildAutofillFromPeripheral(p: PeripheralFullData): {
+  category: string | null
+  brand: string
+  specs: StoreProductSpec[]
+  features: string[]
+  description: string
+  images: string[]
+} {
+  const details = p.specs?.details ?? {}
+
+  const specs: StoreProductSpec[] = []
+  const pushSpec = (label: string, value: string | null | undefined) => {
+    if (value != null && String(value).trim()) specs.push({ label, value: String(value).trim() })
+  }
+
+  // Colunas reais têm prioridade sobre `specs.details` (dual-write legado) — mesma
+  // regra de leitura usada na página pública do periférico.
+  pushSpec("Peso", p.weightG != null ? `${p.weightG}g` : details.weight)
+  pushSpec("Conectividade", p.connectivity)
+  pushSpec("Shape", p.mouseShape)
+  pushSpec("Layout", p.keyboardLayout)
+  pushSpec("Superfície", p.surface)
+  pushSpec("Perfil", p.profile)
+  pushSpec("Tipo de Painel", p.panelType)
+  pushSpec("Taxa de Atualização", p.refreshRate != null ? `${p.refreshRate}Hz` : undefined)
+  for (const { key, label } of PERIPHERAL_SPEC_LABELS) {
+    pushSpec(label, details[key] as string | undefined)
+  }
+
+  const features: string[] = [
+    ...(details.pros ?? []).map((label) => encodeFeature(label, true)),
+    ...(details.cons ?? []).map((label) => encodeFeature(label, false)),
+  ]
+
+  const descriptionParts: string[] = []
+  if (details.summary) descriptionParts.push(details.summary)
+  if (details.highlights && details.highlights.length > 0) {
+    descriptionParts.push(details.highlights.map((h) => `• ${h}`).join("\n"))
+  }
+  const description = descriptionParts.join("\n\n")
+
+  const images = [p.image_url, ...(details.gallery ?? [])].filter((url): url is string => !!url)
+
+  return {
+    category: PERIPHERAL_TO_STORE_CATEGORY[p.category] ?? null,
+    brand: p.brand,
+    specs,
+    features,
+    description,
+    images,
+  }
+}
+
 const CATEGORIES = [
   { value: "mouse", label: "Mouse" },
   { value: "keyboard", label: "Teclado" },
@@ -105,6 +258,9 @@ const CATEGORIES = [
 const NO_CATEGORY = "__none__"
 const MAX_STOCK = 999_999
 const MAX_IMAGES = 8
+const MAX_VARIANT_IMAGES = 3
+const MAX_VARIANTS = 12
+const MIN_PRICE_CENTS = 600
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const IMAGE_COMPRESS_OPTIONS = {
   maxDimension: 2000,
@@ -178,7 +334,8 @@ export function StoreProductForm({
     name: product?.name ?? "",
     description: product?.description ?? "",
     price_brl: product ? (product.price_cents / 100).toFixed(2) : "",
-    stock: product?.stock?.toString() ?? "1",
+    promo_price_brl: product?.promo_price_cents != null ? (product.promo_price_cents / 100).toFixed(2) : "",
+    stock: product?.stock != null ? product.stock.toString() : "1",
     category: product?.category ?? "",
     brand: product?.brand ?? "",
     type: product?.type ?? defaultType,
@@ -188,6 +345,7 @@ export function StoreProductForm({
     video_url: product?.video_url ?? "",
   })
 
+  const [hasStock, setHasStock] = useState(product ? product.stock != null : true)
   const [images, setImages] = useState<string[]>(product?.images ?? [])
   const [features, setFeatures] = useState<string[]>(product?.features ?? [])
   const [featureInput, setFeatureInput] = useState("")
@@ -201,11 +359,19 @@ export function StoreProductForm({
       id: v.id,
       label: v.label,
       price_override_brl: v.price_cents_override != null ? (v.price_cents_override / 100).toFixed(2) : "",
-      stock: v.stock.toString(),
+      promo_price_brl: v.promo_price_cents != null ? (v.promo_price_cents / 100).toFixed(2) : "",
+      stock: v.stock != null ? v.stock.toString() : "0",
+      hasStock: v.stock != null,
+      color: v.color ?? null,
+      icon: v.icon ?? null,
+      image_url: v.image_url ?? null,
+      images: v.images ?? [],
     }))
   )
+  const [uploadingVariantImage, setUploadingVariantImage] = useState<number | null>(null)
   const [peripheralIds, setPeripheralIds] = useState<string[]>(initialPeripheralIds ?? [])
   const [peripheralOptions, setPeripheralOptions] = useState<PeripheralOption[]>([])
+  const [autofilling, setAutofilling] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -219,6 +385,57 @@ export function StoreProductForm({
       mounted = false
     }
   }, [])
+
+  const BRAND_PAGE_SIZE = 20
+  const [brandOptions, setBrandOptions] = useState<{ id: string; name: string }[]>([])
+  const [brandSearch, setBrandSearch] = useState("")
+  const debouncedBrandSearch = useDebouncedValue(brandSearch, 300)
+  const [brandPage, setBrandPage] = useState(1)
+  const [loadingBrands, setLoadingBrands] = useState(false)
+  const [loadingMoreBrands, setLoadingMoreBrands] = useState(false)
+  const [brandTotal, setBrandTotal] = useState(0)
+  const brandRequestId = useRef(0)
+
+  useEffect(() => {
+    setBrandPage(1)
+    setLoadingBrands(true)
+    const currentRequest = ++brandRequestId.current
+    const params = new URLSearchParams({ page: "1", pageSize: String(BRAND_PAGE_SIZE) })
+    if (debouncedBrandSearch.trim()) params.set("search", debouncedBrandSearch.trim())
+
+    fetch(`/api/admin/brands?${params}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data: { brands?: { id: string; name: string }[]; total?: number }) => {
+        if (currentRequest !== brandRequestId.current) return
+        setBrandOptions(data.brands ?? [])
+        setBrandTotal(data.total ?? 0)
+      })
+      .catch(() => {
+        if (currentRequest === brandRequestId.current) setBrandOptions([])
+      })
+      .finally(() => {
+        if (currentRequest === brandRequestId.current) setLoadingBrands(false)
+      })
+  }, [debouncedBrandSearch])
+
+  function handleLoadMoreBrands() {
+    const nextPage = brandPage + 1
+    setLoadingMoreBrands(true)
+    const currentRequest = brandRequestId.current
+    const params = new URLSearchParams({ page: String(nextPage), pageSize: String(BRAND_PAGE_SIZE) })
+    if (debouncedBrandSearch.trim()) params.set("search", debouncedBrandSearch.trim())
+
+    fetch(`/api/admin/brands?${params}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data: { brands?: { id: string; name: string }[]; total?: number }) => {
+        if (currentRequest !== brandRequestId.current) return
+        setBrandOptions((prev) => [...prev, ...(data.brands ?? [])])
+        setBrandTotal(data.total ?? 0)
+        setBrandPage(nextPage)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMoreBrands(false))
+  }
 
   const imageSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
@@ -253,16 +470,121 @@ export function StoreProductForm({
     setSpecs((prev) => prev.filter((_, i) => i !== index))
   }
 
-  function updateVariant(index: number, field: "label" | "price_override_brl" | "stock", value: string) {
+  function updateVariant(
+    index: number,
+    field: "label" | "price_override_brl" | "promo_price_brl" | "stock",
+    value: string
+  ) {
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)))
   }
 
+  function setVariantColor(index: number, color: string | null) {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, color } : v)))
+  }
+
+  function setVariantIcon(index: number, icon: string | null) {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, icon: v.icon === icon ? null : icon } : v)))
+  }
+
   function addVariantRow() {
-    setVariants((prev) => [...prev, { label: "", price_override_brl: "", stock: "0" }])
+    setVariants((prev) => {
+      if (prev.length >= MAX_VARIANTS) {
+        toast.error("Limite de variantes atingido", {
+          description: `Cada produto pode ter no máximo ${MAX_VARIANTS} variantes.`,
+        })
+        return prev
+      }
+      return [
+        ...prev,
+        {
+          label: "",
+          price_override_brl: "",
+          promo_price_brl: "",
+          stock: "0",
+          hasStock: true,
+          color: null,
+          icon: null,
+          image_url: null,
+          images: [],
+        },
+      ]
+    })
   }
 
   function removeVariantRow(index: number) {
     setVariants((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  async function handleVariantImageAdd(index: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploadingVariantImage(index)
+    setError(null)
+    try {
+      const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
+      if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+        throw new Error(
+          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após compressão).`
+        )
+      }
+      const url = await uploadImage(compressed)
+      setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, image_url: url } : v)))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
+      setError(message)
+      toast.error("Erro ao enviar imagem", { description: message })
+    } finally {
+      setUploadingVariantImage(null)
+      e.target.value = ""
+    }
+  }
+
+  function removeVariantImage(index: number) {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, image_url: null } : v)))
+  }
+
+  async function handleVariantGalleryImageAdd(index: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if ((variants[index]?.images.length ?? 0) >= MAX_VARIANT_IMAGES) {
+      toast.error("Limite de imagens atingido", {
+        description: `Cada variante pode ter no máximo ${MAX_VARIANT_IMAGES} imagens.`,
+      })
+      e.target.value = ""
+      return
+    }
+
+    setUploadingVariantImage(index)
+    setError(null)
+    try {
+      const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
+      if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+        throw new Error(
+          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após compressão).`
+        )
+      }
+      const url = await uploadImage(compressed)
+      setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, images: [...v.images, url] } : v)))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
+      setError(message)
+      toast.error("Erro ao enviar imagem", { description: message })
+    } finally {
+      setUploadingVariantImage(null)
+      e.target.value = ""
+    }
+  }
+
+  function removeVariantGalleryImage(index: number, imageIndex: number) {
+    setVariants((prev) =>
+      prev.map((v, i) => (i === index ? { ...v, images: v.images.filter((_, ii) => ii !== imageIndex) } : v))
+    )
+  }
+
+  function setVariantHasStock(index: number, hasStock: boolean) {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, hasStock } : v)))
   }
 
   function bumpVariantStock(index: number, delta: number) {
@@ -279,6 +601,63 @@ export function StoreProductForm({
 
   function set(field: string, value: string | boolean) {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  async function handleAutofillFromPeripheral() {
+    if (peripheralIds.length === 0) return
+    setAutofilling(true)
+    try {
+      const res = await fetch(`/api/peripherals?ids=${peripheralIds[0]}&full=1`, { cache: "no-store" })
+      const data = (await res.json()) as { peripherals?: PeripheralFullData[]; error?: string }
+      const peripheral = data.peripherals?.[0]
+      if (!res.ok || !peripheral) {
+        throw new Error(data.error ?? "Periférico não encontrado.")
+      }
+
+      const filled = buildAutofillFromPeripheral(peripheral)
+
+      setFormData((prev) => ({
+        ...prev,
+        name: peripheral.name,
+        description: prev.description.trim() ? prev.description : filled.description,
+        brand: filled.brand,
+        category: filled.category ?? prev.category,
+      }))
+
+      if (filled.specs.length > 0) {
+        setSpecs((prev) => {
+          const existingLabels = new Set(prev.map((s) => s.label.trim().toLowerCase()).filter(Boolean))
+          const merged = [...prev.filter((s) => s.label.trim() || s.value.trim())]
+          for (const spec of filled.specs) {
+            if (!existingLabels.has(spec.label.toLowerCase())) merged.push(spec)
+          }
+          return merged.length > 0 ? merged : [{ label: "", value: "" }]
+        })
+      }
+
+      if (filled.features.length > 0) {
+        setFeatures((prev) => {
+          const existing = new Set(prev)
+          const additions = filled.features.filter((f) => !existing.has(f))
+          return [...prev, ...additions]
+        })
+      }
+
+      if (filled.images.length > 0) {
+        setImages((prev) => {
+          const existing = new Set(prev)
+          const additions = filled.images.filter((url) => !existing.has(url))
+          return [...prev, ...additions].slice(0, MAX_IMAGES)
+        })
+      }
+
+      toast.success("Dados preenchidos a partir do periférico", { description: peripheral.name })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao buscar dados do periférico"
+      toast.error("Erro ao preencher automaticamente", { description: message })
+    } finally {
+      setAutofilling(false)
+    }
   }
 
   function bumpStock(delta: number) {
@@ -345,12 +724,27 @@ export function StoreProductForm({
       }
       const priceCents = Math.round(parseFloat(formData.price_brl.replace(",", ".")) * 100)
 
-      if (isNaN(priceCents) || priceCents <= 0) {
-        throw new Error("Preço inválido. Use um valor maior que zero (ex: 159,90).")
+      if (isNaN(priceCents) || priceCents < MIN_PRICE_CENTS) {
+        throw new Error(`Preço inválido. Use um valor de pelo menos ${formatBRL(MIN_PRICE_CENTS)} (ex: 159,90).`)
       }
-      const stockValue = parseInt(formData.stock, 10)
-      if (isNaN(stockValue) || stockValue < 0 || stockValue > MAX_STOCK) {
-        throw new Error(`Estoque inválido. Use um número inteiro entre 0 e ${MAX_STOCK.toLocaleString("pt-BR")}.`)
+
+      let promoPriceCents: number | null = null
+      if (formData.promo_price_brl.trim()) {
+        promoPriceCents = Math.round(parseFloat(formData.promo_price_brl.replace(",", ".")) * 100)
+        if (isNaN(promoPriceCents) || promoPriceCents <= 0) {
+          throw new Error("Preço promocional inválido.")
+        }
+        if (promoPriceCents >= priceCents) {
+          throw new Error("Preço promocional deve ser menor que o preço base.")
+        }
+      }
+
+      let stockValue: number | null = null
+      if (hasStock) {
+        stockValue = parseInt(formData.stock, 10)
+        if (isNaN(stockValue) || stockValue < 0 || stockValue > MAX_STOCK) {
+          throw new Error(`Estoque inválido. Use um número inteiro entre 0 e ${MAX_STOCK.toLocaleString("pt-BR")}.`)
+        }
       }
 
       const videoUrl = formData.video_url.trim()
@@ -358,28 +752,70 @@ export function StoreProductForm({
         throw new Error("URL de vídeo precisa ser um link do YouTube.")
       }
 
-      const cleanVariants: Array<{ id?: string; label: string; price_cents_override: number | null; stock: number }> = []
+      if (variants.filter((v) => v.label.trim()).length > MAX_VARIANTS) {
+        throw new Error(`Cada produto pode ter no máximo ${MAX_VARIANTS} variantes.`)
+      }
+
+      const cleanVariants: Array<{
+        id?: string
+        label: string
+        price_cents_override: number | null
+        promo_price_cents: number | null
+        stock: number | null
+        color: string | null
+        icon: string | null
+        image_url: string | null
+        images: string[]
+      }> = []
       for (const v of variants) {
         const label = v.label.trim()
         if (!label) continue
-        const variantStock = parseInt(v.stock, 10)
-        if (isNaN(variantStock) || variantStock < 0 || variantStock > MAX_STOCK) {
-          throw new Error(`Estoque inválido na variante "${label}".`)
+        let variantStock: number | null = null
+        if (v.hasStock) {
+          variantStock = parseInt(v.stock, 10)
+          if (isNaN(variantStock) || variantStock < 0 || variantStock > MAX_STOCK) {
+            throw new Error(`Estoque inválido na variante "${label}".`)
+          }
         }
         let priceOverride: number | null = null
         if (v.price_override_brl.trim()) {
           priceOverride = Math.round(parseFloat(v.price_override_brl.replace(",", ".")) * 100)
-          if (isNaN(priceOverride) || priceOverride <= 0) {
-            throw new Error(`Preço inválido na variante "${label}".`)
+          if (isNaN(priceOverride) || priceOverride < MIN_PRICE_CENTS) {
+            throw new Error(`Preço inválido na variante "${label}". Use pelo menos ${formatBRL(MIN_PRICE_CENTS)}.`)
           }
         }
-        cleanVariants.push({ id: v.id, label, price_cents_override: priceOverride, stock: variantStock })
+        let variantPromoPrice: number | null = null
+        if (v.promo_price_brl.trim()) {
+          variantPromoPrice = Math.round(parseFloat(v.promo_price_brl.replace(",", ".")) * 100)
+          const referencePrice = priceOverride ?? priceCents
+          if (isNaN(variantPromoPrice) || variantPromoPrice <= 0) {
+            throw new Error(`Preço promocional inválido na variante "${label}".`)
+          }
+          if (variantPromoPrice >= referencePrice) {
+            throw new Error(`Preço promocional da variante "${label}" deve ser menor que o preço dela.`)
+          }
+        }
+        if (v.images.length > MAX_VARIANT_IMAGES) {
+          throw new Error(`Cada variante pode ter no máximo ${MAX_VARIANT_IMAGES} imagens ("${label}").`)
+        }
+        cleanVariants.push({
+          id: v.id,
+          label,
+          price_cents_override: priceOverride,
+          promo_price_cents: variantPromoPrice,
+          stock: variantStock,
+          color: v.color,
+          icon: v.icon,
+          image_url: v.image_url,
+          images: v.images,
+        })
       }
 
       const payload = {
         name: formData.name.trim(),
         description: formData.description.trim() || null,
         price_cents: priceCents,
+        promo_price_cents: promoPriceCents,
         stock: stockValue,
         images,
         category: formData.category || null,
@@ -464,9 +900,17 @@ export function StoreProductForm({
   }
 
   const isBazaar = formData.type === "bazaar"
-  const pricePreview = formData.price_brl
-    ? formatBRL(Math.round(parseFloat(formData.price_brl.replace(",", ".")) * 100) || 0)
-    : null
+  const priceCentsPreview = formData.price_brl
+    ? Math.round(parseFloat(formData.price_brl.replace(",", ".")) * 100) || 0
+    : 0
+  const pricePreview = formData.price_brl ? formatBRL(priceCentsPreview) : null
+  const promoPriceCentsPreview = formData.promo_price_brl
+    ? Math.round(parseFloat(formData.promo_price_brl.replace(",", ".")) * 100) || 0
+    : 0
+  const promoDiscountPercent =
+    promoPriceCentsPreview > 0 && priceCentsPreview > 0 && promoPriceCentsPreview < priceCentsPreview
+      ? Math.round((1 - promoPriceCentsPreview / priceCentsPreview) * 100)
+      : null
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -475,6 +919,130 @@ export function StoreProductForm({
           <AlertDescription className="text-xs">{error}</AlertDescription>
         </Alert>
       )}
+
+      {/* Painel de identificação do produto */}
+      <div className="relative overflow-hidden rounded-2xl border border-primary/20 p-5 shadow-[0_0_40px_-20px_rgba(255,138,0,0.5)]">
+        <div
+          className="pointer-events-none absolute inset-0 -z-10"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 60% at 10% 0%, oklch(0.65 0.19 45 / 0.16), transparent 60%), radial-gradient(ellipse 70% 50% at 100% 100%, oklch(0.6 0.16 300 / 0.12), transparent 60%), linear-gradient(160deg, oklch(0.16 0.01 40) 0%, oklch(0.1 0.005 40) 100%)",
+          }}
+        />
+        <div
+          className="pointer-events-none absolute inset-0 -z-10 opacity-[0.05]"
+          style={{
+            backgroundImage:
+              "linear-gradient(oklch(1 0 0) 1px, transparent 1px), linear-gradient(90deg, oklch(1 0 0) 1px, transparent 1px)",
+            backgroundSize: "22px 22px",
+          }}
+        />
+
+        <div className="mb-4 flex items-center gap-2">
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <Sparkles className="size-3.5" />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-foreground">Identificação do produto</p>
+            <p className="text-[10px] text-muted-foreground/70">
+              Vincule um periférico do catálogo para preencher tudo de uma vez, ou preencha manualmente abaixo.
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <MultiCombobox
+            options={peripheralOptions.map<ComboboxOption>((p) => ({
+              value: p.id,
+              label: p.brand ? `${p.name} — ${p.brand}` : p.name,
+            }))}
+            values={peripheralIds}
+            onValuesChange={setPeripheralIds}
+            placeholder="Vincular periférico do catálogo..."
+            searchPlaceholder="Buscar periférico..."
+            emptyText="Nenhum periférico encontrado."
+            allLabel="Nenhum"
+          />
+          {peripheralIds.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-primary/30 bg-primary/5 hover:bg-primary/10"
+              onClick={handleAutofillFromPeripheral}
+              disabled={autofilling}
+            >
+              {autofilling ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="size-3.5" />
+              )}
+              Preencher automaticamente com dados do periférico
+            </Button>
+          )}
+        </div>
+
+        <div className="my-4 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label>Nome do produto *</Label>
+            <Input
+              required
+              minLength={2}
+              maxLength={200}
+              value={formData.name}
+              onChange={(e) => set("name", e.target.value)}
+              placeholder="Ex: Logitech G Pro X Superlight 2"
+              className="bg-background/40"
+            />
+            <p className="text-[10px] text-muted-foreground/60">Obrigatório. Use o nome completo do produto.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Categoria</Label>
+            <Select
+              value={formData.category || NO_CATEGORY}
+              onValueChange={(v) => set("category", v === NO_CATEGORY ? "" : v)}
+            >
+              <SelectTrigger className="h-9 w-full border-border bg-background/40 text-sm">
+                <SelectValue placeholder="Selecionar..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_CATEGORY}>Sem categoria</SelectItem>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Marca</Label>
+            <Combobox
+              options={(() => {
+                const opts: ComboboxOption[] = brandOptions.map((b) => ({ value: b.name, label: b.name }))
+                if (formData.brand && !opts.some((o) => o.value === formData.brand)) {
+                  opts.unshift({ value: formData.brand, label: formData.brand })
+                }
+                return opts
+              })()}
+              value={formData.brand}
+              onValueChange={(value) => set("brand", value)}
+              onSearchChange={setBrandSearch}
+              loading={loadingBrands}
+              onLoadMore={handleLoadMoreBrands}
+              loadingMore={loadingMoreBrands}
+              hasMore={brandOptions.length < brandTotal}
+              onCreateOption={(label) => set("brand", label.trim())}
+              createOptionLabel={(label) => `Usar "${label}"`}
+              placeholder="Selecionar marca..."
+              searchPlaceholder="Buscar marca..."
+              emptyText="Nenhuma marca encontrada."
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Type + Condition */}
       <div className="grid gap-4 md:grid-cols-2">
@@ -523,70 +1091,6 @@ export function StoreProductForm({
         </div>
       )}
 
-      {/* Name + Category + Brand */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="space-y-2 md:col-span-2">
-          <Label>Nome do produto *</Label>
-          <Input
-            required
-            minLength={2}
-            maxLength={200}
-            value={formData.name}
-            onChange={(e) => set("name", e.target.value)}
-            placeholder="Ex: Logitech G Pro X Superlight 2"
-          />
-          <p className="text-[10px] text-muted-foreground/60">Obrigatório. Use o nome completo do produto.</p>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Marca</Label>
-          <Input
-            maxLength={80}
-            value={formData.brand}
-            onChange={(e) => set("brand", e.target.value)}
-            placeholder="Ex: Logitech"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Categoria</Label>
-        <Select
-          value={formData.category || NO_CATEGORY}
-          onValueChange={(v) => set("category", v === NO_CATEGORY ? "" : v)}
-        >
-          <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-            <SelectValue placeholder="Selecionar..." />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NO_CATEGORY}>Sem categoria</SelectItem>
-            {CATEGORIES.map((c) => (
-              <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Periféricos vinculados */}
-      <div className="space-y-2">
-        <Label>Periféricos vinculados</Label>
-        <p className="text-[10px] text-muted-foreground/60">
-          Associe este produto a um ou mais periféricos do catálogo (ex: um kit com mouse + mousepad).
-        </p>
-        <MultiCombobox
-          options={peripheralOptions.map<ComboboxOption>((p) => ({
-            value: p.id,
-            label: p.brand ? `${p.name} — ${p.brand}` : p.name,
-          }))}
-          values={peripheralIds}
-          onValuesChange={setPeripheralIds}
-          placeholder="Nenhum periférico vinculado"
-          searchPlaceholder="Buscar periférico..."
-          emptyText="Nenhum periférico encontrado."
-          allLabel="Nenhum"
-        />
-      </div>
-
       {/* Description */}
       <div className="space-y-2">
         <Label>Descrição</Label>
@@ -603,8 +1107,8 @@ export function StoreProductForm({
         />
       </div>
 
-      {/* Price + Stock + Active */}
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* Price + Promo + Stock + Active */}
+      <div className="grid gap-4 md:grid-cols-4">
         <div className="space-y-2">
           <Label>Preço (R$) *</Label>
           <div className="relative">
@@ -619,51 +1123,96 @@ export function StoreProductForm({
               className="pl-9"
             />
           </div>
-          <p className="text-[10px] text-muted-foreground/60">Maior que zero. Use vírgula para centavos (ex: 159,90).</p>
+          <p className="text-[10px] text-muted-foreground/60">
+            Mínimo de {formatBRL(MIN_PRICE_CENTS)}. Use vírgula para centavos (ex: 159,90).
+          </p>
           {pricePreview && (
             <p className="text-xs text-emerald-400">{pricePreview}</p>
           )}
         </div>
 
         <div className="space-y-2">
-          <Label>Estoque *</Label>
-          <div className="flex items-stretch gap-1.5">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-8 shrink-0"
-              onClick={() => bumpStock(-1)}
-              disabled={parseInt(formData.stock, 10) <= 0}
-              aria-label="Diminuir estoque"
-            >
-              <Minus className="size-3.5" />
-            </Button>
+          <Label>Preço promocional (R$)</Label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
             <Input
-              required
-              type="number"
-              min={0}
-              max={MAX_STOCK}
-              step={1}
-              value={formData.stock}
-              onChange={(e) => set("stock", e.target.value)}
-              placeholder="1"
-              className="no-spinner text-center"
+              type="text"
+              inputMode="decimal"
+              value={formData.promo_price_brl}
+              onChange={(e) => set("promo_price_brl", e.target.value)}
+              placeholder="Opcional"
+              className="pl-9"
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="h-8 shrink-0"
-              onClick={() => bumpStock(1)}
-              disabled={parseInt(formData.stock, 10) >= MAX_STOCK}
-              aria-label="Aumentar estoque"
-            >
-              <Plus className="size-3.5" />
-            </Button>
           </div>
-          {isBazaar && parseInt(formData.stock) > 1 && (
-            <p className="text-[10px] text-amber-400">Bazar normalmente tem estoque 1</p>
+          <p className="text-[10px] text-muted-foreground/60">Preço final &ldquo;De/Por&rdquo;. Deve ser menor que o preço base.</p>
+          {promoDiscountPercent != null && (
+            <p className="flex items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground line-through">{formatBRL(priceCentsPreview)}</span>
+              <span className="font-semibold text-emerald-400">{formatBRL(promoPriceCentsPreview)}</span>
+              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                -{promoDiscountPercent}%
+              </span>
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Estoque {hasStock && "*"}</Label>
+            <button
+              type="button"
+              onClick={() => setHasStock((prev) => !prev)}
+              className="text-[10px] font-medium text-primary hover:underline"
+            >
+              {hasStock ? "Remover controle" : "Controlar estoque"}
+            </button>
+          </div>
+          {hasStock ? (
+            <>
+              <div className="flex items-stretch gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 shrink-0"
+                  onClick={() => bumpStock(-1)}
+                  disabled={parseInt(formData.stock, 10) <= 0}
+                  aria-label="Diminuir estoque"
+                >
+                  <Minus className="size-3.5" />
+                </Button>
+                <Input
+                  required
+                  type="number"
+                  min={0}
+                  max={MAX_STOCK}
+                  step={1}
+                  value={formData.stock}
+                  onChange={(e) => set("stock", e.target.value)}
+                  placeholder="1"
+                  className="no-spinner text-center"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 shrink-0"
+                  onClick={() => bumpStock(1)}
+                  disabled={parseInt(formData.stock, 10) >= MAX_STOCK}
+                  aria-label="Aumentar estoque"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+              </div>
+              {isBazaar && parseInt(formData.stock) > 1 && (
+                <p className="text-[10px] text-amber-400">Bazar normalmente tem estoque 1</p>
+              )}
+            </>
+          ) : (
+            <p className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-[10px] text-muted-foreground">
+              Sem controle de estoque — nunca esgota. Limite de {" "}
+              <span className="font-semibold text-foreground">15 unidades/dia por comprador</span>.
+            </p>
           )}
         </div>
 
@@ -693,73 +1242,253 @@ export function StoreProductForm({
         </p>
         <div className="space-y-2">
           {variants.map((variant, idx) => (
-            <div key={variant.id ?? idx} className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/10 p-2">
-              <Input
-                value={variant.label}
-                onChange={(e) => updateVariant(idx, "label", e.target.value)}
-                placeholder="Ex: Preto"
-                className="min-w-[140px] flex-1 text-sm"
-              />
-              <div className="relative w-28 shrink-0">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
+            <div key={variant.id ?? idx} className="space-y-2 rounded-lg border border-border bg-muted/10 p-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={variant.price_override_brl}
-                  onChange={(e) => updateVariant(idx, "price_override_brl", e.target.value)}
-                  placeholder="Preço base"
-                  className="pl-7 text-sm"
+                  value={variant.label}
+                  onChange={(e) => updateVariant(idx, "label", e.target.value)}
+                  placeholder="Ex: Preto"
+                  className="min-w-[140px] flex-1 text-sm"
                 />
-              </div>
-              <div className="flex items-stretch gap-1">
+                <div className="relative w-28 shrink-0">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={variant.price_override_brl}
+                    onChange={(e) => updateVariant(idx, "price_override_brl", e.target.value)}
+                    placeholder="Preço base"
+                    className="pl-7 text-sm"
+                  />
+                </div>
+                <div className="relative w-28 shrink-0">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={variant.promo_price_brl}
+                    onChange={(e) => updateVariant(idx, "promo_price_brl", e.target.value)}
+                    placeholder="Promo"
+                    className="pl-7 text-sm"
+                  />
+                </div>
+                {variant.hasStock ? (
+                  <div className="flex items-stretch gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 shrink-0"
+                      onClick={() => bumpVariantStock(idx, -1)}
+                      disabled={parseInt(variant.stock, 10) <= 0}
+                      aria-label="Diminuir estoque da variante"
+                    >
+                      <Minus className="size-3.5" />
+                    </Button>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={MAX_STOCK}
+                      step={1}
+                      value={variant.stock}
+                      onChange={(e) => updateVariant(idx, "stock", e.target.value)}
+                      className="no-spinner w-16 text-center text-sm"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 shrink-0"
+                      onClick={() => bumpVariantStock(idx, 1)}
+                      disabled={parseInt(variant.stock, 10) >= MAX_STOCK}
+                      aria-label="Aumentar estoque da variante"
+                    >
+                      <Plus className="size-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="rounded-md border border-dashed border-border px-2 py-1.5 text-[10px] text-muted-foreground">
+                    Sem controle
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setVariantHasStock(idx, !variant.hasStock)}
+                  className="shrink-0 text-[10px] font-medium text-primary hover:underline"
+                >
+                  {variant.hasStock ? "Remover controle" : "Controlar estoque"}
+                </button>
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="ghost"
                   size="icon"
-                  className="h-8 shrink-0"
-                  onClick={() => bumpVariantStock(idx, -1)}
-                  disabled={parseInt(variant.stock, 10) <= 0}
-                  aria-label="Diminuir estoque da variante"
+                  className="shrink-0 text-muted-foreground hover:text-red-400"
+                  onClick={() => removeVariantRow(idx)}
                 >
-                  <Minus className="size-3.5" />
-                </Button>
-                <Input
-                  type="number"
-                  min={0}
-                  max={MAX_STOCK}
-                  step={1}
-                  value={variant.stock}
-                  onChange={(e) => updateVariant(idx, "stock", e.target.value)}
-                  className="no-spinner w-16 text-center text-sm"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-8 shrink-0"
-                  onClick={() => bumpVariantStock(idx, 1)}
-                  disabled={parseInt(variant.stock, 10) >= MAX_STOCK}
-                  aria-label="Aumentar estoque da variante"
-                >
-                  <Plus className="size-3.5" />
+                  <Trash2 className="size-3.5" />
                 </Button>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-muted-foreground hover:text-red-400"
-                onClick={() => removeVariantRow(idx)}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
+
+              {(() => {
+                const refCents = variant.price_override_brl.trim()
+                  ? Math.round(parseFloat(variant.price_override_brl.replace(",", ".")) * 100) || 0
+                  : priceCentsPreview
+                const promoCents = variant.promo_price_brl.trim()
+                  ? Math.round(parseFloat(variant.promo_price_brl.replace(",", ".")) * 100) || 0
+                  : 0
+                if (!promoCents || !refCents || promoCents >= refCents) return null
+                const percent = Math.round((1 - promoCents / refCents) * 100)
+                return (
+                  <p className="flex items-center gap-1.5 pl-0.5 text-xs">
+                    <span className="text-muted-foreground line-through">{formatBRL(refCents)}</span>
+                    <span className="font-semibold text-emerald-400">{formatBRL(promoCents)}</span>
+                    <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+                      -{percent}%
+                    </span>
+                  </p>
+                )
+              })()}
+
+              <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-2">
+                {/* Cor */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">Cor</span>
+                  <input
+                    type="color"
+                    value={variant.color ?? "#22c55e"}
+                    onChange={(e) => setVariantColor(idx, e.target.value)}
+                    aria-label="Cor da variante"
+                    className="size-7 shrink-0 cursor-pointer rounded-md border border-border bg-transparent p-0.5"
+                  />
+                  {variant.color && (
+                    <button
+                      type="button"
+                      onClick={() => setVariantColor(idx, null)}
+                      aria-label="Remover cor"
+                      className="text-muted-foreground/60 hover:text-red-400"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Ícone */}
+                <div className="flex items-center gap-1">
+                  <span className="mr-0.5 text-[10px] text-muted-foreground">Ícone</span>
+                  {VARIANT_ICON_NAMES.map((name) => {
+                    const IconComp = VARIANT_ICONS[name]
+                    const isSelected = variant.icon === name
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setVariantIcon(idx, name)}
+                        aria-label={`Ícone ${name}`}
+                        aria-pressed={isSelected}
+                        className={cn(
+                          "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+                          isSelected
+                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                            : "border-border text-muted-foreground hover:border-foreground/20"
+                        )}
+                      >
+                        <IconComp className="size-3.5" />
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Imagem de capa da variante */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">Capa</span>
+                  {variant.image_url ? (
+                    <div className="relative size-9 shrink-0 overflow-hidden rounded-md border border-border bg-muted">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={variant.image_url} alt="" className="h-full w-full object-contain p-0.5" />
+                      <button
+                        type="button"
+                        onClick={() => removeVariantImage(idx)}
+                        aria-label="Remover imagem de capa da variante"
+                        className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-red-500 text-white"
+                      >
+                        <X className="size-2.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground">
+                      {uploadingVariantImage === idx ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="size-3.5" />
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingVariantImage !== null}
+                        onChange={(e) => handleVariantImageAdd(idx, e)}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* Galeria exclusiva da variante (até MAX_VARIANT_IMAGES) */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">
+                    Galeria {variant.images.length}/{MAX_VARIANT_IMAGES}
+                  </span>
+                  {variant.images.map((url, imageIdx) => (
+                    <div
+                      key={url}
+                      className="relative size-9 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="h-full w-full object-contain p-0.5" />
+                      <button
+                        type="button"
+                        onClick={() => removeVariantGalleryImage(idx, imageIdx)}
+                        aria-label="Remover imagem da galeria"
+                        className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-red-500 text-white"
+                      >
+                        <X className="size-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {variant.images.length < MAX_VARIANT_IMAGES && (
+                    <label className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground">
+                      {uploadingVariantImage === idx ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="size-3.5" />
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingVariantImage !== null}
+                        onChange={(e) => handleVariantGalleryImageAdd(idx, e)}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
             </div>
           ))}
         </div>
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addVariantRow}>
-          <Plus className="size-3.5" />
-          Adicionar variante
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={addVariantRow}
+            disabled={variants.length >= MAX_VARIANTS}
+          >
+            <Plus className="size-3.5" />
+            Adicionar variante
+          </Button>
+          <span className="text-[10px] text-muted-foreground">{variants.length}/{MAX_VARIANTS}</span>
+        </div>
       </div>
 
       {/* Características */}

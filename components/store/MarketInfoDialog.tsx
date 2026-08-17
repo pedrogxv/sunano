@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, HelpCircle, Package, Recycle, ShoppingBag, XCircle } from "lucide-react"
+import { CheckCircle2, HelpCircle, Package, ShoppingBag, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -24,11 +24,11 @@ const CONDITIONS = [
   {
     label: "Usado",
     style: "bg-orange-500/15 text-orange-400 border-orange-500/30",
-    description: "Produto de segunda mão, testado e aprovado pelo Sunano antes de entrar no Bazar.",
+    description: "Produto de segunda mão, testado e aprovado pelo Sunano antes de ir para a venda.",
   },
 ] as const
 
-/** Botão de ajuda + modal explicando os termos do Mercado (Loja, Bazar, condições). */
+/** Botão de ajuda + modal explicando os termos do Mercado (Loja, condições). */
 export function MarketInfoDialog() {
   return (
     <Dialog>
@@ -57,19 +57,6 @@ export function MarketInfoDialog() {
               <p className="font-semibold text-foreground">Loja</p>
               <p className="text-muted-foreground">
                 Produtos novos, selecionados e testados pelo Sunano, vendidos por fornecedores parceiros.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400">
-              <Recycle className="size-4" />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">Bazar</p>
-              <p className="text-muted-foreground">
-                Produtos usados ou com embalagem aberta, com preço reduzido — o estado de cada item
-                fica descrito na página dele.
               </p>
             </div>
           </div>

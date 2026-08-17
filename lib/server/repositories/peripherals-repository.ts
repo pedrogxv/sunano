@@ -151,6 +151,32 @@ export async function getRankedPeripherals(): Promise<RankedPeripheral[]> {
     .filter((p): p is RankedPeripheral => typeof p.score === "number" && p.score > 0)
 }
 
+export type PeripheralRank = { position: number; total: number }
+
+/**
+ * Posição de um periférico no ranking da própria categoria (mesma lógica de
+ * `/perifericos/[slug]`, reaproveitada para exibir o ranking em outras
+ * seções do site, como a Loja, quando um produto tem um periférico vinculado).
+ */
+export async function getPeripheralRankById(peripheralId: string): Promise<PeripheralRank | null> {
+  const all = await listAllPeripherals()
+  const target = all.find((p) => p.id === peripheralId)
+  if (!target) return null
+
+  const rankedInCategory = all
+    .filter((p) => p.category === target.category)
+    .map((p) => {
+      const details = ((p.specs as Record<string, unknown>)?.details ?? {}) as Record<string, unknown>
+      const score = details.score != null ? Number(details.score) : null
+      return { id: p.id, score }
+    })
+    .filter((p): p is { id: string; score: number } => typeof p.score === "number" && p.score > 0)
+    .sort((a, b) => b.score - a.score)
+
+  const rankIndex = rankedInCategory.findIndex((p) => p.id === peripheralId)
+  return rankIndex >= 0 ? { position: rankIndex + 1, total: rankedInCategory.length } : null
+}
+
 /** Busca um periférico por id embutido no slug ou, em fallback, por nome. */
 export async function getPeripheralByIdOrSlug(slug: string): Promise<PeripheralRecord | null> {
   const db = createSupabaseAdminClient()

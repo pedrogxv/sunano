@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ShoppingCart, Recycle, Store } from "lucide-react"
+import { ShoppingCart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
@@ -33,10 +33,15 @@ const CONDITION_LABEL: Record<string, string> = {
   used: "Usado",
 }
 
-const CONDITION_STYLE: Record<string, string> = {
-  new: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  opened: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  used: "bg-orange-500/15 text-orange-400 border-orange-500/30",
+/**
+ * Tint por estado, na mesma linguagem oklch dos ícones de categoria — o
+ * badge do mock é montado por color-mix a partir de uma cor só (borda 32%,
+ * fundo 14% sobre preto), não por três utilitários de cor distintos.
+ */
+const CONDITION_TINT: Record<string, string> = {
+  new: "oklch(0.7 0.15 160)",
+  opened: "oklch(0.8 0.15 85)",
+  used: "oklch(0.7 0.18 45)",
 }
 
 export function ProductCard(props: ProductCardProps) {
@@ -77,27 +82,18 @@ export function ProductCard(props: ProductCardProps) {
     setOpen(true)
   }
 
-  const accentText = props.type === "bazaar" ? "text-amber-400" : "text-sky-400"
-  const TypeIcon = props.type === "bazaar" ? Recycle : Store
+  const conditionTint = CONDITION_TINT[props.condition]
 
   return (
     <Link href={href} className="group block">
       <div className={cn(
-        "relative flex flex-col overflow-hidden rounded-[18px] border border-border/60 bg-secondary/45 transition-all duration-200",
-        "hover:-translate-y-1 hover:border-border hover:shadow-xl hover:shadow-black/10",
-        outOfStock && "opacity-60"
+        "relative flex flex-col overflow-hidden rounded-[18px] border border-[#262626] bg-card transition-all duration-200",
+        "hover:-translate-y-1 hover:border-[#3a3a3a] hover:shadow-xl hover:shadow-black/40",
+        outOfStock && "opacity-55"
       )}>
-        {/* Out of stock overlay */}
-        {outOfStock && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[18px] bg-black/50">
-            <span className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-bold text-red-400">
-              Esgotado
-            </span>
-          </div>
-        )}
-
-        {/* Image */}
-        <div className="relative aspect-square overflow-hidden bg-[var(--card-image-bg)]">
+        {/* Imagem: fundo #141414 com um respiro da cor da categoria no topo,
+            como no mock — não o --card-image-bg genérico dos outros cards. */}
+        <div className="relative aspect-square overflow-hidden bg-[#141414]">
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -108,80 +104,83 @@ export function ProductCard(props: ProductCardProps) {
           ) : (
             <div
               className="flex h-full items-center justify-center"
-              style={{ background: `radial-gradient(120% 120% at 50% 20%, color-mix(in oklab, ${tint} 16%, var(--card-image-bg)), var(--card-image-bg))` }}
+              style={{ background: `radial-gradient(120% 120% at 50% 15%, color-mix(in oklab, ${tint} 13%, #141414), #141414)` }}
             >
               <CategoryIcon
-                className="size-24 opacity-45 transition-transform duration-300 group-hover:scale-105"
+                className="size-[108px] opacity-50 transition-transform duration-300 group-hover:scale-105"
                 style={{ color: tint }}
-                strokeWidth={1.3}
+                strokeWidth={1.15}
               />
             </div>
           )}
 
-          {/* Top badge: condição, sobreposto na imagem */}
-          <div className="absolute inset-x-2.5 top-2.5 z-[1] flex items-start justify-between">
-            <span className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide backdrop-blur-sm",
-              CONDITION_STYLE[props.condition]
-            )}>
-              <span className={cn(
-                "size-1.5 rounded-full",
-                props.condition === "new" && "bg-emerald-400",
-                props.condition === "opened" && "bg-amber-400",
-                props.condition === "used" && "bg-orange-400"
-              )} />
-              {CONDITION_LABEL[props.condition]}
-            </span>
-          </div>
+          {/* Badge de estado — 12px do canto, contra os 10px do botão de
+              carrinho: é assim que o mock desalinha os dois de propósito. */}
+          <span
+            className="absolute left-3 top-3 z-[1] inline-flex items-center gap-[5px] rounded-full border px-[9px] py-[3px] text-[9px] font-bold uppercase tracking-[0.06em]"
+            style={{
+              borderColor: `color-mix(in oklab, ${conditionTint} 32%, transparent)`,
+              background: `color-mix(in oklab, ${conditionTint} 14%, #000)`,
+              color: conditionTint,
+            }}
+          >
+            <span className="size-[5px] rounded-full" style={{ background: conditionTint }} />
+            {CONDITION_LABEL[props.condition]}
+          </span>
+
+          {!outOfStock && (
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              aria-label={hasVariants ? "Ver opções" : "Adicionar ao carrinho"}
+              title={hasVariants ? "Ver opções" : "Adicionar ao carrinho"}
+              className="absolute right-2.5 top-2.5 z-[1] flex size-[34px] shrink-0 items-center justify-center rounded-[10px] border border-[#2e2e2e] bg-[rgba(10,10,10,0.82)] text-[#999999] backdrop-blur-sm transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:text-emerald-400"
+            >
+              <ShoppingCart className="size-[15px]" />
+            </button>
+          )}
 
           {hasDiscount && (
-            <span className="absolute bottom-2.5 left-2.5 z-[1] rounded-lg bg-emerald-500 px-2 py-1 text-[11px] font-extrabold text-emerald-950">
+            <span className="absolute bottom-3 left-3 z-[1] rounded-lg bg-emerald-500 px-2 py-1 text-[11px] font-extrabold text-[#04140d]">
               -{discountPercent}%
             </span>
+          )}
+
+          {/* Esgotado: escurece só a imagem — o card inteiro já perde opacidade
+              acima, então aqui é só reforçar o texto sem duplicar o efeito. */}
+          {outOfStock && (
+            <div className="absolute inset-0 z-[1] flex items-center justify-center bg-black/55">
+              <span className="font-display text-xs font-bold uppercase tracking-[0.1em] text-red-400">
+                Esgotado
+              </span>
+            </div>
           )}
         </div>
 
         {/* Info */}
-        <div className="flex flex-1 flex-col gap-2.5 p-4">
-          <div>
-            <h3 className={cn("flex items-start gap-1.5 line-clamp-2 text-xs font-extrabold uppercase tracking-wide leading-snug", accentText)}>
-              <TypeIcon className="mt-0.5 size-3.5 shrink-0" />
-              <span className="line-clamp-2 text-foreground/90 group-hover:text-foreground">{props.name}</span>
-            </h3>
-            {(props.brand || props.category) && (
-              <p className="mt-1 text-[10px] capitalize text-muted-foreground">
-                {[props.brand, props.category].filter(Boolean).join(" · ")}
-              </p>
-            )}
-          </div>
+        <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
+          {props.category && (
+            <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[#7a7a7a]">{props.category}</p>
+          )}
+          {/* `font-sans tracking-normal` desfaz o reset global de h3 (Space
+              Grotesk + tracking negativo): no mock o nome do produto é Manrope. */}
+          <h3 className="line-clamp-2 font-sans text-[13.5px] font-semibold leading-[1.35] tracking-normal text-white">
+            {props.name}
+          </h3>
 
-          <div>
+          <div className="mt-auto">
             {hasDiscount ? (
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-baseline gap-2">
                 <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(effectivePriceCents)}</p>
-                <p className="text-xs text-muted-foreground line-through">{formatBRL(props.price_cents)}</p>
+                <p className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(props.price_cents)}</p>
               </div>
             ) : (
-              <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(props.price_cents)}</p>
+              <p className="font-display text-lg font-bold text-white">{formatBRL(props.price_cents)}</p>
             )}
             {props.stock !== null && props.stock > 0 && props.stock <= 3 && (
-              <p className="text-[10px] font-semibold text-amber-400">Últimas {props.stock} unidades!</p>
+              <p className="mt-1 text-[10px] font-semibold text-amber-400">Últimas {props.stock} unidades!</p>
             )}
           </div>
-
-          <button
-            onClick={handleAddToCart}
-            disabled={outOfStock}
-            className={cn(
-              "mt-auto flex w-full items-center justify-center gap-1.5 rounded-[11px] border px-3 py-2.5 text-xs font-extrabold transition-all",
-              "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-              "hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:shadow-md hover:shadow-emerald-500/10",
-              outOfStock && "cursor-not-allowed opacity-50 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:shadow-none"
-            )}
-          >
-            <ShoppingCart className="size-3.5" />
-            {hasVariants ? "Ver opções" : "Comprar"}
-          </button>
         </div>
       </div>
     </Link>
@@ -190,15 +189,12 @@ export function ProductCard(props: ProductCardProps) {
 
 export function ProductCardSkeleton() {
   return (
-    <div className="flex flex-col overflow-hidden rounded-[18px] border border-border/60 bg-secondary/45">
+    <div className="flex flex-col overflow-hidden rounded-[18px] border border-[#262626] bg-card">
       <Skeleton className="aspect-square w-full rounded-none" />
-      <div className="flex flex-1 flex-col gap-2.5 p-4">
-        <div className="flex flex-col gap-1.5">
-          <Skeleton className="h-3 w-4/5" />
-          <Skeleton className="h-2.5 w-2/5" />
-        </div>
-        <Skeleton className="h-5 w-1/2" />
-        <Skeleton className="mt-auto h-9 w-full rounded-[11px]" />
+      <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
+        <Skeleton className="h-2.5 w-2/5" />
+        <Skeleton className="h-3 w-4/5" />
+        <Skeleton className="mt-auto h-5 w-1/2" />
       </div>
     </div>
   )

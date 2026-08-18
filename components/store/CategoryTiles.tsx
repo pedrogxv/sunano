@@ -1,5 +1,6 @@
 "use client"
 
+import { ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 
@@ -13,35 +14,50 @@ interface CategoryTilesProps {
 export function CategoryTiles({ categories, categoryCounts, activeCategory, onSelect }: CategoryTilesProps) {
   if (categories.length === 0) return null
 
+  // As duas categorias com mais produtos ganham um tile maior — dá pra quem
+  // tem mais estoque um destaque proporcional, sem depender de posições fixas
+  // (o catálogo real muda de tamanho conforme o admin cadastra categorias).
+  const sorted = [...categories].sort((a, b) => (categoryCounts[b] ?? 0) - (categoryCounts[a] ?? 0))
+
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-      {categories.map((category) => {
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6 lg:gap-3.5">
+      {sorted.map((category, idx) => {
         const { icon: Icon, tint } = getCategoryIcon(category)
         const active = activeCategory === category
+        const big = idx < 2 && sorted.length > 2
         return (
           <button
             key={category}
             type="button"
             onClick={() => onSelect(active ? null : category)}
             className={cn(
-              "group relative flex h-[150px] flex-col justify-end gap-1.5 overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200",
-              active ? "border-foreground/50" : "border-border hover:-translate-y-0.5 hover:border-foreground/25"
+              "group relative flex h-[116px] flex-col justify-end gap-[3px] overflow-hidden rounded-2xl border p-3.5 text-left transition-all duration-200 lg:gap-1.5 lg:rounded-[18px] lg:p-[22px]",
+              big ? "lg:col-span-3 lg:h-[240px]" : "lg:col-span-2 lg:h-[176px]",
+              active ? "border-foreground/50" : "border-[#262626] hover:-translate-y-0.5 hover:border-foreground/25"
             )}
-            style={{ background: `radial-gradient(120% 120% at 100% 100%, color-mix(in oklab, ${tint} 18%, var(--card)), var(--card))` }}
+            style={{ background: `radial-gradient(115% 115% at 100% 0%, color-mix(in oklab, ${tint} 20%, var(--card)), var(--card))` }}
           >
             <Icon
-              className="absolute right-3.5 top-3.5 size-6 transition-transform duration-200 group-hover:scale-110"
+              className={cn(
+                "pointer-events-none absolute -bottom-3 -right-2.5 size-[86px] opacity-[0.16] transition-transform duration-200 group-hover:scale-105 lg:-bottom-[18px] lg:-right-3.5",
+                big ? "lg:size-[187px]" : "lg:size-[137px]"
+              )}
               style={{ color: tint }}
-              strokeWidth={1.5}
+              strokeWidth={0.9}
             />
-            <Icon
-              className="pointer-events-none absolute -bottom-3.5 -right-2.5 size-24 opacity-[0.14]"
-              style={{ color: tint }}
-              strokeWidth={1}
-            />
-            <span className="relative font-display text-[15px] font-bold capitalize text-foreground">{category}</span>
-            <span className="relative text-[11px] font-semibold text-muted-foreground">
+            <span
+              className={cn(
+                "relative font-display text-base font-bold capitalize tracking-tight text-white",
+                big ? "lg:text-[26px]" : "lg:text-lg"
+              )}
+            >
+              {category}
+            </span>
+            <span className="relative flex items-center gap-1.5 text-[11px] font-semibold text-[#909090] lg:text-xs">
               {categoryCounts[category] ?? 0} produto{categoryCounts[category] === 1 ? "" : "s"}
+              {/* A seta só existe no artboard desktop — no mobile o tile é
+                  metade da altura e ela empurraria a contagem pra segunda linha. */}
+              <ArrowRight className="hidden size-[13px] lg:inline" style={{ color: tint }} strokeWidth={2.2} />
             </span>
           </button>
         )

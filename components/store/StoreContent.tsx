@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, PackageSearch, QrCode, Search, ShieldCheck, Sparkles, Star, Store, X } from "lucide-react"
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, Package, PackageSearch, QrCode, ShieldCheck, SlidersHorizontal, Sparkles, Star, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthUser } from "@/components/providers/auth-context"
+import { usePageHeader } from "@/components/providers/page-header-context"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
-import { Input } from "@/components/ui/input"
+import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
 import { MultiCombobox } from "@/components/ui/combobox"
@@ -27,6 +28,14 @@ interface StoreContentProps {
 }
 
 type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
+type ConditionKey = "all" | "new" | "used" | "opened"
+
+const CONDITION_LABEL: Record<ConditionKey, string> = {
+  all: "Estado",
+  new: "Novo",
+  used: "Usado",
+  opened: "Emb. aberta",
+}
 
 const PRICE_MIN = 0
 const SORT_LABEL: Record<SortKey, string> = {
@@ -58,8 +67,13 @@ function buildPageList(current: number, total: number): (number | "ellipsis")[] 
   return result
 }
 
+/** Chip da fileira de filtros do desktop (36 px, #141414 sobre #0a0a0a). */
 const TRIGGER_CLASS =
-  "flex h-10 w-auto items-center gap-2 whitespace-nowrap rounded-lg border border-border bg-muted/30 px-3.5 text-[13px] font-semibold text-foreground hover:bg-muted/50"
+  "flex h-9 w-auto items-center gap-[7px] whitespace-nowrap rounded-[10px] border border-[#2a2a2a] bg-[#141414] px-3.5 text-[12.5px] font-semibold text-[#cfcfcf] hover:border-foreground/25"
+
+/** Mesmo chip, empilhado e de largura cheia dentro do popover do mobile. */
+const MOBILE_TRIGGER_CLASS =
+  "flex h-11 w-full items-center justify-between gap-[7px] whitespace-nowrap rounded-xl border border-[#2a2a2a] bg-[#141414] px-4 text-[13px] font-semibold text-[#cfcfcf]"
 
 function PriceSlider({ value, onChange, max }: { value: [number, number]; onChange: (v: [number, number]) => void; max: number }) {
   const [minVal, maxVal] = value
@@ -89,10 +103,18 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const searchParams = useSearchParams()
   const { user } = useAuthUser()
 
+  // A TopBar cai no fallback "Sunano" sem isso — /loja não está no mapa de
+  // títulos por rota (getPageDefaults em TopBar.tsx). Descrição curta de
+  // propósito: o grupo esquerdo da TopBar é `shrink-0` (TopBar.tsx), então
+  // o `truncate` do span nunca entra em ação — uma string longa empurra os
+  // botões da direita (carrinho/login) pra fora da tela no mobile.
+  usePageHeader("Mercado", "PIX na hora, testado antes de anunciar")
+
   const [query, setQuery] = useState(searchParams.get("q") ?? "")
   const debouncedQuery = useDebouncedValue(query, 400)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
+  const [condition, setCondition] = useState<ConditionKey>("all")
   const [sortKey, setSortKey] = useState<SortKey>("recent")
   const [page, setPage] = useState(1)
 
@@ -139,11 +161,12 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const [total, setTotal] = useState(initialTotal)
   const [isFetching, setIsFetching] = useState(false)
   const isFirstRun = useRef(true)
+  const featuredScrollRef = useRef<HTMLDivElement>(null)
 
   // Volta pra página 1 sempre que um filtro (não a página em si) muda.
   useEffect(() => {
     setPage(1)
-  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey])
+  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey, condition])
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -155,6 +178,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       params.set("priceMin", String(priceRange[0] * 100))
       params.set("priceMax", String(priceRange[1] * 100))
     }
+    if (condition !== "all") params.set("condition", condition)
     if (sortKey !== "recent") params.set("sort", sortKey)
     params.set("page", String(page))
     params.set("pageSize", String(pageSize))
@@ -182,18 +206,20 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       .finally(() => setIsFetching(false))
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, page, pageSize])
+  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, condition, page, pageSize])
 
   const activeFiltersCount =
     selectedCategories.length +
     selectedBrands.length +
     (query.trim() ? 1 : 0) +
+    (condition !== "all" ? 1 : 0) +
     (isPriceFiltered ? 1 : 0)
 
   const resetFilters = () => {
     setQuery("")
     setSelectedCategories([])
     setSelectedBrands([])
+    setCondition("all")
     setPriceRange(null)
     setSortKey("recent")
   }
@@ -212,7 +238,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
 
     return {
       featuredItems: merged,
-      featuredLabel: initialFeatured.length > 0 ? "Selecionados" : discounted.length > 0 ? "Ofertas" : "Novidades",
+      featuredLabel: initialFeatured.length > 0 ? "Selecionados da semana" : discounted.length > 0 ? "Ofertas" : "Novidades",
       FeaturedIcon: initialFeatured.length > 0 ? Star : discounted.length > 0 ? Flame : Sparkles,
     }
   }, [initialItems, initialFeatured])
@@ -221,36 +247,100 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
+  // Os mesmos controles aparecem em dois lugares: na fileira do desktop e
+  // empilhados dentro do popover "Filtros" do mobile (o artboard 390 troca a
+  // fileira inteira por um botão só).
+  const renderFilters = (triggerClass: string) => (
+    <>
+      {categoryOptions.length > 0 && (
+        <MultiCombobox
+          options={categoryOptions}
+          values={selectedCategories}
+          onValuesChange={setSelectedCategories}
+          placeholder="Categoria"
+          searchPlaceholder="Buscar categoria"
+          allLabel="Todas as categorias"
+          className={triggerClass}
+        />
+      )}
+
+      {brandOptions.length > 0 && (
+        <MultiCombobox
+          options={brandOptions}
+          values={selectedBrands}
+          onValuesChange={setSelectedBrands}
+          placeholder="Marca"
+          searchPlaceholder="Buscar marca"
+          allLabel="Todas as marcas"
+          className={triggerClass}
+        />
+      )}
+
+      <Select value={condition} onValueChange={(v) => setCondition(v as ConditionKey)}>
+        <SelectTrigger className={triggerClass}>
+          <SelectValue>{CONDITION_LABEL[condition]}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos os estados</SelectItem>
+          <SelectItem value="new">Novo</SelectItem>
+          <SelectItem value="opened">Emb. aberta</SelectItem>
+          <SelectItem value="used">Usado</SelectItem>
+        </SelectContent>
+      </Select>
+
+      <Popover>
+        <PopoverTrigger asChild>
+          <button type="button" className={triggerClass}>
+            Preço
+            <ChevronDown className="size-[13px] text-[#6e6e6e]" strokeWidth={2.2} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72" align="start">
+          <PriceSlider value={priceRange} onChange={setPriceRange} max={maxPrice} />
+        </PopoverContent>
+      </Popover>
+    </>
+  )
+
   return (
     <div>
-      {/* Announcement bar */}
-      <div className="border-b border-border bg-card px-4 py-2 text-center text-[12px] font-semibold text-muted-foreground">
-        Pagamento via <span className="text-foreground">PIX</span> · Produtos novos e usados{" "}
-        <span className="text-foreground">testados pelo Sunano</span>
-      </div>
-
-      {/* Hero / banner */}
-      <div
-        className="relative overflow-hidden bg-[#0b0f14] px-4 py-10 sm:py-14 md:py-16"
-        style={{
-          backgroundImage: "url(/images/mascot/Loja.png)",
-          backgroundSize: "cover",
-          backgroundPosition: "right center",
+      {/* Faixa de aviso + categorias — vive na página, não é chrome global
+          (sidebar cuida da navegação do site). Hover mostra marcas + 1 produto
+          de exemplo, tudo a partir do que já está carregado no cliente. */}
+      <StoreCategoryNav
+        categories={filterOptions.categories}
+        categoryCounts={filterOptions.categoryCounts}
+        brandsByCategory={filterOptions.brandsByCategory}
+        activeCategory={activeCategory}
+        onSelect={(cat) => setSelectedCategories(cat ? [cat] : [])}
+        onSelectBrand={(cat, brand) => {
+          setSelectedCategories([cat])
+          setSelectedBrands([brand])
         }}
+        query={query}
+        onQueryChange={setQuery}
+        previewPool={[...initialFeatured, ...initialItems]}
+      />
+
+      {/* Hero: a mascote só sangra pela direita no desktop; no mobile ela fica
+          atrás de um degradê vertical e o conteúdo desce pro rodapé do bloco. */}
+      <div
+        className="relative h-[320px] overflow-hidden bg-[#0b0f14] bg-cover [background-position:72%_center] sm:h-[400px] sm:[background-position:right_center]"
+        style={{ backgroundImage: "url(/images/mascot/Loja.png)" }}
       >
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute inset-0 hidden sm:block"
           style={{
             background:
-              "linear-gradient(90deg, #0b0f14 15%, rgba(11,15,20,0.85) 45%, rgba(11,15,20,0.35) 70%, transparent 95%)",
+              "linear-gradient(90deg, #0b0f14 22%, rgba(11,15,20,0.82) 48%, rgba(11,15,20,0.25) 74%, rgba(11,15,20,0) 96%)",
           }}
         />
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 sm:hidden"
           style={{
-            background: "linear-gradient(180deg, rgba(11,15,20,0.55) 0%, rgba(11,15,20,0.9) 75%, #0b0f14 100%)",
+            background: "linear-gradient(180deg, rgba(11,15,20,0.45) 0%, rgba(11,15,20,0.88) 58%, #0b0f14 100%)",
           }}
         />
 
@@ -264,51 +354,65 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           </Link>
         )}
 
-        <div className="relative mx-auto flex max-w-7xl flex-col items-start gap-4 px-2 text-left sm:px-4 md:px-6 lg:px-8">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/25 px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm">
-            <ShieldCheck className="size-3 text-emerald-400" />
-            Testado pelo Sunano
+        <div className="relative mx-auto flex h-full max-w-7xl flex-col items-start justify-end gap-[13px] px-4 pb-[22px] text-left sm:justify-center sm:gap-5 sm:pb-0 lg:px-8">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/16 bg-black/30 px-[11px] py-[5px] text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm sm:gap-[7px] sm:px-[13px] sm:py-1.5 sm:text-[10px]">
+            <ShieldCheck className="size-[11px] text-emerald-400 sm:size-3" strokeWidth={2.2} />
+            Curadoria Sunano
           </span>
           <div className="flex items-center gap-2">
-            <h1 className="font-display text-3xl font-bold leading-[1.05] text-white drop-shadow-sm sm:text-4xl md:text-5xl">
-              NOSSA LOJA DE
+            <h1 className="max-w-[560px] font-display text-4xl font-bold leading-[1.02] tracking-[-0.03em] text-white sm:text-[54px]">
+              Periférico bom,
               <br />
-              <span className="text-emerald-400">PERIFÉRICOS GAMER</span>
+              sem golpe.
             </h1>
             <MarketInfoDialog />
           </div>
-          <p className="max-w-md text-[13px] font-semibold text-white/75 sm:text-sm">
-            Curadoria Sunano · marcas parceiras · reviews da comunidade
+          {/* O artboard mobile corta o subtítulo — a headline e o CTA já ocupam
+              a área legível sobre a mascote em 390px. */}
+          <p className="hidden max-w-[420px] text-[15px] font-medium leading-[1.55] text-white/70 sm:block">
+            Cada item passa pela bancada antes de entrar no anúncio — e a review da comunidade fica na página do produto.
           </p>
-          <div className="mt-1 flex flex-wrap items-center gap-3">
-            <a
-              href="#produtos"
-              className="flex h-[50px] items-center gap-2 rounded-xl bg-emerald-500 px-6 text-sm font-extrabold text-black transition-opacity hover:opacity-90"
-            >
-              Ver todos os produtos
-              <ArrowRight className="size-4" />
-            </a>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-5">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
-              <QrCode className="size-3.5 text-emerald-400" />
-              Pagamento via PIX
-            </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
-              <ShieldCheck className="size-3.5 text-emerald-400" />
-              Compra acompanhada na sua conta
-            </div>
-          </div>
+          <a
+            href="#produtos"
+            className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-extrabold text-[#04140d] transition-opacity hover:opacity-90 sm:w-auto sm:justify-start sm:gap-[9px] sm:px-[26px]"
+          >
+            Ver todos os produtos
+            <ArrowRight className="size-4" strokeWidth={2.4} />
+          </a>
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-14 px-2 pb-16 pt-10 sm:px-4 sm:pt-12 md:px-6 lg:px-8">
+      {/* Faixa de confiança — consolida o que antes estava espalhado nos 2
+          chips do hero + nos 3 cards grandes no rodapé da página. */}
+      <div className="border-b border-[#1c1c1c] bg-[#060606]">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 px-4 sm:grid-cols-3 lg:px-8">
+          {[
+            { icon: QrCode, title: "PIX na hora", desc: "chave gerada no checkout" },
+            { icon: ShieldCheck, title: "Testado antes de anunciar", desc: "bancada Sunano" },
+            { icon: Package, title: "Pedido acompanhado", desc: "status direto na sua conta" },
+          ].map(({ icon: Icon, title, desc }, i) => (
+            <div
+              key={title}
+              className={cn(
+                "flex items-center justify-center gap-[11px] px-6 py-[18px]",
+                i > 0 && "border-t border-[#1c1c1c] sm:border-l sm:border-t-0"
+              )}
+            >
+              <Icon className="size-[17px] shrink-0 text-emerald-400" strokeWidth={1.9} />
+              <span className="text-[12.5px] font-bold text-[#e8e8e8]">{title}</span>
+              <span className="hidden text-xs text-[#7a7a7a] sm:inline">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-9 px-4 pb-10 pt-7 sm:gap-14 sm:pb-[72px] sm:pt-12 lg:px-8">
         {/* Categorias */}
         {categoryOptions.length > 0 && (
-          <section className="flex flex-col gap-4">
-            <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">Navegar</p>
-              <h2 className="font-display text-2xl font-bold text-foreground">Comprar por categoria</h2>
+          <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+            <div className="flex flex-col gap-[3px] sm:gap-1">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>
+              <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Comprar por categoria</h2>
             </div>
             <CategoryTiles
               categories={filterOptions.categories}
@@ -321,26 +425,45 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
 
         {/* Destaques */}
         {featuredItems.length > 0 && (
-          <section className="flex flex-col gap-4">
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
-                  <FeaturedIcon className="size-3" />
+          <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+            <div className="flex items-end justify-between gap-3 sm:gap-4">
+              <div className="flex flex-col gap-[3px] sm:gap-1">
+                <p className="flex items-center gap-[5px] text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:gap-1.5 sm:text-[10.5px]">
+                  <FeaturedIcon className="size-[11px] fill-amber-400 text-amber-400 sm:size-3" strokeWidth={0} />
                   Destaques
                 </p>
-                <h2 className="font-display text-2xl font-bold text-foreground">{featuredLabel}</h2>
+                <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">{featuredLabel}</h2>
               </div>
-              <a
-                href="#produtos"
-                className="flex items-center gap-1.5 text-[13.5px] font-bold text-muted-foreground transition-colors hover:text-foreground"
-              >
-                Ver tudo
-                <ArrowRight className="size-3.5" />
-              </a>
+              <div className="flex items-center gap-2.5">
+                <a
+                  href="#produtos"
+                  className="text-[12.5px] font-bold text-[#999999] transition-colors hover:text-white sm:text-[13px]"
+                >
+                  Ver tudo
+                </a>
+                <div className="hidden items-center gap-2.5 sm:flex">
+                  <button
+                    type="button"
+                    onClick={() => featuredScrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}
+                    aria-label="Rolar para trás"
+                    className="flex size-8 items-center justify-center rounded-[10px] border border-[#2a2a2a] text-[#6e6e6e] transition-colors hover:text-white"
+                  >
+                    <ChevronLeft className="size-[15px]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => featuredScrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}
+                    aria-label="Rolar para frente"
+                    className="flex size-8 items-center justify-center rounded-[10px] border border-[#333333] text-[#dcdcdc] transition-colors hover:bg-white/5 hover:text-white"
+                  >
+                    <ChevronRight className="size-[15px]" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:thin]">
+            <div ref={featuredScrollRef} className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] sm:gap-3.5">
               {featuredItems.map((product) => (
-                <div key={product.id} className="w-[250px] shrink-0">
+                <div key={product.id} className="w-[168px] shrink-0 sm:w-[232px]">
                   <ProductCard {...product} />
                 </div>
               ))}
@@ -349,107 +472,111 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         )}
 
         {/* Catálogo */}
-        <section id="produtos" className="scroll-mt-20">
-          <div className="mb-5">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">Catálogo completo</p>
-            <h2 className="font-display text-2xl font-bold text-foreground">Todos os produtos</h2>
+        <section id="produtos" className="flex scroll-mt-20 flex-col gap-3.5 sm:gap-[18px]">
+          <div className="flex flex-col gap-[3px] sm:gap-1">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Catálogo completo</p>
+            <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Todos os produtos</h2>
           </div>
 
-          {/* Filter bar */}
-          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
-            <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label="Buscar produtos"
-                className="h-10 border-border bg-muted/30 pl-9 text-[13px] placeholder:text-muted-foreground focus-visible:ring-1"
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Buscar por nome, marca..."
-                value={query}
-              />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2.5">
-              {categoryOptions.length > 0 && (
-                <MultiCombobox
-                  options={categoryOptions}
-                  values={selectedCategories}
-                  onValuesChange={setSelectedCategories}
-                  placeholder="Categoria"
-                  searchPlaceholder="Buscar categoria"
-                  allLabel="Todas as categorias"
-                  className={TRIGGER_CLASS}
-                />
-              )}
-
-              {brandOptions.length > 0 && (
-                <MultiCombobox
-                  options={brandOptions}
-                  values={selectedBrands}
-                  onValuesChange={setSelectedBrands}
-                  placeholder="Marca"
-                  searchPlaceholder="Buscar marca"
-                  allLabel="Todas as marcas"
-                  className={TRIGGER_CLASS}
-                />
-              )}
-
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className={TRIGGER_CLASS}>
-                    Preço
-                    <ChevronDown className="size-3.5 text-muted-foreground" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-72" align="start">
-                  <PriceSlider value={priceRange} onChange={setPriceRange} max={maxPrice} />
-                </PopoverContent>
-              </Popover>
-
-              <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-                <SelectTrigger className={TRIGGER_CLASS}>
-                  <SelectValue>{`Ordenar: ${SORT_LABEL[sortKey]}`}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="recent">Mais recentes</SelectItem>
-                  <SelectItem value="name-asc">Nome A-Z</SelectItem>
-                  <SelectItem value="name-desc">Nome Z-A</SelectItem>
-                  <SelectItem value="price-asc">Menor preço</SelectItem>
-                  <SelectItem value="price-desc">Maior preço</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <span className="ml-auto flex items-center gap-2 text-[12.5px] font-semibold text-muted-foreground">
-                <b className="text-foreground">{total}</b> produto{total !== 1 ? "s" : ""}
-                {isFetching && <Loader2 className="size-3.5 animate-spin text-muted-foreground/60" />}
-              </span>
-
-              {activeFiltersCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetFilters}
-                  className="h-10 gap-1.5 text-muted-foreground hover:text-foreground"
+          {/* Mobile: um botão "Filtros" com contador, e a contagem à direita. */}
+          <div className="flex items-center gap-2.5 md:hidden">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex h-11 items-center gap-[7px] rounded-xl border border-[#2a2a2a] bg-[#141414] px-4 text-[12.5px] font-bold text-[#e8e8e8]"
                 >
-                  <X className="size-3.5" />
-                  Limpar ({activeFiltersCount})
-                </Button>
-              )}
-            </div>
+                  <SlidersHorizontal className="size-[15px]" strokeWidth={1.9} />
+                  Filtros
+                  {activeFiltersCount > 0 && (
+                    <span className="flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9.5px] font-extrabold text-[#04140d]">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2.5">
+                {renderFilters(MOBILE_TRIGGER_CLASS)}
+                <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                  <SelectTrigger className={MOBILE_TRIGGER_CLASS}>
+                    <SelectValue>{SORT_LABEL[sortKey]}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="recent">Mais recentes</SelectItem>
+                    <SelectItem value="name-asc">Nome A-Z</SelectItem>
+                    <SelectItem value="name-desc">Nome Z-A</SelectItem>
+                    <SelectItem value="price-asc">Menor preço</SelectItem>
+                    <SelectItem value="price-desc">Maior preço</SelectItem>
+                  </SelectContent>
+                </Select>
+                {activeFiltersCount > 0 && (
+                  <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5 text-muted-foreground">
+                    <X className="size-3.5" />
+                    Limpar ({activeFiltersCount})
+                  </Button>
+                )}
+              </PopoverContent>
+            </Popover>
+            <span className="ml-auto flex items-center gap-2 text-[12.5px] font-semibold text-[#8a8a8a]">
+              <b className="text-white">{total}</b> produto{total !== 1 ? "s" : ""}
+              {isFetching && <Loader2 className="size-3.5 animate-spin text-[#8a8a8a]" />}
+            </span>
+          </div>
+
+          {/* Desktop: a fileira compacta do mock — a busca não aparece aqui,
+              ela vive na faixa de categorias logo acima. */}
+          <div className="hidden flex-wrap items-center gap-2.5 rounded-[14px] border border-[#262626] bg-card px-3.5 py-3 md:flex">
+            <span className="inline-flex shrink-0 items-center gap-[7px] border-r border-[#262626] pr-3 text-xs font-bold text-[#8a8a8a]">
+              <SlidersHorizontal className="size-3.5" strokeWidth={1.9} />
+              Filtros
+            </span>
+
+            {renderFilters(TRIGGER_CLASS)}
+
+            <span className="ml-auto flex items-center gap-1.5 text-[12.5px] font-semibold text-[#8a8a8a]">
+              <b className="text-white">{total}</b> produto{total !== 1 ? "s" : ""}
+              {isFetching && <Loader2 className="size-3.5 animate-spin text-[#8a8a8a]" />}
+            </span>
+
+            {activeFiltersCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={resetFilters}
+                className="h-9 gap-1.5 text-[12.5px] text-[#8a8a8a] hover:text-white"
+              >
+                <X className="size-3.5" />
+                Limpar ({activeFiltersCount})
+              </Button>
+            )}
+
+            <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+              <SelectTrigger className="flex h-9 w-auto items-center gap-[7px] whitespace-nowrap rounded-[10px] border border-white bg-white px-3.5 text-[12.5px] font-bold text-black hover:opacity-90">
+                <SelectValue>{SORT_LABEL[sortKey]}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="recent">Mais recentes</SelectItem>
+                <SelectItem value="name-asc">Nome A-Z</SelectItem>
+                <SelectItem value="name-desc">Nome Z-A</SelectItem>
+                <SelectItem value="price-asc">Menor preço</SelectItem>
+                <SelectItem value="price-desc">Maior preço</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {isFetching ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5 lg:grid-cols-4">
               {Array.from({ length: items.length > 0 ? items.length : pageSize }).map((_, idx) => (
                 <ProductCardSkeleton key={idx} />
               ))}
             </div>
           ) : items.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-card p-12 text-center">
+            <div className="rounded-[18px] border border-[#262626] bg-card p-12 text-center">
               <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
               <p className="mt-1 text-xs text-muted-foreground/60">Tente ajustar os filtros.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5 lg:grid-cols-4">
               {items.map((product) => (
                 <ProductCard key={product.id} {...product} />
               ))}
@@ -458,19 +585,19 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="mt-8 flex items-center justify-center gap-1.5">
+            <div className="mt-4 flex items-center justify-center gap-1.5">
               <button
                 type="button"
                 disabled={page <= 1 || isFetching}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 aria-label="Página anterior"
-                className="flex h-[34px] min-w-[34px] items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted-foreground"
+                className="flex h-[34px] min-w-[34px] items-center justify-center rounded-[10px] border border-[#2a2a2a] text-[#6e6e6e] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[#6e6e6e]"
               >
-                <ChevronLeft className="size-3.5" />
+                <ChevronLeft className="size-[15px]" />
               </button>
               {buildPageList(page, totalPages).map((p, idx) =>
                 p === "ellipsis" ? (
-                  <span key={`e${idx}`} className="px-1 text-xs font-semibold text-muted-foreground">
+                  <span key={`e${idx}`} className="px-1 text-xs font-semibold text-[#6e6e6e]">
                     …
                   </span>
                 ) : (
@@ -481,10 +608,10 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                     onClick={() => setPage(p)}
                     aria-current={p === page ? "page" : undefined}
                     className={cn(
-                      "flex h-[34px] min-w-[34px] items-center justify-center rounded-lg border px-2.5 text-[12.5px] font-bold transition-colors",
+                      "flex h-[34px] min-w-[34px] items-center justify-center rounded-[10px] border px-2.5 text-[12.5px] font-bold transition-colors",
                       p === page
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border text-muted-foreground hover:text-foreground"
+                        ? "border-white bg-white text-black"
+                        : "border-[#2a2a2a] text-[#8a8a8a] hover:text-white"
                     )}
                   >
                     {p}
@@ -496,44 +623,14 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 disabled={page >= totalPages || isFetching}
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 aria-label="Próxima página"
-                className="flex h-[34px] min-w-[34px] items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted-foreground"
+                className="flex h-[34px] min-w-[34px] items-center justify-center rounded-[10px] border border-[#2a2a2a] text-[#6e6e6e] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[#6e6e6e]"
               >
-                <ChevronRight className="size-3.5" />
+                <ChevronRight className="size-[15px]" />
               </button>
             </div>
           )}
         </section>
 
-        {/* Footer trust */}
-        <section className="grid gap-4 border-t border-border pt-12 sm:grid-cols-3">
-          <div className="flex items-start gap-3.5 rounded-2xl border border-border bg-card p-5">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-400">
-              <QrCode className="size-5" />
-            </div>
-            <div>
-              <p className="text-sm font-extrabold text-foreground">Pagamento via PIX</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">Chave PIX gerada na hora, direto no checkout.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3.5 rounded-2xl border border-border bg-card p-5">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-400">
-              <ShieldCheck className="size-5" />
-            </div>
-            <div>
-              <p className="text-sm font-extrabold text-foreground">Testado pelo Sunano</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">Cada produto passa por teste antes de ir pro anúncio.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3.5 rounded-2xl border border-border bg-card p-5">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-400">
-              <Store className="size-5" />
-            </div>
-            <div>
-              <p className="text-sm font-extrabold text-foreground">Compra acompanhada</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">Acompanhe o status do pedido direto na sua conta.</p>
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   )

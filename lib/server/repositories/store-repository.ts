@@ -210,6 +210,12 @@ export type StoreFilterOptions = {
   categories: string[]
   categoryCounts: Record<string, number>
   brands: string[]
+  /**
+   * Marcas por categoria, já ordenadas da mais frequente pra menos — alimenta
+   * a coluna "Marcas" do mega menu da Loja. Sai da mesma query das outras
+   * opções (cada linha já traz category + brand), sem custo extra.
+   */
+  brandsByCategory: Record<string, { brand: string; count: number }[]>
   priceMinCents: number
   priceMaxCents: number
   countByType: { store: number; bazaar: number; all: number }
@@ -228,13 +234,14 @@ export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<
   const { data, error } = await query
   if (error) {
     console.error("[store-repository] getStoreFilterOptions:", error)
-    return { categories: [], categoryCounts: {}, brands: [], priceMinCents: 0, priceMaxCents: 0, countByType: { store: 0, bazaar: 0, all: 0 } }
+    return { categories: [], categoryCounts: {}, brands: [], brandsByCategory: {}, priceMinCents: 0, priceMaxCents: 0, countByType: { store: 0, bazaar: 0, all: 0 } }
   }
 
   const rows = (data ?? []) as unknown as { category: string | null; brand: string | null; price_cents: number; type: "store" | "bazaar" }[]
   const categories = new Set<string>()
   const categoryCounts: Record<string, number> = {}
   const brands = new Set<string>()
+  const brandCountsByCategory: Record<string, Record<string, number>> = {}
   const countByType = { store: 0, bazaar: 0, all: 0 }
   let priceMinCents = Infinity
   let priceMaxCents = 0
@@ -243,6 +250,10 @@ export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<
     if (row.category) {
       categories.add(row.category)
       categoryCounts[row.category] = (categoryCounts[row.category] ?? 0) + 1
+      if (row.brand) {
+        const perCategory = (brandCountsByCategory[row.category] ??= {})
+        perCategory[row.brand] = (perCategory[row.brand] ?? 0) + 1
+      }
     }
     if (row.brand) brands.add(row.brand)
     countByType[row.type] += 1
@@ -251,10 +262,18 @@ export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<
     priceMaxCents = Math.max(priceMaxCents, row.price_cents)
   }
 
+  const brandsByCategory: Record<string, { brand: string; count: number }[]> = {}
+  for (const [category, counts] of Object.entries(brandCountsByCategory)) {
+    brandsByCategory[category] = Object.entries(counts)
+      .map(([brand, count]) => ({ brand, count }))
+      .sort((a, b) => b.count - a.count || a.brand.localeCompare(b.brand))
+  }
+
   return {
     categories: [...categories].sort((a, b) => a.localeCompare(b)),
     categoryCounts,
     brands: [...brands].sort((a, b) => a.localeCompare(b)),
+    brandsByCategory,
     priceMinCents: Number.isFinite(priceMinCents) ? priceMinCents : 0,
     priceMaxCents,
     countByType,

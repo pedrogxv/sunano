@@ -230,74 +230,79 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         <span className="text-foreground">testados pelo Sunano</span>
       </div>
 
-      {/* Hero */}
-      <div className="relative overflow-hidden px-4 py-16 text-center sm:py-20 md:py-24">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            backgroundImage:
-              "linear-gradient(color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--foreground) 6%, transparent) 1px, transparent 1px)",
-            backgroundSize: "44px 44px",
-            maskImage: "radial-gradient(60% 70% at 50% 30%, black, transparent)",
-            WebkitMaskImage: "radial-gradient(60% 70% at 50% 30%, black, transparent)",
-          }}
-        />
+      {/* Hero / banner */}
+      <div
+        className="relative overflow-hidden bg-[#0b0f14] px-4 py-10 sm:py-14 md:py-16"
+        style={{
+          backgroundImage: "url(/images/mascot/Loja.png)",
+          backgroundSize: "cover",
+          backgroundPosition: "right center",
+        }}
+      >
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(60% 55% at 30% 10%, oklch(0.7 0.15 160 / 0.16), transparent 60%), radial-gradient(45% 45% at 80% 30%, oklch(0.68 0.12 220 / 0.12), transparent 65%)",
+              "linear-gradient(90deg, #0b0f14 15%, rgba(11,15,20,0.85) 45%, rgba(11,15,20,0.35) 70%, transparent 95%)",
+          }}
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 sm:hidden"
+          style={{
+            background: "linear-gradient(180deg, rgba(11,15,20,0.55) 0%, rgba(11,15,20,0.9) 75%, #0b0f14 100%)",
           }}
         />
 
         {user && (
           <Link
             href="/conta/pedidos"
-            className="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/30 px-3 py-1.5 text-xs font-semibold text-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+            className="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-emerald-300"
           >
             <PackageSearch className="size-3.5" />
             Meus pedidos
           </Link>
         )}
 
-        <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-4">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground">
+        <div className="relative mx-auto flex max-w-7xl flex-col items-start gap-4 px-2 text-left sm:px-4 md:px-6 lg:px-8">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-black/25 px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm">
             <ShieldCheck className="size-3 text-emerald-400" />
             Testado pelo Sunano
           </span>
-          <div className="flex items-center justify-center gap-2">
-            <h1 className="font-display text-4xl font-bold leading-[1.03] text-foreground sm:text-5xl md:text-[56px]">
-              Equipamento gamer, <span className="text-emerald-400">sem cilada.</span>
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-3xl font-bold leading-[1.05] text-white drop-shadow-sm sm:text-4xl md:text-5xl">
+              NOSSA LOJA DE
+              <br />
+              <span className="text-emerald-400">PERIFÉRICOS GAMER</span>
             </h1>
             <MarketInfoDialog />
           </div>
-          <p className="max-w-lg text-[15px] text-muted-foreground sm:text-base">
-            Produtos novos e usados, selecionados e testados pelo Sunano antes de chegar até você.
+          <p className="max-w-md text-[13px] font-semibold text-white/75 sm:text-sm">
+            Curadoria Sunano · marcas parceiras · reviews da comunidade
           </p>
-          <div className="mt-1 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-1 flex flex-wrap items-center gap-3">
             <a
               href="#produtos"
-              className="flex h-[50px] items-center gap-2 rounded-xl bg-foreground px-6 text-sm font-extrabold text-background transition-opacity hover:opacity-90"
+              className="flex h-[50px] items-center gap-2 rounded-xl bg-emerald-500 px-6 text-sm font-extrabold text-black transition-opacity hover:opacity-90"
             >
               Ver todos os produtos
               <ArrowRight className="size-4" />
             </a>
             <Link
               href="/bazar"
-              className="flex h-[50px] items-center gap-2 rounded-xl border border-border px-6 text-sm font-bold text-foreground transition-colors hover:bg-muted/40"
+              className="flex h-[50px] items-center gap-2 rounded-xl border border-white/25 bg-black/20 px-6 text-sm font-bold text-white backdrop-blur-sm transition-colors hover:bg-black/35"
             >
               <Recycle className="size-4" />
               Conhecer o Bazar
             </Link>
           </div>
-          <div className="mt-2 flex flex-wrap items-center justify-center gap-5">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/80">
+          <div className="mt-2 flex flex-wrap items-center gap-5">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
               <QrCode className="size-3.5 text-emerald-400" />
               Pagamento via PIX
             </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/80">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
               <ShieldCheck className="size-3.5 text-emerald-400" />
               Compra acompanhada na sua conta
             </div>

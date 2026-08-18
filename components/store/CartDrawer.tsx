@@ -95,13 +95,24 @@ export function CartDrawer() {
               </span>
             )}
           </div>
-          <button
-            onClick={() => setOpen(false)}
-            aria-label="Fechar carrinho"
-            className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            {items.length > 0 && (
+              <button
+                onClick={clear}
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
+              >
+                <Trash2 className="size-3.5" />
+                Limpar carrinho
+              </button>
+            )}
+            <button
+              onClick={() => setOpen(false)}
+              aria-label="Fechar carrinho"
+              className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
         </div>
 
         {/* Items */}
@@ -232,18 +243,14 @@ export function CartDrawer() {
               Pagamento via PIX
             </p>
 
-            <Button className="w-full gap-2 bg-emerald-600 text-white hover:bg-emerald-500" asChild>
+            <Button
+              className="h-14 w-full gap-2 rounded-xl bg-emerald-600 text-base font-extrabold text-white hover:bg-emerald-500"
+              asChild
+            >
               <Link href="/checkout" onClick={() => setOpen(false)}>
                 Finalizar Compra
               </Link>
             </Button>
-
-            <button
-              onClick={clear}
-              className="w-full text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Limpar carrinho
-            </button>
           </div>
         )}
       </div>

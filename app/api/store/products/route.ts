@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
     priceMinCents: parseNumber(searchParams.get("priceMin")),
     priceMaxCents: parseNumber(searchParams.get("priceMax")),
     productIds: parseCsv(searchParams.get("productIds")),
+    featured: searchParams.get("featured") === "1" ? true : undefined,
     sort,
     page: parseNumber(searchParams.get("page")),
     pageSize: parseNumber(searchParams.get("pageSize")),

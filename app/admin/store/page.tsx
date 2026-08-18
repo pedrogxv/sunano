@@ -2,7 +2,24 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, AlertTriangle, Edit, LayoutGrid, MessageSquare, Plus, ShoppingCart, Store, Tag, Trash2 } from "lucide-react"
+import {
+  AlertCircle,
+  AlertTriangle,
+  Check,
+  Edit,
+  LayoutGrid,
+  Loader2,
+  MessageSquare,
+  MoreVertical,
+  Package,
+  Plus,
+  ShoppingCart,
+  Star,
+  Store,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
 import { AnimatedCounter } from "@/components/animated-counter"
@@ -18,6 +35,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 
@@ -26,14 +50,37 @@ interface StoreProduct {
   slug: string
   name: string
   price_cents: number
+  promo_price_cents: number | null
   stock: number | null
   images: string[]
   category: string | null
+  brand: string | null
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   is_active: boolean
   is_sold_out: boolean
+  is_featured: boolean
+  has_variants: boolean
   created_at: string
+}
+
+interface ProductDetail {
+  product: {
+    id: string
+    description: string | null
+    brand: string | null
+  }
+  specs: { id: string; label: string; value: string }[]
+  variants: { id: string; label: string }[]
+  peripheralIds: string[]
+}
+
+/** Converte texto em BRL ("29,90" / "R$ 29,90") pra centavos. Retorna null se inválido. */
+function parseBRLToCents(value: string): number | null {
+  const cleaned = value.replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(?:\D|$))/g, "").replace(",", ".")
+  const n = Number(cleaned)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.round(n * 100)
 }
 
 const CONDITION_LABEL: Record<string, string> = {
@@ -103,6 +150,14 @@ export default function AdminStorePage() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
   const [deleting, setDeleting] = useState(false)
 
+  // Detalhe do produto (specs/variantes/descrição) — só buscado quando o
+  // admin abre o dropdown daquela linha pela primeira vez, e cacheado aqui
+  // pra não rebater na API se reabrir. Mantém a listagem principal leve.
+  const [detailCache, setDetailCache] = useState<Record<string, ProductDetail>>({})
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null)
+  const [savingId, setSavingId] = useState<string | null>(null)
+  const [promoDraft, setPromoDraft] = useState<Record<string, string>>({})
+
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -163,6 +218,86 @@ export default function AdminStorePage() {
     } finally {
       setDeleting(false)
     }
+  }
+
+  async function loadDetail(id: string) {
+    if (detailCache[id] || loadingDetailId === id) return
+    setLoadingDetailId(id)
+    try {
+      const res = await fetch(`/api/admin/store/products/${id}`)
+      const data = (await res.json()) as ProductDetail & { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao carregar detalhes")
+      setDetailCache((prev) => ({ ...prev, [id]: data }))
+    } catch (err) {
+      toast.error("Erro ao carregar detalhes do produto", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setLoadingDetailId(null)
+    }
+  }
+
+  async function patchProduct(id: string, patch: Record<string, unknown>) {
+    const previous = products.find((p) => p.id === id)
+    if (!previous) return
+    // Atualização otimista — evita recarregar a listagem inteira a cada ação rápida.
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+    setSavingId(id)
+    try {
+      const res = await fetch(`/api/admin/store/products/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      })
+      const data = (await res.json()) as { product?: StoreProduct; error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao salvar")
+      return true
+    } catch (err) {
+      setProducts((prev) => prev.map((p) => (p.id === id ? previous : p)))
+      toast.error("Erro ao salvar alteração", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+      return false
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function toggleFeatured(product: StoreProduct) {
+    const ok = await patchProduct(product.id, { is_featured: !product.is_featured })
+    if (ok) {
+      toast.success(!product.is_featured ? "Produto marcado como destaque" : "Destaque removido", {
+        description: product.name,
+      })
+    }
+  }
+
+  async function toggleActive(product: StoreProduct) {
+    await patchProduct(product.id, { is_active: !product.is_active })
+  }
+
+  async function toggleSoldOut(product: StoreProduct) {
+    await patchProduct(product.id, { is_sold_out: !product.is_sold_out })
+  }
+
+  async function applyPromoPrice(product: StoreProduct) {
+    const raw = promoDraft[product.id] ?? ""
+    if (raw.trim() === "") {
+      const ok = await patchProduct(product.id, { promo_price_cents: null })
+      if (ok) toast.success("Preço promocional removido", { description: product.name })
+      return
+    }
+    const cents = parseBRLToCents(raw)
+    if (cents === null) {
+      toast.error("Preço promocional inválido")
+      return
+    }
+    if (cents >= product.price_cents) {
+      toast.error("Preço promocional deve ser menor que o preço base.")
+      return
+    }
+    const ok = await patchProduct(product.id, { promo_price_cents: cents })
+    if (ok) toast.success("Preço promocional aplicado", { description: product.name })
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -262,7 +397,7 @@ export default function AdminStorePage() {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-[820px]">
             <thead>
               <tr className="border-b border-border">
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Produto</th>
@@ -275,100 +410,260 @@ export default function AdminStorePage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {visibleProducts.map((p) => (
-                <tr key={p.id} className="transition-colors hover:bg-muted/40">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
-                        {p.images?.[0] ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.images[0]} alt={p.name} className="h-full w-full object-contain p-0.5" />
-                        ) : (
-                          <div className="flex h-full items-center justify-center text-[9px] font-bold text-muted-foreground">
-                            {p.name.slice(0, 2).toUpperCase()}
+              {visibleProducts.map((p) => {
+                const detail = detailCache[p.id]
+                const isLoadingDetail = loadingDetailId === p.id
+                const isSaving = savingId === p.id
+                const hasDiscount = p.promo_price_cents != null && p.promo_price_cents < p.price_cents
+
+                return (
+                  <tr key={p.id} className="transition-colors hover:bg-muted/40">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+                          {p.images?.[0] ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.images[0]} alt={p.name} className="h-full w-full object-contain p-0.5" />
+                          ) : (
+                            <div className="flex h-full items-center justify-center text-[9px] font-bold text-muted-foreground">
+                              {p.name.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold text-foreground">{p.name}</p>
+                            {p.is_featured && (
+                              <Star className="size-3.5 shrink-0 fill-amber-400 text-amber-400" />
+                            )}
                           </div>
-                        )}
+                          {p.category && (
+                            <p className="text-[10px] text-muted-foreground">{p.category}</p>
+                          )}
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{p.name}</p>
-                        {p.category && (
-                          <p className="text-[10px] text-muted-foreground">{p.category}</p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn(
-                      "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                      p.type === "store"
-                        ? "bg-blue-500/15 text-blue-300"
-                        : "bg-amber-500/15 text-amber-300"
-                    )}>
-                      {p.type === "store" ? "🛒 Loja" : "♻️ Bazar"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn(
-                      "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-                      CONDITION_COLOR[p.condition]
-                    )}>
-                      {CONDITION_LABEL[p.condition]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="font-semibold text-emerald-400 text-sm">{formatBRL(p.price_cents)}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={cn(
-                      "rounded-full px-2 py-0.5 text-xs font-bold",
-                      p.stock === 0
-                        ? "bg-red-500/15 text-red-400"
-                        : p.stock !== null && p.stock <= 3
-                          ? "bg-amber-500/15 text-amber-300"
-                          : "bg-muted text-foreground/80"
-                    )}>
-                      {p.stock === null ? "Sem controle" : p.stock === 0 ? "Esgotado" : `${p.stock} un.`}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        "text-[10px]",
-                        !p.is_active
-                          ? "bg-slate-500/10 text-muted-foreground"
-                          : p.is_sold_out
-                            ? "bg-red-500/10 text-red-400"
-                            : "bg-emerald-500/10 text-emerald-400"
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        p.type === "store"
+                          ? "bg-blue-500/15 text-blue-300"
+                          : "bg-amber-500/15 text-amber-300"
+                      )}>
+                        {p.type === "store" ? "🛒 Loja" : "♻️ Bazar"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                        CONDITION_COLOR[p.condition]
+                      )}>
+                        {CONDITION_LABEL[p.condition]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {hasDiscount ? (
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-emerald-400 text-sm">{formatBRL(p.promo_price_cents as number)}</span>
+                          <span className="text-[10px] text-muted-foreground line-through">{formatBRL(p.price_cents)}</span>
+                        </div>
+                      ) : (
+                        <span className="font-semibold text-emerald-400 text-sm">{formatBRL(p.price_cents)}</span>
                       )}
-                    >
-                      {!p.is_active ? "Inativo" : p.is_sold_out ? "Esgotado" : "Ativo"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      <Link href={`/admin/store/${p.id}/reviews`}>
-                        <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
-                          <MessageSquare className="size-3.5" />
-                        </Button>
-                      </Link>
-                      <Link href={`/admin/store/${p.id}`}>
-                        <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
-                          <Edit className="size-3.5" />
-                        </Button>
-                      </Link>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-8 text-red-500/60 hover:text-red-400"
-                        onClick={() => setDeleteDialog({ open: true, id: p.id })}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={cn(
+                        "rounded-full px-2 py-0.5 text-xs font-bold",
+                        p.stock === 0
+                          ? "bg-red-500/15 text-red-400"
+                          : p.stock !== null && p.stock <= 3
+                            ? "bg-amber-500/15 text-amber-300"
+                            : "bg-muted text-foreground/80"
+                      )}>
+                        {p.stock === null ? "Sem controle" : p.stock === 0 ? "Esgotado" : `${p.stock} un.`}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge
+                        variant="secondary"
+                        className={cn(
+                          "text-[10px]",
+                          !p.is_active
+                            ? "bg-slate-500/10 text-muted-foreground"
+                            : p.is_sold_out
+                              ? "bg-red-500/10 text-red-400"
+                              : "bg-emerald-500/10 text-emerald-400"
+                        )}
                       >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {!p.is_active ? "Inativo" : p.is_sold_out ? "Esgotado" : "Ativo"}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1 justify-end">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={cn(
+                            "size-8",
+                            p.is_featured ? "text-amber-400 hover:text-amber-300" : "text-muted-foreground hover:text-foreground"
+                          )}
+                          title={p.is_featured ? "Remover destaque" : "Marcar como destaque"}
+                          disabled={isSaving}
+                          onClick={() => toggleFeatured(p)}
+                        >
+                          <Star className={cn("size-3.5", p.is_featured && "fill-current")} />
+                        </Button>
+                        <Link href={`/admin/store/${p.id}`}>
+                          <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
+                            <Edit className="size-3.5" />
+                          </Button>
+                        </Link>
+                        <DropdownMenu onOpenChange={(open) => { if (open) loadDetail(p.id) }}>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
+                              <MoreVertical className="size-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-80 p-3">
+                            {isLoadingDetail ? (
+                              <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
+                                <Loader2 className="size-3.5 animate-spin" />
+                                Carregando detalhes...
+                              </div>
+                            ) : detail ? (
+                              <div className="space-y-1.5 pb-2">
+                                {detail.product.brand && (
+                                  <p className="text-xs text-muted-foreground">
+                                    <span className="font-semibold text-foreground">Marca:</span> {detail.product.brand}
+                                  </p>
+                                )}
+                                {detail.product.description && (
+                                  <p className="line-clamp-3 text-xs text-muted-foreground">{detail.product.description}</p>
+                                )}
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-foreground/80">
+                                    <Package className="size-3" />
+                                    {detail.specs.length} specs
+                                  </span>
+                                  {p.has_variants && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-foreground/80">
+                                      {detail.variants.length} variantes
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            <DropdownMenuSeparator />
+
+                            {/* Ações rápidas — editam direto na linha, sem abrir o form completo */}
+                            <div className="space-y-2.5 py-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-foreground">Destaque na loja</span>
+                                <button
+                                  type="button"
+                                  disabled={isSaving}
+                                  onClick={() => toggleFeatured(p)}
+                                  className={cn(
+                                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                                    p.is_featured
+                                      ? "border-amber-400/40 bg-amber-400/10 text-amber-400"
+                                      : "border-border bg-muted text-muted-foreground"
+                                  )}
+                                >
+                                  <Star className={cn("size-3", p.is_featured && "fill-current")} />
+                                  {p.is_featured ? "Ativo" : "Inativo"}
+                                </button>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-foreground">Produto ativo</span>
+                                <button
+                                  type="button"
+                                  disabled={isSaving}
+                                  onClick={() => toggleActive(p)}
+                                  className={cn(
+                                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                                    p.is_active
+                                      ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400"
+                                      : "border-border bg-muted text-muted-foreground"
+                                  )}
+                                >
+                                  {p.is_active ? <Check className="size-3" /> : <X className="size-3" />}
+                                  {p.is_active ? "Ativo" : "Inativo"}
+                                </button>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-semibold text-foreground">Esgotado</span>
+                                <button
+                                  type="button"
+                                  disabled={isSaving}
+                                  onClick={() => toggleSoldOut(p)}
+                                  className={cn(
+                                    "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                                    p.is_sold_out
+                                      ? "border-red-400/40 bg-red-400/10 text-red-400"
+                                      : "border-border bg-muted text-muted-foreground"
+                                  )}
+                                >
+                                  {p.is_sold_out ? "Sim" : "Não"}
+                                </button>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <span className="text-xs font-semibold text-foreground">Preço promocional</span>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    inputMode="decimal"
+                                    placeholder={p.promo_price_cents ? formatBRL(p.promo_price_cents) : "Sem desconto"}
+                                    defaultValue={p.promo_price_cents ? String(p.promo_price_cents / 100).replace(".", ",") : ""}
+                                    onChange={(e) => setPromoDraft((prev) => ({ ...prev, [p.id]: e.target.value }))}
+                                    disabled={isSaving}
+                                    className="h-7 w-full rounded-md border border-border bg-muted/30 px-2 text-[11px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-primary"
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={isSaving}
+                                    onClick={() => applyPromoPrice(p)}
+                                    className="h-7 shrink-0 px-2 text-[11px]"
+                                  >
+                                    Aplicar
+                                  </Button>
+                                </div>
+                              </div>
+                            </div>
+
+                            <DropdownMenuSeparator />
+
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin/store/${p.id}/reviews`} className="flex items-center gap-2">
+                                <MessageSquare className="size-3.5" />
+                                Resenhas
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/admin/store/${p.id}`} className="flex items-center gap-2">
+                                <Edit className="size-3.5" />
+                                Editar produto completo
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="flex items-center gap-2 text-red-400 focus:text-red-400"
+                              onClick={() => setDeleteDialog({ open: true, id: p.id })}
+                            >
+                              <Trash2 className="size-3.5" />
+                              Deletar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

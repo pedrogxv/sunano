@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
 import { useCart } from "@/components/providers/cart-context"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface ProductCardProps {
   id: string
@@ -141,7 +142,7 @@ export function ProductCard(props: ProductCardProps) {
         </div>
 
         {/* Info */}
-        <div className="flex flex-1 flex-col gap-2.5 p-3.5">
+        <div className="flex flex-1 flex-col gap-2.5 p-4">
           <div>
             <h3 className={cn("flex items-start gap-1.5 line-clamp-2 text-xs font-extrabold uppercase tracking-wide leading-snug", accentText)}>
               <TypeIcon className="mt-0.5 size-3.5 shrink-0" />
@@ -184,5 +185,21 @@ export function ProductCard(props: ProductCardProps) {
         </div>
       </div>
     </Link>
+  )
+}
+
+export function ProductCardSkeleton() {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-[18px] border border-border/60 bg-secondary/45">
+      <Skeleton className="aspect-square w-full rounded-none" />
+      <div className="flex flex-1 flex-col gap-2.5 p-4">
+        <div className="flex flex-col gap-1.5">
+          <Skeleton className="h-3 w-4/5" />
+          <Skeleton className="h-2.5 w-2/5" />
+        </div>
+        <Skeleton className="h-5 w-1/2" />
+        <Skeleton className="mt-auto h-9 w-full rounded-[11px]" />
+      </div>
+    </div>
   )
 }

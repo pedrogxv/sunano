@@ -236,7 +236,7 @@ export function MultiCombobox({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className={cn("w-(--radix-popover-trigger-width) flex-col gap-0 p-0", contentClassName)}
+        className={cn("w-64 min-w-(--radix-popover-trigger-width) flex-col gap-0 p-0", contentClassName)}
       >
         <Command>
           <CommandInput placeholder={searchPlaceholder} />

@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 import { ShoppingBag } from "lucide-react"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { StoreContent } from "@/components/store/StoreContent"
@@ -37,13 +38,19 @@ export default async function LojaPage() {
     }
   }
 
-  const [{ items, total }, filterOptions] = await Promise.all([
+  const [{ items, total }, filterOptions, { items: featuredItems }] = await Promise.all([
     listStoreProductsPaginated({
       type: "store",
       page: 1,
       pageSize: PAGE_SIZE,
     }),
     getStoreFilterOptions(),
+    listStoreProductsPaginated({
+      type: "store",
+      featured: true,
+      page: 1,
+      pageSize: 8,
+    }),
   ])
 
   if (total === 0 && filterOptions.countByType.store === 0) {
@@ -58,11 +65,14 @@ export default async function LojaPage() {
   }
 
   return (
-    <StoreContent
-      initialItems={items}
-      initialTotal={total}
-      initialFilterOptions={filterOptions}
-      pageSize={PAGE_SIZE}
-    />
+    <Suspense>
+      <StoreContent
+        initialItems={items}
+        initialTotal={total}
+        initialFilterOptions={filterOptions}
+        initialFeatured={featuredItems}
+        pageSize={PAGE_SIZE}
+      />
+    </Suspense>
   )
 }

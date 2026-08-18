@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
     search: searchParams.get("search")?.trim() || undefined,
     categories: searchParams.get("category")?.trim() ? [searchParams.get("category")!.trim()] : undefined,
     outOfStockOnly: searchParams.get("outOfStock") === "1",
+    featured: searchParams.get("featured") === "1" ? true : undefined,
     page: parseNumber(searchParams.get("page")),
     pageSize: parseNumber(searchParams.get("pageSize")) ?? 100,
   }

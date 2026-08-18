@@ -732,6 +732,7 @@ export type Database = {
           condition_notes: string | null
           is_active: boolean
           is_sold_out: boolean
+          is_featured: boolean
           peripheral_id: string | null
           features: string[]
           video_url: string | null
@@ -754,6 +755,7 @@ export type Database = {
           condition_notes?: string | null
           is_active?: boolean
           is_sold_out?: boolean
+          is_featured?: boolean
           peripheral_id?: string | null
           features?: string[]
           video_url?: string | null
@@ -776,6 +778,7 @@ export type Database = {
           condition_notes?: string | null
           is_active?: boolean
           is_sold_out?: boolean
+          is_featured?: boolean
           peripheral_id?: string | null
           features?: string[]
           video_url?: string | null

@@ -68,7 +68,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   const allowed: (keyof StoreProductUpdate)[] = [
     "name", "description", "price_cents", "promo_price_cents", "stock", "images",
     "category", "brand", "type", "condition", "condition_notes", "is_active", "is_sold_out",
-    "features", "video_url",
+    "is_featured", "features", "video_url",
   ]
   const patch: StoreProductUpdate = {}
   for (const key of allowed) {

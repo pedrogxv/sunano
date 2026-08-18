@@ -27,6 +27,7 @@ export type StoreProductCard = {
   has_variants: boolean
   is_active: boolean
   is_sold_out: boolean
+  is_featured: boolean
   created_at: string
 }
 
@@ -72,7 +73,7 @@ export type LinkedProduct = {
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, is_sold_out, created_at, variants:store_product_variants(count)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, is_sold_out, is_featured, created_at, variants:store_product_variants(count)"
 
 type RawCardRow = Omit<StoreProductCard, "has_variants"> & {
   variants: { count: number }[] | null
@@ -130,6 +131,8 @@ export type StoreProductListFilters = {
   productIds?: string[]
   /** Usado pelo admin para achar produtos zerados sem trazer o catálogo inteiro. */
   outOfStockOnly?: boolean
+  /** Filtra só produtos marcados como destaque (`is_featured`). */
+  featured?: boolean
   sort?: "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
   page?: number
   pageSize?: number
@@ -167,6 +170,7 @@ export async function listStoreProductsPaginated(
   if (filters.priceMinCents != null) query = query.gte("price_cents", filters.priceMinCents)
   if (filters.priceMaxCents != null) query = query.lte("price_cents", filters.priceMaxCents)
   if (filters.outOfStockOnly) query = query.eq("stock", 0)
+  if (filters.featured) query = query.eq("is_featured", true)
   if (filters.productIds) {
     if (filters.productIds.length === 0) return { items: [], total: 0 }
     query = query.in("id", filters.productIds)
@@ -257,23 +261,54 @@ export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<
   }
 }
 
-/** Produtos em destaque para a home (ativos e com estoque, ou sem controle de estoque). */
+/**
+ * Produtos em destaque para a home (ativos e com estoque, ou sem controle de
+ * estoque). Prioriza os marcados manualmente pelo admin (`is_featured`) e
+ * completa o restante das vagas com os mais recentes.
+ */
 export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]> {
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
+  const FEATURED_COLUMNS = "id, slug, name, price_cents, images, type, condition"
+
+  const { data: featuredData, error: featuredError } = await db
     .from("store_products")
-    .select("id, slug, name, price_cents, images, type, condition")
+    .select(FEATURED_COLUMNS)
+    .eq("is_active", true)
+    .eq("is_sold_out", false)
+    .eq("is_featured", true)
+    .or("stock.is.null,stock.gt.0")
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (featuredError) {
+    console.error("[store-repository] listFeaturedProducts (featured):", featuredError)
+    return []
+  }
+
+  const featured = (featuredData ?? []) as unknown as FeaturedProduct[]
+  if (featured.length >= limit) return featured
+
+  let recentQuery = db
+    .from("store_products")
+    .select(FEATURED_COLUMNS)
     .eq("is_active", true)
     .eq("is_sold_out", false)
     .or("stock.is.null,stock.gt.0")
     .order("created_at", { ascending: false })
     .limit(limit)
 
-  if (error) {
-    console.error("[store-repository] listFeaturedProducts:", error)
-    return []
+  if (featured.length > 0) {
+    recentQuery = recentQuery.not("id", "in", `(${featured.map((p) => p.id).join(",")})`)
   }
-  return (data ?? []) as unknown as FeaturedProduct[]
+
+  const { data: recentData, error: recentError } = await recentQuery
+  if (recentError) {
+    console.error("[store-repository] listFeaturedProducts (recent):", recentError)
+    return featured
+  }
+
+  const recent = (recentData ?? []) as unknown as FeaturedProduct[]
+  return [...featured, ...recent].slice(0, limit)
 }
 
 type RawLinkedProductRow = Omit<LinkedProduct, "price_cents_min" | "price_cents_max"> & {

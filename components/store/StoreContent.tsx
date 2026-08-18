@@ -3,12 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, PackageSearch, QrCode, Recycle, Search, ShieldCheck, Sparkles, Store, X } from "lucide-react"
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, PackageSearch, QrCode, Search, ShieldCheck, Sparkles, Star, Store, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthUser } from "@/components/providers/auth-context"
-import { ProductCard } from "@/components/store/ProductCard"
+import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
-import { PromoBazarBanner } from "@/components/store/PromoBazarBanner"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
@@ -23,10 +22,10 @@ interface StoreContentProps {
   initialItems: StoreProductCard[]
   initialTotal: number
   initialFilterOptions: StoreFilterOptions
+  initialFeatured: StoreProductCard[]
   pageSize: number
 }
 
-type ConditionFilter = "all" | "new" | "used" | "opened"
 type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 
 const PRICE_MIN = 0
@@ -65,7 +64,7 @@ const TRIGGER_CLASS =
 function PriceSlider({ value, onChange, max }: { value: [number, number]; onChange: (v: [number, number]) => void; max: number }) {
   const [minVal, maxVal] = value
   return (
-    <div className="flex flex-col gap-3 p-2">
+    <div className="flex flex-col gap-3 p-1">
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">Faixa de preço</span>
         <span className="text-xs font-semibold text-foreground">R${minVal} – R${maxVal}</span>
@@ -86,13 +85,12 @@ function PriceSlider({ value, onChange, max }: { value: [number, number]; onChan
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialFilterOptions, pageSize }: StoreContentProps) {
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, pageSize }: StoreContentProps) {
   const searchParams = useSearchParams()
   const { user } = useAuthUser()
 
   const [query, setQuery] = useState(searchParams.get("q") ?? "")
   const debouncedQuery = useDebouncedValue(query, 400)
-  const [selectedCondition, setSelectedCondition] = useState<ConditionFilter>("all")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [selectedBrands, setSelectedBrands] = useState<string[]>([])
   const [sortKey, setSortKey] = useState<SortKey>("recent")
@@ -145,12 +143,11 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // Volta pra página 1 sempre que um filtro (não a página em si) muda.
   useEffect(() => {
     setPage(1)
-  }, [selectedCondition, selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey])
+  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey])
 
   useEffect(() => {
     const params = new URLSearchParams()
     params.set("type", "store")
-    if (selectedCondition !== "all") params.set("condition", selectedCondition)
     if (selectedCategories.length > 0) params.set("categories", selectedCategories.join(","))
     if (selectedBrands.length > 0) params.set("brands", selectedBrands.join(","))
     if (debouncedQuery.trim()) params.set("search", debouncedQuery.trim())
@@ -185,10 +182,9 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       .finally(() => setIsFetching(false))
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCondition, selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, page, pageSize])
+  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, page, pageSize])
 
   const activeFiltersCount =
-    (selectedCondition !== "all" ? 1 : 0) +
     selectedCategories.length +
     selectedBrands.length +
     (query.trim() ? 1 : 0) +
@@ -196,27 +192,30 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
 
   const resetFilters = () => {
     setQuery("")
-    setSelectedCondition("all")
     setSelectedCategories([])
     setSelectedBrands([])
     setPriceRange(null)
     setSortKey("recent")
   }
 
-  // As seções de "navegação" (categorias, destaques, banner do Bazar) só
-  // fazem sentido no estado padrão de navegação — somem assim que o usuário
-  // busca ou filtra, pra não competir com os resultados.
-  const isBrowsing = activeFiltersCount === 0
-
   const { featuredItems, featuredLabel, FeaturedIcon } = useMemo(() => {
-    const discounted = items.filter((p) => p.promo_price_cents != null && p.promo_price_cents < p.price_cents)
-    const source = discounted.length > 0 ? discounted : items
+    // Produtos escolhidos manualmente pelo admin sempre entram primeiro —
+    // se não preencherem as 8 vagas, o restante é completado pela lógica
+    // automática (ofertas/novidades), sem repetir quem já é destaque.
+    // Usa sempre `initialItems` (não os `items` filtrados) pra que Categorias
+    // e Destaques fiquem fixos e não sejam afetados pelos filtros do catálogo.
+    const featuredIds = new Set(initialFeatured.map((p) => p.id))
+    const discounted = initialItems.filter((p) => p.promo_price_cents != null && p.promo_price_cents < p.price_cents && !featuredIds.has(p.id))
+    const fallbackSource = discounted.length > 0 ? discounted : initialItems.filter((p) => !featuredIds.has(p.id))
+    const remaining = Math.max(0, 8 - initialFeatured.length)
+    const merged = [...initialFeatured.slice(0, 8), ...fallbackSource.slice(0, remaining)]
+
     return {
-      featuredItems: source.slice(0, 8),
-      featuredLabel: discounted.length > 0 ? "Ofertas" : "Novidades",
-      FeaturedIcon: discounted.length > 0 ? Flame : Sparkles,
+      featuredItems: merged,
+      featuredLabel: initialFeatured.length > 0 ? "Selecionados" : discounted.length > 0 ? "Ofertas" : "Novidades",
+      FeaturedIcon: initialFeatured.length > 0 ? Star : discounted.length > 0 ? Flame : Sparkles,
     }
-  }, [items])
+  }, [initialItems, initialFeatured])
 
   const activeCategory = selectedCategories.length === 1 ? selectedCategories[0] : null
 
@@ -289,13 +288,6 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
               Ver todos os produtos
               <ArrowRight className="size-4" />
             </a>
-            <Link
-              href="/bazar"
-              className="flex h-[50px] items-center gap-2 rounded-xl border border-white/25 bg-black/20 px-6 text-sm font-bold text-white backdrop-blur-sm transition-colors hover:bg-black/35"
-            >
-              <Recycle className="size-4" />
-              Conhecer o Bazar
-            </Link>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-5">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-white/80">
@@ -310,56 +302,50 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         </div>
       </div>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-14 px-2 pb-16 sm:px-4 md:px-6 lg:px-8">
-        {isBrowsing && (
-          <>
-            {/* Categorias */}
-            {categoryOptions.length > 0 && (
-              <section className="flex flex-col gap-4">
-                <div>
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">Navegar</p>
-                  <h2 className="font-display text-2xl font-bold text-foreground">Comprar por categoria</h2>
-                </div>
-                <CategoryTiles
-                  categories={filterOptions.categories}
-                  categoryCounts={filterOptions.categoryCounts}
-                  activeCategory={activeCategory}
-                  onSelect={(cat) => setSelectedCategories(cat ? [cat] : [])}
-                />
-              </section>
-            )}
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-14 px-2 pb-16 pt-10 sm:px-4 sm:pt-12 md:px-6 lg:px-8">
+        {/* Categorias */}
+        {categoryOptions.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">Navegar</p>
+              <h2 className="font-display text-2xl font-bold text-foreground">Comprar por categoria</h2>
+            </div>
+            <CategoryTiles
+              categories={filterOptions.categories}
+              categoryCounts={filterOptions.categoryCounts}
+              activeCategory={activeCategory}
+              onSelect={(cat) => setSelectedCategories(cat ? [cat] : [])}
+            />
+          </section>
+        )}
 
-            {/* Destaques */}
-            {featuredItems.length > 0 && (
-              <section className="flex flex-col gap-4">
-                <div className="flex items-end justify-between">
-                  <div>
-                    <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
-                      <FeaturedIcon className="size-3" />
-                      Destaques
-                    </p>
-                    <h2 className="font-display text-2xl font-bold text-foreground">{featuredLabel}</h2>
-                  </div>
-                  <a
-                    href="#produtos"
-                    className="flex items-center gap-1.5 text-[13.5px] font-bold text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    Ver tudo
-                    <ArrowRight className="size-3.5" />
-                  </a>
+        {/* Destaques */}
+        {featuredItems.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <div className="flex items-end justify-between">
+              <div>
+                <p className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
+                  <FeaturedIcon className="size-3" />
+                  Destaques
+                </p>
+                <h2 className="font-display text-2xl font-bold text-foreground">{featuredLabel}</h2>
+              </div>
+              <a
+                href="#produtos"
+                className="flex items-center gap-1.5 text-[13.5px] font-bold text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Ver tudo
+                <ArrowRight className="size-3.5" />
+              </a>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:thin]">
+              {featuredItems.map((product) => (
+                <div key={product.id} className="w-[250px] shrink-0">
+                  <ProductCard {...product} />
                 </div>
-                <div className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:thin]">
-                  {featuredItems.map((product) => (
-                    <div key={product.id} className="w-[250px] shrink-0">
-                      <ProductCard {...product} />
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            <PromoBazarBanner />
-          </>
+              ))}
+            </div>
+          </section>
         )}
 
         {/* Catálogo */}
@@ -370,8 +356,8 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           </div>
 
           {/* Filter bar */}
-          <div className="mb-6 flex flex-wrap items-center gap-2.5 rounded-2xl border border-border bg-card p-3">
-            <div className="relative min-w-[200px] flex-1">
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
+            <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 aria-label="Buscar produtos"
@@ -382,96 +368,88 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
               />
             </div>
 
-            <div className="flex items-center gap-1 rounded-full bg-muted/40 p-1">
-              {(["all", "new", "opened", "used"] as ConditionFilter[]).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSelectedCondition(key)}
-                  className={cn(
-                    "rounded-full px-3 py-1.5 text-[12px] font-bold transition-colors",
-                    selectedCondition === key ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
-                  )}
+            <div className="flex flex-wrap items-center gap-2.5">
+              {categoryOptions.length > 0 && (
+                <MultiCombobox
+                  options={categoryOptions}
+                  values={selectedCategories}
+                  onValuesChange={setSelectedCategories}
+                  placeholder="Categoria"
+                  searchPlaceholder="Buscar categoria"
+                  allLabel="Todas as categorias"
+                  className={TRIGGER_CLASS}
+                />
+              )}
+
+              {brandOptions.length > 0 && (
+                <MultiCombobox
+                  options={brandOptions}
+                  values={selectedBrands}
+                  onValuesChange={setSelectedBrands}
+                  placeholder="Marca"
+                  searchPlaceholder="Buscar marca"
+                  allLabel="Todas as marcas"
+                  className={TRIGGER_CLASS}
+                />
+              )}
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button type="button" className={TRIGGER_CLASS}>
+                    Preço
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72" align="start">
+                  <PriceSlider value={priceRange} onChange={setPriceRange} max={maxPrice} />
+                </PopoverContent>
+              </Popover>
+
+              <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                <SelectTrigger className={TRIGGER_CLASS}>
+                  <SelectValue>{`Ordenar: ${SORT_LABEL[sortKey]}`}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Mais recentes</SelectItem>
+                  <SelectItem value="name-asc">Nome A-Z</SelectItem>
+                  <SelectItem value="name-desc">Nome Z-A</SelectItem>
+                  <SelectItem value="price-asc">Menor preço</SelectItem>
+                  <SelectItem value="price-desc">Maior preço</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <span className="ml-auto flex items-center gap-2 text-[12.5px] font-semibold text-muted-foreground">
+                <b className="text-foreground">{total}</b> produto{total !== 1 ? "s" : ""}
+                {isFetching && <Loader2 className="size-3.5 animate-spin text-muted-foreground/60" />}
+              </span>
+
+              {activeFiltersCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetFilters}
+                  className="h-10 gap-1.5 text-muted-foreground hover:text-foreground"
                 >
-                  {key === "all" ? "Qualquer" : key === "new" ? "Novo" : key === "opened" ? "Emb. aberta" : "Usado"}
-                </button>
-              ))}
+                  <X className="size-3.5" />
+                  Limpar ({activeFiltersCount})
+                </Button>
+              )}
             </div>
-
-            {categoryOptions.length > 0 && (
-              <MultiCombobox
-                options={categoryOptions}
-                values={selectedCategories}
-                onValuesChange={setSelectedCategories}
-                placeholder="Categoria"
-                searchPlaceholder="Buscar categoria"
-                allLabel="Todas as categorias"
-                className={TRIGGER_CLASS}
-              />
-            )}
-
-            {brandOptions.length > 0 && (
-              <MultiCombobox
-                options={brandOptions}
-                values={selectedBrands}
-                onValuesChange={setSelectedBrands}
-                placeholder="Marca"
-                searchPlaceholder="Buscar marca"
-                allLabel="Todas as marcas"
-                className={TRIGGER_CLASS}
-              />
-            )}
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <button type="button" className={TRIGGER_CLASS}>
-                  Preço
-                  <ChevronDown className="size-3.5 text-muted-foreground" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64" align="start">
-                <PriceSlider value={priceRange} onChange={setPriceRange} max={maxPrice} />
-              </PopoverContent>
-            </Popover>
-
-            <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-              <SelectTrigger className={TRIGGER_CLASS} style={{ height: "40px" }}>
-                <SelectValue>{`Ordenar: ${SORT_LABEL[sortKey]}`}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recent">Mais recentes</SelectItem>
-                <SelectItem value="name-asc">Nome A-Z</SelectItem>
-                <SelectItem value="name-desc">Nome Z-A</SelectItem>
-                <SelectItem value="price-asc">Menor preço</SelectItem>
-                <SelectItem value="price-desc">Maior preço</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <span className="ml-auto flex items-center gap-2 pl-1 text-[12.5px] font-semibold text-muted-foreground">
-              <b className="text-foreground">{total}</b> produto{total !== 1 ? "s" : ""}
-              {isFetching && <Loader2 className="size-3.5 animate-spin text-muted-foreground/60" />}
-            </span>
-
-            {activeFiltersCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetFilters}
-                className="h-10 gap-1.5 text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-                Limpar ({activeFiltersCount})
-              </Button>
-            )}
           </div>
 
-          {items.length === 0 && !isFetching ? (
+          {isFetching ? (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {Array.from({ length: items.length > 0 ? items.length : pageSize }).map((_, idx) => (
+                <ProductCardSkeleton key={idx} />
+              ))}
+            </div>
+          ) : items.length === 0 ? (
             <div className="rounded-2xl border border-border bg-card p-12 text-center">
               <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
               <p className="mt-1 text-xs text-muted-foreground/60">Tente ajustar os filtros.</p>
             </div>
           ) : (
-            <div className={cn("grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 transition-opacity", isFetching && "opacity-60")}>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {items.map((product) => (
                 <ProductCard key={product.id} {...product} />
               ))}

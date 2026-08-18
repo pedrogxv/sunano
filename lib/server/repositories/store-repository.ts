@@ -26,6 +26,7 @@ export type StoreProductCard = {
   condition_notes: string | null
   has_variants: boolean
   is_active: boolean
+  is_sold_out: boolean
   created_at: string
 }
 
@@ -67,10 +68,11 @@ export type LinkedProduct = {
   /** `null` = sem controle de estoque (nunca esgota). */
   stock: number | null
   is_active: boolean
+  is_sold_out: boolean
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, created_at, variants:store_product_variants(count)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, is_sold_out, created_at, variants:store_product_variants(count)"
 
 type RawCardRow = Omit<StoreProductCard, "has_variants"> & {
   variants: { count: number }[] | null
@@ -256,6 +258,7 @@ export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]
     .from("store_products")
     .select("id, slug, name, price_cents, images, type, condition")
     .eq("is_active", true)
+    .eq("is_sold_out", false)
     .or("stock.is.null,stock.gt.0")
     .order("created_at", { ascending: false })
     .limit(limit)
@@ -290,7 +293,7 @@ export async function listProductsByPeripheral(peripheralId: string): Promise<Li
   const { data, error } = await db
     .from("store_product_peripherals")
     .select(
-      "store_products!inner(id, slug, name, type, price_cents, images, stock, is_active, variants:store_product_variants(price_cents_override))"
+      "store_products!inner(id, slug, name, type, price_cents, images, stock, is_active, is_sold_out, variants:store_product_variants(price_cents_override))"
     )
     .eq("peripheral_id", peripheralId)
     .eq("store_products.is_active", true)
@@ -321,6 +324,7 @@ export type StoreProductDetail = {
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
+  is_sold_out: boolean
   peripheral_id: string | null
   features: string[]
   video_url: string | null
@@ -378,7 +382,7 @@ export const getStoreProductDetail = cache(async (
   const { data: product, error } = await db
     .from("store_products")
     .select(
-      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, type, condition, condition_notes, peripheral_id, features, video_url"
+      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, type, condition, condition_notes, is_sold_out, peripheral_id, features, video_url"
     )
     .eq("slug", slug)
     .eq("type", type)

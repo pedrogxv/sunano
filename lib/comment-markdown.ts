@@ -1,6 +1,6 @@
 /**
  * Markdown mínimo de comentários e posts do fórum: `**negrito**`, `*itálico*`,
- * `__sublinhado__` e `[texto](url)` para link.
+ * `__sublinhado__`, `==destaque==` e `[texto](url)` para link.
  *
  * Devolve segmentos de texto em vez de uma string de HTML. Quem renderiza
  * monta `<strong>`/`<em>`/`<u>`/`<a>` como elemento React (ver `components/comments/CommentBody`),
@@ -19,6 +19,7 @@ export type TextSegment = {
   bold: boolean
   italic: boolean
   underline: boolean
+  highlight: boolean
   /** URL de destino quando o segmento veio de `[texto](url)`; `null` senão. */
   href: string | null
 }
@@ -31,8 +32,9 @@ const LINK_PATTERN = /\[([^[\]]+)\]\((https?:\/\/[^\s()]+)\)/g
 const BOLD_PATTERN = /\*\*(.+?)\*\*/g
 const ITALIC_PATTERN = /\*(.+?)\*/g
 const UNDERLINE_PATTERN = /__(.+?)__/g
+const HIGHLIGHT_PATTERN = /==(.+?)==/g
 
-const PLAIN_SEGMENT = { bold: false, italic: false, underline: false, href: null }
+const PLAIN_SEGMENT = { bold: false, italic: false, underline: false, highlight: false, href: null }
 
 /** Quebra o corpo em trechos normais, negrito, itálico, sublinhado e link. */
 export function parseTextMarkdown(body: string): TextSegment[] {
@@ -93,8 +95,24 @@ function parseUnderline(text: string): TextSegment[] {
   for (const match of text.matchAll(UNDERLINE_PATTERN)) {
     const start = match.index ?? 0
     if (start < cursor) continue
-    if (start > cursor) segments.push({ text: text.slice(cursor, start), ...PLAIN_SEGMENT })
+    if (start > cursor) segments.push(...parseHighlight(text.slice(cursor, start)))
     segments.push({ text: match[1], ...PLAIN_SEGMENT, underline: true })
+    cursor = start + match[0].length
+  }
+
+  if (cursor < text.length) segments.push(...parseHighlight(text.slice(cursor)))
+  return segments
+}
+
+function parseHighlight(text: string): TextSegment[] {
+  const segments: TextSegment[] = []
+  let cursor = 0
+
+  for (const match of text.matchAll(HIGHLIGHT_PATTERN)) {
+    const start = match.index ?? 0
+    if (start < cursor) continue
+    if (start > cursor) segments.push({ text: text.slice(cursor, start), ...PLAIN_SEGMENT })
+    segments.push({ text: match[1], ...PLAIN_SEGMENT, highlight: true })
     cursor = start + match[0].length
   }
 

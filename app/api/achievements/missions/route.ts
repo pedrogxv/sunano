@@ -8,7 +8,7 @@ export const runtime = "nodejs"
 
 /**
  * GET /api/achievements/missions — estado das 3 missões diárias de hoje
- * (UTC) + ofensiva atual do usuário logado. Consumido por `MissionsBadge`
+ * (UTC) + ofensiva atual do usuário logado. Consumido por `AuraMissionsBadge`
  * na TopBar (ver `lib/achievements.ts`).
  */
 export async function GET() {

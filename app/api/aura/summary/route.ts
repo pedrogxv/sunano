@@ -9,7 +9,7 @@ export const runtime = "nodejs"
 /**
  * GET /api/aura/summary — saldo + uso do limite diário de reações do
  * usuário logado, consumido pelo badge de Aura na TopBar
- * (`components/layout/AuraBalanceBadge.tsx`).
+ * (`components/layout/AuraMissionsBadge.tsx`).
  */
 export async function GET() {
   const supabase = await createSupabaseServerClient()

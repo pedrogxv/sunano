@@ -24,6 +24,7 @@ interface StoreProduct {
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   is_active: boolean
+  is_sold_out: boolean
   features?: string[]
   video_url?: string | null
 }

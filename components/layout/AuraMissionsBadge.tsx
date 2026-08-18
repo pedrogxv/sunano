@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Bird, Check, MessageSquare, Sparkles, SquarePen, Target } from "lucide-react"
+import { ArrowRight, Bird, Check, Flame, MessageSquare, Sparkles, SquarePen } from "lucide-react"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -18,6 +18,14 @@ import {
   type UserStreak,
 } from "@/lib/achievements"
 import { cn } from "@/lib/utils"
+
+type AuraUsage = {
+  balance: number
+  givenToday: number
+  limit: number
+  limitReached: boolean
+  nextSlotAt: string | null
+}
 
 const MISSION_ICONS: Record<DailyMissionKey, React.ElementType> = {
   created_post: SquarePen,
@@ -38,19 +46,20 @@ const EMPTY_STREAK: UserStreak = { current: 0, longest: 0 }
 const POLL_MS = 60_000
 
 /**
- * Ícone de missões diárias na TopBar — badge "x/3" enquanto falta alguma,
- * vira o pássaro da Ofensiva (com o número de dias) quando as 3 já foram
- * cumpridas hoje. Clique abre um painel com o detalhe das 3 missões e a
- * ofensiva atual; cada missão pendente linka para onde ela é cumprida
- * (`MISSION_HREFS`). Única exibição das missões diárias — não há mais
- * versão no perfil.
+ * Ícone único de Aura + missões na TopBar (substitui os antigos `MissionsBadge`
+ * e `AuraBalanceBadge` separados). Por padrão mostra só o saldo total de Aura
+ * do usuário; passar o mouse (desktop) ou tocar (mobile) abre um popover com
+ * o progresso das 3 missões diárias, a ofensiva atual e o limite diário de
+ * reações de Aura (`givenToday/limit`).
  */
-export function MissionsBadge() {
+export function AuraMissionsBadge() {
   const { user } = useAuthUser()
+  const [open, setOpen] = useState(false)
   const [missions, setMissions] = useState<DailyMissionsState | null>(null)
   const [streak, setStreak] = useState<UserStreak>(EMPTY_STREAK)
+  const [usage, setUsage] = useState<AuraUsage | null>(null)
 
-  const load = useCallback(async () => {
+  const loadMissions = useCallback(async () => {
     try {
       const res = await fetch("/api/achievements/missions")
       if (!res.ok) throw new Error("failed")
@@ -62,45 +71,53 @@ export function MissionsBadge() {
     }
   }, [])
 
+  const loadUsage = useCallback(async () => {
+    try {
+      const res = await fetch("/api/aura/summary")
+      setUsage(res.ok ? await res.json() : null)
+    } catch {
+      setUsage(null)
+    }
+  }, [])
+
+  const loadAll = useCallback(() => {
+    void loadMissions()
+    void loadUsage()
+  }, [loadMissions, loadUsage])
+
   useEffect(() => {
     if (!user) return
-    void load()
-    const id = setInterval(() => void load(), POLL_MS)
-    window.addEventListener(AURA_CHANGED_EVENT, load)
+    loadAll()
+    const id = setInterval(loadAll, POLL_MS)
+    window.addEventListener(AURA_CHANGED_EVENT, loadAll)
     return () => {
       clearInterval(id)
-      window.removeEventListener(AURA_CHANGED_EVENT, load)
+      window.removeEventListener(AURA_CHANGED_EVENT, loadAll)
     }
-  }, [user, load])
+  }, [user, loadAll])
 
   if (!user) return null
 
-  if (!missions) {
+  if (!missions || !usage) {
     return <Skeleton className="size-11 shrink-0 rounded-lg sm:h-8 sm:w-16" />
   }
 
   const completed = countCompletedMissions(missions)
   const allDone = completed === DAILY_MISSION_KEYS.length
+  const frozen = usage.limitReached
 
   return (
-    <Popover onOpenChange={(open) => open && void load()}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={allDone ? `Missões diárias completas — ofensiva de ${streak.current} dias` : `Missões diárias: ${completed}/${DAILY_MISSION_KEYS.length}`}
-          className={cn(
-            "animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center rounded-lg border border-border bg-card/70 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3",
-            allDone && "border-amber-400/40"
-          )}
+          aria-label={`Aura: ${usage.balance} — ${completed}/${DAILY_MISSION_KEYS.length} missões diárias`}
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          className="animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card/70 text-sm font-semibold tabular-nums text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
         >
-          {allDone ? (
-            <Bird className="size-[15px] text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]" />
-          ) : (
-            <Target className="size-[15px] text-primary" />
-          )}
-          <span className={cn("hidden leading-none sm:ml-1.5 sm:inline", allDone && "text-amber-400")}>
-            {allDone ? streak.current : `${completed}/${DAILY_MISSION_KEYS.length}`}
-          </span>
+          <Flame className="size-[15px] shrink-0 text-orange-500" fill="currentColor" strokeWidth={1.5} />
+          <span className="hidden leading-none sm:inline">{usage.balance}</span>
           {!allDone && (
             <span className="absolute -right-1 -top-1 flex size-2.5 items-center justify-center rounded-full bg-primary sm:hidden" />
           )}
@@ -110,8 +127,17 @@ export function MissionsBadge() {
       <PopoverContent
         align="end"
         sideOffset={8}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
         className="w-[min(20rem,calc(100vw-2rem))] bg-popover p-0 text-foreground shadow-md"
       >
+        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
+          <span className="text-sm font-semibold">Aura hoje</span>
+          <span className={cn("text-xs font-semibold tabular-nums", frozen ? "text-sky-300" : "text-muted-foreground")}>
+            {frozen ? "Limite atingido" : `${usage.givenToday}/${usage.limit}`}
+          </span>
+        </div>
+
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
           <span className="text-sm font-semibold">Missões diárias</span>
           <span className="text-[11px] text-muted-foreground">Reinicia à meia-noite (UTC)</span>

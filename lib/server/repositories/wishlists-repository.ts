@@ -30,7 +30,7 @@ export type WishlistItem = {
   product: LinkedProduct | null
 }
 
-const PRODUCT_COLUMNS = "id, slug, name, type, price_cents, images, stock, is_active"
+const PRODUCT_COLUMNS = "id, slug, name, type, price_cents, images, stock, is_active, is_sold_out"
 
 export async function listUserWishlists(userId: string): Promise<Wishlist[]> {
   const db = createSupabaseAdminClient()

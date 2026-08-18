@@ -32,6 +32,7 @@ interface StoreProduct {
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   is_active: boolean
+  is_sold_out: boolean
   created_at: string
 }
 
@@ -334,12 +335,14 @@ export default function AdminStorePage() {
                       variant="secondary"
                       className={cn(
                         "text-[10px]",
-                        p.is_active
-                          ? "bg-emerald-500/10 text-emerald-400"
-                          : "bg-slate-500/10 text-muted-foreground"
+                        !p.is_active
+                          ? "bg-slate-500/10 text-muted-foreground"
+                          : p.is_sold_out
+                            ? "bg-red-500/10 text-red-400"
+                            : "bg-emerald-500/10 text-emerald-400"
                       )}
                     >
-                      {p.is_active ? "Ativo" : "Inativo"}
+                      {!p.is_active ? "Inativo" : p.is_sold_out ? "Esgotado" : "Ativo"}
                     </Badge>
                   </td>
                   <td className="px-4 py-3">

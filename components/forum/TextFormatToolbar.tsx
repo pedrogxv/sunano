@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type RefObject } from "react"
-import { Bold, CaseUpper, Italic, Link2, Underline } from "lucide-react"
+import { Bold, CaseUpper, Highlighter, Italic, Link2, Underline } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -137,7 +137,7 @@ function LinkFormatButton({
   )
 }
 
-/** Barra compacta de formatação (negrito, itálico, sublinhado, link, maiúsculo) para um textarea controlado. */
+/** Barra compacta de formatação (negrito, itálico, sublinhado, destaque, link, maiúsculo) para um textarea controlado. */
 export function TextFormatToolbar({
   textareaRef,
   value,
@@ -177,6 +177,14 @@ export function TextFormatToolbar({
         className="rounded p-1.5 transition-colors hover:bg-muted hover:text-foreground"
       >
         <Underline className="size-3.5" />
+      </button>
+      <button
+        type="button"
+        title="Destaque (==texto==)"
+        onClick={withTextarea((t) => toggleWrap(t, "==", onChange))}
+        className="rounded p-1.5 transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <Highlighter className="size-3.5" />
       </button>
       <LinkFormatButton textareaRef={textareaRef} onChange={onChange} />
       <button

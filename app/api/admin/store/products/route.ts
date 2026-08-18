@@ -29,6 +29,7 @@ const createProductSchema = z.object({
   condition: z.enum(["new", "used", "opened"]).optional().default("new"),
   condition_notes: z.string().trim().max(1000).optional().nullable(),
   is_active: z.boolean().optional().default(true),
+  is_sold_out: z.boolean().optional().default(false),
   features: z.array(z.string().trim().min(1).max(200)).max(30).optional().default([]),
   video_url: z
     .string()
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
   }
   const {
     name, description, price_cents, promo_price_cents, stock, images, category, brand, type, condition,
-    condition_notes, is_active, features, video_url,
+    condition_notes, is_active, is_sold_out, features, video_url,
   } = parsed.data
 
   if (promo_price_cents != null && promo_price_cents >= price_cents) {
@@ -132,6 +133,7 @@ export async function POST(request: NextRequest) {
       condition,
       condition_notes: condition_notes ?? null,
       is_active,
+      is_sold_out,
       features,
       video_url: video_url || null,
     })

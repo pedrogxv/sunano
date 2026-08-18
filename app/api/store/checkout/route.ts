@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
     const [{ data: products, error: dbError }, variants] = await Promise.all([
       db
         .from("store_products")
-        .select("id, name, price_cents, stock, images, type, condition, is_active")
+        .select("id, name, price_cents, stock, images, type, condition, is_active, is_sold_out")
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
     ])
@@ -231,6 +231,9 @@ export async function POST(request: NextRequest) {
       }
       if (!product.is_active) {
         return NextResponse.json({ error: `Produto indisponível: ${product.name}` }, { status: 400 })
+      }
+      if (product.is_sold_out) {
+        return NextResponse.json({ error: `Produto esgotado: ${product.name}` }, { status: 400 })
       }
 
       const variant = cartItem.variantId ? variants.find((v) => v.id === cartItem.variantId) : null

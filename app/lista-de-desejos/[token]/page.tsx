@@ -91,7 +91,7 @@ export default async function PublicWishlistPage({ params }: PageProps) {
                       <Package className="size-10 text-muted-foreground" />
                     </div>
                   )}
-                  {item.product.stock === 0 && (
+                  {(item.product.stock === 0 || item.product.is_sold_out) && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                       <span className="rounded-full bg-red-500/20 px-2.5 py-1 text-[10px] font-bold text-red-400">
                         Esgotado

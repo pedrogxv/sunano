@@ -26,21 +26,10 @@ const NotificationBell = dynamic(
   () => import("@/components/notifications/notification-bell").then((m) => m.NotificationBell),
   { ssr: false }
 )
-// Idem: o saldo de Aura só existe pra quem tem conta e busca seu próprio
-// endpoint — sem sentido no bundle público. Também se esconde sozinho.
-const AuraBalanceBadge = dynamic(
-  () => import("@/components/layout/AuraBalanceBadge").then((m) => m.AuraBalanceBadge),
-  { ssr: false }
-)
-// Mesma badge de Aura, versão de linha pro menu do avatar no mobile (ver `mobileExtraItems` abaixo).
-const AuraBalanceRow = dynamic(
-  () => import("@/components/layout/AuraBalanceBadge").then((m) => m.AuraBalanceRow),
-  { ssr: false }
-)
-// Idem: missões diárias/ofensiva só existem pra quem tem conta e busca seu
-// próprio endpoint. Também se esconde sozinho.
-const MissionsBadge = dynamic(
-  () => import("@/components/layout/MissionsBadge").then((m) => m.MissionsBadge),
+// Idem: Aura + missões diárias só existem pra quem tem conta e buscam seus
+// próprios endpoints. Também se esconde sozinho.
+const AuraMissionsBadge = dynamic(
+  () => import("@/components/layout/AuraMissionsBadge").then((m) => m.AuraMissionsBadge),
   { ssr: false }
 )
 import { useTheme } from "@/components/providers/theme-context"
@@ -158,6 +147,7 @@ export function TopBar() {
   // No checkout o carrinho já está todo listado na própria página — mostrar o
   // botão/badge aqui só distrai (ou pior, deixa reabrir a gaveta por cima do QR code do PIX).
   const isCheckout = pathname?.startsWith("/checkout")
+  const isStore = pathname?.startsWith("/loja")
   const isCollapsed = isAdmin ? adminCollapsed : publicCollapsed
   const toggleCollapsed = isAdmin ? toggleAdmin : togglePublic
 
@@ -226,8 +216,10 @@ export function TopBar() {
             )}
           </button>
 
-          {/* Carrinho — só na área pública, é onde a loja/bazar vivem. Some no checkout. */}
-          {!isAdmin && !isCheckout && <CartButton />}
+          {/* Carrinho — visível sempre dentro da Loja; fora dela só aparece como
+              badge leve se houver itens pendentes, pra não poluir o header
+              nas outras seções. Some no checkout. */}
+          {!isAdmin && !isCheckout && <CartButton alwaysVisible={!!isStore} />}
 
           {/* Notificações — vale também no admin, onde não há AuthUser aqui. */}
           <NotificationBell />
@@ -235,8 +227,7 @@ export function TopBar() {
           {/* Conta — sempre visível no canto; no admin fica na própria sidebar. */}
           {!isAdmin && (
             <>
-              <MissionsBadge />
-              <AuraBalanceBadge />
+              <AuraMissionsBadge />
               <div className="hidden h-6 w-px shrink-0 bg-border sm:block" />
               <AuthUser
                 layout="topbar"
@@ -244,7 +235,6 @@ export function TopBar() {
                 loginHref="/login"
                 mobileExtraItems={
                   <div className="flex flex-col gap-0.5 py-1">
-                    <AuraBalanceRow />
                     <button
                       type="button"
                       onClick={() => setTheme(isLight ? "dark" : "light")}

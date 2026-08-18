@@ -55,6 +55,7 @@ export interface PeripheralDetailViewLinkedProduct {
   price_cents_max?: number | null
   images?: string[] | null
   stock?: number | null
+  is_sold_out?: boolean | null
 }
 
 export interface PeripheralDetailViewRelatedPost {
@@ -823,7 +824,7 @@ export function PeripheralDetailView({
                             linkedStore.price_cents_max > linkedStore.price_cents_min
                               ? `A partir de ${formatBRL(linkedStore.price_cents_min)}`
                               : formatBRL(linkedStore.price_cents_min ?? linkedStore.price_cents)}
-                            {linkedStore.stock === 0 && <span className="ml-2 font-normal text-rose-300">Esgotado</span>}
+                            {(linkedStore.stock === 0 || linkedStore.is_sold_out) && <span className="ml-2 font-normal text-rose-300">Esgotado</span>}
                           </span>
                         </span>
                         <span className="text-emerald-300">→</span>
@@ -880,6 +881,20 @@ export function PeripheralDetailView({
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
+                    {linkedStore && !(linkedStore.stock === 0 || linkedStore.is_sold_out) && (
+                      <Link
+                        href={`/loja/${linkedStore.slug}`}
+                        className="flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 px-3 py-1.5 text-xs font-semibold text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)] transition hover:from-emerald-500/25 hover:to-emerald-500/10"
+                      >
+                        <ShoppingBag className="size-3.5 text-emerald-300" />
+                        Comprar —{" "}
+                        {linkedStore.price_cents_min != null &&
+                        linkedStore.price_cents_max != null &&
+                        linkedStore.price_cents_max > linkedStore.price_cents_min
+                          ? `a partir de ${formatBRL(linkedStore.price_cents_min)}`
+                          : formatBRL(linkedStore.price_cents_min ?? linkedStore.price_cents)}
+                      </Link>
+                    )}
                     {rankBadge && (
                       <RankingCrownBadge position={rankBadge.position} href={rankingHref} />
                     )}
@@ -1239,7 +1254,7 @@ export function PeripheralDetailView({
                         <p className="truncate text-sm font-medium text-foreground">{linkedBazaar.name}</p>
                         <p className="text-xs text-emerald-400">
                           {formatBRL(linkedBazaar.price_cents)}
-                          {linkedBazaar.stock === 0 && <span className="ml-2 text-rose-300">Esgotado</span>}
+                          {(linkedBazaar.stock === 0 || linkedBazaar.is_sold_out) && <span className="ml-2 text-rose-300">Esgotado</span>}
                         </p>
                       </div>
                       <span className="text-primary">→</span>

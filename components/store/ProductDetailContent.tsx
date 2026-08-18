@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -26,11 +25,11 @@ import { featureLabel, isGoodFeature } from "@/lib/store-features"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
-import { extractYoutubeVideoId } from "@/lib/youtube-url"
 import { getVariantIcon } from "@/lib/variant-icons"
 import type { LinkedPeripheralRef, StoreProductDetailResult } from "@/lib/server/repositories/store-repository"
 import { WishlistButton } from "@/components/store/WishlistButton"
 import { ProductReviews } from "@/components/store/ProductReviews"
+import { FormattedText } from "@/components/ui/formatted-text"
 
 const CONDITION_LABEL: Record<string, string> = {
   new: "Novo",
@@ -84,7 +83,6 @@ export function ProductDetailContent({
   const { add, setOpen } = useCart()
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
-  const [descriptionExpanded, setDescriptionExpanded] = useState(false)
 
   const hasVariants = variants.length > 0
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
@@ -103,7 +101,7 @@ export function ProductDetailContent({
     : null
   const effectiveStock = activeVariant ? activeVariant.stock : product.stock
 
-  const outOfStock = effectiveStock !== null && effectiveStock === 0
+  const outOfStock = product.is_sold_out || (effectiveStock !== null && effectiveStock === 0)
   const baseImages: (string | null)[] = product.images?.length > 0 ? product.images : [null]
   const images =
     activeVariant?.image_url && !baseImages.includes(activeVariant.image_url)
@@ -126,8 +124,6 @@ export function ProductDetailContent({
     setZoomed(false)
   }
   const backHref = "/loja"
-  const videoId = product.video_url ? extractYoutubeVideoId(product.video_url) : null
-  const isDescriptionLong = (product.description?.length ?? 0) > 180
 
   // `linkedPeripheral` (FK única) e `linkedPeripherals` (M:N) podem apontar
   // pro mesmo periférico — mostra cada um só uma vez.
@@ -413,9 +409,10 @@ export function ProductDetailContent({
                   </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="flex flex-col gap-2.5 sm:flex-row">
                 <Button
-                  className="flex-1 gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+                  className="flex-1 gap-2"
+                  variant="secondary"
                   onClick={handleAddToCart}
                   disabled={hasVariants && !activeVariant}
                 >
@@ -423,12 +420,11 @@ export function ProductDetailContent({
                   {added ? "Adicionado!" : "Adicionar ao carrinho"}
                 </Button>
                 <Button
-                  className="flex-1 gap-2"
-                  variant="secondary"
+                  className="h-12 flex-1 gap-2 bg-orange-500 text-base font-bold text-white shadow-lg shadow-orange-500/20 hover:bg-orange-400 sm:flex-[1.3]"
                   onClick={handleBuyNow}
                   disabled={hasVariants && !activeVariant}
                 >
-                  <Zap className="size-4" />
+                  <Zap className="size-5" />
                   Comprar Agora
                 </Button>
               </div>
@@ -436,26 +432,9 @@ export function ProductDetailContent({
           )}
 
           {product.description && (
-            <div className="space-y-1.5">
-              <p
-                className={cn(
-                  "whitespace-pre-line text-sm leading-relaxed text-muted-foreground",
-                  !descriptionExpanded && isDescriptionLong && "line-clamp-3"
-                )}
-              >
-                {product.description}
-              </p>
-              {isDescriptionLong && (
-                <button
-                  type="button"
-                  onClick={() => setDescriptionExpanded((v) => !v)}
-                  className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300"
-                >
-                  {descriptionExpanded ? "Ver menos" : "Ver mais"}
-                  <ChevronDown className={cn("size-3.5 transition-transform", descriptionExpanded && "rotate-180")} />
-                </button>
-              )}
-            </div>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+              <FormattedText text={product.description} />
+            </p>
           )}
 
           {linkedProduct && (
@@ -480,7 +459,7 @@ export function ProductDetailContent({
         </div>
       </div>
 
-      {(product.features?.length > 0 || specs.length > 0 || videoId) && (
+      {(product.features?.length > 0 || specs.length > 0) && (
         <div className="mt-12 grid gap-8 md:grid-cols-2">
           {product.features?.length > 0 && (
             <div>
@@ -519,21 +498,6 @@ export function ProductDetailContent({
               </dl>
             </div>
           )}
-        </div>
-      )}
-
-      {videoId && (
-        <div className="mt-12">
-          <h2 className="mb-4 text-lg font-black text-foreground">Vídeo de análise</h2>
-          <div className="aspect-video overflow-hidden rounded-2xl border border-border">
-            <iframe
-              src={`https://www.youtube.com/embed/${videoId}`}
-              title={`Vídeo de análise — ${product.name}`}
-              className="h-full w-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-            />
-          </div>
         </div>
       )}
 

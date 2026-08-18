@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Combobox, MultiCombobox, type ComboboxOption } from "@/components/ui/combobox"
+import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
@@ -57,8 +58,6 @@ interface StoreProductVariantRow {
   label: string
   price_override_brl: string
   promo_price_brl: string
-  stock: string
-  hasStock: boolean
   color: string | null
   icon: string | null
   image_url: string | null
@@ -80,6 +79,7 @@ interface StoreProduct {
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   is_active: boolean
+  is_sold_out: boolean
   features?: string[]
   video_url?: string | null
 }
@@ -342,6 +342,7 @@ export function StoreProductForm({
     condition: product?.condition ?? (defaultType === "bazaar" ? "used" : "new"),
     condition_notes: product?.condition_notes ?? "",
     is_active: product?.is_active !== false,
+    is_sold_out: product?.is_sold_out ?? false,
     video_url: product?.video_url ?? "",
   })
 
@@ -351,6 +352,7 @@ export function StoreProductForm({
   const [featureInput, setFeatureInput] = useState("")
   const [featureIsGood, setFeatureIsGood] = useState(true)
   const featureInputRef = useRef<HTMLInputElement>(null)
+  const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [specs, setSpecs] = useState<StoreProductSpec[]>(
     initialSpecs && initialSpecs.length > 0 ? initialSpecs : [{ label: "", value: "" }]
   )
@@ -360,8 +362,6 @@ export function StoreProductForm({
       label: v.label,
       price_override_brl: v.price_cents_override != null ? (v.price_cents_override / 100).toFixed(2) : "",
       promo_price_brl: v.promo_price_cents != null ? (v.promo_price_cents / 100).toFixed(2) : "",
-      stock: v.stock != null ? v.stock.toString() : "0",
-      hasStock: v.stock != null,
       color: v.color ?? null,
       icon: v.icon ?? null,
       image_url: v.image_url ?? null,
@@ -472,7 +472,7 @@ export function StoreProductForm({
 
   function updateVariant(
     index: number,
-    field: "label" | "price_override_brl" | "promo_price_brl" | "stock",
+    field: "label" | "price_override_brl" | "promo_price_brl",
     value: string
   ) {
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)))
@@ -500,8 +500,6 @@ export function StoreProductForm({
           label: "",
           price_override_brl: "",
           promo_price_brl: "",
-          stock: "0",
-          hasStock: true,
           color: null,
           icon: null,
           image_url: null,
@@ -583,24 +581,16 @@ export function StoreProductForm({
     )
   }
 
-  function setVariantHasStock(index: number, hasStock: boolean) {
-    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, hasStock } : v)))
-  }
-
-  function bumpVariantStock(index: number, delta: number) {
-    setVariants((prev) =>
-      prev.map((v, i) => {
-        if (i !== index) return v
-        const current = parseInt(v.stock, 10)
-        const base = isNaN(current) ? 0 : current
-        const next = Math.min(MAX_STOCK, Math.max(0, base + delta))
-        return { ...v, stock: next.toString() }
-      })
-    )
-  }
-
   function set(field: string, value: string | boolean) {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  function setStatus(status: "active" | "sold_out" | "inactive") {
+    setFormData((prev) => ({
+      ...prev,
+      is_active: status !== "inactive",
+      is_sold_out: status === "sold_out",
+    }))
   }
 
   async function handleAutofillFromPeripheral() {
@@ -770,13 +760,6 @@ export function StoreProductForm({
       for (const v of variants) {
         const label = v.label.trim()
         if (!label) continue
-        let variantStock: number | null = null
-        if (v.hasStock) {
-          variantStock = parseInt(v.stock, 10)
-          if (isNaN(variantStock) || variantStock < 0 || variantStock > MAX_STOCK) {
-            throw new Error(`Estoque inválido na variante "${label}".`)
-          }
-        }
         let priceOverride: number | null = null
         if (v.price_override_brl.trim()) {
           priceOverride = Math.round(parseFloat(v.price_override_brl.replace(",", ".")) * 100)
@@ -803,7 +786,7 @@ export function StoreProductForm({
           label,
           price_cents_override: priceOverride,
           promo_price_cents: variantPromoPrice,
-          stock: variantStock,
+          stock: null,
           color: v.color,
           icon: v.icon,
           image_url: v.image_url,
@@ -824,6 +807,7 @@ export function StoreProductForm({
         condition: formData.condition,
         condition_notes: formData.condition_notes.trim() || null,
         is_active: formData.is_active,
+        is_sold_out: formData.is_sold_out,
         features,
         video_url: videoUrl || null,
       }
@@ -1094,17 +1078,26 @@ export function StoreProductForm({
       {/* Description */}
       <div className="space-y-2">
         <Label>Descrição</Label>
+        <TextFormatToolbar
+          textareaRef={descriptionTextareaRef}
+          value={formData.description}
+          onChange={(value) => set("description", value)}
+        />
         <textarea
+          ref={descriptionTextareaRef}
           value={formData.description}
           onChange={(e) => set("description", e.target.value)}
           placeholder="Descreva o produto, características, motivo da venda no bazar..."
-          rows={4}
+          rows={8}
           className={cn(
-            "flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
+            "flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
             "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2",
-            "focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
+            "focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
           )}
         />
+        <p className="text-[10px] text-muted-foreground/60">
+          Suporta **negrito**, *itálico*, __sublinhado__, ==destaque== e [texto](url) para link.
+        </p>
       </div>
 
       {/* Price + Promo + Stock + Active */}
@@ -1219,14 +1212,15 @@ export function StoreProductForm({
         <div className="space-y-2">
           <Label>Status</Label>
           <Select
-            value={formData.is_active ? "active" : "inactive"}
-            onValueChange={(v) => set("is_active", v === "active")}
+            value={!formData.is_active ? "inactive" : formData.is_sold_out ? "sold_out" : "active"}
+            onValueChange={(v) => setStatus(v as "active" | "sold_out" | "inactive")}
           >
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="active">✅ Ativo (visível)</SelectItem>
+              <SelectItem value="sold_out">⚠️ Esgotado (visível, não compra)</SelectItem>
               <SelectItem value="inactive">🔒 Inativo (oculto)</SelectItem>
             </SelectContent>
           </Select>
@@ -1237,8 +1231,9 @@ export function StoreProductForm({
       <div className="space-y-2">
         <Label>Variantes (opcional)</Label>
         <p className="text-[10px] text-muted-foreground/60">
-          Se o produto tem variações (cor, modelo, etc.), cadastre aqui — cada uma com seu próprio
-          estoque e, se quiser, um preço diferente do preço base acima.
+          Se o produto tem variações (cor, modelo, etc.), cadastre aqui — cada uma com um preço
+          próprio, se quiser, diferente do preço base acima. Para controlar estoque de uma
+          variante específica, cadastre-a como um anúncio separado.
         </p>
         <div className="space-y-2">
           {variants.map((variant, idx) => (
@@ -1272,52 +1267,6 @@ export function StoreProductForm({
                     className="pl-7 text-sm"
                   />
                 </div>
-                {variant.hasStock ? (
-                  <div className="flex items-stretch gap-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 shrink-0"
-                      onClick={() => bumpVariantStock(idx, -1)}
-                      disabled={parseInt(variant.stock, 10) <= 0}
-                      aria-label="Diminuir estoque da variante"
-                    >
-                      <Minus className="size-3.5" />
-                    </Button>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={MAX_STOCK}
-                      step={1}
-                      value={variant.stock}
-                      onChange={(e) => updateVariant(idx, "stock", e.target.value)}
-                      className="no-spinner w-16 text-center text-sm"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="h-8 shrink-0"
-                      onClick={() => bumpVariantStock(idx, 1)}
-                      disabled={parseInt(variant.stock, 10) >= MAX_STOCK}
-                      aria-label="Aumentar estoque da variante"
-                    >
-                      <Plus className="size-3.5" />
-                    </Button>
-                  </div>
-                ) : (
-                  <span className="rounded-md border border-dashed border-border px-2 py-1.5 text-[10px] text-muted-foreground">
-                    Sem controle
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setVariantHasStock(idx, !variant.hasStock)}
-                  className="shrink-0 text-[10px] font-medium text-primary hover:underline"
-                >
-                  {variant.hasStock ? "Remover controle" : "Controlar estoque"}
-                </button>
                 <Button
                   type="button"
                   variant="ghost"

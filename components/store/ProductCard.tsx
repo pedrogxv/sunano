@@ -19,6 +19,8 @@ interface ProductCardProps {
   promo_price_cents?: number | null
   /** `null` = sem controle de estoque (nunca esgota). */
   stock: number | null
+  /** Esgotado manualmente pelo admin — produto continua visível, mas não pode ser comprado. */
+  is_sold_out?: boolean
   images: string[]
   category: string | null
   brand?: string | null
@@ -49,7 +51,7 @@ export function ProductCard(props: ProductCardProps) {
   const [wishlistLoading, setWishlistLoading] = useState(false)
   const wishlisted = props.wishlisted ?? false
   const href = `/${props.type === "bazaar" ? "bazar" : "loja"}/${props.slug}`
-  const outOfStock = props.stock !== null && props.stock === 0
+  const outOfStock = Boolean(props.is_sold_out) || (props.stock !== null && props.stock === 0)
   const hasVariants = props.has_variants ?? false
   const image = props.images?.[0] ?? null
   const hasDiscount = props.promo_price_cents != null && props.promo_price_cents < props.price_cents

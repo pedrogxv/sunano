@@ -105,6 +105,13 @@ export function CommentBody({
         if (segment.underline) {
           return <u key={index}>{segment.text}</u>
         }
+        if (segment.highlight) {
+          return (
+            <mark key={index} className="rounded bg-primary/25 px-0.5 text-foreground">
+              {segment.text}
+            </mark>
+          )
+        }
         return (
           <Fragment key={index}>
             {splitMentions(segment.text, mentions).map((part, partIndex) => (

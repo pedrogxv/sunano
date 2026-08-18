@@ -731,6 +731,7 @@ export type Database = {
           condition: "new" | "used" | "opened"
           condition_notes: string | null
           is_active: boolean
+          is_sold_out: boolean
           peripheral_id: string | null
           features: string[]
           video_url: string | null
@@ -752,6 +753,7 @@ export type Database = {
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
           is_active?: boolean
+          is_sold_out?: boolean
           peripheral_id?: string | null
           features?: string[]
           video_url?: string | null
@@ -773,6 +775,7 @@ export type Database = {
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
           is_active?: boolean
+          is_sold_out?: boolean
           peripheral_id?: string | null
           features?: string[]
           video_url?: string | null

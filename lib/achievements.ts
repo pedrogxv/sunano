@@ -159,7 +159,7 @@ export const EMPTY_DAILY_MISSIONS: DailyMissionsState = {
 
 export type DailyMissionKey = keyof Omit<DailyMissionsState, "bonus_claimed">
 
-/** As 3 missões do dia, na ordem de exibição — usado por `MissionsBadge` (TopBar). */
+/** As 3 missões do dia, na ordem de exibição — usado por `AuraMissionsBadge` (TopBar). */
 export const DAILY_MISSION_KEYS: Array<{ key: DailyMissionKey; label: string }> = [
   { key: "created_post", label: "Criar um post" },
   { key: "wrote_comment", label: "Fazer um comentário" },

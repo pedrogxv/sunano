@@ -21,10 +21,17 @@ const CONDITION_STYLE: Record<string, string> = {
   used: "bg-orange-500/15 text-orange-400",
 }
 
-export function CartButton() {
+interface CartButtonProps {
+  /** Fora da Loja o ícone só aparece se houver itens (ver `alwaysVisible=false`,
+   *  o padrão). Dentro da Loja ele fica visível mesmo com o carrinho vazio,
+   *  já que ali é o próprio símbolo de "onde fica meu carrinho". */
+  alwaysVisible?: boolean
+}
+
+export function CartButton({ alwaysVisible = false }: CartButtonProps) {
   const { count, setOpen } = useCart()
 
-  if (count === 0) return null
+  if (count === 0 && !alwaysVisible) return null
 
   return (
     <button
@@ -33,9 +40,11 @@ export function CartButton() {
       className="relative flex h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground"
     >
       <ShoppingCart className="size-[15px]" />
-      <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-white ring-2 ring-card">
-        {count > 9 ? "9+" : count}
-      </span>
+      {count > 0 && (
+        <span className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[9px] font-bold text-white ring-2 ring-card">
+          {count > 9 ? "9+" : count}
+        </span>
+      )}
     </button>
   )
 }

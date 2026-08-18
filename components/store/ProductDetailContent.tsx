@@ -10,8 +10,9 @@ import {
   ChevronRight,
   ExternalLink,
   Minus,
-  Package,
   Plus,
+  QrCode,
+  ShieldCheck,
   ShoppingCart,
   Trophy,
   XCircle,
@@ -26,8 +27,8 @@ import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getVariantIcon } from "@/lib/variant-icons"
+import { getCategoryIcon } from "@/lib/store-category-icons"
 import type { LinkedPeripheralRef, StoreProductDetailResult } from "@/lib/server/repositories/store-repository"
-import { WishlistButton } from "@/components/store/WishlistButton"
 import { ProductReviews } from "@/components/store/ProductReviews"
 import { FormattedText } from "@/components/ui/formatted-text"
 
@@ -163,19 +164,21 @@ export function ProductDetailContent({
     router.push("/checkout")
   }
 
+  const { icon: CategoryIcon, tint: categoryTint } = getCategoryIcon(product.category)
+
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10">
+    <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 lg:py-16">
       <Link
         href={backHref}
-        className="mb-6 flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        className="mb-7 flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" />
         Voltar à Loja
       </Link>
 
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid gap-10 md:grid-cols-2 lg:gap-16">
         {/* Images */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <Dialog
             open={lightboxOpen}
             onOpenChange={(next) => {
@@ -183,7 +186,7 @@ export function ProductDetailContent({
               if (!next) setZoomed(false)
             }}
           >
-            <div className="group/zoom relative aspect-square overflow-hidden rounded-2xl border border-border bg-muted">
+            <div className="group/zoom relative aspect-square overflow-hidden rounded-[24px] border border-border bg-[var(--card-image-bg)]">
               {images[activeImage] ? (
                 <button
                   type="button"
@@ -195,15 +198,18 @@ export function ProductDetailContent({
                   <img
                     src={images[activeImage] as string}
                     alt={product.name}
-                    className="h-full w-full object-contain p-6"
+                    className="h-full w-full object-contain p-8"
                   />
-                  <span className="absolute right-3 top-3 flex size-8 items-center justify-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover/zoom:opacity-100">
-                    <ZoomIn className="size-4" />
+                  <span className="absolute right-4 top-4 flex size-11 items-center justify-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover/zoom:opacity-100">
+                    <ZoomIn className="size-5" />
                   </span>
                 </button>
               ) : (
-                <div className="flex h-full items-center justify-center">
-                  <Package className="size-16 text-muted-foreground" />
+                <div
+                  className="flex h-full items-center justify-center"
+                  style={{ background: `radial-gradient(90% 90% at 50% 30%, color-mix(in oklab, ${categoryTint} 14%, var(--card-image-bg)), var(--card-image-bg))` }}
+                >
+                  <CategoryIcon className="size-44 opacity-40" style={{ color: categoryTint }} strokeWidth={1.1} />
                 </div>
               )}
             </div>
@@ -273,20 +279,24 @@ export function ProductDetailContent({
             </DialogContent>
           </Dialog>
           {images.length > 1 && (
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               {images.map((img, idx) => (
                 <button
                   key={idx}
                   onClick={() => setActiveImage(idx)}
                   className={cn(
-                    "size-16 shrink-0 overflow-hidden rounded-lg border bg-muted",
+                    "size-[84px] shrink-0 overflow-hidden rounded-2xl border-[1.5px] bg-[var(--card-image-bg)]",
                     idx === activeImage ? "border-emerald-500" : "border-border"
                   )}
                 >
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={img} alt="" className="h-full w-full object-contain p-1" />
-                  ) : null}
+                    <img src={img} alt="" className="h-full w-full object-contain p-1.5" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center">
+                      <CategoryIcon className="size-8 opacity-40" style={{ color: categoryTint }} strokeWidth={1.2} />
+                    </div>
+                  )}
                 </button>
               ))}
             </div>
@@ -294,27 +304,24 @@ export function ProductDetailContent({
         </div>
 
         {/* Info */}
-        <div className="space-y-5">
+        <div className="space-y-6 pt-1.5">
           {product.type === "bazaar" && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-300">
               ♻️ Bazar
             </span>
           )}
 
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-foreground">{product.name}</h1>
-              {product.category && (
-                <p className="mt-1 text-sm capitalize text-muted-foreground">{product.category}</p>
-              )}
-            </div>
-            <WishlistButton productId={product.id} />
+          <div>
+            <h1 className="font-display text-[38px] font-bold leading-[1.05] tracking-tight text-foreground">{product.name}</h1>
+            {product.category && (
+              <p className="mt-2 text-[15px] capitalize text-muted-foreground">{product.category}</p>
+            )}
           </div>
 
           {product.condition !== "new" && (
             <span
               className={cn(
-                "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold uppercase tracking-wide",
+                "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide",
                 CONDITION_STYLE[product.condition]
               )}
             >
@@ -328,22 +335,24 @@ export function ProductDetailContent({
             </p>
           )}
 
-          {hasDiscount ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-3xl font-black text-emerald-400">{formatBRL(effectivePriceCents)}</p>
-              <p className="text-base text-muted-foreground line-through">{formatBRL(baseEffectivePriceCents)}</p>
-              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-400">
-                -{discountPercent}%
-              </span>
-            </div>
-          ) : (
-            <p className="text-3xl font-black text-emerald-400">{formatBRL(effectivePriceCents)}</p>
-          )}
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-6 py-5">
+            {hasDiscount ? (
+              <div className="flex flex-wrap items-baseline gap-3">
+                <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
+                <p className="text-base text-muted-foreground line-through">{formatBRL(baseEffectivePriceCents)}</p>
+                <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-400">
+                  -{discountPercent}%
+                </span>
+              </div>
+            ) : (
+              <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
+            )}
+          </div>
 
           {hasVariants && (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground">Variante</p>
-              <div className="flex flex-wrap gap-2">
+            <div className="space-y-2.5">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Variante</p>
+              <div className="flex flex-wrap gap-2.5">
                 {variants.map((v) => {
                   const isActive = v.id === selectedVariantId
                   const variantOutOfStock = v.stock !== null && v.stock === 0
@@ -354,7 +363,7 @@ export function ProductDetailContent({
                       type="button"
                       onClick={() => handleSelectVariant(v.id)}
                       className={cn(
-                        "flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors",
+                        "flex items-center gap-2.5 rounded-xl border-[1.5px] px-4 py-3 text-sm font-semibold transition-colors",
                         isActive
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                           : "border-border text-muted-foreground hover:border-foreground/20",
@@ -363,12 +372,12 @@ export function ProductDetailContent({
                     >
                       {(v.color || VariantIcon) && (
                         <span
-                          className="flex size-4 shrink-0 items-center justify-center rounded-full border border-black/10"
+                          className="flex size-[18px] shrink-0 items-center justify-center rounded-full border border-black/10"
                           style={{ backgroundColor: v.color ?? "transparent" }}
                         >
                           {VariantIcon && (
                             <VariantIcon
-                              className="size-2.5"
+                              className="size-3"
                               style={{ color: v.color ? "#fff" : undefined }}
                             />
                           )}
@@ -388,39 +397,39 @@ export function ProductDetailContent({
               Produto esgotado
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {effectiveStock !== null && effectiveStock <= 3 && (
-                <p className="text-xs text-amber-400">Últimas {effectiveStock} unidades!</p>
+                <p className="text-sm font-semibold text-amber-400">Últimas {effectiveStock} unidades!</p>
               )}
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 rounded-lg border border-border">
+                <div className="flex items-center rounded-xl border border-border">
                   <button
                     onClick={() => setQty((q) => Math.max(1, q - 1))}
-                    className="flex size-9 items-center justify-center text-muted-foreground hover:text-foreground"
+                    className="flex size-[46px] items-center justify-center text-muted-foreground hover:text-foreground"
                   >
                     <Minus className="size-3.5" />
                   </button>
-                  <span className="w-8 text-center text-sm font-bold text-foreground">{qty}</span>
+                  <span className="w-[42px] text-center text-[15px] font-bold text-foreground">{qty}</span>
                   <button
                     onClick={() => setQty((q) => (effectiveStock === null ? q + 1 : Math.min(effectiveStock, q + 1)))}
-                    className="flex size-9 items-center justify-center text-muted-foreground hover:text-foreground"
+                    className="flex size-[46px] items-center justify-center text-muted-foreground hover:text-foreground"
                   >
                     <Plus className="size-3.5" />
                   </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-2.5 sm:flex-row">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <Button
-                  className="flex-1 gap-2"
+                  className="h-14 flex-1 gap-2 rounded-xl text-[15px] font-bold"
                   variant="secondary"
                   onClick={handleAddToCart}
                   disabled={hasVariants && !activeVariant}
                 >
-                  <ShoppingCart className="size-4" />
+                  <ShoppingCart className="size-[18px]" />
                   {added ? "Adicionado!" : "Adicionar ao carrinho"}
                 </Button>
                 <Button
-                  className="h-12 flex-1 gap-2 bg-orange-500 text-base font-bold text-white shadow-lg shadow-orange-500/20 hover:bg-orange-400 sm:flex-[1.3]"
+                  className="h-14 flex-1 gap-2 rounded-xl bg-orange-500 text-[17px] font-bold text-white shadow-lg shadow-orange-500/20 hover:bg-orange-400 sm:flex-[1.25]"
                   onClick={handleBuyNow}
                   disabled={hasVariants && !activeVariant}
                 >
@@ -431,8 +440,23 @@ export function ProductDetailContent({
             </div>
           )}
 
+          <div className="flex flex-wrap items-center gap-5 pt-1">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <QrCode className="size-3.5 text-emerald-400" />
+              Pagamento via PIX
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <CheckCircle2 className="size-3.5 text-emerald-400" />
+              Testado pelo Sunano
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <ShieldCheck className="size-3.5 text-emerald-400" />
+              Compra acompanhada na sua conta
+            </div>
+          </div>
+
           {product.description && (
-            <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+            <p className="whitespace-pre-line text-[15px] leading-relaxed text-muted-foreground">
               <FormattedText text={product.description} />
             </p>
           )}
@@ -440,7 +464,7 @@ export function ProductDetailContent({
           {linkedProduct && (
             <Link
               href={`/${product.type === "bazaar" ? "loja" : "bazar"}/${linkedProduct.slug}`}
-              className="block rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm transition-colors hover:border-foreground/20"
+              className="block rounded-2xl border border-border bg-muted/20 px-5 py-4 text-sm transition-colors hover:border-foreground/20"
             >
               <span className="text-muted-foreground">
                 {product.type === "bazaar" ? "Também disponível novo na Loja" : "Também disponível usado no Bazar"}
@@ -450,7 +474,7 @@ export function ProductDetailContent({
           )}
 
           {allLinkedPeripherals.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {allLinkedPeripherals.map((peripheral) => (
                 <LinkedPeripheralCard key={peripheral.id} peripheral={peripheral} />
               ))}
@@ -460,17 +484,17 @@ export function ProductDetailContent({
       </div>
 
       {(product.features?.length > 0 || specs.length > 0) && (
-        <div className="mt-12 grid gap-8 md:grid-cols-2">
+        <div className="mt-20 grid gap-16 md:grid-cols-2">
           {product.features?.length > 0 && (
             <div>
-              <h2 className="mb-4 text-lg font-black text-foreground">Características</h2>
-              <ul className="space-y-2.5">
+              <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Características</h2>
+              <ul className="space-y-3.5">
                 {product.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <li key={idx} className="flex items-start gap-2.5 text-[15px] text-muted-foreground">
                     {isGoodFeature(feature) ? (
-                      <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+                      <CheckCircle2 className="mt-0.5 size-[18px] shrink-0 text-emerald-400" />
                     ) : (
-                      <XCircle className="mt-0.5 size-4 shrink-0 text-red-400" />
+                      <XCircle className="mt-0.5 size-[18px] shrink-0 text-red-400" />
                     )}
                     <span>{featureLabel(feature)}</span>
                   </li>
@@ -481,13 +505,13 @@ export function ProductDetailContent({
 
           {specs.length > 0 && (
             <div>
-              <h2 className="mb-4 text-lg font-black text-foreground">Especificação Técnica</h2>
-              <dl className="overflow-hidden rounded-xl border border-border">
+              <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Especificação Técnica</h2>
+              <dl className="overflow-hidden rounded-2xl border border-border">
                 {specs.map((spec, idx) => (
                   <div
                     key={spec.id}
                     className={cn(
-                      "grid grid-cols-2 gap-2 px-4 py-2.5 text-sm",
+                      "grid grid-cols-2 gap-2 px-5 py-3.5 text-[14.5px]",
                       idx % 2 === 0 ? "bg-muted/20" : "bg-transparent"
                     )}
                   >
@@ -501,7 +525,9 @@ export function ProductDetailContent({
         </div>
       )}
 
-      <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
+      <div className="mt-20">
+        <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
+      </div>
     </div>
   )
 }

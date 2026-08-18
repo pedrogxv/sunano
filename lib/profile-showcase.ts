@@ -160,34 +160,6 @@ export type ProfileShowcase = {
   /** Handle sem "@" — link exibido como ícone clicável no perfil público. */
   youtube_handle: string | null
   tiktok_handle: string | null
-  /** Listas nomeadas (não-padrão) públicas com pelo menos 1 item, para o link compartilhável. */
-  public_wishlists: PublicWishlistRef[]
-  /** Lista de compras padrão ("Favoritos"), exibida inline no perfil — `null` quando vazia ou escondida pelo dono. */
-  default_wishlist: ShowcaseWishlist | null
-}
-
-export type PublicWishlistRef = {
-  id: string
-  name: string
-  share_token: string
-  item_count: number
-}
-
-export type ShowcaseWishlistProduct = {
-  id: string
-  slug: string
-  name: string
-  type: "store" | "bazaar"
-  price_cents: number
-  images: string[]
-}
-
-export type ShowcaseWishlist = {
-  id: string
-  name: string
-  /** Se `false`, o dono escondeu a lista — só ele deve ver esta seção (com o toggle para reexibir). */
-  is_public: boolean
-  items: { id: string; product: ShowcaseWishlistProduct }[]
 }
 
 /** Limite de caracteres da bio (espelha o CHECK constraint da tabela). */

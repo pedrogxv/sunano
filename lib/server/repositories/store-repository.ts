@@ -204,6 +204,7 @@ export async function listStoreProductsPaginated(
 
 export type StoreFilterOptions = {
   categories: string[]
+  categoryCounts: Record<string, number>
   brands: string[]
   priceMinCents: number
   priceMaxCents: number
@@ -223,18 +224,22 @@ export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<
   const { data, error } = await query
   if (error) {
     console.error("[store-repository] getStoreFilterOptions:", error)
-    return { categories: [], brands: [], priceMinCents: 0, priceMaxCents: 0, countByType: { store: 0, bazaar: 0, all: 0 } }
+    return { categories: [], categoryCounts: {}, brands: [], priceMinCents: 0, priceMaxCents: 0, countByType: { store: 0, bazaar: 0, all: 0 } }
   }
 
   const rows = (data ?? []) as unknown as { category: string | null; brand: string | null; price_cents: number; type: "store" | "bazaar" }[]
   const categories = new Set<string>()
+  const categoryCounts: Record<string, number> = {}
   const brands = new Set<string>()
   const countByType = { store: 0, bazaar: 0, all: 0 }
   let priceMinCents = Infinity
   let priceMaxCents = 0
 
   for (const row of rows) {
-    if (row.category) categories.add(row.category)
+    if (row.category) {
+      categories.add(row.category)
+      categoryCounts[row.category] = (categoryCounts[row.category] ?? 0) + 1
+    }
     if (row.brand) brands.add(row.brand)
     countByType[row.type] += 1
     countByType.all += 1
@@ -244,6 +249,7 @@ export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<
 
   return {
     categories: [...categories].sort((a, b) => a.localeCompare(b)),
+    categoryCounts,
     brands: [...brands].sort((a, b) => a.localeCompare(b)),
     priceMinCents: Number.isFinite(priceMinCents) ? priceMinCents : 0,
     priceMaxCents,

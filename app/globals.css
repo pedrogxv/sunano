@@ -1,9 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* O tema é aplicado via atributo data-theme no <html> (ver ThemeProvider), não via
-   classe .dark. A variante default do shadcn (`&:is(.dark *)`) nunca casava, então
-   todo utilitário `dark:` do projeto era código morto. */
+/* Sunano é dark-only: o atributo data-theme="dark" é fixo no <html> (app/layout.tsx).
+   A variante default do shadcn (`&:is(.dark *)`) nunca casava, então todo utilitário
+   `dark:` do projeto era código morto — por isso o custom-variant abaixo. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
@@ -50,55 +50,6 @@
      TopBar sozinha = 4rem (min-h-16). ChangelogBanner ajusta este valor via JS
      (ResizeObserver) quando está montado, pois sua altura varia com o conteúdo. */
   --sticky-header-h: 4rem;
-}
-
-:root[data-theme="light"] {
-  color-scheme: light;
-  --background: #FFFFFF;
-  --foreground: #000000;
-  --card: #f5f5f5;
-  --card-foreground: #000000;
-  --popover: #FFFFFF;
-  --popover-foreground: #000000;
-  --primary: oklch(0.58 0.16 220);
-  --primary-foreground: #FFFFFF;
-  --secondary: #f0f0f0;
-  --secondary-foreground: #000000;
-  --muted: #e8e8e8;
-  --muted-foreground: #666666;
-  --accent: #ececec;
-  --accent-foreground: #000000;
-  --border: #d0d0d0;
-  --input: #d0d0d0;
-  --ring: oklch(0.58 0.16 220);
-
-  /* Espelha o modo escuro: lá o card é #0a0a0a e a área da imagem #1a1a1a —
-     um tom levemente MAIS CLARO que o card, sem virar uma caixa destacada.
-     Aqui o inverso: card #f5f5f5 e imagem branco puro. */
-  --card-image-bg: #ffffff;
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --background: #000000;
-  --foreground: #FFFFFF;
-  --card: #0a0a0a;
-  --card-foreground: #FFFFFF;
-  --popover: #000000;
-  --popover-foreground: #FFFFFF;
-  --primary: oklch(100% 0.00011 271.152);
-  --primary-foreground: #000000;
-  --secondary: #1a1a1a;
-  --secondary-foreground: #FFFFFF;
-  --muted: #1a1a1a;
-  --muted-foreground: #999999;
-  --accent: #1a1a1a;
-  --accent-foreground: #FFFFFF;
-  --destructive: oklch(0.6 0.2 25);
-  --destructive-foreground: #FFFFFF;
-  --border: #333333;
-  --input: #333333;
-  --ring: oklch(0.68 0.12 220);
 }
 
 @theme inline {

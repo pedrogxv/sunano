@@ -1,15 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { ShoppingCart, Package, Bookmark, Recycle, Store } from "lucide-react"
-import { toast } from "sonner"
-import { useState } from "react"
+import { ShoppingCart, Recycle, Store } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CARD_SURFACE } from "@/lib/ui-styles"
+import { getCategoryIcon } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
 import { useCart } from "@/components/providers/cart-context"
-import { useAuthUser } from "@/components/providers/auth-context"
-import { useAuthModal } from "@/components/providers/auth-modal-context"
 
 interface ProductCardProps {
   id: string
@@ -28,8 +24,6 @@ interface ProductCardProps {
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   has_variants?: boolean
-  wishlisted?: boolean
-  onWishlistChange?: (productId: string, wishlisted: boolean) => void
 }
 
 const CONDITION_LABEL: Record<string, string> = {
@@ -46,10 +40,6 @@ const CONDITION_STYLE: Record<string, string> = {
 
 export function ProductCard(props: ProductCardProps) {
   const { add, setOpen } = useCart()
-  const { user } = useAuthUser()
-  const { openLogin } = useAuthModal()
-  const [wishlistLoading, setWishlistLoading] = useState(false)
-  const wishlisted = props.wishlisted ?? false
   const href = `/${props.type === "bazaar" ? "bazar" : "loja"}/${props.slug}`
   const outOfStock = Boolean(props.is_sold_out) || (props.stock !== null && props.stock === 0)
   const hasVariants = props.has_variants ?? false
@@ -59,6 +49,8 @@ export function ProductCard(props: ProductCardProps) {
   const discountPercent = hasDiscount
     ? Math.round((1 - (props.promo_price_cents as number) / props.price_cents) * 100)
     : null
+
+  const { icon: CategoryIcon, tint } = getCategoryIcon(props.category)
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
@@ -84,60 +76,19 @@ export function ProductCard(props: ProductCardProps) {
     setOpen(true)
   }
 
-  async function handleToggleWishlist(e: React.MouseEvent) {
-    e.preventDefault()
-    if (wishlistLoading) return
-    if (!user) {
-      openLogin()
-      return
-    }
-    setWishlistLoading(true)
-    try {
-      const res = await fetch("/api/store/wishlist-toggle", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: props.id }),
-      })
-      if (res.status === 401) {
-        openLogin()
-        return
-      }
-      const data = (await res.json()) as { wishlisted?: boolean; error?: string }
-      if (!res.ok) throw new Error(data.error ?? "Erro ao salvar")
-      props.onWishlistChange?.(props.id, Boolean(data.wishlisted))
-      toast.success(data.wishlisted ? "Adicionado na lista de compras" : "Removido da lista de compras")
-    } catch (err) {
-      toast.error("Erro ao adicionar na lista", { description: err instanceof Error ? err.message : undefined })
-    } finally {
-      setWishlistLoading(false)
-    }
-  }
-
   const accentText = props.type === "bazaar" ? "text-amber-400" : "text-sky-400"
-  const accentGlow = props.type === "bazaar" ? "bg-amber-400" : "bg-sky-400"
   const TypeIcon = props.type === "bazaar" ? Recycle : Store
 
   return (
     <Link href={href} className="group block">
       <div className={cn(
-        "relative overflow-hidden rounded-2xl border transition-all duration-200",
-        CARD_SURFACE,
-        "hover:-translate-y-1 hover:border-border hover:bg-secondary/80 hover:shadow-xl hover:shadow-black/10",
+        "relative flex flex-col overflow-hidden rounded-[18px] border border-border/60 bg-secondary/45 transition-all duration-200",
+        "hover:-translate-y-1 hover:border-border hover:shadow-xl hover:shadow-black/10",
         outOfStock && "opacity-60"
       )}>
-        {/* Glow sutil na cor do tipo (Loja/Bazar), só visível no hover. */}
-        <div
-          aria-hidden="true"
-          className={cn(
-            "pointer-events-none absolute inset-0 z-0 opacity-0 transition-opacity duration-300 group-hover:opacity-[0.07]",
-            "[mask-image:radial-gradient(120%_60%_at_50%_0%,black,transparent)]",
-            accentGlow
-          )}
-        />
-
         {/* Out of stock overlay */}
         {outOfStock && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50">
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-[18px] bg-black/50">
             <span className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-bold text-red-400">
               Esgotado
             </span>
@@ -145,7 +96,7 @@ export function ProductCard(props: ProductCardProps) {
         )}
 
         {/* Image */}
-        <div className="relative aspect-square overflow-hidden bg-muted">
+        <div className="relative aspect-square overflow-hidden bg-[var(--card-image-bg)]">
           {image ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -154,32 +105,47 @@ export function ProductCard(props: ProductCardProps) {
               className="h-full w-full object-contain p-4 transition-transform duration-300 group-hover:scale-105"
             />
           ) : (
-            <div className="flex h-full items-center justify-center">
-              <Package className="size-12 text-muted-foreground" />
+            <div
+              className="flex h-full items-center justify-center"
+              style={{ background: `radial-gradient(120% 120% at 50% 20%, color-mix(in oklab, ${tint} 16%, var(--card-image-bg)), var(--card-image-bg))` }}
+            >
+              <CategoryIcon
+                className="size-24 opacity-45 transition-transform duration-300 group-hover:scale-105"
+                style={{ color: tint }}
+                strokeWidth={1.3}
+              />
             </div>
+          )}
+
+          {/* Top badge: condição, sobreposto na imagem */}
+          <div className="absolute inset-x-2.5 top-2.5 z-[1] flex items-start justify-between">
+            <span className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide backdrop-blur-sm",
+              CONDITION_STYLE[props.condition]
+            )}>
+              <span className={cn(
+                "size-1.5 rounded-full",
+                props.condition === "new" && "bg-emerald-400",
+                props.condition === "opened" && "bg-amber-400",
+                props.condition === "used" && "bg-orange-400"
+              )} />
+              {CONDITION_LABEL[props.condition]}
+            </span>
+          </div>
+
+          {hasDiscount && (
+            <span className="absolute bottom-2.5 left-2.5 z-[1] rounded-lg bg-emerald-500 px-2 py-1 text-[11px] font-extrabold text-emerald-950">
+              -{discountPercent}%
+            </span>
           )}
         </div>
 
         {/* Info */}
-        <div className="relative z-[1] p-4 space-y-3">
-          {/* Condition badge */}
-          <span className={cn(
-            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide",
-            CONDITION_STYLE[props.condition]
-          )}>
-            <span className={cn(
-              "size-1.5 rounded-full",
-              props.condition === "new" && "bg-emerald-400",
-              props.condition === "opened" && "bg-amber-400",
-              props.condition === "used" && "bg-orange-400"
-            )} />
-            {CONDITION_LABEL[props.condition]}
-          </span>
-
+        <div className="flex flex-1 flex-col gap-2.5 p-3.5">
           <div>
-            <h3 className="flex items-start gap-1.5 line-clamp-2 text-xs font-bold uppercase tracking-wide leading-snug text-foreground/90 group-hover:text-foreground">
-              <TypeIcon className={cn("mt-0.5 size-3.5 shrink-0 transition-colors duration-200", accentText)} />
-              <span className="line-clamp-2">{props.name}</span>
+            <h3 className={cn("flex items-start gap-1.5 line-clamp-2 text-xs font-extrabold uppercase tracking-wide leading-snug", accentText)}>
+              <TypeIcon className="mt-0.5 size-3.5 shrink-0" />
+              <span className="line-clamp-2 text-foreground/90 group-hover:text-foreground">{props.name}</span>
             </h3>
             {(props.brand || props.category) && (
               <p className="mt-1 text-[10px] capitalize text-muted-foreground">
@@ -191,48 +157,30 @@ export function ProductCard(props: ProductCardProps) {
           <div>
             {hasDiscount ? (
               <div className="flex flex-wrap items-center gap-1.5">
-                <p className="text-lg font-black text-emerald-400">{formatBRL(effectivePriceCents)}</p>
+                <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(effectivePriceCents)}</p>
                 <p className="text-xs text-muted-foreground line-through">{formatBRL(props.price_cents)}</p>
-                <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">
-                  -{discountPercent}%
-                </span>
               </div>
             ) : (
-              <p className="text-lg font-black text-emerald-400">{formatBRL(props.price_cents)}</p>
+              <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(props.price_cents)}</p>
             )}
             {props.stock !== null && props.stock > 0 && props.stock <= 3 && (
-              <p className="text-[10px] text-amber-400">Últimas {props.stock} unidades!</p>
+              <p className="text-[10px] font-semibold text-amber-400">Últimas {props.stock} unidades!</p>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleAddToCart}
-              disabled={outOfStock}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-all",
-                "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
-                "hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:shadow-md hover:shadow-emerald-500/10",
-                outOfStock && "cursor-not-allowed opacity-50 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:shadow-none"
-              )}
-            >
-              <ShoppingCart className="size-3.5" />
-              {hasVariants ? "Ver opções" : "Comprar"}
-            </button>
-            <button
-              onClick={handleToggleWishlist}
-              disabled={wishlistLoading}
-              aria-label={wishlisted ? "Remover da lista de compras" : "Adicionar na lista de compras"}
-              className={cn(
-                "flex size-9 shrink-0 items-center justify-center rounded-lg border transition-all",
-                wishlisted
-                  ? "border-primary/60 bg-primary text-primary-foreground"
-                  : "border-border bg-card/95 text-foreground/80 hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
-              )}
-            >
-              <Bookmark className={cn("size-3.5", wishlisted && "fill-current")} />
-            </button>
-          </div>
+          <button
+            onClick={handleAddToCart}
+            disabled={outOfStock}
+            className={cn(
+              "mt-auto flex w-full items-center justify-center gap-1.5 rounded-[11px] border px-3 py-2.5 text-xs font-extrabold transition-all",
+              "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+              "hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:shadow-md hover:shadow-emerald-500/10",
+              outOfStock && "cursor-not-allowed opacity-50 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:shadow-none"
+            )}
+          >
+            <ShoppingCart className="size-3.5" />
+            {hasVariants ? "Ver opções" : "Comprar"}
+          </button>
         </div>
       </div>
     </Link>

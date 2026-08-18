@@ -10,7 +10,6 @@ import { DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { getUserAuraBalance, getUserAuraRank, getUserAuraTotalEarned } from "@/lib/server/repositories/aura-repository"
 import { getUserActivityRank } from "@/lib/server/repositories/users-repository"
 import { getUserAchievements, getUserStreak } from "@/lib/server/repositories/achievements-repository"
-import { getDefaultWishlistShowcase, listPublicWishlistsForUser } from "@/lib/server/repositories/wishlists-repository"
 import {
   coerceAccountTier,
   selectVisibleFavorites,
@@ -126,8 +125,6 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviewsByCategory,
     reviewsTotal,
     reviewedPeripheralIds,
-    publicWishlists,
-    defaultWishlist,
   ] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
@@ -144,8 +141,6 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     getUserReviewsByCategory(userId, { limitPerCategory: MINI_REVIEWS_PER_CATEGORY_LIMIT }),
     countUserReviews(userId),
     getReviewedPeripheralIds(userId),
-    listPublicWishlistsForUser(userId),
-    getDefaultWishlistShowcase(userId),
   ])
 
   return {
@@ -180,19 +175,6 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviews_total: reviewsTotal,
     reviews_integrity_accepted_at: row.reviews_integrity_accepted_at,
     reviewed_peripheral_ids: reviewedPeripheralIds,
-    public_wishlists: publicWishlists
-      .filter((w) => w.share_token)
-      .map((w) => ({ id: w.id, name: w.name, share_token: w.share_token as string, item_count: w.item_count ?? 0 })),
-    default_wishlist: defaultWishlist
-      ? {
-          id: defaultWishlist.id,
-          name: defaultWishlist.name,
-          is_public: defaultWishlist.is_public,
-          items: defaultWishlist.items.flatMap((item) =>
-            item.product ? [{ id: item.id, product: item.product }] : []
-          ),
-        }
-      : null,
   }
 })
 

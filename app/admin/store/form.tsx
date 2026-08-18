@@ -56,8 +56,6 @@ interface StoreProductVariantInput {
 interface StoreProductVariantRow {
   id?: string
   label: string
-  price_override_brl: string
-  promo_price_brl: string
   color: string | null
   icon: string | null
   image_url: string | null
@@ -360,8 +358,6 @@ export function StoreProductForm({
     (initialVariants ?? []).map((v) => ({
       id: v.id,
       label: v.label,
-      price_override_brl: v.price_cents_override != null ? (v.price_cents_override / 100).toFixed(2) : "",
-      promo_price_brl: v.promo_price_cents != null ? (v.promo_price_cents / 100).toFixed(2) : "",
       color: v.color ?? null,
       icon: v.icon ?? null,
       image_url: v.image_url ?? null,
@@ -458,23 +454,7 @@ export function StoreProductForm({
     featureInputRef.current?.focus()
   }
 
-  function updateSpec(index: number, field: "label" | "value", value: string) {
-    setSpecs((prev) => prev.map((s, i) => (i === index ? { ...s, [field]: value } : s)))
-  }
-
-  function addSpecRow() {
-    setSpecs((prev) => [...prev, { label: "", value: "" }])
-  }
-
-  function removeSpecRow(index: number) {
-    setSpecs((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  function updateVariant(
-    index: number,
-    field: "label" | "price_override_brl" | "promo_price_brl",
-    value: string
-  ) {
+  function updateVariant(index: number, field: "label", value: string) {
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)))
   }
 
@@ -498,8 +478,6 @@ export function StoreProductForm({
         ...prev,
         {
           label: "",
-          price_override_brl: "",
-          promo_price_brl: "",
           color: null,
           icon: null,
           image_url: null,
@@ -760,32 +738,14 @@ export function StoreProductForm({
       for (const v of variants) {
         const label = v.label.trim()
         if (!label) continue
-        let priceOverride: number | null = null
-        if (v.price_override_brl.trim()) {
-          priceOverride = Math.round(parseFloat(v.price_override_brl.replace(",", ".")) * 100)
-          if (isNaN(priceOverride) || priceOverride < MIN_PRICE_CENTS) {
-            throw new Error(`Preço inválido na variante "${label}". Use pelo menos ${formatBRL(MIN_PRICE_CENTS)}.`)
-          }
-        }
-        let variantPromoPrice: number | null = null
-        if (v.promo_price_brl.trim()) {
-          variantPromoPrice = Math.round(parseFloat(v.promo_price_brl.replace(",", ".")) * 100)
-          const referencePrice = priceOverride ?? priceCents
-          if (isNaN(variantPromoPrice) || variantPromoPrice <= 0) {
-            throw new Error(`Preço promocional inválido na variante "${label}".`)
-          }
-          if (variantPromoPrice >= referencePrice) {
-            throw new Error(`Preço promocional da variante "${label}" deve ser menor que o preço dela.`)
-          }
-        }
         if (v.images.length > MAX_VARIANT_IMAGES) {
           throw new Error(`Cada variante pode ter no máximo ${MAX_VARIANT_IMAGES} imagens ("${label}").`)
         }
         cleanVariants.push({
           id: v.id,
           label,
-          price_cents_override: priceOverride,
-          promo_price_cents: variantPromoPrice,
+          price_cents_override: null,
+          promo_price_cents: null,
           stock: null,
           color: v.color,
           icon: v.icon,
@@ -1028,6 +988,61 @@ export function StoreProductForm({
         </div>
       </div>
 
+      {/* Fotos Principais do Anúncio */}
+      <div className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <Label>Fotos Principais do Anúncio</Label>
+          <span className="text-[10px] text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <DndContext
+            sensors={imageSensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToParentElement]}
+            onDragEnd={handleImageDragEnd}
+          >
+            <SortableContext items={images} strategy={rectSortingStrategy}>
+              {images.map((url, idx) => (
+                <SortableImageThumb
+                  key={url}
+                  url={url}
+                  index={idx}
+                  onRemove={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+
+          {images.length < MAX_IMAGES && (
+            <label className={cn(
+              "flex size-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-border hover:text-foreground/80",
+              uploading && "cursor-wait opacity-50"
+            )}>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImageAdd}
+                disabled={uploading}
+              />
+              {uploading ? (
+                <Loader2 className="size-5 animate-spin" />
+              ) : (
+                <>
+                  <Plus className="size-5" />
+                  <span className="text-[9px]">Adicionar</span>
+                </>
+              )}
+            </label>
+          )}
+        </div>
+        <p className="text-[10px] text-muted-foreground">
+          Arraste pelo ícone no canto para reordenar. A primeira imagem é a principal. Até{" "}
+          {MAX_IMAGES} imagens, {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada
+          (comprimida automaticamente se maior). Recomendado: fundo branco ou transparente.
+        </p>
+      </div>
+
       {/* Type + Condition */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
@@ -1231,9 +1246,8 @@ export function StoreProductForm({
       <div className="space-y-2">
         <Label>Variantes (opcional)</Label>
         <p className="text-[10px] text-muted-foreground/60">
-          Se o produto tem variações (cor, modelo, etc.), cadastre aqui — cada uma com um preço
-          próprio, se quiser, diferente do preço base acima. Para controlar estoque de uma
-          variante específica, cadastre-a como um anúncio separado.
+          Se o produto tem variações visuais (cor, modelo, etc.), cadastre aqui. Para um produto
+          com preço ou estoque diferente, cadastre-o como um anúncio separado.
         </p>
         <div className="space-y-2">
           {variants.map((variant, idx) => (
@@ -1245,28 +1259,6 @@ export function StoreProductForm({
                   placeholder="Ex: Preto"
                   className="min-w-[140px] flex-1 text-sm"
                 />
-                <div className="relative w-28 shrink-0">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={variant.price_override_brl}
-                    onChange={(e) => updateVariant(idx, "price_override_brl", e.target.value)}
-                    placeholder="Preço base"
-                    className="pl-7 text-sm"
-                  />
-                </div>
-                <div className="relative w-28 shrink-0">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">R$</span>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={variant.promo_price_brl}
-                    onChange={(e) => updateVariant(idx, "promo_price_brl", e.target.value)}
-                    placeholder="Promo"
-                    className="pl-7 text-sm"
-                  />
-                </div>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1277,26 +1269,6 @@ export function StoreProductForm({
                   <Trash2 className="size-3.5" />
                 </Button>
               </div>
-
-              {(() => {
-                const refCents = variant.price_override_brl.trim()
-                  ? Math.round(parseFloat(variant.price_override_brl.replace(",", ".")) * 100) || 0
-                  : priceCentsPreview
-                const promoCents = variant.promo_price_brl.trim()
-                  ? Math.round(parseFloat(variant.promo_price_brl.replace(",", ".")) * 100) || 0
-                  : 0
-                if (!promoCents || !refCents || promoCents >= refCents) return null
-                const percent = Math.round((1 - promoCents / refCents) * 100)
-                return (
-                  <p className="flex items-center gap-1.5 pl-0.5 text-xs">
-                    <span className="text-muted-foreground line-through">{formatBRL(refCents)}</span>
-                    <span className="font-semibold text-emerald-400">{formatBRL(promoCents)}</span>
-                    <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
-                      -{percent}%
-                    </span>
-                  </p>
-                )
-              })()}
 
               <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-2">
                 {/* Cor */}
@@ -1503,110 +1475,6 @@ export function StoreProductForm({
             ))}
           </ul>
         )}
-      </div>
-
-      {/* Especificação Técnica */}
-      <div className="space-y-2">
-        <Label>Especificação Técnica</Label>
-        <p className="text-[10px] text-muted-foreground/60">Tabela de campo/valor (ex: &quot;Sensor&quot; → &quot;PixArt PAW3395&quot;).</p>
-        <div className="space-y-2">
-          {specs.map((spec, idx) => (
-            <div key={spec.id ?? idx} className="flex gap-2">
-              <Input
-                value={spec.label}
-                onChange={(e) => updateSpec(idx, "label", e.target.value)}
-                placeholder="Campo (ex: Sensor)"
-                className="text-sm"
-              />
-              <Input
-                value={spec.value}
-                onChange={(e) => updateSpec(idx, "value", e.target.value)}
-                placeholder="Valor (ex: PixArt PAW3395)"
-                className="text-sm"
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-muted-foreground hover:text-red-400"
-                onClick={() => removeSpecRow(idx)}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </div>
-          ))}
-        </div>
-        <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={addSpecRow}>
-          <Plus className="size-3.5" />
-          Adicionar campo
-        </Button>
-      </div>
-
-      {/* Vídeo de análise */}
-      <div className="space-y-2">
-        <Label>Vídeo de análise (YouTube)</Label>
-        <Input
-          value={formData.video_url}
-          onChange={(e) => set("video_url", e.target.value)}
-          placeholder="https://www.youtube.com/watch?v=..."
-          className="text-sm"
-        />
-        <p className="text-[10px] text-muted-foreground/60">Opcional. Aparece embutido na página do produto.</p>
-      </div>
-
-      {/* Images */}
-      <div className="space-y-3">
-        <div className="flex items-baseline justify-between">
-          <Label>Imagens</Label>
-          <span className="text-[10px] text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <DndContext
-            sensors={imageSensors}
-            collisionDetection={closestCenter}
-            modifiers={[restrictToParentElement]}
-            onDragEnd={handleImageDragEnd}
-          >
-            <SortableContext items={images} strategy={rectSortingStrategy}>
-              {images.map((url, idx) => (
-                <SortableImageThumb
-                  key={url}
-                  url={url}
-                  index={idx}
-                  onRemove={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
-
-          {images.length < MAX_IMAGES && (
-            <label className={cn(
-              "flex size-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-border hover:text-foreground/80",
-              uploading && "cursor-wait opacity-50"
-            )}>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageAdd}
-                disabled={uploading}
-              />
-              {uploading ? (
-                <Loader2 className="size-5 animate-spin" />
-              ) : (
-                <>
-                  <Plus className="size-5" />
-                  <span className="text-[9px]">Adicionar</span>
-                </>
-              )}
-            </label>
-          )}
-        </div>
-        <p className="text-[10px] text-muted-foreground">
-          Arraste pelo ícone no canto para reordenar. A primeira imagem é a principal. Até{" "}
-          {MAX_IMAGES} imagens, {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada
-          (comprimida automaticamente se maior). Recomendado: fundo branco ou transparente.
-        </p>
       </div>
 
       {/* Actions */}

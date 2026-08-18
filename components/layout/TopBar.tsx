@@ -1,6 +1,6 @@
 "use client"
 
-import { Moon, PanelLeft, Sun } from "lucide-react"
+import { PanelLeft } from "lucide-react"
 import { usePathname } from "next/navigation"
 import Link from "next/link"
 import dynamic from "next/dynamic"
@@ -32,7 +32,6 @@ const AuraMissionsBadge = dynamic(
   () => import("@/components/layout/AuraMissionsBadge").then((m) => m.AuraMissionsBadge),
   { ssr: false }
 )
-import { useTheme } from "@/components/providers/theme-context"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
 import { CartButton } from "@/components/store/CartDrawer"
@@ -129,7 +128,6 @@ function getPageDefaults(pathname: string): PageDefaults {
 }
 
 export function TopBar() {
-  const { theme, setTheme } = useTheme()
   const {
     publicCollapsed,
     adminCollapsed,
@@ -142,7 +140,6 @@ export function TopBar() {
   } = useSidebar()
   const pathname = usePathname()
 
-  const isLight = theme === "light"
   const isAdmin = pathname?.startsWith("/admin")
   // No checkout o carrinho já está todo listado na própria página — mostrar o
   // botão/badge aqui só distrai (ou pior, deixa reabrir a gaveta por cima do QR code do PIX).
@@ -199,23 +196,9 @@ export function TopBar() {
 
         <div className="min-w-0 flex-1" />
 
-        {/* Right — no mobile, prioriza notificação e missão diária: tema e Aura
-            saem da barra e viram itens do menu do avatar (`mobileExtraItems`). */}
+        {/* Right — no mobile, prioriza notificação e missão diária: Aura
+            sai da barra e vira item do menu do avatar. */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {/* Tema — só a partir de `sm`; no mobile vive dentro do menu do avatar. */}
-          <button
-            className="hidden h-8 items-center gap-2 rounded-lg border border-border bg-card/70 px-3 text-sm font-medium text-foreground transition-all hover:bg-muted/40 sm:flex"
-            type="button"
-            onClick={() => setTheme(isLight ? "dark" : "light")}
-            aria-label={isLight ? "Ativar modo escuro" : "Ativar modo claro"}
-          >
-            {isLight ? (
-              <Moon className="size-[15px] text-primary" />
-            ) : (
-              <Sun className="size-[15px] text-primary" />
-            )}
-          </button>
-
           {/* Carrinho — visível sempre dentro da Loja; fora dela só aparece como
               badge leve se houver itens pendentes, pra não poluir o header
               nas outras seções. Some no checkout. */}
@@ -233,22 +216,6 @@ export function TopBar() {
                 layout="topbar"
                 variant="public"
                 loginHref="/login"
-                mobileExtraItems={
-                  <div className="flex flex-col gap-0.5 py-1">
-                    <button
-                      type="button"
-                      onClick={() => setTheme(isLight ? "dark" : "light")}
-                      className="flex items-center gap-2.5 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                    >
-                      {isLight ? (
-                        <Moon className="size-4 shrink-0 text-primary" />
-                      ) : (
-                        <Sun className="size-4 shrink-0 text-primary" />
-                      )}
-                      {isLight ? "Modo escuro" : "Modo claro"}
-                    </button>
-                  </div>
-                }
               />
             </>
           )}

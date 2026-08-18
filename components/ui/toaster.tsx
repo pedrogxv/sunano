@@ -1,16 +1,12 @@
 "use client"
 
 import { Toaster as SonnerToaster } from "sonner"
-import { useTheme } from "@/components/providers/theme-context"
 
 export function Toaster() {
-  const { theme } = useTheme()
-  const isLight = theme === "light"
-
   return (
     <SonnerToaster
       position="top-right"
-      theme={isLight ? "light" : "dark"}
+      theme="dark"
       richColors
       closeButton
       expand

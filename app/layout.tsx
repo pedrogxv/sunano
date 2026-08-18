@@ -1,12 +1,10 @@
 import "./globals.css"
 
 import type { Metadata, Viewport } from "next"
-import Script from "next/script"
 import { Manrope, Space_Grotesk, Caveat } from "next/font/google"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/toaster"
 import { LocaleProvider } from "@/components/providers/locale-context"
-import { ThemeProvider } from "@/components/providers/theme-context"
 import { SidebarProvider } from "@/components/providers/sidebar-context"
 import { CartProvider } from "@/components/providers/cart-context"
 import { PageHeaderProvider } from "@/components/providers/page-header-context"
@@ -62,30 +60,13 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
-  ],
+  themeColor: "#000000",
   width: "device-width",
   initialScale: 1,
   // O layout usa h-dvh/viewport unit no mobile; travar o zoom prejudicaria
   // acessibilidade, então apenas garantimos a escala inicial.
   viewportFit: "cover",
 }
-
-/** Aplica o tema salvo antes da primeira pintura. Sem isso o ThemeProvider só
- *  ajusta data-theme dentro de um useEffect, e quem usa tema claro vê um flash
- *  escuro a cada carregamento. */
-const THEME_INIT_SCRIPT = `
-(function() {
-  try {
-    var t = localStorage.getItem("sunano-theme");
-    if (t === "light" || t === "dark") {
-      document.documentElement.setAttribute("data-theme", t);
-    }
-  } catch (e) {}
-})();
-`
 
 export default function RootLayout({
   children,
@@ -95,32 +76,27 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className="bg-background" data-theme="dark" suppressHydrationWarning>
       <head>
-        <Script id="theme-init" strategy="beforeInteractive">
-          {THEME_INIT_SCRIPT}
-        </Script>
         <OrganizationJsonLd />
       </head>
       <body className={`${manrope.variable} ${spaceGrotesk.variable} ${caveat.variable} font-sans`}>
-        <ThemeProvider>
-          <LocaleProvider>
-            <AuthProvider>
-              <AuthModalProvider>
-                <SidebarProvider>
-                  <CartProvider>
-                    <PageHeaderProvider>
-                      <TooltipProvider delayDuration={200}>
-                        <LayoutShell>{children}</LayoutShell>
-                        <Toaster />
-                        <AuthHashErrorListener />
-                        <CookieBanner />
-                      </TooltipProvider>
-                    </PageHeaderProvider>
-                  </CartProvider>
-                </SidebarProvider>
-              </AuthModalProvider>
-            </AuthProvider>
-          </LocaleProvider>
-        </ThemeProvider>
+        <LocaleProvider>
+          <AuthProvider>
+            <AuthModalProvider>
+              <SidebarProvider>
+                <CartProvider>
+                  <PageHeaderProvider>
+                    <TooltipProvider delayDuration={200}>
+                      <LayoutShell>{children}</LayoutShell>
+                      <Toaster />
+                      <AuthHashErrorListener />
+                      <CookieBanner />
+                    </TooltipProvider>
+                  </PageHeaderProvider>
+                </CartProvider>
+              </SidebarProvider>
+            </AuthModalProvider>
+          </AuthProvider>
+        </LocaleProvider>
       </body>
     </html>
   )

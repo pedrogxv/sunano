@@ -1014,63 +1014,6 @@ export type Database = {
           updated_at?: string
         }
       }
-      store_wishlists: {
-        Relationships: []
-        Row: {
-          id: string
-          user_id: string
-          name: string
-          is_default: boolean
-          is_public: boolean
-          share_token: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          name?: string
-          is_default?: boolean
-          is_public?: boolean
-          share_token?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          name?: string
-          is_default?: boolean
-          is_public?: boolean
-          share_token?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      store_wishlist_items: {
-        Relationships: []
-        Row: {
-          id: string
-          wishlist_id: string
-          product_id: string
-          note: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          wishlist_id: string
-          product_id: string
-          note?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          wishlist_id?: string
-          product_id?: string
-          note?: string | null
-          created_at?: string
-        }
-      }
       store_orders: {
         Relationships: []
         Row: {

@@ -6,7 +6,7 @@ import { countFollowers } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { EventsContent } from "./events-content"
 
-export const revalidate = 120
+export const dynamic = "force-dynamic"
 
 export default async function ConquistasPage() {
   const supabase = await createSupabaseServerClient()

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { LogOut, Moon, Palette, Sun } from "lucide-react"
+import { LogOut, Palette } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -14,21 +14,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useLocale } from "@/components/providers/locale-context"
-import { useTheme } from "@/components/providers/theme-context"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 import { LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
 
-const THEME_ICONS = { dark: Moon, light: Sun } as const
-
 export function PreferencesTab() {
-  const { theme, setTheme, themes } = useTheme()
   const { locale, setLocale } = useLocale()
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
-  async function persist(changes: { theme?: string; locale?: string }) {
+  async function persist(changes: { locale?: string }) {
     try {
       setSavingPrefs(true)
       await fetch("/api/profile", {
@@ -41,12 +37,6 @@ export function PreferencesTab() {
     } finally {
       setSavingPrefs(false)
     }
-  }
-
-  function onThemeChange(value: typeof theme) {
-    if (value === theme) return
-    setTheme(value)
-    void persist({ theme: value })
   }
 
   function onLocaleChange(value: string) {
@@ -68,52 +58,18 @@ export function PreferencesTab() {
 
   return (
     <div className="space-y-8">
-      {/* ── Aparência ── */}
+      {/* ── Idioma ── */}
       <Card className={cn(CARD_SURFACE_INTERACTIVE, "shadow-sm transition-shadow duration-300 hover:shadow-lg hover:shadow-black/10")}>
         <CardHeader className="border-b border-border/60">
           <CardTitle className="flex items-center gap-2 text-base">
             <Palette className="size-4 text-primary" />
-            Aparência e idioma
+            Idioma
           </CardTitle>
           <CardDescription>
             Preferências sincronizadas com sua conta{savingPrefs ? " — salvando…" : "."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 pt-5 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <span className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tema</span>
-            {/* Segmentado em vez de um botão isolado: ocupa a mesma largura do
-                select ao lado, então a linha não fica com um vão vazio. */}
-            <div
-              role="radiogroup"
-              aria-label="Tema"
-              className="grid h-8 w-full grid-cols-2 gap-0.5 rounded-lg border border-border bg-muted/30 p-0.5"
-            >
-              {themes.map((option) => {
-                const Icon = THEME_ICONS[option.key]
-                const active = theme === option.key
-                return (
-                  <button
-                    key={option.key}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => onThemeChange(option.key)}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors",
-                      active
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <Icon className={cn("size-[15px]", active && "text-primary")} />
-                    {option.label}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
           <div className="space-y-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Idioma</label>
             <Select value={locale} onValueChange={onLocaleChange}>

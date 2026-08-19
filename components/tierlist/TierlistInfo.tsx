@@ -8,6 +8,7 @@ import { enUS, ptBR } from "date-fns/locale"
 import { useLocale } from "@/components/providers/locale-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
+import { CARD_SURFACE } from "@/lib/ui-styles"
 
 type InfoTab = {
   id: string
@@ -120,7 +121,7 @@ export function TierlistInfo({ latestUpdate }: { latestUpdate?: LatestUpdate | n
   const activeContent = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]
 
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card">
+    <section className={cn("overflow-hidden rounded-xl border", CARD_SURFACE)}>
       <div className="border-b border-border bg-muted/30 px-4 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span className="size-2 rounded-sm bg-primary" />

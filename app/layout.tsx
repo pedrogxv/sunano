@@ -10,6 +10,7 @@ import { CartProvider } from "@/components/providers/cart-context"
 import { PageHeaderProvider } from "@/components/providers/page-header-context"
 import { AuthProvider } from "@/components/providers/auth-context"
 import { AuthModalProvider } from "@/components/providers/auth-modal-context"
+import { SavedPostsProvider } from "@/components/providers/saved-posts-context"
 import { AuthHashErrorListener } from "@/components/auth/AuthHashErrorListener"
 import { LayoutShell } from "@/components/layout/LayoutShell"
 import { CookieBanner } from "@/components/lgpd/CookieBanner"
@@ -82,18 +83,20 @@ export default function RootLayout({
         <LocaleProvider>
           <AuthProvider>
             <AuthModalProvider>
-              <SidebarProvider>
-                <CartProvider>
-                  <PageHeaderProvider>
-                    <TooltipProvider delayDuration={200}>
-                      <LayoutShell>{children}</LayoutShell>
-                      <Toaster />
-                      <AuthHashErrorListener />
-                      <CookieBanner />
-                    </TooltipProvider>
-                  </PageHeaderProvider>
-                </CartProvider>
-              </SidebarProvider>
+              <SavedPostsProvider>
+                <SidebarProvider>
+                  <CartProvider>
+                    <PageHeaderProvider>
+                      <TooltipProvider delayDuration={200}>
+                        <LayoutShell>{children}</LayoutShell>
+                        <Toaster />
+                        <AuthHashErrorListener />
+                        <CookieBanner />
+                      </TooltipProvider>
+                    </PageHeaderProvider>
+                  </CartProvider>
+                </SidebarProvider>
+              </SavedPostsProvider>
             </AuthModalProvider>
           </AuthProvider>
         </LocaleProvider>

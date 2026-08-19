@@ -21,17 +21,10 @@ const CONDITION_STYLE: Record<string, string> = {
   used: "bg-orange-500/15 text-orange-400",
 }
 
-interface CartButtonProps {
-  /** Fora da Loja o ícone só aparece se houver itens (ver `alwaysVisible=false`,
-   *  o padrão). Dentro da Loja ele fica visível mesmo com o carrinho vazio,
-   *  já que ali é o próprio símbolo de "onde fica meu carrinho". */
-  alwaysVisible?: boolean
-}
-
-export function CartButton({ alwaysVisible = false }: CartButtonProps) {
+export function CartButton() {
   const { count, setOpen } = useCart()
 
-  if (count === 0 && !alwaysVisible) return null
+  if (count === 0) return null
 
   return (
     <button

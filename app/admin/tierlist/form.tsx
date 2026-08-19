@@ -405,19 +405,31 @@ function FormSection({ title, icon, children, defaultOpen = true, id, forceOpen 
   }, [forceOpen])
 
   return (
-    <Card id={id} className="border-border bg-card/50">
+    <Card
+      id={id}
+      className="scroll-mt-24 gap-0 overflow-hidden rounded-2xl border border-white/10 py-0 shadow-[0_1px_0_0_rgba(255,255,255,0.06)_inset,0_16px_32px_-16px_rgba(0,0,0,0.85)] transition-shadow"
+      style={{ backgroundColor: "#141416" }}
+    >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between p-4 text-left"
+        className="group/section-header flex w-full items-center justify-between gap-3 p-5 text-left"
       >
-        <div className="flex items-center gap-2.5 text-sm font-semibold text-foreground">
-          <span className="text-muted-foreground">{icon}</span>
+        <div className="flex items-center gap-3 text-sm font-semibold text-foreground">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary ring-1 ring-primary/25">
+            {icon}
+          </span>
           {title}
         </div>
-        {open ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white/5 text-muted-foreground transition-colors group-hover/section-header:bg-white/10 group-hover/section-header:text-foreground">
+          {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        </span>
       </button>
-      {open && <CardContent className="border-t border-border pt-4 pb-5">{children}</CardContent>}
+      {open && (
+        <CardContent className="border-t border-white/10 px-5 pt-5 pb-6" style={{ backgroundColor: "#0e0e10" }}>
+          {children}
+        </CardContent>
+      )}
     </Card>
   )
 }
@@ -532,7 +544,7 @@ function LinkedProductPicker({
   return (
     <div className="space-y-2">
       {value ? (
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-2.5">
+        <div className="flex items-center gap-3 rounded-lg border border-white/10 p-2.5" style={{ backgroundColor: "#1c1c1f" }}>
           <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted/40">
             {value.images?.[0] ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -557,14 +569,14 @@ function LinkedProductPicker({
       )}
 
       {open && (
-        <div className="space-y-2 rounded-lg border border-border bg-card/60 p-3">
+        <div className="space-y-2 rounded-lg border border-white/10 p-3" style={{ backgroundColor: "#1c1c1f" }}>
           <div className="flex items-center gap-2">
             <Input
               autoFocus
               placeholder={t.admin.tierlistForm.pickerTypeToFilter}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="border-border bg-background"
+              className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
             />
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
               {t.admin.tierlistForm.pickerClose}
@@ -649,7 +661,7 @@ function LinkedSwitchPicker({
   return (
     <div className="space-y-2">
       {value ? (
-        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-2.5">
+        <div className="flex items-center gap-3 rounded-lg border border-white/10 p-2.5" style={{ backgroundColor: "#1c1c1f" }}>
           <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted/40">
             {value.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -671,14 +683,14 @@ function LinkedSwitchPicker({
       )}
 
       {open && (
-        <div className="space-y-2 rounded-lg border border-border bg-card/60 p-3">
+        <div className="space-y-2 rounded-lg border border-white/10 p-3" style={{ backgroundColor: "#1c1c1f" }}>
           <div className="flex items-center gap-2">
             <Input
               autoFocus
               placeholder={"Digite para filtrar"}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="border-border bg-background"
+              className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
             />
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
               {"Fechar"}
@@ -1428,7 +1440,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       <div className="space-y-6 pb-10">
         <BackBreadcrumb href={backHref} parentLabel={parentLabel} currentLabel={currentLabel} />
 
-        <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-card/40 py-20">
+        <div
+          className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-white/10 py-20 shadow-[0_1px_0_0_rgba(255,255,255,0.06)_inset,0_16px_32px_-16px_rgba(0,0,0,0.85)]"
+          style={{ backgroundColor: "#141416" }}
+        >
           <BoxLoader />
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">
@@ -1453,17 +1468,17 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       <BackBreadcrumb href={backHref} parentLabel={parentLabel} currentLabel={currentLabel} />
 
       {error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-300">{error}</div>
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300 shadow-[0_8px_20px_-12px_rgba(239,68,68,0.4)]">{error}</div>
       )}
 
       {!canWrite && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-300 shadow-[0_8px_20px_-12px_rgba(245,158,11,0.4)]">
           {t.admin.tierlistForm.readOnlyBanner}
         </div>
       )}
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <fieldset disabled={!canWrite} className="contents">
+      <form onSubmit={form.handleSubmit(onSubmit)}>
+        <fieldset disabled={!canWrite} className="grid gap-5">
 
         {/* SECTION 1: Imagem */}
         <FormSection title={t.admin.tierlistForm.sectionImage} icon={<ImageIcon className="size-4" />} defaultOpen>
@@ -1487,11 +1502,13 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   )}
                 </div>
               )}
-              <label className="flex-1 border-2 border-dashed border-border rounded-xl p-6 cursor-pointer hover:border-primary/40 hover:bg-muted/10 transition group">
+              <label className="group flex-1 cursor-pointer rounded-xl border-2 border-dashed border-white/15 bg-[#141416] p-6 transition hover:border-primary/40 hover:bg-primary/[0.06]">
                 <input accept="image/*" className="hidden" onChange={handleImageSelect} type="file" />
                 <div className="flex flex-col items-center gap-2 text-center">
-                  <Upload className="size-6 text-muted-foreground group-hover:text-foreground transition-colors" />
-                  <p className="text-sm text-muted-foreground group-hover:text-foreground transition-colors">
+                  <span className="flex size-10 items-center justify-center rounded-full bg-muted/40 text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
+                    <Upload className="size-4" />
+                  </span>
+                  <p className="text-sm text-muted-foreground transition-colors group-hover:text-foreground">
                     {imagePreview
                       ? t.admin.tierlistForm.clickChangeImage
                       : t.admin.tierlistForm.clickUploadImage}
@@ -1556,7 +1573,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <FormSection title={t.admin.tierlistForm.sectionBasicInfo} icon={<Info className="size-4" />} defaultOpen>
           <div className="space-y-4">
             {/* Review category + approval */}
-            <div className="space-y-2 rounded-lg border border-border px-3 py-2.5">
+            <div className="space-y-2 rounded-xl border border-white/10 px-4 py-3" style={{ backgroundColor: "#1c1c1f" }}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">{t.admin.tierlistForm.reviewCategoryLabel}</p>
@@ -1618,7 +1635,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     onClick={() => form.setValue("category", cat.key, { shouldValidate: true })}
                     className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
                       watchedCategory === cat.key
-                        ? "border-primary bg-primary/10 text-foreground"
+                        ? "border-primary bg-primary/10 text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]"
                         : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
                     }`}
                   >
@@ -1650,7 +1667,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       onClick={() => toggleTierlistCategory(mode.key)}
                       className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all ${
                         active
-                          ? "border-primary bg-primary/10 text-foreground"
+                          ? "border-primary bg-primary/10 text-foreground shadow-[0_0_0_1px_rgba(255,255,255,0.04)_inset]"
                           : "border-border text-muted-foreground hover:border-border/80 hover:text-foreground"
                       }`}
                     >
@@ -1668,7 +1685,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             {/* GOLPE — só faz sentido pra faixa de preço (Custo Benefício), e não existe
                 nas categorias onde "value" significa "Nacional" (mousepad/glasspad). */}
             {selectedTierlistCategories.includes("value") && watchedCategory !== "mousepad" && watchedCategory !== "glasspad" && (
-              <div className="space-y-2 rounded-lg border border-border px-3 py-2.5">
+              <div className="space-y-2 rounded-xl border border-white/10 px-4 py-3" style={{ backgroundColor: "#1c1c1f" }}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">GOLPE</p>
@@ -1694,7 +1711,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       Motivo <span className="text-red-400">*</span>
                     </label>
                     <Textarea
-                      className="border-border bg-background text-sm"
+                      className="border-white/10 bg-[#1a1a1d] text-sm shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
                       placeholder="Ex.: preço muito acima do que entrega, qualidade de construção ruim, promovido só por comissão de afiliado..."
                       rows={3}
                       {...form.register("golpeMotivo")}
@@ -1704,13 +1721,13 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">
                   {t.admin.tierlistForm.name} <span className="text-red-400">*</span>
                 </label>
                 <Input
-                  className="border-border bg-background"
+                  className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
                   placeholder="G Pro X Superlight 2"
                   maxLength={200}
                   aria-invalid={!!form.formState.errors.name}
@@ -1733,7 +1750,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   creating={creatingBrand}
                   placeholder={loadingBrands ? "Carregando marcas..." : t.admin.tierlistForm.selectBrand}
                   searchPlaceholder={t.admin.tierlistForm.searchBrand}
-                  className="border-border bg-background"
+                  className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
                   disabled={loadingBrands}
                   aria-invalid={!!form.formState.errors.brand_id}
                 />
@@ -1750,7 +1767,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   {"Faixa de preço"} <span className="text-red-400">*</span>
                 </label>
                 <Select value={form.watch("priceTier") || ""} onValueChange={(v) => form.setValue("priceTier", v)}>
-                  <SelectTrigger className="border-border bg-background">
+                  <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                     <SelectValue placeholder={"Selecione uma faixa"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -1771,7 +1788,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
                   <Input
-                    className="border-border bg-background pl-7"
+                    className="h-9 border-white/10 bg-[#1a1a1d] pl-7 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
                     placeholder="159.00"
                     type="number"
                     step="0.01"
@@ -1871,7 +1888,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <p className="text-xs text-muted-foreground">
               "Avalie cada aspecto de 1 (pior) a 6 (melhor). Clique × para limpar."
             </p>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
               {RATING_FIELDS.map((field) => {
                 let label = field.ptLabel
                 if (field.key === "ratingBattery" && watchedCategory === "keyboard") {
@@ -1940,10 +1957,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
         {/* SECTION 6: Specs por categoria */}
         <FormSection id="section-technical-specs" forceOpen={forceOpenIds.has("section-technical-specs")} title={t.admin.tierlistForm.sectionTechnicalSpecs} icon={<FileText className="size-4" />} defaultOpen>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Pontuação"}</label>
-              <Input className="border-border bg-background" type="number" min={0} step={0.25} placeholder="788.5" {...form.register("score", { valueAsNumber: true })} />
+              <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" type="number" min={0} step={0.25} placeholder="788.5" {...form.register("score", { valueAsNumber: true })} />
             </div>
 
             {watchedCategory === "mouse" && (
@@ -1951,7 +1968,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Formato"}</label>
                   <Select value={form.watch("mouseShape") || ""} onValueChange={(v) => form.setValue("mouseShape", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -1963,7 +1980,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -1975,7 +1992,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -1987,7 +2004,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Tamanho"}</label>
                   <Select value={form.watch("size") || ""} onValueChange={(v) => form.setValue("size", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2000,20 +2017,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sensor</label>
-                  <Input className="border-border bg-background" placeholder="HERO 2, PMW 3395" {...form.register("driver")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="HERO 2, PMW 3395" {...form.register("driver")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Peso"}</label>
-                  <Input className="border-border bg-background" placeholder="61g" {...form.register("weight")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="61g" {...form.register("weight")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>
-                  <Input className="border-border bg-background" placeholder="0.62ms" {...form.register("latency")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="0.62ms" {...form.register("latency")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
                   <Select value={form.watch("switchType") || ""} onValueChange={(v) => form.setValue("switchType", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2031,7 +2048,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coating</label>
                   <Select value={form.watch("coating") || ""} onValueChange={(v) => form.setValue("coating", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2045,19 +2062,19 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Polling Rate"}</label>
-                  <Input className="border-border bg-background" placeholder="8000Hz" {...form.register("pollingRate")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="8000Hz" {...form.register("pollingRate")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Bateria"}</label>
-                  <Input className="border-border bg-background" placeholder="500mAh" {...form.register("battery")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="500mAh" {...form.register("battery")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Autonomia"}</label>
-                  <Input className="border-border bg-background" placeholder="70h" {...form.register("batteryLife")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="70h" {...form.register("batteryLife")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Dimensões (CxLxA)"}</label>
-                  <Input className="border-border bg-background" placeholder="125 x 63.5 x 40 mm" {...form.register("dimensions")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="125 x 63.5 x 40 mm" {...form.register("dimensions")} />
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Foto do Shape (fundo preto)"}</label>
@@ -2075,7 +2092,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       </button>
                     </div>
                   ) : (
-                    <label className="flex w-fit items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border p-3 hover:border-primary/40 hover:bg-muted/10 transition">
+                    <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/15 bg-[#141416] p-3 transition hover:border-primary/40 hover:bg-primary/[0.06]">
                       <input accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleShapeImageSelect} type="file" />
                       <Upload className="size-4 text-muted-foreground" />
                       <span className="text-sm text-muted-foreground">{"Enviar foto"}</span>
@@ -2145,7 +2162,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</label>
                   <Select value={form.watch("keyboardLayout") || ""} onValueChange={(v) => form.setValue("keyboardLayout", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2158,7 +2175,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2170,7 +2187,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2181,12 +2198,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Peso"}</label>
-                  <Input className="border-border bg-background" placeholder="800g" {...form.register("weight")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="800g" {...form.register("weight")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Type</label>
                   <Select value={form.watch("keyboardType") || ""} onValueChange={(v) => form.setValue("keyboardType", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2198,7 +2215,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Switch</label>
-                  <Input className="border-border bg-background" placeholder={"Linear, Tátil, Clicky"} {...form.register("switchType")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Linear, Tátil, Clicky"} {...form.register("switchType")} />
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Vincular Switch (opcional)"}</label>
@@ -2207,21 +2224,21 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>
-                  <Input className="border-border bg-background" placeholder="0.5ms" {...form.register("latency")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="0.5ms" {...form.register("latency")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deadzone</label>
-                  <Input className="border-border bg-background" placeholder="0.1mm" {...form.register("deadzone")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="0.1mm" {...form.register("deadzone")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">RT Mínimo</label>
-                  <Input className="border-border bg-background" placeholder="0.1mm" {...form.register("rtMin")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="0.1mm" {...form.register("rtMin")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Plate</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" type="button" className="w-full justify-between border-border bg-background h-9 px-3 font-normal">
+                      <Button variant="outline" size="sm" type="button" className="h-9 w-full justify-between border-white/10 bg-[#1a1a1d] px-3 font-normal shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 hover:bg-[#202024]">
                         <span className="line-clamp-1 text-sm">
                           {form.watch("keyboardPlate") || "Selecione"}
                         </span>
@@ -2254,7 +2271,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hot Swap</label>
                   <Select value={form.watch("hotSwap") || ""} onValueChange={(v) => form.setValue("hotSwap", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2267,7 +2284,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Case</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" type="button" className="w-full justify-between border-border bg-background h-9 px-3 font-normal">
+                      <Button variant="outline" size="sm" type="button" className="h-9 w-full justify-between border-white/10 bg-[#1a1a1d] px-3 font-normal shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 hover:bg-[#202024]">
                         <span className="line-clamp-1 text-sm">
                           {form.watch("keyboardCase") || "Selecione"}
                         </span>
@@ -2299,7 +2316,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Features</label>
-                  <Input className="border-border bg-background" placeholder="Rapid Trigger, Hall Effect, RGB..." {...form.register("features")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Rapid Trigger, Hall Effect, RGB..." {...form.register("features")} />
                 </div>
               </>
             )}
@@ -2311,7 +2328,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Layout</label>
                   <Select value={form.watch("keyboardLayout") || ""} onValueChange={(v) => form.setValue("keyboardLayout", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2324,7 +2341,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2336,7 +2353,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2347,12 +2364,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Peso"}</label>
-                  <Input className="border-border bg-background" placeholder="800g" {...form.register("weight")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="800g" {...form.register("weight")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Type</label>
                   <Select value={form.watch("keyboardType") || ""} onValueChange={(v) => form.setValue("keyboardType", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2364,21 +2381,21 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>
-                  <Input className="border-border bg-background" placeholder="0.5ms" {...form.register("latency")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="0.5ms" {...form.register("latency")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deadzone</label>
-                  <Input className="border-border bg-background" placeholder="0.1mm" {...form.register("deadzone")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="0.1mm" {...form.register("deadzone")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">RT Mínimo</label>
-                  <Input className="border-border bg-background" placeholder="0.1mm" {...form.register("rtMin")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="0.1mm" {...form.register("rtMin")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Plate</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" type="button" className="w-full justify-between border-border bg-background h-9 px-3 font-normal">
+                      <Button variant="outline" size="sm" type="button" className="h-9 w-full justify-between border-white/10 bg-[#1a1a1d] px-3 font-normal shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 hover:bg-[#202024]">
                         <span className="line-clamp-1 text-sm">
                           {form.watch("keyboardPlate") || "Selecione"}
                         </span>
@@ -2411,7 +2428,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Hot Swap</label>
                   <Select value={form.watch("hotSwap") || ""} onValueChange={(v) => form.setValue("hotSwap", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2424,7 +2441,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Case</label>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" type="button" className="w-full justify-between border-border bg-background h-9 px-3 font-normal">
+                      <Button variant="outline" size="sm" type="button" className="h-9 w-full justify-between border-white/10 bg-[#1a1a1d] px-3 font-normal shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 hover:bg-[#202024]">
                         <span className="line-clamp-1 text-sm">
                           {form.watch("keyboardCase") || "Selecione"}
                         </span>
@@ -2456,7 +2473,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Features</label>
-                  <Input className="border-border bg-background" placeholder="Rapid Trigger, Hall Effect, RGB..." {...form.register("features")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Rapid Trigger, Hall Effect, RGB..." {...form.register("features")} />
                 </div>
               </>
             )}
@@ -2466,7 +2483,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Surface</label>
                   <Select value={form.watch("surface") || ""} onValueChange={(v) => form.setValue("surface", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2479,7 +2496,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Perfil</label>
                   <Select value={form.watch("profile") || ""} onValueChange={(v) => form.setValue("profile", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2494,7 +2511,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deslize</label>
                   <Select value={form.watch("glide") || ""} onValueChange={(v) => form.setValue("glide", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2507,7 +2524,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Velocidade</label>
                   <Select value={form.watch("padSpeed") || ""} onValueChange={(v) => form.setValue("padSpeed", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2520,7 +2537,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Poder de Parada</label>
                   <Select value={form.watch("stoppingPower") || ""} onValueChange={(v) => form.setValue("stoppingPower", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2533,7 +2550,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Base</label>
                   <Select value={form.watch("padType") || ""} onValueChange={(v) => form.setValue("padType", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2546,7 +2563,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Espessura</label>
                   <Select value={form.watch("thickness") || ""} onValueChange={(v) => form.setValue("thickness", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2562,7 +2579,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tamanho</label>
                   <Select value={form.watch("size") || ""} onValueChange={(v) => form.setValue("size", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2582,7 +2599,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Perfil</label>
                   <Select value={form.watch("profile") || ""} onValueChange={(v) => form.setValue("profile", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2597,7 +2614,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deslize</label>
                   <Select value={form.watch("glide") || ""} onValueChange={(v) => form.setValue("glide", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2610,7 +2627,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Velocidade</label>
                   <Select value={form.watch("padSpeed") || ""} onValueChange={(v) => form.setValue("padSpeed", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2623,7 +2640,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Poder de Parada</label>
                   <Select value={form.watch("stoppingPower") || ""} onValueChange={(v) => form.setValue("stoppingPower", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2636,7 +2653,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Base</label>
                   <Select value={form.watch("padType") || ""} onValueChange={(v) => form.setValue("padType", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2649,7 +2666,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Espessura</label>
                   <Select value={form.watch("thickness") || ""} onValueChange={(v) => form.setValue("thickness", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2664,7 +2681,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tamanho</label>
                   <Select value={form.watch("size") || ""} onValueChange={(v) => form.setValue("size", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
@@ -2683,12 +2700,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               <>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Refresh rate (Hz)</label>
-                  <Input className="border-border bg-background" placeholder="144" type="number" step="1" {...form.register("refreshRate", { valueAsNumber: true })} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="144" type="number" step="1" {...form.register("refreshRate", { valueAsNumber: true })} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Panel</label>
                   <Select value={form.watch("panelType") || ""} onValueChange={(v) => form.setValue("panelType", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2708,7 +2725,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Connectivity</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2720,7 +2737,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2737,7 +2754,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
                   <Select value={form.watch("connectivity") || ""} onValueChange={(v) => form.setValue("connectivity", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2749,7 +2766,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Trimode</label>
                   <Select value={form.watch("trimode") || ""} onValueChange={(v) => form.setValue("trimode", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2760,7 +2777,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Compatibilidade"}</label>
-                  <Input className="border-border bg-background" placeholder="Windows, macOS, PS5" {...form.register("compatibility")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Windows, macOS, PS5" {...form.register("compatibility")} />
                 </div>
                 {watchedCategory === "headset" && (
                   <div className="flex items-center gap-2 col-span-full">
@@ -2784,7 +2801,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Tipo"}</label>
                   <Select value={form.watch("keyboardType") || ""} onValueChange={(v) => form.setValue("keyboardType", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2796,20 +2813,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Força de atuação"}</label>
-                  <Input className="border-border bg-background" placeholder="37gf" {...form.register("actuationForce")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="37gf" {...form.register("actuationForce")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Curso total"}</label>
-                  <Input className="border-border bg-background" placeholder="3.5mm" {...form.register("totalTravel")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="3.5mm" {...form.register("totalTravel")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Fluxo magnético"}</label>
-                  <Input className="border-border bg-background" placeholder="Ex.: valor / curva magnética" {...form.register("magneticFlux")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Ex.: valor / curva magnética" {...form.register("magneticFlux")} />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Carcaça"}</label>
                   <Select value={form.watch("housing") || ""} onValueChange={(v) => form.setValue("housing", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2822,7 +2839,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Tipo do Stem"}</label>
                   <Select value={form.watch("stemType") || ""} onValueChange={(v) => form.setValue("stemType", v)}>
-                    <SelectTrigger className="border-border bg-background">
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -2843,28 +2860,28 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           <div className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Review Completo"}</label>
-              <Input className="border-border bg-background" placeholder="https://youtube.com/..." {...form.register("reviewUrl")} />
+              <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="https://youtube.com/..." {...form.register("reviewUrl")} />
             </div>
 
             {watchedCategory === "switches" && (
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">{"Vídeo do Som"}</label>
-                <Input className="border-border bg-background" placeholder="https://youtube.com/... ou https://.../som.mp4" {...form.register("soundUrl")} />
+                <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="https://youtube.com/... ou https://.../som.mp4" {...form.register("soundUrl")} />
                 <p className="text-[10px] text-muted-foreground">{"Link do YouTube ou arquivo de vídeo direto (.mp4/.webm). Aparece ao lado das especificações na página do switch."}</p>
               </div>
             )}
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Software"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />
+              <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />
             </div>
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Comentários"}</label>
-              <Textarea className="border-border bg-background resize-none" placeholder={"Opinião geral e recomendação sobre o produto"} rows={3} {...form.register("summary")} />
+              <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Opinião geral e recomendação sobre o produto"} rows={3} {...form.register("summary")} />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
               {[
                 { field: "pros", label: "Pros" },
                 { field: "cons", label: "Cons" },
@@ -2872,7 +2889,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div key={field} className="space-y-1.5">
                   <label className="text-sm font-medium text-foreground">{label}</label>
                   <Textarea
-                    className="border-border bg-background resize-none"
+                    className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
                     placeholder={"Um por linha"}
                     rows={4}
                     {...form.register(field as any)}
@@ -2915,7 +2932,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   ))}
                 </div>
               )}
-              <label className="flex w-fit items-center gap-2 cursor-pointer rounded-lg border border-dashed border-border p-3 hover:border-primary/40 hover:bg-muted/10 transition">
+              <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/15 bg-[#141416] p-3 transition hover:border-primary/40 hover:bg-primary/[0.06]">
                 <input accept="image/jpeg,.jpg,.jpeg" className="hidden" multiple onChange={handleGallerySelect} type="file" />
                 <Upload className="size-4 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">{"Adicionar fotos (JPEG)"}</span>
@@ -2931,7 +2948,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <p className="text-xs text-muted-foreground">
               "Vincule este periférico a um produto da Loja e/ou item do Bazar. O vínculo aparece na página do periférico, e as páginas da Loja e do Bazar mostram o item correspondente do outro lado."
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">{t.admin.tierlistForm.linkedStoreProduct}</label>
                 <LinkedProductPicker
@@ -2962,7 +2979,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <p className="text-xs text-muted-foreground">
               Preencha o link de cada loja em que o produto está disponível. Lojas sem link não aparecem na página do periférico.
             </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
               {BUY_LINK_PLATFORMS.map((platform) => (
                 <div key={platform.field} className="space-y-1.5">
                   <label className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -2970,7 +2987,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     {platform.label}
                   </label>
                   <Input
-                    className={`border-border bg-background text-sm ${platform.ring}`}
+                    className={`h-9 border-white/10 bg-[#1a1a1d] text-sm shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024] ${platform.ring}`}
                     placeholder="https://..."
                     {...form.register(platform.field)}
                   />
@@ -2982,7 +2999,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </fieldset>
 
         {/* Footer actions */}
-        <div className="flex gap-3 justify-end pt-2">
+        <div className="sticky bottom-4 z-10 mt-5 flex justify-end gap-3 rounded-xl border border-white/10 p-3 shadow-[0_12px_28px_-14px_rgba(0,0,0,0.85)] backdrop-blur" style={{ backgroundColor: "rgba(20,20,22,0.9)" }}>
           <Link href={backHref}>
             <Button variant="outline">{t.admin.tierlistForm.cancel}</Button>
           </Link>
@@ -2998,9 +3015,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     </div>
 
     <aside className="hidden @5xl/pf:block">
-      <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-auto rounded-2xl border border-border bg-card/30 p-4">
+      <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-auto rounded-2xl border border-white/10 p-4 shadow-[0_16px_32px_-16px_rgba(0,0,0,0.85)]" style={{ backgroundColor: "#141416" }}>
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Eye className="size-4 text-muted-foreground" />
+          <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/15">
+            <Eye className="size-3.5" />
+          </span>
           Pré-visualização
         </div>
         <p className="mb-4 text-xs text-muted-foreground">

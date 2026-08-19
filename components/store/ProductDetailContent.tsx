@@ -28,9 +28,10 @@ import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getVariantIcon } from "@/lib/variant-icons"
 import { getCategoryIcon } from "@/lib/store-category-icons"
-import type { LinkedPeripheralRef, StoreProductDetailResult } from "@/lib/server/repositories/store-repository"
+import type { LinkedPeripheralRef, StoreProductDetailResult, StoreFilterOptions, StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { ProductReviews } from "@/components/store/ProductReviews"
 import { FormattedText } from "@/components/ui/formatted-text"
+import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 
 const CONDITION_LABEL: Record<string, string> = {
   new: "Novo",
@@ -72,6 +73,11 @@ function LinkedPeripheralCard({ peripheral }: { peripheral: LinkedPeripheralRef 
   )
 }
 
+interface ProductDetailContentProps extends StoreProductDetailResult {
+  filterOptions: StoreFilterOptions
+  previewPool: StoreProductCard[]
+}
+
 export function ProductDetailContent({
   product,
   linkedProduct,
@@ -79,7 +85,9 @@ export function ProductDetailContent({
   linkedPeripherals,
   specs,
   variants,
-}: StoreProductDetailResult) {
+  filterOptions,
+  previewPool,
+}: ProductDetailContentProps) {
   const router = useRouter()
   const { add, setOpen } = useCart()
   const [qty, setQty] = useState(1)
@@ -167,14 +175,22 @@ export function ProductDetailContent({
   const { icon: CategoryIcon, tint: categoryTint } = getCategoryIcon(product.category)
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 lg:py-16">
-      <Link
-        href={backHref}
-        className="mb-7 flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" />
-        Voltar à Loja
-      </Link>
+    <>
+      <StoreCategoryNav
+        categories={filterOptions.categories}
+        categoryCounts={filterOptions.categoryCounts}
+        brandsByCategory={filterOptions.brandsByCategory}
+        activeCategory={product.category}
+        previewPool={previewPool}
+      />
+      <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 lg:py-16">
+        <Link
+          href={backHref}
+          className="mb-7 flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" />
+          Voltar à Loja
+        </Link>
 
       <div className="grid gap-10 md:grid-cols-2 lg:gap-16">
         {/* Images */}
@@ -528,6 +544,7 @@ export function ProductDetailContent({
       <div className="mt-20">
         <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
       </div>
-    </div>
+      </div>
+    </>
   )
 }

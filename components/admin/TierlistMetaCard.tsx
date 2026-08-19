@@ -7,6 +7,8 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { cn } from "@/lib/utils"
 
 type TierlistMeta = {
   latestUpdateDescription: string
@@ -64,7 +66,7 @@ export function TierlistMetaCard() {
   }
 
   return (
-    <Card className="border-border bg-card/90">
+    <Card className={cn("border", CARD_SURFACE)}>
       <CardHeader className="border-b border-border">
         <CardTitle className="flex items-center gap-2 text-base">
           <Clock className="size-4 text-primary" />

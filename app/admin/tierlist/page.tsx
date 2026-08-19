@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Edit, Plus, Trash2, AlertCircle, AlertTriangle } from "lucide-react"
+import { Edit, Plus, AlertCircle, AlertTriangle, X } from "lucide-react"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -22,16 +22,9 @@ import {
 import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Combobox } from "@/components/ui/combobox"
 import { useLocale } from "@/components/providers/locale-context"
 import { useT } from "@/lib/use-t"
 import {
@@ -41,10 +34,11 @@ import {
   CARD_PRICE_BAND_STYLES,
   PRICE_BAND_THEMES,
 } from "@/lib/tierlist-theme"
-import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, getPriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
+import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, PRICE_GROUP_SPEC_KEY, resolvePriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
 import { TierItemTooltipContent, type Ratings, type RatingKey } from "@/components/tierlist/TierItemTooltipContent"
 import { FilterBar } from "@/components/tierlist/FilterBar"
 import { TierlistMetaCard } from "@/components/admin/TierlistMetaCard"
+import { CARD_SURFACE, CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 
 type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb" | "ips_va" | "competitive"
 
@@ -201,6 +195,11 @@ function getRatingModeLabel(mode: RatingMode, category: string, locale: string):
 
 type PriceBand = "all" | "budget" | "mid" | "premium" | "golpe"
 const LEGACY_TIER_ORDER_SPEC_KEY = "adminTierOrder"
+// Ordem manual dentro de cada faixa de preço (aba Custo Benefício). Independente de
+// `adminTierOrder_value` (que existia mas nunca foi usado, já que essa aba nunca renderizou
+// o fluxo de tier normal) — usa uma chave própria pra não colidir caso o modo "value" volte
+// a ter um fluxo de tier tradicional no futuro.
+const PRICE_BAND_ORDER_KEY = "adminPriceBandOrder"
 const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
   performance: "adminTierOrder_performance",
   value: "adminTierOrder_value",
@@ -238,6 +237,12 @@ const TIER_VALUES: Tier[] = ["GOAT", "SS", "S", "A", "B", "C", "L"]
 // `adminTier_magnetic` value (including the explicit "unassigned" sentinel below).
 const MAGNETIC_TIER_KEY = "adminTier_magnetic"
 const MAGNETIC_UNASSIGNED_SENTINEL = "__unassigned__"
+
+// Faixa efetiva do item na aba Custo Benefício — manual (specs.adminPriceGroup) quando
+// definida, senão cai pro cálculo a partir do `price` (ver resolvePriceGroupKey).
+function getItemPriceGroup(item: Peripheral): PriceGroupKey | null {
+  return resolvePriceGroupKey(item.price, item.specs?.golpe as boolean | undefined, item.specs?.[PRICE_GROUP_SPEC_KEY])
+}
 
 function getModeTier(item: Peripheral, tierKey: string | null): TierValue {
   if (tierKey === null) return item.tier
@@ -437,14 +442,15 @@ function sortWithTierOrder(
 // Draggable Item Component
 function DraggablePeripheralCard({
   item,
-  onDelete,
+  onRemoveFromCategory,
   disableTooltip,
 }: {
   item: Peripheral
-  onDelete: (id: string) => void
+  onRemoveFromCategory?: (id: string) => void
   disableTooltip?: boolean
 }) {
   const { attributes, listeners, setNodeRef: setDragNodeRef, isDragging } = useDraggable({ id: item.id })
+  const t = useT()
   const tierStyle = item.tier ? CARD_TIER_STYLES[item.tier] : CARD_TIER_STYLES.L
 
   const tierTheme = item.tier ? TIER_THEMES[item.tier] : TIER_THEMES.L
@@ -457,8 +463,9 @@ function DraggablePeripheralCard({
       ref={setDragNodeRef}
       style={{ opacity: isDragging ? 0.2 : 1 }}
       className={cn(
-        "group relative cursor-grab overflow-hidden rounded-lg border border-border bg-card transition-all duration-200 active:cursor-grabbing",
-        "hover:border-border hover:shadow-md hover:shadow-black/40",
+        "group relative cursor-grab overflow-hidden rounded-lg border transition-all duration-200 active:cursor-grabbing",
+        CARD_SURFACE_INTERACTIVE,
+        "hover:shadow-md hover:shadow-black/40",
         isGoat && "shadow-[0_0_14px_rgba(240,97,97,0.18)]",
       )}
       {...attributes}
@@ -467,22 +474,25 @@ function DraggablePeripheralCard({
       {/* Tier accent bar */}
       <div className={cn("absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b", tierTheme.accent)} />
 
-      {/* Edit / Delete overlay */}
+      {/* Edit overlay */}
       <div className="absolute right-1 top-1 z-10 flex gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
         <Link href={`/admin/tierlist/${item.id}`} onPointerDown={(e) => e.stopPropagation()}>
           <Button size="icon" variant="ghost" className="size-6 bg-black/70 text-foreground/80 hover:text-foreground">
             <Edit className="size-3" />
           </Button>
         </Link>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="size-6 bg-black/70 text-red-400 hover:text-red-300"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => onDelete(item.id)}
-        >
-          <Trash2 className="size-3" />
-        </Button>
+        {onRemoveFromCategory && (
+          <Button
+            size="icon"
+            variant="ghost"
+            title={t.admin.tierlistPage.removeFromCategoryAction}
+            className="size-6 bg-black/70 text-amber-400 hover:text-amber-300"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onRemoveFromCategory(item.id)}
+          >
+            <X className="size-3" />
+          </Button>
+        )}
       </div>
 
       {/* Image area */}
@@ -537,28 +547,35 @@ function DraggablePeripheralCard({
   )
 }
 
-// Card de leitura pra faixa de preço (aba Custo Benefício) — a faixa é derivada de `price`,
-// então não faz sentido arrastar um item pra "mudar de faixa" (não persistiria nada). Preço
-// e GOLPE/motivo são editados no form (botão de editar abaixo), não aqui.
+// Card pra faixa de preço (aba Custo Benefício) — a faixa (grupo) é derivada de `price`,
+// então o item não pode ser arrastado pra OUTRA faixa (não persistiria nada), mas a ORDEM
+// dentro da própria faixa é arrastável igual às outras abas. Preço e GOLPE/motivo continuam
+// editados no form (botão de editar abaixo), não pelo drag.
 function PriceBandPeripheralCard({
   item,
   priceGroup,
-  onDelete,
+  disableTooltip,
 }: {
   item: Peripheral
   priceGroup: PriceGroupKey
-  onDelete: (id: string) => void
+  disableTooltip?: boolean
 }) {
+  const { attributes, listeners, setNodeRef: setDragNodeRef, isDragging } = useDraggable({ id: item.id })
   const bandStyle = CARD_PRICE_BAND_STYLES[priceGroup]
   const isGolpe = priceGroup === GOLPE_KEY
   const golpeMotivo = typeof item.specs?.golpeMotivo === "string" ? item.specs.golpeMotivo : undefined
 
   const card = (
     <div
+      ref={setDragNodeRef}
+      style={{ opacity: isDragging ? 0.2 : 1 }}
       className={cn(
-        "group relative overflow-hidden rounded-lg border border-border bg-card transition-all duration-200",
-        "hover:border-border hover:shadow-md hover:shadow-black/40",
+        "group relative cursor-grab overflow-hidden rounded-lg border transition-all duration-200 active:cursor-grabbing",
+        CARD_SURFACE_INTERACTIVE,
+        "hover:shadow-md hover:shadow-black/40",
       )}
+      {...attributes}
+      {...listeners}
     >
       <div className={cn("absolute bottom-0 left-0 top-0 w-[3px]", bandStyle.accent)} />
 
@@ -572,19 +589,11 @@ function PriceBandPeripheralCard({
       )}
 
       <div className="absolute right-1 top-1 z-10 flex gap-0.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
-        <Link href={`/admin/tierlist/${item.id}`}>
+        <Link href={`/admin/tierlist/${item.id}`} onPointerDown={(e) => e.stopPropagation()}>
           <Button size="icon" variant="ghost" className="size-6 bg-black/70 text-foreground/80 hover:text-foreground">
             <Edit className="size-3" />
           </Button>
         </Link>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="size-6 bg-black/70 text-red-400 hover:text-red-300"
-          onClick={() => onDelete(item.id)}
-        >
-          <Trash2 className="size-3" />
-        </Button>
       </div>
 
       <div className="relative ml-[3px] h-12 overflow-hidden" style={{ background: "var(--card-image-bg)" }}>
@@ -603,6 +612,8 @@ function PriceBandPeripheralCard({
       </div>
     </div>
   )
+
+  if (disableTooltip || isDragging) return card
 
   return (
     <Tooltip>
@@ -660,7 +671,7 @@ function DragOverlayCard({ item }: { item: Peripheral }) {
 
   return (
     <div className="w-[150px] rotate-2 scale-105 cursor-grabbing drop-shadow-2xl">
-      <div className="relative overflow-hidden rounded-lg border border-cyan-400/50 bg-card ring-2 ring-cyan-400/20">
+      <div className="relative overflow-hidden rounded-lg border border-cyan-400/50 bg-secondary/50 ring-2 ring-cyan-400/20">
         <div className={cn("absolute bottom-0 left-0 top-0 w-[3px] bg-gradient-to-b", tierTheme.accent)} />
         <div
           className="relative ml-[3px] h-12 overflow-hidden"
@@ -687,13 +698,11 @@ function DragOverlayCard({ item }: { item: Peripheral }) {
 function DroppableTier({
   tier,
   items,
-  onDelete,
   isDragging,
   hoveredItemId,
 }: {
   tier: Tier
   items: Peripheral[]
-  onDelete: (id: string) => void
   isDragging: boolean
   hoveredItemId: string | null
 }) {
@@ -716,7 +725,7 @@ function DroppableTier({
           <div className="grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2">
             {items.map((item) => (
               <DroppableCardSlot key={item.id} itemId={item.id} isDropTarget={hoveredItemId === item.id}>
-                <DraggablePeripheralCard item={item} onDelete={onDelete} disableTooltip={isDragging} />
+                <DraggablePeripheralCard item={item} disableTooltip={isDragging} />
               </DroppableCardSlot>
             ))}
             {isOver && (
@@ -751,13 +760,128 @@ function DroppableTier({
   )
 }
 
+// Droppable Price Band row — igual DroppableTier, mas o id é a faixa de preço (ex: "1000",
+// "golpe"). Soltar aqui move o item pra ESTA faixa (ver `applyPriceBandReorder`), não só
+// reordena — precisa existir um alvo pra soltar mesmo quando a faixa não tem itens ainda.
+function DroppablePriceBandRow({
+  priceGroup,
+  items,
+  isDragging,
+  hoveredItemId,
+}: {
+  priceGroup: PriceGroupKey
+  items: Peripheral[]
+  isDragging: boolean
+  hoveredItemId: string | null
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: `price-band-${priceGroup}` })
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "relative h-full transition-all duration-150",
+        isOver && "bg-cyan-500/[0.06]"
+      )}
+    >
+      {isOver && (
+        <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-cyan-400/50" />
+      )}
+
+      <div className="p-2">
+        {items.length > 0 ? (
+          <div className="grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2">
+            {items.map((item) => (
+              <DroppableCardSlot key={item.id} itemId={item.id} isDropTarget={hoveredItemId === item.id}>
+                <PriceBandPeripheralCard
+                  item={item}
+                  priceGroup={priceGroup}
+                  disableTooltip={isDragging}
+                />
+              </DroppableCardSlot>
+            ))}
+            {isOver && (
+              <div className="col-span-full flex h-7 items-center justify-center rounded border border-dashed border-cyan-400/50 bg-cyan-500/5">
+                <p className="text-[9px] font-medium text-cyan-400">Soltar aqui</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div
+            className={cn(
+              "flex min-h-[72px] items-center justify-center rounded-lg border-2 border-dashed transition-all duration-200",
+              isOver
+                ? "border-cyan-400 bg-cyan-500/10"
+                : isDragging
+                  ? "border-border bg-muted/30"
+                  : "border-border"
+            )}
+          >
+            <p
+              className={cn(
+                "text-[10px] font-medium transition-colors",
+                isOver ? "text-cyan-300" : isDragging ? "text-muted-foreground" : "text-transparent"
+              )}
+            >
+              {isOver ? "Soltar aqui" : "+"}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Vincula um periférico já existente da mesma categoria (que ainda não participa deste modo)
+// ao modo/aba atual, sem passar pelo form de criação — só grava specs.tierlistCategories.
+function LinkPeripheralPopover({
+  items,
+  onLink,
+}: {
+  items: Peripheral[]
+  onLink: (id: string) => Promise<void>
+}) {
+  const t = useT()
+  const [selectedId, setSelectedId] = useState("")
+  const [linking, setLinking] = useState(false)
+
+  const options = useMemo(
+    () => items.map((item) => ({ value: item.id, label: `${item.name} — ${item.brand}` })),
+    [items],
+  )
+
+  async function handleValueChange(id: string) {
+    setSelectedId(id)
+    setLinking(true)
+    try {
+      await onLink(id)
+      setSelectedId("")
+    } finally {
+      setLinking(false)
+    }
+  }
+
+  return (
+    <Combobox
+      options={options}
+      value={selectedId}
+      onValueChange={handleValueChange}
+      placeholder={t.admin.tierlistPage.addToCategory}
+      searchPlaceholder={t.admin.tierlistPage.searchPeripheralPlaceholder}
+      emptyText={t.admin.tierlistPage.noLinkablePeripherals}
+      disabled={linking}
+      className="h-9 w-auto min-w-[220px]"
+    />
+  )
+}
+
 function DroppableUnassignedPool({
   items,
-  onDelete,
+  onRemoveFromCategory,
   isDragging,
 }: {
   items: Peripheral[]
-  onDelete: (id: string) => void
+  onRemoveFromCategory: (id: string) => void
   isDragging: boolean
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: "unassigned-pool" })
@@ -772,7 +896,11 @@ function DroppableUnassignedPool({
         <div className="grid gap-2 p-3 [grid-template-columns:repeat(auto-fill,minmax(130px,1fr))]">
           {items.map((item) => (
             <DroppableCardSlot key={item.id} itemId={item.id}>
-              <DraggablePeripheralCard item={item} onDelete={onDelete} disableTooltip={isDragging} />
+              <DraggablePeripheralCard
+                item={item}
+                onRemoveFromCategory={onRemoveFromCategory}
+                disableTooltip={isDragging}
+              />
             </DroppableCardSlot>
           ))}
         </div>
@@ -819,8 +947,6 @@ export default function AdminPeripheralsPage() {
   const [ratingMode, setRatingMode] = useState<RatingMode>("performance")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
-  const [deleting, setDeleting] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null)
   const hoverRafRef = useRef<number | null>(null)
@@ -838,6 +964,10 @@ export default function AdminPeripheralsPage() {
   const orderKey = ORDER_KEY_BY_MODE[ratingMode]
   const allowLegacyFallback = ratingMode === "performance"
   const tierKey = TIER_KEY_BY_MODE[ratingMode] ?? null
+
+  // Mesma regra da tierlist pública (components/tierlist/TierlistGrid.tsx): "value" vira
+  // faixa de preço em toda categoria, exceto mousepad/glasspad (lá é "Nacional").
+  const isPriceBandMode = ratingMode === "value" && selectedCategory !== "mousepad" && selectedCategory !== "glasspad"
 
   const scheduleHoverUpdate = useCallback((nextId: string | null) => {
     if (pendingHoverIdRef.current === nextId) return
@@ -972,6 +1102,117 @@ export default function AdminPeripheralsPage() {
         if (orderChanged || tierChanged) payload.specs = item.specs
 
         if (Object.keys(payload).length === 0) return
+
+        const res = await fetch(`/api/admin/peripherals/${item.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null
+          throw new Error(data?.error ?? t.admin.tierlistPage.failedToUpdateOrder)
+        }
+      }),
+    )
+  }, [t])
+
+  // Move o item pra `destinationGroup`. A posição é sempre manual (specs.adminPriceGroup) —
+  // isso NUNCA toca em `price`: a ordem que o admin define arrastando prevalece, independente
+  // do preço real do item. GOLPE seta a flag e limpa a posição manual; faixa normal grava a
+  // posição e limpa GOLPE.
+  const withPriceGroup = useCallback((item: Peripheral, destinationGroup: PriceGroupKey): Peripheral => {
+    if (destinationGroup === GOLPE_KEY) {
+      const specs: Peripheral["specs"] = { ...item.specs, golpe: true }
+      delete specs[PRICE_GROUP_SPEC_KEY]
+      return { ...item, specs }
+    }
+    const band = PRICE_BANDS.find((b) => b.key === destinationGroup)
+    if (!band) return item
+    const specs: Peripheral["specs"] = { ...item.specs, [PRICE_GROUP_SPEC_KEY]: destinationGroup }
+    delete specs.golpe
+    return { ...item, specs }
+  }, [])
+
+  // Reordena/move entre faixas de preço. A faixa É a faixa solta (destinationGroup) — se for
+  // diferente da faixa atual do item, `withPriceGroup` grava a nova posição manual
+  // (specs.adminPriceGroup) sem nunca tocar em `price`.
+  const applyPriceBandReorder = useCallback((
+    allItems: Peripheral[],
+    draggedId: string,
+    destinationGroup: PriceGroupKey,
+    insertAfter: boolean,
+    targetItemId?: string,
+  ) => {
+    const draggedItemRaw = allItems.find((item) => item.id === draggedId)
+    if (!draggedItemRaw) return allItems
+
+    const sourceGroup = getItemPriceGroup(draggedItemRaw)
+    const draggedItem = withPriceGroup(draggedItemRaw, destinationGroup)
+
+    const destinationBase = sortByTierOrderThenName(
+      allItems.filter((item) => {
+        if (item.id === draggedId) return false
+        if (item.category !== draggedItem.category) return false
+        return getItemPriceGroup(item) === destinationGroup
+      }),
+      PRICE_BAND_ORDER_KEY,
+      false,
+    )
+
+    const targetIndex =
+      targetItemId !== undefined ? destinationBase.findIndex((item) => item.id === targetItemId) : destinationBase.length
+    const insertIndex = targetIndex < 0 ? destinationBase.length : Math.max(0, targetIndex + (insertAfter ? 1 : 0))
+
+    const destinationItems = [...destinationBase]
+    destinationItems.splice(insertIndex, 0, draggedItem)
+
+    const updates = new Map<string, Peripheral>()
+    destinationItems.forEach((item, index) => {
+      updates.set(item.id, withTierOrder(item, index + 1, PRICE_BAND_ORDER_KEY))
+    })
+
+    // Faixa de origem também precisa renormalizar os índices — igual applyTierReorder faz
+    // pro sourceTier — senão sobra um buraco na sequência de adminPriceBandOrder.
+    if (sourceGroup && sourceGroup !== destinationGroup) {
+      const sourceItems = sortByTierOrderThenName(
+        allItems.filter((item) => {
+          if (item.id === draggedId) return false
+          if (item.category !== draggedItem.category) return false
+          return getItemPriceGroup(item) === sourceGroup
+        }),
+        PRICE_BAND_ORDER_KEY,
+        false,
+      )
+      sourceItems.forEach((item, index) => {
+        updates.set(item.id, withTierOrder(item, index + 1, PRICE_BAND_ORDER_KEY))
+      })
+    }
+
+    return allItems.map((item) => updates.get(item.id) ?? item)
+  }, [withPriceGroup])
+
+  const persistPriceBandOrder = useCallback(async (
+    previousItems: Peripheral[],
+    nextItems: Peripheral[],
+  ) => {
+    const previousById = new Map(previousItems.map((item) => [item.id, item]))
+    const changedItems = nextItems.filter((nextItem) => {
+      const previousItem = previousById.get(nextItem.id)
+      if (!previousItem) return false
+      return (
+        getTierOrder(previousItem, PRICE_BAND_ORDER_KEY, false) !== getTierOrder(nextItem, PRICE_BAND_ORDER_KEY, false) ||
+        previousItem.specs?.[PRICE_GROUP_SPEC_KEY] !== nextItem.specs?.[PRICE_GROUP_SPEC_KEY] ||
+        previousItem.specs?.golpe !== nextItem.specs?.golpe
+      )
+    })
+
+    if (changedItems.length === 0) return
+
+    await Promise.all(
+      changedItems.map(async (item) => {
+        // `price` nunca entra no payload aqui — mover de faixa é só posição visual (specs).
+        const payload: Record<string, unknown> = { specs: item.specs }
 
         const res = await fetch(`/api/admin/peripherals/${item.id}`, {
           method: "PATCH",
@@ -1197,27 +1438,175 @@ export default function AdminPeripheralsPage() {
     }
   }
 
-  async function confirmDelete() {
-    if (!deleteDialog.id) return
+  // Drag handler dedicado da aba Custo Benefício — igual handleDragOver/handleDragEnd, mas o
+  // "tier" aqui é a faixa de preço. Soltar em cima de um card (`item-`) usa a faixa DAQUELE
+  // card como destino; soltar na linha vazia (`price-band-`) usa a faixa da própria linha.
+  // Mudar de faixa ajusta `price`/`golpe` (ver `applyPriceBandReorder`/`withPriceGroup`).
+  function handlePriceBandDragOver(event: DragOverEvent) {
+    const { active, over } = event
 
-    const deletedItem = peripherals.find((p) => p.id === deleteDialog.id)
+    if (!over) {
+      scheduleHoverUpdate(null)
+      return
+    }
+
+    const draggedItem = peripherals.find((item) => item.id === active.id)
+    if (!draggedItem) {
+      scheduleHoverUpdate(null)
+      return
+    }
+
+    const overId = over.id.toString()
+
+    if (overId.startsWith("item-")) {
+      const targetItemId = overId.slice(5)
+      if (targetItemId === draggedItem.id) {
+        scheduleHoverUpdate(null)
+        return
+      }
+
+      const targetItem = peripherals.find((item) => item.id === targetItemId)
+      if (!targetItem || targetItem.category !== draggedItem.category) {
+        scheduleHoverUpdate(null)
+        return
+      }
+
+      hoveredInsertAfterRef.current = getInsertAfter(event)
+      scheduleHoverUpdate(targetItem.id)
+      return
+    }
+
+    // Soltar na linha vazia/área da faixa (fora de qualquer card) só faz sentido pra
+    // preview visual quando não há item específico embaixo do cursor.
+    scheduleHoverUpdate(null)
+  }
+
+  async function handlePriceBandDragEnd(event: DragEndEvent) {
+    setActiveId(null)
+    pendingHoverIdRef.current = null
+    hoveredInsertAfterRef.current = false
+    if (hoverRafRef.current !== null) {
+      window.cancelAnimationFrame(hoverRafRef.current)
+      hoverRafRef.current = null
+    }
+    setHoveredItemId(null)
+    const { active, over } = event
+
+    if (!over) return
+
+    const draggedItem = peripherals.find((p) => p.id === active.id)
+    if (!draggedItem) return
+
+    const previousPeripherals = peripherals
+    const overId = over.id.toString()
+
+    let destinationGroup: PriceGroupKey | null = null
+    let targetItemId: string | undefined
+    let insertAfter = false
+
+    if (overId.startsWith("item-")) {
+      const id = overId.slice(5)
+      if (id === draggedItem.id) return
+
+      const targetItem = peripherals.find((item) => item.id === id)
+      if (!targetItem || targetItem.category !== draggedItem.category) return
+
+      destinationGroup = getItemPriceGroup(targetItem)
+      targetItemId = targetItem.id
+      insertAfter = getInsertAfter(event)
+    } else if (overId.startsWith("price-band-")) {
+      destinationGroup = overId.slice("price-band-".length) as PriceGroupKey
+    }
+
+    if (!destinationGroup) return
+
+    const nextPeripherals = applyPriceBandReorder(previousPeripherals, draggedItem.id, destinationGroup, insertAfter, targetItemId)
+    if (nextPeripherals === previousPeripherals) return
+
+    setPeripherals(nextPeripherals)
+
+    const currentGroup = getItemPriceGroup(draggedItem)
+    const movedToNewGroup = currentGroup !== destinationGroup
 
     try {
-      setDeleting(true)
-      const res = await fetch(`/api/admin/peripherals/${deleteDialog.id}`, { method: "DELETE" })
-      const data = (await res.json().catch(() => null)) as { error?: string } | null
-      if (!res.ok) throw new Error(data?.error ?? t.peripherals.delete.failed)
-      setPeripherals(peripherals.filter((p) => p.id !== deleteDialog.id))
-      setDeleteDialog({ open: false, id: "" })
-      toast.success(t.peripherals.delete.success, {
-        description: deletedItem?.name,
-      })
+      await persistPriceBandOrder(previousPeripherals, nextPeripherals)
+      toast.success(
+        movedToNewGroup ? t.admin.tierlistPage.movedToPriceBand(PRICE_BAND_LABEL[destinationGroup]) : t.admin.tierlistPage.orderUpdated,
+        { description: draggedItem.name },
+      )
     } catch (err) {
-      const message = err instanceof Error ? err.message : t.peripherals.delete.failed
+      setPeripherals(previousPeripherals)
+      const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdate
       setError(message)
-      toast.error(t.peripherals.delete.error, { description: message })
-    } finally {
-      setDeleting(false)
+      toast.error(t.admin.tierlistPage.failedToUpdateOrderDesc, { description: message })
+    }
+  }
+
+  // Remove o item apenas do modo/aba atual (specs.tierlistCategories), sem apagar o
+  // periférico — ele continua existindo e participando dos outros modos da categoria. Sem
+  // `tierlistCategories` definido o item participa de tudo (ver `participatesInMode`), então
+  // remover de UM modo exige materializar a lista completa da categoria menos o modo atual.
+  async function handleRemoveFromMode(id: string) {
+    const item = peripherals.find((p) => p.id === id)
+    if (!item) return
+
+    const normalizedMode = ratingMode === "performance" ? "overall" : ratingMode
+    const existing = item.specs?.tierlistCategories
+    const currentModes = Array.isArray(existing)
+      ? existing
+      : getModesForCategory(item.category).map((m) => (m.key === "performance" ? "overall" : m.key))
+    const nextModes = currentModes.filter((mode) => mode !== normalizedMode)
+
+    const nextSpecs = { ...item.specs, tierlistCategories: nextModes }
+
+    try {
+      const res = await fetch(`/api/admin/peripherals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specs: nextSpecs }),
+      })
+      const data = (await res.json().catch(() => null)) as { error?: string } | null
+      if (!res.ok) throw new Error(data?.error ?? t.admin.tierlistPage.failedToUpdateOrder)
+
+      setPeripherals((prev) => prev.map((p) => (p.id === id ? { ...p, specs: nextSpecs } : p)))
+      toast.success(t.admin.tierlistPage.removedFromCategory, { description: item.name })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdateOrder
+      toast.error(t.admin.tierlistPage.removeFromCategoryFailed, { description: message })
+    }
+  }
+
+  // Vincula um periférico já existente (mesma categoria, ainda sem participar deste modo) ao
+  // modo/aba atual — inverso de `handleRemoveFromMode`. Precisa materializar a lista completa
+  // da categoria + este modo pela mesma razão: sem `tierlistCategories` o item participa de
+  // tudo implicitamente, então só dá pra "adicionar" gravando a lista explícita.
+  async function handleAddToMode(id: string) {
+    const item = peripherals.find((p) => p.id === id)
+    if (!item) return
+
+    const normalizedMode = ratingMode === "performance" ? "overall" : ratingMode
+    const existing = item.specs?.tierlistCategories
+    const currentModes = Array.isArray(existing)
+      ? existing
+      : getModesForCategory(item.category).map((m) => (m.key === "performance" ? "overall" : m.key))
+    const nextModes = currentModes.includes(normalizedMode) ? currentModes : [...currentModes, normalizedMode]
+
+    const nextSpecs = { ...item.specs, tierlistCategories: nextModes }
+
+    try {
+      const res = await fetch(`/api/admin/peripherals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specs: nextSpecs }),
+      })
+      const data = (await res.json().catch(() => null)) as { error?: string } | null
+      if (!res.ok) throw new Error(data?.error ?? t.admin.tierlistPage.failedToUpdateOrder)
+
+      setPeripherals((prev) => prev.map((p) => (p.id === id ? { ...p, specs: nextSpecs } : p)))
+      toast.success(t.admin.tierlistPage.addedToCategory, { description: item.name })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdateOrder
+      toast.error(t.admin.tierlistPage.addToCategoryFailed, { description: message })
     }
   }
 
@@ -1248,8 +1637,15 @@ export default function AdminPeripheralsPage() {
     const targetItem = peripherals.find((item) => item.id === hoveredItemId)
     if (!draggedItem || !targetItem) return peripherals
     if (draggedItem.id === targetItem.id) return peripherals
-    if (getModeTier(draggedItem, tierKey) !== getModeTier(targetItem, tierKey)) return peripherals
     if (draggedItem.category !== targetItem.category) return peripherals
+
+    if (isPriceBandMode) {
+      const targetGroup = getItemPriceGroup(targetItem)
+      if (!targetGroup) return peripherals
+      return applyPriceBandReorder(peripherals, draggedItem.id, targetGroup, hoveredInsertAfterRef.current, targetItem.id)
+    }
+
+    if (getModeTier(draggedItem, tierKey) !== getModeTier(targetItem, tierKey)) return peripherals
 
     return applyTierReorder(
       peripherals,
@@ -1261,7 +1657,7 @@ export default function AdminPeripheralsPage() {
       hoveredInsertAfterRef.current,
       targetItem.id,
     )
-  }, [activeId, hoveredItemId, peripherals, applyTierReorder, orderKey, allowLegacyFallback, tierKey])
+  }, [activeId, hoveredItemId, peripherals, applyTierReorder, applyPriceBandReorder, orderKey, allowLegacyFallback, tierKey, isPriceBandMode])
 
   const filtered = useMemo(() => {
     return visualPeripherals.filter((item) => {
@@ -1309,6 +1705,15 @@ export default function AdminPeripheralsPage() {
   const unassignedItems = filtered
     .filter((item) => getModeTier(item, tierKey) === null)
     .map((item) => ({ ...item, tier: null }))
+  // Candidatos para "vincular a este modo": mesma categoria selecionada, mas que ainda NÃO
+  // participam do modo atual (specs.tierlistCategories não inclui `ratingMode`) — ignora os
+  // filtros de busca/marca/preço de propósito, pra listar qualquer periférico da categoria
+  // que possa ser adicionado, não só os que já passariam no filtro atual.
+  const linkableItems = useMemo(() => {
+    return peripherals.filter(
+      (item) => item.category === selectedCategory && !participatesInMode(item, ratingMode),
+    )
+  }, [peripherals, selectedCategory, ratingMode])
   const activeItem = activeId
     ? (() => {
         const raw = peripherals.find((p) => p.id === activeId)
@@ -1317,10 +1722,6 @@ export default function AdminPeripheralsPage() {
     : null
   const modeConfig = MODE_CONFIGS[ratingMode]
   const modeDescription = t.admin.tierlistPage.modeDescriptions[ratingMode]
-
-  // Mesma regra da tierlist pública (components/tierlist/TierlistGrid.tsx): "value" vira
-  // faixa de preço em toda categoria, exceto mousepad/glasspad (lá é "Nacional").
-  const isPriceBandMode = ratingMode === "value" && selectedCategory !== "mousepad" && selectedCategory !== "glasspad"
 
   const itemsByTier = useMemo(
     () =>
@@ -1337,12 +1738,17 @@ export default function AdminPeripheralsPage() {
     [filtered, modeConfig, orderKey, allowLegacyFallback, tierKey]
   )
 
-  // Faixa derivada de `price`/GOLPE, nunca atribuída manualmente — mesma lógica da
-  // tierlist pública. Faixas vazias somem (sem fallback estático).
+  // Faixa (o grupo em si) é manual (specs.adminPriceGroup) — soltar um item noutra faixa só
+  // grava a nova posição (ver `applyPriceBandReorder`/`persistPriceBandOrder`), nunca mexe em
+  // `price`. Itens nunca movidos caem no fallback calculado a partir do `price` real (ver
+  // `getItemPriceGroup`/`resolvePriceGroupKey`). Faixas vazias somem quando não há drag em
+  // andamento; durante o drag, todas aparecem (mesmo vazias) pra servir de alvo de drop —
+  // mesma ideia do TIER_ROWS sempre completo nas outras abas. A ORDEM dos itens dentro de
+  // cada faixa usa `adminPriceBandOrder` quando definida, com fallback pro tier score + nome.
   const priceGroupRows = useMemo(() => {
     const groups = new Map<PriceGroupKey, Peripheral[]>()
     for (const item of filtered) {
-      const group = getPriceGroupKey(item.price, item.specs?.golpe as boolean | undefined)
+      const group = getItemPriceGroup(item)
       if (!group) continue
       const bucket = groups.get(group) ?? []
       bucket.push(item)
@@ -1351,17 +1757,19 @@ export default function AdminPeripheralsPage() {
 
     const order: PriceGroupKey[] = [...PRICE_BANDS.map((band) => band.key), GOLPE_KEY]
     return order
-      .filter((key) => (groups.get(key)?.length ?? 0) > 0)
+      .filter((key) => activeId !== null || (groups.get(key)?.length ?? 0) > 0)
       .map((key) => ({
         key,
         label: PRICE_BAND_LABEL[key],
         accent: PRICE_BAND_THEMES[key].accent,
         textColor: PRICE_BAND_THEMES[key].textColor,
-        items: [...(groups.get(key) ?? [])].sort(
-          (left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name),
+        items: sortWithTierOrder(groups.get(key) ?? [], PRICE_BAND_ORDER_KEY, false, (items) =>
+          [...items].sort(
+            (left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name),
+          ),
         ),
       }))
-  }, [filtered])
+  }, [filtered, activeId])
 
   const handleCategoryChange = (category: Category) => {
     setSelectedCategory(category)
@@ -1415,19 +1823,19 @@ export default function AdminPeripheralsPage() {
       </div>
 
 
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className={cn("flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between", CARD_SURFACE)}>
         <div>
           <p className="text-xs font-medium text-muted-foreground">{t.tierlist.viewingBy}</p>
           <p className="mt-0.5 text-sm font-semibold text-foreground">{modeDescription}</p>
         </div>
-        <div className="flex rounded-lg border border-border bg-muted/30 p-1">
+        <div className="flex flex-wrap justify-center gap-1 rounded-lg border border-border bg-muted/30 p-1 sm:justify-start">
           {getModesForCategory(selectedCategory).map((mode) => (
             <button
               key={mode.key}
               type="button"
               onClick={() => setRatingMode(mode.key)}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-all",
+                "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
                 ratingMode === mode.key
                   ? "bg-cyan-500/20 text-cyan-300"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
@@ -1460,52 +1868,60 @@ export default function AdminPeripheralsPage() {
           <BoxLoader />
         </div>
       ) : isPriceBandMode ? (
-        // Faixa é derivada de `price`, não arrastável — pré-visualização read-only.
-        // Preço e GOLPE/motivo se editam no form (ícone de lápis em cada card).
-        <section className="overflow-hidden rounded-xl border border-border bg-card shadow-lg">
-          {priceGroupRows.length === 0 ? (
-            <div className="p-8 text-center text-sm text-muted-foreground">
-              {t.tierlist.noItems}
-            </div>
-          ) : (
-            priceGroupRows.map((row) => (
-              <div
-                key={row.key}
-                className="grid border-b border-border last:border-b-0"
-                style={{ gridTemplateColumns: "70px 1fr" }}
-              >
-                <div className={`flex flex-col items-center justify-center bg-gradient-to-b ${row.accent} text-xl font-black ${row.textColor}`}>
-                  {row.label}
-                </div>
-                <div className="p-2">
-                  <div className="grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2">
-                    {row.items.map((item) => (
-                      <PriceBandPeripheralCard
-                        key={item.id}
-                        item={item}
-                        priceGroup={row.key}
-                        onDelete={(id) => setDeleteDialog({ open: true, id })}
-                      />
-                    ))}
+        // Faixa (o grupo) é derivada de `price`, mas pode mudar via drag: soltar um item
+        // noutra faixa atualiza o preço dele pro mínimo daquela faixa (ver
+        // `applyPriceBandReorder`). Preço exato e GOLPE/motivo continuam editáveis no form
+        // (ícone de lápis), o drag só define a faixa/posição.
+        <DndContext
+          sensors={sensors}
+          onDragStart={handleDragStart}
+          onDragOver={handlePriceBandDragOver}
+          onDragEnd={handlePriceBandDragEnd}
+        >
+          <section className={cn("overflow-hidden rounded-xl border shadow-lg", CARD_SURFACE)}>
+            {priceGroupRows.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                {t.tierlist.noItems}
+              </div>
+            ) : (
+              priceGroupRows.map((row) => (
+                <div
+                  key={row.key}
+                  className="grid grid-cols-[56px_1fr] border-b border-border last:border-b-0 sm:grid-cols-[70px_1fr]"
+                >
+                  <div className={`flex flex-col items-center justify-center bg-gradient-to-b p-1 text-center ${row.accent} text-base font-black leading-tight ${row.textColor} sm:text-xl`}>
+                    {row.label}
+                  </div>
+
+                  <div data-drop-zone={row.key}>
+                    <DroppablePriceBandRow
+                      priceGroup={row.key}
+                      items={row.items}
+                      isDragging={activeId !== null}
+                      hoveredItemId={hoveredItemId}
+                    />
                   </div>
                 </div>
-              </div>
-            ))
-          )}
-        </section>
+              ))
+            )}
+          </section>
+
+          <DragOverlay dropAnimation={null}>
+            {activeItem ? <DragOverlayCard item={activeItem} /> : null}
+          </DragOverlay>
+        </DndContext>
       ) : (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-          <section className="overflow-hidden rounded-xl border border-border bg-card shadow-lg">
+          <section className={cn("overflow-hidden rounded-xl border shadow-lg", CARD_SURFACE)}>
             {itemsByTier.map((tierRow) => (
               <div
                 key={tierRow.key}
-                className="grid border-b border-border last:border-b-0"
-                style={{ gridTemplateColumns: "70px 1fr" }}
+                className="grid grid-cols-[56px_1fr] border-b border-border last:border-b-0 sm:grid-cols-[70px_1fr]"
               >
-                <div className={`flex flex-col items-center justify-center bg-gradient-to-b ${tierRow.accent} text-2xl font-black ${tierRow.textColor}`}>
+                <div className={`flex flex-col items-center justify-center bg-gradient-to-b p-1 text-center ${tierRow.accent} text-lg font-black leading-tight ${tierRow.textColor} sm:text-2xl`}>
                   {tierRow.label}
                   {t.tierlist.tierSubtitles[tierRow.key] && (
-                    <span className="text-[10px] font-medium opacity-80">
+                    <span className="text-[9px] font-medium leading-tight opacity-80 sm:text-[10px]">
                       {t.tierlist.tierSubtitles[tierRow.key]}
                     </span>
                   )}
@@ -1515,7 +1931,6 @@ export default function AdminPeripheralsPage() {
                   <DroppableTier
                     tier={tierRow.key}
                     items={tierRow.items}
-                    onDelete={(id) => setDeleteDialog({ open: true, id })}
                     isDragging={activeId !== null}
                     hoveredItemId={hoveredItemId}
                   />
@@ -1526,11 +1941,11 @@ export default function AdminPeripheralsPage() {
 
           <div
             className={cn(
-              "mt-6 overflow-hidden rounded-xl border bg-card shadow-lg transition-colors duration-200",
+              "mt-6 overflow-hidden rounded-xl border bg-secondary/50 shadow-lg transition-colors duration-200",
               unassignedItems.length > 0 ? "border-amber-500/20" : activeId ? "border-amber-500/20" : "border-border"
             )}
           >
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div className="flex items-center gap-3">
                 {unassignedItems.length > 0 && <AlertCircle className="size-4 text-amber-400" />}
                 <div>
@@ -1544,15 +1959,18 @@ export default function AdminPeripheralsPage() {
                   </p>
                 </div>
               </div>
-              {unassignedItems.length > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-400">
-                  {t.admin.tierlistPage.itemsCount(unassignedItems.length)}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {unassignedItems.length > 0 && (
+                  <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-400">
+                    {t.admin.tierlistPage.itemsCount(unassignedItems.length)}
+                  </span>
+                )}
+                <LinkPeripheralPopover items={linkableItems} onLink={handleAddToMode} />
+              </div>
             </div>
             <DroppableUnassignedPool
               items={unassignedItems}
-              onDelete={(id) => setDeleteDialog({ open: true, id })}
+              onRemoveFromCategory={(id) => handleRemoveFromMode(id)}
               isDragging={activeId !== null}
             />
           </div>
@@ -1562,36 +1980,6 @@ export default function AdminPeripheralsPage() {
           </DragOverlay>
         </DndContext>
       )}
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>
-        <DialogContent className="border border-border bg-card">
-          <DialogHeader>
-            <DialogTitle>{t.peripherals.delete.title}</DialogTitle>
-            <DialogDescription>
-              {t.peripherals.delete.cannotUndo}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteDialog({ open: false, id: "" })}
-              disabled={deleting}
-            >
-              {t.common.cancel}
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={confirmDelete}
-              disabled={deleting}
-            >
-              {deleting ? t.common.deleting : t.common.delete}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-
 
     </div>
   )

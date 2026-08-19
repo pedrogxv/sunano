@@ -586,6 +586,7 @@ type Translations = {
       orderUpdated: string
       tierRemoved: string
       movedToTier: (tier: string) => string
+      movedToPriceBand: (band: string) => string
       failedToLoad: string
       failedToLoadPeripherals: string
       failedToUpdate: string
@@ -600,6 +601,14 @@ type Translations = {
       noUnassigned: string
       itemsCount: (count: number) => string
       modeDescriptions: { performance: string; value: string; recommended: string; oled: string; soundTyping: string; mechanical: string; magnetic: string; pcb: string; ips_va: string; competitive: string }
+      addToCategory: string
+      searchPeripheralPlaceholder: string
+      noLinkablePeripherals: string
+      addedToCategory: string
+      addToCategoryFailed: string
+      removeFromCategoryAction: string
+      removedFromCategory: string
+      removeFromCategoryFailed: string
     }
     tierlistReview: {
       pageTitle: string
@@ -674,6 +683,7 @@ type Translations = {
     myProfile: string
     accountSettings: string
     myOrders: string
+    savedPosts: string
     adminPanel: string
     signOut: string
     settings: string
@@ -1337,6 +1347,7 @@ export const translations: Record<LocaleCode, Translations> = {
         orderUpdated: "Ordem atualizada",
         tierRemoved: "Tier removido",
         movedToTier: (tier: string) => `Movido para tier ${tier}`,
+        movedToPriceBand: (band: string) => `Movido para faixa ${band}`,
         failedToLoad: "Erro ao carregar",
         failedToLoadPeripherals: "Erro ao carregar periféricos",
         failedToUpdate: "Erro ao atualizar",
@@ -1351,6 +1362,14 @@ export const translations: Record<LocaleCode, Translations> = {
         noUnassigned: "Nenhum periférico Sob Revisão",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "itens"}`,
         modeDescriptions: { performance: "Ordenado por desempenho puro", value: "Agrupado por faixa de preço", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", oled: "Apenas painéis OLED", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", ips_va: "Apenas painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
+        addToCategory: "Vincular periférico",
+        searchPeripheralPlaceholder: "Buscar periférico...",
+        noLinkablePeripherals: "Nenhum periférico disponível para vincular",
+        addedToCategory: "Periférico vinculado",
+        addToCategoryFailed: "Erro ao vincular periférico",
+        removeFromCategoryAction: "Remover desta categoria",
+        removedFromCategory: "Removido desta categoria",
+        removeFromCategoryFailed: "Erro ao remover da categoria",
       },
       tierlistReview: {
         pageTitle: "Revisão de Periféricos",
@@ -1425,6 +1444,7 @@ export const translations: Record<LocaleCode, Translations> = {
       myProfile: "Meu Perfil",
       accountSettings: "Configurações da conta",
       myOrders: "Meus Pedidos",
+      savedPosts: "Posts Salvos",
       adminPanel: "Painel admin",
       signOut: "Sair",
       settings: "Configurações",
@@ -1478,6 +1498,16 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
+        {
+          version: "v0.3.1",
+          date: "19 de agosto",
+          title: "Posts salvos no fórum",
+          description: "Dá pra salvar posts do fórum pra ler depois, com uma página própria reunindo tudo que você salvou.",
+          items: [
+            "Salvar post do fórum: clique no ícone de marcador em qualquer post pra guardar e ler depois, com uma página \"Posts Salvos\" no menu da conta reunindo tudo que você salvou",
+            "Ajustes visuais e de posicionamento em várias telas da loja e do fórum",
+          ],
+        },
         {
           version: "v0.3.0",
           date: "16 de agosto",
@@ -2328,6 +2358,7 @@ export const translations: Record<LocaleCode, Translations> = {
         orderUpdated: "Order updated",
         tierRemoved: "Tier removed",
         movedToTier: (tier: string) => `Moved to tier ${tier}`,
+        movedToPriceBand: (band: string) => `Moved to price band ${band}`,
         failedToLoad: "Failed to load",
         failedToLoadPeripherals: "Failed to load peripherals",
         failedToUpdate: "Failed to update",
@@ -2342,6 +2373,14 @@ export const translations: Record<LocaleCode, Translations> = {
         noUnassigned: "No peripherals without tier",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "items"}`,
         modeDescriptions: { performance: "Sorted by pure performance", value: "Grouped by price range", recommended: "Suggested picks by Sunano, prioritizing overall balance", oled: "Show only OLED panels", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", ips_va: "Show only IPS and VA panels", competitive: "Sorted by competitive performance" },
+        addToCategory: "Link peripheral",
+        searchPeripheralPlaceholder: "Search peripheral...",
+        noLinkablePeripherals: "No peripherals available to link",
+        addedToCategory: "Peripheral linked",
+        addToCategoryFailed: "Failed to link peripheral",
+        removeFromCategoryAction: "Remove from this category",
+        removedFromCategory: "Removed from this category",
+        removeFromCategoryFailed: "Failed to remove from category",
       },
       tierlistReview: {
         pageTitle: "Peripheral Review",
@@ -2416,6 +2455,7 @@ export const translations: Record<LocaleCode, Translations> = {
       myProfile: "My Profile",
       accountSettings: "Account settings",
       myOrders: "My Orders",
+      savedPosts: "Saved Posts",
       adminPanel: "Admin panel",
       signOut: "Sign out",
       settings: "Settings",
@@ -2469,6 +2509,16 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.3.1",
+          date: "August 19",
+          title: "Saved forum posts",
+          description: "You can now save forum posts to read later, with a dedicated page gathering everything you've saved.",
+          items: [
+            "Save forum posts: click the bookmark icon on any post to save it for later, with a new \"Saved Posts\" page in the account menu gathering everything you've saved",
+            "Visual and layout tweaks across several store and forum screens",
+          ],
+        },
         {
           version: "v0.3.0",
           date: "August 16",

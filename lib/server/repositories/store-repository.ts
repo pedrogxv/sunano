@@ -25,10 +25,23 @@ export type StoreProductCard = {
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   has_variants: boolean
+  /** Subconjunto leve das variantes, pra seleção direto no card — sem specs/imagens extras. */
+  variants: StoreCardVariant[]
   is_active: boolean
   is_sold_out: boolean
   is_featured: boolean
   created_at: string
+}
+
+export type StoreCardVariant = {
+  id: string
+  label: string
+  price_cents_override: number | null
+  promo_price_cents: number | null
+  stock: number | null
+  color: string | null
+  icon: string | null
+  image_url: string | null
 }
 
 export type StoreProductVariant = {
@@ -73,16 +86,21 @@ export type LinkedProduct = {
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, is_sold_out, is_featured, created_at, variants:store_product_variants(count)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, is_sold_out, is_featured, created_at, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, position)"
 
-type RawCardRow = Omit<StoreProductCard, "has_variants"> & {
-  variants: { count: number }[] | null
+type RawCardRow = Omit<StoreProductCard, "has_variants" | "variants"> & {
+  variants: (StoreCardVariant & { position: number })[] | null
 }
 
-/** Converte a linha crua (com embedded count do PostgREST) para StoreProductCard. */
+/** Converte a linha crua (com variantes embutidas) para StoreProductCard. */
 function mapCardRow(row: RawCardRow): StoreProductCard {
-  const { variants, ...rest } = row
-  return { ...rest, has_variants: (variants?.[0]?.count ?? 0) > 0 }
+  const { variants: rawVariants, ...rest } = row
+  const variants = [...(rawVariants ?? [])].sort((a, b) => a.position - b.position)
+  return {
+    ...rest,
+    has_variants: variants.length > 0,
+    variants: variants.map(({ position: _position, ...v }) => v),
+  }
 }
 
 /** Lista produtos ativos de um tipo ("store" ou "bazaar"). */
@@ -204,6 +222,37 @@ export async function listStoreProductsPaginated(
     return { items: [], total: 0 }
   }
   return { items: ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow), total: count ?? 0 }
+}
+
+/**
+ * Busca leve pro dropdown "em tempo real" da barra de pesquisa — sem
+ * `count: "exact"` (custo extra que o typeahead não precisa) e limitada a
+ * poucos itens. Mesma lógica de match (`name`/`brand` ILIKE) de
+ * `listStoreProductsPaginated`, só que sem paginação.
+ */
+export async function searchStoreProductsTop(
+  searchTerm: string,
+  limit = 5
+): Promise<StoreProductCard[]> {
+  const trimmed = searchTerm.trim()
+  if (trimmed.length < 2) return []
+
+  const db = createSupabaseAdminClient()
+  const term = escapeOrFilterValue(trimmed)
+  const { data, error } = await db
+    .from("store_products")
+    .select(CARD_COLUMNS)
+    .eq("is_active", true)
+    .or(`name.ilike."%${term}%",brand.ilike."%${term}%"`)
+    .order("is_featured", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("[store-repository] searchStoreProductsTop:", error)
+    return []
+  }
+  return ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
 }
 
 export type StoreFilterOptions = {

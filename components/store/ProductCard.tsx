@@ -1,12 +1,15 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
-import { ShoppingCart } from "lucide-react"
+import { Plus, ShoppingCart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon } from "@/lib/store-category-icons"
+import { getVariantIcon } from "@/lib/variant-icons"
 import { formatBRL } from "@/lib/format"
 import { useCart } from "@/components/providers/cart-context"
 import { Skeleton } from "@/components/ui/skeleton"
+import type { StoreCardVariant } from "@/lib/server/repositories/store-repository"
 
 interface ProductCardProps {
   id: string
@@ -25,6 +28,7 @@ interface ProductCardProps {
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   has_variants?: boolean
+  variants?: StoreCardVariant[]
 }
 
 const CONDITION_LABEL: Record<string, string> = {
@@ -47,35 +51,50 @@ const CONDITION_TINT: Record<string, string> = {
 export function ProductCard(props: ProductCardProps) {
   const { add, setOpen } = useCart()
   const href = `/${props.type === "bazaar" ? "bazar" : "loja"}/${props.slug}`
-  const outOfStock = Boolean(props.is_sold_out) || (props.stock !== null && props.stock === 0)
-  const hasVariants = props.has_variants ?? false
-  const image = props.images?.[0] ?? null
-  const hasDiscount = props.promo_price_cents != null && props.promo_price_cents < props.price_cents
-  const effectivePriceCents = hasDiscount ? (props.promo_price_cents as number) : props.price_cents
+  const variants = props.variants ?? []
+  const hasVariants = (props.has_variants ?? false) && variants.length > 0
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
+    hasVariants ? (variants.find((v) => v.stock === null || v.stock > 0)?.id ?? variants[0].id) : null
+  )
+  const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) ?? null : null
+
+  const outOfStock = hasVariants
+    ? Boolean(props.is_sold_out) || (activeVariant ? activeVariant.stock !== null && activeVariant.stock === 0 : false)
+    : Boolean(props.is_sold_out) || (props.stock !== null && props.stock === 0)
+  const image = activeVariant?.image_url ?? props.images?.[0] ?? null
+
+  const basePriceCents = activeVariant?.price_cents_override ?? props.price_cents
+  const promoPriceCents = activeVariant
+    ? (activeVariant.promo_price_cents ?? (activeVariant.price_cents_override == null ? props.promo_price_cents : null))
+    : props.promo_price_cents
+  const hasDiscount = promoPriceCents != null && promoPriceCents < basePriceCents
+  const effectivePriceCents = hasDiscount ? (promoPriceCents as number) : basePriceCents
   const discountPercent = hasDiscount
-    ? Math.round((1 - (props.promo_price_cents as number) / props.price_cents) * 100)
+    ? Math.round((1 - (promoPriceCents as number) / basePriceCents) * 100)
     : null
 
   const { icon: CategoryIcon, tint } = getCategoryIcon(props.category)
 
+  function handleSelectVariant(e: React.MouseEvent, variantId: string) {
+    e.preventDefault()
+    setSelectedVariantId(variantId)
+  }
+
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault()
-    // Produto com variantes não tem variante selecionada aqui no card —
-    // deixa o clique navegar normalmente pro Link e o usuário escolhe na
-    // página de detalhe.
-    if (hasVariants) return
     if (outOfStock) return
+    if (hasVariants && !activeVariant) return
     add({
       productId: props.id,
-      variantId: null,
-      variantLabel: null,
-      variantColor: null,
-      variantIcon: null,
+      variantId: activeVariant?.id ?? null,
+      variantLabel: activeVariant?.label ?? null,
+      variantColor: activeVariant?.color ?? null,
+      variantIcon: activeVariant?.icon ?? null,
       slug: props.slug,
       name: props.name,
       priceCents: effectivePriceCents,
       image,
-      stock: props.stock,
+      stock: activeVariant ? activeVariant.stock : props.stock,
       type: props.type,
       condition: props.condition,
     })
@@ -132,11 +151,14 @@ export function ProductCard(props: ProductCardProps) {
             <button
               type="button"
               onClick={handleAddToCart}
-              aria-label={hasVariants ? "Ver opções" : "Adicionar ao carrinho"}
-              title={hasVariants ? "Ver opções" : "Adicionar ao carrinho"}
+              aria-label="Adicionar ao carrinho"
+              title="Adicionar ao carrinho"
               className="absolute right-2.5 top-2.5 z-[1] flex size-[34px] shrink-0 items-center justify-center rounded-[10px] border border-[#2e2e2e] bg-[rgba(10,10,10,0.82)] text-[#999999] backdrop-blur-sm transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:text-emerald-400"
             >
-              <ShoppingCart className="size-[15px]" />
+              <span className="relative">
+                <ShoppingCart className="size-[15px]" />
+                <Plus className="absolute -right-[7px] -top-[7px] size-[10px] rounded-full bg-emerald-500 p-[1px] text-[#04140d]" strokeWidth={3} />
+              </span>
             </button>
           )}
 
@@ -168,18 +190,54 @@ export function ProductCard(props: ProductCardProps) {
             {props.name}
           </h3>
 
+          {/* Variantes: seleção rápida direto no card, sem precisar abrir o
+              produto — o clique é interceptado (stopPropagation) pra não navegar. */}
+          {hasVariants && (
+            <div className="flex flex-wrap gap-[5px]" onClick={(e) => e.stopPropagation()}>
+              {variants.map((v) => {
+                const isActive = v.id === selectedVariantId
+                const variantOutOfStock = v.stock !== null && v.stock === 0
+                const VariantIcon = getVariantIcon(v.icon)
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={(e) => handleSelectVariant(e, v.id)}
+                    title={v.label}
+                    aria-label={v.label}
+                    aria-pressed={isActive}
+                    disabled={variantOutOfStock}
+                    className={cn(
+                      "flex size-[20px] items-center justify-center rounded-full border-[1.5px] transition-colors",
+                      isActive ? "border-emerald-500" : "border-[#333333] hover:border-[#5a5a5a]",
+                      variantOutOfStock && "cursor-not-allowed opacity-35"
+                    )}
+                    style={{ backgroundColor: v.color ?? "#1c1c1c" }}
+                  >
+                    {VariantIcon && (
+                      <VariantIcon className="size-[10px]" style={{ color: v.color ? "#fff" : "#9a9a9a" }} strokeWidth={2.2} />
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           <div className="mt-auto">
             {hasDiscount ? (
               <div className="flex flex-wrap items-baseline gap-2">
                 <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(effectivePriceCents)}</p>
-                <p className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(props.price_cents)}</p>
+                <p className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(basePriceCents)}</p>
               </div>
             ) : (
-              <p className="font-display text-lg font-bold text-white">{formatBRL(props.price_cents)}</p>
+              <p className="font-display text-lg font-bold text-white">{formatBRL(basePriceCents)}</p>
             )}
-            {props.stock !== null && props.stock > 0 && props.stock <= 3 && (
-              <p className="mt-1 text-[10px] font-semibold text-amber-400">Últimas {props.stock} unidades!</p>
-            )}
+            {(() => {
+              const displayStock = activeVariant ? activeVariant.stock : props.stock
+              return displayStock !== null && displayStock > 0 && displayStock <= 3 && (
+                <p className="mt-1 text-[10px] font-semibold text-amber-400">Últimas {displayStock} unidades!</p>
+              )
+            })()}
           </div>
         </div>
       </div>

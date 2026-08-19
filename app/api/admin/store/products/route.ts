@@ -58,11 +58,19 @@ export async function GET(request: NextRequest) {
     return Number.isFinite(n) ? n : undefined
   }
 
+  function parseCsv(value: string | null): string[] | undefined {
+    const trimmed = value?.trim()
+    if (!trimmed) return undefined
+    const list = trimmed.split(",").map((v) => v.trim()).filter(Boolean)
+    return list.length > 0 ? list : undefined
+  }
+
   const filters: StoreProductListFilters = {
     type,
     includeInactive: true,
     search: searchParams.get("search")?.trim() || undefined,
-    categories: searchParams.get("category")?.trim() ? [searchParams.get("category")!.trim()] : undefined,
+    categories: parseCsv(searchParams.get("categories")),
+    brands: parseCsv(searchParams.get("brands")),
     outOfStockOnly: searchParams.get("outOfStock") === "1",
     featured: searchParams.get("featured") === "1" ? true : undefined,
     page: parseNumber(searchParams.get("page")),

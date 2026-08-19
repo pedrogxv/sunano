@@ -9,6 +9,7 @@ import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { cn } from "@/lib/utils"
 import { CARD_TAG_STYLES, CARD_TIER_STYLES, CARD_PRICE_BAND_STYLES } from "@/lib/tierlist-theme"
 import { PRICE_BAND_LABEL, GOLPE_KEY, type PriceGroupKey } from "@/lib/price-band"
+import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { TierItemTooltipContent, type Ratings } from "./TierItemTooltipContent"
 import type { Tag } from "@/lib/tag-options"
 
@@ -63,7 +64,8 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
           href={href}
           aria-label={item.name}
           className={cn(
-            "group relative block cursor-pointer overflow-hidden rounded-lg border bg-card transition-all duration-[220ms] ease-out",
+            "group relative block cursor-pointer overflow-hidden rounded-lg border transition-all duration-[220ms] ease-out",
+            CARD_SURFACE_INTERACTIVE,
             "hover:z-10 hover:-translate-y-1 hover:scale-[1.3] hover:brightness-150",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
             tierStyle.border,

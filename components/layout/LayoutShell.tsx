@@ -78,7 +78,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           <div className="flex-1 min-w-0 bg-card md:mx-2 md:mt-2 md:mb-2 rounded-none md:rounded-2xl md:ml-0">
             <TopBar />
             <ChangelogBanner />
-            <main>{children}</main>
+            <main className="min-w-0 overflow-x-hidden">{children}</main>
           </div>
         )}
       </div>

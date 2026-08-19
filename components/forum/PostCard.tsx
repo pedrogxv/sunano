@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Crown, EyeOff, Flame, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
+import { Bookmark, Crown, EyeOff, Flame, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
@@ -17,6 +17,8 @@ import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLin
 import { CommentBody } from "@/components/comments/CommentBody"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuthUser } from "@/components/providers/auth-context"
+import { useAuthModal } from "@/components/providers/auth-modal-context"
+import { useSavedPosts } from "@/components/providers/saved-posts-context"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
 import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -45,6 +47,8 @@ export type PostCardData = {
   comment_count: number
   /** Somatório da aura de todos os comentários do post (denormalizado). */
   aura_count: number
+  /** Quantos usuários salvaram este post. */
+  saved_count: number
 }
 
 /** Selo de VIP/VIP+ ao lado do nome do autor — mesmo rótulo do tier usado no perfil. */
@@ -204,6 +208,111 @@ function PostAuraButton({
 }
 
 /**
+ * "Salvar post" para ler depois — ao contrário da aura, o próprio autor
+ * também pode salvar o próprio post (não é uma reação social, é uma lista
+ * pessoal).
+ *
+ * Ao contrário de `PostAuraButton`, NÃO busca o próprio estado inicial: lê
+ * de `useSavedPosts()` (`SavedPostsProvider`, montado uma vez no layout
+ * raiz), que carrega os ids salvos da sessão inteira numa única requisição.
+ * Enquanto essa lista global não resolve (`loading`), o botão fica
+ * desabilitado em vez de mostrar "não salvo" e trocar de estado 2-3s depois
+ * — nunca renderiza um estado que ainda pode estar errado.
+ *
+ * `onUnsaved` é opcional e só usado pela página /forum/salvos — permite que
+ * o card suma da lista assim que o usuário remove o post dos salvos, sem
+ * esperar reload.
+ */
+function PostSaveButton({
+  postId,
+  postSlug,
+  initialCount,
+  onUnsaved,
+}: {
+  postId: string
+  postSlug: string
+  initialCount: number
+  onUnsaved?: (slug: string) => void
+}) {
+  const { user } = useAuthUser()
+  const { openLogin } = useAuthModal()
+  const { loading: savedListLoading, isSaved, setSaved: setSavedGlobal } = useSavedPosts()
+
+  const saved = isSaved(postId)
+  const [count, setCount] = useState(initialCount)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    setCount(initialCount)
+  }, [initialCount])
+
+  async function handleClick(event: React.MouseEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (busy || savedListLoading) return
+
+    if (!user) {
+      openLogin(`/forum/${postSlug}`)
+      return
+    }
+
+    const nextSaved = !saved
+    setBusy(true)
+    setSavedGlobal(postId, nextSaved)
+
+    const res = await fetch(`/api/forum/posts/${postSlug}/save`, { method: "POST" }).catch(() => null)
+    setBusy(false)
+
+    if (!res?.ok) {
+      setSavedGlobal(postId, !nextSaved)
+      const data = await res?.json().catch(() => null)
+      toast.error(data?.error ?? "Erro ao salvar post.")
+      return
+    }
+
+    const data = await res.json().catch(() => null)
+    if (data?.ok) {
+      setSavedGlobal(postId, Boolean(data.saved))
+      if (typeof data.savedCount === "number") setCount(data.savedCount)
+      if (!data.saved) onUnsaved?.(postSlug)
+    }
+  }
+
+  const tooltipText = !user
+    ? "Entre na sua conta pra salvar posts e ler depois"
+    : saved
+      ? "Remover dos posts salvos"
+      : "Salvar post para ler depois"
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="pointer-events-auto inline-flex">
+          <button
+            type="button"
+            onClick={handleClick}
+            disabled={Boolean(user) && savedListLoading}
+            aria-pressed={saved}
+            aria-label={tooltipText}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-60",
+              saved ? "border-primary/50 bg-primary/10 text-primary" : "border-border",
+              "hover:border-primary/40 hover:text-primary"
+            )}
+          >
+            <Bookmark className="size-3.5" fill={saved ? "currentColor" : "none"} strokeWidth={1.75} />
+            {count > 0 && count}
+          </button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-56 text-center">
+        {tooltipText}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/**
  * Card de post no estilo Reddit/Twitter: avatar + autor + tempo, texto
  * corrido (sem título separado), mídia opcional, rodapé com Comentários /
  * Compartilhar. Usado tanto na listagem quanto no cabeçalho da página de
@@ -216,6 +325,7 @@ export function PostCard({
   currentUserId = null,
   onOwnPostVisibilityChange,
   onOwnPostDeleted,
+  onOwnPostUnsaved,
 }: {
   post: PostCardData
   clickable?: boolean
@@ -226,6 +336,8 @@ export function PostCard({
   onOwnPostVisibilityChange?: (slug: string, hidden: boolean) => void
   /** Quando definido, o botão de excluir não navega — deixa o chamador remover o post da lista. */
   onOwnPostDeleted?: (slug: string) => void
+  /** Usado só por /forum/salvos — quando definido, remover dos salvos tira o card da lista sem esperar reload. */
+  onOwnPostUnsaved?: (slug: string) => void
 }) {
   const isOwner = Boolean(currentUserId) && post.user_id === currentUserId
   const youtubeId = post.media_video_url ? extractYoutubeId(post.media_video_url) : null
@@ -313,6 +425,7 @@ export function PostCard({
 
           <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2 pointer-events-auto">
             <PostAuraButton postSlug={post.slug} authorId={post.user_id} initialCount={post.aura_count} />
+            <PostSaveButton postId={post.id} postSlug={post.slug} initialCount={post.saved_count} onUnsaved={onOwnPostUnsaved} />
             <Link
               href={clickable ? `/forum/${post.slug}#comments` : "#comments"}
               onClick={(event) => event.stopPropagation()}

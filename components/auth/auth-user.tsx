@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { LayoutDashboard, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
+import { Bookmark, LayoutDashboard, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -236,6 +236,15 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               >
                 <PackageSearch className="size-4 text-muted-foreground" />
                 {t.auth.myOrders}
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/forum/salvos"
+                className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
+              >
+                <Bookmark className="size-4 text-muted-foreground" />
+                {t.auth.savedPosts}
               </Link>
             </DropdownMenuItem>
             {isAdmin && (

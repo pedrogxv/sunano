@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
+import { CARD_SURFACE } from "@/lib/ui-styles"
 
 type MouseShape = "symmetrical" | "ergonomic"
 type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
@@ -81,7 +82,7 @@ export function FilterBar({
   ]
 
   return (
-    <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+    <div className={cn("space-y-3 rounded-xl border p-4", CARD_SURFACE)}>
       <div>
         <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
           {categoryOptions.map((category) => {

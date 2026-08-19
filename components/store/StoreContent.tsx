@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, Package, PackageSearch, QrCode, ShieldCheck, SlidersHorizontal, Sparkles, Star, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, PackageSearch, ShieldCheck, SlidersHorizontal, Sparkles, Star, Tag, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
+import { CategoryTagScroller } from "@/components/store/CategoryTagScroller"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
@@ -17,7 +18,14 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { MarketInfoDialog } from "@/components/store/MarketInfoDialog"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
+import { getCategoryIcon } from "@/lib/store-category-icons"
 import type { StoreProductCard, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
+
+/** Contexto de "loja filtrada" (landing de categoria ou marca) — troca o hero
+ *  padrão por um banner e pré-seleciona o filtro correspondente. */
+export type StoreBanner =
+  | { type: "category"; value: string }
+  | { type: "brand"; value: string }
 
 interface StoreContentProps {
   initialItems: StoreProductCard[]
@@ -25,6 +33,7 @@ interface StoreContentProps {
   initialFilterOptions: StoreFilterOptions
   initialFeatured: StoreProductCard[]
   pageSize: number
+  banner?: StoreBanner
 }
 
 type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
@@ -99,7 +108,55 @@ function PriceSlider({ value, onChange, max }: { value: [number, number]; onChan
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, pageSize }: StoreContentProps) {
+/** Banner das landings de categoria/marca — substitui o hero padrão da Loja. */
+function StoreBannerHero({ banner, productCount }: { banner: StoreBanner; productCount: number }) {
+  const isCategory = banner.type === "category"
+  const { icon: Icon, tint } = isCategory ? getCategoryIcon(banner.value) : { icon: Tag, tint: "oklch(0.65 0.01 260)" }
+
+  return (
+    <div
+      className="relative overflow-hidden border-b border-[#1c1c1c] bg-[#0b0f14] py-10 sm:py-14"
+      style={{ background: `radial-gradient(120% 140% at 85% 0%, color-mix(in oklab, ${tint} 16%, #0b0f14), #0b0f14)` }}
+    >
+      <Icon
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-8 -right-6 size-[220px] opacity-[0.08] sm:size-[280px]"
+        style={{ color: tint }}
+        strokeWidth={0.9}
+      />
+      <div className="relative mx-auto flex max-w-7xl flex-col gap-3 px-4 lg:px-8">
+        <Link
+          href="/loja"
+          className="inline-flex w-fit items-center gap-1.5 text-xs font-semibold text-[#8a8a8a] transition-colors hover:text-white"
+        >
+          <ArrowLeft className="size-3.5" />
+          Voltar pra Loja
+        </Link>
+        <div className="flex items-center gap-3.5">
+          <span
+            className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-white/10"
+            style={{ background: `color-mix(in oklab, ${tint} 18%, #0e0e0e)` }}
+          >
+            <Icon className="size-7" style={{ color: tint }} strokeWidth={1.4} />
+          </span>
+          <div className="flex flex-col gap-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">
+              {isCategory ? "Categoria" : "Marca"}
+            </span>
+            <h1 className="font-display text-3xl font-bold capitalize leading-tight tracking-[-0.02em] text-white sm:text-[42px]">
+              {banner.value}
+            </h1>
+          </div>
+        </div>
+        <p className="text-[13px] font-semibold text-[#9a9a9a]">
+          {productCount} produto{productCount === 1 ? "" : "s"} {isCategory ? "nessa categoria" : "dessa marca"}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, pageSize, banner }: StoreContentProps) {
   const searchParams = useSearchParams()
   const { user } = useAuthUser()
 
@@ -112,8 +169,15 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
 
   const [query, setQuery] = useState(searchParams.get("q") ?? "")
   const debouncedQuery = useDebouncedValue(query, 400)
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([])
+  // Landing de categoria/marca chega com o filtro correspondente pré-selecionado,
+  // mas o usuário continua livre pra trocar ou remover — igual a ter escolhido
+  // o filtro manualmente em /loja.
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    banner?.type === "category" ? [banner.value] : []
+  )
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(
+    banner?.type === "brand" ? [banner.value] : []
+  )
   const [condition, setCondition] = useState<ConditionKey>("all")
   const [sortKey, setSortKey] = useState<SortKey>("recent")
   const [page, setPage] = useState(1)
@@ -245,6 +309,10 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
 
   const activeCategory = selectedCategories.length === 1 ? selectedCategories[0] : null
 
+  // Com poucos itens todos já cabem na tela sem rolar — "ver tudo" e as setas
+  // de carrossel não fazem sentido até que sobre item fora da área visível.
+  const showFeaturedCarouselControls = featuredItems.length > 5
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   // Os mesmos controles aparecem em dois lugares: na fileira do desktop e
@@ -252,6 +320,23 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // fileira inteira por um botão só).
   const renderFilters = (triggerClass: string) => (
     <>
+      {/* Termo de busca ativo (vindo do dropdown "ver todos" ou de ?q= direto)
+          — some quando vazio, já que a digitação em si vive no StoreSearchBox
+          da faixa de categorias, não aqui. */}
+      {query.trim() && (
+        <span className={cn(triggerClass, "gap-2 pr-2")}>
+          <span className="max-w-[160px] truncate">&ldquo;{query.trim()}&rdquo;</span>
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            aria-label="Limpar busca"
+            className="flex size-4 items-center justify-center rounded-full text-[#6e6e6e] hover:text-white"
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      )}
+
       {categoryOptions.length > 0 && (
         <MultiCombobox
           options={categoryOptions}
@@ -312,119 +397,100 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         categoryCounts={filterOptions.categoryCounts}
         brandsByCategory={filterOptions.brandsByCategory}
         activeCategory={activeCategory}
-        onSelect={(cat) => setSelectedCategories(cat ? [cat] : [])}
-        onSelectBrand={(cat, brand) => {
-          setSelectedCategories([cat])
-          setSelectedBrands([brand])
-        }}
-        query={query}
-        onQueryChange={setQuery}
         previewPool={[...initialFeatured, ...initialItems]}
       />
 
-      {/* Hero: a mascote só sangra pela direita no desktop; no mobile ela fica
-          atrás de um degradê vertical e o conteúdo desce pro rodapé do bloco. */}
-      <div
-        className="relative h-[320px] overflow-hidden bg-[#0b0f14] bg-cover [background-position:72%_center] sm:h-[400px] sm:[background-position:right_center]"
-        style={{ backgroundImage: "url(/images/mascot/Loja.png)" }}
-      >
+      {banner ? (
+        <StoreBannerHero banner={banner} productCount={banner.type === "category" ? (initialFilterOptions.categoryCounts[banner.value] ?? total) : total} />
+      ) : (
+        /* Hero: a mascote só sangra pela direita no desktop; no mobile ela fica
+           atrás de um degradê vertical e o conteúdo desce pro rodapé do bloco. */
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 hidden sm:block"
-          style={{
-            background:
-              "linear-gradient(90deg, #0b0f14 22%, rgba(11,15,20,0.82) 48%, rgba(11,15,20,0.25) 74%, rgba(11,15,20,0) 96%)",
-          }}
-        />
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 sm:hidden"
-          style={{
-            background: "linear-gradient(180deg, rgba(11,15,20,0.45) 0%, rgba(11,15,20,0.88) 58%, #0b0f14 100%)",
-          }}
-        />
+          className="relative h-[320px] overflow-hidden bg-[#0b0f14] bg-cover [background-position:72%_center] sm:h-[400px] sm:[background-position:right_center]"
+          style={{ backgroundImage: "url(/images/mascot/Loja.png)" }}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 hidden sm:block"
+            style={{
+              background:
+                "linear-gradient(90deg, #0b0f14 22%, rgba(11,15,20,0.82) 48%, rgba(11,15,20,0.25) 74%, rgba(11,15,20,0) 96%)",
+            }}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 sm:hidden"
+            style={{
+              background: "linear-gradient(180deg, rgba(11,15,20,0.45) 0%, rgba(11,15,20,0.88) 58%, #0b0f14 100%)",
+            }}
+          />
 
-        {user && (
-          <Link
-            href="/conta/pedidos"
-            className="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-emerald-300"
-          >
-            <PackageSearch className="size-3.5" />
-            Meus pedidos
-          </Link>
-        )}
-
-        <div className="relative mx-auto flex h-full max-w-7xl flex-col items-start justify-end gap-[13px] px-4 pb-[22px] text-left sm:justify-center sm:gap-5 sm:pb-0 lg:px-8">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/16 bg-black/30 px-[11px] py-[5px] text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm sm:gap-[7px] sm:px-[13px] sm:py-1.5 sm:text-[10px]">
-            <ShieldCheck className="size-[11px] text-emerald-400 sm:size-3" strokeWidth={2.2} />
-            Curadoria Sunano
-          </span>
-          <div className="flex items-center gap-2">
-            <h1 className="max-w-[560px] font-display text-4xl font-bold leading-[1.02] tracking-[-0.03em] text-white sm:text-[54px]">
-              Periférico bom,
-              <br />
-              sem golpe.
-            </h1>
-            <MarketInfoDialog />
-          </div>
-          {/* O artboard mobile corta o subtítulo — a headline e o CTA já ocupam
-              a área legível sobre a mascote em 390px. */}
-          <p className="hidden max-w-[420px] text-[15px] font-medium leading-[1.55] text-white/70 sm:block">
-            Cada item passa pela bancada antes de entrar no anúncio — e a review da comunidade fica na página do produto.
-          </p>
-          <a
-            href="#produtos"
-            className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-extrabold text-[#04140d] transition-opacity hover:opacity-90 sm:w-auto sm:justify-start sm:gap-[9px] sm:px-[26px]"
-          >
-            Ver todos os produtos
-            <ArrowRight className="size-4" strokeWidth={2.4} />
-          </a>
-        </div>
-      </div>
-
-      {/* Faixa de confiança — consolida o que antes estava espalhado nos 2
-          chips do hero + nos 3 cards grandes no rodapé da página. */}
-      <div className="border-b border-[#1c1c1c] bg-[#060606]">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 px-4 sm:grid-cols-3 lg:px-8">
-          {[
-            { icon: QrCode, title: "PIX na hora", desc: "chave gerada no checkout" },
-            { icon: ShieldCheck, title: "Testado antes de anunciar", desc: "bancada Sunano" },
-            { icon: Package, title: "Pedido acompanhado", desc: "status direto na sua conta" },
-          ].map(({ icon: Icon, title, desc }, i) => (
-            <div
-              key={title}
-              className={cn(
-                "flex items-center justify-center gap-[11px] px-6 py-[18px]",
-                i > 0 && "border-t border-[#1c1c1c] sm:border-l sm:border-t-0"
-              )}
+          {user && (
+            <Link
+              href="/conta/pedidos"
+              className="absolute right-4 top-4 z-[5] inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-emerald-300"
             >
-              <Icon className="size-[17px] shrink-0 text-emerald-400" strokeWidth={1.9} />
-              <span className="text-[12.5px] font-bold text-[#e8e8e8]">{title}</span>
-              <span className="hidden text-xs text-[#7a7a7a] sm:inline">{desc}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+              <PackageSearch className="size-3.5" />
+              Meus pedidos
+            </Link>
+          )}
 
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-9 px-4 pb-10 pt-7 sm:gap-14 sm:pb-[72px] sm:pt-12 lg:px-8">
-        {/* Categorias */}
-        {categoryOptions.length > 0 && (
-          <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-            <div className="flex flex-col gap-[3px] sm:gap-1">
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>
-              <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Comprar por categoria</h2>
+          <div className="relative mx-auto flex h-full max-w-7xl flex-col items-start justify-end gap-[13px] px-4 pb-[22px] text-left sm:justify-center sm:gap-5 sm:pb-0 lg:px-8">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/16 bg-black/30 px-[11px] py-[5px] text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm sm:gap-[7px] sm:px-[13px] sm:py-1.5 sm:text-[10px]">
+              <ShieldCheck className="size-[11px] text-emerald-400 sm:size-3" strokeWidth={2.2} />
+              Curadoria Sunano
+            </span>
+            <div className="flex items-center gap-2">
+              <h1 className="max-w-[560px] font-display text-4xl font-bold leading-[1.02] tracking-[-0.03em] text-white sm:text-[54px]">
+                Periférico bom,
+                <br />
+                sem golpe.
+              </h1>
+              <MarketInfoDialog />
             </div>
-            <CategoryTiles
-              categories={filterOptions.categories}
-              categoryCounts={filterOptions.categoryCounts}
-              activeCategory={activeCategory}
-              onSelect={(cat) => setSelectedCategories(cat ? [cat] : [])}
-            />
-          </section>
+            {/* O artboard mobile corta o subtítulo — a headline e o CTA já ocupam
+                a área legível sobre a mascote em 390px. */}
+            <p className="hidden max-w-[420px] text-[15px] font-medium leading-[1.55] text-white/70 sm:block">
+              Cada item passa pela bancada antes de entrar no anúncio — e a review da comunidade fica na página do produto.
+            </p>
+            <a
+              href="#produtos"
+              className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-extrabold text-[#04140d] transition-opacity hover:opacity-90 sm:w-auto sm:justify-start sm:gap-[9px] sm:px-[26px]"
+            >
+              Ver todos os produtos
+              <ArrowRight className="size-4" strokeWidth={2.4} />
+            </a>
+          </div>
+        </div>
+      )}
+
+      <div className={cn(
+        "mx-auto flex w-full max-w-7xl flex-col px-4 pb-10 sm:pb-[72px] lg:px-8",
+        banner?.type === "category" ? "gap-5 pt-5 sm:gap-7 sm:pt-6" : "gap-9 pt-7 sm:gap-14 sm:pt-12"
+      )}>
+        {/* Categorias — na landing de categoria vira uma fileira de tags com
+            scroll lateral (o hero já mostra a categoria atual em destaque, um
+            grid de cards grandes aqui seria redundante). */}
+        {categoryOptions.length > 0 && (
+          banner?.type === "category" ? (
+            <CategoryTagScroller categories={filterOptions.categories} activeCategory={banner.value} />
+          ) : (
+            <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+              <div className="flex flex-col gap-[3px] sm:gap-1">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>
+                <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Comprar por categoria</h2>
+              </div>
+              <CategoryTiles
+                categories={filterOptions.categories}
+                categoryCounts={filterOptions.categoryCounts}
+              />
+            </section>
+          )
         )}
 
-        {/* Destaques */}
-        {featuredItems.length > 0 && (
+        {/* Destaques — só na Loja geral; a landing de categoria vai direto
+            pros filtros + catálogo, sem essa seção. */}
+        {banner?.type !== "category" && featuredItems.length > 0 && (
           <section className="flex flex-col gap-3.5 sm:gap-[18px]">
             <div className="flex items-end justify-between gap-3 sm:gap-4">
               <div className="flex flex-col gap-[3px] sm:gap-1">
@@ -434,32 +500,34 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 </p>
                 <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">{featuredLabel}</h2>
               </div>
-              <div className="flex items-center gap-2.5">
-                <a
-                  href="#produtos"
-                  className="text-[12.5px] font-bold text-[#999999] transition-colors hover:text-white sm:text-[13px]"
-                >
-                  Ver tudo
-                </a>
-                <div className="hidden items-center gap-2.5 sm:flex">
-                  <button
-                    type="button"
-                    onClick={() => featuredScrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}
-                    aria-label="Rolar para trás"
-                    className="flex size-8 items-center justify-center rounded-[10px] border border-[#2a2a2a] text-[#6e6e6e] transition-colors hover:text-white"
+              {showFeaturedCarouselControls && (
+                <div className="flex items-center gap-2.5">
+                  <a
+                    href="#produtos"
+                    className="text-[12.5px] font-bold text-[#999999] transition-colors hover:text-white sm:text-[13px]"
                   >
-                    <ChevronLeft className="size-[15px]" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => featuredScrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}
-                    aria-label="Rolar para frente"
-                    className="flex size-8 items-center justify-center rounded-[10px] border border-[#333333] text-[#dcdcdc] transition-colors hover:bg-white/5 hover:text-white"
-                  >
-                    <ChevronRight className="size-[15px]" />
-                  </button>
+                    Ver tudo
+                  </a>
+                  <div className="hidden items-center gap-2.5 sm:flex">
+                    <button
+                      type="button"
+                      onClick={() => featuredScrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}
+                      aria-label="Rolar para trás"
+                      className="flex size-8 items-center justify-center rounded-[10px] border border-[#2a2a2a] text-[#6e6e6e] transition-colors hover:text-white"
+                    >
+                      <ChevronLeft className="size-[15px]" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => featuredScrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}
+                      aria-label="Rolar para frente"
+                      className="flex size-8 items-center justify-center rounded-[10px] border border-[#333333] text-[#dcdcdc] transition-colors hover:bg-white/5 hover:text-white"
+                    >
+                      <ChevronRight className="size-[15px]" />
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
             <div ref={featuredScrollRef} className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] sm:gap-3.5">
               {featuredItems.map((product) => (
@@ -525,43 +593,45 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
 
           {/* Desktop: a fileira compacta do mock — a busca não aparece aqui,
               ela vive na faixa de categorias logo acima. */}
-          <div className="hidden flex-wrap items-center gap-2.5 rounded-[14px] border border-[#262626] bg-card px-3.5 py-3 md:flex">
-            <span className="inline-flex shrink-0 items-center gap-[7px] border-r border-[#262626] pr-3 text-xs font-bold text-[#8a8a8a]">
-              <SlidersHorizontal className="size-3.5" strokeWidth={1.9} />
-              Filtros
-            </span>
+          <div className="hidden flex-col gap-2.5 md:flex">
+            <div className="flex flex-wrap items-center gap-2.5 rounded-[14px] border border-[#262626] bg-card px-3.5 py-3">
+              <span className="inline-flex shrink-0 items-center gap-[7px] border-r border-[#262626] pr-3 text-xs font-bold text-[#8a8a8a]">
+                <SlidersHorizontal className="size-3.5" strokeWidth={1.9} />
+                Filtros
+              </span>
 
-            {renderFilters(TRIGGER_CLASS)}
+              {renderFilters(TRIGGER_CLASS)}
 
-            <span className="ml-auto flex items-center gap-1.5 text-[12.5px] font-semibold text-[#8a8a8a]">
+              {activeFiltersCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetFilters}
+                  className="ml-auto h-9 gap-1.5 text-[12.5px] text-[#8a8a8a] hover:text-white"
+                >
+                  <X className="size-3.5" />
+                  Limpar ({activeFiltersCount})
+                </Button>
+              )}
+
+              <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                <SelectTrigger className={cn("flex h-9 w-auto items-center gap-[7px] whitespace-nowrap rounded-[10px] border border-white bg-white px-3.5 text-[12.5px] font-bold text-black hover:opacity-90 dark:bg-white dark:hover:bg-white", activeFiltersCount === 0 && "ml-auto")}>
+                  <SelectValue>{SORT_LABEL[sortKey]}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Mais recentes</SelectItem>
+                  <SelectItem value="name-asc">Nome A-Z</SelectItem>
+                  <SelectItem value="name-desc">Nome Z-A</SelectItem>
+                  <SelectItem value="price-asc">Menor preço</SelectItem>
+                  <SelectItem value="price-desc">Maior preço</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#8a8a8a]">
               <b className="text-white">{total}</b> produto{total !== 1 ? "s" : ""}
               {isFetching && <Loader2 className="size-3.5 animate-spin text-[#8a8a8a]" />}
             </span>
-
-            {activeFiltersCount > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={resetFilters}
-                className="h-9 gap-1.5 text-[12.5px] text-[#8a8a8a] hover:text-white"
-              >
-                <X className="size-3.5" />
-                Limpar ({activeFiltersCount})
-              </Button>
-            )}
-
-            <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-              <SelectTrigger className="flex h-9 w-auto items-center gap-[7px] whitespace-nowrap rounded-[10px] border border-white bg-white px-3.5 text-[12.5px] font-bold text-black hover:opacity-90">
-                <SelectValue>{SORT_LABEL[sortKey]}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="recent">Mais recentes</SelectItem>
-                <SelectItem value="name-asc">Nome A-Z</SelectItem>
-                <SelectItem value="name-desc">Nome Z-A</SelectItem>
-                <SelectItem value="price-asc">Menor preço</SelectItem>
-                <SelectItem value="price-desc">Maior preço</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
 
           {isFetching ? (

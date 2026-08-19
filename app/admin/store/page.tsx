@@ -7,13 +7,12 @@ import {
   AlertTriangle,
   Check,
   Edit,
-  LayoutGrid,
   Loader2,
   MessageSquare,
   MoreVertical,
   Package,
   Plus,
-  ShoppingCart,
+  Search,
   Star,
   Store,
   Tag,
@@ -22,7 +21,6 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
-import { AnimatedCounter } from "@/components/animated-counter"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -42,6 +40,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { MultiCombobox } from "@/components/ui/combobox"
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 
@@ -95,58 +97,24 @@ const CONDITION_COLOR: Record<string, string> = {
   used: "text-orange-400 bg-orange-500/10 border-orange-500/30",
 }
 
-/* ── Stat chip — também funciona como atalho de filtro ─── */
-function StatChip({
-  icon: Icon,
-  value,
-  label,
-  colorClass,
-  active,
-  hoverClass,
-  onClick,
-}: {
-  icon: React.ElementType
-  value: number
-  label: string
-  colorClass: string
-  active: boolean
-  hoverClass: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "rounded-xl border p-3 text-left transition-all duration-200",
-        "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5",
-        active ? "border-primary/50 bg-primary/10" : "border-border bg-card/60",
-        hoverClass
-      )}
-    >
-      <div className={cn("flex size-7 items-center justify-center rounded-lg", colorClass)}>
-        <Icon className="size-3.5" />
-      </div>
-      <p className="mt-2 text-xl font-bold tabular-nums text-foreground">
-        <AnimatedCounter value={value} duration={800} />
-      </p>
-      <p className="truncate text-[11px] text-muted-foreground">{label}</p>
-    </button>
-  )
-}
-
 const PAGE_SIZE = 50
 
 export default function AdminStorePage() {
   const [products, setProducts] = useState<StoreProduct[]>([])
   const [total, setTotal] = useState(0)
-  const [counts, setCounts] = useState({ all: 0, store: 0, bazaar: 0, outOfStock: 0 })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<"all" | "store" | "bazaar">("all")
+  const [typeFilter, setTypeFilter] = useState<"all" | "store" | "bazaar">("all")
   const [outOfStockOnly, setOutOfStockOnly] = useState(false)
   const [page, setPage] = useState(1)
+  const [search, setSearch] = useState("")
+  const debouncedSearch = useDebouncedValue(search, 400)
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([])
+  const [brandFilter, setBrandFilter] = useState<string[]>([])
+  // Opções dos combobox vêm de todos os produtos já vistos nesta sessão (não só
+  // a página atual), pra não sumir uma marca/categoria ao trocar de filtro.
+  const [knownCategories, setKnownCategories] = useState<Set<string>>(new Set())
+  const [knownBrands, setKnownBrands] = useState<Set<string>>(new Set())
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
   const [deleting, setDeleting] = useState(false)
 
@@ -163,13 +131,26 @@ export default function AdminStorePage() {
     setError(null)
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
-      if (filter !== "all") params.set("type", filter)
+      if (typeFilter !== "all") params.set("type", typeFilter)
       if (outOfStockOnly) params.set("outOfStock", "1")
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim())
+      if (categoryFilter.length > 0) params.set("categories", categoryFilter.join(","))
+      if (brandFilter.length > 0) params.set("brands", brandFilter.join(","))
       const res = await fetch(`/api/admin/store/products?${params}`)
       const data = (await res.json()) as { products?: StoreProduct[]; total?: number; error?: string }
       if (!res.ok) throw new Error(data.error ?? "Erro ao carregar")
       setProducts(data.products ?? [])
       setTotal(data.total ?? 0)
+      setKnownCategories((prev) => {
+        const next = new Set(prev)
+        for (const p of data.products ?? []) if (p.category) next.add(p.category)
+        return next
+      })
+      setKnownBrands((prev) => {
+        const next = new Set(prev)
+        for (const p of data.products ?? []) if (p.brand) next.add(p.brand)
+        return next
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao carregar"
       setError(message)
@@ -177,29 +158,11 @@ export default function AdminStorePage() {
     } finally {
       setLoading(false)
     }
-  }, [filter, page, outOfStockOnly])
+  }, [typeFilter, page, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter])
 
   useEffect(() => { load() }, [load])
 
-  // Contadores dos StatChips (Todos/Loja/Bazar) — vêm do total real de cada
-  // filtro no banco, não do array da página atual (que só tem PAGE_SIZE itens).
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      fetch("/api/admin/store/products?pageSize=1").then((r) => r.json()),
-      fetch("/api/admin/store/products?type=store&pageSize=1").then((r) => r.json()),
-      fetch("/api/admin/store/products?type=bazaar&pageSize=1").then((r) => r.json()),
-      fetch("/api/admin/store/products?outOfStock=1&pageSize=1").then((r) => r.json()),
-    ])
-      .then(([all, store, bazaar, outOfStock]) => {
-        if (cancelled) return
-        setCounts({ all: all.total ?? 0, store: store.total ?? 0, bazaar: bazaar.total ?? 0, outOfStock: outOfStock.total ?? 0 })
-      })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [total])
-
-  useEffect(() => { setPage(1) }, [filter, outOfStockOnly])
+  useEffect(() => { setPage(1) }, [typeFilter, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter])
 
   async function handleDelete() {
     if (!deleteDialog.id) return
@@ -304,6 +267,8 @@ export default function AdminStorePage() {
   // O filtro "sem estoque" já é aplicado no banco (query `outOfStockOnly`),
   // então `products` chega pronto — sem filtro adicional em memória.
   const visibleProducts = products
+  const categoryOptions = [...knownCategories].sort((a, b) => a.localeCompare(b)).map((c) => ({ value: c, label: c }))
+  const brandOptions = [...knownBrands].sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b }))
 
   usePageHeader("Loja", "Gerencie os produtos da loja e os itens do bazar (usados pelo Sunano).")
 
@@ -313,58 +278,85 @@ export default function AdminStorePage() {
       <div className="flex justify-end">
         <div className="flex gap-2">
           <Link href="/admin/store/new?type=store">
-            <Button variant="outline" className="gap-2 border-border">
+            <Button className="gap-2 border-border">
               <Plus className="size-4" />
               Novo produto
-            </Button>
-          </Link>
-          <Link href="/admin/store/new?type=bazaar">
-            <Button className="gap-2">
-              <Tag className="size-4" />
-              Item do Bazar
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* Stats — também funcionam como atalho de filtro */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatChip
-          icon={LayoutGrid}
-          value={counts.all}
-          label="Todos"
-          colorClass="bg-primary/15 text-primary"
-          active={filter === "all" && !outOfStockOnly}
-          hoverClass="hover:border-primary/40 hover:bg-primary/5"
-          onClick={() => { setFilter("all"); setOutOfStockOnly(false) }}
+      {/* Busca e filtros */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome ou marca..."
+            className="h-9 border-border bg-card pl-9 text-[13px]"
+            aria-label="Buscar produtos"
+          />
+        </div>
+        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | "store" | "bazaar")}>
+          <SelectTrigger className="h-9 w-auto min-w-[130px] border-border bg-card text-[13px]">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Loja e Bazar</SelectItem>
+            <SelectItem value="store">Loja</SelectItem>
+            <SelectItem value="bazaar">Bazar</SelectItem>
+          </SelectContent>
+        </Select>
+        <MultiCombobox
+          options={categoryOptions}
+          values={categoryFilter}
+          onValuesChange={setCategoryFilter}
+          placeholder="Categoria"
+          searchPlaceholder="Buscar categoria"
+          allLabel="Todas as categorias"
+          className="h-9 w-auto min-w-[150px] border-border bg-card text-[13px] font-normal"
         />
-        <StatChip
-          icon={ShoppingCart}
-          value={counts.store}
-          label="Loja"
-          colorClass="bg-blue-500/15 text-blue-300"
-          active={filter === "store"}
-          hoverClass="hover:border-blue-400/40 hover:bg-blue-500/5"
-          onClick={() => { setFilter((prev) => (prev === "store" ? "all" : "store")); setOutOfStockOnly(false) }}
+        <MultiCombobox
+          options={brandOptions}
+          values={brandFilter}
+          onValuesChange={setBrandFilter}
+          placeholder="Marca"
+          searchPlaceholder="Buscar marca"
+          allLabel="Todas as marcas"
+          className="h-9 w-auto min-w-[150px] border-border bg-card text-[13px] font-normal"
         />
-        <StatChip
-          icon={Tag}
-          value={counts.bazaar}
-          label="Bazar"
-          colorClass="bg-amber-500/15 text-amber-300"
-          active={filter === "bazaar"}
-          hoverClass="hover:border-amber-400/40 hover:bg-amber-500/5"
-          onClick={() => { setFilter((prev) => (prev === "bazaar" ? "all" : "bazaar")); setOutOfStockOnly(false) }}
-        />
-        <StatChip
-          icon={AlertTriangle}
-          value={counts.outOfStock}
-          label="Sem estoque"
-          colorClass="bg-red-500/15 text-red-400"
-          active={outOfStockOnly}
-          hoverClass="hover:border-red-400/40 hover:bg-red-500/5"
+        <button
+          type="button"
           onClick={() => setOutOfStockOnly((prev) => !prev)}
-        />
+          aria-pressed={outOfStockOnly}
+          className={cn(
+            "flex h-9 items-center gap-1.5 rounded-md border px-3 text-[13px] font-medium transition-colors",
+            outOfStockOnly
+              ? "border-red-400/40 bg-red-500/10 text-red-400"
+              : "border-border bg-card text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <AlertTriangle className="size-3.5" />
+          Sem estoque
+        </button>
+        {(search.trim() || typeFilter !== "all" || categoryFilter.length > 0 || brandFilter.length > 0 || outOfStockOnly) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setSearch("")
+              setTypeFilter("all")
+              setCategoryFilter([])
+              setBrandFilter([])
+              setOutOfStockOnly(false)
+            }}
+            className="h-9 gap-1.5 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3.5" />
+            Limpar
+          </Button>
+        )}
       </div>
 
       {error && (

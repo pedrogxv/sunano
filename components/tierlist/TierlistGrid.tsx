@@ -6,7 +6,8 @@ import { PeripheralCard } from "./PeripheralCard"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
-import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, getPriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
+import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, resolvePriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
+import { CARD_SURFACE } from "@/lib/ui-styles"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
@@ -37,6 +38,8 @@ interface Peripheral {
     adminTierOrder_pcb?: number
     adminTierOrder_ips_va?: number
     adminTierOrder_competitive?: number
+    adminPriceBandOrder?: number
+    adminPriceGroup?: string
     adminTier_value?: TierValue
     adminTier_recommended?: TierValue
     adminTier_oled?: TierValue
@@ -123,6 +126,27 @@ function getTierOrder(item: Peripheral, orderKey: string, allowLegacyFallback: b
   }
 
   return null
+}
+
+// Ordem manual dentro de cada faixa de preço, definida arrastando no board admin
+// (app/admin/tierlist/page.tsx). A faixa em si continua derivada de `price`/GOLPE.
+const PRICE_BAND_ORDER_KEY = "adminPriceBandOrder"
+
+function sortPriceBandItems<T extends Peripheral>(items: T[]): T[] {
+  const withOrder = [...items].sort((left, right) => {
+    const leftOrder = getTierOrder(left, PRICE_BAND_ORDER_KEY, false)
+    const rightOrder = getTierOrder(right, PRICE_BAND_ORDER_KEY, false)
+    if (leftOrder !== null && rightOrder !== null) return leftOrder - rightOrder || left.name.localeCompare(right.name)
+    if (leftOrder !== null) return -1
+    if (rightOrder !== null) return 1
+    return left.name.localeCompare(right.name)
+  })
+  const hasAnyOrder = withOrder.some((item) => getTierOrder(item, PRICE_BAND_ORDER_KEY, false) !== null)
+  if (hasAnyOrder) return withOrder
+
+  return [...items].sort(
+    (left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name),
+  )
 }
 
 interface TierRow {
@@ -408,14 +432,16 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     }))
   }, [visibleItems, modeConfig, orderKey, allowLegacyFallback, tierKey])
 
-  // Faixa é sempre derivada de `price` (ou forçada pra GOLPE) — nunca atribuída manualmente.
-  // Itens abaixo de R$100 (e não-GOLPE) não têm faixa e ficam fora desta aba: sem faixa
-  // fictícia pra cobri-los. Dentro de cada faixa, ordena pelo tier base (qualidade geral)
-  // do item — os melhores daquela faixa de preço aparecem primeiro.
+  // Faixa é manual (specs.adminPriceGroup, definida arrastando no board admin) — itens nunca
+  // movidos caem no fallback calculado a partir do `price` (ver resolvePriceGroupKey em
+  // lib/price-band.ts). GOLPE sempre força a própria faixa. Itens abaixo de R$100 sem posição
+  // manual e não-GOLPE não têm faixa e ficam fora desta aba: sem faixa fictícia pra cobri-los.
+  // Dentro de cada faixa, usa a ordem manual definida no board admin (`adminPriceBandOrder`)
+  // quando existir; sem ela, cai pro tier base + nome.
   const priceGroupRows: DisplayRow[] = useMemo(() => {
     const groups = new Map<PriceGroupKey, DisplayItem[]>()
     for (const item of visibleItems) {
-      const group = getPriceGroupKey(item.price, item.specs?.golpe)
+      const group = resolvePriceGroupKey(item.price, item.specs?.golpe, item.specs?.adminPriceGroup)
       if (!group) continue
       const bucket = groups.get(group) ?? []
       bucket.push({ ...item, priceGroup: group })
@@ -426,9 +452,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     return order
       .filter((key) => (groups.get(key)?.length ?? 0) > 0)
       .map((key) => {
-        const items = [...(groups.get(key) ?? [])].sort(
-          (left, right) => getTierScore(right.tier) - getTierScore(left.tier) || left.name.localeCompare(right.name),
-        )
+        const items = sortPriceBandItems(groups.get(key) ?? [])
         return {
           key,
           label: PRICE_BAND_LABEL[key],
@@ -477,12 +501,15 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className={cn("flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between", CARD_SURFACE)}>
         <div>
           <p className="text-xs font-medium text-muted-foreground">{t.tierlist.viewingBy}</p>
           <p className="mt-0.5 text-sm font-semibold text-foreground">{localizedModeDescription}</p>
         </div>
-        <div className="flex flex-wrap justify-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
+        {/* grid no mobile evita o wrap desbalanceado do flex (ex: 3 modos = 2 numa linha
+            + 1 sozinho centralizado, "colado" visualmente) — cada botão ocupa uma célula
+            de largura igual. A partir de sm, cabe tudo numa linha só, então volta a flex. */}
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-muted/30 p-1 sm:flex sm:flex-wrap sm:justify-center">
           {ratingModes.map((mode) => (
             <button
               key={mode.key}
@@ -491,7 +518,8 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                 // A cor do modo vai no ponto, não no fundo: como classe de `bg`, ela
                 // vencia o `bg-primary/20` no twMerge e deixava o rótulo (text-primary,
                 // branco no tema escuro) ilegível sobre um fundo claro.
-                "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
+                "flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all sm:px-4",
+                ratingModes.length % 2 !== 0 && "last:col-span-2",
                 ratingMode === mode.key
                   ? "bg-primary/20 text-primary"
                   : "text-muted-foreground hover:bg-muted/40 hover:text-foreground",
@@ -512,7 +540,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
       </div>
 
 
-      <div className="relative overflow-visible rounded-xl border border-border bg-card shadow-lg">
+      <div className={cn("relative overflow-visible rounded-xl border shadow-lg", CARD_SURFACE)}>
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_top,_rgba(124,58,237,0.07),_transparent_60%)]" />
 
         <table className="hidden w-full border-collapse md:table">
@@ -568,15 +596,20 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
                 return (
                   <div key={tierRow.key}>
-                    <div className={cn("mx-2 mt-2 flex items-center rounded-[11px] bg-gradient-to-b px-3 py-2", tierRow.gradient)}>
-                      <div className="flex min-w-0 items-baseline gap-2.5">
-                        <span className={cn("text-2xl font-black leading-none", tierRow.textColor)}>{tierRow.label}</span>
-                        {tierRow.subtitle && (
-                          <span className={cn("truncate text-sm font-medium opacity-75", tierRow.textColor)}>
-                            {tierRow.subtitle}
-                          </span>
+                    <div className={cn("mx-2 mt-2 flex min-w-0 items-center gap-2.5 rounded-[11px] bg-gradient-to-b px-3 py-2", tierRow.gradient)}>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-md bg-black/15 px-2 py-0.5 text-xl font-black leading-none",
+                          tierRow.textColor,
                         )}
-                      </div>
+                      >
+                        {tierRow.label}
+                      </span>
+                      {tierRow.subtitle && (
+                        <span className={cn("min-w-0 truncate text-xs font-semibold uppercase tracking-wide opacity-80", tierRow.textColor)}>
+                          {tierRow.subtitle}
+                        </span>
+                      )}
                     </div>
 
                     {/* p-2 alinha a grade com a faixa do tier (mx-2) e devolve largura aos

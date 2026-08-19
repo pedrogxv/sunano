@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { ShoppingBag } from "lucide-react"
-import { getStoreProductDetail } from "@/lib/server/repositories/store-repository"
+import { getStoreProductDetail, getStoreFilterOptions, listStoreProductsPaginated } from "@/lib/server/repositories/store-repository"
 import { ProductDetailContent } from "@/components/store/ProductDetailContent"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
@@ -52,5 +52,10 @@ export default async function ProductPage({ params }: PageProps) {
   const detail = await getStoreProductDetail(slug, "store")
   if (!detail) notFound()
 
-  return <ProductDetailContent {...detail} />
+  const [filterOptions, { items: previewPool }] = await Promise.all([
+    getStoreFilterOptions("store"),
+    listStoreProductsPaginated({ type: "store", page: 1, pageSize: 24 }),
+  ])
+
+  return <ProductDetailContent {...detail} filterOptions={filterOptions} previewPool={previewPool} />
 }

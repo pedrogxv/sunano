@@ -36,6 +36,13 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -137,19 +144,6 @@ const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
 }
 
 const REFUNDABLE_STATUSES: OrderStatus[] = ["paid", "awaiting_shipping_info", "shipped", "delivered"]
-
-/** Estilo de cada bloco de filtro quando ativo — mesma cor da badge de status correspondente. */
-const STATUS_FILTER_ACTIVE_STYLE: Record<OrderStatus | "all", string> = {
-  all: "border-primary/50 bg-primary/10 text-primary",
-  pending: "border-amber-500/50 bg-amber-500/10 text-amber-400",
-  paid: "border-emerald-500/50 bg-emerald-500/10 text-emerald-400",
-  awaiting_shipping_info: "border-blue-500/50 bg-blue-500/10 text-blue-300",
-  shipped: "border-violet-500/50 bg-violet-500/10 text-violet-300",
-  delivered: "border-teal-500/50 bg-teal-500/10 text-teal-300",
-  cancelled: "border-muted-foreground/40 bg-muted text-muted-foreground",
-  refunded: "border-sky-500/50 bg-sky-500/10 text-sky-400",
-  expired: "border-orange-500/50 bg-orange-500/10 text-orange-400",
-}
 
 const STATUS_FILTER_ICON_STYLE: Record<OrderStatus | "all", string> = {
   all: "bg-primary/15 text-primary",
@@ -603,37 +597,7 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Filtros de status */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-        {STATUS_FILTERS.map(({ value, label, icon: Icon }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setStatusFilter(value)}
-            aria-pressed={statusFilter === value}
-            className={cn(
-              "rounded-xl border p-3 text-left transition-all duration-200",
-              "hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5",
-              statusFilter === value
-                ? STATUS_FILTER_ACTIVE_STYLE[value]
-                : "border-border bg-card/60 hover:border-border/80"
-            )}
-          >
-            <div
-              className={cn(
-                "flex size-7 items-center justify-center rounded-lg",
-                statusFilter === value ? "bg-background/40" : STATUS_FILTER_ICON_STYLE[value]
-              )}
-            >
-              <Icon className="size-3.5" />
-            </div>
-            <p className="mt-2 text-xl font-bold tabular-nums text-foreground">{counts[value] ?? 0}</p>
-            <p className="truncate text-[11px]">{label}</p>
-          </button>
-        ))}
-      </div>
-
-      {/* Filtros adicionais */}
+      {/* Filtros */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
@@ -647,6 +611,50 @@ export default function AdminOrdersPage() {
           </div>
           <CustomerFilterCombobox value={customerFilter} onChange={setCustomerFilter} />
           <ProductFilterCombobox value={productFilter} onChange={setProductFilter} />
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | "all")}>
+            <SelectTrigger className="w-full border-border bg-card text-sm sm:w-64">
+              <SelectValue>
+                {(() => {
+                  const current = STATUS_FILTERS.find((f) => f.value === statusFilter)
+                  if (!current) return null
+                  const Icon = current.icon
+                  return (
+                    <span className="flex items-center gap-2">
+                      <span className="text-muted-foreground">Status:</span>
+                      <span
+                        className={cn(
+                          "flex size-5 items-center justify-center rounded-md",
+                          STATUS_FILTER_ICON_STYLE[current.value]
+                        )}
+                      >
+                        <Icon className="size-3" />
+                      </span>
+                      <span>{current.label}</span>
+                      <span className="text-muted-foreground">({counts[current.value] ?? 0})</span>
+                    </span>
+                  )
+                })()}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_FILTERS.map(({ value, label, icon: Icon }) => (
+                <SelectItem key={value} value={value}>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "flex size-5 items-center justify-center rounded-md",
+                        STATUS_FILTER_ICON_STYLE[value]
+                      )}
+                    >
+                      <Icon className="size-3" />
+                    </span>
+                    <span>{label}</span>
+                    <span className="text-muted-foreground">({counts[value] ?? 0})</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

@@ -477,6 +477,17 @@ export type Database = {
           reviewed_at?: string | null
         }
       }
+      forum_saved_posts: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          post_id: string
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["forum_saved_posts"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["forum_saved_posts"]["Insert"]>
+      }
       forum_categories: {
         Relationships: []
         Row: {

@@ -144,7 +144,6 @@ export function TopBar() {
   // No checkout o carrinho já está todo listado na própria página — mostrar o
   // botão/badge aqui só distrai (ou pior, deixa reabrir a gaveta por cima do QR code do PIX).
   const isCheckout = pathname?.startsWith("/checkout")
-  const isStore = pathname?.startsWith("/loja")
   const isCollapsed = isAdmin ? adminCollapsed : publicCollapsed
   const toggleCollapsed = isAdmin ? toggleAdmin : togglePublic
 
@@ -169,7 +168,7 @@ export function TopBar() {
     <div className="sticky top-0 z-20 min-h-16 border-b border-border bg-card">
       <div className="min-h-16 flex items-center justify-between gap-4 px-4 py-2">
         {/* Left — Toggle + Page Title + Description */}
-        <div className="flex items-center gap-3 min-w-0 shrink-0">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={handleSidebarToggle}
@@ -194,15 +193,12 @@ export function TopBar() {
           </div>
         </div>
 
-        <div className="min-w-0 flex-1" />
-
         {/* Right — no mobile, prioriza notificação e missão diária: Aura
             sai da barra e vira item do menu do avatar. */}
-        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          {/* Carrinho — visível sempre dentro da Loja; fora dela só aparece como
-              badge leve se houver itens pendentes, pra não poluir o header
-              nas outras seções. Some no checkout. */}
-          {!isAdmin && !isCheckout && <CartButton alwaysVisible={!!isStore} />}
+        <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 md:gap-2">
+          {/* Carrinho — só aparece se houver itens pendentes, pra não poluir
+              o header. Some no checkout. */}
+          {!isAdmin && !isCheckout && <CartButton />}
 
           {/* Notificações — vale também no admin, onde não há AuthUser aqui. */}
           <NotificationBell />

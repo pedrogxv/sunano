@@ -42,6 +42,8 @@ export type ForumListPost = {
   comment_count: number
   /** Somatório denormalizado da aura de todos os comentários do post — ver 20260823000000_forum_post_aura_from_comments.sql. */
   aura_count: number
+  /** Quantos usuários salvaram este post — ver forum_saved_posts (20260921000013_forum_saved_posts.sql). */
+  saved_count: number
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
@@ -114,6 +116,78 @@ async function resolveCategoryIdsForFilter(categoryId: string): Promise<string[]
   const { data } = await db.from("forum_categories").select("id").eq("parent_id", categoryId)
   const childIds = (data ?? []).map((row) => row.id)
   return [categoryId, ...childIds]
+}
+
+type ForumPostRow = {
+  id: string
+  slug: string
+  title: string
+  body_preview: string | null
+  author_name: string
+  user_id: string | null
+  category_id: string | null
+  media_image_urls: string[] | null
+  media_video_url: string | null
+  created_at: string
+  is_locked: boolean
+  is_pinned: boolean
+  is_hidden: boolean
+  aura_count: number | null
+}
+
+/**
+ * Monta `ForumListPost[]` a partir de linhas cruas de `forum_posts` —
+ * resolve contagem de comentários, categoria e perfil do autor em lote.
+ * Compartilhado por `listForumPosts` e `listSavedPosts` (posts salvos) para
+ * não duplicar o enriquecimento.
+ */
+export async function enrichForumPostRows(rows: ForumPostRow[]): Promise<ForumListPost[]> {
+  if (rows.length === 0) return []
+
+  const db = createSupabaseAdminClient()
+  const postIds = rows.map((p) => p.id)
+
+  const commentCounts: Record<string, number> = {}
+  const { data: comments } = await db
+    .from("forum_comments")
+    .select("post_id")
+    .in("post_id", postIds)
+    .eq("is_hidden", false)
+  for (const c of comments ?? []) {
+    commentCounts[c.post_id] = (commentCounts[c.post_id] ?? 0) + 1
+  }
+
+  const savedCounts: Record<string, number> = {}
+  const { data: savedRows } = await db.from("forum_saved_posts").select("post_id").in("post_id", postIds)
+  for (const s of savedRows ?? []) {
+    savedCounts[s.post_id] = (savedCounts[s.post_id] ?? 0) + 1
+  }
+
+  const profileMap = await buildProfileMap(rows.map((p) => p.user_id))
+  const categoryMap = await buildCategoryMap()
+
+  return rows.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    title: p.title,
+    body: p.body_preview,
+    author_name: p.author_name,
+    user_id: p.user_id,
+    category: resolveCategoryInfo(p.category_id, categoryMap),
+    media_image_urls: p.media_image_urls ?? [],
+    media_video_url: p.media_video_url,
+    created_at: p.created_at,
+    is_locked: p.is_locked,
+    is_pinned: p.is_pinned,
+    is_hidden: p.is_hidden,
+    comment_count: commentCounts[p.id] ?? 0,
+    aura_count: p.aura_count ?? 0,
+    saved_count: savedCounts[p.id] ?? 0,
+    author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
+    author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
+    author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
+    author_display_slug: p.user_id ? profileMap[p.user_id]?.display_slug ?? null : null,
+  }))
 }
 
 /** Slugs + data de todos os posts visíveis — usado só pelo `app/sitemap.ts`, sem o enriquecimento pesado de `listForumPosts`. */
@@ -204,44 +278,8 @@ export async function listForumPosts(params: {
 
   const rows = posts ?? []
   const hasMore = from + rows.length < (count ?? rows.length)
-  const postIds = rows.map((p) => p.id)
 
-  const commentCounts: Record<string, number> = {}
-  if (postIds.length > 0) {
-    const { data: comments } = await db
-      .from("forum_comments")
-      .select("post_id")
-      .in("post_id", postIds)
-      .eq("is_hidden", false)
-    for (const c of comments ?? []) {
-      commentCounts[c.post_id] = (commentCounts[c.post_id] ?? 0) + 1
-    }
-  }
-
-  const profileMap = await buildProfileMap(rows.map((p) => p.user_id))
-  const categoryMap = await buildCategoryMap()
-
-  const list = rows.map((p) => ({
-    id: p.id,
-    slug: p.slug,
-    title: p.title,
-    body: p.body_preview,
-    author_name: p.author_name,
-    user_id: p.user_id,
-    category: resolveCategoryInfo(p.category_id, categoryMap),
-    media_image_urls: p.media_image_urls ?? [],
-    media_video_url: p.media_video_url,
-    created_at: p.created_at,
-    is_locked: p.is_locked,
-    is_pinned: p.is_pinned,
-    is_hidden: p.is_hidden,
-    comment_count: commentCounts[p.id] ?? 0,
-    aura_count: p.aura_count ?? 0,
-    author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
-    author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
-    author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
-    author_display_slug: p.user_id ? profileMap[p.user_id]?.display_slug ?? null : null,
-  }))
+  const list = await enrichForumPostRows(rows)
 
   // "Em Alta" = mais discutido dentro desta página (ver comentário no topo
   // da função sobre a limitação de paginar uma ordenação calculada em JS).
@@ -633,13 +671,14 @@ export const getForumPostBySlug = cache(async (
   if (!post) return null
   if (post.is_hidden && post.user_id !== viewerId) return null
 
-  const [commentsPage, { count: totalCommentCount }] = await Promise.all([
+  const [commentsPage, { count: totalCommentCount }, { count: savedCount }] = await Promise.all([
     listForumComments(slug),
     db
       .from("forum_comments")
       .select("id", { count: "exact", head: true })
       .eq("post_id", post.id)
       .eq("is_hidden", false),
+    db.from("forum_saved_posts").select("id", { count: "exact", head: true }).eq("post_id", post.id),
   ])
 
   const profileMap = await buildProfileMap([post.user_id, ...commentsPage.comments.map((c) => c.user_id)])
@@ -661,6 +700,7 @@ export const getForumPostBySlug = cache(async (
     is_hidden: post.is_hidden,
     comment_count: totalCommentCount ?? 0,
     aura_count: post.aura_count ?? 0,
+    saved_count: savedCount ?? 0,
     author_display_name: post.user_id
       ? profileMap[post.user_id]?.display_name ?? post.author_name
       : post.author_name,

@@ -3,7 +3,7 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { recordPriceHistoryIfChanged } from "@/lib/server/repositories/store-repository"
+import { recordPriceHistoryIfChanged, listProductVariantGroups } from "@/lib/server/repositories/store-repository"
 import type { Database } from "@/lib/database.types"
 
 type StoreProductUpdate = Database["public"]["Tables"]["store_products"]["Update"]
@@ -23,25 +23,27 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   const { id } = await context.params
   const db = createSupabaseAdminClient()
-  const [{ data, error }, { data: specs }, { data: variants }, { data: peripherals }] = await Promise.all([
-    db.from("store_products").select("*").eq("id", id).single(),
-    db
-      .from("store_product_specs")
-      .select("id, label, value, position")
-      .eq("product_id", id)
-      .order("position", { ascending: true }),
-    db
-      .from("store_product_variants")
-      .select("id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url")
-      .eq("product_id", id)
-      .eq("is_active", true)
-      .order("position", { ascending: true }),
-    db
-      .from("store_product_peripherals")
-      .select("peripheral_id, position")
-      .eq("product_id", id)
-      .order("position", { ascending: true }),
-  ])
+  const [{ data, error }, { data: specs }, { data: variants }, { data: peripherals }, variantGroups] =
+    await Promise.all([
+      db.from("store_products").select("*").eq("id", id).single(),
+      db
+        .from("store_product_specs")
+        .select("id, label, value, position")
+        .eq("product_id", id)
+        .order("position", { ascending: true }),
+      db
+        .from("store_product_variants")
+        .select("id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, is_sold_out")
+        .eq("product_id", id)
+        .eq("is_active", true)
+        .order("position", { ascending: true }),
+      db
+        .from("store_product_peripherals")
+        .select("peripheral_id, position")
+        .eq("product_id", id)
+        .order("position", { ascending: true }),
+      listProductVariantGroups(id),
+    ])
 
   if (error) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
 
@@ -49,6 +51,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
     product: data,
     specs: specs ?? [],
     variants: variants ?? [],
+    variantGroups,
     peripheralIds: (peripherals ?? []).map((row) => row.peripheral_id),
   })
 }
@@ -67,7 +70,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   const allowed: (keyof StoreProductUpdate)[] = [
     "name", "description", "price_cents", "promo_price_cents", "stock", "images",
-    "category", "brand", "type", "condition", "condition_notes", "is_active", "is_sold_out",
+    "category", "brand", "type", "condition", "condition_notes", "sale_type", "is_active", "is_sold_out",
     "is_featured", "features", "video_url",
   ]
   const patch: StoreProductUpdate = {}

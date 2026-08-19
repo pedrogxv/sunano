@@ -24,6 +24,7 @@ export type StoreProductCard = {
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
+  sale_type: "pre_order" | "ready_stock" | "normal"
   has_variants: boolean
   /** Subconjunto leve das variantes, pra seleção direto no card — sem specs/imagens extras. */
   variants: StoreCardVariant[]
@@ -42,6 +43,7 @@ export type StoreCardVariant = {
   color: string | null
   icon: string | null
   image_url: string | null
+  is_sold_out: boolean
 }
 
 export type StoreProductVariant = {
@@ -56,6 +58,23 @@ export type StoreProductVariant = {
   icon: string | null
   image_url: string | null
   images: string[]
+  /** Toggle manual, independente de `stock === 0` — ver 20260921000014. */
+  is_sold_out: boolean
+}
+
+export type StoreProductVariantGroupOption = {
+  id: string
+  label: string
+  price_cents_override: number | null
+  is_sold_out: boolean
+  position: number
+}
+
+export type StoreProductVariantGroup = {
+  id: string
+  name: string
+  position: number
+  options: StoreProductVariantGroupOption[]
 }
 
 export type FeaturedProduct = {
@@ -86,7 +105,7 @@ export type LinkedProduct = {
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, is_active, is_sold_out, is_featured, created_at, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, position)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, created_at, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position)"
 
 type RawCardRow = Omit<StoreProductCard, "has_variants" | "variants"> & {
   variants: (StoreCardVariant & { position: number })[] | null
@@ -433,6 +452,7 @@ export type StoreProductDetail = {
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
+  sale_type: "pre_order" | "ready_stock" | "normal"
   is_sold_out: boolean
   peripheral_id: string | null
   features: string[]
@@ -473,6 +493,7 @@ export type StoreProductDetailResult = {
   linkedPeripherals: LinkedPeripheralRef[]
   specs: StoreProductSpec[]
   variants: StoreProductVariant[]
+  variantGroups: StoreProductVariantGroup[]
 }
 
 /**
@@ -491,7 +512,7 @@ export const getStoreProductDetail = cache(async (
   const { data: product, error } = await db
     .from("store_products")
     .select(
-      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, type, condition, condition_notes, is_sold_out, peripheral_id, features, video_url"
+      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, type, condition, condition_notes, sale_type, is_sold_out, peripheral_id, features, video_url"
     )
     .eq("slug", slug)
     .eq("type", type)
@@ -508,7 +529,7 @@ export const getStoreProductDetail = cache(async (
   let linkedProduct: LinkedStoreItem | null = null
   let linkedPeripheral: LinkedPeripheralRef | null = null
 
-  const [specsResult, variantsResult, peripheralsResult, linkedResult] = await Promise.all([
+  const [specsResult, variantsResult, variantGroupsResult, peripheralsResult, linkedResult] = await Promise.all([
     db
       .from("store_product_specs")
       .select("id, label, value, position")
@@ -517,10 +538,17 @@ export const getStoreProductDetail = cache(async (
     db
       .from("store_product_variants")
       .select(
-        "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, variant_images:store_product_variant_images(url, position)"
+        "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, is_sold_out, variant_images:store_product_variant_images(url, position)"
       )
       .eq("product_id", detail.id)
       .eq("is_active", true)
+      .order("position", { ascending: true }),
+    db
+      .from("store_product_variant_groups")
+      .select(
+        "id, name, position, options:store_product_variant_group_options(id, label, price_cents_override, is_sold_out, position)"
+      )
+      .eq("product_id", detail.id)
       .order("position", { ascending: true }),
     db
       .from("store_product_peripherals")
@@ -559,6 +587,11 @@ export const getStoreProductDetail = cache(async (
       images: [...(variant_images ?? [])].sort((a, b) => a.position - b.position).map((img) => img.url),
     })
   )
+
+  const variantGroups = ((variantGroupsResult.data ?? []) as unknown as StoreProductVariantGroup[]).map((g) => ({
+    ...g,
+    options: [...(g.options ?? [])].sort((a, b) => a.position - b.position),
+  }))
 
   type PeripheralJoinRow = {
     peripherals: { id: string; name: string; brand_id: string; brands: { name: string } | { name: string }[] | null; image_url: string | null } | null
@@ -599,7 +632,7 @@ export const getStoreProductDetail = cache(async (
       }
     : null
 
-  return { product: detail, linkedProduct, linkedPeripheral, linkedPeripherals, specs, variants }
+  return { product: detail, linkedProduct, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups }
 })
 
 /** Lista variantes de um produto (usado pela API admin ao editar). */
@@ -611,7 +644,7 @@ export async function listProductVariants(
   let query = db
     .from("store_product_variants")
     .select(
-      "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, variant_images:store_product_variant_images(url, position)"
+      "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, is_sold_out, variant_images:store_product_variant_images(url, position)"
     )
     .eq("product_id", productId)
     .order("position", { ascending: true })
@@ -636,6 +669,27 @@ export async function listProductVariants(
   )
 }
 
+/** Lista grupos de variantes (Switch, Voltagem...) de um produto, usado pela API admin ao editar. */
+export async function listProductVariantGroups(productId: string): Promise<StoreProductVariantGroup[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_product_variant_groups")
+    .select(
+      "id, name, position, options:store_product_variant_group_options(id, label, price_cents_override, is_sold_out, position)"
+    )
+    .eq("product_id", productId)
+    .order("position", { ascending: true })
+
+  if (error) {
+    console.error("[store-repository] listProductVariantGroups:", error)
+    return []
+  }
+  return ((data ?? []) as unknown as StoreProductVariantGroup[]).map((g) => ({
+    ...g,
+    options: [...(g.options ?? [])].sort((a, b) => a.position - b.position),
+  }))
+}
+
 export type CheckoutVariant = {
   id: string
   product_id: string
@@ -644,6 +698,7 @@ export type CheckoutVariant = {
   /** `null` = sem controle de estoque (nunca esgota). */
   stock: number | null
   is_active: boolean
+  is_sold_out: boolean
 }
 
 /** Busca variantes por id, para validação de estoque/preço no checkout. */
@@ -652,7 +707,7 @@ export async function getVariantsForCheckout(variantIds: string[]): Promise<Chec
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("store_product_variants")
-    .select("id, product_id, label, price_cents_override, stock, is_active")
+    .select("id, product_id, label, price_cents_override, stock, is_active, is_sold_out")
     .in("id", variantIds)
 
   if (error) {
@@ -660,6 +715,103 @@ export async function getVariantsForCheckout(variantIds: string[]): Promise<Chec
     return []
   }
   return (data ?? []) as unknown as CheckoutVariant[]
+}
+
+export type CheckoutVariantOption = {
+  id: string
+  label: string
+  price_cents_override: number | null
+  is_sold_out: boolean
+  group: { id: string; name: string; position: number; product_id: string }
+}
+
+/** Busca opções de grupos de variante por id, para validar/precificar no checkout. */
+export async function getVariantOptionsForCheckout(optionIds: string[]): Promise<CheckoutVariantOption[]> {
+  if (optionIds.length === 0) return []
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_product_variant_group_options")
+    .select(
+      "id, label, price_cents_override, is_sold_out, group:store_product_variant_groups(id, name, position, product_id)"
+    )
+    .in("id", optionIds)
+
+  if (error) {
+    console.error("[store-repository] getVariantOptionsForCheckout:", error)
+    return []
+  }
+  type RawRow = Omit<CheckoutVariantOption, "group"> & {
+    group: CheckoutVariantOption["group"] | CheckoutVariantOption["group"][] | null
+  }
+  return ((data ?? []) as unknown as RawRow[])
+    .map((row) => ({ ...row, group: Array.isArray(row.group) ? row.group[0] : row.group }))
+    .filter((row): row is CheckoutVariantOption => row.group != null)
+}
+
+const MAX_VARIANT_GROUPS_PER_PRODUCT = 6
+const MAX_OPTIONS_PER_VARIANT_GROUP = 12
+
+/**
+ * Substitui os grupos de variantes (e suas opções) de um produto — usado
+ * pela API admin ao salvar. Delete-then-insert, diferente do upsert-com-diff
+ * de replaceProductVariants: nada referencia essas linhas por FK (pedidos
+ * guardam só um snapshot denormalizado, não o id da opção), então não há
+ * necessidade de preservar ids entre saves — mesmo padrão de replaceProductSpecs.
+ */
+export async function replaceProductVariantGroups(
+  productId: string,
+  groups: Array<{
+    name: string
+    options: Array<{ label: string; price_cents_override: number | null; is_sold_out: boolean }>
+  }>
+): Promise<void> {
+  if (groups.length > MAX_VARIANT_GROUPS_PER_PRODUCT) {
+    throw new Error(`Cada produto pode ter no máximo ${MAX_VARIANT_GROUPS_PER_PRODUCT} grupos de variantes.`)
+  }
+  for (const g of groups) {
+    if (g.options.length > MAX_OPTIONS_PER_VARIANT_GROUP) {
+      throw new Error(`Cada grupo de variantes pode ter no máximo ${MAX_OPTIONS_PER_VARIANT_GROUP} opções.`)
+    }
+  }
+
+  const db = createSupabaseAdminClient()
+
+  const { error: deleteError } = await db
+    .from("store_product_variant_groups")
+    .delete()
+    .eq("product_id", productId)
+  if (deleteError) {
+    console.error("[store-repository] replaceProductVariantGroups delete:", deleteError)
+    throw new Error("Erro ao atualizar variantes.")
+  }
+
+  if (groups.length === 0) return
+
+  const { data: insertedGroups, error: insertGroupsError } = await db
+    .from("store_product_variant_groups")
+    .insert(groups.map((g, position) => ({ product_id: productId, name: g.name, position })))
+    .select("id")
+  if (insertGroupsError || !insertedGroups) {
+    console.error("[store-repository] replaceProductVariantGroups insert groups:", insertGroupsError)
+    throw new Error("Erro ao atualizar variantes.")
+  }
+
+  const optionRows = groups.flatMap((g, gi) =>
+    g.options.map((o, position) => ({
+      group_id: insertedGroups[gi].id as string,
+      label: o.label,
+      price_cents_override: o.price_cents_override,
+      is_sold_out: o.is_sold_out,
+      position,
+    }))
+  )
+  if (optionRows.length > 0) {
+    const { error: insertOptionsError } = await db.from("store_product_variant_group_options").insert(optionRows)
+    if (insertOptionsError) {
+      console.error("[store-repository] replaceProductVariantGroups insert options:", insertOptionsError)
+      throw new Error("Erro ao atualizar variantes.")
+    }
+  }
 }
 
 /** Limite diário (janela de 24h corridas) de unidades por produto e por usuário,
@@ -784,6 +936,7 @@ export async function replaceProductVariants(
     icon: string | null
     image_url: string | null
     images: string[]
+    is_sold_out: boolean
   }>
 ): Promise<void> {
   if (variants.length > MAX_VARIANTS_PER_PRODUCT) {
@@ -830,6 +983,7 @@ export async function replaceProductVariants(
         color: v.color,
         icon: v.icon,
         image_url: v.image_url,
+        is_sold_out: v.is_sold_out,
       })
       .eq("id", v.id)
     if (error) {
@@ -850,6 +1004,7 @@ export async function replaceProductVariants(
       color: v.color,
       icon: v.icon,
       image_url: v.image_url,
+      is_sold_out: v.is_sold_out,
     }))
     const { data: inserted, error } = await db.from("store_product_variants").insert(rows).select("id")
     if (error) {

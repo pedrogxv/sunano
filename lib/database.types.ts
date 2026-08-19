@@ -741,6 +741,7 @@ export type Database = {
           type: "store" | "bazaar"
           condition: "new" | "used" | "opened"
           condition_notes: string | null
+          sale_type: "pre_order" | "ready_stock" | "normal"
           is_active: boolean
           is_sold_out: boolean
           is_featured: boolean
@@ -764,6 +765,7 @@ export type Database = {
           type: "store" | "bazaar"
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
+          sale_type?: "pre_order" | "ready_stock" | "normal"
           is_active?: boolean
           is_sold_out?: boolean
           is_featured?: boolean
@@ -787,6 +789,7 @@ export type Database = {
           type?: "store" | "bazaar"
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
+          sale_type?: "pre_order" | "ready_stock" | "normal"
           is_active?: boolean
           is_sold_out?: boolean
           is_featured?: boolean
@@ -859,6 +862,7 @@ export type Database = {
           color: string | null
           icon: string | null
           image_url: string | null
+          is_sold_out: boolean
           created_at: string
           updated_at: string
         }
@@ -874,6 +878,7 @@ export type Database = {
           color?: string | null
           icon?: string | null
           image_url?: string | null
+          is_sold_out?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -889,8 +894,63 @@ export type Database = {
           color?: string | null
           icon?: string | null
           image_url?: string | null
+          is_sold_out?: boolean
           created_at?: string
           updated_at?: string
+        }
+      }
+      store_product_variant_groups: {
+        Relationships: []
+        Row: {
+          id: string
+          product_id: string
+          name: string
+          position: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          name: string
+          position?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          name?: string
+          position?: number
+          created_at?: string
+        }
+      }
+      store_product_variant_group_options: {
+        Relationships: []
+        Row: {
+          id: string
+          group_id: string
+          label: string
+          price_cents_override: number | null
+          is_sold_out: boolean
+          position: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          group_id: string
+          label: string
+          price_cents_override?: number | null
+          is_sold_out?: boolean
+          position?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          group_id?: string
+          label?: string
+          price_cents_override?: number | null
+          is_sold_out?: boolean
+          position?: number
+          created_at?: string
         }
       }
       store_product_variant_images: {

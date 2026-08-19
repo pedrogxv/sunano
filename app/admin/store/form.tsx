@@ -12,7 +12,7 @@ import {
 import { restrictToParentElement } from "@dnd-kit/modifiers"
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { CheckCircle2, GripVertical, Loader2, Minus, Plus, Sparkles, Trash2, Upload, X, XCircle } from "lucide-react"
+import { Ban, GripVertical, Loader2, Minus, Plus, Sparkles, Trash2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,8 +30,8 @@ import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
-import { encodeFeature, featureLabel, isGoodFeature } from "@/lib/store-features"
 import { compressImageFile } from "@/lib/client/compress-image"
+import { removeBackground } from "@/lib/client/remove-background"
 import { VARIANT_ICONS, VARIANT_ICON_NAMES } from "@/lib/variant-icons"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 
@@ -51,6 +51,7 @@ interface StoreProductVariantInput {
   icon: string | null
   image_url: string | null
   images?: string[]
+  is_sold_out?: boolean
 }
 
 interface StoreProductVariantRow {
@@ -60,6 +61,33 @@ interface StoreProductVariantRow {
   icon: string | null
   image_url: string | null
   images: string[]
+  is_sold_out: boolean
+}
+
+interface StoreProductVariantGroupOptionInput {
+  id?: string
+  label: string
+  price_cents_override: number | null
+  is_sold_out: boolean
+}
+
+interface StoreProductVariantGroupInput {
+  id?: string
+  name: string
+  options: StoreProductVariantGroupOptionInput[]
+}
+
+interface VariantGroupOptionRow {
+  id?: string
+  label: string
+  price_brl: string
+  is_sold_out: boolean
+}
+
+interface VariantGroupRow {
+  id?: string
+  name: string
+  options: VariantGroupOptionRow[]
 }
 
 interface StoreProduct {
@@ -76,6 +104,7 @@ interface StoreProduct {
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
+  sale_type: "pre_order" | "ready_stock" | "normal"
   is_active: boolean
   is_sold_out: boolean
   features?: string[]
@@ -86,6 +115,7 @@ interface StoreProductFormProps {
   product?: StoreProduct
   initialSpecs?: StoreProductSpec[]
   initialVariants?: StoreProductVariantInput[]
+  initialVariantGroups?: StoreProductVariantGroupInput[]
   initialPeripheralIds?: string[]
   defaultType?: "store" | "bazaar"
   onSuccess: (product: StoreProduct) => void
@@ -153,9 +183,7 @@ const PERIPHERAL_TO_STORE_CATEGORY: Record<string, string> = {
   glasspad: "glasspad",
   headset: "headset",
   iem: "iem",
-  monitors: "monitors",
   switches: "switches",
-  chairs: "chairs",
   dac_amp: "dac_amp",
   feet: "feet",
 }
@@ -188,7 +216,6 @@ function buildAutofillFromPeripheral(p: PeripheralFullData): {
   category: string | null
   brand: string
   specs: StoreProductSpec[]
-  features: string[]
   description: string
   images: string[]
 } {
@@ -213,11 +240,6 @@ function buildAutofillFromPeripheral(p: PeripheralFullData): {
     pushSpec(label, details[key] as string | undefined)
   }
 
-  const features: string[] = [
-    ...(details.pros ?? []).map((label) => encodeFeature(label, true)),
-    ...(details.cons ?? []).map((label) => encodeFeature(label, false)),
-  ]
-
   const descriptionParts: string[] = []
   if (details.summary) descriptionParts.push(details.summary)
   if (details.highlights && details.highlights.length > 0) {
@@ -231,7 +253,6 @@ function buildAutofillFromPeripheral(p: PeripheralFullData): {
     category: PERIPHERAL_TO_STORE_CATEGORY[p.category] ?? null,
     brand: p.brand,
     specs,
-    features,
     description,
     images,
   }
@@ -244,12 +265,11 @@ const CATEGORIES = [
   { value: "glasspad", label: "Glasspad" },
   { value: "headset", label: "Headset" },
   { value: "iem", label: "IEM" },
-  { value: "monitors", label: "Monitor" },
   { value: "switches", label: "Switches" },
-  { value: "chairs", label: "Cadeira" },
   { value: "dac_amp", label: "DAC/AMP" },
   { value: "feet", label: "Feet" },
   { value: "acessorio", label: "Acessório" },
+  { value: "services", label: "Serviços" },
   { value: "outro", label: "Outro" },
 ]
 
@@ -258,6 +278,8 @@ const MAX_STOCK = 999_999
 const MAX_IMAGES = 8
 const MAX_VARIANT_IMAGES = 3
 const MAX_VARIANTS = 12
+const MAX_VARIANT_GROUPS = 6
+const MAX_OPTIONS_PER_VARIANT_GROUP = 12
 const MIN_PRICE_CENTS = 600
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const IMAGE_COMPRESS_OPTIONS = {
@@ -319,6 +341,7 @@ export function StoreProductForm({
   product,
   initialSpecs,
   initialVariants,
+  initialVariantGroups,
   initialPeripheralIds,
   defaultType = "store",
   onSuccess,
@@ -339,6 +362,7 @@ export function StoreProductForm({
     type: product?.type ?? defaultType,
     condition: product?.condition ?? (defaultType === "bazaar" ? "used" : "new"),
     condition_notes: product?.condition_notes ?? "",
+    sale_type: product?.sale_type ?? "normal",
     is_active: product?.is_active !== false,
     is_sold_out: product?.is_sold_out ?? false,
     video_url: product?.video_url ?? "",
@@ -346,10 +370,6 @@ export function StoreProductForm({
 
   const [hasStock, setHasStock] = useState(product ? product.stock != null : true)
   const [images, setImages] = useState<string[]>(product?.images ?? [])
-  const [features, setFeatures] = useState<string[]>(product?.features ?? [])
-  const [featureInput, setFeatureInput] = useState("")
-  const [featureIsGood, setFeatureIsGood] = useState(true)
-  const featureInputRef = useRef<HTMLInputElement>(null)
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [specs, setSpecs] = useState<StoreProductSpec[]>(
     initialSpecs && initialSpecs.length > 0 ? initialSpecs : [{ label: "", value: "" }]
@@ -362,9 +382,22 @@ export function StoreProductForm({
       icon: v.icon ?? null,
       image_url: v.image_url ?? null,
       images: v.images ?? [],
+      is_sold_out: v.is_sold_out ?? false,
     }))
   )
   const [uploadingVariantImage, setUploadingVariantImage] = useState<number | null>(null)
+  const [variantGroups, setVariantGroups] = useState<VariantGroupRow[]>(
+    (initialVariantGroups ?? []).map((g) => ({
+      id: g.id,
+      name: g.name,
+      options: g.options.map((o) => ({
+        id: o.id,
+        label: o.label,
+        price_brl: o.price_cents_override != null ? (o.price_cents_override / 100).toFixed(2) : "",
+        is_sold_out: o.is_sold_out,
+      })),
+    }))
+  )
   const [peripheralIds, setPeripheralIds] = useState<string[]>(initialPeripheralIds ?? [])
   const [peripheralOptions, setPeripheralOptions] = useState<PeripheralOption[]>([])
   const [autofilling, setAutofilling] = useState(false)
@@ -446,14 +479,6 @@ export function StoreProductForm({
     })
   }
 
-  function addFeature() {
-    const value = featureInput.trim()
-    if (!value) return
-    setFeatures((prev) => [...prev, encodeFeature(value, featureIsGood)])
-    setFeatureInput("")
-    featureInputRef.current?.focus()
-  }
-
   function updateVariant(index: number, field: "label", value: string) {
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, [field]: value } : v)))
   }
@@ -464,6 +489,10 @@ export function StoreProductForm({
 
   function setVariantIcon(index: number, icon: string | null) {
     setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, icon: v.icon === icon ? null : icon } : v)))
+  }
+
+  function toggleVariantSoldOut(index: number) {
+    setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, is_sold_out: !v.is_sold_out } : v)))
   }
 
   function addVariantRow() {
@@ -482,6 +511,7 @@ export function StoreProductForm({
           icon: null,
           image_url: null,
           images: [],
+          is_sold_out: false,
         },
       ]
     })
@@ -489,6 +519,75 @@ export function StoreProductForm({
 
   function removeVariantRow(index: number) {
     setVariants((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  function addVariantGroup() {
+    setVariantGroups((prev) => {
+      if (prev.length >= MAX_VARIANT_GROUPS) {
+        toast.error("Limite de grupos atingido", {
+          description: `Cada produto pode ter no máximo ${MAX_VARIANT_GROUPS} grupos de variantes.`,
+        })
+        return prev
+      }
+      return [...prev, { name: "", options: [{ label: "", price_brl: "", is_sold_out: false }] }]
+    })
+  }
+
+  function removeVariantGroup(groupIndex: number) {
+    setVariantGroups((prev) => prev.filter((_, i) => i !== groupIndex))
+  }
+
+  function updateVariantGroupName(groupIndex: number, name: string) {
+    setVariantGroups((prev) => prev.map((g, i) => (i === groupIndex ? { ...g, name } : g)))
+  }
+
+  function addVariantGroupOption(groupIndex: number) {
+    setVariantGroups((prev) =>
+      prev.map((g, i) => {
+        if (i !== groupIndex) return g
+        if (g.options.length >= MAX_OPTIONS_PER_VARIANT_GROUP) {
+          toast.error("Limite de variantes atingido", {
+            description: `Cada grupo pode ter no máximo ${MAX_OPTIONS_PER_VARIANT_GROUP} variantes.`,
+          })
+          return g
+        }
+        return { ...g, options: [...g.options, { label: "", price_brl: "", is_sold_out: false }] }
+      })
+    )
+  }
+
+  function removeVariantGroupOption(groupIndex: number, optionIndex: number) {
+    setVariantGroups((prev) =>
+      prev.map((g, i) => (i === groupIndex ? { ...g, options: g.options.filter((_, oi) => oi !== optionIndex) } : g))
+    )
+  }
+
+  function updateVariantGroupOption(
+    groupIndex: number,
+    optionIndex: number,
+    field: "label" | "price_brl",
+    value: string
+  ) {
+    setVariantGroups((prev) =>
+      prev.map((g, i) =>
+        i === groupIndex
+          ? { ...g, options: g.options.map((o, oi) => (oi === optionIndex ? { ...o, [field]: value } : o)) }
+          : g
+      )
+    )
+  }
+
+  function toggleVariantGroupOptionSoldOut(groupIndex: number, optionIndex: number) {
+    setVariantGroups((prev) =>
+      prev.map((g, i) =>
+        i === groupIndex
+          ? {
+              ...g,
+              options: g.options.map((o, oi) => (oi === optionIndex ? { ...o, is_sold_out: !o.is_sold_out } : o)),
+            }
+          : g
+      )
+    )
   }
 
   async function handleVariantImageAdd(index: number, e: React.ChangeEvent<HTMLInputElement>) {
@@ -603,14 +702,6 @@ export function StoreProductForm({
         })
       }
 
-      if (filled.features.length > 0) {
-        setFeatures((prev) => {
-          const existing = new Set(prev)
-          const additions = filled.features.filter((f) => !existing.has(f))
-          return [...prev, ...additions]
-        })
-      }
-
       if (filled.images.length > 0) {
         setImages((prev) => {
           const existing = new Set(prev)
@@ -663,13 +754,23 @@ export function StoreProductForm({
     setUploading(true)
     setError(null)
     try {
-      const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
-      if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+      // Remove o fundo automaticamente (mesmo comportamento do periférico).
+      // A saída já vem em PNG redimensionado, então pula a recompressão pra
+      // JPEG -- ela achataria a transparência num fundo opaco.
+      let prepared: File
+      try {
+        prepared = await removeBackground(file)
+      } catch (err) {
+        console.error("Falha ao remover o fundo:", err)
+        prepared = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
+      }
+
+      if (prepared.size > MAX_IMAGE_FILE_SIZE_BYTES) {
         throw new Error(
-          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após compressão).`
+          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após remoção de fundo).`
         )
       }
-      const url = await uploadImage(compressed)
+      const url = await uploadImage(prepared)
       setImages((prev) => [...prev, url])
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
@@ -734,6 +835,7 @@ export function StoreProductForm({
         icon: string | null
         image_url: string | null
         images: string[]
+        is_sold_out: boolean
       }> = []
       for (const v of variants) {
         const label = v.label.trim()
@@ -751,7 +853,40 @@ export function StoreProductForm({
           icon: v.icon,
           image_url: v.image_url,
           images: v.images,
+          is_sold_out: v.is_sold_out,
         })
+      }
+
+      if (variantGroups.length > MAX_VARIANT_GROUPS) {
+        throw new Error(`Cada produto pode ter no máximo ${MAX_VARIANT_GROUPS} grupos de variantes.`)
+      }
+
+      const cleanVariantGroups: Array<{
+        name: string
+        options: Array<{ label: string; price_cents_override: number | null; is_sold_out: boolean }>
+      }> = []
+      for (const g of variantGroups) {
+        const name = g.name.trim()
+        const options = g.options.filter((o) => o.label.trim())
+        if (!name || options.length === 0) continue
+        if (options.length > MAX_OPTIONS_PER_VARIANT_GROUP) {
+          throw new Error(`Cada grupo pode ter no máximo ${MAX_OPTIONS_PER_VARIANT_GROUP} variantes ("${name}").`)
+        }
+        const cleanOptions: Array<{ label: string; price_cents_override: number | null; is_sold_out: boolean }> = []
+        for (const o of options) {
+          const label = o.label.trim()
+          let priceCentsOverride: number | null = null
+          if (o.price_brl.trim()) {
+            priceCentsOverride = Math.round(parseFloat(o.price_brl.replace(",", ".")) * 100)
+            if (isNaN(priceCentsOverride) || priceCentsOverride < MIN_PRICE_CENTS) {
+              throw new Error(
+                `Preço inválido em "${name} — ${label}". Use um valor de pelo menos ${formatBRL(MIN_PRICE_CENTS)}.`
+              )
+            }
+          }
+          cleanOptions.push({ label, price_cents_override: priceCentsOverride, is_sold_out: o.is_sold_out })
+        }
+        cleanVariantGroups.push({ name, options: cleanOptions })
       }
 
       const payload = {
@@ -766,9 +901,9 @@ export function StoreProductForm({
         type: formData.type,
         condition: formData.condition,
         condition_notes: formData.condition_notes.trim() || null,
+        sale_type: formData.sale_type,
         is_active: formData.is_active,
         is_sold_out: formData.is_sold_out,
-        features,
         video_url: videoUrl || null,
       }
 
@@ -814,6 +949,18 @@ export function StoreProductForm({
         const variantsData = (await variantsRes.json()) as { error?: string }
         toast.error("Produto salvo, mas houve erro nas variantes", {
           description: variantsData.error,
+        })
+      }
+
+      const variantGroupsRes = await fetch(`/api/admin/store/products/${data.product.id}/variant-groups`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groups: cleanVariantGroups }),
+      })
+      if (!variantGroupsRes.ok) {
+        const variantGroupsData = (await variantGroupsRes.json()) as { error?: string }
+        toast.error("Produto salvo, mas houve erro nas variantes", {
+          description: variantGroupsData.error,
         })
       }
 
@@ -1037,14 +1184,14 @@ export function StoreProductForm({
           )}
         </div>
         <p className="text-[10px] text-muted-foreground">
-          Arraste pelo ícone no canto para reordenar. A primeira imagem é a principal. Até{" "}
-          {MAX_IMAGES} imagens, {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada
-          (comprimida automaticamente se maior). Recomendado: fundo branco ou transparente.
+          O fundo é removido automaticamente ao enviar. Arraste pelo ícone no canto para
+          reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
+          {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada.
         </p>
       </div>
 
-      {/* Type + Condition */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Type + Condition + Sale type */}
+      <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2">
           <Label>Tipo</Label>
           <Select value={formData.type} onValueChange={(v) => set("type", v)}>
@@ -1070,6 +1217,27 @@ export function StoreProductForm({
               <SelectItem value="used">Usado</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Tipo de Venda</Label>
+          <Select value={formData.sale_type} onValueChange={(v) => set("sale_type", v)}>
+            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="pre_order">🚀 Pré-venda</SelectItem>
+              <SelectItem value="ready_stock">📦 Pronta Entrega</SelectItem>
+            </SelectContent>
+          </Select>
+          {formData.sale_type === "pre_order" && (
+            <p className="text-[10px] text-amber-400">
+              Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; ou
+              &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar — o anúncio, reviews
+              e vendas já feitas continuam os mesmos.
+            </p>
+          )}
         </div>
       </div>
 
@@ -1242,9 +1410,9 @@ export function StoreProductForm({
         </div>
       </div>
 
-      {/* Variantes */}
+      {/* Cor */}
       <div className="space-y-2">
-        <Label>Variantes (opcional)</Label>
+        <Label>Cor (Opcional)</Label>
         <p className="text-[10px] text-muted-foreground/60">
           Se o produto tem variações visuais (cor, modelo, etc.), cadastre aqui. Para um produto
           com preço ou estoque diferente, cadastre-o como um anúncio separado.
@@ -1259,6 +1427,19 @@ export function StoreProductForm({
                   placeholder="Ex: Preto"
                   className="min-w-[140px] flex-1 text-sm"
                 />
+                <Button
+                  type="button"
+                  variant={variant.is_sold_out ? "default" : "outline"}
+                  size="sm"
+                  className={cn(
+                    "h-8 shrink-0 gap-1.5 text-[11px]",
+                    variant.is_sold_out && "bg-red-500/90 text-white hover:bg-red-500"
+                  )}
+                  onClick={() => toggleVariantSoldOut(idx)}
+                >
+                  <Ban className="size-3.5" />
+                  Esgotado
+                </Button>
                 <Button
                   type="button"
                   variant="ghost"
@@ -1412,69 +1593,115 @@ export function StoreProductForm({
         </div>
       </div>
 
-      {/* Características */}
+      {/* Variantes */}
       <div className="space-y-2">
-        <Label>Características</Label>
+        <Label>Variantes (Opcional)</Label>
         <p className="text-[10px] text-muted-foreground/60">
-          Lista de destaques do produto (ex: &quot;Sensor óptico de 26.000 DPI&quot;).
+          Outros tipos de opção do produto (Switch, Voltagem, Tamanho...). Cada opção é só um
+          botão de texto, e pode ter um preço diferente do preço base.
         </p>
-        <div className="flex gap-2">
+        <div className="space-y-3">
+          {variantGroups.map((group, groupIdx) => (
+            <div key={group.id ?? groupIdx} className="space-y-2 rounded-lg border border-border bg-muted/10 p-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  value={group.name}
+                  onChange={(e) => updateVariantGroupName(groupIdx, e.target.value)}
+                  placeholder="Ex: Switch, Voltagem, Tamanho..."
+                  className="min-w-[140px] flex-1 text-sm font-medium"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 text-muted-foreground hover:text-red-400"
+                  onClick={() => removeVariantGroup(groupIdx)}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+
+              <div className="space-y-1.5 border-t border-border/60 pt-2">
+                {group.options.map((option, optionIdx) => (
+                  <div key={option.id ?? optionIdx} className="flex flex-wrap items-center gap-1.5">
+                    <Input
+                      value={option.label}
+                      onChange={(e) => updateVariantGroupOption(groupIdx, optionIdx, "label", e.target.value)}
+                      placeholder="Ex: WUKONG PRO"
+                      className="min-w-[120px] flex-1 text-sm"
+                    />
+                    <div className="relative w-[110px] shrink-0">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
+                        R$
+                      </span>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        value={option.price_brl}
+                        onChange={(e) => updateVariantGroupOption(groupIdx, optionIdx, "price_brl", e.target.value)}
+                        placeholder="Opcional"
+                        className="pl-7 text-sm"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant={option.is_sold_out ? "default" : "outline"}
+                      size="sm"
+                      className={cn(
+                        "h-8 shrink-0 gap-1.5 text-[11px]",
+                        option.is_sold_out && "bg-red-500/90 text-white hover:bg-red-500"
+                      )}
+                      onClick={() => toggleVariantGroupOptionSoldOut(groupIdx, optionIdx)}
+                    >
+                      <Ban className="size-3.5" />
+                      Esgotado
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-muted-foreground hover:text-red-400"
+                      onClick={() => removeVariantGroupOption(groupIdx, optionIdx)}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => addVariantGroupOption(groupIdx)}
+                  disabled={group.options.length >= MAX_OPTIONS_PER_VARIANT_GROUP}
+                >
+                  <Plus className="size-3.5" />
+                  Adicionar variante
+                </Button>
+                <span className="text-[10px] text-muted-foreground">
+                  {group.options.length}/{MAX_OPTIONS_PER_VARIANT_GROUP}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="outline"
-            size="icon"
-            className={cn(
-              "shrink-0",
-              featureIsGood ? "border-emerald-500/40 text-emerald-400" : "border-red-500/40 text-red-400"
-            )}
-            onClick={() => setFeatureIsGood((prev) => !prev)}
-            title={featureIsGood ? "Característica positiva (clique para marcar como negativa)" : "Característica negativa (clique para marcar como positiva)"}
+            size="sm"
+            className="gap-1.5"
+            onClick={addVariantGroup}
+            disabled={variantGroups.length >= MAX_VARIANT_GROUPS}
           >
-            {featureIsGood ? <CheckCircle2 className="size-4" /> : <XCircle className="size-4" />}
+            <Plus className="size-3.5" />
+            Adicionar grupo de variantes
           </Button>
-          <Input
-            ref={featureInputRef}
-            value={featureInput}
-            onChange={(e) => setFeatureInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault()
-                addFeature()
-              }
-            }}
-            placeholder="Ex: Bateria com 95h de duração"
-            className="text-sm"
-          />
-          <Button type="button" variant="outline" size="icon" className="shrink-0" onClick={addFeature}>
-            <Plus className="size-4" />
-          </Button>
+          <span className="text-[10px] text-muted-foreground">{variantGroups.length}/{MAX_VARIANT_GROUPS}</span>
         </div>
-        {features.length > 0 && (
-          <ul className="space-y-1.5">
-            {features.map((feature, idx) => (
-              <li
-                key={idx}
-                className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/20 px-3 py-1.5 text-sm"
-              >
-                <span className="flex items-center gap-2 text-foreground/90">
-                  {isGoodFeature(feature) ? (
-                    <CheckCircle2 className="size-3.5 shrink-0 text-emerald-400" />
-                  ) : (
-                    <XCircle className="size-3.5 shrink-0 text-red-400" />
-                  )}
-                  {featureLabel(feature)}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setFeatures((prev) => prev.filter((_, i) => i !== idx))}
-                  className="text-muted-foreground hover:text-red-400"
-                >
-                  <Trash2 className="size-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
 
       {/* Actions */}

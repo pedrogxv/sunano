@@ -15,6 +15,7 @@ interface OrderItem {
   price_cents?: number
   quantity?: number
   variant_label?: string | null
+  variant_options?: { group: string; label: string }[] | null
 }
 
 interface OrderReceipt {
@@ -155,6 +156,9 @@ function PixCheckoutContent() {
                     {item.variant_label ? (
                       <span className="text-muted-foreground"> — {item.variant_label}</span>
                     ) : null}
+                    {(item.variant_options ?? []).map((o, oi) => (
+                      <span key={oi} className="text-muted-foreground"> — {o.label}</span>
+                    ))}
                   </span>
                   {typeof item.price_cents === "number" && (
                     <span className="shrink-0 text-muted-foreground">

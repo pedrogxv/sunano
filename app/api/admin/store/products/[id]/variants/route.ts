@@ -24,6 +24,7 @@ const variantsSchema = z.object({
         icon: z.string().trim().max(40).nullable().optional(),
         image_url: z.string().trim().url().max(2048).nullable().optional(),
         images: z.array(z.string().trim().url().max(2048)).max(MAX_IMAGES_PER_VARIANT).optional().default([]),
+        is_sold_out: z.boolean().optional().default(false),
       })
       .refine(
         (v) => v.promo_price_cents == null || v.price_cents_override == null || v.promo_price_cents < v.price_cents_override,
@@ -62,6 +63,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         color: v.color ?? null,
         icon: v.icon ?? null,
         image_url: v.image_url ?? null,
+        is_sold_out: v.is_sold_out ?? false,
       }))
     )
   } catch (err) {

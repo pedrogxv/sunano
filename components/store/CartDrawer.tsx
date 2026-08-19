@@ -125,9 +125,11 @@ export function CartDrawer() {
             </div>
           ) : (
             <div className="space-y-2.5">
-              {items.map((item) => (
+              {items.map((item) => {
+                const optionIds = item.variantOptions.map((o) => o.optionId)
+                return (
                 <div
-                  key={`${item.productId}:${item.variantId ?? "base"}`}
+                  key={`${item.productId}:${item.variantId ?? "base"}:${optionIds.join(",")}`}
                   className="group flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
                 >
                   {/* Image */}
@@ -167,6 +169,11 @@ export function CartDrawer() {
                         )
                       })()}
                     </p>
+                    {item.variantOptions.length > 0 && (
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {item.variantOptions.map((o) => `${o.groupName}: ${o.label}`).join(" · ")}
+                      </p>
+                    )}
                     <p className="mt-0.5 text-xs font-bold text-emerald-400">{formatBRL(item.priceCents)}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       <span className={cn(
@@ -188,7 +195,7 @@ export function CartDrawer() {
                   {/* Qty */}
                   <div className="flex flex-col items-end gap-1.5">
                     <button
-                      onClick={() => remove(item.productId, item.variantId)}
+                      onClick={() => remove(item.productId, item.variantId, optionIds)}
                       aria-label={`Remover ${item.name}`}
                       className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
                     >
@@ -196,7 +203,7 @@ export function CartDrawer() {
                     </button>
                     <div className="flex items-center gap-1">
                       <button
-                        onClick={() => decrement(item.productId, item.variantId)}
+                        onClick={() => decrement(item.productId, item.variantId, optionIds)}
                         aria-label="Diminuir quantidade"
                         className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
                       >
@@ -206,7 +213,7 @@ export function CartDrawer() {
                         {item.quantity}
                       </span>
                       <button
-                        onClick={() => increment(item.productId, item.variantId)}
+                        onClick={() => increment(item.productId, item.variantId, optionIds)}
                         disabled={item.stock !== null && item.quantity >= item.stock}
                         aria-label="Aumentar quantidade"
                         className={cn(
@@ -219,7 +226,8 @@ export function CartDrawer() {
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

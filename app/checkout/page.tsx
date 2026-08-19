@@ -101,7 +101,12 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ productId: i.productId, variantId: i.variantId, quantity: i.quantity })),
+          items: items.map((i) => ({
+            productId: i.productId,
+            variantId: i.variantId,
+            variantOptionIds: i.variantOptions.map((o) => o.optionId),
+            quantity: i.quantity,
+          })),
           ...(needsPayerInfo ? { guestName, guestDocument: guestDocument.replace(/\D/g, "") } : {}),
         }),
       })
@@ -153,7 +158,7 @@ export default function CheckoutPage() {
       <div className="mb-4 space-y-2">
         {items.map((item) => (
           <div
-            key={`${item.productId}:${item.variantId ?? "base"}`}
+            key={`${item.productId}:${item.variantId ?? "base"}:${item.variantOptions.map((o) => o.optionId).join(",")}`}
             className="flex items-center gap-3 rounded-xl border border-border bg-muted/20 p-3"
           >
             {/* Photo */}
@@ -177,6 +182,9 @@ export default function CheckoutPage() {
               >
                 {item.name}
                 {item.variantLabel && <span className="text-muted-foreground"> — {item.variantLabel}</span>}
+                {item.variantOptions.map((o) => (
+                  <span key={o.optionId} className="text-muted-foreground"> — {o.label}</span>
+                ))}
               </Link>
               <div className="mt-1 flex flex-wrap items-center gap-1">
                 <span className={cn(

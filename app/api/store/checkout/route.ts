@@ -9,6 +9,7 @@ import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
 import {
   getVariantsForCheckout,
+  getVariantOptionsForCheckout,
   getRecentProductPurchaseQuantity,
   DAILY_PURCHASE_LIMIT_NO_STOCK,
 } from "@/lib/server/repositories/store-repository"
@@ -24,6 +25,7 @@ export const maxDuration = 20
 interface CheckoutItem {
   productId: string
   variantId?: string | null
+  variantOptionIds?: string[] | null
   quantity: number
 }
 
@@ -159,26 +161,34 @@ export async function POST(request: NextRequest) {
           !i.productId ||
           !Number.isInteger(i.quantity) ||
           i.quantity < 1 ||
-          (i.variantId != null && (typeof i.variantId !== "string" || !i.variantId))
+          (i.variantId != null && (typeof i.variantId !== "string" || !i.variantId)) ||
+          (i.variantOptionIds != null &&
+            (!Array.isArray(i.variantOptionIds) || i.variantOptionIds.some((o) => typeof o !== "string" || !o)))
       )
     ) {
       return NextResponse.json({ error: "Quantidade inválida no carrinho." }, { status: 400 })
     }
 
-    // Agrupa por (produto, variante) antes de checar estoque — sem isso,
-    // repetir o mesmo par em várias entradas do carrinho passava pela
-    // checagem de estoque por linha mesmo pedindo, no total, mais unidades
-    // do que existem. Duas variantes do mesmo produto NÃO são mescladas —
-    // cada uma tem seu próprio estoque.
-    const lineKey = (productId: string, variantId: string | null) => `${productId}:${variantId ?? ""}`
-    const quantityByLine = new Map<string, { productId: string; variantId: string | null; quantity: number }>()
+    // Agrupa por (produto, variante, opções de variante) antes de checar
+    // estoque — sem isso, repetir o mesmo par em várias entradas do carrinho
+    // passava pela checagem de estoque por linha mesmo pedindo, no total,
+    // mais unidades do que existem. Combinações diferentes do mesmo produto
+    // NÃO são mescladas — cada uma tem seu próprio estoque/preço.
+    const lineKey = (productId: string, variantId: string | null, optionIds: string[]) =>
+      `${productId}:${variantId ?? ""}:${[...optionIds].sort().join(",")}`
+    const quantityByLine = new Map<
+      string,
+      { productId: string; variantId: string | null; optionIds: string[]; quantity: number }
+    >()
     for (const item of items) {
       const variantId = item.variantId ?? null
-      const key = lineKey(item.productId, variantId)
+      const optionIds = [...new Set(item.variantOptionIds ?? [])]
+      const key = lineKey(item.productId, variantId, optionIds)
       const existing = quantityByLine.get(key)
       quantityByLine.set(key, {
         productId: item.productId,
         variantId,
+        optionIds,
         quantity: (existing?.quantity ?? 0) + item.quantity,
       })
     }
@@ -193,13 +203,15 @@ export async function POST(request: NextRequest) {
     const mergedItems = [...quantityByLine.values()]
     const productIds = [...new Set(mergedItems.map((line) => line.productId))]
     const variantIds = [...new Set(mergedItems.map((line) => line.variantId).filter((id): id is string => id != null))]
+    const optionIds = [...new Set(mergedItems.flatMap((line) => line.optionIds))]
 
-    const [{ data: products, error: dbError }, variants] = await Promise.all([
+    const [{ data: products, error: dbError }, variants, variantOptions] = await Promise.all([
       db
         .from("store_products")
         .select("id, name, price_cents, stock, images, type, condition, is_active, is_sold_out")
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
+      getVariantOptionsForCheckout(optionIds),
     ])
 
     if (dbError) {
@@ -215,12 +227,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Uma ou mais variantes não encontradas" }, { status: 404 })
     }
 
+    if (variantOptions.length !== optionIds.length) {
+      return NextResponse.json({ error: "Uma ou mais variantes não encontradas" }, { status: 404 })
+    }
+
     // Validação síncrona (sem query) de cada linha antes de tocar o banco —
     // nenhum decremento acontece ainda aqui, então não precisa reverter nada
     // em caso de erro.
     type ValidatedLine = {
       product: (typeof products)[number]
       variant: (typeof variants)[number] | null
+      options: (typeof variantOptions)[number][]
       quantity: number
     }
     const validatedLines: ValidatedLine[] = []
@@ -241,12 +258,39 @@ export async function POST(request: NextRequest) {
         if (!variant || variant.product_id !== product.id) {
           return NextResponse.json({ error: `Variante não encontrada para "${product.name}"` }, { status: 404 })
         }
-        if (!variant.is_active) {
+        if (!variant.is_active || variant.is_sold_out) {
           return NextResponse.json({ error: `Variante indisponível: ${product.name} — ${variant.label}` }, { status: 400 })
         }
       }
 
-      validatedLines.push({ product, variant: variant ?? null, quantity: cartItem.quantity })
+      const options = cartItem.optionIds.map((id) => variantOptions.find((o) => o.id === id)).filter(
+        (o): o is (typeof variantOptions)[number] => o != null
+      )
+      if (options.length !== cartItem.optionIds.length) {
+        return NextResponse.json({ error: `Variante não encontrada para "${product.name}"` }, { status: 404 })
+      }
+      for (const option of options) {
+        if (option.group.product_id !== product.id) {
+          return NextResponse.json({ error: `Variante não encontrada para "${product.name}"` }, { status: 404 })
+        }
+        if (option.is_sold_out) {
+          return NextResponse.json(
+            { error: `Variante indisponível: ${product.name} — ${option.label}` },
+            { status: 400 }
+          )
+        }
+      }
+      // Uma opção por grupo, no máximo.
+      if (new Set(options.map((o) => o.group.id)).size !== options.length) {
+        return NextResponse.json({ error: `Selecione só uma opção por grupo de variantes: "${product.name}"` }, { status: 400 })
+      }
+
+      validatedLines.push({
+        product,
+        variant: variant ?? null,
+        options: [...options].sort((a, b) => a.group.position - b.group.position),
+        quantity: cartItem.quantity,
+      })
     }
 
     // Limite de 15un/produto/usuário a cada 24h — só para produtos SEM
@@ -338,8 +382,14 @@ export async function POST(request: NextRequest) {
     let totalCents = 0
     const orderItems = []
     for (const line of validatedLines) {
-      const { product, variant, quantity } = line
-      const effectivePriceCents = variant?.price_cents_override ?? product.price_cents
+      const { product, variant, options, quantity } = line
+      // Overrides se acumulam nesta ordem, o último presente vence: preço
+      // base → cor → cada opção de grupo selecionada, na ordem de
+      // `group.position` — mesma regra usada em ProductDetailContent.
+      let effectivePriceCents = variant?.price_cents_override ?? product.price_cents
+      for (const option of options) {
+        if (option.price_cents_override != null) effectivePriceCents = option.price_cents_override
+      }
 
       totalCents += effectivePriceCents * quantity
       orderItems.push({
@@ -349,6 +399,7 @@ export async function POST(request: NextRequest) {
         quantity,
         variant_id: variant?.id ?? null,
         variant_label: variant?.label ?? null,
+        variant_options: options.map((o) => ({ group: o.group.name, label: o.label })),
         image: product.images?.[0] ?? null,
       })
     }

@@ -9,7 +9,6 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
-import { CategoryTagScroller } from "@/components/store/CategoryTagScroller"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
@@ -17,6 +16,7 @@ import { MultiCombobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { MarketInfoDialog } from "@/components/store/MarketInfoDialog"
+import { TrustStrip } from "@/components/store/TrustStrip"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import type { StoreProductCard, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
@@ -224,6 +224,11 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const [items, setItems] = useState<StoreProductCard[]>(initialItems)
   const [total, setTotal] = useState(initialTotal)
   const [isFetching, setIsFetching] = useState(false)
+  // "Carregar mais" do mobile soma a próxima página aos itens já carregados
+  // em vez de substituir — o mesmo grid serve os dois breakpoints, então o
+  // fetch effect abaixo lê essa ref pra saber se deve acumular ou trocar.
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const appendNextRef = useRef(false)
   const isFirstRun = useRef(true)
   const featuredScrollRef = useRef<HTMLDivElement>(null)
 
@@ -256,18 +261,21 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       }
     }
 
-    setIsFetching(true)
+    const appending = appendNextRef.current
+    appendNextRef.current = false
+    if (appending) setIsLoadingMore(true)
+    else setIsFetching(true)
     const controller = new AbortController()
     fetch(`/api/store/products?${params}`, { signal: controller.signal })
       .then((res) => res.json())
       .then((data: { items: StoreProductCard[]; total: number }) => {
-        setItems(data.items)
+        setItems((prev) => (appending ? [...prev, ...data.items] : data.items))
         setTotal(data.total)
       })
       .catch((err) => {
-        if (err?.name !== "AbortError") setItems([])
+        if (err?.name !== "AbortError" && !appending) setItems([])
       })
-      .finally(() => setIsFetching(false))
+      .finally(() => (appending ? setIsLoadingMore(false) : setIsFetching(false)))
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, condition, page, pageSize])
@@ -286,6 +294,13 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
     setCondition("all")
     setPriceRange(null)
     setSortKey("recent")
+  }
+
+  // Mobile: acumula a próxima página no grid já visível, em vez da paginação
+  // numérica do desktop.
+  const loadMore = () => {
+    appendNextRef.current = true
+    setPage((p) => p + 1)
   }
 
   const { featuredItems, featuredLabel, FeaturedIcon } = useMemo(() => {
@@ -442,16 +457,16 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             </span>
             <div className="flex items-center gap-2">
               <h1 className="max-w-[560px] font-display text-4xl font-bold leading-[1.02] tracking-[-0.03em] text-white sm:text-[54px]">
-                Periférico bom,
+                Compre com quem
                 <br />
-                sem golpe.
+                já testou.
               </h1>
               <MarketInfoDialog />
             </div>
             {/* O artboard mobile corta o subtítulo — a headline e o CTA já ocupam
                 a área legível sobre a mascote em 390px. */}
             <p className="hidden max-w-[420px] text-[15px] font-medium leading-[1.55] text-white/70 sm:block">
-              Cada item passa pela bancada antes de entrar no anúncio — e a review da comunidade fica na página do produto.
+              Cada item passa pela bancada do Sunano antes de virar anúncio, com reviews reais da comunidade na página do produto.
             </p>
             <a
               href="#produtos"
@@ -468,24 +483,24 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         "mx-auto flex w-full max-w-7xl flex-col px-4 pb-10 sm:pb-[72px] lg:px-8",
         banner?.type === "category" ? "gap-5 pt-5 sm:gap-7 sm:pt-6" : "gap-9 pt-7 sm:gap-14 sm:pt-12"
       )}>
-        {/* Categorias — na landing de categoria vira uma fileira de tags com
-            scroll lateral (o hero já mostra a categoria atual em destaque, um
-            grid de cards grandes aqui seria redundante). */}
-        {categoryOptions.length > 0 && (
-          banner?.type === "category" ? (
-            <CategoryTagScroller categories={filterOptions.categories} activeCategory={banner.value} />
-          ) : (
-            <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-              <div className="flex flex-col gap-[3px] sm:gap-1">
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>
-                <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Comprar por categoria</h2>
-              </div>
-              <CategoryTiles
-                categories={filterOptions.categories}
-                categoryCounts={filterOptions.categoryCounts}
-              />
-            </section>
-          )
+        {/* Trust strip — mesma regra dos Destaques: pula na landing de categoria
+            (banner já deixa a área densa com a fileira de tags). */}
+        {banner?.type !== "category" && <TrustStrip />}
+
+        {/* Categorias — só aparece na Loja geral. Na landing de categoria a
+            navegação já vive inteira no menu do header (StoreCategoryNav),
+            sem repetir a mesma lista aqui embaixo. */}
+        {categoryOptions.length > 0 && banner?.type !== "category" && (
+          <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+            <div className="flex flex-col gap-[3px] sm:gap-1">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>
+              <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Comprar por categoria</h2>
+            </div>
+            <CategoryTiles
+              categories={filterOptions.categories}
+              categoryCounts={filterOptions.categoryCounts}
+            />
+          </section>
         )}
 
         {/* Destaques — só na Loja geral; a landing de categoria vai direto
@@ -653,9 +668,9 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             </div>
           )}
 
-          {/* Pagination */}
+          {/* Desktop: paginação numérica. */}
           {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-center gap-1.5">
+            <div className="mt-4 hidden items-center justify-center gap-1.5 md:flex">
               <button
                 type="button"
                 disabled={page <= 1 || isFetching}
@@ -696,6 +711,21 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 className="flex h-[34px] min-w-[34px] items-center justify-center rounded-[10px] border border-[#2a2a2a] text-[#6e6e6e] transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-[#6e6e6e]"
               >
                 <ChevronRight className="size-[15px]" />
+              </button>
+            </div>
+          )}
+
+          {/* Mobile: "Carregar mais" em vez de páginas numeradas. */}
+          {items.length < total && (
+            <div className="mt-1 flex justify-center md:hidden">
+              <button
+                type="button"
+                disabled={isLoadingMore}
+                onClick={loadMore}
+                className="flex h-11 items-center gap-2 rounded-xl border border-[#2a2a2a] bg-[#141414] px-6 text-[12.5px] font-bold text-[#e8e8e8] transition-colors disabled:opacity-60"
+              >
+                {isLoadingMore && <Loader2 className="size-3.5 animate-spin" />}
+                Carregar mais
               </button>
             </div>
           )}

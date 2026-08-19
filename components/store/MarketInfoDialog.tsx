@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, HelpCircle, Package, ShoppingBag, XCircle } from "lucide-react"
+import { HelpCircle, Package, ShoppingBag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -79,21 +79,6 @@ export function MarketInfoDialog() {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3 border-t border-border pt-4">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
-              <CheckCircle2 className="size-4" />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">Características</p>
-              <p className="text-muted-foreground">
-                Na página de cada produto, itens marcados com{" "}
-                <CheckCircle2 className="inline size-3.5 text-emerald-400" /> são pontos fortes e com{" "}
-                <XCircle className="inline size-3.5 text-red-400" /> são limitações — pra você decidir
-                rápido se o produto serve pro seu uso.
-              </p>
             </div>
           </div>
         </div>

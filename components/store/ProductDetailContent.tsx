@@ -15,20 +15,18 @@ import {
   ShieldCheck,
   ShoppingCart,
   Trophy,
-  XCircle,
   Zap,
   ZoomIn,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { useCart } from "@/components/providers/cart-context"
-import { featureLabel, isGoodFeature } from "@/lib/store-features"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getVariantIcon } from "@/lib/variant-icons"
 import { getCategoryIcon } from "@/lib/store-category-icons"
-import type { LinkedPeripheralRef, StoreProductDetailResult, StoreFilterOptions, StoreProductCard } from "@/lib/server/repositories/store-repository"
+import type { LinkedPeripheralRef, StoreProductDetailResult, StoreProductVariantGroup, StoreFilterOptions, StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { ProductReviews } from "@/components/store/ProductReviews"
 import { FormattedText } from "@/components/ui/formatted-text"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
@@ -85,6 +83,7 @@ export function ProductDetailContent({
   linkedPeripherals,
   specs,
   variants,
+  variantGroups,
   filterOptions,
   previewPool,
 }: ProductDetailContentProps) {
@@ -94,15 +93,44 @@ export function ProductDetailContent({
   const [added, setAdded] = useState(false)
 
   const hasVariants = variants.length > 0
+  const isColorSoldOut = (v: { is_sold_out: boolean; stock: number | null }) =>
+    v.is_sold_out || (v.stock !== null && v.stock === 0)
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    hasVariants ? (variants.find((v) => v.stock === null || v.stock > 0)?.id ?? variants[0].id) : null
+    hasVariants ? (variants.find((v) => !isColorSoldOut(v))?.id ?? variants[0].id) : null
   )
   const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) ?? null : null
 
-  const baseEffectivePriceCents = activeVariant?.price_cents_override ?? product.price_cents
-  const activePromoPriceCents =
-    activeVariant?.promo_price_cents ??
-    (activeVariant?.price_cents_override == null ? product.promo_price_cents : null)
+  const isOptionSoldOut = (o: { is_sold_out: boolean }) => o.is_sold_out
+  const [selectedOptionByGroup, setSelectedOptionByGroup] = useState<Record<string, string | null>>(() =>
+    Object.fromEntries(
+      variantGroups.map((g) => [g.id, g.options.find((o) => !isOptionSoldOut(o))?.id ?? g.options[0]?.id ?? null])
+    )
+  )
+
+  function handleSelectGroupOption(group: StoreProductVariantGroup, optionId: string) {
+    setSelectedOptionByGroup((prev) => ({ ...prev, [group.id]: optionId }))
+    setQty(1)
+  }
+
+  // Overrides se acumulam nesta ordem, o último presente vence: preço base →
+  // cor selecionada → cada grupo de variantes selecionado (na ordem em que
+  // os grupos foram cadastrados). Promoção só se aplica quando nenhum desses
+  // overrides foi usado — mesma regra que já existia pra cor, estendida.
+  let baseEffectivePriceCents = activeVariant?.price_cents_override ?? product.price_cents
+  const selectedOptions = variantGroups
+    .map((g) => g.options.find((o) => o.id === selectedOptionByGroup[g.id]) ?? null)
+    .filter((o): o is NonNullable<typeof o> => o !== null)
+  let groupOverrideApplied = false
+  for (const option of selectedOptions) {
+    if (option.price_cents_override != null) {
+      baseEffectivePriceCents = option.price_cents_override
+      groupOverrideApplied = true
+    }
+  }
+
+  const activePromoPriceCents = groupOverrideApplied
+    ? null
+    : activeVariant?.promo_price_cents ?? (activeVariant?.price_cents_override == null ? product.promo_price_cents : null)
   const hasDiscount = activePromoPriceCents != null && activePromoPriceCents < baseEffectivePriceCents
   const effectivePriceCents = hasDiscount ? (activePromoPriceCents as number) : baseEffectivePriceCents
   const discountPercent = hasDiscount
@@ -110,12 +138,16 @@ export function ProductDetailContent({
     : null
   const effectiveStock = activeVariant ? activeVariant.stock : product.stock
 
-  const outOfStock = product.is_sold_out || (effectiveStock !== null && effectiveStock === 0)
+  const hasUnselectableGroup = variantGroups.some((g) => !selectedOptionByGroup[g.id])
+  const outOfStock =
+    product.is_sold_out || (effectiveStock !== null && effectiveStock === 0) || hasUnselectableGroup
   const baseImages: (string | null)[] = product.images?.length > 0 ? product.images : [null]
-  const images =
-    activeVariant?.image_url && !baseImages.includes(activeVariant.image_url)
-      ? [activeVariant.image_url, ...baseImages]
-      : baseImages
+  const variantImages = activeVariant
+    ? [...(activeVariant.image_url ? [activeVariant.image_url] : []), ...activeVariant.images].filter(
+        (url, idx, arr) => arr.indexOf(url) === idx
+      )
+    : []
+  const images = variantImages.length > 0 ? variantImages : baseImages
   const [activeImage, setActiveImage] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [zoomed, setZoomed] = useState(false)
@@ -142,6 +174,10 @@ export function ProductDetailContent({
 
   function addCurrentToCart() {
     if (outOfStock || (hasVariants && !activeVariant)) return false
+    const cartVariantOptions = selectedOptions.map((option) => {
+      const group = variantGroups.find((g) => g.options.some((o) => o.id === option.id))!
+      return { groupId: group.id, groupName: group.name, optionId: option.id, label: option.label }
+    })
     for (let i = 0; i < qty; i++) {
       add({
         productId: product.id,
@@ -149,6 +185,7 @@ export function ProductDetailContent({
         variantLabel: activeVariant?.label ?? null,
         variantColor: activeVariant?.color ?? null,
         variantIcon: activeVariant?.icon ?? null,
+        variantOptions: cartVariantOptions,
         slug: product.slug,
         name: product.name,
         priceCents: effectivePriceCents,
@@ -367,23 +404,24 @@ export function ProductDetailContent({
 
           {hasVariants && (
             <div className="space-y-2.5">
-              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Variante</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Cor</p>
               <div className="flex flex-wrap gap-2.5">
                 {variants.map((v) => {
                   const isActive = v.id === selectedVariantId
-                  const variantOutOfStock = v.stock !== null && v.stock === 0
+                  const variantSoldOut = isColorSoldOut(v)
                   const VariantIcon = getVariantIcon(v.icon)
                   return (
                     <button
                       key={v.id}
                       type="button"
-                      onClick={() => handleSelectVariant(v.id)}
+                      onClick={() => !variantSoldOut && handleSelectVariant(v.id)}
+                      disabled={variantSoldOut}
                       className={cn(
                         "flex items-center gap-2.5 rounded-xl border-[1.5px] px-4 py-3 text-sm font-semibold transition-colors",
                         isActive
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                           : "border-border text-muted-foreground hover:border-foreground/20",
-                        variantOutOfStock && "opacity-50"
+                        variantSoldOut && "cursor-not-allowed opacity-50 hover:border-border"
                       )}
                     >
                       {(v.color || VariantIcon) && (
@@ -399,14 +437,44 @@ export function ProductDetailContent({
                           )}
                         </span>
                       )}
-                      {v.label}
-                      {variantOutOfStock && " (esgotado)"}
+                      <span className={cn(variantSoldOut && "line-through")}>{v.label}</span>
+                      {variantSoldOut && " (esgotado)"}
                     </button>
                   )
                 })}
               </div>
             </div>
           )}
+
+          {variantGroups.map((group) => (
+            <div key={group.id} className="space-y-2.5">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">{group.name}</p>
+              <div className="flex flex-wrap gap-2.5">
+                {group.options.map((option) => {
+                  const isActive = option.id === selectedOptionByGroup[group.id]
+                  const optionSoldOut = isOptionSoldOut(option)
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => !optionSoldOut && handleSelectGroupOption(group, option.id)}
+                      disabled={optionSoldOut}
+                      className={cn(
+                        "rounded-xl border-[1.5px] px-4 py-3 text-sm font-semibold transition-colors",
+                        isActive
+                          ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                          : "border-border text-muted-foreground hover:border-foreground/20",
+                        optionSoldOut && "cursor-not-allowed opacity-50 hover:border-border"
+                      )}
+                    >
+                      <span className={cn(optionSoldOut && "line-through")}>{option.label}</span>
+                      {optionSoldOut && " (esgotado)"}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
 
           {outOfStock ? (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400">
@@ -499,45 +567,23 @@ export function ProductDetailContent({
         </div>
       </div>
 
-      {(product.features?.length > 0 || specs.length > 0) && (
-        <div className="mt-20 grid gap-16 md:grid-cols-2">
-          {product.features?.length > 0 && (
-            <div>
-              <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Características</h2>
-              <ul className="space-y-3.5">
-                {product.features.map((feature, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 text-[15px] text-muted-foreground">
-                    {isGoodFeature(feature) ? (
-                      <CheckCircle2 className="mt-0.5 size-[18px] shrink-0 text-emerald-400" />
-                    ) : (
-                      <XCircle className="mt-0.5 size-[18px] shrink-0 text-red-400" />
-                    )}
-                    <span>{featureLabel(feature)}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {specs.length > 0 && (
-            <div>
-              <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Especificação Técnica</h2>
-              <dl className="overflow-hidden rounded-2xl border border-border">
-                {specs.map((spec, idx) => (
-                  <div
-                    key={spec.id}
-                    className={cn(
-                      "grid grid-cols-2 gap-2 px-5 py-3.5 text-[14.5px]",
-                      idx % 2 === 0 ? "bg-muted/20" : "bg-transparent"
-                    )}
-                  >
-                    <dt className="text-muted-foreground">{spec.label}</dt>
-                    <dd className="font-medium text-foreground">{spec.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          )}
+      {specs.length > 0 && (
+        <div className="mt-20">
+          <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Especificação Técnica</h2>
+          <dl className="overflow-hidden rounded-2xl border border-border md:max-w-xl">
+            {specs.map((spec, idx) => (
+              <div
+                key={spec.id}
+                className={cn(
+                  "grid grid-cols-2 gap-2 px-5 py-3.5 text-[14.5px]",
+                  idx % 2 === 0 ? "bg-muted/20" : "bg-transparent"
+                )}
+              >
+                <dt className="text-muted-foreground">{spec.label}</dt>
+                <dd className="font-medium text-foreground">{spec.value}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       )}
 

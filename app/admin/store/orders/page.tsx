@@ -81,6 +81,7 @@ type OrderItem = {
   quantity?: number
   price_cents?: number
   variant_label?: string | null
+  variant_options?: { group: string; label: string }[] | null
 }
 
 type AdminOrder = {
@@ -958,7 +959,10 @@ function OrderManageDialog({
                 <div key={idx} className="flex items-center justify-between text-sm">
                   <span className="text-foreground">
                     {item.quantity ?? 1}x {item.name ?? "Produto"}
-                    {item.variant_label ? ` · ${item.variant_label}` : ""}
+                    {[item.variant_label, ...(item.variant_options ?? []).map((o) => o.label)]
+                      .filter(Boolean)
+                      .map((label) => ` · ${label}`)
+                      .join("")}
                   </span>
                   {typeof item.price_cents === "number" && (
                     <span className="text-muted-foreground">{formatBRL(item.price_cents)}</span>

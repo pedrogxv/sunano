@@ -1,5 +1,17 @@
 import { Camera, Cable, Gamepad2, Headphones, Keyboard, Mic, Monitor, Mouse, Package, RectangleHorizontal, type LucideIcon } from "lucide-react"
 
+/** Grupos fixos do menu da Loja — Mouse/Teclado/Mousepad ficam sozinhos,
+ *  Audio junta Headset/Iem/Dac e Outros pega o resto (Acessórios, Serviços...). */
+export type StoreNavGroup = "mouse" | "teclado" | "mousepad" | "audio" | "outros"
+
+export function classifyStoreNavGroup(category: string): StoreNavGroup {
+  if (/mouse\s*pad/i.test(category)) return "mousepad"
+  if (/mouse/i.test(category)) return "mouse"
+  if (/teclado|keyboard/i.test(category)) return "teclado"
+  if (/headset|fone|headphone|\biem\b|\bdac\b/i.test(category)) return "audio"
+  return "outros"
+}
+
 /**
  * Categoria é texto livre cadastrado pelo admin — sem enum no banco. Mapeia
  * por palavra-chave pra dar um ícone/cor consistente nos tiles e placeholders
@@ -9,7 +21,7 @@ const CATEGORY_ICON_RULES: { match: RegExp; icon: LucideIcon; tint: string }[] =
   { match: /mouse\s*pad/i, icon: RectangleHorizontal, tint: "oklch(0.7 0.15 160)" },
   { match: /mouse/i, icon: Mouse, tint: "oklch(0.75 0.15 195)" },
   { match: /teclado|keyboard/i, icon: Keyboard, tint: "oklch(0.8 0.15 85)" },
-  { match: /headset|fone|headphone/i, icon: Headphones, tint: "oklch(0.7 0.15 340)" },
+  { match: /headset|fone|headphone|\biem\b|\bdac\b/i, icon: Headphones, tint: "oklch(0.7 0.15 340)" },
   { match: /monitor/i, icon: Monitor, tint: "oklch(0.72 0.14 260)" },
   { match: /webcam|câmera|camera/i, icon: Camera, tint: "oklch(0.75 0.15 195)" },
   { match: /microfone|mic\b/i, icon: Mic, tint: "oklch(0.7 0.15 25)" },

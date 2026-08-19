@@ -90,6 +90,7 @@ export function ProductCard(props: ProductCardProps) {
       variantLabel: activeVariant?.label ?? null,
       variantColor: activeVariant?.color ?? null,
       variantIcon: activeVariant?.icon ?? null,
+      variantOptions: [],
       slug: props.slug,
       name: props.name,
       priceCents: effectivePriceCents,

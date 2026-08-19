@@ -23,6 +23,7 @@ interface StoreProduct {
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
+  sale_type: "pre_order" | "ready_stock" | "normal"
   is_active: boolean
   is_sold_out: boolean
   features?: string[]
@@ -45,6 +46,20 @@ interface StoreProductVariant {
   icon: string | null
   image_url: string | null
   images?: string[]
+  is_sold_out?: boolean
+}
+
+interface StoreProductVariantGroupOption {
+  id?: string
+  label: string
+  price_cents_override: number | null
+  is_sold_out: boolean
+}
+
+interface StoreProductVariantGroup {
+  id?: string
+  name: string
+  options: StoreProductVariantGroupOption[]
 }
 
 export default function EditProductPage() {
@@ -53,6 +68,7 @@ export default function EditProductPage() {
   const [product, setProduct] = useState<StoreProduct | null>(null)
   const [specs, setSpecs] = useState<StoreProductSpec[]>([])
   const [variants, setVariants] = useState<StoreProductVariant[]>([])
+  const [variantGroups, setVariantGroups] = useState<StoreProductVariantGroup[]>([])
   const [peripheralIds, setPeripheralIds] = useState<string[]>([])
   const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([])
   const [loading, setLoading] = useState(true)
@@ -69,6 +85,7 @@ export default function EditProductPage() {
           product?: StoreProduct
           specs?: StoreProductSpec[]
           variants?: StoreProductVariant[]
+          variantGroups?: StoreProductVariantGroup[]
           peripheralIds?: string[]
           error?: string
         }
@@ -76,6 +93,7 @@ export default function EditProductPage() {
         setProduct(data.product)
         setSpecs(data.specs ?? [])
         setVariants(data.variants ?? [])
+        setVariantGroups(data.variantGroups ?? [])
         setPeripheralIds(data.peripheralIds ?? [])
 
         if (historyRes.ok) {
@@ -138,6 +156,7 @@ export default function EditProductPage() {
           product={product}
           initialSpecs={specs}
           initialVariants={variants}
+          initialVariantGroups={variantGroups}
           initialPeripheralIds={peripheralIds}
           onSuccess={() => router.push("/admin/store")}
           onCancel={() => router.push("/admin/store")}

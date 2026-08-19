@@ -170,7 +170,10 @@ function OrderDetailsDialog({ order, onOpenChange }: { order: UserOrder | null; 
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-foreground">{item.name ?? "Item"}</p>
                       <p className="text-xs text-muted-foreground">
-                        {item.variant_label ? `${item.variant_label} · ` : ""}
+                        {[item.variant_label, ...(item.variant_options ?? []).map((o) => o.label)]
+                          .filter(Boolean)
+                          .map((label) => `${label} · `)
+                          .join("")}
                         {item.quantity ?? 1}x
                         {typeof item.price_cents === "number" ? ` · ${formatBRL(item.price_cents)}` : ""}
                       </p>

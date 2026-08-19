@@ -9,6 +9,7 @@ export type UserOrderItem = {
   quantity?: number
   price_cents?: number
   variant_label?: string | null
+  variant_options?: { group: string; label: string }[] | null
   image?: string | null
 }
 

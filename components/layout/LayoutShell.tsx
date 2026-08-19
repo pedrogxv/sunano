@@ -78,7 +78,14 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
           <div className="flex-1 min-w-0 bg-card md:mx-2 md:mt-2 md:mb-2 rounded-none md:rounded-2xl md:ml-0">
             <TopBar />
             <ChangelogBanner />
-            <main className="min-w-0 overflow-x-hidden">{children}</main>
+            {/* overflow-x-hidden (mesmo só no eixo X) força o overflow-y a
+                computar pra `auto` (regra do spec CSS Overflow), o que
+                transforma o <main> num scroll container próprio e quebra
+                `position: sticky` de tudo que vive dentro dele
+                (StoreCategoryNav etc.), mesmo sem o <main> nunca de fato
+                rolar internamente — quem rola é a página. overflow-x-clip
+                evita overflow horizontal sem esse efeito colateral. */}
+            <main className="min-w-0 overflow-x-clip">{children}</main>
           </div>
         )}
       </div>

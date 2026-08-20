@@ -305,6 +305,16 @@ type Translations = {
       performanceTabWeek: string
       performanceInteractionsLabel: string
       performanceAuraLabel: string
+      revenueOverview: string
+      revenueCardTitle: string
+      revenueCaption: (period: "day" | "week" | "month" | "year") => string
+      revenueEmpty: string
+      topProductsCardTitle: string
+      topProductsEmpty: string
+      topProductsUnitsLabel: (count: number) => string
+      hideFinancialsLabel: string
+      showFinancialsLabel: string
+      financialsHiddenLabel: string
       gaugeTitle: string
       gaugeCaption: (approved: number, total: number) => string
       gaugePendingLabel: (count: number) => string
@@ -1085,6 +1095,23 @@ export const translations: Record<LocaleCode, Translations> = {
         performanceTabWeek: "Semana",
         performanceInteractionsLabel: "novos posts e comentários",
         performanceAuraLabel: "de aura gerada no período",
+        revenueOverview: "Receita e vendas",
+        revenueCardTitle: "Receita",
+        revenueCaption: (period) =>
+          period === "day"
+            ? "receita hoje"
+            : period === "week"
+              ? "receita nos últimos 7 dias"
+              : period === "month"
+                ? "receita no mês"
+                : "receita no ano",
+        revenueEmpty: "Nenhuma receita registrada nesse período",
+        topProductsCardTitle: "Produtos mais vendidos",
+        topProductsEmpty: "Nenhuma venda registrada nesse período",
+        topProductsUnitsLabel: (count) => `${count} unidade${count === 1 ? "" : "s"} vendida${count === 1 ? "" : "s"}`,
+        hideFinancialsLabel: "Ocultar valores",
+        showFinancialsLabel: "Mostrar valores",
+        financialsHiddenLabel: "Valores ocultos",
         gaugeTitle: "Periféricos revisados",
         gaugeCaption: (approved, total) => `${approved} de ${total} aprovados`,
         gaugePendingLabel: (count) => `${count} pendente${count === 1 ? "" : "s"}`,
@@ -2157,6 +2184,23 @@ export const translations: Record<LocaleCode, Translations> = {
         performanceTabWeek: "Week",
         performanceInteractionsLabel: "new posts and comments",
         performanceAuraLabel: "aura earned in the period",
+        revenueOverview: "Revenue & sales",
+        revenueCardTitle: "Revenue",
+        revenueCaption: (period) =>
+          period === "day"
+            ? "revenue today"
+            : period === "week"
+              ? "revenue in the last 7 days"
+              : period === "month"
+                ? "revenue this month"
+                : "revenue this year",
+        revenueEmpty: "No revenue recorded in this period",
+        topProductsCardTitle: "Top selling products",
+        topProductsEmpty: "No sales recorded in this period",
+        topProductsUnitsLabel: (count) => `${count} unit${count === 1 ? "" : "s"} sold`,
+        hideFinancialsLabel: "Hide values",
+        showFinancialsLabel: "Show values",
+        financialsHiddenLabel: "Values hidden",
         gaugeTitle: "Peripherals reviewed",
         gaugeCaption: (approved, total) => `${approved} of ${total} approved`,
         gaugePendingLabel: (count) => `${count} pending`,

@@ -6,6 +6,9 @@ import {
   AlertTriangle,
   ArrowRight,
   BarChart2,
+  DollarSign,
+  Eye,
+  EyeOff,
   GalleryHorizontalEnd,
   Gift,
   LayoutGrid,
@@ -25,9 +28,12 @@ import {
 import { AnimatedCounter } from "@/components/animated-counter"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PerformanceCard } from "@/components/admin/PerformanceCard"
+import { RevenueCard } from "@/components/admin/RevenueCard"
 import { ReviewGaugeCard } from "@/components/admin/ReviewGaugeCard"
+import { TopProductsCard } from "@/components/admin/TopProductsCard"
 import { VisitorsStatCard } from "@/components/admin/VisitorsStatCard"
 import type { PerformanceSeries } from "@/lib/server/repositories/dashboard-performance-repository"
+import type { RevenueSeries, TopProductsSeries } from "@/lib/server/repositories/dashboard-revenue-repository"
 import type { VisitSeries } from "@/lib/server/repositories/visits-repository"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
@@ -43,6 +49,8 @@ type DashboardStats = {
   support: { open: number; resolved: number; cancelled: number } | null
   visits: VisitSeries | null
   performance: PerformanceSeries | null
+  revenue: RevenueSeries | null
+  topProducts: TopProductsSeries | null
 }
 
 type ColorKey = "cyan" | "emerald" | "amber" | "violet" | "rose" | "sky" | "fuchsia" | "orange" | "slate"
@@ -84,6 +92,10 @@ export default function AdminPage() {
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
+  // Só visual/local — não persiste no banco nem no localStorage, volta ao
+  // normal ao recarregar a página. Serve pra tirar valores financeiros da
+  // tela num print/compartilhamento de tela sem precisar sair do admin.
+  const [hideFinancials, setHideFinancials] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -219,12 +231,24 @@ export default function AdminPage() {
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">{d.subtitle}</p>
           </div>
-          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
-            <span className="relative flex size-1.5">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
-            </span>
-            {d.liveLabel}
+          <div className="flex items-center gap-2">
+            {isWebMaster(profile) && (
+              <button
+                type="button"
+                onClick={() => setHideFinancials((value) => !value)}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-violet-400/40 hover:text-foreground"
+              >
+                {hideFinancials ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                {hideFinancials ? d.showFinancialsLabel : d.hideFinancialsLabel}
+              </button>
+            )}
+            <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300">
+              <span className="relative flex size-1.5">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
+              </span>
+              {d.liveLabel}
+            </div>
           </div>
         </div>
       </div>
@@ -300,6 +324,34 @@ export default function AdminPage() {
                 href={gaugeHref}
                 loading={loading}
               />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Receita e vendas — restrito a webmaster (dado financeiro), tanto no
+          front (aqui) quanto no back (app/api/admin/dashboard/route.ts).
+          Toggle de olho no header borra/oculta esta seção pra print/compartilhamento. */}
+      {isWebMaster(profile) && (loading || stats?.revenue || stats?.topProducts) && (
+        <div className="space-y-2">
+          <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            <DollarSign className="size-3.5" />
+            {d.revenueOverview}
+          </h2>
+          <div className="relative">
+            <div className={cn("grid grid-cols-1 gap-4 lg:grid-cols-3", hideFinancials && "pointer-events-none blur-md select-none")}>
+              {(loading || stats?.revenue) && (
+                <div className="lg:col-span-2">
+                  <RevenueCard data={stats?.revenue ?? null} loading={loading} />
+                </div>
+              )}
+              {(loading || stats?.topProducts) && <TopProductsCard data={stats?.topProducts ?? null} loading={loading} />}
+            </div>
+            {hideFinancials && (
+              <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-2xl">
+                <EyeOff className="size-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">{d.financialsHiddenLabel}</span>
+              </div>
             )}
           </div>
         </div>

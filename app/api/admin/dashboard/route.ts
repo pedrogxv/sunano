@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server"
 
-import { hasAdminPermission } from "@/lib/admin-permissions"
+import { hasAdminPermission, isWebMaster } from "@/lib/admin-permissions"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getTelegramOffers } from "@/lib/server/integrations/telegram-offers"
 import { countActiveBanners, MAX_ACTIVE_BANNERS } from "@/lib/server/repositories/banners-repository"
 import { getPerformanceSeries, type PerformanceSeries } from "@/lib/server/repositories/dashboard-performance-repository"
+import { getRevenueSeries, getTopSellingProducts, type RevenueSeries, type TopProductsSeries } from "@/lib/server/repositories/dashboard-revenue-repository"
 import { getVisitSeries, type VisitSeries } from "@/lib/server/repositories/visits-repository"
 import { getSupportTicketStats, type SupportTicketStats } from "@/lib/server/repositories/support-repository"
 
@@ -28,6 +29,8 @@ export async function GET() {
     visits: VisitSeries | null
     performance: PerformanceSeries | null
     support: SupportTicketStats | null
+    revenue: RevenueSeries | null
+    topProducts: TopProductsSeries | null
   } = {
     peripherals: null,
     blog: null,
@@ -38,6 +41,8 @@ export async function GET() {
     visits: null,
     performance: null,
     support: null,
+    revenue: null,
+    topProducts: null,
   }
 
   // Cada seção roda isolada: se uma falhar (ex.: integração externa fora do ar),
@@ -114,6 +119,16 @@ export async function GET() {
       // agregada), não nas permissões de cada domínio individual.
       if (!hasAdminPermission(profile, "dashboard_read")) return
       stats.performance = await getPerformanceSeries()
+    }),
+    safe("revenue", async () => {
+      // Dado financeiro — restrito a webmaster, mais estrito que
+      // dashboard_read (admin também tem full() mas não deve ver receita).
+      if (!isWebMaster(profile)) return
+      stats.revenue = await getRevenueSeries()
+    }),
+    safe("topProducts", async () => {
+      if (!isWebMaster(profile)) return
+      stats.topProducts = await getTopSellingProducts()
     }),
   ])
 

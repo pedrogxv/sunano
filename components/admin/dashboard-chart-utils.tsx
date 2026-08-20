@@ -33,12 +33,14 @@ export type ValueLabelProps = {
   value?: number | string | boolean | null
 }
 
-export function makeValueLabel(showAll: boolean, peakValue: number) {
+const defaultFormatValue = (value: number) => value.toLocaleString("pt-BR")
+
+export function makeValueLabel(showAll: boolean, peakValue: number, formatValue: (value: number) => string = defaultFormatValue) {
   return function ValueLabel({ x, y, value }: ValueLabelProps) {
     if (typeof value !== "number" || (!showAll && value !== peakValue)) return null
     return (
       <text x={x} y={Number(y ?? 0) - 8} textAnchor="middle" fontSize={10} fontWeight={600} fill="var(--foreground)">
-        {value.toLocaleString("pt-BR")}
+        {formatValue(value)}
       </text>
     )
   }
@@ -46,7 +48,15 @@ export function makeValueLabel(showAll: boolean, peakValue: number) {
 
 export type TooltipPayloadItem = { value?: number; payload?: { label?: string } }
 
-export function ChartTooltip({ active, payload }: { active?: boolean; payload?: TooltipPayloadItem[] }) {
+export function ChartTooltip({
+  active,
+  payload,
+  formatValue = defaultFormatValue,
+}: {
+  active?: boolean
+  payload?: TooltipPayloadItem[]
+  formatValue?: (value: number) => string
+}) {
   if (!active || !payload?.length) return null
   const point = payload[0]
   return (
@@ -54,7 +64,7 @@ export function ChartTooltip({ active, payload }: { active?: boolean; payload?: 
       <p className="text-muted-foreground">{point.payload?.label}</p>
       <p className="mt-0.5 flex items-center gap-1.5 font-semibold text-foreground">
         <span className="inline-block h-0.5 w-3 rounded-full bg-violet-400" />
-        {point.value?.toLocaleString("pt-BR")}
+        {typeof point.value === "number" ? formatValue(point.value) : point.value}
       </p>
     </div>
   )

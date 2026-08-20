@@ -1666,6 +1666,14 @@ export type Database = {
         Args: Record<string, never>
         Returns: { status: string; count: number }[]
       }
+      get_order_revenue_between: {
+        Args: { p_from: string; p_to: string }
+        Returns: number
+      }
+      get_top_selling_products: {
+        Args: { p_from: string; p_to: string; p_limit?: number }
+        Returns: { product_id: string; product_name: string | null; units_sold: number; revenue_cents: number }[]
+      }
       broadcast_system_notification: {
         Args: { p_title: string; p_body: string; p_link?: string | null; p_user_id?: string | null }
         Returns: number

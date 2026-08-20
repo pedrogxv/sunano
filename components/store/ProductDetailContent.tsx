@@ -354,6 +354,10 @@ export function ProductDetailContent({
               ))}
             </div>
           )}
+
+          <div className="pt-2">
+            <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
+          </div>
         </div>
 
         {/* Info */}
@@ -401,6 +405,14 @@ export function ProductDetailContent({
               <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
             )}
           </div>
+
+          {allLinkedPeripherals.length > 0 && (
+            <div className="space-y-2.5">
+              {allLinkedPeripherals.map((peripheral) => (
+                <LinkedPeripheralCard key={peripheral.id} peripheral={peripheral} />
+              ))}
+            </div>
+          )}
 
           {hasVariants && (
             <div className="space-y-2.5">
@@ -486,7 +498,7 @@ export function ProductDetailContent({
                 <p className="text-sm font-semibold text-amber-400">Últimas {effectiveStock} unidades!</p>
               )}
               <div className="flex items-center gap-3">
-                <div className="flex items-center rounded-xl border border-border">
+                <div className="flex shrink-0 items-center rounded-xl border border-border">
                   <button
                     onClick={() => setQty((q) => Math.max(1, q - 1))}
                     className="flex size-[46px] items-center justify-center text-muted-foreground hover:text-foreground"
@@ -501,10 +513,8 @@ export function ProductDetailContent({
                     <Plus className="size-3.5" />
                   </button>
                 </div>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row">
                 <Button
-                  className="h-14 flex-1 gap-2 rounded-xl text-[15px] font-bold"
+                  className="h-[46px] flex-1 gap-2 rounded-xl text-[15px] font-bold"
                   variant="secondary"
                   onClick={handleAddToCart}
                   disabled={hasVariants && !activeVariant}
@@ -512,15 +522,15 @@ export function ProductDetailContent({
                   <ShoppingCart className="size-[18px]" />
                   {added ? "Adicionado!" : "Adicionar ao carrinho"}
                 </Button>
-                <Button
-                  className="h-14 flex-1 gap-2 rounded-xl bg-orange-500 text-[17px] font-bold text-white shadow-lg shadow-orange-500/20 hover:bg-orange-400 sm:flex-[1.25]"
-                  onClick={handleBuyNow}
-                  disabled={hasVariants && !activeVariant}
-                >
-                  <Zap className="size-5" />
-                  Comprar Agora
-                </Button>
               </div>
+              <Button
+                className="h-16 w-full gap-2 rounded-xl bg-orange-500 text-[18px] font-bold text-white shadow-lg shadow-orange-500/20 hover:bg-orange-400"
+                onClick={handleBuyNow}
+                disabled={hasVariants && !activeVariant}
+              >
+                <Zap className="size-5" />
+                Comprar Agora
+              </Button>
             </div>
           )}
 
@@ -556,14 +566,6 @@ export function ProductDetailContent({
               <span className="font-semibold text-foreground">— {formatBRL(linkedProduct.price_cents)}</span>
             </Link>
           )}
-
-          {allLinkedPeripherals.length > 0 && (
-            <div className="space-y-2.5">
-              {allLinkedPeripherals.map((peripheral) => (
-                <LinkedPeripheralCard key={peripheral.id} peripheral={peripheral} />
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
@@ -586,10 +588,6 @@ export function ProductDetailContent({
           </dl>
         </div>
       )}
-
-      <div className="mt-20">
-        <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
-      </div>
       </div>
     </>
   )

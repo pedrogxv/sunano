@@ -465,6 +465,18 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
   const displayRows: DisplayRow[] = isPriceBandMode ? priceGroupRows : itemsByTier
 
+  // No modo Custo Benefício, itens sem faixa resolvida (ver resolvePriceGroupKey em
+  // lib/price-band.ts) ficavam fora de todas as linhas e desapareciam da aba — aqui eles
+  // caem no mesmo bloco "Sob Revisão" usado pelas abas por tier.
+  const priceBandUntieredItems = useMemo(() => {
+    if (!isPriceBandMode) return []
+    return visibleItems.filter(
+      (item) => resolvePriceGroupKey(item.price, item.specs?.golpe, item.specs?.adminPriceGroup) === null,
+    )
+  }, [isPriceBandMode, visibleItems])
+
+  const underReviewItems = isPriceBandMode ? priceBandUntieredItems : untieredItems
+
   const hasItems = isPriceBandMode
     ? displayRows.some((row) => row.items.length > 0)
     : visibleItems.length > 0
@@ -629,7 +641,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
           )}
         </div>
 
-        {!isPriceBandMode && untieredItems.length > 0 && (
+        {underReviewItems.length > 0 && (
           <div className="border-t border-border bg-muted/10">
             <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
               <div className="flex items-center gap-3">
@@ -642,7 +654,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
             <div className="hidden p-2 md:block">
               <div className="grid w-full auto-rows-max grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-2.5">
-                {untieredItems.map((item) => (
+                {underReviewItems.map((item) => (
                   <PeripheralCard key={item.id} {...item} />
                 ))}
               </div>
@@ -650,7 +662,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
             <div className="p-2 md:hidden">
               <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-2">
-                {untieredItems.map((item) => (
+                {underReviewItems.map((item) => (
                   <PeripheralCard key={item.id} {...item} />
                 ))}
               </div>

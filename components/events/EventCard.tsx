@@ -99,7 +99,6 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim
             <Button
               size="sm"
               onClick={(e) => {
-                e.preventDefault()
                 e.stopPropagation()
               }}
               disabled={pending}
@@ -128,7 +127,6 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim
             <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
-                e.preventDefault()
                 e.stopPropagation()
                 onClaim()
               }}

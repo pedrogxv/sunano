@@ -30,7 +30,6 @@ import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
-import { compressImageFile } from "@/lib/client/compress-image"
 import { removeBackground } from "@/lib/client/remove-background"
 import { VARIANT_ICONS, VARIANT_ICON_NAMES } from "@/lib/variant-icons"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
@@ -281,11 +280,6 @@ const MAX_VARIANT_GROUPS = 6
 const MAX_OPTIONS_PER_VARIANT_GROUP = 12
 const MIN_PRICE_CENTS = 600
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
-const IMAGE_COMPRESS_OPTIONS = {
-  maxDimension: 2000,
-  targetBytes: 1.5 * 1024 * 1024,
-  skipBelowBytes: 800 * 1024,
-}
 
 function SortableImageThumb({
   url,
@@ -594,13 +588,7 @@ export function StoreProductForm({
     setUploadingVariantImage(index)
     setError(null)
     try {
-      const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
-      if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
-        throw new Error(
-          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após compressão).`
-        )
-      }
-      const url = await uploadImage(compressed)
+      const url = await uploadImage(await prepareProductImage(file))
       setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, image_url: url } : v)))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
@@ -631,13 +619,7 @@ export function StoreProductForm({
     setUploadingVariantImage(index)
     setError(null)
     try {
-      const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
-      if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
-        throw new Error(
-          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após compressão).`
-        )
-      }
-      const url = await uploadImage(compressed)
+      const url = await uploadImage(await prepareProductImage(file))
       setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, images: [...v.images, url] } : v)))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
@@ -736,6 +718,28 @@ export function StoreProductForm({
     return data.publicUrl
   }
 
+  /**
+   * Prepara a foto antes de subir: remoção de fundo pelo mesmo serviço usado no
+   * cadastro de Periféricos (`removeBackground`), que já devolve um PNG
+   * redimensionado com transparência — por isso não passa pela recompressão
+   * pra JPEG, que achataria o fundo de volta num branco opaco.
+   *
+   * Os três pontos de envio da Loja (fotos principais do anúncio, capa da
+   * variante e galeria da variante) passam por aqui, pra que o tratamento seja
+   * exatamente o mesmo nos três. Sem fallback: se a remoção falhar, o upload
+   * falha com o erro à mostra, em vez de subir a foto crua e parecer que o
+   * tratamento simplesmente não foi aplicado.
+   */
+  async function prepareProductImage(file: File): Promise<File> {
+    const prepared = await removeBackground(file)
+    if (prepared.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+      throw new Error(
+        `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após remoção de fundo).`
+      )
+    }
+    return prepared
+  }
+
   async function handleImageAdd(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -751,23 +755,7 @@ export function StoreProductForm({
     setUploading(true)
     setError(null)
     try {
-      // Remove o fundo automaticamente (mesmo comportamento do periférico).
-      // A saída já vem em PNG redimensionado, então pula a recompressão pra
-      // JPEG -- ela achataria a transparência num fundo opaco.
-      let prepared: File
-      try {
-        prepared = await removeBackground(file)
-      } catch (err) {
-        console.error("Falha ao remover o fundo:", err)
-        prepared = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
-      }
-
-      if (prepared.size > MAX_IMAGE_FILE_SIZE_BYTES) {
-        throw new Error(
-          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após remoção de fundo).`
-        )
-      }
-      const url = await uploadImage(prepared)
+      const url = await uploadImage(await prepareProductImage(file))
       setImages((prev) => [...prev, url])
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"

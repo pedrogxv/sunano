@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
+import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 
 /** Extrai o dono do pedido a partir de `metadata->>user_id` (null em pedidos de convidado). */
@@ -391,7 +392,8 @@ export type RepositoryResult = { ok: true } | { ok: false; error: string; status
 export async function advanceOrderStatus(
   id: string,
   nextStatus: OrderStatus,
-  extra?: { trackingCode?: string; carrier?: string }
+  extra?: { trackingCode?: string; carrier?: string },
+  adminId?: string | null
 ): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -442,6 +444,17 @@ export async function advanceOrderStatus(
     await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: nextStatus })
   }
 
+  if (adminId) {
+    await logAdminAction({
+      adminId,
+      action: "order.advance",
+      entityType: "store_order",
+      entityId: id,
+      before: { status: currentStatus },
+      after: { status: nextStatus, trackingCode: extra?.trackingCode ?? null, carrier: extra?.carrier ?? null },
+    })
+  }
+
   return { ok: true }
 }
 
@@ -456,7 +469,8 @@ export async function advanceOrderStatus(
  */
 export async function refundOrder(
   id: string,
-  params: { valueCents?: number; reason?: string }
+  params: { valueCents?: number; reason?: string },
+  adminId?: string | null
 ): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -532,6 +546,17 @@ export async function refundOrder(
     )
   } catch (err) {
     console.error("[orders-repository] refundOrder — syncCommissionForRefund:", err)
+  }
+
+  if (adminId) {
+    await logAdminAction({
+      adminId,
+      action: "order.refund",
+      entityType: "store_order",
+      entityId: id,
+      before: { status: existing.status, refunded_cents: existing.refunded_cents },
+      after: { status: update.status ?? existing.status, refunded_cents: newRefundedCents, reason: params.reason ?? null },
+    })
   }
 
   return { ok: true }

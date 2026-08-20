@@ -991,6 +991,7 @@ export type Database = {
           price_cents: number
           promo_price_cents: number | null
           final_price_cents: number
+          changed_by: string | null
           created_at: string
         }
         Insert: {
@@ -1000,6 +1001,7 @@ export type Database = {
           price_cents: number
           promo_price_cents?: number | null
           final_price_cents: number
+          changed_by?: string | null
           created_at?: string
         }
         Update: {
@@ -1009,6 +1011,40 @@ export type Database = {
           price_cents?: number
           promo_price_cents?: number | null
           final_price_cents?: number
+          changed_by?: string | null
+          created_at?: string
+        }
+      }
+      store_admin_audit_log: {
+        Relationships: []
+        Row: {
+          id: string
+          admin_id: string | null
+          action: string
+          entity_type: string
+          entity_id: string | null
+          before: Record<string, unknown> | null
+          after: Record<string, unknown> | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          admin_id?: string | null
+          action: string
+          entity_type: string
+          entity_id?: string | null
+          before?: Record<string, unknown> | null
+          after?: Record<string, unknown> | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          admin_id?: string | null
+          action?: string
+          entity_type?: string
+          entity_id?: string | null
+          before?: Record<string, unknown> | null
+          after?: Record<string, unknown> | null
           created_at?: string
         }
       }

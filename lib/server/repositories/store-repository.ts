@@ -836,7 +836,8 @@ export async function recordPriceHistoryIfChanged(
   productId: string,
   variantId: string | null,
   priceCents: number,
-  promoPriceCents: number | null
+  promoPriceCents: number | null,
+  adminId: string | null = null
 ): Promise<void> {
   const db = createSupabaseAdminClient()
   const finalPriceCents = promoPriceCents ?? priceCents
@@ -862,6 +863,7 @@ export async function recordPriceHistoryIfChanged(
     price_cents: priceCents,
     promo_price_cents: promoPriceCents,
     final_price_cents: finalPriceCents,
+    changed_by: adminId,
   })
   if (insertError) {
     console.error("[store-repository] recordPriceHistoryIfChanged insert:", insertError)
@@ -912,7 +914,8 @@ export async function replaceProductVariants(
     image_url: string | null
     images: string[]
     is_sold_out: boolean
-  }>
+  }>,
+  adminId: string | null = null
 ): Promise<void> {
   if (variants.length > MAX_VARIANTS_PER_PRODUCT) {
     throw new Error(`Cada produto pode ter no máximo ${MAX_VARIANTS_PER_PRODUCT} variantes.`)
@@ -1072,7 +1075,13 @@ export async function replaceProductVariants(
 
     await Promise.all(
       variantsWithId.map((v) =>
-        recordPriceHistoryIfChanged(productId, v.id, v.price_cents_override ?? basePriceCents, v.promo_price_cents)
+        recordPriceHistoryIfChanged(
+          productId,
+          v.id,
+          v.price_cents_override ?? basePriceCents,
+          v.promo_price_cents,
+          adminId
+        )
       )
     )
   }

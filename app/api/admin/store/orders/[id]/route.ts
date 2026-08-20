@@ -37,11 +37,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   const result =
     parsed.data.action === "advance"
-      ? await advanceOrderStatus(id, parsed.data.status, {
-          trackingCode: parsed.data.trackingCode,
-          carrier: parsed.data.carrier,
-        })
-      : await refundOrder(id, { valueCents: parsed.data.valueCents, reason: parsed.data.reason })
+      ? await advanceOrderStatus(
+          id,
+          parsed.data.status,
+          { trackingCode: parsed.data.trackingCode, carrier: parsed.data.carrier },
+          auth.profile.id
+        )
+      : await refundOrder(id, { valueCents: parsed.data.valueCents, reason: parsed.data.reason }, auth.profile.id)
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })

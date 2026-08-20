@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(body, { status })
   }
 
-  await recordPriceHistoryIfChanged(data.id as string, null, price_cents, promo_price_cents ?? null)
+  await recordPriceHistoryIfChanged(data.id as string, null, price_cents, promo_price_cents ?? null, auth.profile.id)
 
   return NextResponse.json({ product: data })
 }

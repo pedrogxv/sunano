@@ -12,6 +12,7 @@ import {
   Minus,
   Plus,
   QrCode,
+  Rocket,
   ShieldCheck,
   ShoppingCart,
   Trophy,
@@ -26,22 +27,11 @@ import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getVariantIcon } from "@/lib/variant-icons"
 import { getCategoryIcon } from "@/lib/store-category-icons"
+import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import type { LinkedPeripheralRef, StoreProductDetailResult, StoreProductVariantGroup, StoreFilterOptions, StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { ProductReviews } from "@/components/store/ProductReviews"
 import { FormattedText } from "@/components/ui/formatted-text"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
-
-const CONDITION_LABEL: Record<string, string> = {
-  new: "Novo",
-  opened: "Embalagem aberta",
-  used: "Usado",
-}
-
-const CONDITION_STYLE: Record<string, string> = {
-  new: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  opened: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  used: "bg-orange-500/15 text-orange-400 border-orange-500/30",
-}
 
 function LinkedPeripheralCard({ peripheral }: { peripheral: LinkedPeripheralRef }) {
   return (
@@ -152,6 +142,7 @@ export function ProductDetailContent({
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [zoomed, setZoomed] = useState(false)
   const [loadedDialog, setLoadedDialog] = useState<number | null>(null)
+  const [mainImageLoaded, setMainImageLoaded] = useState<string | null>(null)
 
   function handleSelectVariant(id: string) {
     setSelectedVariantId(id)
@@ -193,6 +184,7 @@ export function ProductDetailContent({
         stock: effectiveStock,
         type: product.type,
         condition: product.condition,
+        sale_type: product.sale_type,
       })
     }
     return true
@@ -220,15 +212,7 @@ export function ProductDetailContent({
         activeCategory={product.category}
         previewPool={previewPool}
       />
-      <div className="mx-auto max-w-7xl px-4 py-12 md:px-6 lg:py-16">
-        <Link
-          href={backHref}
-          className="mb-7 flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="size-3.5" />
-          Voltar à Loja
-        </Link>
-
+      <div className="mx-auto max-w-7xl px-4 pb-12 md:px-6 lg:pb-16 pt-5">
       <div className="grid gap-10 md:grid-cols-2 lg:gap-16">
         {/* Images */}
         <div className="space-y-4">
@@ -247,11 +231,21 @@ export function ProductDetailContent({
                   className="block h-full w-full cursor-zoom-in"
                   aria-label="Ampliar imagem"
                 >
+                  {mainImageLoaded !== images[activeImage] && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="size-8 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-emerald-500" />
+                    </div>
+                  )}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
+                    key={images[activeImage] as string}
                     src={images[activeImage] as string}
                     alt={product.name}
-                    className="h-full w-full object-contain p-8"
+                    onLoad={() => setMainImageLoaded(images[activeImage] as string)}
+                    className={cn(
+                      "h-full w-full object-contain p-8 transition-opacity duration-150",
+                      mainImageLoaded === images[activeImage] ? "opacity-100" : "opacity-0"
+                    )}
                   />
                   <span className="absolute right-4 top-4 flex size-11 items-center justify-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover/zoom:opacity-100">
                     <ZoomIn className="size-5" />
@@ -362,29 +356,28 @@ export function ProductDetailContent({
 
         {/* Info */}
         <div className="space-y-6 pt-1.5">
-          {product.type === "bazaar" && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-300">
-              ♻️ Bazar
-            </span>
-          )}
-
           <div>
+            {product.sale_type !== "normal" && (() => {
+              const SaleTypeIcon = SALE_TYPE_ICON[product.sale_type]
+              return (
+                <span
+                  className={cn(
+                    "mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold",
+                    product.sale_type === "pre_order"
+                      ? "bg-amber-500/15 text-amber-400"
+                      : "bg-emerald-500/15 text-emerald-400"
+                  )}
+                >
+                  <SaleTypeIcon className="size-3.5" strokeWidth={2.5} />
+                  {SALE_TYPE_LABEL[product.sale_type]}
+                </span>
+              )
+            })()}
             <h1 className="font-display text-[38px] font-bold leading-[1.05] tracking-tight text-foreground">{product.name}</h1>
             {product.category && (
               <p className="mt-2 text-[15px] capitalize text-muted-foreground">{product.category}</p>
             )}
           </div>
-
-          {product.condition !== "new" && (
-            <span
-              className={cn(
-                "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide",
-                CONDITION_STYLE[product.condition]
-              )}
-            >
-              {CONDITION_LABEL[product.condition]}
-            </span>
-          )}
 
           {product.condition_notes && (
             <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-muted-foreground">
@@ -494,6 +487,15 @@ export function ProductDetailContent({
             </div>
           ) : (
             <div className="space-y-4">
+              {product.sale_type === "pre_order" && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">
+                  <Rocket className="mt-0.5 size-4 shrink-0" />
+                  <p>
+                    <span className="font-bold">Produto em pré-venda.</span> A compra é garantida agora, mas o envio
+                    só acontece quando o estoque chegar — acompanhe o status na sua conta.
+                  </p>
+                </div>
+              )}
               {effectiveStock !== null && effectiveStock <= 3 && (
                 <p className="text-sm font-semibold text-amber-400">Últimas {effectiveStock} unidades!</p>
               )}
@@ -529,7 +531,7 @@ export function ProductDetailContent({
                 disabled={hasVariants && !activeVariant}
               >
                 <Zap className="size-5" />
-                Comprar Agora
+                {product.sale_type === "pre_order" ? "Reservar Agora" : "Comprar Agora"}
               </Button>
             </div>
           )}

@@ -9,7 +9,14 @@ import { getVariantIcon } from "@/lib/variant-icons"
 import { formatBRL } from "@/lib/format"
 import { useCart } from "@/components/providers/cart-context"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import type { StoreCardVariant } from "@/lib/server/repositories/store-repository"
+
+const CONDITION_LABEL: Record<"new" | "used" | "opened", string> = {
+  new: "Novo",
+  used: "Usado",
+  opened: "Emb. aberta",
+}
 
 interface ProductCardProps {
   id: string
@@ -29,23 +36,7 @@ interface ProductCardProps {
   condition_notes: string | null
   has_variants?: boolean
   variants?: StoreCardVariant[]
-}
-
-const CONDITION_LABEL: Record<string, string> = {
-  new: "Novo",
-  opened: "Emb. aberta",
-  used: "Usado",
-}
-
-/**
- * Tint por estado, na mesma linguagem oklch dos ícones de categoria — o
- * badge do mock é montado por color-mix a partir de uma cor só (borda 32%,
- * fundo 14% sobre preto), não por três utilitários de cor distintos.
- */
-const CONDITION_TINT: Record<string, string> = {
-  new: "oklch(0.7 0.15 160)",
-  opened: "oklch(0.8 0.15 85)",
-  used: "oklch(0.7 0.18 45)",
+  sale_type?: "pre_order" | "ready_stock" | "normal"
 }
 
 export function ProductCard(props: ProductCardProps) {
@@ -57,6 +48,7 @@ export function ProductCard(props: ProductCardProps) {
     hasVariants ? (variants.find((v) => v.stock === null || v.stock > 0)?.id ?? variants[0].id) : null
   )
   const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) ?? null : null
+  const [imageLoaded, setImageLoaded] = useState<string | null>(null)
 
   const outOfStock = hasVariants
     ? Boolean(props.is_sold_out) || (activeVariant ? activeVariant.stock !== null && activeVariant.stock === 0 : false)
@@ -74,6 +66,8 @@ export function ProductCard(props: ProductCardProps) {
     : null
 
   const { icon: CategoryIcon, tint } = getCategoryIcon(props.category)
+  const saleType = props.sale_type ?? "normal"
+  const SaleTypeIcon = saleType !== "normal" ? SALE_TYPE_ICON[saleType] : null
 
   function handleSelectVariant(e: React.MouseEvent, variantId: string) {
     e.preventDefault()
@@ -98,11 +92,10 @@ export function ProductCard(props: ProductCardProps) {
       stock: activeVariant ? activeVariant.stock : props.stock,
       type: props.type,
       condition: props.condition,
+      sale_type: saleType,
     })
     setOpen(true)
   }
-
-  const conditionTint = CONDITION_TINT[props.condition]
 
   return (
     <Link href={href} className="group block">
@@ -115,12 +108,24 @@ export function ProductCard(props: ProductCardProps) {
             como no mock — não o --card-image-bg genérico dos outros cards. */}
         <div className="relative aspect-square overflow-hidden bg-[#141414]">
           {image ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={image}
-              alt={props.name}
-              className="h-full w-full object-contain p-4 transition-transform duration-300 group-hover:scale-105"
-            />
+            <>
+              {imageLoaded !== image && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="size-6 animate-spin rounded-full border-2 border-white/15 border-t-emerald-500" />
+                </div>
+              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                key={image}
+                src={image}
+                alt={props.name}
+                onLoad={() => setImageLoaded(image)}
+                className={cn(
+                  "h-full w-full object-contain p-4 transition-[opacity,transform] duration-300 group-hover:scale-105",
+                  imageLoaded === image ? "opacity-100" : "opacity-0"
+                )}
+              />
+            </>
           ) : (
             <div
               className="flex h-full items-center justify-center"
@@ -134,19 +139,19 @@ export function ProductCard(props: ProductCardProps) {
             </div>
           )}
 
-          {/* Badge de estado — 12px do canto, contra os 10px do botão de
-              carrinho: é assim que o mock desalinha os dois de propósito. */}
-          <span
-            className="absolute left-3 top-3 z-[1] inline-flex items-center gap-[5px] rounded-full border px-[9px] py-[3px] text-[9px] font-bold uppercase tracking-[0.06em]"
-            style={{
-              borderColor: `color-mix(in oklab, ${conditionTint} 32%, transparent)`,
-              background: `color-mix(in oklab, ${conditionTint} 14%, #000)`,
-              color: conditionTint,
-            }}
-          >
-            <span className="size-[5px] rounded-full" style={{ background: conditionTint }} />
-            {CONDITION_LABEL[props.condition]}
-          </span>
+          {SaleTypeIcon && !outOfStock && (
+            <span
+              className={cn(
+                "absolute left-2.5 top-2.5 z-[1] flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold",
+                saleType === "pre_order"
+                  ? "bg-amber-500/90 text-[#1a1200]"
+                  : "bg-emerald-500/90 text-[#04140d]"
+              )}
+            >
+              <SaleTypeIcon className="size-2.5" strokeWidth={2.5} />
+              {SALE_TYPE_LABEL[saleType]}
+            </span>
+          )}
 
           {!outOfStock && (
             <button
@@ -191,11 +196,11 @@ export function ProductCard(props: ProductCardProps) {
             {props.name}
           </h3>
 
-          {/* Variantes: seleção rápida direto no card, sem precisar abrir o
-              produto — o clique é interceptado (stopPropagation) pra não navegar. */}
-          {hasVariants && (
-            <div className="flex flex-wrap gap-[5px]" onClick={(e) => e.stopPropagation()}>
-              {variants.map((v) => {
+          {/* Slot de altura fixa: variantes quando existem, senão uma info do
+              produto (condição/marca) — evita cards com heights diferentes no grid. */}
+          <div className="flex h-5 flex-wrap items-center gap-[5px]" onClick={hasVariants ? (e) => e.stopPropagation() : undefined}>
+            {hasVariants ? (
+              variants.map((v) => {
                 const isActive = v.id === selectedVariantId
                 const variantOutOfStock = v.stock !== null && v.stock === 0
                 const VariantIcon = getVariantIcon(v.icon)
@@ -220,9 +225,13 @@ export function ProductCard(props: ProductCardProps) {
                     )}
                   </button>
                 )
-              })}
-            </div>
-          )}
+              })
+            ) : (
+              <p className="line-clamp-1 text-[10.5px] font-medium text-[#7a7a7a]">
+                {props.condition !== "new" ? CONDITION_LABEL[props.condition] : (props.brand ?? " ")}
+              </p>
+            )}
+          </div>
 
           <div className="mt-auto">
             {hasDiscount ? (

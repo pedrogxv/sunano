@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bookmark, LayoutDashboard, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
+import { Bookmark, LayoutDashboard, LifeBuoy, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -238,6 +238,20 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
                 {t.auth.myOrders}
               </Link>
             </DropdownMenuItem>
+            {authUser?.hasSupportTicket && (
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/conta/suporte"
+                  className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
+                >
+                  <LifeBuoy className="size-4 text-muted-foreground" />
+                  <span className="flex-1">{t.auth.myTickets}</span>
+                  {Boolean(authUser.supportTicketsAwaitingMe) && (
+                    <span className="size-2 shrink-0 rounded-full bg-amber-500" />
+                  )}
+                </Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem asChild>
               <Link
                 href="/forum/salvos"

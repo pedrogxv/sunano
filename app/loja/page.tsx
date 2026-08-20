@@ -38,7 +38,7 @@ export default async function LojaPage() {
     }
   }
 
-  const [{ items, total }, filterOptions, { items: featuredItems }] = await Promise.all([
+  const [{ items, total }, filterOptions, { items: featuredItems }, { items: preOrderItems }, { items: readyStockItems }] = await Promise.all([
     listStoreProductsPaginated({
       type: "store",
       page: 1,
@@ -50,6 +50,18 @@ export default async function LojaPage() {
       featured: true,
       page: 1,
       pageSize: 8,
+    }),
+    listStoreProductsPaginated({
+      type: "store",
+      saleType: "pre_order",
+      page: 1,
+      pageSize: 12,
+    }),
+    listStoreProductsPaginated({
+      type: "store",
+      saleType: "ready_stock",
+      page: 1,
+      pageSize: 12,
     }),
   ])
 
@@ -71,6 +83,8 @@ export default async function LojaPage() {
         initialTotal={total}
         initialFilterOptions={filterOptions}
         initialFeatured={featuredItems}
+        preOrderItems={preOrderItems}
+        readyStockItems={readyStockItems}
         pageSize={PAGE_SIZE}
       />
     </Suspense>

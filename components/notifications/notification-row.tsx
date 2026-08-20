@@ -7,6 +7,7 @@ import {
   Circle,
   CircleCheck,
   Flame,
+  LifeBuoy,
   Megaphone,
   MessageSquare,
   Newspaper,
@@ -30,6 +31,10 @@ export const ICONS: Record<NotificationType, typeof Bell> = {
   mention: AtSign,
   new_post: Newspaper,
   order_status: Package,
+  support_reply: LifeBuoy,
+  support_new_ticket: LifeBuoy,
+  support_user_reply: LifeBuoy,
+  support_status: CircleCheck,
 }
 
 export const ICON_TONE: Record<NotificationType, string> = {
@@ -41,6 +46,10 @@ export const ICON_TONE: Record<NotificationType, string> = {
   mention: "bg-rose-500/15 text-rose-400",
   new_post: "bg-emerald-500/15 text-emerald-400",
   order_status: "bg-indigo-500/15 text-indigo-400",
+  support_reply: "bg-cyan-500/15 text-cyan-400",
+  support_new_ticket: "bg-cyan-500/15 text-cyan-400",
+  support_user_reply: "bg-cyan-500/15 text-cyan-400",
+  support_status: "bg-cyan-500/15 text-cyan-400",
 }
 
 export function fill(template: string, values: Record<string, string | number>) {
@@ -104,6 +113,28 @@ export function buildMessage(n: Notification, t: ReturnType<typeof useT>): strin
       return n.title ?? t.notifications.systemTitle
     case "order_status":
       return n.title ?? t.notifications.orderStatusFallback
+    case "support_reply":
+      return fill(t.notifications.supportReply, { name })
+    case "support_new_ticket":
+      return fill(t.notifications.supportNewTicket, { name })
+    case "support_user_reply":
+      return fill(t.notifications.supportUserReply, { name })
+    case "support_status":
+      return fill(t.notifications.supportStatus, { subject: n.title ?? "" })
+  }
+}
+
+/** Rótulo do status gravado em `body` por `support_status` — ver trg_notify_support_status_change. */
+export function supportStatusLabel(status: string | null, t: ReturnType<typeof useT>): string {
+  switch (status) {
+    case "resolved":
+      return t.notifications.supportStatusResolved
+    case "cancelled":
+      return t.notifications.supportStatusCancelled
+    case "open":
+      return t.notifications.supportStatusReopened
+    default:
+      return status ?? ""
   }
 }
 
@@ -134,7 +165,17 @@ export function NotificationRow({
   // (corpo do aviso, status, título do post) — comentário/resposta não
   // exibe o texto da mensagem em si, só o aviso de que chegou.
   const preview =
-    n.type === "system" || n.type === "order_status" ? n.body : n.type === "new_post" ? n.title : null
+    n.type === "system" ||
+    n.type === "order_status" ||
+    n.type === "support_reply" ||
+    n.type === "support_new_ticket" ||
+    n.type === "support_user_reply"
+      ? n.body
+      : n.type === "support_status"
+        ? supportStatusLabel(n.body, t)
+        : n.type === "new_post"
+          ? n.title
+          : null
 
   const href = notificationHref(n)
 

@@ -4,6 +4,7 @@ import * as z from "zod"
 import { hasAdminPermission, type AdminProfile } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { countSupportTicketsAwaitingAdmin } from "@/lib/server/repositories/support-repository"
 
 const profileSchema = z.object({
   display_name: z.string().trim().max(80, "Nome deve ter no máximo 80 caracteres").optional(),
@@ -40,6 +41,12 @@ export async function GET() {
     const email = typedProfile?.email ?? authData.user.email ?? null
     const displayName = typedProfile?.display_name?.trim() || defaultNameFromEmail(email)
 
+    // Alimenta o badge de "Suporte" da sidebar sem nenhum fetch novo — a
+    // sidebar já busca este endpoint uma vez no mount (ver AdminSidebar.tsx).
+    const supportAwaitingCount = hasAdminPermission(typedProfile, "support_read")
+      ? await countSupportTicketsAwaitingAdmin()
+      : 0
+
     return NextResponse.json({
       ok: true,
       profile: {
@@ -50,6 +57,7 @@ export async function GET() {
         role: typedProfile?.role ?? "admin",
         permissions: typedProfile?.permissions ?? {},
       },
+      supportAwaitingCount,
     })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar perfil." }, { status: 500 })

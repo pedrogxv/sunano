@@ -2,24 +2,13 @@
 
 import { useEffect } from "react"
 import Link from "next/link"
-import { Minus, Package, Plus, Recycle, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react"
+import { Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { getVariantIcon } from "@/lib/variant-icons"
-
-const CONDITION_LABEL: Record<string, string> = {
-  new: "Novo",
-  opened: "Emb. aberta",
-  used: "Usado",
-}
-
-const CONDITION_STYLE: Record<string, string> = {
-  new: "bg-emerald-500/15 text-emerald-400",
-  opened: "bg-amber-500/15 text-amber-400",
-  used: "bg-orange-500/15 text-orange-400",
-}
+import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 
 export function CartButton() {
   const { count, setOpen } = useCart()
@@ -46,6 +35,7 @@ export function CartDrawer() {
   const { items, count, remove, increment, decrement, clear, isOpen, setOpen } = useCart()
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
+  const hasPreOrderItem = items.some((i) => i.sale_type === "pre_order")
 
   useEffect(() => {
     if (!isOpen) return
@@ -145,12 +135,7 @@ export function CartDrawer() {
                   {/* Info */}
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
-                      <span className="truncate">
-                        {item.name}
-                        {item.variantLabel && (
-                          <span className="text-muted-foreground"> — {item.variantLabel}</span>
-                        )}
-                      </span>
+                      <span className="truncate">{item.name}</span>
                       {(() => {
                         const VariantIcon = getVariantIcon(item.variantIcon)
                         if (!item.variantColor && !VariantIcon) return null
@@ -169,27 +154,35 @@ export function CartDrawer() {
                         )
                       })()}
                     </p>
-                    {item.variantOptions.length > 0 && (
+                    {(item.variantLabel || item.variantOptions.length > 0) && (
                       <p className="truncate text-[11px] text-muted-foreground">
-                        {item.variantOptions.map((o) => `${o.groupName}: ${o.label}`).join(" · ")}
+                        {[item.variantLabel, ...item.variantOptions.map((o) => `${o.groupName}: ${o.label}`)]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     )}
                     <p className="mt-0.5 text-xs font-bold text-emerald-400">{formatBRL(item.priceCents)}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                      <span className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
-                        item.type === "bazaar" ? "bg-amber-500/15 text-amber-300" : "bg-sky-500/15 text-sky-300"
-                      )}>
-                        {item.type === "bazaar" ? <Recycle className="size-2.5" /> : <ShoppingBag className="size-2.5" />}
-                        {item.type === "bazaar" ? "Bazar" : "Loja"}
-                      </span>
-                      <span className={cn(
-                        "inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
-                        CONDITION_STYLE[item.condition]
-                      )}>
-                        {CONDITION_LABEL[item.condition]}
-                      </span>
-                    </div>
+                    {item.sale_type !== "normal" && (() => {
+                      const SaleTypeIcon = SALE_TYPE_ICON[item.sale_type]
+                      return (
+                        <span
+                          className={cn(
+                            "mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold",
+                            item.sale_type === "pre_order"
+                              ? "bg-amber-500/15 text-amber-400"
+                              : "bg-emerald-500/15 text-emerald-400"
+                          )}
+                        >
+                          <SaleTypeIcon className="size-2.5" strokeWidth={2.5} />
+                          {SALE_TYPE_LABEL[item.sale_type]}
+                        </span>
+                      )
+                    })()}
+                    {item.stock !== null && item.stock <= 3 && (
+                      <p className="mt-0.5 text-[10px] font-semibold text-amber-400">
+                        Últimas {item.stock} unidades!
+                      </p>
+                    )}
                   </div>
 
                   {/* Qty */}
@@ -243,6 +236,12 @@ export function CartDrawer() {
             <p className="text-[10px] text-muted-foreground">
               Pagamento via PIX
             </p>
+
+            {hasPreOrderItem && (
+              <p className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-[10px] font-semibold text-amber-400">
+                Seu carrinho tem item(ns) em pré-venda — o envio desses produtos só ocorre quando o estoque chegar.
+              </p>
+            )}
 
             <Button
               className="h-14 w-full gap-2 rounded-xl bg-emerald-600 text-base font-extrabold text-white hover:bg-emerald-500"

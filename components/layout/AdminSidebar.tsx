@@ -11,6 +11,7 @@ import {
   Gift,
   Handshake,
   Home,
+  LifeBuoy,
   Medal,
   Megaphone,
   MessageSquare,
@@ -47,6 +48,8 @@ interface NavItem {
   permission?: AdminPermissionKey
   requiresWebMaster?: boolean
   children?: NavItem[]
+  /** Contador exibido como pill ao lado do label — hoje só "Suporte" (chamados aguardando resposta). */
+  badgeCount?: number
 }
 
 interface NavGroup {
@@ -71,6 +74,7 @@ export function AdminSidebar() {
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [expandedHref, setExpandedHref] = useState<string | null>(null)
+  const [supportAwaitingCount, setSupportAwaitingCount] = useState(0)
 
   const navGroups: NavGroup[] = [
     {
@@ -110,6 +114,7 @@ export function AdminSidebar() {
           children: [
             { href: "/admin/store",        label: "Produtos", icon: ShoppingBag, permission: "store_read" },
             { href: "/admin/store/orders", label: "Pedidos",  icon: Package,     permission: "store_read" },
+            { href: "/admin/suporte",      label: "Suporte",  icon: LifeBuoy,    permission: "support_read", badgeCount: supportAwaitingCount },
           ],
         },
         { href: "/admin/market", label: "Mercado",                      icon: Tags,        permission: "market_read" },
@@ -152,9 +157,12 @@ export function AdminSidebar() {
           if (mounted) { setProfile(null); setIsLoadingProfile(false) }
           return
         }
-        const data = (await res.json().catch(() => null)) as { profile?: AdminProfile } | null
+        const data = (await res.json().catch(() => null)) as
+          | { profile?: AdminProfile; supportAwaitingCount?: number }
+          | null
         if (!mounted) return
         setProfile(data?.profile ?? null)
+        setSupportAwaitingCount(data?.supportAwaitingCount ?? 0)
       } catch {
         if (mounted) setProfile(null)
       } finally {
@@ -255,9 +263,10 @@ export function AdminSidebar() {
                       if (item.children && item.children.length > 0) {
                         const activeChild = activeChildHref(item.children)
                         const open = expandedHref === item.href || activeChild !== null
+                        const childrenBadgeCount = item.children.reduce((sum, child) => sum + (child.badgeCount ?? 0), 0)
 
                         return (
-                          <div key={item.href}>
+                          <div key={item.href} className="relative">
                             <button
                               type="button"
                               onClick={() => setExpandedHref((prev) => (prev === item.href ? null : item.href))}
@@ -272,6 +281,14 @@ export function AdminSidebar() {
                             >
                               <Icon className="size-[18px] shrink-0" />
                               <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>{item.label}</span>
+                              {Boolean(childrenBadgeCount) && (
+                                <span className={cn(
+                                  "flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white",
+                                  isCollapsed && "absolute right-1 top-1 h-4 min-w-4 px-0.5 text-[9px]"
+                                )}>
+                                  {childrenBadgeCount}
+                                </span>
+                              )}
                               <ChevronDown
                                 className={cn(
                                   "size-3.5 shrink-0 transition-transform duration-200",
@@ -303,7 +320,12 @@ export function AdminSidebar() {
                                           )}
                                         >
                                           <ChildIcon className="size-4 shrink-0" />
-                                          <span>{child.label}</span>
+                                          <span className="flex-1">{child.label}</span>
+                                          {Boolean(child.badgeCount) && (
+                                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                                              {child.badgeCount}
+                                            </span>
+                                          )}
                                         </Link>
                                       )
                                     })}
@@ -330,7 +352,12 @@ export function AdminSidebar() {
                           )}
                         >
                           <Icon className="size-[18px] shrink-0" />
-                          <span className={cn(isCollapsed && "hidden")}>{item.label}</span>
+                          <span className={cn("flex-1", isCollapsed && "hidden")}>{item.label}</span>
+                          {Boolean(item.badgeCount) && !isCollapsed && (
+                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                              {item.badgeCount}
+                            </span>
+                          )}
                         </Link>
                       )
                     })}

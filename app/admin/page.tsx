@@ -9,6 +9,7 @@ import {
   GalleryHorizontalEnd,
   Gift,
   LayoutGrid,
+  LifeBuoy,
   MessageSquare,
   Mouse,
   NotebookPen,
@@ -39,6 +40,7 @@ type DashboardStats = {
   store: { total: number; active: number; outOfStock: number } | null
   offers: { active: number } | null
   banners: { total: number; active: number; max: number } | null
+  support: { open: number; resolved: number; cancelled: number } | null
   visits: VisitSeries | null
   performance: PerformanceSeries | null
 }
@@ -158,6 +160,15 @@ export default function AdminPage() {
       caption: d.statBannersCaption(stats.banners.active, stats.banners.max),
       alert: false,
     },
+    stats?.support && {
+      href: "/admin/suporte",
+      icon: LifeBuoy,
+      color: "fuchsia" as ColorKey,
+      value: stats.support.open,
+      label: d.statSupport,
+      caption: d.statSupportCaption(stats.support.resolved, stats.support.cancelled),
+      alert: false,
+    },
   ].filter((tile): tile is NonNullable<typeof tile> => Boolean(tile))
 
   // Mesma regra do link de pendências no bloco "Precisa de atenção": só manda
@@ -224,9 +235,9 @@ export default function AdminPage() {
           <LayoutGrid className="size-3.5" />
           {d.overview}
         </h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
           {loading
-            ? Array.from({ length: 6 }).map((_, i) => <StatSkeleton key={i} />)
+            ? Array.from({ length: 7 }).map((_, i) => <StatSkeleton key={i} />)
             : statTiles.map((tile, index) => {
                 const Icon = tile.icon
                 const styles = COLOR_STYLES[tile.color]

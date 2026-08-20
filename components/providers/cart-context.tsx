@@ -26,6 +26,7 @@ export interface CartItem {
   stock: number | null
   type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
+  sale_type: "pre_order" | "ready_stock" | "normal"
 }
 
 interface CartContextValue {
@@ -86,7 +87,8 @@ function isCartItem(value: unknown): value is CartItem {
     (i.stock === null || typeof i.stock === "number") &&
     (i.image === null || typeof i.image === "string") &&
     (i.type === "store" || i.type === "bazaar") &&
-    (i.condition === "new" || i.condition === "used" || i.condition === "opened")
+    (i.condition === "new" || i.condition === "used" || i.condition === "opened") &&
+    (i.sale_type === undefined || i.sale_type === "pre_order" || i.sale_type === "ready_stock" || i.sale_type === "normal")
   )
 }
 
@@ -106,6 +108,7 @@ function loadCart(): CartItem[] {
         variantColor: i.variantColor ?? null,
         variantIcon: i.variantIcon ?? null,
         variantOptions: i.variantOptions ?? [],
+        sale_type: i.sale_type ?? "normal",
       }))
   } catch {
     return []

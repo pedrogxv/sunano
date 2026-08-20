@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, PackageSearch, ShieldCheck, SlidersHorizontal, Sparkles, Star, Tag, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, Package, PackageSearch, ShieldCheck, SlidersHorizontal, Sparkles, Star, Tag, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -32,19 +32,15 @@ interface StoreContentProps {
   initialTotal: number
   initialFilterOptions: StoreFilterOptions
   initialFeatured: StoreProductCard[]
+  /** Produtos em pré-venda (todo o catálogo, não só a página atual) — seção dedicada abaixo dos Destaques. */
+  preOrderItems?: StoreProductCard[]
+  /** Produtos de pronta entrega (todo o catálogo, não só a página atual) — seção dedicada abaixo dos Destaques. */
+  readyStockItems?: StoreProductCard[]
   pageSize: number
   banner?: StoreBanner
 }
 
 type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
-type ConditionKey = "all" | "new" | "used" | "opened"
-
-const CONDITION_LABEL: Record<ConditionKey, string> = {
-  all: "Estado",
-  new: "Novo",
-  used: "Usado",
-  opened: "Emb. aberta",
-}
 
 const PRICE_MIN = 0
 const SORT_LABEL: Record<SortKey, string> = {
@@ -156,7 +152,68 @@ function StoreBannerHero({ banner, productCount }: { banner: StoreBanner; produc
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, pageSize, banner }: StoreContentProps) {
+/** Carrossel horizontal reutilizado por Destaques e Disponibilidade (pronta entrega + pré-venda). */
+function ProductCarouselSection({
+  items,
+  eyebrow,
+  title,
+  icon: Icon,
+  iconClassName,
+}: {
+  items: StoreProductCard[]
+  eyebrow: string
+  title: string
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  iconClassName: string
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const showCarouselControls = items.length > 5
+
+  if (items.length === 0) return null
+
+  return (
+    <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+      <div className="flex items-end justify-between gap-3 sm:gap-4">
+        <div className="flex flex-col gap-[3px] sm:gap-1">
+          <p className="flex items-center gap-[5px] text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] text-[#7a7a7a] sm:gap-1.5 sm:text-[10.5px]">
+            <Icon className={cn("size-[11px] shrink-0 sm:size-3", iconClassName)} strokeWidth={2.2} />
+            {eyebrow}
+          </p>
+          <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">{title}</h2>
+        </div>
+        {showCarouselControls && (
+          <div className="hidden items-center gap-2.5 sm:flex">
+            <button
+              type="button"
+              onClick={() => scrollRef.current?.scrollBy({ left: -300, behavior: "smooth" })}
+              aria-label="Rolar para trás"
+              className="flex size-8 items-center justify-center rounded-[10px] border border-[#2a2a2a] text-[#6e6e6e] transition-colors hover:text-white"
+            >
+              <ChevronLeft className="size-[15px]" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollRef.current?.scrollBy({ left: 300, behavior: "smooth" })}
+              aria-label="Rolar para frente"
+              className="flex size-8 items-center justify-center rounded-[10px] border border-[#333333] text-[#dcdcdc] transition-colors hover:bg-white/5 hover:text-white"
+            >
+              <ChevronRight className="size-[15px]" />
+            </button>
+          </div>
+        )}
+      </div>
+      <div ref={scrollRef} className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] sm:gap-3.5">
+        {items.map((product) => (
+          <div key={product.id} className="w-[168px] shrink-0 sm:w-[232px]">
+            <ProductCard {...product} />
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], readyStockItems = [], pageSize, banner }: StoreContentProps) {
   const searchParams = useSearchParams()
   const { user } = useAuthUser()
 
@@ -178,7 +235,6 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const [selectedBrands, setSelectedBrands] = useState<string[]>(
     banner?.type === "brand" ? [banner.value] : []
   )
-  const [condition, setCondition] = useState<ConditionKey>("all")
   const [sortKey, setSortKey] = useState<SortKey>("recent")
   const [page, setPage] = useState(1)
 
@@ -235,7 +291,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // Volta pra página 1 sempre que um filtro (não a página em si) muda.
   useEffect(() => {
     setPage(1)
-  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey, condition])
+  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey])
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -247,7 +303,6 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       params.set("priceMin", String(priceRange[0] * 100))
       params.set("priceMax", String(priceRange[1] * 100))
     }
-    if (condition !== "all") params.set("condition", condition)
     if (sortKey !== "recent") params.set("sort", sortKey)
     params.set("page", String(page))
     params.set("pageSize", String(pageSize))
@@ -278,20 +333,18 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       .finally(() => (appending ? setIsLoadingMore(false) : setIsFetching(false)))
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, condition, page, pageSize])
+  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, page, pageSize])
 
   const activeFiltersCount =
     selectedCategories.length +
     selectedBrands.length +
     (query.trim() ? 1 : 0) +
-    (condition !== "all" ? 1 : 0) +
     (isPriceFiltered ? 1 : 0)
 
   const resetFilters = () => {
     setQuery("")
     setSelectedCategories([])
     setSelectedBrands([])
-    setCondition("all")
     setPriceRange(null)
     setSortKey("recent")
   }
@@ -321,6 +374,13 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       FeaturedIcon: initialFeatured.length > 0 ? Star : discounted.length > 0 ? Flame : Sparkles,
     }
   }, [initialItems, initialFeatured])
+
+  // Pronta entrega primeiro (compra imediata), pré-venda depois — cada
+  // ProductCard já traz o badge do tipo, então uma fileira só basta.
+  const availabilityItems = useMemo(
+    () => [...readyStockItems, ...preOrderItems],
+    [readyStockItems, preOrderItems]
+  )
 
   const activeCategory = selectedCategories.length === 1 ? selectedCategories[0] : null
 
@@ -376,18 +436,6 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         />
       )}
 
-      <Select value={condition} onValueChange={(v) => setCondition(v as ConditionKey)}>
-        <SelectTrigger className={triggerClass}>
-          <SelectValue>{CONDITION_LABEL[condition]}</SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos os estados</SelectItem>
-          <SelectItem value="new">Novo</SelectItem>
-          <SelectItem value="opened">Emb. aberta</SelectItem>
-          <SelectItem value="used">Usado</SelectItem>
-        </SelectContent>
-      </Select>
-
       <Popover>
         <PopoverTrigger asChild>
           <button type="button" className={triggerClass}>
@@ -418,28 +466,12 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       {banner ? (
         <StoreBannerHero banner={banner} productCount={banner.type === "category" ? (initialFilterOptions.categoryCounts[banner.value] ?? total) : total} />
       ) : (
-        /* Hero: a mascote só sangra pela direita no desktop; no mobile ela fica
-           atrás de um degradê vertical e o conteúdo desce pro rodapé do bloco. */
+        /* Hero: aspect-ratio da própria imagem (6047×1890) — mostra o banner
+           inteiro em vez de cortar topo/laterais com bg-cover numa altura fixa. */
         <div
-          className="relative h-[320px] overflow-hidden bg-[#0b0f14] bg-cover [background-position:72%_center] sm:h-[400px] sm:[background-position:right_center]"
+          className="relative aspect-[6047/1890] w-full overflow-hidden bg-[#0b0f14] bg-contain bg-center bg-no-repeat"
           style={{ backgroundImage: "url(/images/mascot/Loja.png)" }}
         >
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 hidden sm:block"
-            style={{
-              background:
-                "linear-gradient(90deg, #0b0f14 22%, rgba(11,15,20,0.82) 48%, rgba(11,15,20,0.25) 74%, rgba(11,15,20,0) 96%)",
-            }}
-          />
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 sm:hidden"
-            style={{
-              background: "linear-gradient(180deg, rgba(11,15,20,0.45) 0%, rgba(11,15,20,0.88) 58%, #0b0f14 100%)",
-            }}
-          />
-
           {user && (
             <Link
               href="/conta/pedidos"
@@ -449,33 +481,6 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
               Meus pedidos
             </Link>
           )}
-
-          <div className="relative mx-auto flex h-full max-w-7xl flex-col items-start justify-end gap-[13px] px-4 pb-[22px] text-left sm:justify-center sm:gap-5 sm:pb-0 lg:px-8">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/16 bg-black/30 px-[11px] py-[5px] text-[9.5px] font-extrabold uppercase tracking-[0.16em] text-white/90 backdrop-blur-sm sm:gap-[7px] sm:px-[13px] sm:py-1.5 sm:text-[10px]">
-              <ShieldCheck className="size-[11px] text-emerald-400 sm:size-3" strokeWidth={2.2} />
-              Curadoria Sunano
-            </span>
-            <div className="flex items-center gap-2">
-              <h1 className="max-w-[560px] font-display text-4xl font-bold leading-[1.02] tracking-[-0.03em] text-white sm:text-[54px]">
-                Compre com quem
-                <br />
-                já testou.
-              </h1>
-              <MarketInfoDialog />
-            </div>
-            {/* O artboard mobile corta o subtítulo — a headline e o CTA já ocupam
-                a área legível sobre a mascote em 390px. */}
-            <p className="hidden max-w-[420px] text-[15px] font-medium leading-[1.55] text-white/70 sm:block">
-              Cada item passa pela bancada do Sunano antes de virar anúncio, com reviews reais da comunidade na página do produto.
-            </p>
-            <a
-              href="#produtos"
-              className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 text-sm font-extrabold text-[#04140d] transition-opacity hover:opacity-90 sm:w-auto sm:justify-start sm:gap-[9px] sm:px-[26px]"
-            >
-              Ver todos os produtos
-              <ArrowRight className="size-4" strokeWidth={2.4} />
-            </a>
-          </div>
         </div>
       )}
 
@@ -486,22 +491,6 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         {/* Trust strip — mesma regra dos Destaques: pula na landing de categoria
             (banner já deixa a área densa com a fileira de tags). */}
         {banner?.type !== "category" && <TrustStrip />}
-
-        {/* Categorias — só aparece na Loja geral. Na landing de categoria a
-            navegação já vive inteira no menu do header (StoreCategoryNav),
-            sem repetir a mesma lista aqui embaixo. */}
-        {categoryOptions.length > 0 && banner?.type !== "category" && (
-          <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-            <div className="flex flex-col gap-[3px] sm:gap-1">
-              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>
-              <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Comprar por categoria</h2>
-            </div>
-            <CategoryTiles
-              categories={filterOptions.categories}
-              categoryCounts={filterOptions.categoryCounts}
-            />
-          </section>
-        )}
 
         {/* Destaques — só na Loja geral; a landing de categoria vai direto
             pros filtros + catálogo, sem essa seção. */}
@@ -552,6 +541,19 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
               ))}
             </div>
           </section>
+        )}
+
+        {/* Pronta entrega + Pré-venda numa seção só — o badge de cada
+            ProductCard já diferencia o tipo de venda, então separar em duas
+            fileiras era redundante. Pronta entrega primeiro (compra imediata). */}
+        {banner?.type !== "category" && (
+          <ProductCarouselSection
+            items={availabilityItems}
+            eyebrow="Disponibilidade"
+            title="Pronta entrega e pré-venda"
+            icon={Package}
+            iconClassName="text-emerald-400"
+          />
         )}
 
         {/* Catálogo */}
@@ -730,6 +732,22 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             </div>
           )}
         </section>
+
+        {/* Categorias — só aparece na Loja geral. Na landing de categoria a
+            navegação já vive inteira no menu do header (StoreCategoryNav),
+            sem repetir a mesma lista aqui embaixo. */}
+        {categoryOptions.length > 0 && banner?.type !== "category" && (
+          <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+            <div className="flex flex-col gap-[3px] sm:gap-1">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>
+              <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Comprar por categoria</h2>
+            </div>
+            <CategoryTiles
+              categories={filterOptions.categories}
+              categoryCounts={filterOptions.categoryCounts}
+            />
+          </section>
+        )}
 
       </div>
     </div>

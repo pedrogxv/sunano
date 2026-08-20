@@ -1,9 +1,9 @@
 import type { Metadata } from "next"
-import { SuporteForm } from "@/components/store/SuporteForm"
+import { SupportTicketForm } from "@/components/store/SupportTicketForm"
 
 export const metadata: Metadata = {
   title: "Suporte | Sunano",
-  description: "Fale com o suporte da Sunano sobre um pedido, produto ou dúvida da Loja.",
+  description: "Abra um chamado de suporte da Sunano sobre um pedido, produto ou dúvida da Loja.",
 }
 
 export default function SuportePage() {
@@ -13,12 +13,12 @@ export default function SuportePage() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">Suporte</p>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Precisa de ajuda?</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Conta pra gente o que aconteceu — se for sobre um pedido, inclua o número dele. Ao enviar,
-          abrimos seu e-mail com a mensagem pronta para <strong>contato@sunano.gg</strong>.
+          Conta pra gente o que aconteceu — se for sobre um pedido ou produto, vincule ele abaixo.
+          Nossa equipe responde por aqui mesmo, e você acompanha tudo em &ldquo;Meus Tickets&rdquo;.
         </p>
       </header>
 
-      <SuporteForm />
+      <SupportTicketForm />
     </article>
   )
 }

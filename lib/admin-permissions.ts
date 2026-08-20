@@ -30,6 +30,8 @@ export type AdminPermissionKey =
   | "brands_write"
   | "affiliates_read"
   | "affiliates_write"
+  | "support_read"
+  | "support_write"
 
 export type AdminProfile = {
   id: string
@@ -40,7 +42,7 @@ export type AdminProfile = {
   permissions: Record<string, boolean> | null
 }
 
-export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store" | "market" | "banners" | "events" | "brands" | "affiliates"
+export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store" | "market" | "banners" | "events" | "brands" | "affiliates" | "support"
 
 export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKey: AdminPermissionKey; writeKey: AdminPermissionKey }> = [
   { key: "dashboard", label: "Dashboard", readKey: "dashboard_read", writeKey: "dashboard_read" },
@@ -48,6 +50,7 @@ export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKe
   { key: "brands", label: "Marcas", readKey: "brands_read", writeKey: "brands_write" },
   { key: "blog", label: "Blog", readKey: "blog_read", writeKey: "blog_write" },
   { key: "forum", label: "Fórum", readKey: "forum_read", writeKey: "forum_write" },
+  { key: "support", label: "Suporte", readKey: "support_read", writeKey: "support_write" },
   { key: "settings", label: "Configurações", readKey: "settings_read", writeKey: "settings_write" },
   { key: "tiers", label: "Tiers", readKey: "tiers_read", writeKey: "tiers_write" },
   { key: "maintenance", label: "Manutenção", readKey: "maintenance_read", writeKey: "maintenance_write" },
@@ -90,6 +93,8 @@ export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [
   "brands_write",
   "affiliates_read",
   "affiliates_write",
+  "support_read",
+  "support_write",
 ]
 
 export function createFullPermissions() {

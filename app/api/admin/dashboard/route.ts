@@ -7,6 +7,7 @@ import { getTelegramOffers } from "@/lib/server/integrations/telegram-offers"
 import { countActiveBanners, MAX_ACTIVE_BANNERS } from "@/lib/server/repositories/banners-repository"
 import { getPerformanceSeries, type PerformanceSeries } from "@/lib/server/repositories/dashboard-performance-repository"
 import { getVisitSeries, type VisitSeries } from "@/lib/server/repositories/visits-repository"
+import { getSupportTicketStats, type SupportTicketStats } from "@/lib/server/repositories/support-repository"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -23,7 +24,11 @@ export async function GET() {
   const profile = auth.profile
   const db = createSupabaseAdminClient()
 
-  const stats: Record<string, SectionStats | null> & { visits: VisitSeries | null; performance: PerformanceSeries | null } = {
+  const stats: Record<string, SectionStats | null> & {
+    visits: VisitSeries | null
+    performance: PerformanceSeries | null
+    support: SupportTicketStats | null
+  } = {
     peripherals: null,
     blog: null,
     forum: null,
@@ -32,6 +37,7 @@ export async function GET() {
     banners: null,
     visits: null,
     performance: null,
+    support: null,
   }
 
   // Cada seção roda isolada: se uma falhar (ex.: integração externa fora do ar),
@@ -94,6 +100,10 @@ export async function GET() {
       const { count: total } = await db.from("home_banners").select("id", { count: "exact", head: true })
       const active = await countActiveBanners()
       stats.banners = { total: total ?? 0, active, max: MAX_ACTIVE_BANNERS }
+    }),
+    safe("support", async () => {
+      if (!hasAdminPermission(profile, "support_read")) return
+      stats.support = await getSupportTicketStats()
     }),
     safe("visits", async () => {
       if (!hasAdminPermission(profile, "dashboard_read")) return

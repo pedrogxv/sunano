@@ -170,6 +170,7 @@ export type StoreProductListFilters = {
   outOfStockOnly?: boolean
   /** Filtra só produtos marcados como destaque (`is_featured`). */
   featured?: boolean
+  saleType?: "pre_order" | "ready_stock" | "normal"
   sort?: "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
   page?: number
   pageSize?: number
@@ -208,6 +209,7 @@ export async function listStoreProductsPaginated(
   if (filters.priceMaxCents != null) query = query.lte("price_cents", filters.priceMaxCents)
   if (filters.outOfStockOnly) query = query.eq("stock", 0)
   if (filters.featured) query = query.eq("is_featured", true)
+  if (filters.saleType) query = query.eq("sale_type", filters.saleType)
   if (filters.productIds) {
     if (filters.productIds.length === 0) return { items: [], total: 0 }
     query = query.in("id", filters.productIds)

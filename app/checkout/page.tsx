@@ -8,9 +8,8 @@ import {
   Loader2,
   Package,
   QrCode,
-  Recycle,
+  Rocket,
   ShieldCheck,
-  ShoppingBag,
   ShoppingCart,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -21,18 +20,7 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
-
-const CONDITION_LABEL: Record<string, string> = {
-  new: "Novo",
-  opened: "Emb. aberta",
-  used: "Usado",
-}
-
-const CONDITION_STYLE: Record<string, string> = {
-  new: "bg-emerald-500/15 text-emerald-400",
-  opened: "bg-amber-500/15 text-amber-400",
-  used: "bg-orange-500/15 text-orange-400",
-}
+import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 
 function formatCpfInput(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 11)
@@ -84,6 +72,7 @@ export default function CheckoutPage() {
   }, [user, authLoading])
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
+  const hasPreOrderItem = items.some((i) => i.sale_type === "pre_order")
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -174,36 +163,45 @@ export default function CheckoutPage() {
               )}
             </Link>
 
-            {/* Info, flattened: name, badges, qty × price */}
+            {/* Info, flattened: name, variant, qty × price */}
             <div className="min-w-0 flex-1">
               <Link
                 href={`${item.type === "bazaar" ? bazaarBase : storeBase}/${item.slug}`}
                 className="truncate text-sm font-semibold text-foreground hover:underline"
               >
                 {item.name}
-                {item.variantLabel && <span className="text-muted-foreground"> — {item.variantLabel}</span>}
-                {item.variantOptions.map((o) => (
-                  <span key={o.optionId} className="text-muted-foreground"> — {o.label}</span>
-                ))}
               </Link>
-              <div className="mt-1 flex flex-wrap items-center gap-1">
-                <span className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
-                  item.type === "bazaar" ? "bg-amber-500/15 text-amber-300" : "bg-sky-500/15 text-sky-300"
-                )}>
-                  {item.type === "bazaar" ? <Recycle className="size-2.5" /> : <ShoppingBag className="size-2.5" />}
-                  {item.type === "bazaar" ? "Bazar" : "Loja"}
-                </span>
-                <span className={cn(
-                  "inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold",
-                  CONDITION_STYLE[item.condition]
-                )}>
-                  {CONDITION_LABEL[item.condition]}
-                </span>
-              </div>
+              {(item.variantLabel || item.variantOptions.length > 0) && (
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {[item.variantLabel, ...item.variantOptions.map((o) => `${o.groupName}: ${o.label}`)]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
               <p className="mt-1 text-xs text-muted-foreground">
                 {item.quantity}× {formatBRL(item.priceCents)}
               </p>
+              {item.sale_type !== "normal" && (() => {
+                const SaleTypeIcon = SALE_TYPE_ICON[item.sale_type]
+                return (
+                  <span
+                    className={cn(
+                      "mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold",
+                      item.sale_type === "pre_order"
+                        ? "bg-amber-500/15 text-amber-400"
+                        : "bg-emerald-500/15 text-emerald-400"
+                    )}
+                  >
+                    <SaleTypeIcon className="size-2.5" strokeWidth={2.5} />
+                    {SALE_TYPE_LABEL[item.sale_type]}
+                  </span>
+                )
+              })()}
+              {item.stock !== null && item.stock <= 3 && (
+                <p className="mt-0.5 text-[10px] font-semibold text-amber-400">
+                  Últimas {item.stock} unidades!
+                </p>
+              )}
             </div>
 
             {/* Line total */}
@@ -229,6 +227,16 @@ export default function CheckoutPage() {
           <span className="text-emerald-400">{formatBRL(total)}</span>
         </div>
       </div>
+
+      {hasPreOrderItem && (
+        <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">
+          <Rocket className="mt-0.5 size-4 shrink-0" />
+          <p>
+            <span className="font-bold">Seu pedido tem item(ns) em pré-venda.</span> O pagamento é processado
+            normalmente, mas o envio desses produtos só acontece quando o estoque chegar — acompanhe o status na sua conta.
+          </p>
+        </div>
+      )}
 
       {/* Trust / security info */}
       <div className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-3">

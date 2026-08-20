@@ -11,6 +11,10 @@ export type AuthContextUser = {
   displayName: string
   avatarUrl: string | null
   isAdmin: boolean
+  /** Se já abriu algum chamado de suporte — controla o item "Meus Tickets" do dropdown/nav (só aparece com histórico). */
+  hasSupportTicket: boolean
+  /** Quantos tickets abertos estão aguardando resposta do usuário — alimenta o ponto amber no sino e em "Meus Tickets". */
+  supportTicketsAwaitingMe: number
 }
 
 type AuthContextValue = {
@@ -31,6 +35,7 @@ const AuthContext = createContext<AuthContextValue>({ user: null, loading: true,
 /** Teto para `/api/auth/me`. Um fetch pendurado sem limite deixaria o avatar da
  *  topbar em skeleton e o sino invisível para sempre. */
 const ME_TIMEOUT_MS = 8000
+
 
 /** Espera antes da única retentativa. Cobre a queda momentânea de rede que,
  *  sem ela, mostraria "Login" a quem está logado até a próxima navegação. */
@@ -72,6 +77,8 @@ type MeResponse = {
   user?: { id: string; email: string | null } | null
   userProfile?: { display_name?: string | null; avatar_url?: string | null } | null
   adminProfile?: { email?: string | null; display_name?: string | null; avatar_url?: string | null } | null
+  hasSupportTicket?: boolean
+  supportTicketsAwaitingMe?: number
 }
 
 /**
@@ -85,7 +92,7 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
   if (!res.ok) throw new Error(`auth/me respondeu ${res.status}`)
 
   const data = (await res.json()) as MeResponse
-  const { user, userProfile, adminProfile } = data
+  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe } = data
   if (!user) return null
 
   return {
@@ -98,6 +105,8 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
       "Usuário",
     avatarUrl: adminProfile?.avatar_url || userProfile?.avatar_url || null,
     isAdmin: Boolean(adminProfile),
+    hasSupportTicket: Boolean(hasSupportTicket),
+    supportTicketsAwaitingMe: supportTicketsAwaitingMe ?? 0,
   }
 }
 

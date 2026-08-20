@@ -83,6 +83,17 @@ type Translations = {
     /** `{name}` = quem postou. */
     newPost: string
     orderStatusFallback: string
+    /** `{name}` = quem respondeu (nome do admin). */
+    supportReply: string
+    /** `{name}` = quem abriu o chamado (nome do usuário). */
+    supportNewTicket: string
+    /** `{name}` = quem respondeu (nome do usuário). */
+    supportUserReply: string
+    /** `{subject}` = assunto do chamado. */
+    supportStatus: string
+    supportStatusResolved: string
+    supportStatusCancelled: string
+    supportStatusReopened: string
     viewAll: string
     historyTitle: string
     historySubtitle: string
@@ -278,6 +289,8 @@ type Translations = {
       statOffersCaption: string
       statBanners: string
       statBannersCaption: (active: number, max: number) => string
+      statSupport: string
+      statSupportCaption: (resolved: number, cancelled: number) => string
       statVisitorsCardTitle: string
       statVisitorsTabDay: string
       statVisitorsTabWeek: string
@@ -683,6 +696,7 @@ type Translations = {
     myProfile: string
     accountSettings: string
     myOrders: string
+    myTickets: string
     savedPosts: string
     adminPanel: string
     signOut: string
@@ -787,6 +801,13 @@ export const translations: Record<LocaleCode, Translations> = {
       mention: "{name} mencionou você em um comentário",
       newPost: "{name} publicou um novo post",
       orderStatusFallback: "Seu pedido foi atualizado",
+      supportReply: "{name} respondeu seu chamado de suporte",
+      supportNewTicket: "{name} abriu um novo chamado de suporte",
+      supportUserReply: "{name} respondeu no chamado de suporte",
+      supportStatus: "Seu chamado \"{subject}\" foi atualizado",
+      supportStatusResolved: "Marcado como resolvido",
+      supportStatusCancelled: "Cancelado",
+      supportStatusReopened: "Reaberto",
       viewAll: "Ver histórico completo",
       historyTitle: "Histórico de notificações",
       historySubtitle: "Todas as suas notificações, das mais recentes às mais antigas.",
@@ -1032,6 +1053,8 @@ export const translations: Record<LocaleCode, Translations> = {
         statOffersCaption: "últimos 30 dias",
         statBanners: "Banners",
         statBannersCaption: (active, max) => `${active}/${max} ativos`,
+        statSupport: "Suporte",
+        statSupportCaption: (resolved, cancelled) => `${resolved} resolvido${resolved === 1 ? "" : "s"}, ${cancelled} cancelado${cancelled === 1 ? "" : "s"}`,
         statVisitorsCardTitle: "Visitantes",
         statVisitorsTabDay: "Dia",
         statVisitorsTabWeek: "Semana",
@@ -1444,6 +1467,7 @@ export const translations: Record<LocaleCode, Translations> = {
       myProfile: "Meu Perfil",
       accountSettings: "Configurações da conta",
       myOrders: "Meus Pedidos",
+      myTickets: "Meus Tickets",
       savedPosts: "Posts Salvos",
       adminPanel: "Painel admin",
       signOut: "Sair",
@@ -1840,6 +1864,13 @@ export const translations: Record<LocaleCode, Translations> = {
       mention: "{name} mentioned you in a comment",
       newPost: "{name} published a new post",
       orderStatusFallback: "Your order was updated",
+      supportReply: "{name} replied to your support ticket",
+      supportNewTicket: "{name} opened a new support ticket",
+      supportUserReply: "{name} replied on the support ticket",
+      supportStatus: "Your ticket \"{subject}\" was updated",
+      supportStatusResolved: "Marked as resolved",
+      supportStatusCancelled: "Cancelled",
+      supportStatusReopened: "Reopened",
       viewAll: "View full history",
       historyTitle: "Notification history",
       historySubtitle: "All your notifications, from newest to oldest.",
@@ -2085,6 +2116,8 @@ export const translations: Record<LocaleCode, Translations> = {
         statOffersCaption: "last 30 days",
         statBanners: "Banners",
         statBannersCaption: (active, max) => `${active}/${max} active`,
+        statSupport: "Support",
+        statSupportCaption: (resolved, cancelled) => `${resolved} resolved, ${cancelled} cancelled`,
         statVisitorsCardTitle: "Visitors",
         statVisitorsTabDay: "Day",
         statVisitorsTabWeek: "Week",
@@ -2497,6 +2530,7 @@ export const translations: Record<LocaleCode, Translations> = {
       myProfile: "My Profile",
       accountSettings: "Account settings",
       myOrders: "My Orders",
+      myTickets: "My Tickets",
       savedPosts: "Saved Posts",
       adminPanel: "Admin panel",
       signOut: "Sign out",

@@ -76,14 +76,14 @@ function BannerSlide({
         loading={index === 0 ? "eager" : "lazy"}
         fetchPriority={index === 0 ? "high" : "auto"}
         draggable={false}
-        className="size-full object-cover"
+        className="block w-full h-auto"
       />
     </picture>
   )
 
   const content = banner.linkUrl ? (
     isInternalBannerLink(banner.linkUrl) ? (
-      <Link href={banner.linkUrl} className="block size-full" tabIndex={isCurrent ? 0 : -1}>
+      <Link href={banner.linkUrl} className="block w-full" tabIndex={isCurrent ? 0 : -1}>
         {image}
       </Link>
     ) : (
@@ -91,7 +91,7 @@ function BannerSlide({
         href={banner.linkUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="block size-full"
+        className="block w-full"
         tabIndex={isCurrent ? 0 : -1}
       >
         {image}
@@ -109,7 +109,7 @@ function BannerSlide({
       aria-hidden={!isCurrent}
       inert={!isCurrent}
       className={cn(
-        "absolute inset-0 transition-opacity duration-700 ease-out motion-reduce:transition-none",
+        "col-start-1 row-start-1 transition-opacity duration-700 ease-out motion-reduce:transition-none",
         isCurrent ? "opacity-100" : "pointer-events-none opacity-0"
       )}
     >
@@ -267,9 +267,10 @@ export default function BannerCarousel({
         className
       )}
     >
-      {/* Proporção ~3.2:1 no desktop; mais alto no mobile para a arte não virar
-          uma tira fina. A imagem preenche com object-cover nos dois casos. */}
-      <div className="relative aspect-[2/1] w-full sm:aspect-[12/5] md:aspect-[16/5]">
+      {/* Grid com todos os slides na mesma célula: a altura do carrossel
+          acompanha a imagem atual (sem cortar), e o crossfade acontece via
+          opacidade em vez de position: absolute. */}
+      <div className="relative grid w-full">
         {banners.map((banner, index) => (
           <BannerSlide
             key={banner.id}

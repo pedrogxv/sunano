@@ -20,6 +20,10 @@ export type NotificationType =
   | "mention"
   | "new_post"
   | "order_status"
+  | "support_reply"
+  | "support_new_ticket"
+  | "support_user_reply"
+  | "support_status"
 
 export type NotificationEntityType =
   | "forum_post"
@@ -28,6 +32,7 @@ export type NotificationEntityType =
   | "blog_comment"
   | "user"
   | "order"
+  | "support_ticket"
 
 export type Database = {
   public: {
@@ -1188,6 +1193,102 @@ export type Database = {
           user_id?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      support_tickets: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          subject: string
+          order_id: string | null
+          product_id: string | null
+          status: "open" | "resolved" | "cancelled"
+          waiting_on: "user" | "admin" | "closed"
+          message_count: number
+          last_message_at: string
+          last_message_preview: string | null
+          last_message_sender: "user" | "admin" | null
+          rating: number | null
+          rating_comment: string | null
+          rated_at: string | null
+          created_at: string
+          updated_at: string
+          closed_at: string | null
+          closed_by: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          subject: string
+          order_id?: string | null
+          product_id?: string | null
+          status?: "open" | "resolved" | "cancelled"
+          waiting_on?: "user" | "admin" | "closed"
+          message_count?: number
+          last_message_at?: string
+          last_message_preview?: string | null
+          last_message_sender?: "user" | "admin" | null
+          rating?: number | null
+          rating_comment?: string | null
+          rated_at?: string | null
+          created_at?: string
+          updated_at?: string
+          closed_at?: string | null
+          closed_by?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          subject?: string
+          order_id?: string | null
+          product_id?: string | null
+          status?: "open" | "resolved" | "cancelled"
+          waiting_on?: "user" | "admin" | "closed"
+          message_count?: number
+          last_message_at?: string
+          last_message_preview?: string | null
+          last_message_sender?: "user" | "admin" | null
+          rating?: number | null
+          rating_comment?: string | null
+          rated_at?: string | null
+          created_at?: string
+          updated_at?: string
+          closed_at?: string | null
+          closed_by?: string | null
+        }
+      }
+      support_messages: {
+        Relationships: []
+        Row: {
+          id: string
+          ticket_id: string
+          sender_type: "user" | "admin"
+          sender_id: string
+          sender_name: string
+          body: string
+          image_urls: string[]
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          ticket_id: string
+          sender_type: "user" | "admin"
+          sender_id: string
+          sender_name: string
+          body: string
+          image_urls?: string[]
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          ticket_id?: string
+          sender_type?: "user" | "admin"
+          sender_id?: string
+          sender_name?: string
+          body?: string
+          image_urls?: string[]
+          created_at?: string
         }
       }
       market_listings: {

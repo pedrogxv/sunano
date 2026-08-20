@@ -82,27 +82,23 @@ export function StoreCategoryNav({
     : null
 
   return (
-    <div className="sticky top-[var(--sticky-header-h)] z-10" onMouseLeave={() => setHovered(null)}>
-      {/* Desktop: menu centralizado, com Home/Suporte fixos e os grupos de
-          categoria no meio. Grid de 3 colunas iguais garante centralização
-          de verdade mesmo com a busca ocupando a coluna da direita. */}
-      <nav className="hidden items-center border-b border-[#262626] bg-card px-4 md:grid md:grid-cols-[1fr_auto_1fr] lg:px-8">
-        <div aria-hidden="true" />
+    <div className="relative" onMouseLeave={() => setHovered(null)}>
+      {/* Desktop: layout space-between em 3 blocos — Home | Categorias | Busca+Suporte. */}
+      <nav className="hidden items-center justify-between border-b border-[#262626] bg-card px-4 md:flex lg:px-8">
+        <Link
+          href="/loja"
+          className={cn(
+            "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
+            activeCategory === null
+              ? "border-white font-bold text-white"
+              : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
+          )}
+        >
+          <Home className="size-[13px]" strokeWidth={2.2} />
+          Home
+        </Link>
 
         <div className="flex items-center justify-center gap-[26px] overflow-x-auto [scrollbar-width:none]">
-          <Link
-            href="/loja"
-            className={cn(
-              "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
-              activeCategory === null
-                ? "border-white font-bold text-white"
-                : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
-            )}
-          >
-            <Home className="size-[13px]" strokeWidth={2.2} />
-            Home
-          </Link>
-
           {groupsWithCategories.map((group) => {
             const groupCategories = grouped.get(group) ?? []
             const isOpen = hovered === group
@@ -149,7 +145,16 @@ export function StoreCategoryNav({
               </button>
             )
           })}
+        </div>
 
+        {/* Busca vive aqui, na faixa de categorias — é onde o mock a coloca,
+            em vez de ocupar uma linha inteira dentro da barra de filtros.
+            O carrinho não duplica aqui: já vive na TopBar. */}
+        <div className="flex shrink-0 items-center gap-[22px]">
+          <StoreSearchBox
+            className="w-[260px]"
+            inputClassName="h-[34px] w-full rounded-[10px] border border-[#2a2a2a] bg-[#141414] pl-[34px] pr-3 text-[12.5px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
+          />
           <Link
             href="/suporte"
             className="flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 border-transparent text-[13.5px] font-semibold text-[#b4b4b4] transition-colors hover:text-white"
@@ -157,16 +162,6 @@ export function StoreCategoryNav({
             <LifeBuoy className="size-[13px]" strokeWidth={2.2} />
             Suporte
           </Link>
-        </div>
-
-        {/* Busca vive aqui, na faixa de categorias — é onde o mock a coloca,
-            em vez de ocupar uma linha inteira dentro da barra de filtros.
-            O carrinho não duplica aqui: já vive na TopBar. */}
-        <div className="flex shrink-0 items-center justify-end">
-          <StoreSearchBox
-            className="w-[260px]"
-            inputClassName="h-[34px] w-full rounded-[10px] border border-[#2a2a2a] bg-[#141414] pl-[34px] pr-3 text-[12.5px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
-          />
         </div>
       </nav>
 

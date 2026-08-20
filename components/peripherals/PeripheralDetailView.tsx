@@ -86,7 +86,6 @@ interface PeripheralDetailViewProps {
   rankBadge?: { position: number; total: number } | null
   relatedPosts?: PeripheralDetailViewRelatedPost[]
   linkedStore?: PeripheralDetailViewLinkedProduct | null
-  linkedBazaar?: PeripheralDetailViewLinkedProduct | null
   linkedSwitch?: PeripheralDetailViewLinkedSwitch | null
   /** Todas as classificações deste produto (por nome+marca), incluindo a
    *  categoria atual. Se omitido, cai de volta para a classificação única de
@@ -458,7 +457,6 @@ export function PeripheralDetailView({
   rankBadge = null,
   relatedPosts = [],
   linkedStore = null,
-  linkedBazaar = null,
   linkedSwitch = null,
   classifications = [],
   rankingHref = "/ranking",
@@ -1229,39 +1227,6 @@ export function PeripheralDetailView({
                 </CardContent>
               </Card>
 
-              {linkedBazaar && (
-                <Card size="sm" className="border-border/60 bg-secondary/50">
-                  <CardHeader>
-                    <InfoCardTitle icon={ShoppingBag} accent="lime">Disponível para comprar</InfoCardTitle>
-                    <CardDescription className="text-xs">Item relacionado no Bazar.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="grid gap-3 @2xl/col:grid-cols-2">
-                    <Link
-                      href={`/bazar/${linkedBazaar.slug}`}
-                      className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-foreground transition hover:bg-amber-500/10"
-                    >
-                      <div className="relative size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/40">
-                        {linkedBazaar.images?.[0] ? (
-                          <Image alt={linkedBazaar.name} fill sizes="48px" className="object-contain p-0.5" src={linkedBazaar.images[0]} />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                            <Package className="size-4" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">♻️ Bazar</p>
-                        <p className="truncate text-sm font-medium text-foreground">{linkedBazaar.name}</p>
-                        <p className="text-xs text-emerald-400">
-                          {formatBRL(linkedBazaar.price_cents)}
-                          {(linkedBazaar.stock === 0 || linkedBazaar.is_sold_out) && <span className="ml-2 text-rose-300">Esgotado</span>}
-                        </p>
-                      </div>
-                      <span className="text-primary">→</span>
-                    </Link>
-                  </CardContent>
-                </Card>
-              )}
 
             </div>
     </div>

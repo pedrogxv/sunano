@@ -31,7 +31,7 @@ interface ProductCardProps {
   images: string[]
   category: string | null
   brand?: string | null
-  type: "store" | "bazaar"
+  type: "store"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   has_variants?: boolean
@@ -41,7 +41,7 @@ interface ProductCardProps {
 
 export function ProductCard(props: ProductCardProps) {
   const { add, setOpen } = useCart()
-  const href = `/${props.type === "bazaar" ? "bazar" : "loja"}/${props.slug}`
+  const href = `/loja/${props.slug}`
   const variants = props.variants ?? []
   const hasVariants = (props.has_variants ?? false) && variants.length > 0
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(

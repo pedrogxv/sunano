@@ -259,7 +259,7 @@ type Translations = {
       users: string
       settings: string
       offers: string
-      storeAndBazar: string
+      store: string
       newsAndReviews: string
       forum: string
       actions: string
@@ -444,7 +444,12 @@ type Translations = {
       displayName: string
       displayNamePlaceholder: string
       role: string
+      webmaster: string
+      admin: string
       moderator: string
+      editor: string
+      vendedor: string
+      suporte: string
       user: string
       initialPermissions: string
       sending: string
@@ -467,14 +472,15 @@ type Translations = {
       failedToChangePassword: string
       passwordChanged: string
       failedToCreateUser: string
-      tier: string
-      tierUpdated: string
       searchPlaceholder: string
       noResultsFiltered: string
       statTotal: string
       statWebMasters: string
       statAdmins: string
       statModerators: string
+      statEditors: string
+      statVendedores: string
+      statSuportes: string
       statRegular: string
       deleteUser: string
       deleteUserTitle: (name: string) => string
@@ -513,7 +519,6 @@ type Translations = {
       headerEditDesc: string
       headerNewDesc: string
       pickerSearchStore: string
-      pickerSearchBazaar: string
       pickerTypeToFilter: string
       pickerClose: string
       pickerLoading: string
@@ -565,7 +570,6 @@ type Translations = {
       sectionWikiContent: string
       sectionLinkedProducts: string
       linkedStoreProduct: string
-      linkedBazaarItem: string
       sectionBuyLinks: string
       cancel: string
       saving: string
@@ -1023,7 +1027,7 @@ export const translations: Record<LocaleCode, Translations> = {
         users: "Usuários",
         settings: "Configurações",
         offers: "Ofertas",
-        storeAndBazar: "Loja",
+        store: "Loja",
         newsAndReviews: "Notícias & Reviews",
         forum: "Fórum",
         actions: "Ações",
@@ -1215,9 +1219,14 @@ export const translations: Record<LocaleCode, Translations> = {
         displayName: "Nome",
         displayNamePlaceholder: "ex: Ana Souza",
         role: "Cargo",
+        webmaster: "WEB Master",
+        admin: "Admin",
         moderator: "Moderador",
+        editor: "Editor",
+        vendedor: "Vendedor",
+        suporte: "Suporte",
         user: "Usuário",
-        initialPermissions: "Permissões iniciais",
+        initialPermissions: "Permissões do cargo",
         sending: "Enviando...",
         sendInvite: "Enviar convite",
         noUsersFound: "Nenhum usuário encontrado.",
@@ -1230,7 +1239,7 @@ export const translations: Record<LocaleCode, Translations> = {
         locked: "Bloqueado",
         changePassword: "Alterar senha",
         newPasswordPlaceholder: "Nova senha (mín. 8 caracteres)",
-        regularUserNote: "Usuário comum. Defina Moderador ou Admin para liberar as permissões do painel.",
+        regularUserNote: "Usuário comum. Defina um cargo administrativo para liberar as permissões do painel.",
         webMasterProtected: "As permissões do WEB Master são protegidas e não podem ser alteradas pelo painel.",
         makeWebMaster: (name: string) => `Tornar ${name} um WEB Master?`,
         makeWebMasterDesc: "Um WEB Master tem acesso total e irrestrito: pode gerenciar todos os usuários, cargos e permissões. É o nível mais alto e, uma vez concedido, a conta fica protegida — não poderá ser editada nem rebaixada por este painel.",
@@ -1238,14 +1247,15 @@ export const translations: Record<LocaleCode, Translations> = {
         failedToChangePassword: "Erro ao alterar senha",
         passwordChanged: "Senha alterada",
         failedToCreateUser: "Erro ao criar usuário",
-        tier: "Tier",
-        tierUpdated: "Tier atualizado",
         searchPlaceholder: "Buscar por nome ou email...",
         noResultsFiltered: "Nenhum usuário corresponde à busca.",
         statTotal: "Total",
         statWebMasters: "WEB Masters",
         statAdmins: "Admins",
         statModerators: "Moderadores",
+        statEditors: "Editores",
+        statVendedores: "Vendedores",
+        statSuportes: "Suportes",
         statRegular: "Comuns",
         deleteUser: "Excluir usuário",
         deleteUserTitle: (name: string) => `Excluir ${name} permanentemente?`,
@@ -1305,7 +1315,6 @@ export const translations: Record<LocaleCode, Translations> = {
         headerEditDesc: "Atualize as informações do periférico abaixo.",
         headerNewDesc: "Preencha os dados para adicionar um novo periférico à tierlist.",
         pickerSearchStore: "Buscar produto da Loja...",
-        pickerSearchBazaar: "Buscar item do Bazar...",
         pickerTypeToFilter: "Digite para filtrar...",
         pickerClose: "Fechar",
         pickerLoading: "Carregando...",
@@ -1357,7 +1366,6 @@ export const translations: Record<LocaleCode, Translations> = {
         sectionWikiContent: "Conteúdo da Wiki",
         sectionLinkedProducts: "Produtos Vinculados",
         linkedStoreProduct: "Produto da Loja vinculado",
-        linkedBazaarItem: "Item do Bazar vinculado",
         sectionBuyLinks: "Links de Compra",
         cancel: "Cancelar",
         saving: "Salvando...",
@@ -2086,7 +2094,7 @@ export const translations: Record<LocaleCode, Translations> = {
         users: "Users",
         settings: "Settings",
         offers: "Offers",
-        storeAndBazar: "Marketplace",
+        store: "Store",
         newsAndReviews: "News & Reviews",
         forum: "Forum",
         actions: "Actions",
@@ -2278,9 +2286,14 @@ export const translations: Record<LocaleCode, Translations> = {
         displayName: "Display name",
         displayNamePlaceholder: "e.g. Ana Souza",
         role: "Role",
+        webmaster: "WEB Master",
+        admin: "Admin",
         moderator: "Moderator",
+        editor: "Editor",
+        vendedor: "Vendor",
+        suporte: "Support",
         user: "User",
-        initialPermissions: "Initial permissions",
+        initialPermissions: "Role permissions",
         sending: "Sending...",
         sendInvite: "Send invite",
         noUsersFound: "No users found.",
@@ -2293,7 +2306,7 @@ export const translations: Record<LocaleCode, Translations> = {
         locked: "Locked",
         changePassword: "Change password",
         newPasswordPlaceholder: "New password (min. 8 chars)",
-        regularUserNote: "Regular user. Assign Moderator or Admin to grant panel permissions.",
+        regularUserNote: "Regular user. Assign an admin role to grant panel permissions.",
         webMasterProtected: "WEB Master permissions are protected and cannot be changed from the panel.",
         makeWebMaster: (name: string) => `Make ${name} a WEB Master?`,
         makeWebMasterDesc: "A WEB Master has full, unrestricted access: they can manage all users, roles and permissions. It is the highest level and, once granted, the account becomes protected — it cannot be edited or demoted from this panel.",
@@ -2301,14 +2314,15 @@ export const translations: Record<LocaleCode, Translations> = {
         failedToChangePassword: "Failed to change password",
         passwordChanged: "Password changed",
         failedToCreateUser: "Failed to create user",
-        tier: "Tier",
-        tierUpdated: "Tier updated",
         searchPlaceholder: "Search by name or email...",
         noResultsFiltered: "No users match your search.",
         statTotal: "Total",
         statWebMasters: "WEB Masters",
         statAdmins: "Admins",
         statModerators: "Moderators",
+        statEditors: "Editors",
+        statVendedores: "Vendors",
+        statSuportes: "Support",
         statRegular: "Regular",
         deleteUser: "Delete user",
         deleteUserTitle: (name: string) => `Permanently delete ${name}?`,
@@ -2347,7 +2361,6 @@ export const translations: Record<LocaleCode, Translations> = {
         headerEditDesc: "Update the peripheral information below.",
         headerNewDesc: "Fill in the details to add a new peripheral to the tierlist.",
         pickerSearchStore: "Search a store product...",
-        pickerSearchBazaar: "Search a bazaar item...",
         pickerTypeToFilter: "Type to filter...",
         pickerClose: "Close",
         pickerLoading: "Loading...",
@@ -2399,7 +2412,6 @@ export const translations: Record<LocaleCode, Translations> = {
         sectionWikiContent: "Wiki Content",
         sectionLinkedProducts: "Linked Products",
         linkedStoreProduct: "Linked Loja product",
-        linkedBazaarItem: "Linked Bazar item",
         sectionBuyLinks: "Buy Links",
         cancel: "Cancel",
         saving: "Saving...",
@@ -2650,7 +2662,7 @@ export const translations: Record<LocaleCode, Translations> = {
             "Wishlists: create multiple named lists, save products with one click from the card or product page, and make a list public to share a link with anyone (even without an account)",
             "Your wishlist can show up right on your public profile, with a toggle to show or hide it from visitors",
             "New checkout: pay with PIX straight from the store, with a QR code screen and automatic confirmation as soon as payment lands",
-            "Login required to buy: finishing an order (store or bazaar) now requires an account — trying to check out without one opens the same quick login/sign-up modal",
+            "Login required to buy: finishing an order now requires an account — trying to check out without one opens the same quick login/sign-up modal",
             "New \"My Orders\" page in your account, showing the status of every purchase (paid, shipped, delivered, etc.)",
             "Store search, sorting, and brand filter, plus a \"wishlist only\" filter",
             "Infinite scroll in the forum: category pages and the main feed now load more posts automatically as you scroll, no more clicking \"load more\"",

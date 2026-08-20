@@ -18,21 +18,19 @@ interface AvatarQuadradoProps {
 }
 
 /**
- * Cor da moldura por tier. VIP+ recebe o dourado da referência; VIP fica no
- * âmbar do próprio badge e conta comum numa borda neutra, para a moldura
- * continuar sendo um sinal de tier e não decoração de todo mundo.
+ * Cor da moldura por tier. VIP recebe o dourado da referência; conta comum
+ * fica numa borda neutra, para a moldura continuar sendo um sinal de tier e
+ * não decoração de todo mundo.
  */
 const TIER_FRAME: Record<AccountTier, string> = {
   common: "border-border",
-  vip: "border-amber-400/70",
-  vip_plus: "border-amber-300",
+  vip: "border-amber-300",
 }
 
 /** Brilho externo — só para quem tem tier, senão vira ruído na grade. */
 const TIER_GLOW: Record<AccountTier, string> = {
   common: "",
-  vip: "shadow-[0_0_18px_-4px_rgba(251,191,36,0.55)]",
-  vip_plus: "shadow-[0_0_22px_-3px_rgba(252,211,77,0.75)]",
+  vip: "shadow-[0_0_22px_-3px_rgba(252,211,77,0.75)]",
 }
 
 /**

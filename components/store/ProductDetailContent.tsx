@@ -68,7 +68,6 @@ interface ProductDetailContentProps extends StoreProductDetailResult {
 
 export function ProductDetailContent({
   product,
-  linkedProduct,
   linkedPeripheral,
   linkedPeripherals,
   specs,
@@ -557,17 +556,6 @@ export function ProductDetailContent({
             </p>
           )}
 
-          {linkedProduct && (
-            <Link
-              href={`/${product.type === "bazaar" ? "loja" : "bazar"}/${linkedProduct.slug}`}
-              className="block rounded-2xl border border-border bg-muted/20 px-5 py-4 text-sm transition-colors hover:border-foreground/20"
-            >
-              <span className="text-muted-foreground">
-                {product.type === "bazaar" ? "Também disponível novo na Loja" : "Também disponível usado no Bazar"}
-              </span>{" "}
-              <span className="font-semibold text-foreground">— {formatBRL(linkedProduct.price_cents)}</span>
-            </Link>
-          )}
         </div>
       </div>
 

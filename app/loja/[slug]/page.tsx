@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (isStoreMaintenanceEnabled()) return {}
 
   const { slug } = await params
-  const detail = await getStoreProductDetail(slug, "store")
+  const detail = await getStoreProductDetail(slug)
   if (!detail) return {}
 
   return {
@@ -49,7 +49,7 @@ export default async function ProductPage({ params }: PageProps) {
   }
 
   const { slug } = await params
-  const detail = await getStoreProductDetail(slug, "store")
+  const detail = await getStoreProductDetail(slug)
   if (!detail) notFound()
 
   const [filterOptions, { items: previewPool }] = await Promise.all([

@@ -5,20 +5,19 @@ import { getStoreProductDetail } from "@/lib/server/repositories/store-repositor
 export const dynamic = "force-dynamic"
 
 /**
- * Endpoint público de detalhe de um produto da Loja/Bazar.
+ * Endpoint público de detalhe de um produto da Loja.
  *
- * As páginas `loja/[slug]` e `bazar/[slug]` consomem este endpoint em vez de
- * abrir um cliente Supabase no navegador. `?type=store|bazaar`.
+ * A página `loja/[slug]` consome este endpoint em vez de abrir um cliente
+ * Supabase no navegador.
  */
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await context.params
-  const type = new URL(request.url).searchParams.get("type") === "bazaar" ? "bazaar" : "store"
 
   try {
-    const detail = await getStoreProductDetail(slug, type)
+    const detail = await getStoreProductDetail(slug)
     if (!detail) {
       return NextResponse.json({ error: "Produto não encontrado." }, { status: 404 })
     }

@@ -6,12 +6,11 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 /**
- * Listagem paginada de produtos da Loja/Bazar, com filtros aplicados no
+ * Listagem paginada de produtos da Loja, com filtros aplicados no
  * banco. Consumida por `/loja` (pública — sempre `is_active = true`).
  */
 
 const SORT_KEYS = ["recent", "name-asc", "name-desc", "price-asc", "price-desc"] as const
-const TYPES = ["store", "bazaar"] as const
 const CONDITIONS = ["new", "used", "opened"] as const
 
 function parseCsv(value: string | null): string[] | undefined {
@@ -30,9 +29,6 @@ function parseNumber(value: string | null): number | undefined {
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
 
-  const typeParam = searchParams.get("type")?.trim()
-  const type = (TYPES as readonly string[]).includes(typeParam ?? "") ? (typeParam as "store" | "bazaar") : undefined
-
   const conditionParam = searchParams.get("condition")?.trim()
   const condition = (CONDITIONS as readonly string[]).includes(conditionParam ?? "")
     ? (conditionParam as "new" | "used" | "opened")
@@ -42,7 +38,7 @@ export async function GET(request: NextRequest) {
   const sort = (SORT_KEYS as readonly string[]).includes(sortParam ?? "") ? (sortParam as StoreProductListFilters["sort"]) : undefined
 
   const filters: StoreProductListFilters = {
-    type,
+    type: "store",
     condition,
     categories: parseCsv(searchParams.get("categories")),
     brands: parseCsv(searchParams.get("brands")),

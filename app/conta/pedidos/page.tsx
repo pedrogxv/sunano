@@ -274,7 +274,7 @@ export default function PedidosPage() {
       <div className="mx-auto max-w-4xl px-2 py-8 sm:px-4 md:px-6">
         <div className="mb-6 space-y-1">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">Meus Pedidos</h2>
-          <p className="text-xs text-muted-foreground">Histórico de compras na Loja e no Bazar.</p>
+          <p className="text-xs text-muted-foreground">Histórico de compras na Loja.</p>
         </div>
 
         {ordersLoading ? (

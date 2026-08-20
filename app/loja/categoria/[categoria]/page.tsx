@@ -26,7 +26,7 @@ export default async function LojaCategoriaPage({ params }: CategoriaPageProps) 
   const { categoria } = await params
   const category = decodeURIComponent(categoria)
 
-  const filterOptions = await getStoreFilterOptions()
+  const filterOptions = await getStoreFilterOptions("store")
   if (!filterOptions.categories.includes(category)) {
     notFound()
   }

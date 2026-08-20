@@ -1,4 +1,4 @@
--- Store: products (Loja + Bazar) and orders
+-- Store: products and orders
 
 create table if not exists public.store_products (
   id            uuid        primary key default gen_random_uuid(),
@@ -12,7 +12,7 @@ create table if not exists public.store_products (
   type          text        not null check (type in ('store', 'bazaar')),
   condition     text        not null default 'new'
                             check (condition in ('new', 'used', 'opened')),
-  condition_notes text,                                          -- visible to buyers on bazar items
+  condition_notes text,                                          -- visible to buyers when condition != 'new'
   is_active     boolean     not null default true,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()

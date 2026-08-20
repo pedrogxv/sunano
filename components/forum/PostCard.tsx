@@ -51,15 +51,11 @@ export type PostCardData = {
   saved_count: number
 }
 
-/** Selo de VIP/VIP+ ao lado do nome do autor — mesmo rótulo do tier usado no perfil. */
+/** Selo de VIP ao lado do nome do autor — mesmo rótulo do tier usado no perfil. */
 export function AuthorTierBadge({ tier }: { tier: AccountTier }) {
   if (tier === "common") return null
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium ${
-        tier === "vip_plus" ? "bg-fuchsia-400/15 text-fuchsia-400" : "bg-amber-400/15 text-amber-400"
-      }`}
-    >
+    <span className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium bg-fuchsia-400/15 text-fuchsia-400">
       <Crown className="size-2.5" />
       {TIER_CAPABILITIES[tier].label}
     </span>

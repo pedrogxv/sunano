@@ -24,7 +24,7 @@ export interface CartItem {
   image: string | null
   /** `null` = sem controle de estoque (nunca esgota). */
   stock: number | null
-  type: "store" | "bazaar"
+  type: "store"
   condition: "new" | "used" | "opened"
   sale_type: "pre_order" | "ready_stock" | "normal"
 }
@@ -86,7 +86,7 @@ function isCartItem(value: unknown): value is CartItem {
     i.quantity > 0 &&
     (i.stock === null || typeof i.stock === "number") &&
     (i.image === null || typeof i.image === "string") &&
-    (i.type === "store" || i.type === "bazaar") &&
+    i.type === "store" &&
     (i.condition === "new" || i.condition === "used" || i.condition === "opened") &&
     (i.sale_type === undefined || i.sale_type === "pre_order" || i.sale_type === "ready_stock" || i.sale_type === "normal")
   )

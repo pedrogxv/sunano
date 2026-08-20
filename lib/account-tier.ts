@@ -6,7 +6,7 @@
  * pode exibir" vive aqui — nenhum componente deve repetir esses números.
  */
 
-export const ACCOUNT_TIERS = ["common", "vip", "vip_plus"] as const
+export const ACCOUNT_TIERS = ["common", "vip"] as const
 
 export type AccountTier = (typeof ACCOUNT_TIERS)[number]
 
@@ -22,9 +22,8 @@ export type TierCapabilities = {
 }
 
 export const TIER_CAPABILITIES: Record<AccountTier, TierCapabilities> = {
-  common:   { label: "Membro", maxMedals: 3, maxFavorites: 3, animatedMedia: false },
-  vip:      { label: "VIP",    maxMedals: 5, maxFavorites: 5, animatedMedia: true },
-  vip_plus: { label: "VIP+",   maxMedals: 8, maxFavorites: 8, animatedMedia: true },
+  common: { label: "Membro", maxMedals: 3, maxFavorites: 3, animatedMedia: false },
+  vip:    { label: "VIP",    maxMedals: 8, maxFavorites: 8, animatedMedia: true },
 }
 
 /** Normaliza um valor vindo do banco (ou de um payload) para um tier válido. */

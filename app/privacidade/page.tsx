@@ -240,8 +240,8 @@ export default function PrivacidadePage() {
               armazenados localmente no seu navegador.
             </li>
             <li>
-              <strong>Carrinho de compras (localStorage):</strong> os itens adicionados à loja ou ao
-              bazar ficam salvos localmente no seu navegador para não se perderem entre páginas.
+              <strong>Carrinho de compras (localStorage):</strong> os itens adicionados à loja
+              ficam salvos localmente no seu navegador para não se perderem entre páginas.
               Nenhum dado de pagamento fica nesse armazenamento — nome, e-mail e CPF de compras sem
               conta são enviados apenas no momento da finalização, direto para gerar a cobrança PIX.
             </li>

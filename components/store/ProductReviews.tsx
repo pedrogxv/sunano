@@ -49,7 +49,7 @@ export function ProductReviews({
 }: {
   productId: string
   productSlug: string
-  productType: "store" | "bazaar"
+  productType: "store"
 }) {
   const [data, setData] = useState<ReviewsResponse | null>(null)
   const [loading, setLoading] = useState(true)

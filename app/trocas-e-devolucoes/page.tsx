@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = {
   title: "Trocas e Devoluções | Sunano",
-  description: "Política de trocas, devoluções e direito de arrependimento das compras na Loja e no Bazar Sunano.",
+  description: "Política de trocas, devoluções e direito de arrependimento das compras na Loja Sunano.",
 }
 
 export default function TrocasEDevolucoesPage() {
@@ -25,7 +25,7 @@ export default function TrocasEDevolucoesPage() {
 
         <section>
           <p>
-            Esta política se aplica a todas as compras feitas na Loja e no Bazar do Sunano e segue
+            Esta política se aplica a todas as compras feitas na Loja do Sunano e segue
             o <strong>Código de Defesa do Consumidor (Lei 8.078/1990)</strong> e o{" "}
             <strong>Decreto 7.962/2013</strong>, que regula as contratações no comércio eletrônico.
           </p>
@@ -71,19 +71,8 @@ export default function TrocasEDevolucoesPage() {
           </ul>
         </section>
 
-        <section id="produtos-do-bazar">
-          <h2>3. Particularidades do Bazar (produtos usados)</h2>
-          <p>
-            Itens do Bazar são vendidos como usados/seminovos, com a condição descrita
-            explicitamente na página do produto (ex: sinais de uso, embalagem aberta). O direito de
-            arrependimento de 7 dias continua valendo normalmente — a condição de uso divulgada não
-            reduz esse prazo. Já a garantia contra defeitos não cobre o desgaste natural já
-            informado na descrição do produto no momento da compra.
-          </p>
-        </section>
-
         <section id="como-solicitar">
-          <h2>4. Como solicitar troca, devolução ou reembolso</h2>
+          <h2>3. Como solicitar troca, devolução ou reembolso</h2>
           <ol>
             <li>Entre em contato pelo canal de atendimento indicado na página{" "}
               <Link href="/quem-somos" className="text-primary hover:underline">Quem Somos</Link>
@@ -101,7 +90,7 @@ export default function TrocasEDevolucoesPage() {
         </section>
 
         <section id="identificacao-do-vendedor">
-          <h2>5. Identificação do vendedor</h2>
+          <h2>4. Identificação do vendedor</h2>
           <p>
             Nome fantasia: <strong>Sunano</strong>
             <br />
@@ -114,7 +103,7 @@ export default function TrocasEDevolucoesPage() {
         </section>
 
         <section id="procon">
-          <h2>6. Se não conseguirmos resolver</h2>
+          <h2>5. Se não conseguirmos resolver</h2>
           <p>
             Caso não cheguemos a um acordo pelo nosso canal de atendimento, você também pode
             recorrer ao PROCON da sua região ou à plataforma{" "}

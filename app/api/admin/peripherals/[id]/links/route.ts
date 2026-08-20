@@ -13,7 +13,6 @@ const LINK_COLUMNS = "id, slug, name, type, price_cents, images, stock, is_activ
 
 const linksPayload = z.object({
   storeProductId: z.string().uuid().nullable().optional(),
-  bazaarProductId: z.string().uuid().nullable().optional(),
 })
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -37,10 +36,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json(body, { status })
   }
 
-  const rows = (data ?? []) as Array<{ id: string; type: "store" | "bazaar" } & Record<string, unknown>>
+  const rows = (data ?? []) as Array<{ id: string; type: string } & Record<string, unknown>>
   const store = rows.find((p) => p.type === "store") ?? null
-  const bazaar = rows.find((p) => p.type === "bazaar") ?? null
-  return NextResponse.json({ store, bazaar })
+  return NextResponse.json({ store })
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -68,49 +66,42 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const db = createSupabaseAdminClient()
+  const productId = parsed.data.storeProductId ?? null
 
-  for (const [type, productId] of [
-    ["store", parsed.data.storeProductId ?? null] as const,
-    ["bazaar", parsed.data.bazaarProductId ?? null] as const,
-  ]) {
-    if (productId) {
-      const { data: product, error: lookupError } = await db
-        .from("store_products")
-        .select("id, type")
-        .eq("id", productId)
-        .maybeSingle()
-      if (lookupError) {
-        const { body, status } = dbErrorResponse(lookupError, "Erro ao buscar produto.")
-        return NextResponse.json(body, { status })
-      }
-      if (!product) {
-        return NextResponse.json({ error: "Produto não encontrado." }, { status: 404 })
-      }
-      if (product.type !== type) {
-        return NextResponse.json(
-          { error: type === "store" ? "O produto selecionado precisa ser do tipo Loja." : "O item selecionado precisa ser do tipo Bazar." },
-          { status: 400 }
-        )
-      }
-    }
-
-    const { error: clearError } = await (db.from("store_products") as any)
-      .update({ peripheral_id: null })
-      .eq("peripheral_id", id)
-      .eq("type", type)
-    if (clearError) {
-      const { body, status } = dbErrorResponse(clearError, "Erro ao limpar vínculo anterior.")
+  if (productId) {
+    const { data: product, error: lookupError } = await db
+      .from("store_products")
+      .select("id, type")
+      .eq("id", productId)
+      .maybeSingle()
+    if (lookupError) {
+      const { body, status } = dbErrorResponse(lookupError, "Erro ao buscar produto.")
       return NextResponse.json(body, { status })
     }
+    if (!product) {
+      return NextResponse.json({ error: "Produto não encontrado." }, { status: 404 })
+    }
+    if (product.type !== "store") {
+      return NextResponse.json({ error: "O produto selecionado precisa ser do tipo Loja." }, { status: 400 })
+    }
+  }
 
-    if (productId) {
-      const { error: setError } = await (db.from("store_products") as any)
-        .update({ peripheral_id: id })
-        .eq("id", productId)
-      if (setError) {
-        const { body, status } = dbErrorResponse(setError, "Erro ao salvar vínculo.")
-        return NextResponse.json(body, { status })
-      }
+  const { error: clearError } = await (db.from("store_products") as any)
+    .update({ peripheral_id: null })
+    .eq("peripheral_id", id)
+    .eq("type", "store")
+  if (clearError) {
+    const { body, status } = dbErrorResponse(clearError, "Erro ao limpar vínculo anterior.")
+    return NextResponse.json(body, { status })
+  }
+
+  if (productId) {
+    const { error: setError } = await (db.from("store_products") as any)
+      .update({ peripheral_id: id })
+      .eq("id", productId)
+    if (setError) {
+      const { body, status } = dbErrorResponse(setError, "Erro ao salvar vínculo.")
+      return NextResponse.json(body, { status })
     }
   }
 

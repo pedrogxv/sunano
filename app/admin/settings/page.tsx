@@ -14,13 +14,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { useT } from "@/lib/use-t"
+import { adminRoleLabel } from "@/components/people/RoleBadge"
+import type { AdminRole } from "@/lib/admin-permissions"
 
 type AdminProfile = {
   id: string
   email: string | null
   display_name: string
   avatar_url: string | null
-  role: "admin" | "moderator" | "webmaster"
+  role: AdminRole
   permissions: Record<string, boolean>
 }
 
@@ -41,7 +43,7 @@ export default function SettingsPage() {
   const [displayName, setDisplayName] = useState("")
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [role, setRole] = useState<"admin" | "moderator" | "webmaster">("admin")
+  const [role, setRole] = useState<AdminRole>("admin")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [passwordError, setPasswordError] = useState<string | null>(null)
@@ -204,7 +206,7 @@ export default function SettingsPage() {
   }
 
   const previewName = useMemo(() => displayName.trim() || getNameFallback(email), [displayName, email])
-  const roleLabel = role === "webmaster" ? "WEB Master" : role === "moderator" ? t.settings.moderator : "Admin"
+  const roleLabel = adminRoleLabel(t, role)
 
   usePageHeader(t.settings.title, t.settings.subtitle)
 

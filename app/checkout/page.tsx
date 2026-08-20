@@ -135,7 +135,6 @@ export default function CheckoutPage() {
 
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0)
   const storeBase = "/loja"
-  const bazaarBase = "/bazar"
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
@@ -152,7 +151,7 @@ export default function CheckoutPage() {
           >
             {/* Photo */}
             <Link
-              href={`${item.type === "bazaar" ? bazaarBase : storeBase}/${item.slug}`}
+              href={`${storeBase}/${item.slug}`}
               className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted"
             >
               {item.image ? (
@@ -166,7 +165,7 @@ export default function CheckoutPage() {
             {/* Info, flattened: name, variant, qty × price */}
             <div className="min-w-0 flex-1">
               <Link
-                href={`${item.type === "bazaar" ? bazaarBase : storeBase}/${item.slug}`}
+                href={`${storeBase}/${item.slug}`}
                 className="truncate text-sm font-semibold text-foreground hover:underline"
               >
                 {item.name}

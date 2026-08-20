@@ -26,7 +26,7 @@ export default async function LojaMarcaPage({ params }: MarcaPageProps) {
   const { marca } = await params
   const brand = decodeURIComponent(marca)
 
-  const filterOptions = await getStoreFilterOptions()
+  const filterOptions = await getStoreFilterOptions("store")
   if (!filterOptions.brands.includes(brand)) {
     notFound()
   }

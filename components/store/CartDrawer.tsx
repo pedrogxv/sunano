@@ -107,46 +107,46 @@ export function CartDrawer() {
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Seu carrinho está vazio</p>
-                <p className="text-xs text-muted-foreground">Adicione produtos da loja ou do bazar</p>
+                <p className="text-xs text-muted-foreground">Adicione produtos da loja</p>
               </div>
               <Button variant="outline" size="sm" onClick={() => setOpen(false)} asChild>
                 <Link href="/loja">Explorar loja</Link>
               </Button>
             </div>
           ) : (
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               {items.map((item) => {
                 const optionIds = item.variantOptions.map((o) => o.optionId)
                 return (
                 <div
                   key={`${item.productId}:${item.variantId ?? "base"}:${optionIds.join(",")}`}
-                  className="group flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 transition-colors hover:bg-muted/50"
+                  className="group flex items-center gap-3.5 rounded-xl border border-border bg-muted/30 p-3.5 transition-colors hover:bg-muted/50"
                 >
                   {/* Image */}
-                  <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
+                  <div className="flex size-[70px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted">
                     {item.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1" />
+                      <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1.5" />
                     ) : (
-                      <Package className="size-5 text-muted-foreground" />
+                      <Package className="size-6 text-muted-foreground" />
                     )}
                   </div>
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+                    <p className="flex items-center gap-1.5 truncate text-[15px] font-semibold text-foreground">
                       <span className="truncate">{item.name}</span>
                       {(() => {
                         const VariantIcon = getVariantIcon(item.variantIcon)
                         if (!item.variantColor && !VariantIcon) return null
                         return (
                           <span
-                            className="flex size-3.5 shrink-0 items-center justify-center rounded-full border border-black/10"
+                            className="flex size-4 shrink-0 items-center justify-center rounded-full border border-black/10"
                             style={{ backgroundColor: item.variantColor ?? "transparent" }}
                           >
                             {VariantIcon && (
                               <VariantIcon
-                                className="size-2"
+                                className="size-2.5"
                                 style={{ color: item.variantColor ? "#fff" : undefined }}
                               />
                             )}
@@ -155,38 +155,38 @@ export function CartDrawer() {
                       })()}
                     </p>
                     {(item.variantLabel || item.variantOptions.length > 0) && (
-                      <p className="truncate text-[11px] text-muted-foreground">
+                      <p className="truncate text-xs text-muted-foreground">
                         {[item.variantLabel, ...item.variantOptions.map((o) => `${o.groupName}: ${o.label}`)]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
                     )}
-                    <p className="mt-0.5 text-xs font-bold text-emerald-400">{formatBRL(item.priceCents)}</p>
+                    <p className="mt-1 text-sm font-bold text-emerald-400">{formatBRL(item.priceCents)}</p>
                     {item.sale_type !== "normal" && (() => {
                       const SaleTypeIcon = SALE_TYPE_ICON[item.sale_type]
                       return (
                         <span
                           className={cn(
-                            "mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9.5px] font-bold",
+                            "mt-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold",
                             item.sale_type === "pre_order"
                               ? "bg-amber-500/15 text-amber-400"
                               : "bg-emerald-500/15 text-emerald-400"
                           )}
                         >
-                          <SaleTypeIcon className="size-2.5" strokeWidth={2.5} />
+                          <SaleTypeIcon className="size-3" strokeWidth={2.5} />
                           {SALE_TYPE_LABEL[item.sale_type]}
                         </span>
                       )
                     })()}
                     {item.stock !== null && item.stock <= 3 && (
-                      <p className="mt-0.5 text-[10px] font-semibold text-amber-400">
+                      <p className="mt-1 text-[11px] font-semibold text-amber-400">
                         Últimas {item.stock} unidades!
                       </p>
                     )}
                   </div>
 
                   {/* Qty */}
-                  <div className="flex flex-col items-end gap-1.5">
+                  <div className="flex flex-col items-end gap-2">
                     <button
                       onClick={() => remove(item.productId, item.variantId, optionIds)}
                       aria-label={`Remover ${item.name}`}
@@ -194,15 +194,15 @@ export function CartDrawer() {
                     >
                       <Trash2 className="size-3.5" />
                     </button>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => decrement(item.productId, item.variantId, optionIds)}
                         aria-label="Diminuir quantidade"
-                        className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+                        className="flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
                       >
-                        <Minus className="size-3" />
+                        <Minus className="size-3.5" />
                       </button>
-                      <span className="w-5 text-center text-sm font-bold text-foreground">
+                      <span className="w-6 text-center text-sm font-bold text-foreground">
                         {item.quantity}
                       </span>
                       <button
@@ -210,11 +210,11 @@ export function CartDrawer() {
                         disabled={item.stock !== null && item.quantity >= item.stock}
                         aria-label="Aumentar quantidade"
                         className={cn(
-                          "flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground",
+                          "flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground",
                           item.stock !== null && item.quantity >= item.stock && "cursor-not-allowed opacity-40"
                         )}
                       >
-                        <Plus className="size-3" />
+                        <Plus className="size-3.5" />
                       </button>
                     </div>
                   </div>

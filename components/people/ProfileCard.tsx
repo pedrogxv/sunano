@@ -20,16 +20,15 @@ import {
 
 const TIER_RING = {
   common: "ring-background",
-  vip: "ring-amber-400/70",
-  vip_plus: "ring-fuchsia-400/70",
+  vip: "ring-fuchsia-400/70",
 } as const
 
 /**
- * Matiz do neon. Contas VIP acendem na cor do próprio tier (âmbar/fúcsia);
- * as demais acendem na cor que o card já usa na faixa e nas iniciais, então
+ * Matiz do neon. Contas VIP acendem na cor do próprio tier (fúcsia); as
+ * demais acendem na cor que o card já usa na faixa e nas iniciais, então
  * a luz parece emitida pelo próprio card.
  */
-const TIER_GLOW_HUE: Record<string, number> = { vip: 45, vip_plus: 300 }
+const TIER_GLOW_HUE: Record<string, number> = { vip: 300 }
 
 /**
  * Ouro, prata e bronze do badge de posição. Só aparecem quando a lista é curta

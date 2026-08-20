@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   AlertCircle,
@@ -15,7 +15,6 @@ import {
   Search,
   Star,
   Store,
-  Tag,
   Trash2,
   X,
 } from "lucide-react"
@@ -41,7 +40,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MultiCombobox } from "@/components/ui/combobox"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { cn } from "@/lib/utils"
@@ -57,7 +55,6 @@ interface StoreProduct {
   images: string[]
   category: string | null
   brand: string | null
-  type: "store" | "bazaar"
   condition: "new" | "used" | "opened"
   is_active: boolean
   is_sold_out: boolean
@@ -99,12 +96,19 @@ const CONDITION_COLOR: Record<string, string> = {
 
 const PAGE_SIZE = 50
 
+const NO_CATEGORY_KEY = "__sem_categoria__"
+
+/** Deriva o título do grupo a partir do valor de categoria salvo no produto — sem lista estática de labels. */
+function formatCategoryLabel(key: string): string {
+  if (key === NO_CATEGORY_KEY) return "Sem categoria"
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 export default function AdminStorePage() {
   const [products, setProducts] = useState<StoreProduct[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [typeFilter, setTypeFilter] = useState<"all" | "store" | "bazaar">("all")
   const [outOfStockOnly, setOutOfStockOnly] = useState(false)
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState("")
@@ -131,7 +135,6 @@ export default function AdminStorePage() {
     setError(null)
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(PAGE_SIZE) })
-      if (typeFilter !== "all") params.set("type", typeFilter)
       if (outOfStockOnly) params.set("outOfStock", "1")
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim())
       if (categoryFilter.length > 0) params.set("categories", categoryFilter.join(","))
@@ -158,11 +161,11 @@ export default function AdminStorePage() {
     } finally {
       setLoading(false)
     }
-  }, [typeFilter, page, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter])
+  }, [page, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter])
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => { setPage(1) }, [typeFilter, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter])
+  useEffect(() => { setPage(1) }, [outOfStockOnly, debouncedSearch, categoryFilter, brandFilter])
 
   async function handleDelete() {
     if (!deleteDialog.id) return
@@ -270,14 +273,27 @@ export default function AdminStorePage() {
   const categoryOptions = [...knownCategories].sort((a, b) => a.localeCompare(b)).map((c) => ({ value: c, label: c }))
   const brandOptions = [...knownBrands].sort((a, b) => a.localeCompare(b)).map((b) => ({ value: b, label: b }))
 
-  usePageHeader("Loja", "Gerencie os produtos da loja e os itens do bazar (usados pelo Sunano).")
+  const groupedProducts = useMemo(() => {
+    const groups = new Map<string, StoreProduct[]>()
+    for (const p of visibleProducts) {
+      const key = p.category ?? NO_CATEGORY_KEY
+      const list = groups.get(key)
+      if (list) list.push(p)
+      else groups.set(key, [p])
+    }
+    return [...groups.entries()].sort((a, b) =>
+      a[0] === NO_CATEGORY_KEY ? 1 : b[0] === NO_CATEGORY_KEY ? -1 : formatCategoryLabel(a[0]).localeCompare(formatCategoryLabel(b[0]))
+    )
+  }, [visibleProducts])
+
+  usePageHeader("Loja", "Gerencie os produtos da loja.")
 
   return (
     <div className="space-y-6">
       {/* Actions */}
       <div className="flex justify-end">
         <div className="flex gap-2">
-          <Link href="/admin/store/new?type=store">
+          <Link href="/admin/store/new">
             <Button className="gap-2 border-border">
               <Plus className="size-4" />
               Novo produto
@@ -298,16 +314,6 @@ export default function AdminStorePage() {
             aria-label="Buscar produtos"
           />
         </div>
-        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as "all" | "store" | "bazaar")}>
-          <SelectTrigger className="h-9 w-auto min-w-[130px] border-border bg-card text-[13px]">
-            <SelectValue placeholder="Tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Loja e Bazar</SelectItem>
-            <SelectItem value="store">Loja</SelectItem>
-            <SelectItem value="bazaar">Bazar</SelectItem>
-          </SelectContent>
-        </Select>
         <MultiCombobox
           options={categoryOptions}
           values={categoryFilter}
@@ -340,13 +346,12 @@ export default function AdminStorePage() {
           <AlertTriangle className="size-3.5" />
           Sem estoque
         </button>
-        {(search.trim() || typeFilter !== "all" || categoryFilter.length > 0 || brandFilter.length > 0 || outOfStockOnly) && (
+        {(search.trim() || categoryFilter.length > 0 || brandFilter.length > 0 || outOfStockOnly) && (
           <Button
             variant="ghost"
             size="sm"
             onClick={() => {
               setSearch("")
-              setTypeFilter("all")
               setCategoryFilter([])
               setBrandFilter([])
               setOutOfStockOnly(false)
@@ -388,21 +393,24 @@ export default function AdminStorePage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[820px]">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Produto</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tipo</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Condição</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Preço</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estoque</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {visibleProducts.map((p) => {
+        <div className="space-y-8">
+          {groupedProducts.map(([categoryKey, categoryProducts]) => (
+          <div key={categoryKey} className="space-y-3">
+            <h2 className="text-xl font-bold text-foreground">{formatCategoryLabel(categoryKey)}</h2>
+            <div className="overflow-x-auto rounded-xl border border-border bg-card">
+              <table className="w-full min-w-[820px]">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Produto</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Condição</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Preço</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Estoque</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+              {categoryProducts.map((p) => {
                 const detail = detailCache[p.id]
                 const isLoadingDetail = loadingDetailId === p.id
                 const isSaving = savingId === p.id
@@ -434,16 +442,6 @@ export default function AdminStorePage() {
                           )}
                         </div>
                       </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                        p.type === "store"
-                          ? "bg-blue-500/15 text-blue-300"
-                          : "bg-amber-500/15 text-amber-300"
-                      )}>
-                        {p.type === "store" ? "🛒 Loja" : "♻️ Bazar"}
-                      </span>
                     </td>
                     <td className="px-4 py-3">
                       <span className={cn(
@@ -656,8 +654,11 @@ export default function AdminStorePage() {
                   </tr>
                 )
               })}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          ))}
         </div>
       )}
 

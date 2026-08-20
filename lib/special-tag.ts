@@ -3,7 +3,7 @@
  *
  * Ao contrário do tier (ordinal, um por conta), uma tag especial só existe
  * para contas específicas e se soma ao badge de tier no perfil público
- * (ex: um VIP+ pode também ter a tag SUNANO). Mesmo padrão hardcoded-por-slug
+ * (ex: um VIP pode também ter a tag SUNANO). Mesmo padrão hardcoded-por-slug
  * já usado em `RESERVED_SLUGS` (`lib/profile-name.ts`) para proteger o nome.
  */
 

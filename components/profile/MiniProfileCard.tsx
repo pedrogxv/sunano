@@ -14,8 +14,7 @@ import type { MiniProfile } from "@/lib/mini-profile"
 
 const TIER_RING = {
   common: "ring-background",
-  vip: "ring-amber-400/70",
-  vip_plus: "ring-fuchsia-400/70",
+  vip: "ring-fuchsia-400/70",
 } as const
 
 function formatCount(value: number): string {

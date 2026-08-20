@@ -10,9 +10,9 @@ import type { AccountTier } from "@/lib/account-tier"
 /** Taxa cobrada de quem não tem direito ao anúncio grátis. */
 export const MARKET_FEE_RATE = 0.05
 
-/** vip e vip_plus têm direito a 1 anúncio ativo simultâneo sem custo. */
+/** vip tem direito a 1 anúncio ativo simultâneo sem custo. */
 export function isVipTier(tier: AccountTier): boolean {
-  return tier === "vip" || tier === "vip_plus"
+  return tier === "vip"
 }
 
 export type ListingFee = {

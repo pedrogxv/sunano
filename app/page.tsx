@@ -7,7 +7,6 @@ import {
   MessageCircle,
   Package,
   PlayCircle,
-  Recycle,
   ShoppingBag,
 } from "lucide-react"
 
@@ -32,9 +31,9 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 }
 
-// TODO: reativar quando Loja/Bazar estiverem prontos para lançamento.
-// Enquanto false, a seção "Mercado" fica oculta na Home (o menu lateral
-// e as rotas /loja e /bazar continuam funcionando normalmente).
+// TODO: reativar quando a Loja estiver pronta para lançamento.
+// Enquanto false, a seção "Loja" fica oculta na Home (o menu lateral
+// e a rota /loja continuam funcionando normalmente).
 const SHOW_STORE_SECTION = false
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -190,63 +189,42 @@ export default async function HomePage() {
       {/* ============ CONQUISTAS EM DESTAQUE ============ */}
       {events.length > 0 && <EventsShowcase events={events} />}
 
-      {/* ============ MERCADO ============ */}
+      {/* ============ LOJA ============ */}
       {SHOW_STORE_SECTION && products.length > 0 && (
         <section>
           <SectionHeader
             icon={ShoppingBag}
-            title="Mercado"
-            subtitle="Produtos novos e itens usados pelo Sunano"
+            title="Loja"
+            subtitle="Produtos novos escolhidos pelo Sunano"
             href="/loja"
             linkLabel="Ver loja"
           />
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {products.slice(0, 4).map((product) => {
-              const isBazar = product.type === "bazaar"
-              return (
-                <Link
-                  key={product.id}
-                  href={isBazar ? `/bazar/${product.slug}` : `/loja/${product.slug}`}
-                  className={cn(
-                    "group relative overflow-hidden rounded-xl border bg-card transition-all hover:-translate-y-0.5",
-                    isBazar
-                      ? "border-amber-500/20 hover:border-amber-500/40"
-                      : "border-border hover:border-emerald-500/30"
+            {products.slice(0, 4).map((product) => (
+              <Link
+                key={product.id}
+                href={`/loja/${product.slug}`}
+                className="group relative overflow-hidden rounded-xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-emerald-500/30"
+              >
+                <div className="relative aspect-square bg-muted">
+                  {product.images?.[0] && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={product.images[0]}
+                      alt={product.name}
+                      className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
                   )}
-                >
-                  {isBazar && (
-                    <div className="absolute right-2 top-2 z-10 rounded-md bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-amber-950">
-                      Usado
-                    </div>
-                  )}
-                  <div className="relative aspect-square bg-muted">
-                    {product.images?.[0] && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={product.images[0]}
-                        alt={product.name}
-                        className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
-                      />
-                    )}
-                  </div>
-                  <div className="space-y-1 p-3">
-                    <p className="line-clamp-1 text-xs font-semibold text-foreground">{product.name}</p>
-                    <p
-                      className={cn(
-                        "text-sm font-bold",
-                        isBazar ? "text-amber-400" : "text-emerald-400"
-                      )}
-                    >
-                      {formatBRL(product.price_cents)}
-                    </p>
-                  </div>
-                </Link>
-              )
-            })}
+                </div>
+                <div className="space-y-1 p-3">
+                  <p className="line-clamp-1 text-xs font-semibold text-foreground">{product.name}</p>
+                  <p className="text-sm font-bold text-emerald-400">{formatBRL(product.price_cents)}</p>
+                </div>
+              </Link>
+            ))}
           </div>
 
-          {/* Quick links to both */}
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-4">
             <Link
               href="/loja"
               className="group flex items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 transition-all hover:border-emerald-500/40 hover:bg-emerald-500/10"
@@ -259,19 +237,6 @@ export default async function HomePage() {
                 </div>
               </div>
               <ArrowRight className="size-4 text-emerald-400 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-            <Link
-              href="/loja?type=bazaar"
-              className="group flex items-center justify-between rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 transition-all hover:border-amber-500/40 hover:bg-amber-500/10"
-            >
-              <div className="flex items-center gap-3">
-                <Recycle className="size-5 text-amber-400" />
-                <div>
-                  <p className="text-sm font-semibold text-amber-300">Bazar</p>
-                  <p className="text-[11px] text-amber-500/70">Itens usados</p>
-                </div>
-              </div>
-              <ArrowRight className="size-4 text-amber-400 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </div>
         </section>

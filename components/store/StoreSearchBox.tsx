@@ -95,7 +95,7 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
       if (highlighted >= 0 && items[highlighted]) {
         const product = items[highlighted]
         setIsOpen(false)
-        router.push(`/${product.type === "bazaar" ? "bazar" : "loja"}/${product.slug}`)
+        router.push(`/loja/${product.slug}`)
         return
       }
       goToResults(query)
@@ -156,7 +156,7 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
                 return (
                   <li key={product.id}>
                     <Link
-                      href={`/${product.type === "bazaar" ? "bazar" : "loja"}/${product.slug}`}
+                      href={`/loja/${product.slug}`}
                       onMouseEnter={() => setHighlighted(idx)}
                       onClick={() => setIsOpen(false)}
                       className={cn(

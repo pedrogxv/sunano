@@ -1,4 +1,4 @@
-// Superfície de card padrão usada em listagens (periféricos, loja, bazar) e
+// Superfície de card padrão usada em listagens (periféricos, loja) e
 // nos cards de detalhe (PeripheralDetailView). Fundo sólido, mais distinto
 // do bg-background que o `bg-card` genérico — reutilizar aqui em vez de
 // inventar uma variação nova por tela.

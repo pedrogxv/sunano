@@ -6,7 +6,7 @@ import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/s
 import { getPeripheralRankById, type PeripheralRank } from "@/lib/server/repositories/peripherals-repository"
 
 /**
- * Repositório da Loja / Bazar — única porta de acesso à tabela `store_products`
+ * Repositório da Loja — única porta de acesso à tabela `store_products`
  * para leitura. Páginas e endpoints delegam aqui.
  */
 
@@ -21,7 +21,7 @@ export type StoreProductCard = {
   images: string[]
   category: string | null
   brand: string | null
-  type: "store" | "bazaar"
+  type: "store"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   sale_type: "pre_order" | "ready_stock" | "normal"
@@ -83,7 +83,7 @@ export type FeaturedProduct = {
   name: string
   price_cents: number
   images: string[]
-  type: "store" | "bazaar"
+  type: "store"
   condition: "new" | "used" | "opened"
 }
 
@@ -91,7 +91,7 @@ export type LinkedProduct = {
   id: string
   slug: string
   name: string
-  type: "store" | "bazaar"
+  type: "store"
   price_cents: number
   /** Menor preço entre as variantes ativas (ou `price_cents` se não houver variantes). */
   price_cents_min: number
@@ -122,9 +122,9 @@ function mapCardRow(row: RawCardRow): StoreProductCard {
   }
 }
 
-/** Lista produtos ativos de um tipo ("store" ou "bazaar"). */
+/** Lista produtos ativos do tipo "store". */
 export async function listActiveProductsByType(
-  type: "store" | "bazaar"
+  type: "store"
 ): Promise<StoreProductCard[]> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
@@ -141,7 +141,7 @@ export async function listActiveProductsByType(
   return ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
 }
 
-/** Lista todos os produtos ativos (Loja + Bazar), para a página unificada. */
+/** Lista todos os produtos ativos, para a página unificada. */
 export async function listActiveProducts(): Promise<StoreProductCard[]> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
@@ -158,7 +158,7 @@ export async function listActiveProducts(): Promise<StoreProductCard[]> {
 }
 
 export type StoreProductListFilters = {
-  type?: "store" | "bazaar"
+  type?: "store"
   condition?: "new" | "used" | "opened"
   categories?: string[]
   brands?: string[]
@@ -184,7 +184,7 @@ export type StoreProductListResult = {
 }
 
 /**
- * Listagem paginada de produtos da Loja/Bazar, com filtros aplicados no
+ * Listagem paginada de produtos da Loja, com filtros aplicados no
  * banco (mesmo padrão de `listOrdersForAdmin` em orders-repository.ts).
  * Usada por `/loja` e `/admin/store` — substitui `listActiveProducts()` +
  * filtro em memória no client, e o `select("*")` cru que a API admin fazia
@@ -288,15 +288,15 @@ export type StoreFilterOptions = {
   brandsByCategory: Record<string, { brand: string; count: number }[]>
   priceMinCents: number
   priceMaxCents: number
-  countByType: { store: number; bazaar: number; all: number }
+  countByType: { store: number; all: number }
 }
 
 /**
  * Opções de filtro disponíveis (categorias, marcas, faixa de preço,
- * contagem por tipo) para a Loja/Bazar. Query leve, pensada para ser
+ * contagem por tipo) para a Loja. Query leve, pensada para ser
  * chamada por trás de cache (`revalidate` na página/rota chamadora).
  */
-export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<StoreFilterOptions> {
+export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilterOptions> {
   const db = createSupabaseAdminClient()
   let query = db.from("store_products").select("category, brand, price_cents, type").eq("is_active", true)
   if (type) query = query.eq("type", type)
@@ -304,15 +304,15 @@ export async function getStoreFilterOptions(type?: "store" | "bazaar"): Promise<
   const { data, error } = await query
   if (error) {
     console.error("[store-repository] getStoreFilterOptions:", error)
-    return { categories: [], categoryCounts: {}, brands: [], brandsByCategory: {}, priceMinCents: 0, priceMaxCents: 0, countByType: { store: 0, bazaar: 0, all: 0 } }
+    return { categories: [], categoryCounts: {}, brands: [], brandsByCategory: {}, priceMinCents: 0, priceMaxCents: 0, countByType: { store: 0, all: 0 } }
   }
 
-  const rows = (data ?? []) as unknown as { category: string | null; brand: string | null; price_cents: number; type: "store" | "bazaar" }[]
+  const rows = (data ?? []) as unknown as { category: string | null; brand: string | null; price_cents: number; type: "store" }[]
   const categories = new Set<string>()
   const categoryCounts: Record<string, number> = {}
   const brands = new Set<string>()
   const brandCountsByCategory: Record<string, Record<string, number>> = {}
-  const countByType = { store: 0, bazaar: 0, all: 0 }
+  const countByType = { store: 0, all: 0 }
   let priceMinCents = Infinity
   let priceMaxCents = 0
 
@@ -362,6 +362,7 @@ export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]
   const { data: featuredData, error: featuredError } = await db
     .from("store_products")
     .select(FEATURED_COLUMNS)
+    .eq("type", "store")
     .eq("is_active", true)
     .eq("is_sold_out", false)
     .eq("is_featured", true)
@@ -380,6 +381,7 @@ export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]
   let recentQuery = db
     .from("store_products")
     .select(FEATURED_COLUMNS)
+    .eq("type", "store")
     .eq("is_active", true)
     .eq("is_sold_out", false)
     .or("stock.is.null,stock.gt.0")
@@ -451,7 +453,7 @@ export type StoreProductDetail = {
   stock: number | null
   images: string[]
   category: string | null
-  type: "store" | "bazaar"
+  type: "store"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   sale_type: "pre_order" | "ready_stock" | "normal"
@@ -468,18 +470,6 @@ export type StoreProductSpec = {
   position: number
 }
 
-export type LinkedStoreItem = {
-  id: string
-  slug: string
-  name: string
-  price_cents: number
-  images: string[]
-  /** `null` = sem controle de estoque (nunca esgota). */
-  stock: number | null
-  condition: "new" | "used" | "opened"
-  condition_notes: string | null
-}
-
 export type LinkedPeripheralRef = {
   id: string
   name: string
@@ -490,7 +480,6 @@ export type LinkedPeripheralRef = {
 
 export type StoreProductDetailResult = {
   product: StoreProductDetail
-  linkedProduct: LinkedStoreItem | null
   linkedPeripheral: LinkedPeripheralRef | null
   linkedPeripherals: LinkedPeripheralRef[]
   specs: StoreProductSpec[]
@@ -499,15 +488,14 @@ export type StoreProductDetailResult = {
 }
 
 /**
- * Detalhe de um produto da Loja/Bazar pelo slug, já com o produto vinculado
- * do outro tipo e o periférico relacionado. Consome a página de detalhe.
+ * Detalhe de um produto da Loja pelo slug, já com o periférico relacionado.
+ * Consome a página de detalhe.
  *
  * `React.cache`: dispara 6 queries; `generateMetadata` e a página chamam com
- * o mesmo (slug, type) na mesma requisição — sem isso, dobra tudo por visita.
+ * o mesmo slug na mesma requisição — sem isso, dobra tudo por visita.
  */
 export const getStoreProductDetail = cache(async (
-  slug: string,
-  type: "store" | "bazaar"
+  slug: string
 ): Promise<StoreProductDetailResult | null> => {
   const db = createSupabaseAdminClient()
 
@@ -517,7 +505,7 @@ export const getStoreProductDetail = cache(async (
       "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, type, condition, condition_notes, sale_type, is_sold_out, peripheral_id, features, video_url"
     )
     .eq("slug", slug)
-    .eq("type", type)
+    .eq("type", "store")
     .eq("is_active", true)
     .maybeSingle()
 
@@ -528,10 +516,9 @@ export const getStoreProductDetail = cache(async (
   if (!product) return null
 
   const detail = product as unknown as StoreProductDetail
-  let linkedProduct: LinkedStoreItem | null = null
   let linkedPeripheral: LinkedPeripheralRef | null = null
 
-  const [specsResult, variantsResult, variantGroupsResult, peripheralsResult, linkedResult] = await Promise.all([
+  const [specsResult, variantsResult, variantGroupsResult, peripheralsResult, peripheralResult] = await Promise.all([
     db
       .from("store_product_specs")
       .select("id, label, value, position")
@@ -558,25 +545,12 @@ export const getStoreProductDetail = cache(async (
       .eq("product_id", detail.id)
       .order("position", { ascending: true }),
     detail.peripheral_id
-      ? (async () => {
-          const oppositeType = type === "store" ? "bazaar" : "store"
-          const [{ data: linked }, { data: peripheral }] = await Promise.all([
-            db
-              .from("store_products")
-              .select("id, slug, name, price_cents, images, stock, condition, condition_notes")
-              .eq("peripheral_id", detail.peripheral_id as string)
-              .eq("type", oppositeType)
-              .eq("is_active", true)
-              .maybeSingle(),
-            db
-              .from("peripherals")
-              .select("id, name, brand_id, brands(name), image_url")
-              .eq("id", detail.peripheral_id as string)
-              .maybeSingle(),
-          ])
-          return { linked, peripheral }
-        })()
-      : Promise.resolve({ linked: null, peripheral: null }),
+      ? db
+          .from("peripherals")
+          .select("id, name, brand_id, brands(name), image_url")
+          .eq("id", detail.peripheral_id as string)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   const specs = (specsResult.data ?? []) as unknown as StoreProductSpec[]
@@ -602,8 +576,7 @@ export const getStoreProductDetail = cache(async (
     .map((row) => row.peripherals)
     .filter((p): p is NonNullable<PeripheralJoinRow["peripherals"]> => p !== null)
 
-  linkedProduct = (linkedResult.linked ?? null) as unknown as LinkedStoreItem | null
-  const peripheralRow = linkedResult.peripheral as unknown as
+  const peripheralRow = (peripheralResult?.data ?? null) as unknown as
     | { id: string; name: string; brand_id: string; brands: { name: string } | { name: string }[] | null; image_url: string | null }
     | null
 
@@ -634,7 +607,7 @@ export const getStoreProductDetail = cache(async (
       }
     : null
 
-  return { product: detail, linkedProduct, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups }
+  return { product: detail, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups }
 })
 
 /** Lista variantes de um produto (usado pela API admin ao editar). */

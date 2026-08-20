@@ -21,7 +21,7 @@ interface FavoritosGridProps {
 
 /**
  * Periféricos favoritos. O número de slots é o limite do tier
- * (3 comum · 5 VIP · 8 VIP+), com os não preenchidos exibidos como
+ * (3 comum · 8 VIP), com os não preenchidos exibidos como
  * placeholders — inclusive para deixar o ganho de upgrade visível.
  */
 export function FavoritosGrid({ favorites, tier, isOwner = false }: FavoritosGridProps) {

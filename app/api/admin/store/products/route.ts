@@ -25,7 +25,6 @@ const createProductSchema = z.object({
   images: z.array(z.string().url()).max(MAX_PRODUCT_IMAGES).optional().default([]),
   category: z.string().trim().max(50).optional().nullable(),
   brand: z.string().trim().max(80).optional().nullable(),
-  type: z.enum(["store", "bazaar"]),
   condition: z.enum(["new", "used", "opened"]).optional().default("new"),
   condition_notes: z.string().trim().max(1000).optional().nullable(),
   sale_type: z.enum(["pre_order", "ready_stock", "normal"]).optional().default("normal"),
@@ -50,8 +49,6 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url)
-  const typeParam = searchParams.get("type") // 'store' | 'bazaar' | null = all
-  const type = typeParam === "store" || typeParam === "bazaar" ? typeParam : undefined
 
   function parseNumber(value: string | null): number | undefined {
     if (!value) return undefined
@@ -67,7 +64,7 @@ export async function GET(request: NextRequest) {
   }
 
   const filters: StoreProductListFilters = {
-    type,
+    type: "store",
     includeInactive: true,
     search: searchParams.get("search")?.trim() || undefined,
     categories: parseCsv(searchParams.get("categories")),
@@ -104,7 +101,7 @@ export async function POST(request: NextRequest) {
     )
   }
   const {
-    name, description, price_cents, promo_price_cents, stock, images, category, brand, type, condition,
+    name, description, price_cents, promo_price_cents, stock, images, category, brand, condition,
     condition_notes, sale_type, is_active, is_sold_out, features, video_url,
   } = parsed.data
 
@@ -139,7 +136,7 @@ export async function POST(request: NextRequest) {
       images,
       category: category ?? null,
       brand: brand ?? null,
-      type,
+      type: "store",
       condition,
       condition_notes: condition_notes ?? null,
       sale_type,

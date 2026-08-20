@@ -21,7 +21,7 @@ export type BlogAuthor = {
   display_name: string | null
   avatar_url: string | null
   email: string | null
-  role: "admin" | "moderator" | "webmaster" | null
+  role: "webmaster" | "admin" | "moderator" | "editor" | "vendedor" | "suporte" | null
 } | null
 
 /**

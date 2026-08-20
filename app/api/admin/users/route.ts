@@ -1,14 +1,11 @@
 import { NextResponse } from "next/server"
 import * as z from "zod"
 
-import { ACCOUNT_TIERS, coerceAccountTier } from "@/lib/account-tier"
+import { coerceAccountTier } from "@/lib/account-tier"
 import {
-  createDefaultPermissions,
-  createFullPermissions,
   type AdminProfile,
+  getRolePermissions,
   isWebMaster,
-  normalizePermissions,
-  withBaselinePermissions,
 } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -24,16 +21,14 @@ const userUpdateSchema = z.object({
   display_name: z.string().trim().max(80).optional(),
   avatar_url: z.string().trim().url().nullable().optional(),
   // "user" representa um usuário comum (sem linha em admin_profiles).
-  role: z.enum(["user", "admin", "moderator", "webmaster"]).optional(),
-  permissions: z.record(z.string(), z.boolean()).optional(),
-  account_tier: z.enum(ACCOUNT_TIERS).optional(),
+  role: z.enum(["user", "webmaster", "admin", "moderator", "editor", "vendedor", "suporte"]).optional(),
 })
 
 const userCreateSchema = z.object({
   email: z.string().trim().email(),
   display_name: z.string().trim().max(80).optional(),
-  role: z.enum(["admin", "moderator"]).optional(),
-  permissions: z.record(z.string(), z.boolean()).optional(),
+  // Web Master não é atribuível na criação: exige a promoção com confirmação dedicada.
+  role: z.enum(["admin", "moderator", "editor", "vendedor", "suporte"]).optional(),
 })
 
 function defaultNameFromEmail(email: string | null | undefined) {
@@ -121,12 +116,7 @@ export async function GET() {
           account_tier: coerceAccountTier(up?.account_tier),
           display_slug: up?.display_slug ?? null,
           role,
-          permissions:
-            role === "webmaster"
-              ? createFullPermissions()
-              : role === "user"
-                ? {}
-                : normalizePermissions(ap?.permissions as Record<string, boolean> | null),
+          permissions: getRolePermissions(role),
           created_at: u.created_at,
           updated_at: ap?.updated_at ?? u.created_at,
         }
@@ -183,26 +173,12 @@ export async function PATCH(request: Request) {
     const isTargetWebMaster = typedTargetProfile?.role === "webmaster"
     const isTargetCurrentUser = parsed.data.id === authData.user.id
 
-    // O WEB Master e o próprio usuário têm cargo/permissões protegidos.
-    if ((isTargetCurrentUser || isTargetWebMaster) && (parsed.data.role !== undefined || parsed.data.permissions !== undefined)) {
+    // O WEB Master e o próprio usuário têm cargo (e, por consequência, permissões) protegidos.
+    if ((isTargetCurrentUser || isTargetWebMaster) && parsed.data.role !== undefined) {
       return NextResponse.json(
         { error: "As permissões do WEB Master não podem ser alteradas." },
         { status: 403 }
       )
-    }
-
-    // Tier de conta (VIP) mora em `user_profiles`, não em `admin_profiles` — não
-    // tem relação com cargo/permissões, então é independente da trava acima e
-    // pode ser alterado até para o WEB Master ou para o próprio usuário logado.
-    if (parsed.data.account_tier !== undefined) {
-      const { error: tierError } = await admin
-        .from("user_profiles")
-        .update({ account_tier: parsed.data.account_tier })
-        .eq("id", parsed.data.id)
-      if (tierError) {
-        const { body, status } = dbErrorResponse(tierError, "Erro ao atualizar tier do usuário.")
-        return NextResponse.json(body, { status })
-      }
     }
 
     // Rebaixar para usuário comum: remove a linha de admin_profiles.
@@ -221,6 +197,20 @@ export async function PATCH(request: Request) {
     if (!nextRole) {
       // Usuário comum sem mudança de cargo: nada a persistir em admin_profiles.
       return NextResponse.json({ ok: true })
+    }
+
+    // Todo cargo (exceto Usuário) garante VIP automaticamente — não editável
+    // manualmente. Só eleva de "common" pra "vip" (não mexe em quem já é vip).
+    if (parsed.data.role !== undefined) {
+      const { error: tierError } = await admin
+        .from("user_profiles")
+        .update({ account_tier: "vip" })
+        .eq("id", parsed.data.id)
+        .eq("account_tier", "common")
+      if (tierError) {
+        const { body, status } = dbErrorResponse(tierError, "Erro ao atualizar tier do usuário.")
+        return NextResponse.json(body, { status })
+      }
     }
 
     // Resolve identificação do alvo (que pode ainda não ter admin_profiles).
@@ -249,14 +239,8 @@ export async function PATCH(request: Request) {
       display_name: parsed.data.display_name?.trim() || fallbackDisplay?.trim() || defaultNameFromEmail(targetEmail),
       avatar_url: parsed.data.avatar_url ?? fallbackAvatar ?? null,
       role: nextRole,
-      permissions:
-        nextRole === "webmaster"
-          ? createFullPermissions()
-          : withBaselinePermissions(
-              parsed.data.permissions
-                ? normalizePermissions(parsed.data.permissions)
-                : normalizePermissions(typedTargetProfile?.permissions ?? createDefaultPermissions())
-            ),
+      // Permissões vêm 100% do cargo — a coluna só espelha a matriz para quem lê direto do banco.
+      permissions: getRolePermissions(nextRole),
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -322,11 +306,6 @@ export async function POST(request: Request) {
     }
 
     const role = parsed.data.role ?? "admin"
-    const permissions = withBaselinePermissions(
-      parsed.data.permissions
-        ? normalizePermissions(parsed.data.permissions)
-        : createDefaultPermissions()
-    )
 
     const payload = {
       id: invitedUser.user.id,
@@ -334,7 +313,7 @@ export async function POST(request: Request) {
       display_name: displayName,
       avatar_url: null,
       role,
-      permissions,
+      permissions: getRolePermissions(role),
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -342,6 +321,18 @@ export async function POST(request: Request) {
 
     if (error) {
       const { body, status } = dbErrorResponse(error, "Erro ao criar usuário.")
+      return NextResponse.json(body, { status })
+    }
+
+    // Todo cargo (exceto Usuário) garante VIP automaticamente — inclusive
+    // quem acabou de ganhar um cargo administrativo.
+    const { error: tierError } = await adminClient
+      .from("user_profiles")
+      .update({ account_tier: "vip" })
+      .eq("id", invitedUser.user.id)
+      .eq("account_tier", "common")
+    if (tierError) {
+      const { body, status } = dbErrorResponse(tierError, "Erro ao atualizar tier do usuário.")
       return NextResponse.json(body, { status })
     }
 

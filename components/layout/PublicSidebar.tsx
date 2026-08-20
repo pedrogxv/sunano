@@ -105,10 +105,6 @@ export function PublicSidebar() {
   const close = () => setMobileOpen(false)
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname?.startsWith(href)
-  // Loja e Bazar agora vivem na mesma rota (/loja?type=bazaar) — sem
-  // useSearchParams aqui pra não forçar a sidebar (presente em toda página)
-  // para client-side rendering. Ambos os itens ficam ativos juntos em /loja;
-  // o filtro de tipo dentro da página é que reflete a seleção real.
   const isLojaActive = isActive("/loja")
 
   const peripheralItems: NavItem[] = [
@@ -205,7 +201,7 @@ export function PublicSidebar() {
           {/* Mercado */}
           <SectionLabel label={t.nav.shop} collapsed={isCollapsed} />
           <div className="space-y-1">
-            {/* Mercado (Loja + Bazar) */}
+            {/* Loja */}
             <Link
               href="/loja"
               onClick={close}

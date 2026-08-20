@@ -20,7 +20,7 @@ interface StoreProduct {
   images: string[]
   category: string | null
   brand: string | null
-  type: "store" | "bazaar"
+  type: "store"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   sale_type: "pre_order" | "ready_stock" | "normal"

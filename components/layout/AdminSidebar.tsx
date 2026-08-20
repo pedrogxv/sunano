@@ -108,7 +108,7 @@ export function AdminSidebar() {
         { href: "/admin/offers", label: t.admin.sidebar.offers,         icon: Gift,       permission: "offers_read" },
         {
           href: "/admin/store",
-          label: t.admin.sidebar.storeAndBazar,
+          label: t.admin.sidebar.store,
           icon: ShoppingBag,
           permission: "store_read",
           children: [

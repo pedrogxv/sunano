@@ -3,12 +3,26 @@
 import { useEffect, useMemo, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag as TagIcon, Layers, FileText, ShoppingCart, Info, Link2, Search, X, Scissors, RotateCcw, Loader2, Eye, Wand2 } from "lucide-react"
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import { restrictToParentElement } from "@dnd-kit/modifiers"
+import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag as TagIcon, Layers, FileText, ShoppingCart, Info, Link2, Search, X, GripVertical, Plus, Trash2, Loader2, Eye } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import * as z from "zod"
 
+import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
+import { compressImageFile } from "@/lib/client/compress-image"
 import { formatBRL } from "@/lib/format"
 import { hasAdminPermission, type AdminProfile } from "@/lib/admin-permissions"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
@@ -38,7 +52,7 @@ import { mapTier } from "@/lib/tier-utils"
 import { parseWeightToGrams } from "@/lib/peripheral-weight"
 import { RATING_LEVEL_COLORS } from "@/lib/tierlist-theme"
 import { useT } from "@/lib/use-t"
-import { removeBackground, fileToDataUrl, STRONG_REMOVAL_OPTIONS } from "@/lib/client/remove-background"
+import { removeBackground, fileToDataUrl } from "@/lib/client/remove-background"
 import { SWITCH_PRICE_TIERS } from "@/lib/switch-price-tier"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
 import { getTagOptionsForCategory, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
@@ -256,6 +270,63 @@ const BUY_LINK_PLATFORMS: {
   { field: "buyLinkAmazon", label: "Amazon", matches: ["amazon"], dot: "bg-blue-500", ring: "focus-visible:ring-blue-400/40" },
   { field: "buyLinkShopee", label: "Shopee", matches: ["shopee"], dot: "bg-orange-500", ring: "focus-visible:ring-orange-400/40" },
 ]
+
+const MAX_IMAGES = 8
+const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
+const IMAGE_COMPRESS_OPTIONS = {
+  maxDimension: 2000,
+  targetBytes: 1.5 * 1024 * 1024,
+  skipBelowBytes: 800 * 1024,
+}
+
+function SortableImageThumb({
+  url,
+  index,
+  onRemove,
+}: {
+  url: string
+  index: number
+  onRemove: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: url,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        "group relative size-24 overflow-hidden rounded-xl border border-border bg-muted/30",
+        isDragging && "z-10 border-primary/40 shadow-lg"
+      )}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt={`Imagem ${index + 1}`} className="h-full w-full object-contain p-1" />
+      <button
+        type="button"
+        aria-label="Reordenar imagem"
+        className="absolute left-1 top-1 flex size-5 cursor-grab touch-none items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-3" />
+      </button>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-red-500/80 opacity-0 transition-opacity group-hover:opacity-100"
+      >
+        <Trash2 className="size-2.5 text-white" />
+      </button>
+      {index === 0 && (
+        <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1 py-0.5 text-[8px] font-semibold text-white">
+          Principal
+        </span>
+      )}
+    </div>
+  )
+}
 
 function findBuyLinkUrl(buyLinks: unknown, needles: string[]): string {
   if (!Array.isArray(buyLinks)) return ""
@@ -496,19 +567,17 @@ interface LinkedProduct {
   id: string
   slug: string
   name: string
-  type: "store" | "bazaar"
+  type: "store"
   price_cents: number
   images: string[]
 }
 
 function LinkedProductPicker({
-  kind,
   value,
   onChange,
   excludeId,
   t,
 }: {
-  kind: "store" | "bazaar"
   value: LinkedProduct | null
   onChange: (product: LinkedProduct | null) => void
   excludeId: string | null
@@ -523,23 +592,21 @@ function LinkedProductPicker({
     if (!open) return
     let cancelled = false
     setLoading(true)
-    fetch(`/api/admin/store/products?type=${kind}`, { cache: "no-store" })
+    fetch(`/api/admin/store/products`, { cache: "no-store" })
       .then((res) => res.json().catch(() => null))
       .then((json: { products?: LinkedProduct[] } | null) => {
         if (!cancelled) setResults(json?.products ?? [])
       })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [open, kind])
+  }, [open])
 
   const filtered = query.trim()
     ? results.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
     : results
   const visible = filtered.filter((p) => p.id !== excludeId)
 
-  const placeholderLabel = kind === "store"
-    ? t.admin.tierlistForm.pickerSearchStore
-    : t.admin.tierlistForm.pickerSearchBazaar
+  const placeholderLabel = t.admin.tierlistForm.pickerSearchStore
 
   return (
     <div className="space-y-2">
@@ -781,20 +848,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     el?.scrollIntoView({ behavior: "smooth", block: "start" })
   }, [loadingPeripheral, focusTarget])
 
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  // Guarda o original e o recorte para permitir alternar entre eles.
-  const [originalImage, setOriginalImage] = useState<{ file: File; preview: string } | null>(null)
-  const [processedImage, setProcessedImage] = useState<{ file: File; preview: string } | null>(null)
-  const [bgRemoved, setBgRemoved] = useState(false)
-  const [removingBg, setRemovingBg] = useState(false)
+  // Fotos principais do anúncio: a primeira é a "Principal". Cada foto já sobe
+  // com o fundo removido automaticamente (ver handleImageAdd).
+  const [images, setImages] = useState<string[]>([])
   const [selectedTag, setSelectedTag] = useState<Tag[]>([])
   const [selectedTierlistCategories, setSelectedTierlistCategories] = useState<TierlistMode[]>([])
   const [error, setError] = useState<string | null>(null)
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
   const [originalUsdPrice, setOriginalUsdPrice] = useState<number | null>(null)
   const [linkedStore, setLinkedStore] = useState<LinkedProduct | null>(null)
-  const [linkedBazaar, setLinkedBazaar] = useState<LinkedProduct | null>(null)
   const [linkedSwitch, setLinkedSwitch] = useState<LinkedSwitch | null>(null)
   const [rankedPeripherals, setRankedPeripherals] = useState<{ id: string; name: string; tier: string; ranking: number; score: number | null }[]>([])
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([])
@@ -805,9 +867,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   // então precisam ser preservados à parte para o preview ao vivo continuar mostrando o
   // seletor de modo (o mesmo que aparece na página pública do periférico).
   const [existingModeTiers, setExistingModeTiers] = useState<Record<string, unknown>>({})
-  const [galleryFiles, setGalleryFiles] = useState<File[]>([])
-  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([])
-  const [existingGalleryUrls, setExistingGalleryUrls] = useState<string[]>([])
   // Foto 2D do mouse (fundo preto, estilo eloshapes) — usada no bloco "Shape" da página
   // pública. Upload único, sem remoção de fundo (o admin já sobe a foto pronta).
   const [shapeImageFile, setShapeImageFile] = useState<File | null>(null)
@@ -861,7 +920,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   // seriam salvos, então campos ainda vazios aparecem no preview exatamente como
   // aparecerão para quem visitar a página pública (com os textos de "não cadastrado").
   const watchedAll = form.watch()
-  const previewGallery = [...existingGalleryUrls, ...galleryPreviews]
+  const previewGallery = images.slice(1)
   const previewData = {
     id: peripheralId ?? "preview",
     name: watchedAll.name?.trim() || "Nome do periférico",
@@ -870,7 +929,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     tier: watchedAll.tier === "__none__" ? null : watchedAll.tier,
     price: watchedAll.price ?? 0,
     tags: selectedTag,
-    image_url: imagePreview,
+    image_url: images[0] ?? null,
     specs: {
       ...existingModeTiers,
       ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview }),
@@ -1101,9 +1160,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         setSelectedTierlistCategories(
           storedTierlistCategories.filter((mode): mode is TierlistMode => validTierlistKeys.includes(mode as TierlistMode))
         )
-        if (data.image_url) setImagePreview(data.image_url)
         const galleryArr = Array.isArray(data.specs?.details?.gallery) ? data.specs.details.gallery : []
-        setExistingGalleryUrls(galleryArr.filter(Boolean))
+        setImages([data.image_url, ...galleryArr].filter(Boolean))
         setShapeImagePreview(data.specs?.details?.shapeImage ?? null)
         setShapeImageFile(null)
 
@@ -1124,10 +1182,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
       try {
         const linksRes = await fetch(`/api/admin/peripherals/${peripheralId}/links`, { cache: "no-store" })
-        const linksJson = (await linksRes.json().catch(() => null)) as { store?: LinkedProduct | null; bazaar?: LinkedProduct | null } | null
+        const linksJson = (await linksRes.json().catch(() => null)) as { store?: LinkedProduct | null } | null
         if (linksRes.ok && linksJson) {
           setLinkedStore(linksJson.store ?? null)
-          setLinkedBazaar(linksJson.bazaar ?? null)
         }
       } catch { /* ignore — links are optional */ }
     } catch (err) {
@@ -1155,41 +1212,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         return
       }
 
-      let imageUrl = imagePreview
-      if (imageFile) {
-        setUploading(true)
-        const uploadForm = new FormData()
-        uploadForm.set("file", imageFile)
-        const uploadRes = await fetch("/api/admin/peripherals/upload-image", {
-          method: "POST",
-          body: uploadForm,
-        })
-        const uploadData = (await uploadRes.json().catch(() => null)) as { publicUrl?: string; error?: string; ok?: boolean } | null
-        if (!uploadRes.ok || !uploadData?.publicUrl) {
-          throw new Error(uploadData?.error ?? t.admin.tierlistForm.failedUploadImage)
-        }
-        imageUrl = uploadData.publicUrl
-      }
-
-      const uploadedGalleryUrls: string[] = []
-      if (galleryFiles.length > 0) {
-        setUploading(true)
-        for (const file of galleryFiles) {
-          const gForm = new FormData()
-          gForm.set("file", file)
-          gForm.set("kind", "gallery")
-          const gRes = await fetch("/api/admin/peripherals/upload-image", {
-            method: "POST",
-            body: gForm,
-          })
-          const gData = (await gRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
-          if (!gRes.ok || !gData?.publicUrl) {
-            throw new Error(gData?.error ?? "Falha ao fazer upload de imagem da galeria")
-          }
-          uploadedGalleryUrls.push(gData.publicUrl)
-        }
-      }
-      const finalGallery = [...existingGalleryUrls, ...uploadedGalleryUrls]
+      const imageUrl = images[0] ?? null
+      const finalGallery = images.slice(1)
 
       let shapeImageUrl = shapeImagePreview
       if (shapeImageFile) {
@@ -1266,7 +1290,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             storeProductId: linkedStore?.id ?? null,
-            bazaarProductId: linkedBazaar?.id ?? null,
           }),
         })
         if (!linkRes.ok) {
@@ -1288,115 +1311,67 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     }
   }
 
-  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const imageSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  function handleImageDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    setImages((prev) => {
+      const oldIndex = prev.indexOf(active.id as string)
+      const newIndex = prev.indexOf(over.id as string)
+      if (oldIndex === -1 || newIndex === -1) return prev
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
+
+  async function handleImageAdd(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
-    // Reseta o input para permitir reenviar o mesmo arquivo.
-    e.target.value = ""
     if (!file) return
 
-    // Mostra o original imediatamente.
-    const originalPreview = await fileToDataUrl(file)
-    setOriginalImage({ file, preview: originalPreview })
-    setProcessedImage(null)
-    setImageFile(file)
-    setImagePreview(originalPreview)
-    setBgRemoved(false)
-
-    // Tenta remover o fundo automaticamente.
-    setRemovingBg(true)
-    try {
-      const result = await removeBackground(file)
-      const resultPreview = await fileToDataUrl(result)
-      setProcessedImage({ file: result, preview: resultPreview })
-      setImageFile(result)
-      setImagePreview(resultPreview)
-      setBgRemoved(true)
-    } catch (err) {
-      console.error("Falha ao remover o fundo:", err)
-      toast.error(t.admin.tierlistForm.failedRemoveBg)
-    } finally {
-      setRemovingBg(false)
-    }
-  }
-
-  const toggleBackground = async () => {
-    if (!originalImage || removingBg) return
-
-    if (bgRemoved) {
-      // Volta para a imagem original.
-      setImageFile(originalImage.file)
-      setImagePreview(originalImage.preview)
-      setBgRemoved(false)
+    if (images.length >= MAX_IMAGES) {
+      toast.error("Limite de imagens atingido", {
+        description: `Cada periférico pode ter no máximo ${MAX_IMAGES} imagens.`,
+      })
+      e.target.value = ""
       return
     }
 
-    // Reaplica o recorte (reaproveita se já foi calculado).
-    if (processedImage) {
-      setImageFile(processedImage.file)
-      setImagePreview(processedImage.preview)
-      setBgRemoved(true)
-      return
-    }
-
-    setRemovingBg(true)
+    setUploading(true)
+    setError(null)
     try {
-      const result = await removeBackground(originalImage.file)
-      const resultPreview = await fileToDataUrl(result)
-      setProcessedImage({ file: result, preview: resultPreview })
-      setImageFile(result)
-      setImagePreview(resultPreview)
-      setBgRemoved(true)
+      // Remove o fundo automaticamente (mesmo comportamento em toda foto adicionada).
+      let prepared: File
+      try {
+        prepared = await removeBackground(file)
+      } catch (err) {
+        console.error("Falha ao remover o fundo:", err)
+        prepared = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
+      }
+
+      if (prepared.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+        throw new Error(
+          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após remoção de fundo).`
+        )
+      }
+      const uploadForm = new FormData()
+      uploadForm.set("file", prepared)
+      const uploadRes = await fetch("/api/admin/peripherals/upload-image", {
+        method: "POST",
+        body: uploadForm,
+      })
+      const uploadData = (await uploadRes.json().catch(() => null)) as { publicUrl?: string; error?: string; ok?: boolean } | null
+      if (!uploadRes.ok || !uploadData?.publicUrl) {
+        throw new Error(uploadData?.error ?? t.admin.tierlistForm.failedUploadImage)
+      }
+      setImages((prev) => [...prev, uploadData.publicUrl as string])
     } catch (err) {
-      console.error("Falha ao remover o fundo:", err)
-      toast.error(t.admin.tierlistForm.failedRemoveBg)
+      const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
+      setError(message)
+      toast.error("Erro ao enviar imagem", { description: message })
     } finally {
-      setRemovingBg(false)
+      setUploading(false)
+      e.target.value = ""
     }
-  }
-
-  // Passe alternativo, mais agressivo, pra fotos de baixo contraste (ex.:
-  // linework claro sobre fundo branco) onde a remoção padrão come parte do
-  // desenho. Não é o padrão porque pode sub-remover fundos com textura
-  // própria -- por isso fica atrás de um botão separado, pro admin comparar.
-  const tryStrongBackgroundRemoval = async () => {
-    if (!originalImage || removingBg) return
-
-    setRemovingBg(true)
-    try {
-      const result = await removeBackground(originalImage.file, STRONG_REMOVAL_OPTIONS)
-      const resultPreview = await fileToDataUrl(result)
-      setProcessedImage({ file: result, preview: resultPreview })
-      setImageFile(result)
-      setImagePreview(resultPreview)
-      setBgRemoved(true)
-    } catch (err) {
-      console.error("Falha ao remover o fundo (modo forte):", err)
-      toast.error(t.admin.tierlistForm.failedRemoveBg)
-    } finally {
-      setRemovingBg(false)
-    }
-  }
-
-  const handleGallerySelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? [])
-    e.target.value = ""
-    const jpegFiles = files.filter((f) => f.type === "image/jpeg")
-    if (jpegFiles.length !== files.length) {
-      toast.error("Apenas arquivos JPEG são permitidos na galeria")
-    }
-    if (jpegFiles.length === 0) return
-    const previews = await Promise.all(jpegFiles.map(fileToDataUrl))
-    setGalleryFiles((prev) => [...prev, ...jpegFiles])
-    setGalleryPreviews((prev) => [...prev, ...previews])
-  }
-
-  const removeNewGalleryImage = (index: number) => {
-    setGalleryFiles((prev) => prev.filter((_, i) => i !== index))
-    setGalleryPreviews((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const removeExistingGalleryImage = (index: number) => {
-    setExistingGalleryUrls((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleShapeImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1482,90 +1457,58 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
         {/* SECTION 1: Imagem */}
         <FormSection title={t.admin.tierlistForm.sectionImage} icon={<ImageIcon className="size-4" />} defaultOpen>
-          <div className="flex flex-col gap-3">
-            <div className="flex gap-4 items-start">
-              {imagePreview && (
-                <div
-                  className="relative w-28 h-28 rounded-xl border border-border overflow-hidden shrink-0"
-                  style={{
-                    backgroundImage:
-                      "conic-gradient(#0000 90deg, #80808022 0 180deg, #0000 0 270deg, #80808022 0)",
-                    backgroundSize: "16px 16px",
-                  }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt="Preview" className="w-full h-full object-contain" src={imagePreview} />
-                  {removingBg && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-sm">
-                      <Loader2 className="size-5 animate-spin text-foreground" />
-                    </div>
-                  )}
-                </div>
-              )}
-              <label className="group flex-1 cursor-pointer rounded-xl border-2 border-dashed border-white/15 bg-[#141416] p-6 transition hover:border-primary/40 hover:bg-primary/[0.06]">
-                <input accept="image/*" className="hidden" onChange={handleImageSelect} type="file" />
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <span className="flex size-10 items-center justify-center rounded-full bg-muted/40 text-muted-foreground transition-colors group-hover:bg-primary/10 group-hover:text-primary">
-                    <Upload className="size-4" />
-                  </span>
-                  <p className="text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-                    {imagePreview
-                      ? t.admin.tierlistForm.clickChangeImage
-                      : t.admin.tierlistForm.clickUploadImage}
-                  </p>
-                  <p className="text-xs text-muted-foreground/60">PNG, JPG, WebP</p>
-                </div>
-              </label>
+          <div className="space-y-3">
+            <div className="flex items-baseline justify-between">
+              <Label>Fotos Principais do Anúncio</Label>
+              <span className="text-[10px] text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
             </div>
+            <div className="flex flex-wrap gap-3">
+              <DndContext
+                sensors={imageSensors}
+                collisionDetection={closestCenter}
+                modifiers={[restrictToParentElement]}
+                onDragEnd={handleImageDragEnd}
+              >
+                <SortableContext items={images} strategy={rectSortingStrategy}>
+                  {images.map((url, idx) => (
+                    <SortableImageThumb
+                      key={url}
+                      url={url}
+                      index={idx}
+                      onRemove={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
 
-            {originalImage && (
-              <div className="flex flex-col gap-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={removingBg}
-                    onClick={toggleBackground}
-                    className="gap-1.5"
-                  >
-                    {removingBg ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : bgRemoved ? (
-                      <RotateCcw className="size-3.5" />
-                    ) : (
-                      <Scissors className="size-3.5" />
-                    )}
-                    {removingBg
-                      ? t.admin.tierlistForm.removingBg
-                      : bgRemoved
-                        ? t.admin.tierlistForm.restoreOriginalBg
-                        : t.admin.tierlistForm.removeBg}
-                  </Button>
-                  {bgRemoved && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      disabled={removingBg}
-                      onClick={tryStrongBackgroundRemoval}
-                      className="gap-1.5"
-                    >
-                      <Wand2 className="size-3.5" />
-                      {t.admin.tierlistForm.removeBgStrong}
-                    </Button>
+              {images.length < MAX_IMAGES && (
+                <label className={cn(
+                  "flex size-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-border hover:text-foreground/80",
+                  uploading && "cursor-wait opacity-50"
+                )}>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleImageAdd}
+                    disabled={uploading}
+                  />
+                  {uploading ? (
+                    <Loader2 className="size-5 animate-spin" />
+                  ) : (
+                    <>
+                      <Plus className="size-5" />
+                      <span className="text-[9px]">Adicionar</span>
+                    </>
                   )}
-                </div>
-                <p className="text-xs text-muted-foreground/70">
-                  {bgRemoved
-                    ? t.admin.tierlistForm.bgRemovedAuto
-                    : t.admin.tierlistForm.bgBestWithSolid}
-                </p>
-                {bgRemoved && (
-                  <p className="text-xs text-muted-foreground/70">{t.admin.tierlistForm.bgStrongHint}</p>
-                )}
-              </div>
-            )}
+                </label>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              O fundo é removido automaticamente ao enviar. Arraste pelo ícone no canto para
+              reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
+              {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada.
+            </p>
           </div>
         </FormSection>
 
@@ -2899,46 +2842,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               ))}
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">{"URLs da Galeria"}</label>
-              <p className="text-[10px] text-muted-foreground/60">{"Apenas arquivos JPEG. Múltiplos arquivos permitidos."}</p>
-              {(existingGalleryUrls.length > 0 || galleryPreviews.length > 0) && (
-                <div className="flex flex-wrap gap-2">
-                  {existingGalleryUrls.map((url, i) => (
-                    <div key={`eg-${i}`} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-border">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`Galeria ${i + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeExistingGalleryImage(i)}
-                        className="absolute top-0.5 right-0.5 size-5 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                  {galleryPreviews.map((preview, i) => (
-                    <div key={`ng-${i}`} className="relative group w-20 h-20 rounded-lg overflow-hidden border border-dashed border-primary/50">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={preview} alt={`Nova ${i + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => removeNewGalleryImage(i)}
-                        className="absolute top-0.5 right-0.5 size-5 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"
-                      >
-                        <X className="size-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/15 bg-[#141416] p-3 transition hover:border-primary/40 hover:bg-primary/[0.06]">
-                <input accept="image/jpeg,.jpg,.jpeg" className="hidden" multiple onChange={handleGallerySelect} type="file" />
-                <Upload className="size-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">{"Adicionar fotos (JPEG)"}</span>
-              </label>
-            </div>
-
           </div>
         </FormSection>
 
@@ -2946,26 +2849,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <FormSection id="section-linked-products" forceOpen={forceOpenIds.has("section-linked-products")} title={t.admin.tierlistForm.sectionLinkedProducts} icon={<Link2 className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              "Vincule este periférico a um produto da Loja e/ou item do Bazar. O vínculo aparece na página do periférico, e as páginas da Loja e do Bazar mostram o item correspondente do outro lado."
+              Vincule este periférico a um produto da Loja. O vínculo aparece na página do periférico, e a página do produto na Loja mostra o periférico correspondente.
             </p>
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">{t.admin.tierlistForm.linkedStoreProduct}</label>
                 <LinkedProductPicker
-                  kind="store"
                   value={linkedStore}
                   onChange={setLinkedStore}
-                  excludeId={linkedBazaar?.id ?? null}
-                  t={t}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-foreground">{t.admin.tierlistForm.linkedBazaarItem}</label>
-                <LinkedProductPicker
-                  kind="bazaar"
-                  value={linkedBazaar}
-                  onChange={setLinkedBazaar}
-                  excludeId={linkedStore?.id ?? null}
+                  excludeId={null}
                   t={t}
                 />
               </div>
@@ -3003,7 +2895,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           <Link href={backHref}>
             <Button variant="outline">{t.admin.tierlistForm.cancel}</Button>
           </Link>
-          <Button disabled={!canWrite || uploading || removingBg || form.formState.isSubmitting} type="submit" className="min-w-28">
+          <Button disabled={!canWrite || uploading || form.formState.isSubmitting} type="submit" className="min-w-28">
             {uploading || form.formState.isSubmitting
               ? t.admin.tierlistForm.saving
               : peripheralId
@@ -3028,7 +2920,6 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <PeripheralDetailView
           data={previewData}
           linkedStore={linkedStore}
-          linkedBazaar={linkedBazaar}
           linkedSwitch={linkedSwitch}
           rankingHref="/admin/ranking"
         />

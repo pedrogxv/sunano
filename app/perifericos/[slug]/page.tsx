@@ -39,7 +39,6 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   ])
 
   const linkedStore = linkedProducts.find((p) => p.type === "store") ?? null
-  const linkedBazaar = linkedProducts.find((p) => p.type === "bazaar") ?? null
   const rankedInCategory = allPeripherals
     .filter((p) => p.category === data.category)
     .map((p) => {
@@ -73,7 +72,6 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
         rankBadge={rankBadge}
         relatedPosts={relatedPosts}
         linkedStore={linkedStore}
-        linkedBazaar={linkedBazaar}
         linkedSwitch={linkedSwitch ? { id: linkedSwitch.id, name: linkedSwitch.name } : null}
         classifications={classifications}
       />

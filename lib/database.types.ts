@@ -116,7 +116,7 @@ export type Database = {
            */
           media_adjustments: Record<string, unknown>
           bio: string | null
-          account_tier: "common" | "vip" | "vip_plus"
+          account_tier: "common" | "vip"
           /** Handle sem "@" — exibido como ícone clicável no perfil público. */
           youtube_handle: string | null
           tiktok_handle: string | null
@@ -394,7 +394,7 @@ export type Database = {
           email: string | null
           display_name: string | null
           avatar_url: string | null
-          role: "admin" | "moderator" | "webmaster"
+          role: "webmaster" | "admin" | "moderator" | "editor" | "vendedor" | "suporte"
           permissions: Record<string, boolean>
           created_at: string
           updated_at: string

@@ -22,8 +22,7 @@ interface InfoBasicaProps {
 
 const TIER_BADGE_STYLES: Record<AccountTier, string> = {
   common: "border-border bg-muted/40 text-muted-foreground",
-  vip: "border-amber-400/40 bg-amber-400/10 text-amber-300",
-  vip_plus: "border-fuchsia-400/40 bg-fuchsia-400/10 text-fuchsia-300",
+  vip: "border-fuchsia-400/40 bg-fuchsia-400/10 text-fuchsia-300",
 }
 
 /**
@@ -49,7 +48,6 @@ export function InfoBasica({
 }: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
   const isVip = tier !== "common"
-  const isVipPlus = tier === "vip_plus"
   const specialTag = getSpecialTag(displaySlug)
 
   const joinedLabel = memberSince
@@ -67,8 +65,8 @@ export function InfoBasica({
             TIER_BADGE_STYLES[tier]
           )}
         >
-          {isVip && <Crown className={cn("size-3", isVipPlus && "vip-plus-badge-crown")} />}
-          <span className={cn(isVipPlus && "vip-plus-badge-text")}>{label}</span>
+          {isVip && <Crown className="size-3 vip-badge-crown" />}
+          <span className={cn(isVip && "vip-badge-text")}>{label}</span>
         </span>
 
         {specialTag && (

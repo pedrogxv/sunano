@@ -44,7 +44,7 @@ export default function TermosPage() {
             <li>Tierlist e comparações de periféricos (mouses, teclados, headsets e outros).</li>
             <li>Reviews, blog e vídeos sobre periféricos.</li>
             <li>Fórum de discussão para a comunidade.</li>
-            <li>Loja e bazar de periféricos novos e usados.</li>
+            <li>Loja de periféricos novos.</li>
             <li>Seção de ofertas e notícias.</li>
           </ul>
         </section>

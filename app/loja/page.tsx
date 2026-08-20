@@ -44,7 +44,7 @@ export default async function LojaPage() {
       page: 1,
       pageSize: PAGE_SIZE,
     }),
-    getStoreFilterOptions(),
+    getStoreFilterOptions("store"),
     listStoreProductsPaginated({
       type: "store",
       featured: true,

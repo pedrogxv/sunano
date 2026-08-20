@@ -1,4 +1,15 @@
-export type AdminRole = "admin" | "moderator" | "webmaster"
+export type AdminRole = "webmaster" | "admin" | "moderator" | "editor" | "vendedor" | "suporte"
+
+// Hierarquia de poder do painel admin, do maior para o menor. É a fonte
+// única de ordenação para seletores/listas de cargo e para qualquer
+// comparação de nível — nada de listas soltas duplicando esta ordem.
+export const ADMIN_ROLE_ORDER: AdminRole[] = ["webmaster", "admin", "moderator", "editor", "vendedor", "suporte"]
+
+/** Posição na hierarquia (0 = mais poderoso). "user" (usuário comum, sem linha em admin_profiles) fica sempre por último. */
+export function getAdminRoleRank(role: AdminRole | "user"): number {
+  if (role === "user") return ADMIN_ROLE_ORDER.length
+  return ADMIN_ROLE_ORDER.indexOf(role)
+}
 
 export type AdminPermissionKey =
   | "dashboard_read"
@@ -56,7 +67,7 @@ export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKe
   { key: "maintenance", label: "Manutenção", readKey: "maintenance_read", writeKey: "maintenance_write" },
   { key: "profile", label: "Perfil", readKey: "profile_read", writeKey: "profile_write" },
   { key: "offers", label: "Ofertas", readKey: "offers_read", writeKey: "offers_write" },
-  { key: "store", label: "Loja / Bazar", readKey: "store_read", writeKey: "store_write" },
+  { key: "store", label: "Loja", readKey: "store_read", writeKey: "store_write" },
   { key: "market", label: "Mercado", readKey: "market_read", writeKey: "market_write" },
   { key: "banners", label: "Banners da Home", readKey: "banners_read", writeKey: "banners_write" },
   { key: "events", label: "Conquistas", readKey: "events_read", writeKey: "events_write" },
@@ -97,26 +108,88 @@ export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [
   "support_write",
 ]
 
-export function createFullPermissions() {
+function full(): Record<AdminPermissionKey, boolean> {
   return ADMIN_PERMISSION_KEYS.reduce<Record<string, boolean>>((accumulator, key) => {
     accumulator[key] = true
     return accumulator
-  }, {})
+  }, {}) as Record<AdminPermissionKey, boolean>
 }
 
-export function createDefaultPermissions() {
+function none(): Record<AdminPermissionKey, boolean> {
   return ADMIN_PERMISSION_KEYS.reduce<Record<string, boolean>>((accumulator, key) => {
-    accumulator[key] = key.endsWith("_read")
+    accumulator[key] = false
     return accumulator
-  }, {})
+  }, {}) as Record<AdminPermissionKey, boolean>
 }
 
-// A grade de permissões da tela de usuários esconde a feature "dashboard": todo
-// perfil administrativo enxerga o dashboard, não é algo que se escolha. Como não
-// há toggle, `dashboard_read` precisa ser garantido na gravação — quem é
-// promovido pela lista parte de um mapa todo-false e nasceria sem acesso.
-export function withBaselinePermissions(permissions: Record<string, boolean>) {
-  return { ...permissions, dashboard_read: true }
+function build(grants: Partial<Record<AdminPermissionKey, boolean>>): Record<AdminPermissionKey, boolean> {
+  return { ...none(), ...grants }
+}
+
+// Matriz fixa de permissões por cargo — fonte única de autorização do painel.
+// Cargo define acesso; não há mais toggle individual por usuário nem exceção
+// pontual. Acesso decrescente conforme a hierarquia (ADMIN_ROLE_ORDER):
+// Web Master e Admin têm acesso total; os demais cargos têm acesso recortado
+// à sua especialidade, e "user" (sem linha em admin_profiles) não tem nenhum.
+export const ROLE_PERMISSIONS: Record<AdminRole, Record<AdminPermissionKey, boolean>> = {
+  webmaster: full(),
+  // Admin tem acesso total como o Web Master; a única diferença (não gerenciar
+  // ou rebaixar um Web Master) é resolvida pela hierarquia de cargos
+  // (getAdminRoleRank/isWebMaster), não por uma permissão desta matriz.
+  admin: full(),
+  // Gerencia e vigia a comunidade: só Fórum e Blog (onde ficam os comentários).
+  moderator: build({
+    dashboard_read: true,
+    profile_read: true,
+    profile_write: true,
+    blog_read: true,
+    blog_write: true,
+    forum_read: true,
+    forum_write: true,
+  }),
+  // Cria/gerencia guias e participa da Tierlist/Periféricos: Tier List, Tiers
+  // e Marcas. Não há módulo de Guias no painel ainda — sinalizado ao usuário.
+  editor: build({
+    dashboard_read: true,
+    profile_read: true,
+    profile_write: true,
+    peripherals_read: true,
+    peripherals_write: true,
+    tiers_read: true,
+    tiers_write: true,
+    brands_read: true,
+    brands_write: true,
+  }),
+  // Gestão da loja: Loja/Bazar (módulo "store"; Bazar foi incorporado à Loja)
+  // e Tickets (módulo "support", os chamados em /admin/suporte).
+  vendedor: build({
+    dashboard_read: true,
+    profile_read: true,
+    profile_write: true,
+    store_read: true,
+    store_write: true,
+    support_read: true,
+    support_write: true,
+  }),
+  // Beta tester da comunidade: silencia/apaga postagens e apazigua conflitos
+  // em Fórum e Blog. O sistema não distingue "moderação leve" de edição
+  // completa dentro do módulo, então aplica-se Leitura e Edição completas
+  // ali — limitação sinalizada ao usuário.
+  suporte: build({
+    dashboard_read: true,
+    profile_read: true,
+    profile_write: true,
+    blog_read: true,
+    blog_write: true,
+    forum_read: true,
+    forum_write: true,
+  }),
+}
+
+/** Permissões efetivas de um cargo. "user" (sem linha em admin_profiles) não tem nenhuma. */
+export function getRolePermissions(role: AdminRole | "user"): Record<AdminPermissionKey, boolean> {
+  if (role === "user") return none()
+  return ROLE_PERMISSIONS[role]
 }
 
 export function normalizePermissions(permissions: Record<string, boolean> | null | undefined) {
@@ -132,16 +205,18 @@ export function isWebMaster(profile: PermissionProfile | null | undefined) {
   return profile?.role === "webmaster"
 }
 
+// Autorização no app (Next.js) deriva 100% do cargo — sem fallback estático e
+// sem ler a coluna `permissions` do perfil aqui. Mas essa coluna NÃO é só um
+// espelho: as RLS policies do Supabase (admin_has_permission() em
+// supabase/security.sql) leem ela direto pra autorizar escritas no banco, então
+// ela precisa ficar sincronizada com esta matriz via migration sempre que a
+// matriz mudar — ver supabase/migrations/20260921000019_role_based_permissions.sql.
 export function hasAdminPermission(
   profile: PermissionProfile | null | undefined,
   permission: AdminPermissionKey
 ) {
   if (!profile) return false
-  if (isWebMaster(profile)) return true
-  const basePermissions = profile.permissions && Object.keys(profile.permissions).length > 0
-    ? profile.permissions
-    : createDefaultPermissions()
-  return Boolean(basePermissions[permission])
+  return Boolean(getRolePermissions(profile.role)[permission])
 }
 
 export function hasAnyPermission(

@@ -65,7 +65,7 @@ const PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/offers":      { title: "Ofertas", description: "Ofertas sincronizadas das mensagens do Telegram." },
   "/admin/users":       { title: "Usuários e permissões", description: "Controle quem pode ler ou editar cada seção." },
   "/admin/settings":    { title: "Configurações", description: "Gerencie seu perfil e preferências do sistema." },
-  "/admin/store":       { title: "Loja & Bazar", description: "Gerencie os produtos da loja e os itens do bazar." },
+  "/admin/store":       { title: "Loja", description: "Gerencie os produtos da loja." },
   "/admin/market":      { title: "Mercado", description: "Modere os anúncios publicados pela comunidade e gerencie banimentos." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
   "/admin/suporte":     { title: "Suporte", description: "Veja e responda aos chamados abertos pelos clientes." },
@@ -108,7 +108,7 @@ function AlphaBadge() {
 
 function getPageDefaults(pathname: string): PageDefaults {
   if (PAGE_DEFAULTS[pathname]) return PAGE_DEFAULTS[pathname]
-  if (pathname.startsWith("/admin/store/new"))   return { title: "Novo produto", description: "Adicione um item à loja ou ao bazar." }
+  if (pathname.startsWith("/admin/store/new"))   return { title: "Novo produto", description: "Adicione um item à loja." }
   if (pathname.startsWith("/admin/store/"))      return { title: "Editar produto", description: "Atualize as informações do produto." }
   if (pathname.startsWith("/admin/blog/new"))    return { title: "Novo artigo", description: "Crie um review ou artigo relacionado a um periférico." }
   if (pathname.startsWith("/admin/blog/"))       return { title: "Editar artigo", description: "Atualize o conteúdo do artigo." }

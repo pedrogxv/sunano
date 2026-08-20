@@ -17,14 +17,24 @@ import {
   ShieldAlert,
   UserCog,
   User as UserIcon,
+  Pencil,
+  Store,
+  Headset,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { AnimatedCounter } from "@/components/animated-counter"
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
-import { ACCOUNT_TIERS, getTierCapabilities, type AccountTier } from "@/lib/account-tier"
-import { ADMIN_FEATURES, createDefaultPermissions, normalizePermissions, type AdminProfile } from "@/lib/admin-permissions"
+import { getTierCapabilities, type AccountTier } from "@/lib/account-tier"
+import {
+  ADMIN_FEATURES,
+  ADMIN_ROLE_ORDER,
+  getRolePermissions,
+  normalizePermissions,
+  type AdminProfile,
+  type AdminRole,
+} from "@/lib/admin-permissions"
 import { getSpecialTag } from "@/lib/special-tag"
 import {
   AlertDialog,
@@ -42,7 +52,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { RoleBadge } from "@/components/people/RoleBadge"
+import { RoleBadge, adminRoleLabel } from "@/components/people/RoleBadge"
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/use-t"
 
@@ -65,11 +75,13 @@ type UsersResponse = {
   users?: AdminUser[]
 }
 
+// Web Master exige a promoção com confirmação dedicada; "user" não se convida, é o estado sem cargo.
+type CreatableRole = Exclude<AdminRole, "webmaster">
+
 type NewUserForm = {
   email: string
   displayName: string
-  role: "admin" | "moderator"
-  permissions: Record<string, boolean>
+  role: CreatableRole
 }
 
 type RoleFilter = "all" | UserRole
@@ -78,37 +90,42 @@ const ROLE_RING: Record<UserRole, string> = {
   webmaster: "ring-2 ring-amber-400/40",
   admin: "ring-2 ring-cyan-400/30",
   moderator: "ring-2 ring-violet-400/30",
+  editor: "ring-2 ring-sky-400/30",
+  vendedor: "ring-2 ring-emerald-400/30",
+  suporte: "ring-2 ring-orange-400/30",
   user: "ring-1 ring-border",
 }
 
-/* ── Toggle switch component ─────────────────────────────── */
-function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+// Metadados visuais dos StatChips de cargo, na mesma ordem de poder de ADMIN_ROLE_ORDER.
+const ROLE_STAT_META: Record<AdminRole, {
+  icon: React.ElementType
+  colorClass: string
+  hoverClass: string
+  labelKey: "statWebMasters" | "statAdmins" | "statModerators" | "statEditors" | "statVendedores" | "statSuportes"
+}> = {
+  webmaster: { icon: Crown, colorClass: "bg-amber-500/15 text-amber-300", hoverClass: "hover:border-amber-400/40 hover:bg-amber-500/5", labelKey: "statWebMasters" },
+  admin: { icon: ShieldCheck, colorClass: "bg-cyan-500/15 text-cyan-300", hoverClass: "hover:border-cyan-400/40 hover:bg-cyan-500/5", labelKey: "statAdmins" },
+  moderator: { icon: UserCog, colorClass: "bg-violet-500/15 text-violet-300", hoverClass: "hover:border-violet-400/40 hover:bg-violet-500/5", labelKey: "statModerators" },
+  editor: { icon: Pencil, colorClass: "bg-sky-500/15 text-sky-300", hoverClass: "hover:border-sky-400/40 hover:bg-sky-500/5", labelKey: "statEditors" },
+  vendedor: { icon: Store, colorClass: "bg-emerald-500/15 text-emerald-300", hoverClass: "hover:border-emerald-400/40 hover:bg-emerald-500/5", labelKey: "statVendedores" },
+  suporte: { icon: Headset, colorClass: "bg-orange-500/15 text-orange-300", hoverClass: "hover:border-orange-400/40 hover:bg-orange-500/5", labelKey: "statSuportes" },
+}
+
+/* ── Read-only permission indicator ──────────────────────── */
+function PermissionDot({ on }: { on: boolean }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => !disabled && onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-        disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer"
-      } ${checked ? "bg-primary" : "bg-muted"}`}
+    <span
+      className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] ${
+        on ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+      }`}
     >
-      <span className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
-    </button>
+      {on ? "✓" : "–"}
+    </span>
   )
 }
 
-/* ── Permission grid for a user ─────────────────────────── */
-function PermissionGrid({
-  permissions,
-  locked,
-  onChange,
-}: {
-  permissions: Record<string, boolean>
-  locked: boolean
-  onChange: (key: string, value: boolean) => void
-}) {
+/* ── Permission grid — somente leitura: permissões vêm 100% do cargo ── */
+function PermissionGrid({ permissions }: { permissions: Record<string, boolean> }) {
   const t = useT()
   const features = ADMIN_FEATURES.filter((f) => f.key !== "dashboard")
   const norm = normalizePermissions(permissions)
@@ -124,19 +141,11 @@ function PermissionGrid({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-muted-foreground">{t.admin.users.read}</span>
-                <Toggle
-                  checked={canRead}
-                  disabled={locked}
-                  onChange={(v) => onChange(feature.readKey, v)}
-                />
+                <PermissionDot on={canRead} />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-muted-foreground">{t.admin.users.edit}</span>
-                <Toggle
-                  checked={canWrite}
-                  disabled={locked}
-                  onChange={(v) => onChange(feature.writeKey, v)}
-                />
+                <PermissionDot on={canWrite} />
               </div>
             </div>
           </div>
@@ -151,7 +160,7 @@ function TierBadge({ tier }: { tier: AccountTier }) {
   if (tier === "common") return null
   const { label } = getTierCapabilities(tier)
   return (
-    <Badge className={tier === "vip_plus" ? "bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30 hover:bg-fuchsia-500/20" : "bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/20"}>
+    <Badge className="bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30 hover:bg-fuchsia-500/20">
       <Crown className="mr-1 size-3" />
       {label}
     </Badge>
@@ -178,9 +187,7 @@ function UserCard({
   savingId,
   deletingId,
   onRoleChange,
-  onPermissionChange,
   onSave,
-  onTierSave,
   onDelete,
 }: {
   user: AdminUser
@@ -189,9 +196,7 @@ function UserCard({
   savingId: string | null
   deletingId: string | null
   onRoleChange: (id: string, role: UserRole) => void
-  onPermissionChange: (id: string, key: string, value: boolean) => void
   onSave: (user: AdminUser) => void
-  onTierSave: (userId: string, tier: AccountTier) => Promise<void>
   onDelete: (user: AdminUser) => Promise<void>
 }) {
   const t = useT()
@@ -199,7 +204,6 @@ function UserCard({
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [newPassword, setNewPassword] = useState("")
   const [savingPassword, setSavingPassword] = useState(false)
-  const [savingTier, setSavingTier] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
   // A trava usa o cargo PERSISTIDO (não o que está sendo editado no select),
@@ -207,8 +211,6 @@ function UserCard({
   const isPersistedWebMaster = user.originalRole === "webmaster"
   const isRegularUser = user.role === "user"
   const locked = isPersistedWebMaster
-  // Permissões só fazem sentido para admin/moderador.
-  const gridLocked = locked || user.role === "user" || user.role === "webmaster"
   // Promoção a WEB Master (a partir de um cargo menor) exige confirmação.
   const isPromotingToWebmaster = user.role === "webmaster" && user.originalRole !== "webmaster"
   const canChangeThisPassword = isCurrentUserWebMaster && (!isPersistedWebMaster || isCurrentUser)
@@ -238,15 +240,6 @@ function UserCard({
       toast.error(t.admin.users.failedToChangePassword, { description: message })
     } finally {
       setSavingPassword(false)
-    }
-  }
-
-  async function handleTierChange(nextTier: AccountTier) {
-    try {
-      setSavingTier(true)
-      await onTierSave(user.id, nextTier)
-    } finally {
-      setSavingTier(false)
     }
   }
 
@@ -422,38 +415,14 @@ function UserCard({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  {ADMIN_ROLE_ORDER.filter((r) => r !== "webmaster" || isCurrentUserWebMaster).map((r) => (
+                    <SelectItem key={r} value={r}>{adminRoleLabel(t, r)}</SelectItem>
+                  ))}
                   <SelectItem value="user">{t.admin.users.user}</SelectItem>
-                  <SelectItem value="moderator">{t.admin.users.moderator}</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  {isCurrentUserWebMaster && <SelectItem value="webmaster">WEB Master</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
           )}
-
-          {/* Tier de conta (VIP) — independente de cargo/permissões. */}
-          <div className="flex items-center gap-3">
-            <label className="min-w-16 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {t.admin.users.tier}
-            </label>
-            <Select
-              value={user.account_tier}
-              onValueChange={(v) => handleTierChange(v as AccountTier)}
-              disabled={savingTier}
-            >
-              <SelectTrigger className="w-44 border-border bg-card/50 h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ACCOUNT_TIERS.map((tierOption) => (
-                  <SelectItem key={tierOption} value={tierOption}>
-                    {getTierCapabilities(tierOption).label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {savingTier && <span className="text-xs text-muted-foreground">{t.admin.users.saving}</span>}
-          </div>
 
           {isRegularUser && (
             <p className="text-xs text-muted-foreground">
@@ -468,9 +437,7 @@ function UserCard({
           )}
 
           <PermissionGrid
-            permissions={normalizePermissions(user.permissions)}
-            locked={gridLocked}
-            onChange={(key, value) => onPermissionChange(user.id, key, value)}
+            permissions={getRolePermissions(user.role)}
           />
         </div>
       )}
@@ -528,9 +495,7 @@ function UserListSection({
   savingId,
   deletingId,
   onRoleChange,
-  onPermissionChange,
   onSave,
-  onTierSave,
   onDelete,
 }: {
   title: string
@@ -542,9 +507,7 @@ function UserListSection({
   savingId: string | null
   deletingId: string | null
   onRoleChange: (id: string, role: UserRole) => void
-  onPermissionChange: (id: string, key: string, value: boolean) => void
   onSave: (user: AdminUser) => void
-  onTierSave: (userId: string, tier: AccountTier) => Promise<void>
   onDelete: (user: AdminUser) => Promise<void>
 }) {
   return (
@@ -572,9 +535,7 @@ function UserListSection({
               savingId={savingId}
               deletingId={deletingId}
               onRoleChange={onRoleChange}
-              onPermissionChange={onPermissionChange}
               onSave={onSave}
-              onTierSave={onTierSave}
               onDelete={onDelete}
             />
           </div>
@@ -645,7 +606,6 @@ export default function AdminUsersPage() {
     email: "",
     displayName: "",
     role: "admin",
-    permissions: normalizePermissions(createDefaultPermissions()),
   })
 
   useEffect(() => { loadUsers() }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -670,9 +630,10 @@ export default function AdminUsersPage() {
 
   const stats = useMemo(() => ({
     total: users.length,
-    webmasters: users.filter((u) => u.role === "webmaster").length,
-    admins: users.filter((u) => u.role === "admin").length,
-    moderators: users.filter((u) => u.role === "moderator").length,
+    byRole: ADMIN_ROLE_ORDER.reduce<Record<AdminRole, number>>((acc, r) => {
+      acc[r] = users.filter((u) => u.role === r).length
+      return acc
+    }, {} as Record<AdminRole, number>),
     regular: users.filter((u) => u.role === "user").length,
   }), [users])
 
@@ -685,9 +646,9 @@ export default function AdminUsersPage() {
     })
   }, [users, search, roleFilter])
 
-  // Staff (WEB Master / Admin / Moderador) vs. Membros (Usuário comum) — mesmo filtro/busca acima.
+  // Staff (qualquer cargo administrativo) vs. Membros (Usuário comum) — mesmo filtro/busca acima.
   const staffUsers = useMemo(
-    () => filteredUsers.filter((u) => u.role === "webmaster" || u.role === "admin" || u.role === "moderator"),
+    () => filteredUsers.filter((u) => u.role !== "user"),
     [filteredUsers]
   )
   const memberUsers = useMemo(
@@ -699,29 +660,6 @@ export default function AdminUsersPage() {
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: nextRole } : u))
   }
 
-  function updateUserPermission(userId: string, key: string, value: boolean) {
-    setUsers((prev) => prev.map((u) =>
-      u.id === userId ? { ...u, permissions: { ...normalizePermissions(u.permissions), [key]: value } } : u
-    ))
-  }
-
-  async function saveTier(userId: string, tier: AccountTier) {
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: userId, account_tier: tier }),
-      })
-      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
-      if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToSave)
-      setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, account_tier: tier } : u))
-      toast.success(t.admin.users.tierUpdated, { description: getTierCapabilities(tier).label })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : t.admin.users.failedToSave
-      toast.error(t.admin.users.failedToSaveUser, { description: message })
-    }
-  }
-
   async function saveUser(user: AdminUser) {
     try {
       setSavingId(user.id)
@@ -729,7 +667,7 @@ export default function AdminUsersPage() {
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: user.id, role: user.role, permissions: normalizePermissions(user.permissions) }),
+        body: JSON.stringify({ id: user.id, role: user.role }),
       })
       const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToSave)
@@ -774,13 +712,12 @@ export default function AdminUsersPage() {
           email: newUser.email.trim(),
           display_name: newUser.displayName.trim() || undefined,
           role: newUser.role,
-          permissions: normalizePermissions(newUser.permissions),
         }),
       })
       const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToCreate)
       const createdEmail = newUser.email.trim()
-      setNewUser({ email: "", displayName: "", role: "admin", permissions: normalizePermissions(createDefaultPermissions()) })
+      setNewUser({ email: "", displayName: "", role: "admin" })
       setCreateSuccess(true)
       setShowCreateForm(false)
       toast.success(t.admin.users.inviteSent, { description: createdEmail })
@@ -816,8 +753,8 @@ export default function AdminUsersPage() {
           </Button>
         </div>
 
-        {/* Stats — visão rápida da composição do time */}
-        <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {/* Stats — visão rápida da composição do time, na ordem de hierarquia */}
+        <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
           <StatChip
             icon={UsersIcon}
             value={stats.total}
@@ -827,33 +764,21 @@ export default function AdminUsersPage() {
             hoverClass="hover:border-primary/40 hover:bg-primary/5"
             onClick={() => setRoleFilter("all")}
           />
-          <StatChip
-            icon={Crown}
-            value={stats.webmasters}
-            label={t.admin.users.statWebMasters}
-            colorClass="bg-amber-500/15 text-amber-300"
-            active={roleFilter === "webmaster"}
-            hoverClass="hover:border-amber-400/40 hover:bg-amber-500/5"
-            onClick={() => setRoleFilter((prev) => (prev === "webmaster" ? "all" : "webmaster"))}
-          />
-          <StatChip
-            icon={ShieldCheck}
-            value={stats.admins}
-            label={t.admin.users.statAdmins}
-            colorClass="bg-cyan-500/15 text-cyan-300"
-            active={roleFilter === "admin"}
-            hoverClass="hover:border-cyan-400/40 hover:bg-cyan-500/5"
-            onClick={() => setRoleFilter((prev) => (prev === "admin" ? "all" : "admin"))}
-          />
-          <StatChip
-            icon={UserCog}
-            value={stats.moderators}
-            label={t.admin.users.statModerators}
-            colorClass="bg-violet-500/15 text-violet-300"
-            active={roleFilter === "moderator"}
-            hoverClass="hover:border-violet-400/40 hover:bg-violet-500/5"
-            onClick={() => setRoleFilter((prev) => (prev === "moderator" ? "all" : "moderator"))}
-          />
+          {ADMIN_ROLE_ORDER.map((r) => {
+            const meta = ROLE_STAT_META[r]
+            return (
+              <StatChip
+                key={r}
+                icon={meta.icon}
+                value={stats.byRole[r]}
+                label={t.admin.users[meta.labelKey]}
+                colorClass={meta.colorClass}
+                active={roleFilter === r}
+                hoverClass={meta.hoverClass}
+                onClick={() => setRoleFilter((prev) => (prev === r ? "all" : r))}
+              />
+            )
+          })}
         </div>
       </div>
 
@@ -897,13 +822,14 @@ export default function AdminUsersPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.admin.users.role}</label>
-                <Select value={newUser.role} onValueChange={(v) => setNewUser((p) => ({ ...p, role: v as "admin" | "moderator" }))}>
+                <Select value={newUser.role} onValueChange={(v) => setNewUser((p) => ({ ...p, role: v as CreatableRole }))}>
                   <SelectTrigger className="border-border bg-background">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="moderator">{t.admin.users.moderator}</SelectItem>
+                    {ADMIN_ROLE_ORDER.filter((r): r is CreatableRole => r !== "webmaster").map((r) => (
+                      <SelectItem key={r} value={r}>{adminRoleLabel(t, r)}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -911,11 +837,7 @@ export default function AdminUsersPage() {
 
             <div>
               <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.admin.users.initialPermissions}</p>
-              <PermissionGrid
-                permissions={newUser.permissions}
-                locked={false}
-                onChange={(key, value) => setNewUser((p) => ({ ...p, permissions: { ...p.permissions, [key]: value } }))}
-              />
+              <PermissionGrid permissions={getRolePermissions(newUser.role)} />
             </div>
 
             <div className="flex justify-end gap-2 border-t border-border pt-4">
@@ -946,9 +868,9 @@ export default function AdminUsersPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t.common.all}</SelectItem>
-            <SelectItem value="webmaster">WEB Master</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="moderator">{t.admin.users.moderator}</SelectItem>
+            {ADMIN_ROLE_ORDER.map((r) => (
+              <SelectItem key={r} value={r}>{adminRoleLabel(t, r)}</SelectItem>
+            ))}
             <SelectItem value="user">{t.admin.users.user}</SelectItem>
           </SelectContent>
         </Select>
@@ -978,9 +900,7 @@ export default function AdminUsersPage() {
             savingId={savingId}
             deletingId={deletingId}
             onRoleChange={updateUserRole}
-            onPermissionChange={updateUserPermission}
             onSave={saveUser}
-            onTierSave={saveTier}
             onDelete={deleteUser}
           />
           <UserListSection
@@ -993,9 +913,7 @@ export default function AdminUsersPage() {
             savingId={savingId}
             deletingId={deletingId}
             onRoleChange={updateUserRole}
-            onPermissionChange={updateUserPermission}
             onSave={saveUser}
-            onTierSave={saveTier}
             onDelete={deleteUser}
           />
         </div>

@@ -301,7 +301,7 @@ export function StoreCategoryNav({
               </span>
               {previewProduct ? (
                 <Link
-                  href={`/${previewProduct.type === "bazaar" ? "bazar" : "loja"}/${previewProduct.slug}`}
+                  href={`/loja/${previewProduct.slug}`}
                   className="flex gap-4 rounded-2xl border border-[#262626] p-4 transition-colors hover:border-foreground/25"
                   style={{ background: `radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, ${getCategoryIcon(previewProduct.category).tint} 12%, #0e0e0e), #0e0e0e)` }}
                 >

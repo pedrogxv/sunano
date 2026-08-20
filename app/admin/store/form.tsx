@@ -101,7 +101,7 @@ interface StoreProduct {
   images: string[]
   category: string | null
   brand: string | null
-  type: "store" | "bazaar"
+  type: "store"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   sale_type: "pre_order" | "ready_stock" | "normal"
@@ -117,7 +117,6 @@ interface StoreProductFormProps {
   initialVariants?: StoreProductVariantInput[]
   initialVariantGroups?: StoreProductVariantGroupInput[]
   initialPeripheralIds?: string[]
-  defaultType?: "store" | "bazaar"
   onSuccess: (product: StoreProduct) => void
   onCancel: () => void
 }
@@ -343,7 +342,6 @@ export function StoreProductForm({
   initialVariants,
   initialVariantGroups,
   initialPeripheralIds,
-  defaultType = "store",
   onSuccess,
   onCancel,
 }: StoreProductFormProps) {
@@ -359,8 +357,7 @@ export function StoreProductForm({
     stock: product?.stock != null ? product.stock.toString() : "1",
     category: product?.category ?? "",
     brand: product?.brand ?? "",
-    type: product?.type ?? defaultType,
-    condition: product?.condition ?? (defaultType === "bazaar" ? "used" : "new"),
+    condition: product?.condition ?? "new",
     condition_notes: product?.condition_notes ?? "",
     sale_type: product?.sale_type ?? "normal",
     is_active: product?.is_active !== false,
@@ -898,7 +895,7 @@ export function StoreProductForm({
         images,
         category: formData.category || null,
         brand: formData.brand.trim() || null,
-        type: formData.type,
+        type: "store" as const,
         condition: formData.condition,
         condition_notes: formData.condition_notes.trim() || null,
         sale_type: formData.sale_type,
@@ -990,7 +987,7 @@ export function StoreProductForm({
     }
   }
 
-  const isBazaar = formData.type === "bazaar"
+  const isNewStoreListing = !product
   const priceCentsPreview = formData.price_brl
     ? Math.round(parseFloat(formData.price_brl.replace(",", ".")) * 100) || 0
     : 0
@@ -1136,90 +1133,65 @@ export function StoreProductForm({
       </div>
 
       {/* Fotos Principais do Anúncio */}
-      <div className="space-y-3">
-        <div className="flex items-baseline justify-between">
-          <Label>Fotos Principais do Anúncio</Label>
-          <span className="text-[10px] text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <DndContext
-            sensors={imageSensors}
-            collisionDetection={closestCenter}
-            modifiers={[restrictToParentElement]}
-            onDragEnd={handleImageDragEnd}
-          >
-            <SortableContext items={images} strategy={rectSortingStrategy}>
-              {images.map((url, idx) => (
-                <SortableImageThumb
-                  key={url}
-                  url={url}
-                  index={idx}
-                  onRemove={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
-                />
-              ))}
-            </SortableContext>
-          </DndContext>
+      {!isNewStoreListing && (
+        <div className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <Label>Fotos Principais do Anúncio</Label>
+            <span className="text-[10px] text-muted-foreground">{images.length}/{MAX_IMAGES}</span>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <DndContext
+              sensors={imageSensors}
+              collisionDetection={closestCenter}
+              modifiers={[restrictToParentElement]}
+              onDragEnd={handleImageDragEnd}
+            >
+              <SortableContext items={images} strategy={rectSortingStrategy}>
+                {images.map((url, idx) => (
+                  <SortableImageThumb
+                    key={url}
+                    url={url}
+                    index={idx}
+                    onRemove={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
 
-          {images.length < MAX_IMAGES && (
-            <label className={cn(
-              "flex size-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-border hover:text-foreground/80",
-              uploading && "cursor-wait opacity-50"
-            )}>
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageAdd}
-                disabled={uploading}
-              />
-              {uploading ? (
-                <Loader2 className="size-5 animate-spin" />
-              ) : (
-                <>
-                  <Plus className="size-5" />
-                  <span className="text-[9px]">Adicionar</span>
-                </>
-              )}
-            </label>
-          )}
+            {images.length < MAX_IMAGES && (
+              <label className={cn(
+                "flex size-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-border hover:text-foreground/80",
+                uploading && "cursor-wait opacity-50"
+              )}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageAdd}
+                  disabled={uploading}
+                />
+                {uploading ? (
+                  <Loader2 className="size-5 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="size-5" />
+                    <span className="text-[9px]">Adicionar</span>
+                  </>
+                )}
+              </label>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            O fundo é removido automaticamente ao enviar. Arraste pelo ícone no canto para
+            reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
+            {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada.
+          </p>
         </div>
-        <p className="text-[10px] text-muted-foreground">
-          O fundo é removido automaticamente ao enviar. Arraste pelo ícone no canto para
-          reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
-          {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada.
-        </p>
-      </div>
+      )}
 
       {/* Type + Condition + Sale type */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="space-y-2">
-          <Label>Tipo</Label>
-          <Select value={formData.type} onValueChange={(v) => set("type", v)}>
-            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="store">🛒 Loja (produto novo)</SelectItem>
-              <SelectItem value="bazaar">♻️ Bazar (produto usado)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Condição</Label>
-          <Select value={formData.condition} onValueChange={(v) => set("condition", v)}>
-            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="new">Novo</SelectItem>
-              <SelectItem value="opened">Embalagem aberta</SelectItem>
-              <SelectItem value="used">Usado</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
+      {isNewStoreListing ? (
+        <div className="space-y-2 md:max-w-xs">
           <Label>Tipo de Venda</Label>
           <Select value={formData.sale_type} onValueChange={(v) => set("sale_type", v)}>
             <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
@@ -1239,22 +1211,54 @@ export function StoreProductForm({
             </p>
           )}
         </div>
-      </div>
-
-      {isBazaar && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 space-y-2">
-          <p className="text-xs font-semibold text-amber-300">
-            ⚠️ Produto do Bazar — O comprador verá claramente que é usado/já aberto
-          </p>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Notas sobre a condição (visível ao comprador)</Label>
-            <Input
-              placeholder="Ex: Mouse usado por 6 meses, sem defeitos, pés originais..."
-              value={formData.condition_notes}
-              onChange={(e) => set("condition_notes", e.target.value)}
-              className="text-sm"
-            />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Condição</Label>
+            <Select value={formData.condition} onValueChange={(v) => set("condition", v)}>
+              <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="new">Novo</SelectItem>
+                <SelectItem value="opened">Embalagem aberta</SelectItem>
+                <SelectItem value="used">Usado</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          <div className="space-y-2">
+            <Label>Tipo de Venda</Label>
+            <Select value={formData.sale_type} onValueChange={(v) => set("sale_type", v)}>
+              <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="pre_order">🚀 Pré-venda</SelectItem>
+                <SelectItem value="ready_stock">📦 Pronta Entrega</SelectItem>
+              </SelectContent>
+            </Select>
+            {formData.sale_type === "pre_order" && (
+              <p className="text-[10px] text-amber-400">
+                Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; ou
+                &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar — o anúncio, reviews
+                e vendas já feitas continuam os mesmos.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!isNewStoreListing && formData.condition !== "new" && (
+        <div className="space-y-1.5">
+          <Label className="text-xs">Notas sobre a condição (visível ao comprador)</Label>
+          <Input
+            placeholder="Ex: Embalagem aberta para teste, sem uso, acompanha todos os acessórios..."
+            value={formData.condition_notes}
+            onChange={(e) => set("condition_notes", e.target.value)}
+            className="text-sm"
+          />
         </div>
       )}
 
@@ -1270,7 +1274,7 @@ export function StoreProductForm({
           ref={descriptionTextareaRef}
           value={formData.description}
           onChange={(e) => set("description", e.target.value)}
-          placeholder="Descreva o produto, características, motivo da venda no bazar..."
+          placeholder="Descreva o produto, características, diferenciais..."
           rows={8}
           className={cn(
             "flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
@@ -1380,9 +1384,6 @@ export function StoreProductForm({
                   <Plus className="size-3.5" />
                 </Button>
               </div>
-              {isBazaar && parseInt(formData.stock) > 1 && (
-                <p className="text-[10px] text-amber-400">Bazar normalmente tem estoque 1</p>
-              )}
             </>
           ) : (
             <p className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-[10px] text-muted-foreground">
@@ -1712,7 +1713,7 @@ export function StoreProductForm({
         <Button type="submit" disabled={loading || uploading}>
           {(loading || uploading) && <Loader2 className="mr-2 size-4 animate-spin" />}
           <Upload className="mr-2 size-4" />
-          {product ? "Salvar alterações" : `Criar ${isBazaar ? "item do Bazar" : "produto"}`}
+          {product ? "Salvar alterações" : "Criar produto"}
         </Button>
       </div>
     </form>

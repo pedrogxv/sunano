@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -341,6 +342,7 @@ export function StoreProductForm({
 }: StoreProductFormProps) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [disableBackgroundRemoval, setDisableBackgroundRemoval] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
@@ -731,6 +733,14 @@ export function StoreProductForm({
    * tratamento simplesmente não foi aplicado.
    */
   async function prepareProductImage(file: File): Promise<File> {
+    if (disableBackgroundRemoval) {
+      if (file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+        throw new Error(
+          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB).`
+        )
+      }
+      return file
+    }
     const prepared = await removeBackground(file)
     if (prepared.size > MAX_IMAGE_FILE_SIZE_BYTES) {
       throw new Error(
@@ -1174,6 +1184,13 @@ export function StoreProductForm({
             reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
             {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada.
           </p>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox
+              checked={disableBackgroundRemoval}
+              onCheckedChange={(checked) => setDisableBackgroundRemoval(checked === true)}
+            />
+            Desativar remoção automática de fundo
+          </label>
         </div>
       )}
 

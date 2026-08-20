@@ -186,18 +186,22 @@ function UserCard({
   isCurrentUserWebMaster,
   savingId,
   deletingId,
+  vipSavingId,
   onRoleChange,
   onSave,
   onDelete,
+  onVipToggle,
 }: {
   user: AdminUser
   isCurrentUser: boolean
   isCurrentUserWebMaster: boolean
   savingId: string | null
   deletingId: string | null
+  vipSavingId: string | null
   onRoleChange: (id: string, role: UserRole) => void
   onSave: (user: AdminUser) => void
   onDelete: (user: AdminUser) => Promise<void>
+  onVipToggle: (user: AdminUser) => Promise<void>
 }) {
   const t = useT()
   const [expanded, setExpanded] = useState(false)
@@ -210,6 +214,11 @@ function UserCard({
   // senão escolher "WEB Master" travaria a própria linha antes de salvar.
   const isPersistedWebMaster = user.originalRole === "webmaster"
   const isRegularUser = user.role === "user"
+  // VIP manual só se aplica a quem NÃO tem cargo persistido — com cargo, o VIP
+  // é automático (garantido pela API) e a UI só exibe o estado, travada.
+  const isPersistedRegular = user.originalRole === "user"
+  const canEditVip = isPersistedRegular && !isCurrentUser
+  const isVip = user.account_tier !== "common"
   const locked = isPersistedWebMaster
   // Promoção a WEB Master (a partir de um cargo menor) exige confirmação.
   const isPromotingToWebmaster = user.role === "webmaster" && user.originalRole !== "webmaster"
@@ -430,6 +439,39 @@ function UserCard({
             </p>
           )}
 
+          {/* VIP — automático por cargo (travado) ou manual para Usuário comum */}
+          {!locked && (
+            <div className="flex items-center gap-3">
+              <label className="min-w-16 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t.admin.users.vipLabel}
+              </label>
+              {canEditVip ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={vipSavingId === user.id}
+                  onClick={() => onVipToggle(user)}
+                  className={cn(
+                    "gap-1.5 text-xs",
+                    isVip && "border-fuchsia-500/40 text-fuchsia-300 hover:border-fuchsia-500/60 hover:bg-fuchsia-500/10"
+                  )}
+                >
+                  <Crown className="size-3.5" />
+                  {vipSavingId === user.id
+                    ? t.admin.users.saving
+                    : isVip
+                      ? t.admin.users.vipManualRevoke
+                      : t.admin.users.vipManualGrant}
+                </Button>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Lock className="size-3.5" />
+                  {t.admin.users.vipAutoByRole}
+                </div>
+              )}
+            </div>
+          )}
+
           {locked && !isCurrentUser && (
             <p className="text-xs text-amber-400/80">
               {t.admin.users.webMasterProtected}
@@ -494,9 +536,11 @@ function UserListSection({
   isCurrentUserWebMaster,
   savingId,
   deletingId,
+  vipSavingId,
   onRoleChange,
   onSave,
   onDelete,
+  onVipToggle,
 }: {
   title: string
   icon: React.ElementType
@@ -506,9 +550,11 @@ function UserListSection({
   isCurrentUserWebMaster: boolean
   savingId: string | null
   deletingId: string | null
+  vipSavingId: string | null
   onRoleChange: (id: string, role: UserRole) => void
   onSave: (user: AdminUser) => void
   onDelete: (user: AdminUser) => Promise<void>
+  onVipToggle: (user: AdminUser) => Promise<void>
 }) {
   return (
     <Card className="border-border bg-card/90">
@@ -534,9 +580,11 @@ function UserListSection({
               isCurrentUserWebMaster={isCurrentUserWebMaster}
               savingId={savingId}
               deletingId={deletingId}
+              vipSavingId={vipSavingId}
               onRoleChange={onRoleChange}
               onSave={onSave}
               onDelete={onDelete}
+              onVipToggle={onVipToggle}
             />
           </div>
         ))}
@@ -592,6 +640,7 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [vipSavingId, setVipSavingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -681,6 +730,27 @@ export default function AdminUsersPage() {
       toast.error(t.admin.users.failedToSaveUser, { description: message })
     } finally {
       setSavingId(null)
+    }
+  }
+
+  async function toggleVip(user: AdminUser) {
+    const nextTier = user.account_tier === "common" ? "vip" : "common"
+    try {
+      setVipSavingId(user.id)
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, account_tier: nextTier }),
+      })
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToUpdateVip)
+      toast.success(t.admin.users.userUpdated, { description: user.display_name || user.email })
+      await loadUsers()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.users.failedToUpdateVip
+      toast.error(t.admin.users.failedToUpdateVip, { description: message })
+    } finally {
+      setVipSavingId(null)
     }
   }
 
@@ -899,9 +969,11 @@ export default function AdminUsersPage() {
             isCurrentUserWebMaster={isCurrentUserWebMaster}
             savingId={savingId}
             deletingId={deletingId}
+            vipSavingId={vipSavingId}
             onRoleChange={updateUserRole}
             onSave={saveUser}
             onDelete={deleteUser}
+            onVipToggle={toggleVip}
           />
           <UserListSection
             title={t.admin.users.membersSectionTitle}
@@ -912,9 +984,11 @@ export default function AdminUsersPage() {
             isCurrentUserWebMaster={isCurrentUserWebMaster}
             savingId={savingId}
             deletingId={deletingId}
+            vipSavingId={vipSavingId}
             onRoleChange={updateUserRole}
             onSave={saveUser}
             onDelete={deleteUser}
+            onVipToggle={toggleVip}
           />
         </div>
       )}

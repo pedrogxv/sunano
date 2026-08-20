@@ -22,6 +22,8 @@ const userUpdateSchema = z.object({
   avatar_url: z.string().trim().url().nullable().optional(),
   // "user" representa um usuário comum (sem linha em admin_profiles).
   role: z.enum(["user", "webmaster", "admin", "moderator", "editor", "vendedor", "suporte"]).optional(),
+  // Só aceito para quem não tem cargo: com cargo, o VIP é automático e não editável.
+  account_tier: z.enum(["common", "vip"]).optional(),
 })
 
 const userCreateSchema = z.object({
@@ -174,14 +176,15 @@ export async function PATCH(request: Request) {
     const isTargetCurrentUser = parsed.data.id === authData.user.id
 
     // O WEB Master e o próprio usuário têm cargo (e, por consequência, permissões) protegidos.
-    if ((isTargetCurrentUser || isTargetWebMaster) && parsed.data.role !== undefined) {
+    if ((isTargetCurrentUser || isTargetWebMaster) && (parsed.data.role !== undefined || parsed.data.account_tier !== undefined)) {
       return NextResponse.json(
         { error: "As permissões do WEB Master não podem ser alteradas." },
         { status: 403 }
       )
     }
 
-    // Rebaixar para usuário comum: remove a linha de admin_profiles.
+    // Rebaixar para usuário comum: remove a linha de admin_profiles. Sem cargo,
+    // o VIP passa a ser controlável manualmente.
     if (parsed.data.role === "user") {
       if (typedTargetProfile) {
         const { error } = await admin.from("admin_profiles").delete().eq("id", parsed.data.id)
@@ -190,13 +193,41 @@ export async function PATCH(request: Request) {
           return NextResponse.json(body, { status })
         }
       }
+      if (parsed.data.account_tier !== undefined) {
+        const { error: tierError } = await admin
+          .from("user_profiles")
+          .update({ account_tier: parsed.data.account_tier })
+          .eq("id", parsed.data.id)
+        if (tierError) {
+          const { body, status } = dbErrorResponse(tierError, "Erro ao atualizar tier do usuário.")
+          return NextResponse.json(body, { status })
+        }
+      }
       return NextResponse.json({ ok: true })
     }
 
     const nextRole = parsed.data.role ?? typedTargetProfile?.role
     if (!nextRole) {
-      // Usuário comum sem mudança de cargo: nada a persistir em admin_profiles.
+      // Usuário comum sem mudança de cargo: VIP é controlável manualmente.
+      if (parsed.data.account_tier !== undefined) {
+        const { error: tierError } = await admin
+          .from("user_profiles")
+          .update({ account_tier: parsed.data.account_tier })
+          .eq("id", parsed.data.id)
+        if (tierError) {
+          const { body, status } = dbErrorResponse(tierError, "Erro ao atualizar tier do usuário.")
+          return NextResponse.json(body, { status })
+        }
+      }
       return NextResponse.json({ ok: true })
+    }
+
+    // Usuário com cargo: VIP é automático, não editável manualmente.
+    if (parsed.data.account_tier !== undefined) {
+      return NextResponse.json(
+        { error: "VIP é automático para usuários com cargo e não pode ser alterado manualmente." },
+        { status: 400 }
+      )
     }
 
     // Todo cargo (exceto Usuário) garante VIP automaticamente — não editável

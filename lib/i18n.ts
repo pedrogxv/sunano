@@ -466,6 +466,11 @@ type Translations = {
       newPasswordPlaceholder: string
       regularUserNote: string
       webMasterProtected: string
+      vipLabel: string
+      vipAutoByRole: string
+      vipManualGrant: string
+      vipManualRevoke: string
+      failedToUpdateVip: string
       makeWebMaster: (name: string) => string
       makeWebMasterDesc: string
       confirmMakeWebMaster: string
@@ -1241,6 +1246,11 @@ export const translations: Record<LocaleCode, Translations> = {
         newPasswordPlaceholder: "Nova senha (mín. 8 caracteres)",
         regularUserNote: "Usuário comum. Defina um cargo administrativo para liberar as permissões do painel.",
         webMasterProtected: "As permissões do WEB Master são protegidas e não podem ser alteradas pelo painel.",
+        vipLabel: "VIP",
+        vipAutoByRole: "Ativo automaticamente por causa do cargo. Não editável manualmente.",
+        vipManualGrant: "Conceder VIP",
+        vipManualRevoke: "Remover VIP",
+        failedToUpdateVip: "Erro ao atualizar VIP",
         makeWebMaster: (name: string) => `Tornar ${name} um WEB Master?`,
         makeWebMasterDesc: "Um WEB Master tem acesso total e irrestrito: pode gerenciar todos os usuários, cargos e permissões. É o nível mais alto e, uma vez concedido, a conta fica protegida — não poderá ser editada nem rebaixada por este painel.",
         confirmMakeWebMaster: "Sim, tornar WEB Master",
@@ -2308,6 +2318,11 @@ export const translations: Record<LocaleCode, Translations> = {
         newPasswordPlaceholder: "New password (min. 8 chars)",
         regularUserNote: "Regular user. Assign an admin role to grant panel permissions.",
         webMasterProtected: "WEB Master permissions are protected and cannot be changed from the panel.",
+        vipLabel: "VIP",
+        vipAutoByRole: "Automatically active because of the role. Not manually editable.",
+        vipManualGrant: "Grant VIP",
+        vipManualRevoke: "Remove VIP",
+        failedToUpdateVip: "Failed to update VIP",
         makeWebMaster: (name: string) => `Make ${name} a WEB Master?`,
         makeWebMasterDesc: "A WEB Master has full, unrestricted access: they can manage all users, roles and permissions. It is the highest level and, once granted, the account becomes protected — it cannot be edited or demoted from this panel.",
         confirmMakeWebMaster: "Yes, make WEB Master",

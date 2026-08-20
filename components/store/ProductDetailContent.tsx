@@ -525,7 +525,7 @@ export function ProductDetailContent({
                 </Button>
               </div>
               <Button
-                className="h-16 w-full gap-2 rounded-xl bg-orange-500 text-[18px] font-bold text-white shadow-lg shadow-orange-500/20 hover:bg-orange-400"
+                className="h-16 w-full gap-2 rounded-xl bg-gradient-to-r from-[#7F77DD] to-[#D4537E] text-[18px] font-bold text-white shadow-lg shadow-[#D4537E]/20 hover:brightness-110"
                 onClick={handleBuyNow}
                 disabled={hasVariants && !activeVariant}
               >

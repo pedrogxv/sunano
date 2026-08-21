@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
+import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 
 type State = { error: string | null }
 
@@ -32,6 +33,17 @@ export async function resetPasswordAction(_: State, formData: FormData): Promise
 
   if (!user) {
     return { error: "Link de redefinição expirado. Solicite um novo." }
+  }
+
+  const identifier = getClientIdentifierFromHeaders(headersList)
+  const rateLimit = await checkRateLimit({
+    action: "reset_password",
+    identifier: `${identifier}:${user.id}`,
+    maxAttempts: 5,
+    windowSeconds: 300,
+  })
+  if (!rateLimit.allowed) {
+    return { error: "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente." }
   }
 
   const { error } = await supabase.auth.updateUser({ password })

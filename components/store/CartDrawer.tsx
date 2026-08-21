@@ -56,7 +56,7 @@ export function CartDrawer() {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 animate-in fade-in-0 duration-200 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 z-[60] animate-in fade-in-0 duration-200 bg-black/60 backdrop-blur-sm"
         onClick={() => setOpen(false)}
       />
 
@@ -65,7 +65,7 @@ export function CartDrawer() {
         role="dialog"
         aria-modal="true"
         aria-label="Carrinho de compras"
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm animate-in slide-in-from-right fade-in-0 duration-300 ease-out flex-col border-l border-border bg-popover shadow-2xl"
+        className="fixed inset-y-0 right-0 z-[61] flex w-full max-w-sm animate-in slide-in-from-right fade-in-0 duration-300 ease-out flex-col border-l border-border bg-popover shadow-2xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
@@ -190,7 +190,7 @@ export function CartDrawer() {
                     <button
                       onClick={() => remove(item.productId, item.variantId, optionIds)}
                       aria-label={`Remover ${item.name}`}
-                      className="flex size-6 items-center justify-center rounded-md text-muted-foreground/60 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                      className="flex size-8 items-center justify-center rounded-md text-muted-foreground/60 opacity-100 transition-all hover:text-red-400 md:opacity-0 md:group-hover:opacity-100"
                     >
                       <Trash2 className="size-3.5" />
                     </button>
@@ -198,7 +198,7 @@ export function CartDrawer() {
                       <button
                         onClick={() => decrement(item.productId, item.variantId, optionIds)}
                         aria-label="Diminuir quantidade"
-                        className="flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
+                        className="flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground md:size-7"
                       >
                         <Minus className="size-3.5" />
                       </button>
@@ -210,7 +210,7 @@ export function CartDrawer() {
                         disabled={item.stock !== null && item.quantity >= item.stock}
                         aria-label="Aumentar quantidade"
                         className={cn(
-                          "flex size-7 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground",
+                          "flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground md:size-7",
                           item.stock !== null && item.quantity >= item.stock && "cursor-not-allowed opacity-40"
                         )}
                       >

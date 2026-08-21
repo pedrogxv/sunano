@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
+import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
-import { togglePeripheralCommentAura, type ReactionKind } from "@/lib/server/repositories/aura-repository"
+import { togglePeripheralCommentAura } from "@/lib/server/repositories/aura-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+
+const auraSchema = z.object({
+  kind: z.enum(["like", "dislike"]),
+})
 
 /** Dá, troca ou remove (toggle) a reação (like/dislike) do usuário atual num comentário de periférico. */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string; commentId: string }> }) {
@@ -14,8 +19,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "Você precisa estar logado para reagir.", code: "unauthenticated" }, { status: 401 })
   }
 
-  const body = await request.json().catch(() => null)
-  const kind: ReactionKind = body?.kind === "dislike" ? "dislike" : "like"
+  const parsed = auraSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Dados inválidos.", code: "invalid_body" },
+      { status: 400 }
+    )
+  }
+  const { kind } = parsed.data
 
   const rateLimit = await checkRateLimit({
     action: "peripheral_aura",

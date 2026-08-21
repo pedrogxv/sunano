@@ -335,12 +335,12 @@ export function StoreCategoryNav({
                     </span>
                     <span className="text-[13.5px] font-semibold leading-[1.35] text-white">{previewProduct.name}</span>
                     <span className="flex items-baseline gap-2">
-                      <span className="font-display text-[19px] font-bold text-emerald-400">
-                        {formatBRL(previewProduct.promo_price_cents ?? previewProduct.price_cents)}
-                      </span>
                       {previewProduct.promo_price_cents != null && previewProduct.promo_price_cents < previewProduct.price_cents && (
                         <span className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(previewProduct.price_cents)}</span>
                       )}
+                      <span className="font-display text-[19px] font-bold text-emerald-400">
+                        {formatBRL(previewProduct.promo_price_cents ?? previewProduct.price_cents)}
+                      </span>
                     </span>
                     {previewProduct.brand && (
                       <span className="text-[11.5px] font-medium leading-[1.45] text-[#8a8a8a]">{previewProduct.brand}</span>

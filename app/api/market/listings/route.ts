@@ -6,7 +6,7 @@ import { getRequestUser } from "@/lib/server/auth/current-user"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import { findOrCreateCustomer, createPixPayment, getPixQrCode } from "@/lib/server/integrations/asaas"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { parsePayerInfo } from "@/lib/server/validation/guest-checkout"
+import { payerInfoSchema } from "@/lib/server/validation/guest-checkout"
 import {
   insertMarketListing,
   listActiveMarketListings,
@@ -35,6 +35,8 @@ const listingSchema = z.object({
       message: "O link precisa ser de um anúncio na OLX (olx.com.br).",
     }),
   images: z.array(z.string().url()).max(8).optional(),
+  guestName: payerInfoSchema.shape.guestName.optional(),
+  guestDocument: payerInfoSchema.shape.guestDocument.optional(),
 })
 
 export async function GET(request: NextRequest) {
@@ -130,16 +132,15 @@ export async function POST(request: NextRequest) {
     const cachedAsaasCustomerId = profile?.asaas_customer_id ?? null
 
     if (!payerName || !payerDocument) {
-      try {
-        const payer = parsePayerInfo(rawBody)
-        payerName = payer.name
-        payerDocument = payer.document
-      } catch (err) {
+      const payer = payerInfoSchema.safeParse(parsed.data)
+      if (!payer.success) {
         return NextResponse.json(
-          { error: err instanceof Error ? err.message : "Informe seu nome e CPF para pagar a taxa." },
+          { error: payer.error.issues[0]?.message ?? "Informe seu nome e CPF para pagar a taxa." },
           { status: 400 }
         )
       }
+      payerName = payer.data.guestName
+      payerDocument = payer.data.guestDocument
 
       await db.from("user_profiles").update({ full_name: payerName, cpf: payerDocument }).eq("id", user.id)
     }

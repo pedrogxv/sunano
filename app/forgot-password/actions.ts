@@ -2,6 +2,7 @@
 
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { headers } from "next/headers"
+import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 
 type State = { error: string | null; success: boolean }
 
@@ -19,6 +20,17 @@ export async function forgotPasswordAction(_: State, formData: FormData): Promis
   const host = headersList.get("host") ?? ""
   const proto = headersList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")
   const origin = headersList.get("origin") || (host ? `${proto}://${host}` : "")
+
+  const identifier = getClientIdentifierFromHeaders(headersList)
+  const rateLimit = await checkRateLimit({
+    action: "forgot_password",
+    identifier: `${identifier}:${email}`,
+    maxAttempts: 5,
+    windowSeconds: 300,
+  })
+  if (!rateLimit.allowed) {
+    return { error: "Muitas tentativas. Aguarde alguns minutos antes de pedir um novo link.", success: false }
+  }
 
   const supabase = await createSupabaseServerClient()
   const { error } = await supabase.auth.resetPasswordForEmail(email, {

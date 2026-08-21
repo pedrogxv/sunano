@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
+import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { peripheralsExist } from "@/lib/server/repositories/peripherals-repository"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
-import { getPeripheralVoteState, togglePeripheralVote, type ReactionKind } from "@/lib/server/repositories/aura-repository"
+import { getPeripheralVoteState, togglePeripheralVote } from "@/lib/server/repositories/aura-repository"
 
 export const dynamic = "force-dynamic"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const voteSchema = z.object({
+  kind: z.enum(["like", "dislike"]),
+})
 
 /** Contagem de votos "BOM OU BAGRE" + reação do usuário atual (se logado) — hidrata a caixa na página do periférico. */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -33,8 +38,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     return NextResponse.json({ error: "Você precisa estar logado para votar." }, { status: 401 })
   }
 
-  const body = await request.json().catch(() => null)
-  const kind: ReactionKind = body?.kind === "dislike" ? "dislike" : "like"
+  const parsed = voteSchema.safeParse(await request.json().catch(() => null))
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Dados inválidos." },
+      { status: 400 }
+    )
+  }
+  const { kind } = parsed.data
 
   const rateLimit = await checkRateLimit({
     action: "peripheral_vote",

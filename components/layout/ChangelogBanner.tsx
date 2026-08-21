@@ -64,7 +64,7 @@ export function ChangelogBanner() {
       className="sticky top-16 z-20 flex items-center gap-3 border-b border-border bg-card px-4 py-2 text-xs sm:text-sm"
     >
       <Sparkles className="size-4 shrink-0 text-primary" />
-      <p className="min-w-0 flex-1 truncate text-foreground">
+      <p className="line-clamp-1 min-w-0 flex-1 text-foreground">
         <span className="font-semibold">Novidade ({latest.version}):</span>{" "}
         <span className="text-muted-foreground">{latest.title}</span>
       </p>

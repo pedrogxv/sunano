@@ -14,6 +14,14 @@ const unbanSchema = z.object({
   userId: z.string().uuid(),
 })
 
+function getClientIp(request: NextRequest): string | null {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    null
+  )
+}
+
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedProfile()
   if (!auth.profile || !hasAdminPermission(auth.profile, "market_write")) {
@@ -28,7 +36,10 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const result = await setMarketBan(parsed.data.userId, parsed.data.reason)
+  const result = await setMarketBan(parsed.data.userId, parsed.data.reason, {
+    actorId: auth.profile.id,
+    ipAddress: getClientIp(request),
+  })
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
@@ -49,7 +60,10 @@ export async function DELETE(request: NextRequest) {
     )
   }
 
-  const result = await setMarketBan(parsed.data.userId, null)
+  const result = await setMarketBan(parsed.data.userId, null, {
+    actorId: auth.profile.id,
+    ipAddress: getClientIp(request),
+  })
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }

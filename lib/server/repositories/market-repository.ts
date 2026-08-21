@@ -443,8 +443,17 @@ export async function rejectMarketListing(id: string, adminId: string, reason: s
   return { ok: true }
 }
 
-/** Banimento restrito ao Mercado — `reason: null` desbane. */
-export async function setMarketBan(userId: string, reason: string | null): Promise<RepositoryResult> {
+/**
+ * Banimento restrito ao Mercado — `reason: null` desbane. Registra em
+ * `audit_log` (mesma tabela de `deleteUserAsAdmin`) porque `market_banned_at`/
+ * `market_ban_reason` são sobrescritas a cada chamada e não preservam quem
+ * baniu ou o histórico de motivos.
+ */
+export async function setMarketBan(
+  userId: string,
+  reason: string | null,
+  options: { actorId: string; ipAddress?: string | null }
+): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
   const { error } = await db
     .from("user_profiles")
@@ -454,5 +463,16 @@ export async function setMarketBan(userId: string, reason: string | null): Promi
   if (error) {
     return { ok: false, error: "Não foi possível atualizar o banimento.", status: 400 }
   }
+
+  await db.from("audit_log").insert({
+    user_id: userId,
+    actor_id: options.actorId,
+    action: reason ? "admin_market_banned" : "admin_market_unbanned",
+    table_name: "user_profiles",
+    record_id: userId,
+    metadata: { reason },
+    ip_address: options.ipAddress ?? null,
+  })
+
   return { ok: true }
 }

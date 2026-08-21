@@ -1,4 +1,5 @@
 import "server-only"
+import * as z from "zod"
 
 /**
  * Validação de CPF com dígitos verificadores (não só formato/tamanho) —
@@ -27,28 +28,23 @@ export function isValidCPF(raw: string): boolean {
   return true
 }
 
-export interface PayerInfo {
-  name: string
-  document: string
-}
-
 /**
- * Valida nome+CPF enviados por um usuário logado que ainda não tem esses
- * dados no perfil (sem e-mail, que já vem da sessão), para o checkout
+ * Nome+CPF enviados por um usuário logado que ainda não tem esses dados no
+ * perfil (sem e-mail, que já vem da sessão), para o checkout/anúncio
  * completar o perfil no mesmo request em vez de mandar a pessoa para uma
- * tela de edição que não existe.
+ * tela de edição que não existe. Compartilhado entre `store/checkout` e
+ * `market/listings` — os dois cobram PIX e exigem o mesmo par de dados.
  */
-export function parsePayerInfo(body: unknown): PayerInfo {
-  const b = (body ?? {}) as Record<string, unknown>
-  const name = typeof b.guestName === "string" ? b.guestName.trim() : ""
-  const document = typeof b.guestDocument === "string" ? b.guestDocument.replace(/\D/g, "") : ""
+export const payerInfoSchema = z.object({
+  guestName: z
+    .string("Informe seu nome completo.")
+    .trim()
+    .min(2, "Informe seu nome completo.")
+    .max(200, "Informe seu nome completo."),
+  guestDocument: z
+    .string("Informe um CPF válido.")
+    .transform((value) => value.replace(/\D/g, ""))
+    .refine(isValidCPF, "Informe um CPF válido."),
+})
 
-  if (name.length < 2 || name.length > 200) {
-    throw new Error("Informe seu nome completo.")
-  }
-  if (!isValidCPF(document)) {
-    throw new Error("Informe um CPF válido.")
-  }
-
-  return { name, document }
-}
+export type PayerInfo = z.infer<typeof payerInfoSchema>

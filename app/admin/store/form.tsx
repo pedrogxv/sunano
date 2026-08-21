@@ -1286,7 +1286,7 @@ export function StoreProductForm({
           ref={descriptionTextareaRef}
           value={formData.description}
           onChange={(e) => set("description", e.target.value)}
-          placeholder="Descreva o produto, características, diferenciais..."
+          placeholder="Descreva o produto, características, diferenciais... (evite repetir specs como Plate, Keycaps, Layout, Carcaça — isso já vai na tabela de Especificação Técnica)"
           rows={8}
           className={cn(
             "flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
@@ -1296,6 +1296,9 @@ export function StoreProductForm({
         />
         <p className="text-[10px] text-muted-foreground/60">
           Suporta **negrito**, *itálico*, __sublinhado__, ==destaque== e [texto](url) para link.
+        </p>
+        <p className="text-[10px] text-amber-600 dark:text-amber-500">
+          Não repita aqui specs como Plate, Keycaps, Layout, Carcaça etc. — esses dados já aparecem na tabela de "Especificação Técnica".
         </p>
       </div>
 

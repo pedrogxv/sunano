@@ -347,10 +347,6 @@ export function ProductDetailContent({
               ))}
             </div>
           )}
-
-          <div className="pt-2">
-            <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
-          </div>
         </div>
 
         {/* Info */}
@@ -387,8 +383,8 @@ export function ProductDetailContent({
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-6 py-5">
             {hasDiscount ? (
               <div className="flex flex-wrap items-baseline gap-3">
-                <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
                 <p className="text-base text-muted-foreground line-through">{formatBRL(baseEffectivePriceCents)}</p>
+                <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
                 <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-400">
                   -{discountPercent}%
                 </span>
@@ -556,6 +552,10 @@ export function ProductDetailContent({
             </p>
           )}
 
+        </div>
+
+        <div className="pt-2 md:col-start-1">
+          <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
         </div>
       </div>
 

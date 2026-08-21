@@ -236,8 +236,8 @@ export function ProductCard(props: ProductCardProps) {
           <div className="mt-auto">
             {hasDiscount ? (
               <div className="flex flex-wrap items-baseline gap-2">
-                <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(effectivePriceCents)}</p>
                 <p className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(basePriceCents)}</p>
+                <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(effectivePriceCents)}</p>
               </div>
             ) : (
               <p className="font-display text-lg font-bold text-white">{formatBRL(basePriceCents)}</p>

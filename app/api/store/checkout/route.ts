@@ -1,10 +1,11 @@
 import { randomUUID } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
+import * as z from "zod"
 import { createPixTransaction } from "@/lib/server/integrations/misticpay"
 import { findOrCreateCustomer, createPixPayment, getPixQrCode } from "@/lib/server/integrations/asaas"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser } from "@/lib/server/auth/current-user"
-import { parsePayerInfo } from "@/lib/server/validation/guest-checkout"
+import { payerInfoSchema } from "@/lib/server/validation/guest-checkout"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
 import {
@@ -22,13 +23,6 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export const runtime = "nodejs"
 export const maxDuration = 20
 
-interface CheckoutItem {
-  productId: string
-  variantId?: string | null
-  variantOptionIds?: string[] | null
-  quantity: number
-}
-
 type DecrementedLine = { productId: string; variantId: string | null; quantity: number }
 
 const MAX_ITEM_LINES = 50
@@ -36,6 +30,25 @@ const MAX_QUANTITY_PER_LINE = 20
 
 const AFFILIATE_REF_COOKIE = "sn_aff_ref"
 const AFFILIATE_REF_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+
+const checkoutItemSchema = z.object({
+  productId: z.string("Quantidade inválida no carrinho.").min(1, "Quantidade inválida no carrinho."),
+  variantId: z.string().min(1, "Quantidade inválida no carrinho.").nullish(),
+  variantOptionIds: z.array(z.string().min(1, "Quantidade inválida no carrinho.")).nullish(),
+  quantity: z
+    .number("Quantidade inválida no carrinho.")
+    .int("Quantidade inválida no carrinho.")
+    .min(1, "Quantidade inválida no carrinho."),
+})
+
+const checkoutBodySchema = z.object({
+  items: z
+    .array(checkoutItemSchema, { error: "Carrinho vazio" })
+    .min(1, "Carrinho vazio")
+    .max(MAX_ITEM_LINES, "Carrinho com itens demais."),
+  guestName: payerInfoSchema.shape.guestName.optional(),
+  guestDocument: payerInfoSchema.shape.guestDocument.optional(),
+})
 
 /**
  * Resolve o afiliado a atribuir a esta venda a partir do cookie gravado pelo
@@ -143,31 +156,15 @@ export async function POST(request: NextRequest) {
     }
     const affiliateAttribution = await resolveAffiliateAttribution(request, user.id)
 
-    const body = (await request.json()) as { items: CheckoutItem[] }
-    const { items } = body
-
-    if (!items || items.length === 0) {
-      return NextResponse.json({ error: "Carrinho vazio" }, { status: 400 })
-    }
-
-    if (items.length > MAX_ITEM_LINES) {
-      return NextResponse.json({ error: "Carrinho com itens demais." }, { status: 400 })
-    }
-
-    if (
-      items.some(
-        (i) =>
-          typeof i.productId !== "string" ||
-          !i.productId ||
-          !Number.isInteger(i.quantity) ||
-          i.quantity < 1 ||
-          (i.variantId != null && (typeof i.variantId !== "string" || !i.variantId)) ||
-          (i.variantOptionIds != null &&
-            (!Array.isArray(i.variantOptionIds) || i.variantOptionIds.some((o) => typeof o !== "string" || !o)))
+    const rawBody = await request.json().catch(() => null)
+    const parsedBody = checkoutBodySchema.safeParse(rawBody)
+    if (!parsedBody.success) {
+      return NextResponse.json(
+        { error: parsedBody.error.issues[0]?.message ?? "Carrinho inválido." },
+        { status: 400 }
       )
-    ) {
-      return NextResponse.json({ error: "Quantidade inválida no carrinho." }, { status: 400 })
     }
+    const { items } = parsedBody.data
 
     // Agrupa por (produto, variante, opções de variante) antes de checar
     // estoque — sem isso, repetir o mesmo par em várias entradas do carrinho
@@ -424,17 +421,16 @@ export async function POST(request: NextRequest) {
     // incompleto) e completa o cadastro aqui — não existe uma tela separada
     // de "editar perfil" para isso hoje.
     if (!payerName || !payerDocument) {
-      try {
-        const payer = parsePayerInfo(body)
-        payerName = payer.name
-        payerDocument = payer.document
-      } catch (err) {
+      const payer = payerInfoSchema.safeParse(parsedBody.data)
+      if (!payer.success) {
         await revertDecrements(db, decrementedLines)
         return NextResponse.json(
-          { error: err instanceof Error ? err.message : "Informe seu nome e CPF para finalizar a compra." },
+          { error: payer.error.issues[0]?.message ?? "Informe seu nome e CPF para finalizar a compra." },
           { status: 400 }
         )
       }
+      payerName = payer.data.guestName
+      payerDocument = payer.data.guestDocument
 
       const { error: profileUpdateError } = await db
         .from("user_profiles")

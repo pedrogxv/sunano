@@ -39,6 +39,14 @@ function defaultNameFromEmail(email: string | null | undefined) {
   return localPart || "Usuário"
 }
 
+function getClientIp(request: Request): string | null {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    null
+  )
+}
+
 export async function GET() {
   try {
     const supabase = await createSupabaseServerClient()
@@ -183,6 +191,8 @@ export async function PATCH(request: Request) {
       )
     }
 
+    const ipAddress = getClientIp(request)
+
     // Rebaixar para usuário comum: remove a linha de admin_profiles. Sem cargo,
     // o VIP passa a ser controlável manualmente.
     if (parsed.data.role === "user") {
@@ -192,6 +202,20 @@ export async function PATCH(request: Request) {
           const { body, status } = dbErrorResponse(error, "Erro ao atualizar usuário.")
           return NextResponse.json(body, { status })
         }
+        await admin.from("audit_log").insert({
+          user_id: parsed.data.id,
+          actor_id: authData.user.id,
+          action: "admin_role_changed",
+          table_name: "admin_profiles",
+          record_id: parsed.data.id,
+          metadata: {
+            previous_role: typedTargetProfile.role,
+            new_role: "user",
+            previous_permissions: typedTargetProfile.permissions,
+            new_permissions: null,
+          },
+          ip_address: ipAddress,
+        })
       }
       if (parsed.data.account_tier !== undefined) {
         const { error: tierError } = await admin
@@ -280,6 +304,23 @@ export async function PATCH(request: Request) {
     if (error) {
       const { body, status } = dbErrorResponse(error, "Erro ao atualizar usuário.")
       return NextResponse.json(body, { status })
+    }
+
+    if (parsed.data.role !== undefined) {
+      await admin.from("audit_log").insert({
+        user_id: parsed.data.id,
+        actor_id: authData.user.id,
+        action: "admin_role_changed",
+        table_name: "admin_profiles",
+        record_id: parsed.data.id,
+        metadata: {
+          previous_role: typedTargetProfile?.role ?? "user",
+          new_role: nextRole,
+          previous_permissions: typedTargetProfile?.permissions ?? null,
+          new_permissions: payload.permissions,
+        },
+        ip_address: ipAddress,
+      })
     }
 
     return NextResponse.json({ ok: true })

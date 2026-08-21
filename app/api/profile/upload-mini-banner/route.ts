@@ -1,28 +1,16 @@
 import { NextResponse } from "next/server"
 
-import { canUseAnimatedMedia } from "@/lib/account-tier"
-import { getAccountTier } from "@/lib/server/repositories/profile-showcase-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { checkRateLimit } from "@/lib/server/rate-limit"
-import { validateImageUpload } from "@/lib/server/upload-validation"
-
-// Funções serverless do Vercel cortam o corpo da requisição em ~4.5MB antes
-// do handler rodar — ver o mesmo comentário em upload-banner/route.ts.
-const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+import { finalizeProfileMediaUpload, requestProfileMediaUpload } from "@/lib/server/profile-media-upload"
 
 /**
- * Upload do fundo do Mini Perfil — o cartão de preview rápido, no conceito de
- * "Profile Background" da Steam.
+ * Upload do fundo do Mini Perfil em duas etapas — ver
+ * `lib/server/profile-media-upload.ts`. POST gera a signed URL, PUT confirma
+ * o que foi de fato enviado pro bucket.
  *
  * Rota própria (e não a de `upload-banner`) porque as duas imagens são
- * independentes: quem troca a capa grande não mexe no fundo do cartão. O nome
- * do arquivo carrega o prefixo `user-mini-banner-` para as duas nunca
- * colidirem no bucket.
- *
- * GIF é aceito apenas de contas VIP — a mesma regra do banner e do avatar — e
- * a validação usa o tipo real detectado por magic bytes, não o MIME declarado
- * pelo cliente.
+ * independentes: quem troca a capa grande não mexe no fundo do cartão.
  */
 export async function POST(request: Request) {
   try {
@@ -33,11 +21,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Sessão expirada. Entre novamente." }, { status: 401 })
     }
 
-    const formData = await request.formData()
-    const fileEntry = formData.get("file")
-
-    if (!(fileEntry instanceof File)) {
-      return NextResponse.json({ error: "Arquivo inválido." }, { status: 400 })
+    const body = (await request.json().catch(() => null)) as
+      | { contentType?: string; sizeBytes?: number }
+      | null
+    if (!body?.contentType || typeof body.sizeBytes !== "number") {
+      return NextResponse.json({ error: "Requisição inválida." }, { status: 400 })
     }
 
     const rateLimit = await checkRateLimit({
@@ -53,43 +41,45 @@ export async function POST(request: Request) {
       )
     }
 
-    const validated = await validateImageUpload(fileEntry, {
-      maxSizeBytes: MAX_FILE_SIZE_BYTES,
-      allowedMimeTypes: ALLOWED_MIME_TYPES,
-    })
-    if (!validated.ok) {
-      return NextResponse.json({ error: validated.error }, { status: 400 })
+    const result = await requestProfileMediaUpload(
+      "mini-banner",
+      authData.user.id,
+      body.contentType,
+      body.sizeBytes
+    )
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
     }
 
-    if (validated.mime === "image/gif") {
-      const tier = await getAccountTier(authData.user.id)
-      if (!canUseAnimatedMedia(tier)) {
-        return NextResponse.json(
-          { error: "Fundo animado (GIF) no Mini Perfil é exclusivo para membros VIP." },
-          { status: 403 }
-        )
-      }
-    }
-
-    const fileName = `user-mini-banner-${authData.user.id}-${Date.now()}.${validated.extension}`
-
-    const { error: uploadError } = await supabase.storage
-      .from("peripherals")
-      .upload(fileName, validated.bytes, { upsert: false, contentType: validated.mime })
-
-    if (uploadError) {
-      console.error("[upload-mini-banner] falha no storage:", uploadError.message)
-      return NextResponse.json(
-        { error: "Não foi possível salvar a imagem. Tente novamente em instantes." },
-        { status: 500 }
-      )
-    }
-
-    const { data: publicData } = supabase.storage.from("peripherals").getPublicUrl(fileName)
-
-    return NextResponse.json({ ok: true, publicUrl: publicData.publicUrl })
+    return NextResponse.json({ ok: true, path: result.path, token: result.token })
   } catch (err) {
     console.error("[upload-mini-banner] falha inesperada:", err)
-    return NextResponse.json({ error: "Erro ao enviar o fundo do Mini Perfil." }, { status: 500 })
+    return NextResponse.json({ error: "Erro ao iniciar envio do fundo do Mini Perfil." }, { status: 500 })
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const supabase = await createSupabaseServerClient()
+    const { data: authData } = await supabase.auth.getUser()
+
+    if (!authData.user) {
+      return NextResponse.json({ error: "Sessão expirada. Entre novamente." }, { status: 401 })
+    }
+
+    const body = (await request.json().catch(() => null)) as { path?: string } | null
+    if (!body?.path) {
+      return NextResponse.json({ error: "Requisição inválida." }, { status: 400 })
+    }
+
+    const result = await finalizeProfileMediaUpload("mini-banner", authData.user.id, body.path)
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+
+    return NextResponse.json({ ok: true, publicUrl: result.publicUrl })
+  } catch (err) {
+    console.error("[upload-mini-banner] falha ao confirmar:", err)
+    return NextResponse.json({ error: "Erro ao confirmar envio do fundo do Mini Perfil." }, { status: 500 })
   }
 }

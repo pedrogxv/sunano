@@ -43,7 +43,7 @@ function LinkedPeripheralCard({ peripheral }: { peripheral: LinkedPeripheralRef 
     >
       <div>
         <p className="flex items-center gap-1.5 text-muted-foreground">
-          Ver periférico no Ranking
+          Ver Detalhes técnicos e review do Periférico
           <ExternalLink className="size-3.5 shrink-0" />
         </p>
         <p className="font-semibold text-foreground">

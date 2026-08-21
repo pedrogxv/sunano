@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
 import { MediaAdjuster } from "./MediaAdjuster"
 import { compressImageFile } from "@/lib/client/compress-image"
+import { supabaseStorageClient } from "@/lib/client/supabase-storage"
 import {
   coerceMediaAdjustments,
   DEFAULT_ADJUST,
@@ -70,13 +71,60 @@ interface ProfileSectionProps {
   onProfileChange: (profile: ProfileData) => void
 }
 
-// Vale para banner e fundo do Mini Perfil: o endpoint aceita até 4MB, mas a
-// meta fica com folga porque o corpo da requisição (multipart) soma alguns
-// bytes de overhead em cima do arquivo.
+// Vale para banner e fundo do Mini Perfil: o upload vai direto pro Storage
+// (não passa mais pelo limite de corpo da Vercel), mas ainda vale comprimir
+// fotos de câmera gigantes pra deixar o envio rápido — GIF nunca entra aqui
+// (ver `compressImageFile`).
 const COVER_IMAGE_COMPRESS_OPTIONS = {
   maxDimension: 2400,
   targetBytes: 3.5 * 1024 * 1024,
   skipBelowBytes: 3 * 1024 * 1024,
+}
+
+/**
+ * Upload em duas etapas: pede uma signed URL ao endpoint (que valida sessão,
+ * tier e tamanho declarado), sobe os bytes direto pro Storage do Supabase —
+ * sem passar pelo corpo de requisição do Route Handler, que a Vercel corta
+ * em ~4.5MB — e então confirma com o endpoint, que baixa o arquivo e valida
+ * de verdade (magic bytes, tamanho, tier de GIF) antes de liberar a URL
+ * pública.
+ */
+async function uploadProfileMedia(
+  endpoint: string,
+  file: File
+): Promise<{ ok: true; publicUrl: string } | { ok: false; error: string }> {
+  const startRes = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ contentType: file.type, sizeBytes: file.size }),
+  })
+  const startData = (await startRes.json().catch(() => null)) as
+    | { error?: string; path?: string; token?: string }
+    | null
+  if (!startRes.ok || !startData?.path || !startData?.token) {
+    return { ok: false, error: startData?.error || "Erro ao iniciar envio." }
+  }
+
+  const { error: uploadError } = await supabaseStorageClient.storage
+    .from("peripherals")
+    .uploadToSignedUrl(startData.path, startData.token, file, { contentType: file.type })
+  if (uploadError) {
+    return { ok: false, error: "Erro ao enviar arquivo." }
+  }
+
+  const finishRes = await fetch(endpoint, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path: startData.path }),
+  })
+  const finishData = (await finishRes.json().catch(() => null)) as
+    | { error?: string; publicUrl?: string }
+    | null
+  if (!finishRes.ok || !finishData?.publicUrl) {
+    return { ok: false, error: finishData?.error || "Erro ao confirmar envio." }
+  }
+
+  return { ok: true, publicUrl: finishData.publicUrl }
 }
 
 /**
@@ -237,13 +285,10 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       const reader = new FileReader()
       reader.onloadend = () => setAvatarPreview(reader.result as string)
       reader.readAsDataURL(file)
-      const body = new FormData()
-      body.append("file", file)
-      const res = await fetch("/api/profile/upload-avatar", { method: "POST", body })
-      const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
-      if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
-      setAvatarUrl(data.publicUrl)
-      setAvatarPreview(data.publicUrl)
+      const result = await uploadProfileMedia("/api/profile/upload-avatar", file)
+      if (!result.ok) throw new Error(result.error)
+      setAvatarUrl(result.publicUrl)
+      setAvatarPreview(result.publicUrl)
       setAdjust("avatar", DEFAULT_ADJUST)
       toast.success("Avatar enviado")
     } catch (err) {
@@ -261,12 +306,9 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     try {
       setUploadingBanner(true)
       const compressed = await compressImageFile(file, COVER_IMAGE_COMPRESS_OPTIONS)
-      const body = new FormData()
-      body.append("file", compressed)
-      const res = await fetch("/api/profile/upload-banner", { method: "POST", body })
-      const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
-      if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
-      setBannerUrl(data.publicUrl)
+      const result = await uploadProfileMedia("/api/profile/upload-banner", compressed)
+      if (!result.ok) throw new Error(result.error)
+      setBannerUrl(result.publicUrl)
       // Enquadramento da imagem anterior não vale para a nova.
       setAdjust("banner", DEFAULT_ADJUST)
       toast.success("Banner enviado")
@@ -284,14 +326,11 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     try {
       setUploadingMiniBanner(true)
       const compressed = await compressImageFile(file, COVER_IMAGE_COMPRESS_OPTIONS)
-      const body = new FormData()
-      body.append("file", compressed)
       // Rota própria: o fundo do Mini Perfil é uma imagem independente da capa
       // grande, e trocar uma não pode sobrescrever a outra no bucket.
-      const res = await fetch("/api/profile/upload-mini-banner", { method: "POST", body })
-      const data = (await res.json().catch(() => null)) as { error?: string; publicUrl?: string } | null
-      if (!res.ok || !data?.publicUrl) throw new Error(data?.error ?? "")
-      setMiniBannerUrl(data.publicUrl)
+      const result = await uploadProfileMedia("/api/profile/upload-mini-banner", compressed)
+      if (!result.ok) throw new Error(result.error)
+      setMiniBannerUrl(result.publicUrl)
       setAdjust("mini_banner", DEFAULT_ADJUST)
       toast.success("Fundo do Mini Perfil enviado")
     } catch (err) {

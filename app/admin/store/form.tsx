@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
 import { removeBackground } from "@/lib/client/remove-background"
+import { compressImageFile } from "@/lib/client/compress-image"
 import { VARIANT_ICONS, VARIANT_ICON_NAMES } from "@/lib/variant-icons"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 
@@ -281,6 +282,11 @@ const MAX_VARIANT_GROUPS = 6
 const MAX_OPTIONS_PER_VARIANT_GROUP = 12
 const MIN_PRICE_CENTS = 600
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
+const IMAGE_COMPRESS_OPTIONS = {
+  maxDimension: 2000,
+  targetBytes: 1.5 * 1024 * 1024,
+  skipBelowBytes: 800 * 1024,
+}
 
 function SortableImageThumb({
   url,
@@ -734,12 +740,13 @@ export function StoreProductForm({
    */
   async function prepareProductImage(file: File): Promise<File> {
     if (disableBackgroundRemoval) {
-      if (file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+      const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
+      if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
         throw new Error(
           `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB).`
         )
       }
-      return file
+      return compressed
     }
     const prepared = await removeBackground(file)
     if (prepared.size > MAX_IMAGE_FILE_SIZE_BYTES) {

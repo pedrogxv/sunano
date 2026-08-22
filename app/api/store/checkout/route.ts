@@ -12,6 +12,7 @@ import {
   getVariantsForCheckout,
   getVariantOptionsForCheckout,
   getRecentProductPurchaseQuantity,
+  getSoldOutCombinations,
   DAILY_PURCHASE_LIMIT_NO_STOCK,
 } from "@/lib/server/repositories/store-repository"
 import { PIX_EXPIRATION_MINUTES } from "@/lib/server/repositories/orders-repository"
@@ -202,14 +203,18 @@ export async function POST(request: NextRequest) {
     const variantIds = [...new Set(mergedItems.map((line) => line.variantId).filter((id): id is string => id != null))]
     const optionIds = [...new Set(mergedItems.flatMap((line) => line.optionIds))]
 
-    const [{ data: products, error: dbError }, variants, variantOptions] = await Promise.all([
+    const [{ data: products, error: dbError }, variants, variantOptions, soldOutCombinations] = await Promise.all([
       db
         .from("store_products")
         .select("id, name, price_cents, stock, images, type, condition, is_active, is_sold_out")
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
       getVariantOptionsForCheckout(optionIds),
+      getSoldOutCombinations(variantIds, optionIds),
     ])
+    const soldOutCombinationKeys = new Set(
+      soldOutCombinations.map((c) => `${c.variant_id}:${c.option_id}`)
+    )
 
     if (dbError) {
       const { body, status } = dbErrorResponse(dbError, "Não foi possível carregar os produtos do carrinho.")
@@ -280,6 +285,20 @@ export async function POST(request: NextRequest) {
       // Uma opção por grupo, no máximo.
       if (new Set(options.map((o) => o.group.id)).size !== options.length) {
         return NextResponse.json({ error: `Selecione só uma opção por grupo de variantes: "${product.name}"` }, { status: 400 })
+      }
+
+      // Combinação Cor × Variante esgotada — checado à parte dos flags
+      // isolados acima, já que uma cor e uma opção podem estar disponíveis
+      // individualmente mas bloqueadas juntas (ver store_product_variant_combinations).
+      if (variant) {
+        for (const option of options) {
+          if (soldOutCombinationKeys.has(`${variant.id}:${option.id}`)) {
+            return NextResponse.json(
+              { error: `Combinação indisponível: ${product.name} — ${variant.label} + ${option.label}` },
+              { status: 400 }
+            )
+          }
+        }
       }
 
       validatedLines.push({

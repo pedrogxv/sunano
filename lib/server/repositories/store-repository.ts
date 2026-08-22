@@ -516,6 +516,8 @@ export type StoreProductDetailResult = {
   specs: StoreProductSpec[]
   variants: StoreProductVariant[]
   variantGroups: StoreProductVariantGroup[]
+  /** Pares (cor, opção) esgotados — só relevante quando o produto tem Cor e Variante juntos. */
+  combinations: StoreProductVariantCombination[]
 }
 
 /**
@@ -549,7 +551,8 @@ export const getStoreProductDetail = cache(async (
   const detail = product as unknown as StoreProductDetail
   let linkedPeripheral: LinkedPeripheralRef | null = null
 
-  const [specsResult, variantsResult, variantGroupsResult, peripheralsResult, peripheralResult] = await Promise.all([
+  const [specsResult, variantsResult, variantGroupsResult, combinationsResult, peripheralsResult, peripheralResult] =
+    await Promise.all([
     db
       .from("store_product_specs")
       .select("id, label, value, position")
@@ -570,6 +573,10 @@ export const getStoreProductDetail = cache(async (
       )
       .eq("product_id", detail.id)
       .order("position", { ascending: true }),
+    db
+      .from("store_product_variant_combinations")
+      .select("variant_id, option_id")
+      .eq("product_id", detail.id),
     db
       .from("store_product_peripherals")
       .select("position, peripherals(id, name, brand_id, brands(name), image_url)")
@@ -599,6 +606,8 @@ export const getStoreProductDetail = cache(async (
     ...g,
     options: [...(g.options ?? [])].sort((a, b) => a.position - b.position),
   }))
+
+  const combinations = (combinationsResult.data ?? []) as unknown as StoreProductVariantCombination[]
 
   type PeripheralJoinRow = {
     peripherals: { id: string; name: string; brand_id: string; brands: { name: string } | { name: string }[] | null; image_url: string | null } | null
@@ -638,7 +647,7 @@ export const getStoreProductDetail = cache(async (
       }
     : null
 
-  return { product: detail, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups }
+  return { product: detail, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups, combinations }
 })
 
 /** Lista variantes de um produto (usado pela API admin ao editar). */
@@ -694,6 +703,107 @@ export async function listProductVariantGroups(productId: string): Promise<Store
     ...g,
     options: [...(g.options ?? [])].sort((a, b) => a.position - b.position),
   }))
+}
+
+export type StoreProductVariantCombination = {
+  variant_id: string
+  option_id: string
+}
+
+/** Lista as combinações Cor × Variante marcadas como esgotadas de um produto, usado pela API admin ao editar. */
+export async function listProductVariantCombinations(productId: string): Promise<StoreProductVariantCombination[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_product_variant_combinations")
+    .select("variant_id, option_id")
+    .eq("product_id", productId)
+
+  if (error) {
+    console.error("[store-repository] listProductVariantCombinations:", error)
+    return []
+  }
+  return (data ?? []) as unknown as StoreProductVariantCombination[]
+}
+
+/**
+ * Substitui as combinações Cor × Variante esgotadas de um produto — usado
+ * pela API admin ao salvar. A existência da linha já significa "esgotado"
+ * (sem coluna booleana), então é delete-then-insert escopado por produto,
+ * igual replaceProductSpecs. Filtra os pares recebidos contra as
+ * variantes/opções que de fato pertencem ao produto, evitando referenciar
+ * ids de outro produto.
+ */
+export async function replaceProductVariantCombinations(
+  productId: string,
+  pairs: Array<{ variant_id: string; option_id: string }>
+): Promise<void> {
+  const db = createSupabaseAdminClient()
+
+  const [{ data: productVariants, error: variantsError }, { data: productGroups, error: groupsError }] =
+    await Promise.all([
+      db.from("store_product_variants").select("id").eq("product_id", productId).eq("is_active", true),
+      db.from("store_product_variant_groups").select("id").eq("product_id", productId),
+    ])
+  if (variantsError || groupsError) {
+    console.error("[store-repository] replaceProductVariantCombinations list:", variantsError ?? groupsError)
+    throw new Error("Erro ao atualizar combinações.")
+  }
+
+  const groupIds = (productGroups ?? []).map((row) => row.id as string)
+  let productOptionIds = new Set<string>()
+  if (groupIds.length > 0) {
+    const { data: productOptions, error: optionsError } = await db
+      .from("store_product_variant_group_options")
+      .select("id")
+      .in("group_id", groupIds)
+    if (optionsError) {
+      console.error("[store-repository] replaceProductVariantCombinations list options:", optionsError)
+      throw new Error("Erro ao atualizar combinações.")
+    }
+    productOptionIds = new Set((productOptions ?? []).map((row) => row.id as string))
+  }
+
+  const productVariantIds = new Set((productVariants ?? []).map((row) => row.id as string))
+  const validPairs = pairs.filter((p) => productVariantIds.has(p.variant_id) && productOptionIds.has(p.option_id))
+
+  const { error: deleteError } = await db
+    .from("store_product_variant_combinations")
+    .delete()
+    .eq("product_id", productId)
+  if (deleteError) {
+    console.error("[store-repository] replaceProductVariantCombinations delete:", deleteError)
+    throw new Error("Erro ao atualizar combinações.")
+  }
+
+  if (validPairs.length === 0) return
+
+  const { error: insertError } = await db.from("store_product_variant_combinations").insert(
+    validPairs.map((p) => ({ product_id: productId, variant_id: p.variant_id, option_id: p.option_id }))
+  )
+  if (insertError) {
+    console.error("[store-repository] replaceProductVariantCombinations insert:", insertError)
+    throw new Error("Erro ao atualizar combinações.")
+  }
+}
+
+/** Busca combinações Cor × Variante esgotadas entre os ids informados, para validar no checkout. */
+export async function getSoldOutCombinations(
+  variantIds: string[],
+  optionIds: string[]
+): Promise<StoreProductVariantCombination[]> {
+  if (variantIds.length === 0 || optionIds.length === 0) return []
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_product_variant_combinations")
+    .select("variant_id, option_id")
+    .in("variant_id", variantIds)
+    .in("option_id", optionIds)
+
+  if (error) {
+    console.error("[store-repository] getSoldOutCombinations:", error)
+    return []
+  }
+  return (data ?? []) as unknown as StoreProductVariantCombination[]
 }
 
 export type CheckoutVariant = {
@@ -759,18 +869,22 @@ const MAX_OPTIONS_PER_VARIANT_GROUP = 12
 
 /**
  * Substitui os grupos de variantes (e suas opções) de um produto — usado
- * pela API admin ao salvar. Delete-then-insert, diferente do upsert-com-diff
- * de replaceProductVariants: nada referencia essas linhas por FK (pedidos
- * guardam só um snapshot denormalizado, não o id da opção), então não há
- * necessidade de preservar ids entre saves — mesmo padrão de replaceProductSpecs.
+ * pela API admin ao salvar. Upsert-com-diff (mesmo padrão de
+ * replaceProductVariants): preserva o id de grupos/opções já existentes,
+ * porque agora store_product_variant_combinations referencia option_id por
+ * FK — um delete-then-insert total apagaria (cascade) a matriz de
+ * combinações a cada save do produto, mesmo sem mudança real. Grupos/opções
+ * removidos são hard-deleted (nada mais referencia essas linhas, e o cascade
+ * cuida de limpar combinações associadas).
  */
 export async function replaceProductVariantGroups(
   productId: string,
   groups: Array<{
+    id?: string
     name: string
-    options: Array<{ label: string; price_cents_override: number | null; is_sold_out: boolean }>
+    options: Array<{ id?: string; label: string; price_cents_override: number | null; is_sold_out: boolean }>
   }>
-): Promise<void> {
+): Promise<Array<{ id: string; position: number; options: Array<{ id: string; position: number }> }>> {
   if (groups.length > MAX_VARIANT_GROUPS_PER_PRODUCT) {
     throw new Error(`Cada produto pode ter no máximo ${MAX_VARIANT_GROUPS_PER_PRODUCT} grupos de variantes.`)
   }
@@ -782,42 +896,123 @@ export async function replaceProductVariantGroups(
 
   const db = createSupabaseAdminClient()
 
-  const { error: deleteError } = await db
+  const { data: existingGroups, error: existingError } = await db
     .from("store_product_variant_groups")
-    .delete()
-    .eq("product_id", productId)
-  if (deleteError) {
-    console.error("[store-repository] replaceProductVariantGroups delete:", deleteError)
-    throw new Error("Erro ao atualizar variantes.")
-  }
-
-  if (groups.length === 0) return
-
-  const { data: insertedGroups, error: insertGroupsError } = await db
-    .from("store_product_variant_groups")
-    .insert(groups.map((g, position) => ({ product_id: productId, name: g.name, position })))
     .select("id")
-  if (insertGroupsError || !insertedGroups) {
-    console.error("[store-repository] replaceProductVariantGroups insert groups:", insertGroupsError)
+    .eq("product_id", productId)
+  if (existingError) {
+    console.error("[store-repository] replaceProductVariantGroups list:", existingError)
     throw new Error("Erro ao atualizar variantes.")
   }
 
-  const optionRows = groups.flatMap((g, gi) =>
-    g.options.map((o, position) => ({
-      group_id: insertedGroups[gi].id as string,
-      label: o.label,
-      price_cents_override: o.price_cents_override,
-      is_sold_out: o.is_sold_out,
-      position,
-    }))
+  const existingGroupIds = new Set((existingGroups ?? []).map((row) => row.id as string))
+  const incomingGroupIds = new Set(
+    groups.filter((g) => g.id && existingGroupIds.has(g.id)).map((g) => g.id as string)
   )
-  if (optionRows.length > 0) {
-    const { error: insertOptionsError } = await db.from("store_product_variant_group_options").insert(optionRows)
-    if (insertOptionsError) {
-      console.error("[store-repository] replaceProductVariantGroups insert options:", insertOptionsError)
+  const groupsToDelete = [...existingGroupIds].filter((id) => !incomingGroupIds.has(id))
+
+  if (groupsToDelete.length > 0) {
+    const { error } = await db.from("store_product_variant_groups").delete().in("id", groupsToDelete)
+    if (error) {
+      console.error("[store-repository] replaceProductVariantGroups delete groups:", error)
       throw new Error("Erro ao atualizar variantes.")
     }
   }
+
+  const result: Array<{ id: string; position: number; options: Array<{ id: string; position: number }> }> = []
+
+  for (let position = 0; position < groups.length; position++) {
+    const g = groups[position]
+    let groupId = g.id && existingGroupIds.has(g.id) ? g.id : null
+
+    if (groupId) {
+      const { error } = await db
+        .from("store_product_variant_groups")
+        .update({ name: g.name, position })
+        .eq("id", groupId)
+      if (error) {
+        console.error("[store-repository] replaceProductVariantGroups update group:", error)
+        throw new Error("Erro ao atualizar variantes.")
+      }
+    } else {
+      const { data: inserted, error } = await db
+        .from("store_product_variant_groups")
+        .insert({ product_id: productId, name: g.name, position })
+        .select("id")
+        .single()
+      if (error || !inserted) {
+        console.error("[store-repository] replaceProductVariantGroups insert group:", error)
+        throw new Error("Erro ao atualizar variantes.")
+      }
+      groupId = inserted.id as string
+    }
+
+    const { data: existingOptions, error: existingOptionsError } = await db
+      .from("store_product_variant_group_options")
+      .select("id")
+      .eq("group_id", groupId)
+    if (existingOptionsError) {
+      console.error("[store-repository] replaceProductVariantGroups list options:", existingOptionsError)
+      throw new Error("Erro ao atualizar variantes.")
+    }
+
+    const existingOptionIds = new Set((existingOptions ?? []).map((row) => row.id as string))
+    const incomingOptionIds = new Set(
+      g.options.filter((o) => o.id && existingOptionIds.has(o.id)).map((o) => o.id as string)
+    )
+    const optionsToDelete = [...existingOptionIds].filter((id) => !incomingOptionIds.has(id))
+    if (optionsToDelete.length > 0) {
+      const { error } = await db.from("store_product_variant_group_options").delete().in("id", optionsToDelete)
+      if (error) {
+        console.error("[store-repository] replaceProductVariantGroups delete options:", error)
+        throw new Error("Erro ao atualizar variantes.")
+      }
+    }
+
+    const groupOptions: Array<{ id: string; position: number }> = []
+    for (let optionPosition = 0; optionPosition < g.options.length; optionPosition++) {
+      const o = g.options[optionPosition]
+      const optionId = o.id && existingOptionIds.has(o.id) ? o.id : null
+
+      if (optionId) {
+        const { error } = await db
+          .from("store_product_variant_group_options")
+          .update({
+            label: o.label,
+            price_cents_override: o.price_cents_override,
+            is_sold_out: o.is_sold_out,
+            position: optionPosition,
+          })
+          .eq("id", optionId)
+        if (error) {
+          console.error("[store-repository] replaceProductVariantGroups update option:", error)
+          throw new Error("Erro ao atualizar variantes.")
+        }
+        groupOptions.push({ id: optionId, position: optionPosition })
+      } else {
+        const { data: inserted, error } = await db
+          .from("store_product_variant_group_options")
+          .insert({
+            group_id: groupId,
+            label: o.label,
+            price_cents_override: o.price_cents_override,
+            is_sold_out: o.is_sold_out,
+            position: optionPosition,
+          })
+          .select("id")
+          .single()
+        if (error || !inserted) {
+          console.error("[store-repository] replaceProductVariantGroups insert option:", error)
+          throw new Error("Erro ao atualizar variantes.")
+        }
+        groupOptions.push({ id: inserted.id as string, position: optionPosition })
+      }
+    }
+
+    result.push({ id: groupId, position, options: groupOptions })
+  }
+
+  return result
 }
 
 /** Limite diário (janela de 24h corridas) de unidades por produto e por usuário,
@@ -947,7 +1142,7 @@ export async function replaceProductVariants(
     is_sold_out: boolean
   }>,
   adminId: string | null = null
-): Promise<void> {
+): Promise<Array<{ id: string; position: number }>> {
   if (variants.length > MAX_VARIANTS_PER_PRODUCT) {
     throw new Error(`Cada produto pode ter no máximo ${MAX_VARIANTS_PER_PRODUCT} variantes.`)
   }
@@ -1116,6 +1311,8 @@ export async function replaceProductVariants(
       )
     )
   }
+
+  return variantsWithId.map((v) => ({ id: v.id, position: v.position }))
 }
 
 /** Substitui todas as specs de um produto (usado pela API admin ao salvar). */

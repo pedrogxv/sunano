@@ -62,6 +62,11 @@ interface StoreProductVariantGroup {
   options: StoreProductVariantGroupOption[]
 }
 
+interface StoreProductVariantCombination {
+  variant_id: string
+  option_id: string
+}
+
 export default function EditProductPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
@@ -69,6 +74,7 @@ export default function EditProductPage() {
   const [specs, setSpecs] = useState<StoreProductSpec[]>([])
   const [variants, setVariants] = useState<StoreProductVariant[]>([])
   const [variantGroups, setVariantGroups] = useState<StoreProductVariantGroup[]>([])
+  const [combinations, setCombinations] = useState<StoreProductVariantCombination[]>([])
   const [peripheralIds, setPeripheralIds] = useState<string[]>([])
   const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([])
   const [loading, setLoading] = useState(true)
@@ -86,6 +92,7 @@ export default function EditProductPage() {
           specs?: StoreProductSpec[]
           variants?: StoreProductVariant[]
           variantGroups?: StoreProductVariantGroup[]
+          combinations?: StoreProductVariantCombination[]
           peripheralIds?: string[]
           error?: string
         }
@@ -94,6 +101,7 @@ export default function EditProductPage() {
         setSpecs(data.specs ?? [])
         setVariants(data.variants ?? [])
         setVariantGroups(data.variantGroups ?? [])
+        setCombinations(data.combinations ?? [])
         setPeripheralIds(data.peripheralIds ?? [])
 
         if (historyRes.ok) {
@@ -157,6 +165,7 @@ export default function EditProductPage() {
           initialSpecs={specs}
           initialVariants={variants}
           initialVariantGroups={variantGroups}
+          initialCombinations={combinations}
           initialPeripheralIds={peripheralIds}
           onSuccess={() => router.push("/admin/store")}
           onCancel={() => router.push("/admin/store")}

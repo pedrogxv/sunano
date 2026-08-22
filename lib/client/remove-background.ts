@@ -8,15 +8,29 @@
  * às extremidades. Isso preserva áreas claras dentro do produto (ex.: keycaps
  * brancos) que não estão ligadas ao fundo. Funciona bem em fotos de produto com
  * fundo sólido/uniforme (branco, cinza, etc.).
+ *
+ * O contorno não é binário: numa foto real os pixels da borda são uma mistura
+ * do produto com o fundo, e é essa mistura que vira alpha parcial (cobertura)
+ * aqui -- ver `applyBackgroundRemoval`. Sem isso o recorte sai em "escada",
+ * porque cada pixel só poderia ser 100% produto ou 100% fundo.
  */
 
 export interface RemoveBackgroundOptions {
   /** Distância de cor (0-441) para considerar um pixel como fundo. */
   tolerance?: number
-  /** Faixa extra de distância usada para suavizar a borda (anti-aliasing). */
+  /** Largura mínima (em distância de cor) da rampa de alpha na borda. */
   feather?: number
   /** Maior dimensão (px) da saída; imagens maiores são reduzidas proporcionalmente. */
   maxDimension?: number
+  /**
+   * Menor dimensão (px) em que a máscara é calculada. Fotos de produto chegam
+   * bem pequenas (as da Loja têm ~300px de lado) e são exibidas bem maiores que
+   * isso -- na página do produto o quadro passa de 500px e o lightbox de 900px.
+   * Nessa escala cada degrau da máscara vira 3-4px na tela. Calcular a máscara
+   * numa grade mais fina (supersampling) deixa o contorno com precisão
+   * sub-pixel no tamanho em que a imagem é realmente vista.
+   */
+  minDimension?: number
   /** Margem uniforme ao redor do produto após o recorte, em % da maior dimensão do conteúdo. */
   paddingRatio?: number
   /**
@@ -35,17 +49,47 @@ export interface RemoveBackgroundOptions {
    * junto com `edgeThreshold`.
    */
   wallDilate?: number
+  /**
+   * Fração de `tolerance` abaixo da qual a cobertura é considerada zero.
+   * Quanto menor, mais fiel é a rampa da borda -- e mais fácil é uma sombra
+   * suave ou ruído de JPEG no fundo sobreviver como um halo fino. 0.5 é o
+   * meio-termo medido entre as duas coisas.
+   */
+  edgeFloorRatio?: number
+  /**
+   * Recalcula a cor dos pixels de borda tirando o fundo que está misturado
+   * neles. Sem isso a borda continua com a cor do fundo original (uma franja
+   * branca em volta de um produto escuro, por exemplo), que aparece como
+   * contorno claro quando a foto é exibida sobre o card escuro.
+   */
+  decontaminate?: boolean
 }
 
 const DEFAULTS: Required<RemoveBackgroundOptions> = {
   tolerance: 42,
   feather: 28,
   maxDimension: 2000,
+  minDimension: 1400,
   paddingRatio: 0.04,
   edgeThreshold: 0,
   edgeMode: "chroma",
   wallDilate: 0,
+  edgeFloorRatio: 0.5,
+  decontaminate: true,
 }
+
+/**
+ * Teto do supersampling. Uma foto de 200px levada a 1400px seria 7x de
+ * ampliação -- muito arquivo para pouca informação nova; 3x já coloca o
+ * contorno abaixo do pixel na tela.
+ */
+const MAX_UPSCALE = 3
+
+/** Largura da faixa de borda (px na resolução de trabalho, escalada pelo supersampling). */
+const EDGE_BAND_PX = 2
+
+/** Raio da janela que estima a cor "pura" do produto ao lado de cada borda. */
+const CONTRAST_RADIUS_PX = 4
 
 /**
  * Preset "remoção mais forte": pra fotos com arte de baixo contraste sobre
@@ -74,18 +118,24 @@ export async function removeBackground(
   file: File,
   options: RemoveBackgroundOptions = {}
 ): Promise<File> {
-  const { tolerance, feather, maxDimension, paddingRatio, edgeThreshold, edgeMode, wallDilate } = {
+  const {
+    tolerance,
+    feather,
+    maxDimension,
+    minDimension,
+    paddingRatio,
+    edgeThreshold,
+    edgeMode,
+    wallDilate,
+    edgeFloorRatio,
+    decontaminate,
+  } = {
     ...DEFAULTS,
     ...options,
   }
 
   const bitmap = await loadBitmap(file)
-  // Reduz imagens muito grandes para manter o PNG (com transparência) leve e
-  // o processamento rápido. Fotos de produto não precisam de mais que isso.
-  const scale = Math.min(
-    1,
-    maxDimension / Math.max(bitmap.width, bitmap.height)
-  )
+  const scale = workingScale(bitmap.width, bitmap.height, maxDimension, minDimension)
   const canvas = document.createElement("canvas")
   canvas.width = Math.max(1, Math.round(bitmap.width * scale))
   canvas.height = Math.max(1, Math.round(bitmap.height * scale))
@@ -96,11 +146,25 @@ export async function removeBackground(
     throw new Error("Canvas 2D não suportado neste navegador.")
   }
 
+  // A qualidade padrão do redimensionamento do canvas é "low"; num recorte a
+  // borda é justamente o que interessa, então vale o custo do filtro melhor.
+  ctx.imageSmoothingEnabled = true
+  ctx.imageSmoothingQuality = "high"
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close?.()
 
   const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
-  applyBackgroundRemoval(image, tolerance, feather, edgeThreshold, edgeMode, wallDilate)
+  applyBackgroundRemoval(image, {
+    tolerance,
+    feather,
+    edgeThreshold,
+    edgeMode,
+    wallDilate,
+    edgeFloorRatio,
+    decontaminate,
+    bandPx: Math.max(EDGE_BAND_PX, Math.round(EDGE_BAND_PX * scale)),
+    contrastRadius: Math.max(CONTRAST_RADIUS_PX, Math.round(CONTRAST_RADIUS_PX * scale)),
+  })
   ctx.putImageData(image, 0, 0)
 
   // Recorta a área vazia ao redor do produto. Sem isso, o quanto o produto
@@ -112,6 +176,23 @@ export async function removeBackground(
   const blob = await canvasToBlob(finalCanvas)
   const name = `${stripExtension(file.name)}.png`
   return new File([blob], name, { type: "image/png" })
+}
+
+/**
+ * Escala em que a máscara é calculada: reduz o que passa de `maxDimension`
+ * (PNG com transparência é pesado) e amplia o que não chega em `minDimension`,
+ * até o teto de `MAX_UPSCALE`.
+ */
+function workingScale(
+  width: number,
+  height: number,
+  maxDimension: number,
+  minDimension: number
+): number {
+  const longest = Math.max(width, height)
+  const scale = Math.min(1, maxDimension / longest)
+  if (minDimension <= 0) return scale
+  return Math.max(scale, Math.min(minDimension / longest, MAX_UPSCALE))
 }
 
 /**
@@ -257,17 +338,44 @@ function dilateMask(mask: Uint8Array, width: number, height: number, radius: num
   return current
 }
 
-function applyBackgroundRemoval(
-  image: ImageData,
-  tolerance: number,
-  feather: number,
-  edgeThreshold: number,
-  edgeMode: "luma" | "chroma",
+interface RemovalParams {
+  tolerance: number
+  feather: number
+  edgeThreshold: number
+  edgeMode: "luma" | "chroma"
   wallDilate: number
-) {
+  edgeFloorRatio: number
+  decontaminate: boolean
+  bandPx: number
+  contrastRadius: number
+}
+
+function applyBackgroundRemoval(image: ImageData, params: RemovalParams) {
+  const {
+    tolerance,
+    feather,
+    edgeThreshold,
+    edgeMode,
+    wallDilate,
+    edgeFloorRatio,
+    decontaminate,
+    bandPx,
+    contrastRadius,
+  } = params
   const { data, width, height } = image
   const bg = estimateBackgroundColor(data, width, height)
   const total = width * height
+
+  // Distância de cor até o fundo, por pixel. É o sinal que decide tanto o
+  // recorte quanto a cobertura da borda, então vale calcular uma vez só.
+  const dist = new Float32Array(total)
+  for (let idx = 0; idx < total; idx++) {
+    const o = idx << 2
+    const dr = data[o] - bg.r
+    const dg = data[o + 1] - bg.g
+    const db = data[o + 2] - bg.b
+    dist[idx] = Math.sqrt(dr * dr + dg * dg + db * db)
+  }
 
   // "Parede" opcional: pixels com gradiente local acima do threshold nunca
   // são admitidos como fundo, mesmo dentro do tolerance de cor. Desligado
@@ -284,17 +392,9 @@ function applyBackgroundRemoval(
   const mask = new Uint8Array(total)
   const stack: number[] = []
 
-  const distance = (idx: number): number => {
-    const o = idx << 2
-    const dr = data[o] - bg.r
-    const dg = data[o + 1] - bg.g
-    const db = data[o + 2] - bg.b
-    return Math.sqrt(dr * dr + dg * dg + db * db)
-  }
-
   const seed = (x: number, y: number) => {
     const idx = y * width + x
-    if (!mask[idx] && distance(idx) <= tolerance && !(wall && wall[idx])) {
+    if (!mask[idx] && dist[idx] <= tolerance && !(wall && wall[idx])) {
       mask[idx] = 1
       stack.push(idx)
     }
@@ -321,33 +421,119 @@ function applyBackgroundRemoval(
     if (y < height - 1) seed(x, y + 1)
   }
 
-  const touchesBackground = (idx: number, x: number, y: number): boolean =>
-    (x > 0 && mask[idx - 1] === 1) ||
-    (x < width - 1 && mask[idx + 1] === 1) ||
-    (y > 0 && mask[idx - width] === 1) ||
-    (y < height - 1 && mask[idx + width] === 1)
+  // Faixa de borda: os pixels dos dois lados do contorno do flood-fill. Numa
+  // foto real esses pixels são uma mistura do produto com o fundo, e é neles
+  // (e só neles) que o alpha é parcial. Pegar os dois lados importa: se só o
+  // lado de dentro entrasse, todo pixel com menos de ~50% de produto cairia
+  // no fundo e o recorte comeria meio pixel do contorno inteiro.
+  const inverse = new Uint8Array(total)
+  for (let i = 0; i < total; i++) inverse[i] = mask[i] ? 0 : 1
+  const grownMask = dilateMask(mask, width, height, bandPx)
+  const grownInverse = dilateMask(inverse, width, height, bandPx)
+  const band = new Uint8Array(total)
+  for (let i = 0; i < total; i++) {
+    // A parede de detalhe fino nunca entra na faixa: ela existe justamente
+    // para segurar traços que o tolerance sozinho apagaria.
+    if (wall && wall[i]) continue
+    if ((grownMask[i] && !mask[i]) || (mask[i] && grownInverse[i])) band[i] = 1
+  }
 
-  // Aplica a transparência. Pixels de fundo ficam 100% transparentes; pixels
-  // de borda próximos do fundo recebem alpha parcial para suavizar o recorte.
+  // Distância de cor do produto "puro" perto de cada borda. É o denominador
+  // da cobertura: um pixel de borda vale `dist / distDoProduto`, porque a
+  // mistura com o fundo é proporcional ao contraste local. Um valor fixo aqui
+  // (o `feather` sozinho) assume que todo produto é quase da cor do fundo --
+  // num produto escuro sobre branco a rampa acaba em 2 pixels e o que sobra é
+  // uma franja branca dura em vez de uma borda.
+  const pureDist = new Float32Array(total)
+  const pureHits = new Float32Array(total)
+  for (let i = 0; i < total; i++) {
+    if (mask[i] || band[i]) continue
+    pureDist[i] = dist[i]
+    pureHits[i] = 1
+  }
+  const localSum = boxBlur2D(pureDist, width, height, contrastRadius)
+  const localCount = boxBlur2D(pureHits, width, height, contrastRadius)
+
+  const floor = tolerance * edgeFloorRatio
+  const minSpan = tolerance + feather - floor
+
   for (let idx = 0; idx < total; idx++) {
     const o = idx << 2
-    if (mask[idx]) {
-      data[o + 3] = 0
+
+    if (!band[idx]) {
+      if (mask[idx]) data[o + 3] = 0
       continue
     }
-    if (feather <= 0) continue
 
-    const x = idx % width
-    const y = (idx / width) | 0
-    if (!touchesBackground(idx, x, y)) continue
+    const localPure = localCount[idx] > 1e-4 ? localSum[idx] / localCount[idx] : 0
+    const span = Math.max(localPure - floor, minSpan)
+    const coverage = Math.min(1, Math.max(0, (dist[idx] - floor) / span))
+    const alpha = data[o + 3] * coverage
+    data[o + 3] = Math.round(alpha)
 
-    const d = distance(idx)
-    if (d <= tolerance + feather) {
-      const factor = (d - tolerance) / feather // 0 = fundo, 1 = produto
-      const clamped = factor < 0 ? 0 : factor > 1 ? 1 : factor
-      data[o + 3] = Math.round(data[o + 3] * clamped)
+    if (!decontaminate) continue
+
+    // O pixel observado é `produto * a + fundo * (1 - a)`; invertendo a conta
+    // recupera a cor do produto sozinha. Abaixo de a=0.15 a divisão amplifica
+    // ruído, então o efeito entra em rampa e some antes disso.
+    const a = alpha / 255
+    if (a <= 0.15 || a >= 0.98) continue
+    const weight = Math.min(1, (a - 0.15) / 0.35)
+    data[o] = unmix(data[o], bg.r, a, weight)
+    data[o + 1] = unmix(data[o + 1], bg.g, a, weight)
+    data[o + 2] = unmix(data[o + 2], bg.b, a, weight)
+  }
+}
+
+/** Remove do canal a parcela que veio do fundo, ponderada por `weight`. */
+function unmix(observed: number, background: number, alpha: number, weight: number): number {
+  const pure = (observed - (1 - alpha) * background) / alpha
+  const clamped = pure < 0 ? 0 : pure > 255 ? 255 : pure
+  return Math.round(observed * (1 - weight) + clamped * weight)
+}
+
+/** Desfoque em caixa (box blur) separável, com borda replicada nas extremidades. */
+function boxBlurPass(
+  src: Float32Array,
+  width: number,
+  height: number,
+  radius: number,
+  horizontal: boolean
+): Float32Array {
+  const dst = new Float32Array(src.length)
+  const size = radius * 2 + 1
+  const clamp = (i: number, size2: number) => (i < 0 ? 0 : i >= size2 ? size2 - 1 : i)
+
+  if (horizontal) {
+    for (let y = 0; y < height; y++) {
+      const row = y * width
+      let sum = 0
+      for (let k = -radius; k <= radius; k++) sum += src[row + clamp(k, width)]
+      for (let x = 0; x < width; x++) {
+        dst[row + x] = sum / size
+        const addX = row + clamp(x + radius + 1, width)
+        const removeX = row + clamp(x - radius, width)
+        sum += src[addX] - src[removeX]
+      }
+    }
+  } else {
+    for (let x = 0; x < width; x++) {
+      let sum = 0
+      for (let k = -radius; k <= radius; k++) sum += src[clamp(k, height) * width + x]
+      for (let y = 0; y < height; y++) {
+        dst[y * width + x] = sum / size
+        const addY = clamp(y + radius + 1, height) * width + x
+        const removeY = clamp(y - radius, height) * width + x
+        sum += src[addY] - src[removeY]
+      }
     }
   }
+  return dst
+}
+
+/** Média de janela quadrada, em duas passagens separáveis. */
+function boxBlur2D(src: Float32Array, width: number, height: number, radius: number): Float32Array {
+  return boxBlurPass(boxBlurPass(src, width, height, radius, true), width, height, radius, false)
 }
 
 /**

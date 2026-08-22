@@ -958,6 +958,30 @@ export type Database = {
           created_at?: string
         }
       }
+      store_product_variant_combinations: {
+        Relationships: []
+        Row: {
+          id: string
+          product_id: string
+          variant_id: string
+          option_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          variant_id: string
+          option_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          variant_id?: string
+          option_id?: string
+          created_at?: string
+        }
+      }
       store_product_variant_images: {
         Relationships: []
         Row: {

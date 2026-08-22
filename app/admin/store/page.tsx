@@ -470,7 +470,7 @@ export default function AdminStorePage() {
                             ? "bg-amber-500/15 text-amber-300"
                             : "bg-muted text-foreground/80"
                       )}>
-                        {p.stock === null ? "Sem controle" : p.stock === 0 ? "Esgotado" : `${p.stock} un.`}
+                        {p.stock === null ? "Disponível" : p.stock === 0 ? "Esgotado" : `${p.stock} un.`}
                       </span>
                     </td>
                     <td className="px-4 py-3">

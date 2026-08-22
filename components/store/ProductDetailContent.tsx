@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -73,6 +73,7 @@ export function ProductDetailContent({
   specs,
   variants,
   variantGroups,
+  combinations,
   filterOptions,
   previewPool,
 }: ProductDetailContentProps) {
@@ -89,12 +90,46 @@ export function ProductDetailContent({
   )
   const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) ?? null : null
 
-  const isOptionSoldOut = (o: { is_sold_out: boolean }) => o.is_sold_out
+  // Combinações Cor × Variante esgotadas — só relevante quando o produto tem
+  // Cor E Variante juntos. Cada grupo de variante forma sua própria matriz
+  // com a cor, então esse mesmo set serve pra qualquer grupo.
+  const comboSet = useMemo(
+    () => new Set(combinations.map((c) => `${c.variant_id}|${c.option_id}`)),
+    [combinations]
+  )
+  const isOptionSoldOut = (o: { id: string; is_sold_out: boolean }, variant: { id: string } | null) =>
+    o.is_sold_out || (variant != null && comboSet.has(`${variant.id}|${o.id}`))
   const [selectedOptionByGroup, setSelectedOptionByGroup] = useState<Record<string, string | null>>(() =>
     Object.fromEntries(
-      variantGroups.map((g) => [g.id, g.options.find((o) => !isOptionSoldOut(o))?.id ?? g.options[0]?.id ?? null])
+      variantGroups.map((g) => [
+        g.id,
+        g.options.find((o) => !isOptionSoldOut(o, activeVariant))?.id ?? g.options[0]?.id ?? null,
+      ])
     )
   )
+
+  // Quando a cor selecionada muda, a opção já escolhida em cada grupo pode
+  // virar uma combinação esgotada (ex: trocou pra "Preto" e a opção
+  // "Fechada" só existe esgotada nessa cor) — troca pra primeira disponível
+  // nessa cor, mesmo fallback usado na seleção inicial acima.
+  useEffect(() => {
+    setSelectedOptionByGroup((prev) => {
+      let changed = false
+      const next = { ...prev }
+      for (const g of variantGroups) {
+        const current = prev[g.id]
+        const currentOption = g.options.find((o) => o.id === current)
+        if (currentOption && !isOptionSoldOut(currentOption, activeVariant)) continue
+        const fallback = g.options.find((o) => !isOptionSoldOut(o, activeVariant))?.id ?? g.options[0]?.id ?? null
+        if (fallback !== current) {
+          next[g.id] = fallback
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVariantId])
 
   function handleSelectGroupOption(group: StoreProductVariantGroup, optionId: string) {
     setSelectedOptionByGroup((prev) => ({ ...prev, [group.id]: optionId }))
@@ -452,7 +487,7 @@ export function ProductDetailContent({
               <div className="flex flex-wrap gap-2.5">
                 {group.options.map((option) => {
                   const isActive = option.id === selectedOptionByGroup[group.id]
-                  const optionSoldOut = isOptionSoldOut(option)
+                  const optionSoldOut = isOptionSoldOut(option, activeVariant)
                   return (
                     <button
                       key={option.id}

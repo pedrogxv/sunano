@@ -57,6 +57,9 @@ interface StoreProductVariantInput {
 
 interface StoreProductVariantRow {
   id?: string
+  /** Chave estável no client (== `id` quando já persistida, gerada localmente quando nova)
+   *  usada só para amarrar a matriz de combinações Cor × Variante antes do id real existir. */
+  clientKey: string
   label: string
   color: string | null
   icon: string | null
@@ -80,6 +83,8 @@ interface StoreProductVariantGroupInput {
 
 interface VariantGroupOptionRow {
   id?: string
+  /** Mesma ideia de `StoreProductVariantRow.clientKey`. */
+  clientKey: string
   label: string
   price_brl: string
   is_sold_out: boolean
@@ -117,6 +122,7 @@ interface StoreProductFormProps {
   initialSpecs?: StoreProductSpec[]
   initialVariants?: StoreProductVariantInput[]
   initialVariantGroups?: StoreProductVariantGroupInput[]
+  initialCombinations?: Array<{ variant_id: string; option_id: string }>
   initialPeripheralIds?: string[]
   onSuccess: (product: StoreProduct) => void
   onCancel: () => void
@@ -279,6 +285,15 @@ const MAX_IMAGES = 8
 const MAX_VARIANT_IMAGES = 3
 const MAX_VARIANTS = 12
 const MAX_VARIANT_GROUPS = 6
+const VARIANT_COLOR_PRESETS: { label: string; color: string }[] = [
+  { label: "Preto", color: "#000000" },
+  { label: "Branco", color: "#ffffff" },
+  { label: "Prata", color: "#c0c0c0" },
+  { label: "Roxo", color: "#8b5cf6" },
+  { label: "Verde", color: "#22c55e" },
+  { label: "Vermelho", color: "#ef4444" },
+  { label: "Azul", color: "#3b82f6" },
+]
 const MAX_OPTIONS_PER_VARIANT_GROUP = 12
 const MIN_PRICE_CENTS = 600
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
@@ -342,6 +357,7 @@ export function StoreProductForm({
   initialSpecs,
   initialVariants,
   initialVariantGroups,
+  initialCombinations,
   initialPeripheralIds,
   onSuccess,
   onCancel,
@@ -376,6 +392,7 @@ export function StoreProductForm({
   const [variants, setVariants] = useState<StoreProductVariantRow[]>(
     (initialVariants ?? []).map((v) => ({
       id: v.id,
+      clientKey: v.id ?? crypto.randomUUID(),
       label: v.label,
       color: v.color ?? null,
       icon: v.icon ?? null,
@@ -391,12 +408,28 @@ export function StoreProductForm({
       name: g.name,
       options: g.options.map((o) => ({
         id: o.id,
+        clientKey: o.id ?? crypto.randomUUID(),
         label: o.label,
         price_brl: o.price_cents_override != null ? (o.price_cents_override / 100).toFixed(2) : "",
         is_sold_out: o.is_sold_out,
       })),
     }))
   )
+  // Chave `${variantClientKey}|${optionClientKey}` -> esgotado. Só usada quando
+  // o produto tem Cor E Variante juntos (ver seção "Estoque por combinação" no
+  // render). Pra linhas já existentes clientKey == id, então os pares de
+  // initialCombinations (que vêm por id do banco) já batem direto.
+  const [combinations, setCombinations] = useState<Set<string>>(() => {
+    const variantIds = new Set((initialVariants ?? []).map((v) => v.id).filter((id): id is string => Boolean(id)))
+    const optionIds = new Set(
+      (initialVariantGroups ?? []).flatMap((g) => g.options.map((o) => o.id).filter((id): id is string => Boolean(id)))
+    )
+    return new Set(
+      (initialCombinations ?? [])
+        .filter((c) => variantIds.has(c.variant_id) && optionIds.has(c.option_id))
+        .map((c) => `${c.variant_id}|${c.option_id}`)
+    )
+  })
   const [peripheralIds, setPeripheralIds] = useState<string[]>(initialPeripheralIds ?? [])
   const [peripheralOptions, setPeripheralOptions] = useState<PeripheralOption[]>([])
   const [autofilling, setAutofilling] = useState(false)
@@ -505,6 +538,7 @@ export function StoreProductForm({
       return [
         ...prev,
         {
+          clientKey: crypto.randomUUID(),
           label: "",
           color: null,
           icon: null,
@@ -516,8 +550,50 @@ export function StoreProductForm({
     })
   }
 
+  function addVariantColorPreset(label: string, color: string) {
+    setVariants((prev) => {
+      const isDuplicate = prev.some(
+        (v) => v.label.trim().toLowerCase() === label.toLowerCase() || v.color === color
+      )
+      if (isDuplicate) {
+        toast.error("Cor já cadastrada", {
+          description: `Este produto já tem uma variante "${label}" ou com essa cor.`,
+        })
+        return prev
+      }
+      if (prev.length >= MAX_VARIANTS) {
+        toast.error("Limite de variantes atingido", {
+          description: `Cada produto pode ter no máximo ${MAX_VARIANTS} variantes.`,
+        })
+        return prev
+      }
+      return [
+        ...prev,
+        {
+          clientKey: crypto.randomUUID(),
+          label,
+          color,
+          icon: null,
+          image_url: null,
+          images: [],
+          is_sold_out: false,
+        },
+      ]
+    })
+  }
+
   function removeVariantRow(index: number) {
+    const removedKey = variants[index]?.clientKey
     setVariants((prev) => prev.filter((_, i) => i !== index))
+    if (removedKey) {
+      setCombinations((prev) => {
+        const next = new Set(prev)
+        for (const key of next) {
+          if (key.startsWith(`${removedKey}|`)) next.delete(key)
+        }
+        return next
+      })
+    }
   }
 
   function addVariantGroup() {
@@ -528,12 +604,25 @@ export function StoreProductForm({
         })
         return prev
       }
-      return [...prev, { name: "", options: [{ label: "", price_brl: "", is_sold_out: false }] }]
+      return [
+        ...prev,
+        { name: "", options: [{ clientKey: crypto.randomUUID(), label: "", price_brl: "", is_sold_out: false }] },
+      ]
     })
   }
 
   function removeVariantGroup(groupIndex: number) {
+    const removedKeys = new Set(variantGroups[groupIndex]?.options.map((o) => o.clientKey) ?? [])
     setVariantGroups((prev) => prev.filter((_, i) => i !== groupIndex))
+    if (removedKeys.size > 0) {
+      setCombinations((prev) => {
+        const next = new Set(prev)
+        for (const key of next) {
+          if (removedKeys.has(key.split("|")[1])) next.delete(key)
+        }
+        return next
+      })
+    }
   }
 
   function updateVariantGroupName(groupIndex: number, name: string) {
@@ -550,15 +639,41 @@ export function StoreProductForm({
           })
           return g
         }
-        return { ...g, options: [...g.options, { label: "", price_brl: "", is_sold_out: false }] }
+        return {
+          ...g,
+          options: [...g.options, { clientKey: crypto.randomUUID(), label: "", price_brl: "", is_sold_out: false }],
+        }
       })
     )
   }
 
   function removeVariantGroupOption(groupIndex: number, optionIndex: number) {
+    const removedKey = variantGroups[groupIndex]?.options[optionIndex]?.clientKey
     setVariantGroups((prev) =>
       prev.map((g, i) => (i === groupIndex ? { ...g, options: g.options.filter((_, oi) => oi !== optionIndex) } : g))
     )
+    if (removedKey) {
+      setCombinations((prev) => {
+        const next = new Set(prev)
+        for (const key of next) {
+          if (key.split("|")[1] === removedKey) next.delete(key)
+        }
+        return next
+      })
+    }
+  }
+
+  function toggleCombination(variantClientKey: string, optionClientKey: string) {
+    setCombinations((prev) => {
+      const key = `${variantClientKey}|${optionClientKey}`
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
   }
 
   function updateVariantGroupOption(
@@ -596,7 +711,7 @@ export function StoreProductForm({
     setUploadingVariantImage(index)
     setError(null)
     try {
-      const url = await uploadImage(await prepareProductImage(file))
+      const url = await uploadImage(await prepareProductImage(file, { removeBg: false }))
       setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, image_url: url } : v)))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
@@ -627,7 +742,7 @@ export function StoreProductForm({
     setUploadingVariantImage(index)
     setError(null)
     try {
-      const url = await uploadImage(await prepareProductImage(file))
+      const url = await uploadImage(await prepareProductImage(file, { removeBg: false }))
       setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, images: [...v.images, url] } : v)))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
@@ -727,19 +842,16 @@ export function StoreProductForm({
   }
 
   /**
-   * Prepara a foto antes de subir: remoção de fundo pelo mesmo serviço usado no
-   * cadastro de Periféricos (`removeBackground`), que já devolve um PNG
-   * redimensionado com transparência — por isso não passa pela recompressão
-   * pra JPEG, que achataria o fundo de volta num branco opaco.
-   *
-   * Os três pontos de envio da Loja (fotos principais do anúncio, capa da
-   * variante e galeria da variante) passam por aqui, pra que o tratamento seja
-   * exatamente o mesmo nos três. Sem fallback: se a remoção falhar, o upload
-   * falha com o erro à mostra, em vez de subir a foto crua e parecer que o
-   * tratamento simplesmente não foi aplicado.
+   * Prepara a foto antes de subir. Só as fotos principais do anúncio passam
+   * pela remoção de fundo (`removeBackground`); capa e galeria da variante de
+   * cor usam sempre a compressão normal (`removeBg: false`), sem remoção de
+   * fundo. Sem fallback: se a etapa falhar, o upload falha com o erro à
+   * mostra, em vez de subir a foto crua e parecer que o tratamento simplesmente
+   * não foi aplicado.
    */
-  async function prepareProductImage(file: File): Promise<File> {
-    if (disableBackgroundRemoval) {
+  async function prepareProductImage(file: File, options?: { removeBg?: boolean }): Promise<File> {
+    const removeBg = options?.removeBg ?? true
+    if (!removeBg || disableBackgroundRemoval) {
       const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
       if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
         throw new Error(
@@ -829,6 +941,7 @@ export function StoreProductForm({
 
       const cleanVariants: Array<{
         id?: string
+        clientKey: string
         label: string
         price_cents_override: number | null
         promo_price_cents: number | null
@@ -847,6 +960,7 @@ export function StoreProductForm({
         }
         cleanVariants.push({
           id: v.id,
+          clientKey: v.clientKey,
           label,
           price_cents_override: null,
           promo_price_cents: null,
@@ -864,8 +978,15 @@ export function StoreProductForm({
       }
 
       const cleanVariantGroups: Array<{
+        id?: string
         name: string
-        options: Array<{ label: string; price_cents_override: number | null; is_sold_out: boolean }>
+        options: Array<{
+          id?: string
+          clientKey: string
+          label: string
+          price_cents_override: number | null
+          is_sold_out: boolean
+        }>
       }> = []
       for (const g of variantGroups) {
         const name = g.name.trim()
@@ -874,7 +995,13 @@ export function StoreProductForm({
         if (options.length > MAX_OPTIONS_PER_VARIANT_GROUP) {
           throw new Error(`Cada grupo pode ter no máximo ${MAX_OPTIONS_PER_VARIANT_GROUP} variantes ("${name}").`)
         }
-        const cleanOptions: Array<{ label: string; price_cents_override: number | null; is_sold_out: boolean }> = []
+        const cleanOptions: Array<{
+          id?: string
+          clientKey: string
+          label: string
+          price_cents_override: number | null
+          is_sold_out: boolean
+        }> = []
         for (const o of options) {
           const label = o.label.trim()
           let priceCentsOverride: number | null = null
@@ -886,9 +1013,15 @@ export function StoreProductForm({
               )
             }
           }
-          cleanOptions.push({ label, price_cents_override: priceCentsOverride, is_sold_out: o.is_sold_out })
+          cleanOptions.push({
+            id: o.id,
+            clientKey: o.clientKey,
+            label,
+            price_cents_override: priceCentsOverride,
+            is_sold_out: o.is_sold_out,
+          })
         }
-        cleanVariantGroups.push({ name, options: cleanOptions })
+        cleanVariantGroups.push({ id: g.id, name, options: cleanOptions })
       }
 
       const payload = {
@@ -947,11 +1080,19 @@ export function StoreProductForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ variants: cleanVariants }),
       })
+      let variantIdByClientKey: Map<string, string> | null = null
       if (!variantsRes.ok) {
         const variantsData = (await variantsRes.json()) as { error?: string }
         toast.error("Produto salvo, mas houve erro nas variantes", {
           description: variantsData.error,
         })
+      } else {
+        const variantsData = (await variantsRes.json()) as { variants?: Array<{ id: string; position: number }> }
+        variantIdByClientKey = new Map(
+          (variantsData.variants ?? [])
+            .filter((v) => cleanVariants[v.position])
+            .map((v) => [cleanVariants[v.position].clientKey, v.id])
+        )
       }
 
       const variantGroupsRes = await fetch(`/api/admin/store/products/${data.product.id}/variant-groups`, {
@@ -959,10 +1100,53 @@ export function StoreProductForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ groups: cleanVariantGroups }),
       })
+      let optionIdByClientKey: Map<string, string> | null = null
       if (!variantGroupsRes.ok) {
         const variantGroupsData = (await variantGroupsRes.json()) as { error?: string }
         toast.error("Produto salvo, mas houve erro nas variantes", {
           description: variantGroupsData.error,
+        })
+      } else {
+        const variantGroupsData = (await variantGroupsRes.json()) as {
+          groups?: Array<{ id: string; position: number; options: Array<{ id: string; position: number }> }>
+        }
+        optionIdByClientKey = new Map()
+        for (const g of variantGroupsData.groups ?? []) {
+          const cleanGroup = cleanVariantGroups[g.position]
+          if (!cleanGroup) continue
+          for (const o of g.options) {
+            const cleanOption = cleanGroup.options[o.position]
+            if (cleanOption) optionIdByClientKey.set(cleanOption.clientKey, o.id)
+          }
+        }
+      }
+
+      if (variantIdByClientKey && optionIdByClientKey) {
+        const idByClientKey = variantIdByClientKey
+        const optionIdMap = optionIdByClientKey
+        const combinationPairs = [...combinations]
+          .map((key) => {
+            const [variantClientKey, optionClientKey] = key.split("|")
+            const variantId = idByClientKey.get(variantClientKey)
+            const optionId = optionIdMap.get(optionClientKey)
+            return variantId && optionId ? { variant_id: variantId, option_id: optionId } : null
+          })
+          .filter((p): p is { variant_id: string; option_id: string } => p != null)
+
+        const combinationsRes = await fetch(`/api/admin/store/products/${data.product.id}/variant-combinations`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ combinations: combinationPairs }),
+        })
+        if (!combinationsRes.ok) {
+          const combinationsData = (await combinationsRes.json()) as { error?: string }
+          toast.error("Produto salvo, mas houve erro nas combinações de estoque", {
+            description: combinationsData.error,
+          })
+        }
+      } else if (combinations.size > 0) {
+        toast.error("Combinações de estoque não foram salvas", {
+          description: "Corrija o erro em Cor ou Variantes acima e salve novamente.",
         })
       }
 
@@ -1435,7 +1619,7 @@ export function StoreProductForm({
         </p>
         <div className="space-y-2">
           {variants.map((variant, idx) => (
-            <div key={variant.id ?? idx} className="space-y-2 rounded-lg border border-border bg-muted/10 p-2">
+            <div key={variant.clientKey} className="space-y-2 rounded-lg border border-border bg-muted/10 p-2">
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   value={variant.label}
@@ -1593,6 +1777,31 @@ export function StoreProductForm({
             </div>
           ))}
         </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] text-muted-foreground">Atalhos:</span>
+          {VARIANT_COLOR_PRESETS.map((preset) => {
+            const isDuplicate = variants.some(
+              (v) => v.label.trim().toLowerCase() === preset.label.toLowerCase() || v.color === preset.color
+            )
+            const disabled = isDuplicate || variants.length >= MAX_VARIANTS
+            return (
+              <button
+                key={`${preset.label}-${preset.color}`}
+                type="button"
+                onClick={() => addVariantColorPreset(preset.label, preset.color)}
+                disabled={disabled}
+                title={isDuplicate ? `"${preset.label}" já cadastrada` : undefined}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-muted/20 px-2 py-1 text-[11px] text-foreground/80 transition-colors hover:border-foreground/30 hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <span
+                  className="size-3 shrink-0 rounded-full border border-border/60"
+                  style={{ backgroundColor: preset.color }}
+                />
+                {preset.label}
+              </button>
+            )
+          })}
+        </div>
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -1639,7 +1848,7 @@ export function StoreProductForm({
 
               <div className="space-y-1.5 border-t border-border/60 pt-2">
                 {group.options.map((option, optionIdx) => (
-                  <div key={option.id ?? optionIdx} className="flex flex-wrap items-center gap-1.5">
+                  <div key={option.clientKey} className="flex flex-wrap items-center gap-1.5">
                     <Input
                       value={option.label}
                       onChange={(e) => updateVariantGroupOption(groupIdx, optionIdx, "label", e.target.value)}
@@ -1701,6 +1910,78 @@ export function StoreProductForm({
                   {group.options.length}/{MAX_OPTIONS_PER_VARIANT_GROUP}
                 </span>
               </div>
+
+              {(() => {
+                const activeColors = variants.filter((v) => v.label.trim())
+                const activeOptions = group.options.filter((o) => o.label.trim())
+                if (activeColors.length === 0 || activeOptions.length === 0) return null
+                return (
+                  <div className="space-y-1.5 border-t border-border/60 pt-2">
+                    <p className="text-[10px] font-medium text-muted-foreground">
+                      Estoque por combinação (Cor × {group.name.trim() || "Variante"})
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60">
+                      Clique numa célula pra esgotar só aquela combinação de cor + variante.
+                    </p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-[11px]">
+                        <thead>
+                          <tr>
+                            <th className="p-1 text-left font-normal text-muted-foreground" />
+                            {activeOptions.map((option) => (
+                              <th key={option.clientKey} className="p-1 text-center font-medium text-muted-foreground">
+                                {option.label}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {activeColors.map((variant) => (
+                            <tr key={variant.clientKey}>
+                              <td className="whitespace-nowrap p-1 text-muted-foreground">
+                                <span className="flex items-center gap-1.5">
+                                  {variant.color && (
+                                    <span
+                                      className="inline-block size-2.5 shrink-0 rounded-full border border-border"
+                                      style={{ backgroundColor: variant.color }}
+                                    />
+                                  )}
+                                  {variant.label}
+                                </span>
+                              </td>
+                              {activeOptions.map((option) => {
+                                const soldOut = combinations.has(`${variant.clientKey}|${option.clientKey}`)
+                                return (
+                                  <td key={option.clientKey} className="p-1 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleCombination(variant.clientKey, option.clientKey)}
+                                      aria-pressed={soldOut}
+                                      aria-label={`${variant.label} + ${option.label}: ${soldOut ? "esgotado" : "disponível"}`}
+                                      className={cn(
+                                        "inline-flex size-6 items-center justify-center rounded-md border transition-colors",
+                                        soldOut
+                                          ? "border-red-500/60 bg-red-500/90 text-white hover:bg-red-500"
+                                          : "border-border text-muted-foreground hover:border-foreground/30"
+                                      )}
+                                    >
+                                      {soldOut ? (
+                                        <Ban className="size-3.5" />
+                                      ) : (
+                                        <span className="size-1.5 rounded-full bg-current" />
+                                      )}
+                                    </button>
+                                  </td>
+                                )
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           ))}
         </div>

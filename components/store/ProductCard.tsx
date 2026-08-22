@@ -178,7 +178,7 @@ export function ProductCard(props: ProductCardProps) {
               acima, então aqui é só reforçar o texto sem duplicar o efeito. */}
           {outOfStock && (
             <div className="absolute inset-0 z-[1] flex items-center justify-center bg-black/55">
-              <span className="font-display text-xs font-bold uppercase tracking-[0.1em] text-red-400">
+              <span className="font-display text-xs font-bold uppercase tracking-[0.1em] text-white">
                 Esgotado
               </span>
             </div>

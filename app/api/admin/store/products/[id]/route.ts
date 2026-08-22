@@ -4,7 +4,11 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { recordPriceHistoryIfChanged, listProductVariantGroups } from "@/lib/server/repositories/store-repository"
+import {
+  recordPriceHistoryIfChanged,
+  listProductVariantGroups,
+  listProductVariantCombinations,
+} from "@/lib/server/repositories/store-repository"
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
 import type { Database } from "@/lib/database.types"
@@ -54,7 +58,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   const { id } = await context.params
   const db = createSupabaseAdminClient()
-  const [{ data, error }, { data: specs }, { data: variants }, { data: peripherals }, variantGroups] =
+  const [{ data, error }, { data: specs }, { data: variants }, { data: peripherals }, variantGroups, combinations] =
     await Promise.all([
       db.from("store_products").select("*").eq("id", id).single(),
       db
@@ -74,6 +78,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
         .eq("product_id", id)
         .order("position", { ascending: true }),
       listProductVariantGroups(id),
+      listProductVariantCombinations(id),
     ])
 
   if (error) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
@@ -83,6 +88,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
     specs: specs ?? [],
     variants: variants ?? [],
     variantGroups,
+    combinations,
     peripheralIds: (peripherals ?? []).map((row) => row.peripheral_id),
   })
 }

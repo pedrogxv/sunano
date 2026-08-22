@@ -53,7 +53,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   }
 
   try {
-    await replaceProductVariants(
+    const variants = await replaceProductVariants(
       id,
       parsed.data.variants.map((v) => ({
         ...v,
@@ -66,10 +66,9 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         is_sold_out: v.is_sold_out ?? false,
       }))
     )
+    return NextResponse.json({ ok: true, variants })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro ao salvar variantes."
     return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  return NextResponse.json({ ok: true })
 }

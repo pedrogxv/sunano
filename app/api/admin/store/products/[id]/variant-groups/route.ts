@@ -12,10 +12,12 @@ const groupsSchema = z.object({
   groups: z
     .array(
       z.object({
+        id: z.string().uuid().optional(),
         name: z.string().trim().min(1).max(60),
         options: z
           .array(
             z.object({
+              id: z.string().uuid().optional(),
               label: z.string().trim().min(1).max(60),
               price_cents_override: z.number().int().min(MIN_PRICE_CENTS, "Preço mínimo de R$6,00.").nullable().optional(),
               is_sold_out: z.boolean().optional().default(false),
@@ -47,21 +49,22 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
   }
 
   try {
-    await replaceProductVariantGroups(
+    const groups = await replaceProductVariantGroups(
       id,
       parsed.data.groups.map((g) => ({
+        id: g.id,
         name: g.name,
         options: g.options.map((o) => ({
+          id: o.id,
           label: o.label,
           price_cents_override: o.price_cents_override ?? null,
           is_sold_out: o.is_sold_out ?? false,
         })),
       }))
     )
+    return NextResponse.json({ ok: true, groups })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro ao salvar variantes."
     return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  return NextResponse.json({ ok: true })
 }

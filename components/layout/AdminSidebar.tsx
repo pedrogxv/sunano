@@ -112,9 +112,10 @@ export function AdminSidebar() {
           icon: ShoppingBag,
           permission: "store_read",
           children: [
-            { href: "/admin/store",        label: "Produtos", icon: ShoppingBag, permission: "store_read" },
-            { href: "/admin/store/orders", label: "Pedidos",  icon: Package,     permission: "store_read" },
-            { href: "/admin/suporte",      label: "Suporte",  icon: LifeBuoy,    permission: "support_read", badgeCount: supportAwaitingCount },
+            { href: "/admin/store",         label: "Produtos", icon: ShoppingBag,          permission: "store_read" },
+            { href: "/admin/store/banners", label: "Banners",  icon: GalleryHorizontalEnd, permission: "store_read" },
+            { href: "/admin/store/orders",  label: "Pedidos",  icon: Package,              permission: "store_read" },
+            { href: "/admin/suporte",       label: "Suporte",  icon: LifeBuoy,              permission: "support_read", badgeCount: supportAwaitingCount },
           ],
         },
         { href: "/admin/market", label: "Mercado",                      icon: Tags,        permission: "market_read" },

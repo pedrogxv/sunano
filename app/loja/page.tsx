@@ -1,7 +1,8 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
 import { ShoppingBag } from "lucide-react"
-import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
+import { listStoreProductsPaginated, getStoreFilterOptions, listBestSellingProducts } from "@/lib/server/repositories/store-repository"
+import { listActiveBannersBySection } from "@/lib/server/repositories/store-banners-repository"
 import { StoreContent } from "@/components/store/StoreContent"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
@@ -38,7 +39,16 @@ export default async function LojaPage() {
     }
   }
 
-  const [{ items, total }, filterOptions, { items: featuredItems }, { items: preOrderItems }, { items: readyStockItems }] = await Promise.all([
+  const [
+    { items, total },
+    filterOptions,
+    { items: featuredItems },
+    { items: preOrderItems },
+    { items: readyStockItems },
+    { items: siteItems },
+    bestSellingItems,
+    sectionBanners,
+  ] = await Promise.all([
     listStoreProductsPaginated({
       type: "store",
       page: 1,
@@ -63,6 +73,14 @@ export default async function LojaPage() {
       page: 1,
       pageSize: 12,
     }),
+    listStoreProductsPaginated({
+      type: "store",
+      categories: ["site"],
+      page: 1,
+      pageSize: 12,
+    }),
+    listBestSellingProducts(12),
+    listActiveBannersBySection(),
   ])
 
   if (total === 0 && filterOptions.countByType.store === 0) {
@@ -85,6 +103,9 @@ export default async function LojaPage() {
         initialFeatured={featuredItems}
         preOrderItems={preOrderItems}
         readyStockItems={readyStockItems}
+        siteItems={siteItems}
+        bestSellingItems={bestSellingItems}
+        sectionBanners={sectionBanners}
         pageSize={PAGE_SIZE}
       />
     </Suspense>

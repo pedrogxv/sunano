@@ -1489,6 +1489,51 @@ export type Database = {
           updated_at?: string
         }
       }
+      store_section_banners: {
+        Relationships: []
+        Row: {
+          id: string
+          section: string
+          image_url: string | null
+          video_url: string | null
+          title: string
+          subtitle: string | null
+          cta_text: string | null
+          cta_link: string | null
+          sort_order: number
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          section: string
+          image_url?: string | null
+          video_url?: string | null
+          title: string
+          subtitle?: string | null
+          cta_text?: string | null
+          cta_link?: string | null
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          section?: string
+          image_url?: string | null
+          video_url?: string | null
+          title?: string
+          subtitle?: string | null
+          cta_text?: string | null
+          cta_link?: string | null
+          sort_order?: number
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       notifications: {
         Relationships: []
         Row: {

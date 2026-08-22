@@ -73,3 +73,43 @@ export async function validateImageUpload(
 
   return { ok: true, extension: detected.extension, mime: detected.mime, bytes }
 }
+
+/** Detecta MP4 pelos bytes 4-7, que são a marca ASCII "ftyp" da box de tipo do arquivo. */
+export function detectVideoType(bytes: Uint8Array): { mime: string; extension: string } | null {
+  if (
+    bytes.length >= 12 &&
+    bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70 // "ftyp"
+  ) {
+    return { mime: "video/mp4", extension: "mp4" }
+  }
+  return null
+}
+
+/**
+ * Valida um `File` de vídeo: checa tamanho, MIME declarado E os bytes reais
+ * (magic bytes do MP4). Mesmo formato de retorno de `validateImageUpload`.
+ */
+export async function validateVideoUpload(
+  file: File,
+  options: { maxSizeBytes: number; allowedMimeTypes: string[] }
+): Promise<
+  | { ok: true; extension: string; mime: string; bytes: Uint8Array }
+  | { ok: false; error: string }
+> {
+  if (file.size > options.maxSizeBytes) {
+    return { ok: false, error: `Arquivo deve ter no máximo ${Math.floor(options.maxSizeBytes / (1024 * 1024))}MB.` }
+  }
+
+  if (!options.allowedMimeTypes.includes(file.type)) {
+    return { ok: false, error: "Tipo de arquivo não permitido." }
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const detected = detectVideoType(bytes)
+
+  if (!detected || !options.allowedMimeTypes.includes(detected.mime)) {
+    return { ok: false, error: "O conteúdo do arquivo não corresponde a um vídeo MP4 válido." }
+  }
+
+  return { ok: true, extension: detected.extension, mime: detected.mime, bytes }
+}

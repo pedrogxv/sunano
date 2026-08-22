@@ -246,6 +246,37 @@ export async function listStoreProductsPaginated(
 }
 
 /**
+ * Produtos mais vendidos nos últimos 90 dias, pela mesma RPC do card
+ * "Produtos mais vendidos" do dashboard admin (get_top_selling_products,
+ * ver dashboard-revenue-repository.ts) — soma unidades vendidas a partir de
+ * `store_orders.items` (jsonb). A RPC pode devolver ids de itens de bazar
+ * (cart-context também aceita type "bazaar"); como `listStoreProductsPaginated`
+ * já filtra `type: "store"` e `is_active: true`, esses ids somem sozinhos.
+ */
+export async function listBestSellingProducts(limit = 12): Promise<StoreProductCard[]> {
+  const db = createSupabaseAdminClient()
+  const from = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+  const { data, error } = await db.rpc("get_top_selling_products", {
+    p_from: from.toISOString(),
+    p_to: new Date().toISOString(),
+    p_limit: limit,
+  })
+  if (error) {
+    console.error("[store-repository] listBestSellingProducts (rpc):", error)
+    return []
+  }
+
+  const rankedIds = ((data ?? []) as { product_id: string }[]).map((row) => row.product_id)
+  if (rankedIds.length === 0) return []
+
+  const { items } = await listStoreProductsPaginated({ type: "store", productIds: rankedIds, pageSize: rankedIds.length })
+  const rank = new Map(rankedIds.map((id, index) => [id, index]))
+  return items
+    .filter((item) => rank.has(item.id))
+    .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!)
+}
+
+/**
  * Busca leve pro dropdown "em tempo real" da barra de pesquisa — sem
  * `count: "exact"` (custo extra que o typeahead não precisa) e limitada a
  * poucos itens. Mesma lógica de match (`name`/`brand` ILIKE) de

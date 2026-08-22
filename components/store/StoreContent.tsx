@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Loader2, Package, PackageSearch, ShieldCheck, SlidersHorizontal, Sparkles, Star, Tag, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, Package, PackageSearch, ShieldCheck, SlidersHorizontal, Sparkles, Star, Tag, TrendingUp, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -20,6 +20,8 @@ import { TrustStrip } from "@/components/store/TrustStrip"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import type { StoreProductCard, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
+import type { StoreBannerSection, StoreSectionBanner } from "@/lib/server/repositories/store-banners-repository"
+import SectionBannerCarousel, { type SectionCarouselBanner } from "@/components/store/SectionBannerCarousel"
 
 /** Contexto de "loja filtrada" (landing de categoria ou marca) — troca o hero
  *  padrão por um banner e pré-seleciona o filtro correspondente. */
@@ -36,8 +38,35 @@ interface StoreContentProps {
   preOrderItems?: StoreProductCard[]
   /** Produtos de pronta entrega (todo o catálogo, não só a página atual) — seção dedicada abaixo dos Destaques. */
   readyStockItems?: StoreProductCard[]
+  /** Produtos institucionais/do site (category: "site") — seção "Itens para o site" da Home. */
+  siteItems?: StoreProductCard[]
+  /** Mais vendidos nos últimos 90 dias (get_top_selling_products) — primeira seção da Home. */
+  bestSellingItems?: StoreProductCard[]
+  /** Banners ativos por seção — quando uma seção tem ao menos 1, ela vira carrossel em vez de grid. */
+  sectionBanners?: Record<StoreBannerSection, StoreSectionBanner[]>
   pageSize: number
   banner?: StoreBanner
+}
+
+const EMPTY_SECTION_BANNERS: Record<StoreBannerSection, StoreSectionBanner[]> = {
+  main: [],
+  best_sellers: [],
+  pre_sale: [],
+  ready_stock: [],
+  site_items: [],
+}
+
+/** Mapeia as colunas snake_case do banco para as props camelCase do carrossel. */
+function toCarouselBanners(banners: StoreSectionBanner[]): SectionCarouselBanner[] {
+  return banners.map((banner) => ({
+    id: banner.id,
+    imageUrl: banner.image_url,
+    videoUrl: banner.video_url,
+    title: banner.title,
+    subtitle: banner.subtitle,
+    ctaText: banner.cta_text,
+    ctaLink: banner.cta_link,
+  }))
 }
 
 type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
@@ -152,6 +181,33 @@ function StoreBannerHero({ banner, productCount }: { banner: StoreBanner; produc
   )
 }
 
+/**
+ * Cabeçalho (eyebrow + título) das seções dinâmicas da Home da Loja — o mesmo
+ * usado dentro de `ProductCarouselSection`, mas extraído para também ficar
+ * acima de `SectionBannerCarousel`, que não tem cabeçalho próprio.
+ */
+function SectionHeading({
+  eyebrow,
+  title,
+  icon: Icon,
+  iconClassName,
+}: {
+  eyebrow: string
+  title: string
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  iconClassName: string
+}) {
+  return (
+    <div className="flex flex-col gap-[3px] sm:gap-1">
+      <p className="flex items-center gap-[5px] text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] text-[#7a7a7a] sm:gap-1.5 sm:text-[10.5px]">
+        <Icon className={cn("size-[11px] shrink-0 sm:size-3", iconClassName)} strokeWidth={2.2} />
+        {eyebrow}
+      </p>
+      <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">{title}</h2>
+    </div>
+  )
+}
+
 /** Carrossel horizontal reutilizado por Destaques e Disponibilidade (pronta entrega + pré-venda). */
 function ProductCarouselSection({
   items,
@@ -213,7 +269,7 @@ function ProductCarouselSection({
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], readyStockItems = [], pageSize, banner }: StoreContentProps) {
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], readyStockItems = [], siteItems = [], bestSellingItems = [], sectionBanners = EMPTY_SECTION_BANNERS, pageSize, banner }: StoreContentProps) {
   const searchParams = useSearchParams()
   const { user } = useAuthUser()
 
@@ -466,12 +522,18 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       {banner ? (
         <StoreBannerHero banner={banner} productCount={banner.type === "category" ? (initialFilterOptions.categoryCounts[banner.value] ?? total) : total} />
       ) : (
-        /* Hero: aspect-ratio da própria imagem (6047×1890) — mostra o banner
-           inteiro em vez de cortar topo/laterais com bg-cover numa altura fixa. */
-        <div
-          className="relative aspect-[6047/1890] w-full overflow-hidden bg-[#0b0f14] bg-contain bg-center bg-no-repeat"
-          style={{ backgroundImage: "url(/images/mascot/Loja.png)" }}
-        >
+        <div className="relative">
+          {sectionBanners.main.length > 0 ? (
+            <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.main)} className="rounded-none border-0" />
+          ) : (
+            /* Fallback estático — mesma imagem de sempre, aspect-ratio dela
+               própria (6047×1890) pra mostrar o banner inteiro em vez de
+               cortar topo/laterais com bg-cover numa altura fixa. */
+            <div
+              className="aspect-[6047/1890] w-full overflow-hidden bg-[#0b0f14] bg-contain bg-center bg-no-repeat"
+              style={{ backgroundImage: "url(/images/mascot/Loja.png)" }}
+            />
+          )}
           {user && (
             <Link
               href="/conta/pedidos"
@@ -492,9 +554,10 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             (banner já deixa a área densa com a fileira de tags). */}
         {banner?.type !== "category" && <TrustStrip />}
 
-        {/* Destaques — só na Loja geral; a landing de categoria vai direto
-            pros filtros + catálogo, sem essa seção. */}
-        {banner?.type !== "category" && featuredItems.length > 0 && (
+        {/* Destaques — só na landing de marca; a Home tem suas próprias seções
+            (Mais vendidos/Pré-venda/Pronta entrega/Itens para o site) e a
+            landing de categoria vai direto pros filtros + catálogo. */}
+        {banner?.type === "brand" && featuredItems.length > 0 && (
           <section className="flex flex-col gap-3.5 sm:gap-[18px]">
             <div className="flex items-end justify-between gap-3 sm:gap-4">
               <div className="flex flex-col gap-[3px] sm:gap-1">
@@ -543,10 +606,11 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           </section>
         )}
 
-        {/* Pronta entrega + Pré-venda numa seção só — o badge de cada
-            ProductCard já diferencia o tipo de venda, então separar em duas
-            fileiras era redundante. Pronta entrega primeiro (compra imediata). */}
-        {banner?.type !== "category" && (
+        {/* Pronta entrega + Pré-venda numa seção só — só na landing de marca
+            (mesmo motivo dos Destaques acima). O badge de cada ProductCard já
+            diferencia o tipo de venda, então separar em duas fileiras era
+            redundante. Pronta entrega primeiro (compra imediata). */}
+        {banner?.type === "brand" && (
           <ProductCarouselSection
             items={availabilityItems}
             eyebrow="Disponibilidade"
@@ -556,7 +620,75 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           />
         )}
 
-        {/* Catálogo */}
+        {/* Seções dinâmicas da Home — só na Loja geral (sem banner). Cada uma
+            só existe se tiver produto (ProductCarouselSection já retorna null
+            vazia); não há fallback estático. */}
+        {!banner && (
+          <>
+            {sectionBanners.best_sellers.length > 0 ? (
+              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+                <SectionHeading eyebrow="Popularidade" title="Mais vendidos" icon={TrendingUp} iconClassName="text-amber-400" />
+                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.best_sellers)} />
+              </section>
+            ) : (
+              <ProductCarouselSection
+                items={bestSellingItems}
+                eyebrow="Popularidade"
+                title="Mais vendidos"
+                icon={TrendingUp}
+                iconClassName="text-amber-400"
+              />
+            )}
+            {sectionBanners.pre_sale.length > 0 ? (
+              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+                <SectionHeading eyebrow="Lançamento" title="Pré-venda 🔥🔥🔥" icon={Flame} iconClassName="text-orange-400" />
+                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.pre_sale)} />
+              </section>
+            ) : (
+              <ProductCarouselSection
+                items={preOrderItems}
+                eyebrow="Lançamento"
+                title="Pré-venda 🔥🔥🔥"
+                icon={Flame}
+                iconClassName="text-orange-400"
+              />
+            )}
+            {sectionBanners.ready_stock.length > 0 ? (
+              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+                <SectionHeading eyebrow="Envio imediato" title="Pronta entrega 📦" icon={Package} iconClassName="text-emerald-400" />
+                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.ready_stock)} />
+              </section>
+            ) : (
+              <ProductCarouselSection
+                items={readyStockItems}
+                eyebrow="Envio imediato"
+                title="Pronta entrega 📦"
+                icon={Package}
+                iconClassName="text-emerald-400"
+              />
+            )}
+            {sectionBanners.site_items.length > 0 ? (
+              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+                <SectionHeading eyebrow="Sunano" title="Itens para o site 🤝" icon={Handshake} iconClassName="text-sky-400" />
+                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.site_items)} />
+              </section>
+            ) : (
+              <ProductCarouselSection
+                items={siteItems}
+                eyebrow="Sunano"
+                title="Itens para o site 🤝"
+                icon={Handshake}
+                iconClassName="text-sky-400"
+              />
+            )}
+          </>
+        )}
+
+        {/* Catálogo — landings de categoria/marca sempre mostram; na Home
+            só aparece quando há uma busca ativa (StoreSearchBox navega pra
+            cá com ?q=...#produtos mesmo sem banner). Sem isso a busca fica
+            sem lugar pra mostrar resultado na Home. */}
+        {(banner || query.trim()) && (
         <section id="produtos" className="flex scroll-mt-20 flex-col gap-3.5 sm:gap-[18px]">
           <div className="flex flex-col gap-[3px] sm:gap-1">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Catálogo completo</p>
@@ -732,6 +864,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             </div>
           )}
         </section>
+        )}
 
         {/* Categorias — só aparece na Loja geral. Na landing de categoria a
             navegação já vive inteira no menu do header (StoreCategoryNav),

@@ -161,6 +161,7 @@ function getRequiredPermission(pathname: string): AdminPermissionKey | null {
   if (pathname.startsWith("/admin/forum")) return "forum_read"
   if (pathname.startsWith("/admin/offers/new")) return "offers_write"
   if (pathname.startsWith("/admin/offers")) return "offers_read"
+  if (pathname.startsWith("/admin/store/banners")) return "store_read"
   if (pathname.startsWith("/admin/store/new") || /^\/admin\/store\/[^/]+$/.test(pathname)) {
     return "store_write"
   }

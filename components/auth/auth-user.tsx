@@ -23,6 +23,7 @@ import { useUserOrders, pendingPaymentHref } from "@/lib/hooks/use-user-orders"
 import { formatBRL } from "@/lib/format"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
+import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 
 function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -205,7 +206,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               <Crown className="size-3 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
               <span className="vip-badge-text text-[10px] font-bold uppercase tracking-wide">VIP</span>
             </div>
-          ) : (
+          ) : isVipSubscriptionEnabled() ? (
             <button
               type="button"
               onClick={() => setVipUpsellOpen(true)}
@@ -215,7 +216,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               <Crown className="size-3" />
               Seja VIP
             </button>
-          )}
+          ) : null}
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator className="bg-border" />

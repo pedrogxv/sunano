@@ -8,7 +8,7 @@ import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repo
 import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 
 /** Extrai o dono do pedido a partir de `metadata->>user_id` (null em pedidos de convidado). */
-function orderOwnerId(metadata: Record<string, unknown> | null | undefined): string | null {
+export function orderOwnerId(metadata: Record<string, unknown> | null | undefined): string | null {
   const userId = metadata?.user_id
   return typeof userId === "string" ? userId : null
 }
@@ -71,20 +71,29 @@ const ORDER_COLUMNS =
  *
  * Paginado (mesmo padrão de `_shared.ts`) — sem limite, um cliente antigo
  * com muitos pedidos trazia o histórico inteiro toda vez que abria "Meus
- * Pedidos" ou o popover de pedido pendente do miniperfil.
+ * Pedidos" ou o popover de pedido pendente do miniperfil. Filtros por
+ * status/período são opcionais e resolvidos no banco (não em memória) para
+ * manter o mesmo custo de query independente do histórico do cliente.
  */
 export async function listOrdersByUser(
   userId: string,
   page = 1,
-  pageSize = 20
+  pageSize = 20,
+  filters?: { status?: OrderStatus; dateFrom?: string; dateTo?: string }
 ): Promise<{ orders: UserOrderSummary[]; total: number; hasMore: boolean }> {
   const db = createSupabaseAdminClient()
   const currentPage = clampPage(page)
   const size = clampPageSize(pageSize, 50, 20)
-  const { data, count, error } = await db
+  let query = db
     .from("store_orders")
     .select(ORDER_COLUMNS, { count: "exact" })
     .eq("metadata->>user_id", userId)
+
+  if (filters?.status) query = query.eq("status", filters.status)
+  if (filters?.dateFrom) query = query.gte("created_at", filters.dateFrom)
+  if (filters?.dateTo) query = query.lte("created_at", filters.dateTo)
+
+  const { data, count, error } = await query
     .order("created_at", { ascending: false })
     .range(...rangeFor(currentPage, size))
 
@@ -562,6 +571,79 @@ export async function refundOrder(
   return { ok: true }
 }
 
+/**
+ * Cancela um pedido ainda não pago (`pending`), devolvendo o estoque
+ * reservado no checkout e, se houver cobrança Asaas associada, removendo-a
+ * lá também (`DELETE /payments/{id}` — só vale para cobrança ainda não
+ * paga; pedido já pago é extorno, não cancelamento, ver `refundOrder`).
+ *
+ * MisticPay não expõe remoção de cobrança na API pública, então para esses
+ * pedidos cancelamos só localmente — o PIX gerado simplesmente nunca será
+ * pago e a cobrança expira sozinha do lado da MisticPay.
+ *
+ * O UPDATE condicional (`WHERE status = 'pending'`) roda antes da chamada à
+ * Asaas e da devolução de estoque, mesmo padrão de `expireStalePendingOrders`:
+ * evita cancelar um pedido que acabou de ser pago por um webhook concorrente.
+ */
+export async function cancelOrder(
+  id: string,
+  params: { reason?: string },
+  adminId?: string | null
+): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: existing } = await db
+    .from("store_orders")
+    .update({ status: "cancelled", updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id, items, metadata, asaas_payment_id")
+    .maybeSingle()
+
+  if (!existing) {
+    return { ok: false, error: "Só é possível cancelar um pedido aguardando pagamento.", status: 400 }
+  }
+
+  if (existing.asaas_payment_id) {
+    const { cancelPayment } = await import("@/lib/server/integrations/asaas")
+    try {
+      await cancelPayment(existing.asaas_payment_id)
+    } catch (err) {
+      console.error("[orders-repository] cancelOrder — Asaas:", err)
+      // Já marcamos cancelado localmente; a cobrança Asaas fica pendente até
+      // expirar sozinha (ou precisa ser removida manualmente no painel) —
+      // não deixamos o pedido preso por causa de uma falha no gateway.
+    }
+  }
+
+  const cart = (existing.items as Array<{ id: string; quantity: number; variant_id?: string | null }>) ?? []
+  await Promise.all(
+    cart.map((item) =>
+      item.variant_id
+        ? db.rpc("increment_variant_stock", { p_variant_id: item.variant_id, p_quantity: item.quantity })
+        : db.rpc("increment_store_stock", { p_product_id: item.id, p_quantity: item.quantity })
+    )
+  )
+
+  const ownerId = orderOwnerId(existing.metadata as Record<string, unknown> | null)
+  if (ownerId) {
+    await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: "cancelled" })
+  }
+
+  if (adminId) {
+    await logAdminAction({
+      adminId,
+      action: "order.cancel",
+      entityType: "store_order",
+      entityId: id,
+      before: { status: "pending" },
+      after: { status: "cancelled", reason: params.reason ?? null },
+    })
+  }
+
+  return { ok: true }
+}
+
 export type ExpireStalePendingOrdersResult = {
   expired_count: number
   stock_restored_count: number
@@ -590,14 +672,24 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
     .update({ status: "expired", updated_at: now })
     .eq("status", "pending")
     .or(`pix_expires_at.lt.${now},and(pix_expires_at.is.null,created_at.lt.${fallbackCutoff})`)
-    .select("id, items")
+    .select("id, items, metadata")
 
   if (error) {
     console.error("[orders-repository] expireStalePendingOrders — update:", error)
     return { expired_count: 0, stock_restored_count: 0, errors: [error.message] }
   }
 
-  const orders = (expiredOrders ?? []) as { id: string; items: Record<string, unknown>[] }[]
+  const orders = (expiredOrders ?? []) as {
+    id: string
+    items: Record<string, unknown>[]
+    metadata: Record<string, unknown> | null
+  }[]
+
+  for (const order of orders) {
+    const ownerId = orderOwnerId(order.metadata)
+    if (!ownerId) continue
+    await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
+  }
 
   // Achata (pedido, item) numa lista única e restaura o estoque em paralelo —
   // cada RPC é independente (produto/variante diferentes), então não há

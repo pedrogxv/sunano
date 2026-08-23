@@ -13,6 +13,7 @@ export type CommentItem = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_vip_expires_at: string | null
   author_display_slug: string | null
   /** Ofensiva atual do autor (dias consecutivos de missões diárias) — 0 se não tem ou expirou. */
   author_streak: number

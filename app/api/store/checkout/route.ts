@@ -2,10 +2,10 @@ import { randomUUID } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 import { createPixTransaction } from "@/lib/server/integrations/misticpay"
-import { findOrCreateCustomer, createPixPayment, getPixQrCode } from "@/lib/server/integrations/asaas"
+import { findOrCreateCustomer, createPixPayment, getPixQrCode, createCheckout } from "@/lib/server/integrations/asaas"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser } from "@/lib/server/auth/current-user"
-import { payerInfoSchema } from "@/lib/server/validation/guest-checkout"
+import { payerInfoSchema, payerAddressSchema } from "@/lib/server/validation/guest-checkout"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
 import {
@@ -16,8 +16,12 @@ import {
   DAILY_PURCHASE_LIMIT_NO_STOCK,
 } from "@/lib/server/repositories/store-repository"
 import { PIX_EXPIRATION_MINUTES } from "@/lib/server/repositories/orders-repository"
+import { getStoreSettings } from "@/lib/server/repositories/store-settings-repository"
 import { getAffiliateByCode } from "@/lib/server/repositories/affiliates-repository"
+import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { isWebMaster } from "@/lib/admin-permissions"
+import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
+import { SITE_URL } from "@/lib/site-url"
 import type { Database } from "@/lib/database.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -49,6 +53,15 @@ const checkoutBodySchema = z.object({
     .max(MAX_ITEM_LINES, "Carrinho com itens demais."),
   guestName: payerInfoSchema.shape.guestName.optional(),
   guestDocument: payerInfoSchema.shape.guestDocument.optional(),
+  guestPhone: payerAddressSchema.shape.guestPhone.optional(),
+  guestPostalCode: payerAddressSchema.shape.guestPostalCode.optional(),
+  guestStreet: payerAddressSchema.shape.guestStreet.optional(),
+  guestNumber: payerAddressSchema.shape.guestNumber.optional(),
+  guestComplement: payerAddressSchema.shape.guestComplement,
+  guestNeighborhood: payerAddressSchema.shape.guestNeighborhood.optional(),
+  guestCity: payerAddressSchema.shape.guestCity.optional(),
+  guestState: payerAddressSchema.shape.guestState.optional(),
+  paymentMethod: z.enum(["pix", "credit_card"]).default("pix"),
 })
 
 /**
@@ -115,8 +128,7 @@ export async function POST(request: NextRequest) {
   // Segunda checagem da mesma flag que o proxy já aplica (proxy.ts) — fechado
   // por padrão, caso o matcher/lógica do proxy mude e essa rota deixe de
   // passar por lá. WEB MASTER ignora a manutenção, igual no proxy.
-  const storeMaintenance = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE
-  if (storeMaintenance === "true") {
+  if (isStoreMaintenanceEnabled()) {
     const maintenanceUser = await getRequestUser(request)
     const { data: maintenanceProfile } = maintenanceUser
       ? await db.from("admin_profiles").select("id, role, permissions").eq("id", maintenanceUser.id).maybeSingle()
@@ -165,7 +177,27 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    const { items } = parsedBody.data
+    const { items, paymentMethod } = parsedBody.data
+
+    // Limite adicional (mais rígido) só pra tentativas de cartão, em cima do
+    // limite geral acima — cartão é o alvo natural de spam/enumeração de
+    // checkout mesmo sem receber dados de cartão de verdade (o link gerado
+    // custa uma chamada na Asaas a cada tentativa). Ação separada do limite
+    // geral pra não derrubar quem só está comprando PIX no mesmo IP.
+    if (paymentMethod === "credit_card") {
+      const cardRateLimit = await checkRateLimit({
+        action: "store_checkout_card_attempt",
+        identifier: clientId,
+        maxAttempts: 3,
+        windowSeconds: 600,
+      })
+      if (!cardRateLimit.allowed) {
+        return NextResponse.json(
+          { error: "Muitas tentativas de compra no cartão. Aguarde alguns minutos e tente novamente." },
+          { status: 429 }
+        )
+      }
+    }
 
     // Agrupa por (produto, variante, opções de variante) antes de checar
     // estoque — sem isso, repetir o mesmo par em várias entradas do carrinho
@@ -474,15 +506,198 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    let payerAddress: {
+      phone: string
+      postalCode: string
+      street: string
+      number: string
+      complement?: string
+      neighborhood: string
+      city: string
+      state: string
+    } | null = null
+
+    // Cartão exige endereço/telefone completos no customer da Asaas (PIX
+    // não precisa) — checa e, se faltar, aceita os dados no próprio corpo do
+    // checkout (mesmo padrão de payerInfoSchema acima) e completa o perfil.
+    if (paymentMethod === "credit_card") {
+      const { data: addressProfile } = await db
+        .from("user_profiles")
+        .select("phone, postal_code, street, number, complement, neighborhood, city, state")
+        .eq("id", user.id)
+        .single()
+
+      const hasCompleteAddress = Boolean(
+        addressProfile?.phone &&
+          addressProfile?.postal_code &&
+          addressProfile?.street &&
+          addressProfile?.number &&
+          addressProfile?.neighborhood &&
+          addressProfile?.city &&
+          addressProfile?.state
+      )
+
+      if (hasCompleteAddress) {
+        payerAddress = {
+          phone: addressProfile!.phone!,
+          postalCode: addressProfile!.postal_code!,
+          street: addressProfile!.street!,
+          number: addressProfile!.number!,
+          complement: addressProfile!.complement ?? undefined,
+          neighborhood: addressProfile!.neighborhood!,
+          city: addressProfile!.city!,
+          state: addressProfile!.state!,
+        }
+      } else {
+        const address = payerAddressSchema.safeParse(parsedBody.data)
+        if (!address.success) {
+          await revertDecrements(db, decrementedLines)
+          return NextResponse.json(
+            { error: address.error.issues[0]?.message ?? "Informe seu telefone e endereço para pagar com cartão." },
+            { status: 400 }
+          )
+        }
+        payerAddress = {
+          phone: address.data.guestPhone,
+          postalCode: address.data.guestPostalCode,
+          street: address.data.guestStreet,
+          number: address.data.guestNumber,
+          complement: address.data.guestComplement,
+          neighborhood: address.data.guestNeighborhood,
+          city: address.data.guestCity,
+          state: address.data.guestState,
+        }
+
+        const { error: addressUpdateError } = await db
+          .from("user_profiles")
+          .update({
+            phone: payerAddress.phone,
+            postal_code: payerAddress.postalCode,
+            street: payerAddress.street,
+            number: payerAddress.number,
+            complement: payerAddress.complement ?? null,
+            neighborhood: payerAddress.neighborhood,
+            city: payerAddress.city,
+            state: payerAddress.state,
+          })
+          .eq("id", user.id)
+        if (addressUpdateError) {
+          await revertDecrements(db, decrementedLines)
+          const { body: errBody, status } = dbErrorResponse(
+            addressUpdateError,
+            "Não foi possível salvar seu endereço. Tente novamente."
+          )
+          return NextResponse.json(errBody, { status })
+        }
+      }
+    }
+
     const description = `Pedido Sunano — ${orderItems.length} ${orderItems.length === 1 ? "item" : "itens"}`
+
+    let orderInsert: Partial<Database["public"]["Tables"]["store_orders"]["Insert"]>
+    let qrCodeBase64: string | null = null
+    let copyPaste: string | null = null
+    let checkoutUrl: string | null = null
+
+    if (paymentMethod === "credit_card") {
+      // Cartão é SEMPRE via Asaas Checkout hospedado, independente de
+      // PAYMENT_GATEWAY — a MisticPay não tem API de cartão. O cliente
+      // digita os dados na página da própria Asaas; nosso backend nunca
+      // recebe número de cartão, validade ou CVV (ver createCheckout).
+      const settings = await getStoreSettings()
+      const cardTotalCents = Math.round(totalCents * (1 + settings.cardSurchargePercent / 100))
+
+      const customer = await findOrCreateCustomer({
+        name: payerName,
+        cpfCnpj: payerDocument,
+        email: customerEmail,
+        phone: payerAddress!.phone,
+        postalCode: payerAddress!.postalCode,
+        address: payerAddress!.street,
+        addressNumber: payerAddress!.number,
+        complement: payerAddress!.complement,
+        province: payerAddress!.neighborhood,
+        city: payerAddress!.city,
+        state: payerAddress!.state,
+      })
+      if (customer.id !== cachedAsaasCustomerId) {
+        await db.from("user_profiles").update({ asaas_customer_id: customer.id }).eq("id", user.id)
+      }
+
+      // Gera o id do pedido antes do insert (Supabase aceita PK explícita)
+      // para poder apontar `successUrl` pra ele — diferente do fluxo PIX,
+      // aqui o cliente é redirecionado de volta pro nosso site, então
+      // precisamos do id real ANTES de criar o checkout na Asaas, não só de
+      // uma referência opaca. externalReference usa o mesmo id (não vaza
+      // nada novo: é o id do próprio pedido que o cliente já vai ver na URL).
+      const orderId = randomUUID()
+
+      let checkout
+      try {
+        checkout = await createCheckout({
+          customerId: customer.id,
+          totalCents: cardTotalCents,
+          description,
+          externalReference: orderId,
+          maxInstallments: settings.cardMaxInstallments,
+          successUrl: `${SITE_URL}/checkout/card?orderId=${orderId}`,
+          cancelUrl: `${SITE_URL}/checkout`,
+          expiredUrl: `${SITE_URL}/checkout`,
+          minutesToExpire: PIX_EXPIRATION_MINUTES,
+        })
+      } catch (checkoutError) {
+        // Falha ao criar o checkout na Asaas (ex.: cartão de teste inválido
+        // em sandbox, erro de validação) — reverte a reserva de estoque
+        // imediatamente aqui, sem esperar cair no catch externo genérico,
+        // pra devolver uma mensagem específica de cartão recusado/indisponível.
+        console.error("[checkout] createCheckout falhou:", checkoutError)
+        await revertDecrements(db, decrementedLines)
+        return NextResponse.json(
+          { error: "Não foi possível iniciar o pagamento com cartão. Tente novamente ou use PIX." },
+          { status: 402 }
+        )
+      }
+
+      orderInsert = {
+        id: orderId,
+        asaas_checkout_id: checkout.id,
+        asaas_customer_id: customer.id,
+        pix_price_cents: totalCents,
+        card_surcharge_percent: settings.cardSurchargePercent,
+      }
+      checkoutUrl = checkout.link
+
+      const { data: order, error: insertError } = await db
+        .from("store_orders")
+        .insert({
+          ...orderInsert,
+          items: orderItems,
+          total_cents: cardTotalCents,
+          status: "pending",
+          payment_method: "credit_card",
+          customer_email: customerEmail,
+          customer_name: payerName,
+          metadata: { user_id: user.id },
+          affiliate_id: affiliateAttribution?.affiliateId ?? null,
+          affiliate_code: affiliateAttribution?.affiliateCode ?? null,
+        })
+        .select("id")
+        .single()
+
+      if (insertError || !order) {
+        await revertDecrements(db, decrementedLines)
+        const { body, status } = dbErrorResponse(insertError, "Não foi possível registrar o pedido.")
+        return NextResponse.json(body, { status })
+      }
+
+      await notifyOrderStatusChange({ userId: user.id, orderId: order.id, status: "pending" })
+
+      return NextResponse.json({ orderId: order.id, checkoutUrl })
+    }
 
     // MisticPay é o gateway padrão hoje — Asaas fica atrás de
     // PAYMENT_GATEWAY=asaas até a migração ser concluída.
     const gateway = process.env.PAYMENT_GATEWAY === "asaas" ? "asaas" : "misticpay"
-
-    let orderInsert: Partial<Database["public"]["Tables"]["store_orders"]["Insert"]>
-    let qrCodeBase64: string
-    let copyPaste: string
 
     if (gateway === "asaas") {
       // externalReference próprio (não o id do pedido) para não vazar UUID
@@ -570,6 +785,8 @@ export async function POST(request: NextRequest) {
       const { body, status } = dbErrorResponse(insertError, "Não foi possível registrar o pedido.")
       return NextResponse.json(body, { status })
     }
+
+    await notifyOrderStatusChange({ userId: user.id, orderId: order.id, status: "pending" })
 
     return NextResponse.json({
       orderId: order.id,

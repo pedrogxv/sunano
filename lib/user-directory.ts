@@ -15,6 +15,8 @@ export type PublicProfileSummary = {
   /** Enquadramento escolhido para cada imagem (ver `profile-media-adjust`). */
   media_adjustments: ProfileMediaAdjustments
   account_tier: AccountTier
+  /** Validade do VIP — `null` = sem expiração (manual/cargo). Usar sempre com `isVipActive`, nunca `account_tier` sozinho. */
+  vip_expires_at: string | null
   profile_views: number
   followers: number
   /** Saldo acumulado em `user_aura_wallet` — a mesma Aura que o fórum credita. */

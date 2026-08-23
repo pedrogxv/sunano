@@ -10,6 +10,8 @@ import { DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { getUserAuraBalance, getUserAuraRank, getUserAuraTotalEarned } from "@/lib/server/repositories/aura-repository"
 import { getUserActivityRank } from "@/lib/server/repositories/users-repository"
 import { getUserAchievements, getUserStreak } from "@/lib/server/repositories/achievements-repository"
+import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
+import { countUserTierlistItems } from "@/lib/server/repositories/user-tierlist-repository"
 import {
   coerceAccountTier,
   selectVisibleFavorites,
@@ -55,7 +57,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at, equipped_avatar_frame_id, aura_items ( frame_asset_url )"
 
 const PERIPHERAL_COLUMNS = PERIPHERAL_SHOWCASE_COLUMNS
 type PeripheralRow = PeripheralShowcaseRow
@@ -100,12 +102,17 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     mini_banner_url: string | null
     bio: string | null
     account_tier: string | null
+    vip_expires_at: string | null
     youtube_handle: string | null
     tiktok_handle: string | null
     created_at: string
     profile_views: number | null
     reviews_integrity_accepted_at: string | null
+    equipped_avatar_frame_id: string | null
+    aura_items: { frame_asset_url: string } | { frame_asset_url: string }[] | null
   }
+
+  const equippedFrame = Array.isArray(row.aura_items) ? row.aura_items[0] : row.aura_items
 
   const tier = coerceAccountTier(row.account_tier)
 
@@ -125,6 +132,8 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviewsByCategory,
     reviewsTotal,
     reviewedPeripheralIds,
+    youtubeSubscribed,
+    tierlistItemCount,
   ] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
@@ -141,6 +150,8 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     getUserReviewsByCategory(userId, { limitPerCategory: MINI_REVIEWS_PER_CATEGORY_LIMIT }),
     countUserReviews(userId),
     getReviewedPeripheralIds(userId),
+    hasConfirmedYoutubeSubscription(userId),
+    countUserTierlistItems(userId),
   ])
 
   return {
@@ -153,8 +164,11 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     mini_banner_url: row.mini_banner_url,
     bio: row.bio,
     account_tier: tier,
+    vip_expires_at: row.vip_expires_at,
     youtube_handle: row.youtube_handle,
     tiktok_handle: row.tiktok_handle,
+    youtube_subscribed: youtubeSubscribed,
+    equipped_avatar_frame_url: equippedFrame?.frame_asset_url ?? null,
     member_since: row.created_at,
     profile_views: row.profile_views ?? 0,
     followers,
@@ -175,6 +189,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviews_total: reviewsTotal,
     reviews_integrity_accepted_at: row.reviews_integrity_accepted_at,
     reviewed_peripheral_ids: reviewedPeripheralIds,
+    tierlist_item_count: tierlistItemCount,
   }
 })
 

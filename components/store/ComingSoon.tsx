@@ -1,12 +1,14 @@
 import Link from "next/link"
 import { ArrowLeft, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { StoreCountdown } from "@/components/store/StoreCountdown"
 
 interface ComingSoonProps {
   icon: LucideIcon
   title: string
   description: string
   accent?: "emerald" | "amber"
+  launchAt?: string
 }
 
 const ACCENT_STYLE = {
@@ -15,16 +17,18 @@ const ACCENT_STYLE = {
     bg: "bg-emerald-500/5",
     icon: "text-emerald-400",
     badge: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+    countdown: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
   },
   amber: {
     border: "border-amber-500/20",
     bg: "bg-amber-500/5",
     icon: "text-amber-400",
     badge: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+    countdown: "border-amber-500/30 bg-amber-500/10 text-amber-300",
   },
 } as const
 
-export function ComingSoon({ icon: Icon, title, description, accent = "emerald" }: ComingSoonProps) {
+export function ComingSoon({ icon: Icon, title, description, accent = "emerald", launchAt }: ComingSoonProps) {
   const style = ACCENT_STYLE[accent]
 
   return (
@@ -57,6 +61,7 @@ export function ComingSoon({ icon: Icon, title, description, accent = "emerald" 
           </span>
         </div>
         <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
+        {launchAt ? <StoreCountdown launchAt={launchAt} accentClassName={style.countdown} /> : null}
       </div>
     </div>
   )

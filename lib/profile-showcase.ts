@@ -118,6 +118,8 @@ export type ProfileShowcase = {
   media_adjustments: import("./profile-media-adjust").ProfileMediaAdjustments
   bio: string | null
   account_tier: import("./account-tier").AccountTier
+  /** Validade do VIP — `null` = sem expiração (manual/cargo). Usar sempre com `isVipActive(account_tier, vip_expires_at)`, nunca `account_tier` sozinho. */
+  vip_expires_at: string | null
   member_since: string
   /** Quantas pessoas seguem este perfil. */
   followers: number
@@ -160,6 +162,12 @@ export type ProfileShowcase = {
   /** Handle sem "@" — link exibido como ícone clicável no perfil público. */
   youtube_handle: string | null
   tiktok_handle: string | null
+  /** Se confirmou inscrição no canal do YouTube (conquista especial "Inscrito", ver `AchievementsGrid`). */
+  youtube_subscribed: boolean
+  /** Moldura de avatar equipada (Central de Aura), sobreposta à foto de perfil — `null` quando nenhuma está equipada. */
+  equipped_avatar_frame_url: string | null
+  /** Quantos itens a tierlist pessoal (VIP, Beta) do usuário já tem — 0 esconde o card resumido no perfil. */
+  tierlist_item_count: number
 }
 
 /** Limite de caracteres da bio (espelha o CHECK constraint da tabela). */

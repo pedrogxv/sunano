@@ -88,14 +88,23 @@ export async function GET() {
 
     const [{ data: adminRows }, { data: profileRows }] = await Promise.all([
       admin.from("admin_profiles").select("id, email, display_name, avatar_url, role, permissions, updated_at"),
-      admin.from("user_profiles").select("id, display_name, avatar_url, account_tier, display_slug"),
+      admin
+        .from("user_profiles")
+        .select("id, display_name, avatar_url, account_tier, display_slug, account_banned_at, account_ban_reason"),
     ])
 
     const adminMap = new Map<string, AdminProfileRow>()
     for (const row of (adminRows ?? []) as AdminProfileRow[]) adminMap.set(row.id, row)
     const profileMap = new Map<
       string,
-      { display_name: string | null; avatar_url: string | null; account_tier: string | null; display_slug: string | null }
+      {
+        display_name: string | null
+        avatar_url: string | null
+        account_tier: string | null
+        display_slug: string | null
+        account_banned_at: string | null
+        account_ban_reason: string | null
+      }
     >()
     for (const row of (profileRows ?? []) as {
       id: string
@@ -103,12 +112,16 @@ export async function GET() {
       avatar_url: string | null
       account_tier: string | null
       display_slug: string | null
+      account_banned_at: string | null
+      account_ban_reason: string | null
     }[]) {
       profileMap.set(row.id, {
         display_name: row.display_name,
         avatar_url: row.avatar_url,
         account_tier: row.account_tier,
         display_slug: row.display_slug,
+        account_banned_at: row.account_banned_at,
+        account_ban_reason: row.account_ban_reason,
       })
     }
 
@@ -125,6 +138,8 @@ export async function GET() {
           avatar_url: ap?.avatar_url ?? up?.avatar_url ?? null,
           account_tier: coerceAccountTier(up?.account_tier),
           display_slug: up?.display_slug ?? null,
+          account_banned_at: up?.account_banned_at ?? null,
+          account_ban_reason: up?.account_ban_reason ?? null,
           role,
           permissions: getRolePermissions(role),
           created_at: u.created_at,

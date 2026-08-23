@@ -7,6 +7,7 @@ import { StoreContent } from "@/components/store/StoreContent"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { isWebMaster } from "@/lib/admin-permissions"
+import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
 
 export const revalidate = 60
 
@@ -17,11 +18,6 @@ export const metadata: Metadata = {
 }
 
 const PAGE_SIZE = 24
-
-function isStoreMaintenanceEnabled() {
-  const value = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE
-  return value === "true"
-}
 
 export default async function LojaPage() {
   if (isStoreMaintenanceEnabled()) {
@@ -34,6 +30,7 @@ export default async function LojaPage() {
           title="Mercado"
           description="O Mercado, com produtos selecionados pelo Sunano, está sendo preparado. Fique de olho nas redes para o lançamento."
           accent="emerald"
+          launchAt={getStoreLaunchAt()}
         />
       )
     }

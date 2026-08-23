@@ -19,11 +19,36 @@ export type TierCapabilities = {
   maxFavorites: number
   /** Se GIF anima no banner e na foto de perfil. */
   animatedMedia: boolean
+  /**
+   * Desconto (basis points, 1000 = 10%) aplicado ao custo em Aura na Central
+   * de Aura. Só documenta o número aqui — o débito real é decidido dentro
+   * das RPCs `redeem_aura_item`/`change_display_name_with_aura` em SQL,
+   * nunca em TS (o client nunca deve decidir o preço).
+   */
+  auraDiscountBps: number
+  /** Quantas reações (like/dislike) o usuário pode dar por dia. */
+  dailyAuraGiveLimit: number
 }
 
 export const TIER_CAPABILITIES: Record<AccountTier, TierCapabilities> = {
-  common: { label: "Membro", maxMedals: 3, maxFavorites: 3, animatedMedia: false },
-  vip:    { label: "VIP",    maxMedals: 8, maxFavorites: 8, animatedMedia: true },
+  common: { label: "Membro", maxMedals: 3, maxFavorites: 3, animatedMedia: false, auraDiscountBps: 0, dailyAuraGiveLimit: 50 },
+  vip:    { label: "VIP",    maxMedals: 8, maxFavorites: 8, animatedMedia: true, auraDiscountBps: 1000, dailyAuraGiveLimit: 100 },
+}
+
+/**
+ * VIP "ativo agora" — `vip_expires_at IS NULL` (manual/cargo, sem
+ * expiração) ou ainda dentro do período pago. Espelho TS de `is_vip_active`
+ * (SQL, ver migration `20260922000001_is_vip_active_helper.sql`) — mudar um,
+ * mudar o outro. Único ponto de verdade: nenhum componente/repositório deve
+ * checar `account_tier !== "common"` sozinho, sempre passar por aqui.
+ */
+export function isVipActive(
+  accountTier: AccountTier | string | null | undefined,
+  vipExpiresAt: string | null | undefined
+): boolean {
+  if (accountTier !== "vip") return false
+  if (!vipExpiresAt) return true
+  return new Date(vipExpiresAt).getTime() > Date.now()
 }
 
 /** Normaliza um valor vindo do banco (ou de um payload) para um tier válido. */

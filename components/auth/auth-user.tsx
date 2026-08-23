@@ -1,9 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { Bookmark, LayoutDashboard, LifeBuoy, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
+import { Bookmark, Crown, LayoutDashboard, LifeBuoy, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
+
+import { useState } from "react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { signOutSafely } from "@/lib/client/supabase-auth"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
-import { useUserOrders } from "@/lib/hooks/use-user-orders"
+import { useUserOrders, pendingPaymentHref } from "@/lib/hooks/use-user-orders"
 import { formatBRL } from "@/lib/format"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
@@ -49,6 +52,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   const { pendingOrder } = useUserOrders()
   const ready = !loading
   const isAdmin = authUser?.isAdmin ?? false
+  const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
   // Só a topbar pública abre o modal — a sidebar de admin (/admin/login) segue
   // navegando de verdade, já que aquele login não é o alvo deste modal.
   const useModal = variant === "public" && layout === "topbar"
@@ -119,20 +123,36 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   const initials = getInitials(user.name)
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {layout === "topbar" ? (
           <button
             type="button"
             aria-label={user.name}
-            className="animate-fade-in-up flex size-11 shrink-0 items-center justify-center rounded-lg transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:size-8"
+            className="animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center rounded-lg transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:size-8"
           >
-            <Avatar className="size-8 rounded-lg ring-1 ring-border">
+            <Avatar
+              className={cn(
+                "size-8 rounded-lg",
+                authUser?.isVip
+                  ? "ring-2 ring-[var(--vip-accent)] shadow-[0_0_10px_-2px_var(--vip-accent-soft)]"
+                  : "ring-1 ring-border"
+              )}
+            >
               <AvatarImage src={user.avatar} alt={user.name} />
               <AvatarFallback className="rounded-lg bg-primary/15 text-xs font-semibold text-primary">
                 {initials}
               </AvatarFallback>
             </Avatar>
+            {authUser?.isVip && (
+              <span
+                className="absolute -bottom-1 -right-1 z-10 flex size-3.5 items-center justify-center rounded-full border-2 border-background"
+                style={{ backgroundColor: "var(--vip-accent)" }}
+              >
+                <Crown className="size-2 vip-badge-crown text-black" />
+              </span>
+            )}
           </button>
         ) : (
           <button
@@ -180,6 +200,22 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               <span className="truncate text-xs text-muted-foreground">{user.email}</span>
             </div>
           </div>
+          {authUser?.isVip ? (
+            <div className="flex items-center gap-1 px-2 pb-1.5">
+              <Crown className="size-3 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
+              <span className="vip-badge-text text-[10px] font-bold uppercase tracking-wide">VIP</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setVipUpsellOpen(true)}
+              className="flex items-center gap-1 px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wide transition-opacity hover:opacity-80"
+              style={{ color: "var(--vip-accent)" }}
+            >
+              <Crown className="size-3" />
+              Seja VIP
+            </button>
+          )}
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator className="bg-border" />
@@ -188,13 +224,16 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
           <>
             <DropdownMenuItem asChild>
               <Link
-                href={`/checkout/pix?orderId=${pendingOrder.id}`}
+                href={pendingPaymentHref(pendingOrder)}
                 className="flex cursor-pointer items-center gap-2.5 rounded-sm bg-amber-500/10 focus:bg-amber-500/20 focus:text-foreground"
               >
                 <QrCode className="size-4 shrink-0 text-amber-400" />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-sm font-medium text-foreground">Pedido aguardando pagamento</span>
-                  <span className="text-xs text-muted-foreground">{formatBRL(pendingOrder.total_cents)} · concluir com PIX</span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatBRL(pendingOrder.total_cents)} ·{" "}
+                    {pendingOrder.payment_method === "credit_card" ? "concluir com cartão" : "concluir com PIX"}
+                  </span>
                 </div>
               </Link>
             </DropdownMenuItem>
@@ -310,5 +349,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />
+    </>
   )
 }

@@ -1,13 +1,15 @@
 import { Activity, Crown, Flame, Sparkles } from "lucide-react"
 
-import { getTierCapabilities, type AccountTier } from "@/lib/account-tier"
+import { getTierCapabilities, isVipActive, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 import { StreakBadge } from "./StreakBadge"
+import { EditNameButton } from "./EditNameButton"
 
 interface InfoBasicaProps {
   name: string
   tier: AccountTier
+  vipExpiresAt?: string | null
   memberSince?: string | null
   /** Slug do perfil — resolve tag especial (ex: SUNANO), se houver. */
   displaySlug?: string | null
@@ -18,11 +20,13 @@ interface InfoBasicaProps {
   /** Dias de ofensiva atual — some da badge quando zerada (ver `StreakBadge`). */
   streak?: number
   bio?: string | null
+  /** Habilita o ícone de trocar nome (Central de Aura) quando é o próprio dono. */
+  isOwner?: boolean
 }
 
 const TIER_BADGE_STYLES: Record<AccountTier, string> = {
   common: "border-border bg-muted/40 text-muted-foreground",
-  vip: "border-fuchsia-400/40 bg-fuchsia-400/10 text-fuchsia-300",
+  vip: "border-[var(--vip-accent-soft)] bg-[var(--vip-accent)]/10 text-[var(--vip-accent)]",
 }
 
 /**
@@ -39,15 +43,17 @@ const TIER_BADGE_STYLES: Record<AccountTier, string> = {
 export function InfoBasica({
   name,
   tier,
+  vipExpiresAt = null,
   memberSince,
   displaySlug,
   auraRank,
   activityRank,
   streak = 0,
   bio,
+  isOwner = false,
 }: InfoBasicaProps) {
   const { label } = getTierCapabilities(tier)
-  const isVip = tier !== "common"
+  const isVip = isVipActive(tier, vipExpiresAt)
   const specialTag = getSpecialTag(displaySlug)
 
   const joinedLabel = memberSince
@@ -56,17 +62,20 @@ export function InfoBasica({
 
   return (
     <div className="flex flex-col items-center gap-1.5">
-      <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{name}</h1>
+      <div className="flex items-center gap-1.5">
+        <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{name}</h1>
+        {isOwner && <EditNameButton currentName={name} />}
+      </div>
 
       <div className="flex flex-wrap items-center justify-center gap-2">
         <span
           className={cn(
             "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider",
-            TIER_BADGE_STYLES[tier]
+            TIER_BADGE_STYLES[isVip ? "vip" : "common"]
           )}
         >
           {isVip && <Crown className="size-3 vip-badge-crown" />}
-          <span className={cn(isVip && "vip-badge-text")}>{label}</span>
+          <span className={cn(isVip && "vip-badge-text")}>{isVip ? label : getTierCapabilities("common").label}</span>
         </span>
 
         {specialTag && (

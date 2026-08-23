@@ -5,12 +5,11 @@ import { coerceAccountTier } from "@/lib/account-tier"
 import { checkContent, CONTENT_FILTER_MESSAGE } from "@/lib/content-filter"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { coerceMediaAdjustments, DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
-import { DISPLAY_NAME_MAX_LENGTH, slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
+import { slugifyDisplayName } from "@/lib/profile-name"
 import { BIO_MAX_LENGTH, normalizeSocialHandle, SOCIAL_HANDLE_PATTERN } from "@/lib/profile-showcase"
 import {
   getAdminProfileSummary,
   getUserProfileSettings,
-  isDisplayNameAvailable,
   resolveAvailableDisplayName,
   updateUserProfileSettings,
 } from "@/lib/server/repositories/users-repository"
@@ -22,11 +21,12 @@ const VALID_THEMES = ["dark", "light"] as const
 const VALID_LOCALES = ["pt-BR", "en-US"] as const
 
 const profileSchema = z.object({
-  display_name: z
-    .string()
-    .trim()
-    .max(DISPLAY_NAME_MAX_LENGTH, `Nome deve ter no máximo ${DISPLAY_NAME_MAX_LENGTH} caracteres`)
-    .optional(),
+  // display_name REMOVIDO — trocar nome agora é só via
+  // POST /api/aura/display-name (change_display_name_with_aura), pago com
+  // Aura e sujeito a cooldown de 3 dias. Este endpoint nunca mais aceita
+  // esse campo; o nome inicial (conta nova) continua sendo resolvido
+  // internamente a partir do e-mail, sem input do usuário (ver `seedName`
+  // abaixo).
   avatar_url: z.string().trim().url("URL da imagem inválida").nullable().optional(),
   theme: z.enum(VALID_THEMES).nullable().optional(),
   locale: z.enum(VALID_LOCALES).nullable().optional(),
@@ -122,6 +122,7 @@ export async function GET() {
         mini_banner_url: settings?.mini_banner_url ?? null,
         bio: settings?.bio ?? null,
         account_tier: coerceAccountTier(settings?.account_tier),
+        vip_expires_at: settings?.vip_expires_at ?? null,
         youtube_handle: settings?.youtube_handle ?? null,
         tiktok_handle: settings?.tiktok_handle ?? null,
         media_adjustments: settings?.media_adjustments ?? DEFAULT_ADJUSTMENTS,
@@ -153,47 +154,6 @@ export async function POST(request: Request) {
 
     const email = authData.user.email ?? null
     const existingSettings = await getUserProfileSettings(authData.user.id)
-    const incomingDisplayName =
-      parsed.data.display_name !== undefined
-        ? parsed.data.display_name.trim() || defaultNameFromEmail(email)
-        : undefined
-
-    // A tela de perfil salva identidade e vitrine juntas e sempre reenvia o
-    // nome atual, mudando ele ou não. Validar (reservado/unicidade) toda vez
-    // travava o salvamento de bio/avatar/etc. sempre que o nome já gravado
-    // colidisse com essas regras — ex.: uma conta cujo nome já é o próprio
-    // slug reservado. Só revalida quando o slug realmente muda.
-    //
-    // Perfil que ainda não existe (primeiro save) reenvia o nome default
-    // derivado do e-mail — a pessoa nunca escolheu esse nome, só o formulário
-    // ecoou o que a própria API sugeriu no GET. Se esse default colidir com
-    // uma palavra reservada (ex.: conta "sunano@..." recebendo o default
-    // "sunano", que é reservado), não faz sentido travar a gravação inteira
-    // (avatar, banner, bio) por causa de um nome que ninguém digitou; esse
-    // caso cai no mesmo `seedName` que já resolve um nome livre abaixo.
-    const isUnclaimedDefaultName =
-      !existingSettings && incomingDisplayName === defaultNameFromEmail(email)
-
-    const nameSlugChanging =
-      incomingDisplayName !== undefined &&
-      !isUnclaimedDefaultName &&
-      slugifyDisplayName(incomingDisplayName) !== existingSettings?.display_slug
-
-    if (nameSlugChanging) {
-      const invalid = validateDisplayName(incomingDisplayName!)
-      if (invalid) {
-        return NextResponse.json({ error: invalid, field: "display_name" }, { status: 400 })
-      }
-      // Checagem amigável antes do índice único do banco, que também barra —
-      // aqui a mensagem sai específica em vez de "erro ao salvar".
-      const available = await isDisplayNameAvailable(incomingDisplayName!, authData.user.id)
-      if (!available) {
-        return NextResponse.json(
-          { error: "Esse nome já está em uso. Escolha outro.", field: "display_name" },
-          { status: 409 }
-        )
-      }
-    }
 
     if (parsed.data.bio && checkContent(parsed.data.bio).blocked) {
       return NextResponse.json({ error: CONTENT_FILTER_MESSAGE, field: "bio" }, { status: 400 })
@@ -210,15 +170,15 @@ export async function POST(request: Request) {
 
     // Perfil que ainda não existe (conta antiga, ou primeira mudança de tema
     // antes de qualquer edição) nasce com um nome derivado do email em vez do
-    // `user-<id>` que o banco geraria como fallback. Mesma resolução quando o
-    // default é o próprio nome reenviado sem ter sido escolhido (ver acima).
-    const seedName =
-      (incomingDisplayName === undefined || isUnclaimedDefaultName) && !existingSettings
-        ? await resolveAvailableDisplayName(defaultNameFromEmail(email), authData.user.id)
-        : undefined
+    // `user-<id>` que o banco geraria como fallback. Perfil já existente nunca
+    // tem o nome tocado por este endpoint — trocar nome é só via
+    // POST /api/aura/display-name.
+    const seedName = !existingSettings
+      ? await resolveAvailableDisplayName(defaultNameFromEmail(email), authData.user.id)
+      : undefined
 
     await updateUserProfileSettings(authData.user.id, {
-      displayName: isUnclaimedDefaultName ? seedName : (incomingDisplayName ?? seedName),
+      displayName: seedName,
       avatarUrl: parsed.data.avatar_url,
       theme: parsed.data.theme,
       locale: parsed.data.locale,
@@ -259,6 +219,7 @@ export async function POST(request: Request) {
         mini_banner_url: settings?.mini_banner_url ?? null,
         bio: settings?.bio ?? null,
         account_tier: coerceAccountTier(settings?.account_tier),
+        vip_expires_at: settings?.vip_expires_at ?? null,
         youtube_handle: settings?.youtube_handle ?? null,
         tiktok_handle: settings?.tiktok_handle ?? null,
         media_adjustments: settings?.media_adjustments ?? DEFAULT_ADJUSTMENTS,

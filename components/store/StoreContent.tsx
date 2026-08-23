@@ -258,7 +258,7 @@ function ProductCarouselSection({
           </div>
         )}
       </div>
-      <div ref={scrollRef} className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] sm:gap-3.5">
+      <div ref={scrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 [scrollbar-width:thin] sm:gap-3.5 lg:-mx-8 lg:px-8">
         {items.map((product) => (
           <div key={product.id} className="w-[168px] shrink-0 sm:w-[232px]">
             <ProductCard {...product} />
@@ -596,7 +596,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 </div>
               )}
             </div>
-            <div ref={featuredScrollRef} className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:thin] sm:gap-3.5">
+            <div ref={featuredScrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 [scrollbar-width:thin] sm:gap-3.5 lg:-mx-8 lg:px-8">
               {featuredItems.map((product) => (
                 <div key={product.id} className="w-[168px] shrink-0 sm:w-[232px]">
                   <ProductCard {...product} />

@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Bird, Check, Flame, MessageSquare, Sparkles, SquarePen } from "lucide-react"
+import { ArrowRight, Bird, Check, Flame, MessageSquare, Sparkles, SquarePen, Youtube } from "lucide-react"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { AURA_CHANGED_EVENT } from "@/lib/client/aura-events"
+import { supabaseAuth } from "@/lib/client/supabase-auth"
 import {
   DAILY_MISSION_KEYS,
   DAILY_MISSION_REWARDS,
@@ -58,6 +59,8 @@ export function AuraMissionsBadge() {
   const [missions, setMissions] = useState<DailyMissionsState | null>(null)
   const [streak, setStreak] = useState<UserStreak>(EMPTY_STREAK)
   const [usage, setUsage] = useState<AuraUsage | null>(null)
+  const [youtubeConfirmed, setYoutubeConfirmed] = useState(true)
+  const [youtubeLoading, setYoutubeLoading] = useState(false)
 
   const loadMissions = useCallback(async () => {
     try {
@@ -80,10 +83,38 @@ export function AuraMissionsBadge() {
     }
   }, [])
 
+  const loadYoutubeStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/youtube/subscription-status")
+      const data = res.ok ? await res.json() : null
+      setYoutubeConfirmed(Boolean(data?.confirmed))
+    } catch {
+      setYoutubeConfirmed(true)
+    }
+  }, [])
+
   const loadAll = useCallback(() => {
     void loadMissions()
     void loadUsage()
-  }, [loadMissions, loadUsage])
+    void loadYoutubeStatus()
+  }, [loadMissions, loadUsage, loadYoutubeStatus])
+
+  async function handleYoutubeConfirm() {
+    setYoutubeLoading(true)
+    const redirectTo = `${window.location.origin}/auth/youtube/callback?next=${encodeURIComponent(window.location.pathname)}`
+    const { error } = await supabaseAuth.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo,
+        scopes: "https://www.googleapis.com/auth/youtube.readonly",
+        queryParams: { access_type: "offline", prompt: "consent" },
+      },
+    })
+    if (error) {
+      console.error("[AuraMissionsBadge] signInWithOAuth falhou:", error.message)
+      setYoutubeLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -181,6 +212,23 @@ export function AuraMissionsBadge() {
           })}
         </ul>
 
+        {!youtubeConfirmed && (
+          <div className="border-t border-border p-3">
+            <button
+              type="button"
+              onClick={handleYoutubeConfirm}
+              disabled={youtubeLoading}
+              className="flex w-full items-center gap-2.5 rounded-lg border border-red-600/30 bg-red-600/5 px-2.5 py-1.5 text-sm text-foreground transition-colors hover:border-red-600/50 hover:bg-red-600/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-red-600/50 bg-red-600/10 text-red-500">
+                <Youtube className="size-3" />
+              </span>
+              <span>{youtubeLoading ? "Conectando…" : "Inscreva-se no YouTube"}</span>
+              <span className="ml-auto text-[11px] font-semibold text-red-500">+50 aura</span>
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center gap-2 border-t border-border px-3 py-2.5">
           <Bird
             className={cn("size-4 shrink-0", streak.current > 0 ? "text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.8)]" : "text-muted-foreground")}
@@ -198,6 +246,14 @@ export function AuraMissionsBadge() {
             )}
           </p>
         </div>
+
+        <Link
+          href="/aura"
+          className="flex items-center justify-center gap-1.5 border-t border-border px-3 py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/40"
+        >
+          Ver Central de Aura
+          <ArrowRight className="size-3" />
+        </Link>
       </PopoverContent>
     </Popover>
   )

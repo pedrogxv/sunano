@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Bird, Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
 
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia } from "@/lib/account-tier"
+import { resolveProfileMedia, isVipActive } from "@/lib/account-tier"
 import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -14,7 +14,7 @@ import type { MiniProfile } from "@/lib/mini-profile"
 
 const TIER_RING = {
   common: "ring-background",
-  vip: "ring-fuchsia-400/70",
+  vip: "ring-[var(--vip-accent-soft)]",
 } as const
 
 function formatCount(value: number): string {
@@ -39,7 +39,8 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
   const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier)
   const background = resolveProfileMedia(profile.mini_banner_url, profile.account_tier)
   const hue = profileAccentHue(profile.id)
-  const isVip = profile.account_tier !== "common"
+  const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
+  const effectiveTier = isVip ? "vip" : "common"
   const specialTag = getSpecialTag(profile.display_slug)
   const initials =
     profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
@@ -79,9 +80,7 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
             "relative size-[72px] overflow-hidden rounded-full bg-muted ring-4 ring-offset-0",
             // Sobre uma imagem qualquer, o anel de conta comum precisa de uma
             // cor própria: `ring-background` sumiria no fundo escuro.
-            profile.account_tier === "common"
-              ? "ring-white/50"
-              : TIER_RING[profile.account_tier]
+            effectiveTier === "common" ? "ring-white/50" : TIER_RING[effectiveTier]
           )}
         >
           <ImageWithFallback
@@ -111,7 +110,7 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
             o caso da imagem clara. */}
         <p className="mt-2 flex w-full items-center justify-center gap-1 text-sm font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
           <span className="truncate">{profile.display_name}</span>
-          {isVip && <Crown className="size-3.5 shrink-0 text-amber-300" />}
+          {isVip && <Crown className="size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />}
           {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-300" />}
         </p>
 

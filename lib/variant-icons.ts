@@ -1,43 +1,35 @@
-import {
-  Circle,
-  Square,
-  Triangle,
-  Star,
-  Heart,
-  Diamond,
-  Hexagon,
-  Sparkles,
-  Sun,
-  Moon,
-  Flame,
-  Snowflake,
-  Zap,
-  Droplet,
-  Leaf,
-  type LucideIcon,
-} from "lucide-react"
+import emojiByChar from "unicode-emoji-json/data-by-emoji.json"
 
-export const VARIANT_ICONS: Record<string, LucideIcon> = {
-  circle: Circle,
-  square: Square,
-  triangle: Triangle,
-  star: Star,
-  heart: Heart,
-  diamond: Diamond,
-  hexagon: Hexagon,
-  sparkles: Sparkles,
-  sun: Sun,
-  moon: Moon,
-  flame: Flame,
-  snowflake: Snowflake,
-  zap: Zap,
-  droplet: Droplet,
-  leaf: Leaf,
+export interface VariantEmojiEntry {
+  emoji: string
+  name: string
+  group: string
 }
 
-export const VARIANT_ICON_NAMES = Object.keys(VARIANT_ICONS)
+export const VARIANT_EMOJI_LIST: VariantEmojiEntry[] = Object.entries(
+  emojiByChar as Record<string, { name: string; group: string }>
+).map(([emoji, meta]) => ({ emoji, name: meta.name, group: meta.group }))
 
-export function getVariantIcon(name: string | null | undefined): LucideIcon | null {
-  if (!name) return null
-  return VARIANT_ICONS[name] ?? null
+export const VARIANT_EMOJI_GROUPS = [
+  "Smileys & Emotion",
+  "People & Body",
+  "Animals & Nature",
+  "Food & Drink",
+  "Travel & Places",
+  "Activities",
+  "Objects",
+  "Symbols",
+  "Flags",
+] as const
+
+// Sugestões rápidas pro seletor de variante (cores/modelos de periférico).
+export const VARIANT_EMOJI_SUGGESTIONS = [
+  "🔴", "🟠", "🟡", "🟢", "🔵", "🟣", "⚫", "⚪", "🟤",
+  "⭐", "✨", "🔥", "💧", "❄️", "⚡", "🌙", "☀️", "🍃",
+  "🎮", "⌨️", "🖱️", "🎧", "🔊",
+]
+
+export function isKnownVariantEmoji(value: string | null | undefined): boolean {
+  if (!value) return false
+  return Object.prototype.hasOwnProperty.call(emojiByChar, value)
 }

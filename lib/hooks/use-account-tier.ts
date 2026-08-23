@@ -9,6 +9,7 @@ import {
   getMedalLimit,
   getFavoriteLimit,
   getTierCapabilities,
+  isVipActive,
   selectVisibleFavorites,
   selectVisibleMedals,
   type AccountTier,
@@ -37,7 +38,7 @@ export type UseAccountTierResult = {
  * fixadas). Envolve as funções puras de `lib/account-tier` — a fonte da
  * verdade continua sendo aquele módulo, usado também no servidor.
  */
-export function useAccountTier(rawTier: unknown): UseAccountTierResult {
+export function useAccountTier(rawTier: unknown, vipExpiresAt: string | null = null): UseAccountTierResult {
   return useMemo(() => {
     const tier = coerceAccountTier(rawTier)
     return {
@@ -46,10 +47,10 @@ export function useAccountTier(rawTier: unknown): UseAccountTierResult {
       medalLimit: getMedalLimit(tier),
       favoriteLimit: getFavoriteLimit(tier),
       animatedMedia: canUseAnimatedMedia(tier),
-      isVip: tier !== "common",
+      isVip: isVipActive(tier, vipExpiresAt),
       visibleMedals: (medals) => selectVisibleMedals(medals, tier),
       visibleFavorites: (favorites) => selectVisibleFavorites(favorites, tier),
       hiddenCount: countHiddenByTier,
     }
-  }, [rawTier])
+  }, [rawTier, vipExpiresAt])
 }

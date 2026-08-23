@@ -1,5 +1,7 @@
+import { Crown } from "lucide-react"
+
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
+import { isVipActive, resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
 import {
   DEFAULT_ADJUST,
   mediaAdjustStyle,
@@ -12,9 +14,13 @@ interface AvatarQuadradoProps {
   avatarUrl: string | null
   name: string
   tier: AccountTier
+  /** Quando expira o VIP (`null` = sem expiração) — decide o selo de coroa. */
+  vipExpiresAt?: string | null
   /** Enquadramento escolhido pelo dono no editor de perfil. */
   adjust?: MediaAdjust
   className?: string
+  /** Moldura cosmética equipada (Central de Aura), sobreposta à foto — `null`/ausente = nenhuma. */
+  frameUrl?: string | null
 }
 
 /**
@@ -24,13 +30,13 @@ interface AvatarQuadradoProps {
  */
 const TIER_FRAME: Record<AccountTier, string> = {
   common: "border-border",
-  vip: "border-amber-300",
+  vip: "border-[var(--vip-accent)]",
 }
 
 /** Brilho externo — só para quem tem tier, senão vira ruído na grade. */
 const TIER_GLOW: Record<AccountTier, string> = {
   common: "",
-  vip: "shadow-[0_0_22px_-3px_rgba(252,211,77,0.75)]",
+  vip: "shadow-[0_0_22px_-3px_var(--vip-accent-soft)]",
 }
 
 /**
@@ -48,36 +54,66 @@ export function AvatarQuadrado({
   avatarUrl,
   name,
   tier,
+  vipExpiresAt = null,
   adjust = DEFAULT_ADJUST,
   className,
+  frameUrl,
 }: AvatarQuadradoProps) {
   const { src, animated } = resolveProfileMedia(avatarUrl, tier)
   const initials = name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2)
+  const isVip = isVipActive(tier, vipExpiresAt)
 
   const frame = (
-    <div
-      className={cn(
-        "relative size-24 shrink-0 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-28 md:size-32",
-        TIER_FRAME[tier],
-        TIER_GLOW[tier],
-        className
+    <div className="relative shrink-0">
+      <div
+        className={cn(
+          "relative size-24 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-28 md:size-32",
+          TIER_FRAME[tier],
+          TIER_GLOW[tier],
+          className
+        )}
+      >
+        <ImageWithFallback
+          src={src}
+          alt={name}
+          fill
+          priority
+          unoptimized={animated}
+          sizes="128px"
+          style={mediaAdjustStyle(adjust)}
+          className="object-cover"
+          fallback={
+            <div className="flex size-full items-center justify-center bg-primary/15 text-2xl font-bold text-primary">
+              {initials || "?"}
+            </div>
+          }
+        />
+        {/* Moldura cosmética da Central de Aura — camada por cima da foto,
+            fora do `overflow-hidden` do próprio elemento (ela costuma extrapolar
+            levemente a borda de propósito, como um efeito de moldura). */}
+        {frameUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={frameUrl}
+            alt=""
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-10 size-full scale-110 object-contain"
+          />
+        )}
+      </div>
+
+      {/* Selo VIP — mesma técnica do PersonAvatar, ancorado na base da
+          moldura quadrada em vez do canto (aqui a moldura é maior e
+          centralizada, o canto ficaria longe demais do centro visual). */}
+      {isVip && (
+        <span
+          className="absolute -bottom-1.5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border-2 border-background px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black shadow-sm"
+          style={{ backgroundColor: "var(--vip-accent)" }}
+        >
+          <Crown className="size-3 vip-badge-crown" />
+          VIP
+        </span>
       )}
-    >
-      <ImageWithFallback
-        src={src}
-        alt={name}
-        fill
-        priority
-        unoptimized={animated}
-        sizes="128px"
-        style={mediaAdjustStyle(adjust)}
-        className="object-cover"
-        fallback={
-          <div className="flex size-full items-center justify-center bg-primary/15 text-2xl font-bold text-primary">
-            {initials || "?"}
-          </div>
-        }
-      />
     </div>
   )
 

@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPayment } from "@/lib/server/integrations/asaas"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { markMarketFeePaid } from "@/lib/server/repositories/market-repository"
-import { syncOrderRefundState } from "@/lib/server/repositories/orders-repository"
+import { syncOrderRefundState, orderOwnerId } from "@/lib/server/repositories/orders-repository"
 import { creditCommissionForOrder } from "@/lib/server/repositories/affiliates-repository"
+import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 
 export const runtime = "nodejs"
 export const maxDuration = 20
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
       })
       .eq("asaas_payment_id", paymentId)
       .neq("status", "paid")
-      .select("id, affiliate_id")
+      .select("id, affiliate_id, metadata")
 
     if (!updatedOrders || updatedOrders.length === 0) {
       // Não é um pedido da loja — pode ser a taxa de publicação de um
@@ -127,6 +128,12 @@ export async function POST(request: NextRequest) {
       } catch (err) {
         console.error("[webhooks/asaas] creditCommissionForOrder:", err)
       }
+    }
+
+    for (const order of updatedOrders) {
+      const ownerId = orderOwnerId(order.metadata as Record<string, unknown> | null)
+      if (!ownerId) continue
+      await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "paid" })
     }
 
     return NextResponse.json({ received: true })

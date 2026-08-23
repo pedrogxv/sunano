@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import type { Database } from "@/lib/database.types"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { completeDailyMission } from "@/lib/server/repositories/achievements-repository"
+import { isVipActive, getTierCapabilities } from "@/lib/account-tier"
 
 type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reason"]
 
@@ -192,7 +193,13 @@ const DAILY_LIMIT_REASONS: AuraLedgerReason[] = [
   "post_aura_disliked", "comment_aura_disliked", "blog_post_aura_disliked", "blog_comment_aura_disliked",
 ]
 
+/** Limite de conta comum — VIP dobra para 100 (ver `TIER_CAPABILITIES.vip.dailyAuraGiveLimit`). */
 export const DAILY_AURA_GIVE_LIMIT = 50
+
+/** Limite diário de reações dadas conforme o tier — espelha o `v_daily_limit` das RPCs de toggle. */
+export function getDailyAuraGiveLimit(isVip: boolean): number {
+  return getTierCapabilities(isVip ? "vip" : "common").dailyAuraGiveLimit
+}
 
 export type AuraUsage = {
   balance: number
@@ -220,7 +227,8 @@ export async function getUserAuraUsage(userId: string): Promise<AuraUsage> {
   const db = createSupabaseAdminClient()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-  const [{ data: wallet }, { data: ledgerRows, count }] = await Promise.all([
+  const [{ data: profile }, { data: wallet }, { data: ledgerRows, count }] = await Promise.all([
+    db.from("user_profiles").select("account_tier, vip_expires_at").eq("id", userId).maybeSingle(),
     db.from("user_aura_wallet").select("balance").eq("user_id", userId).maybeSingle(),
     db
       .from("aura_ledger")
@@ -232,8 +240,10 @@ export async function getUserAuraUsage(userId: string): Promise<AuraUsage> {
       .limit(1),
   ])
 
+  const isVip = isVipActive(profile?.account_tier, profile?.vip_expires_at)
+  const limit = getDailyAuraGiveLimit(isVip)
   const givenToday = count ?? 0
-  const limitReached = givenToday >= DAILY_AURA_GIVE_LIMIT
+  const limitReached = givenToday >= limit
   const oldest = ledgerRows?.[0]?.created_at ?? null
   const nextSlotAt =
     limitReached && oldest ? new Date(new Date(oldest).getTime() + 24 * 60 * 60 * 1000).toISOString() : null
@@ -241,7 +251,7 @@ export async function getUserAuraUsage(userId: string): Promise<AuraUsage> {
   return {
     balance: wallet?.balance ?? 0,
     givenToday,
-    limit: DAILY_AURA_GIVE_LIMIT,
+    limit,
     limitReached,
     nextSlotAt,
   }

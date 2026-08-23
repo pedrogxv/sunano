@@ -33,6 +33,29 @@ export function formatStreakMultiplier(streakDays: number): string {
   return `${(bps / 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
 }
 
+/**
+ * Bônus passivo de Aura para VIP — espelha o `v_vip_bps` de `apply_aura_gain`
+ * (20260922000005_apply_aura_gain_vip_bonus.sql): +0,4% (40 bps) sempre que
+ * VIP e sem ofensiva ativa hoje, ou +0,25% (25 bps) ADICIONAL ao bônus de
+ * ofensiva quando ela estiver ativa. `hasActiveStreak` = streakDays > 0.
+ */
+export function vipAuraMultiplierBps(hasActiveStreak: boolean): number {
+  return hasActiveStreak ? 25 : 40
+}
+
+/** Multiplicador total (ofensiva + VIP) em basis points, para exibição na UI. */
+export function totalAuraMultiplierBps(streakDays: number, isVip: boolean): number {
+  const streakBps = streakAuraMultiplierBps(streakDays)
+  const vipBps = isVip ? vipAuraMultiplierBps(streakDays > 0) : 0
+  return streakBps + vipBps
+}
+
+/** Ex.: 175 bps -> "1,75%". */
+export function formatTotalAuraMultiplier(streakDays: number, isVip: boolean): string {
+  const bps = totalAuraMultiplierBps(streakDays, isVip)
+  return `${(bps / 100).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`
+}
+
 export type StreakHeatTier = "none" | "low" | "mid" | "high" | "max"
 
 /**

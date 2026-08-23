@@ -5,6 +5,7 @@ import { hasAdminPermission, isWebMaster, type AdminPermissionKey, type AdminPro
 import { isMfaStepUpRequired, sanitizeNextPath, TRUSTED_DEVICE_COOKIE_NAME, TWO_FACTOR_PATH } from "@/lib/auth-mfa"
 import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { updateSession } from "@/lib/server/supabase/middleware-client"
+import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 
 function isMaintenanceEnabled() {
   const value = process.env.MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_MAINTENANCE_MODE
@@ -15,11 +16,6 @@ function isMaintenanceEnabled() {
 // continuam normais. As páginas /loja mostram "em breve" sozinhas (ver
 // app/loja/page.tsx e app/loja/[slug]/page.tsx); aqui só falta recusar,
 // fechado por padrão, qualquer requisição que crie um pedido novo.
-function isStoreMaintenanceEnabled() {
-  const value = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE
-  return value === "true"
-}
-
 const STORE_ORDER_WRITE_PATHS = ["/api/store/checkout"]
 
 // Rotas públicas de autenticação que continuam acessíveis mesmo em manutenção,
@@ -247,9 +243,30 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return response
   }
 
-  const { response, user, profile, aal, needsLgpdConsent } = await updateSession(request, {
+  const { response, user, profile, aal, needsLgpdConsent, isAccountBanned } = await updateSession(request, {
     needProfile: isAdminRoute || maintenanceMode || storeMaintenanceMode,
   })
+
+  // ── Ban geral de conta (vale para QUALQUER usuário autenticado) ──
+  // Roda antes do 2FA e do LGPD: uma conta banida nunca deve progredir por
+  // essas telas, só ser expulsa. `updateSession` já chamou signOut() ao
+  // detectar o ban, então o cookie copiado abaixo já sai invalidado.
+  if (user && isAccountBanned && !isPublicAuthRoute(pathname)) {
+    if (pathname.startsWith("/api")) {
+      const apiResponse = NextResponse.json({ error: "account_banned" }, { status: 403 })
+      copyCookies(response, apiResponse)
+      return apiResponse
+    }
+
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = "/login"
+    loginUrl.search = ""
+    loginUrl.searchParams.set("error", "account_banned")
+
+    const redirectResponse = NextResponse.redirect(loginUrl)
+    copyCookies(response, redirectResponse)
+    return redirectResponse
+  }
 
   // Loja em manutenção, mas há sessão: só o WEB MASTER passa. Qualquer outro
   // usuário logado (ou perfil ausente) continua recusado.

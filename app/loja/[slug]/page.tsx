@@ -6,16 +6,12 @@ import { ProductDetailContent } from "@/components/store/ProductDetailContent"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { isWebMaster } from "@/lib/admin-permissions"
+import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
 
 export const revalidate = 120
 
 interface PageProps {
   params: Promise<{ slug: string }>
-}
-
-function isStoreMaintenanceEnabled() {
-  const value = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE
-  return value === "true"
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -43,6 +39,7 @@ export default async function ProductPage({ params }: PageProps) {
           title="Mercado"
           description="O Mercado, com produtos selecionados pelo Sunano, está sendo preparado. Fique de olho nas redes para o lançamento."
           accent="emerald"
+          launchAt={getStoreLaunchAt()}
         />
       )
     }

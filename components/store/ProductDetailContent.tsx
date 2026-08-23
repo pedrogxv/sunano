@@ -23,9 +23,10 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
+import { computeCardPriceCents } from "@/lib/store-pricing"
+import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
-import { getVariantIcon } from "@/lib/variant-icons"
 import { getCategoryIcon } from "@/lib/store-category-icons"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import type { LinkedPeripheralRef, StoreProductDetailResult, StoreProductVariantGroup, StoreFilterOptions, StoreProductCard } from "@/lib/server/repositories/store-repository"
@@ -79,6 +80,7 @@ export function ProductDetailContent({
 }: ProductDetailContentProps) {
   const router = useRouter()
   const { add, setOpen } = useCart()
+  const { cardSurchargePercent } = useStoreSettings()
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
 
@@ -427,6 +429,10 @@ export function ProductDetailContent({
             ) : (
               <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
             )}
+            <p className="mt-1 text-sm text-muted-foreground">
+              ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão de crédito
+              (+{cardSurchargePercent}%)
+            </p>
           </div>
 
           {allLinkedPeripherals.length > 0 && (
@@ -444,7 +450,6 @@ export function ProductDetailContent({
                 {variants.map((v) => {
                   const isActive = v.id === selectedVariantId
                   const variantSoldOut = isColorSoldOut(v)
-                  const VariantIcon = getVariantIcon(v.icon)
                   return (
                     <button
                       key={v.id}
@@ -459,17 +464,12 @@ export function ProductDetailContent({
                         variantSoldOut && "cursor-not-allowed opacity-50 hover:border-border"
                       )}
                     >
-                      {(v.color || VariantIcon) && (
+                      {(v.color || v.icon) && (
                         <span
                           className="flex size-[18px] shrink-0 items-center justify-center rounded-full border border-black/10"
                           style={{ backgroundColor: v.color ?? "transparent" }}
                         >
-                          {VariantIcon && (
-                            <VariantIcon
-                              className="size-3"
-                              style={{ color: v.color ? "#fff" : undefined }}
-                            />
-                          )}
+                          {v.icon && <span className="text-[11px] leading-none">{v.icon}</span>}
                         </span>
                       )}
                       <span className={cn(variantSoldOut && "line-through")}>{v.label}</span>
@@ -569,7 +569,7 @@ export function ProductDetailContent({
           <div className="flex flex-wrap items-center gap-5 pt-1">
             <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
               <QrCode className="size-3.5 text-emerald-400" />
-              Pagamento via PIX
+              PIX ou cartão de crédito
             </div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
               <CheckCircle2 className="size-3.5 text-emerald-400" />

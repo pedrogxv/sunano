@@ -44,6 +44,19 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   return (data ?? null) as UserProfile | null
 }
 
+export type UserVipStatus = { account_tier: string | null; vip_expires_at: string | null }
+
+/** Tier + validade do VIP — usado por GET /api/auth/me para alimentar a tag do dropdown do topbar. */
+export async function getUserVipStatus(userId: string): Promise<UserVipStatus | null> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_profiles")
+    .select("account_tier, vip_expires_at")
+    .eq("id", userId)
+    .maybeSingle()
+  return (data ?? null) as UserVipStatus | null
+}
+
 /** Perfis públicos de vários usuários do fórum, indexados por id. */
 export async function getUserProfiles(
   userIds: string[]
@@ -62,7 +75,7 @@ export async function getUserProfiles(
 }
 
 const DIRECTORY_COLUMNS =
-  "id, display_name, display_slug, avatar_url, mini_banner_url, account_tier, profile_views, created_at"
+  "id, display_name, display_slug, avatar_url, mini_banner_url, account_tier, vip_expires_at, profile_views, created_at"
 
 type DirectoryRow = {
   id: string
@@ -71,6 +84,7 @@ type DirectoryRow = {
   avatar_url: string | null
   mini_banner_url: string | null
   account_tier: string | null
+  vip_expires_at: string | null
   profile_views: number | null
   created_at: string
 }
@@ -91,6 +105,7 @@ function toProfileSummary(
     avatar_url: row.avatar_url,
     mini_banner_url: row.mini_banner_url,
     account_tier: coerceAccountTier(row.account_tier),
+    vip_expires_at: row.vip_expires_at,
     profile_views: row.profile_views ?? 0,
     followers,
     aura,
@@ -250,13 +265,18 @@ const getActivityCounts = unstable_cache(
 
 /**
  * Filtro compartilhado por TODAS as abas do diretório de pessoas (Aura,
- * Visitados, Seguidores, Seguindo): esconde o dono do site (`SITE_OWNER_SLUG`)
- * das listagens públicas sem apagar seus dados — os demais usuários sobem uma
+ * Visitados, Seguidores, Seguindo) e pela busca: esconde o dono do site
+ * (`SITE_OWNER_SLUG`) e qualquer conta banida (`account_banned_at`) das
+ * listagens públicas sem apagar seus dados — os demais usuários sobem uma
  * posição. Antes cada função repetia (ou esquecia de repetir) o `.neq` na sua
  * própria query; centralizado aqui, uma aba nova herda o filtro por padrão.
+ * O perfil público (`/perfil/[slug]`) continua acessível por link direto — só
+ * as listagens/rankings/busca usam este filtro.
  */
-function excludeSiteOwner<Q extends { neq(column: string, value: string): Q }>(query: Q): Q {
-  return query.neq("display_slug", SITE_OWNER_SLUG)
+function excludeFromPublicListings<
+  Q extends { neq(column: string, value: string): Q; is(column: string, value: null): Q },
+>(query: Q): Q {
+  return query.neq("display_slug", SITE_OWNER_SLUG).is("account_banned_at", null)
 }
 
 /**
@@ -298,9 +318,9 @@ export async function searchUserProfiles(
   if (trimmed.length < 2) return []
 
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("user_profiles")
-    .select(DIRECTORY_COLUMNS)
+  const { data, error } = await excludeFromPublicListings(
+    db.from("user_profiles").select(DIRECTORY_COLUMNS)
+  )
     .ilike("display_name", `%${trimmed}%`)
     .order("profile_views", { ascending: false })
     .limit(limit)
@@ -312,10 +332,10 @@ export async function searchUserProfiles(
   return withCounters((data ?? []) as DirectoryRow[])
 }
 
-/** Perfis com mais visitas. O dono do site fica de fora (ver `excludeSiteOwner`). */
+/** Perfis com mais visitas. O dono do site fica de fora (ver `excludeFromPublicListings`). */
 export async function getMostVisitedProfiles(limit = 12): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
-  const { data, error } = await excludeSiteOwner(
+  const { data, error } = await excludeFromPublicListings(
     db.from("user_profiles").select(DIRECTORY_COLUMNS)
   )
     .order("profile_views", { ascending: false })
@@ -369,7 +389,7 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
   const rankedIds = [...balances.keys()]
 
   const { data: rankedRows, error: rankedError } = rankedIds.length
-    ? await excludeSiteOwner(
+    ? await excludeFromPublicListings(
         db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
       )
     : { data: [], error: null }
@@ -387,7 +407,7 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
   const remaining = limit - ranked.length
   let fillers: DirectoryRow[] = []
   if (remaining > 0) {
-    let query = excludeSiteOwner(db.from("user_profiles").select(DIRECTORY_COLUMNS))
+    let query = excludeFromPublicListings(db.from("user_profiles").select(DIRECTORY_COLUMNS))
       .order("profile_views", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(remaining)
@@ -449,7 +469,7 @@ export async function getTopStreakProfiles(limit = 12): Promise<PublicProfileSum
   const rankedIds = active.map((r) => r.user_id)
 
   const { data: rankedRows, error: rankedError } = rankedIds.length
-    ? await excludeSiteOwner(
+    ? await excludeFromPublicListings(
         db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
       )
     : { data: [], error: null }
@@ -466,7 +486,7 @@ export async function getTopStreakProfiles(limit = 12): Promise<PublicProfileSum
   const remaining = limit - ranked.length
   let fillers: DirectoryRow[] = []
   if (remaining > 0) {
-    let query = excludeSiteOwner(db.from("user_profiles").select(DIRECTORY_COLUMNS))
+    let query = excludeFromPublicListings(db.from("user_profiles").select(DIRECTORY_COLUMNS))
       .order("profile_views", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(remaining)
@@ -487,9 +507,9 @@ export async function getTopStreakProfiles(limit = 12): Promise<PublicProfileSum
 /** Perfis criados mais recentemente. */
 export async function getNewestProfiles(limit = 12): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("user_profiles")
-    .select(DIRECTORY_COLUMNS)
+  const { data, error } = await excludeFromPublicListings(
+    db.from("user_profiles").select(DIRECTORY_COLUMNS)
+  )
     .order("created_at", { ascending: false })
     .limit(limit)
 
@@ -521,7 +541,7 @@ export async function getFollowingProfiles(
   const ids = (follows ?? []).map((r) => (r as { following_id: string }).following_id)
   if (ids.length === 0) return []
 
-  const { data, error: profilesError } = await excludeSiteOwner(
+  const { data, error: profilesError } = await excludeFromPublicListings(
     db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", ids)
   )
 
@@ -559,7 +579,7 @@ export async function getFollowerProfiles(
   const ids = (follows ?? []).map((r) => (r as { follower_id: string }).follower_id)
   if (ids.length === 0) return []
 
-  const { data, error: profilesError } = await excludeSiteOwner(
+  const { data, error: profilesError } = await excludeFromPublicListings(
     db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", ids)
   )
 
@@ -613,7 +633,7 @@ const getFollowCounts = unstable_cache(
  * a base de membros for pequena isso não compensa — o dia em que compensar,
  * a troca fica contida nesta função.
  *
- * O dono do site fica de fora (ver `excludeSiteOwner`). A contagem de
+ * O dono do site fica de fora (ver `excludeFromPublicListings`). A contagem de
  * seguidores é feita por id, então buscamos um a mais que `limit` para cobrir
  * o caso dele estar entre os top N — mesmo padrão de `getTopAuraProfiles`.
  */
@@ -628,7 +648,7 @@ export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfile
 
   if (topIds.length === 0) return []
 
-  const { data, error: profilesError } = await excludeSiteOwner(
+  const { data, error: profilesError } = await excludeFromPublicListings(
     db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", topIds)
   )
 
@@ -665,7 +685,7 @@ export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfile
  *
  * Mesma estratégia de `getMostFollowedProfiles`: sem coluna nem view para
  * ordenar no banco, então soma em JS a partir das três tabelas de origem.
- * O dono do site fica de fora (ver `excludeSiteOwner`); buscamos um a mais
+ * O dono do site fica de fora (ver `excludeFromPublicListings`); buscamos um a mais
  * que `limit` para cobrir o caso dele estar entre os top N.
  */
 export async function getMostActiveProfiles(limit = 12): Promise<PublicProfileSummary[]> {
@@ -679,7 +699,7 @@ export async function getMostActiveProfiles(limit = 12): Promise<PublicProfileSu
 
   if (topIds.length === 0) return []
 
-  const { data, error: profilesError } = await excludeSiteOwner(
+  const { data, error: profilesError } = await excludeFromPublicListings(
     db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", topIds)
   )
 
@@ -1049,6 +1069,8 @@ export type UserProfileSettings = {
   bio: string | null
   /** Somente leitura pelo usuário — definido pela administração. */
   account_tier: string | null
+  /** Validade do VIP — `null` = sem expiração (manual/cargo). Usar sempre com `isVipActive`. */
+  vip_expires_at: string | null
   youtube_handle: string | null
   tiktok_handle: string | null
   /** Enquadramento das imagens. Padrão quando a coluna ainda não existe. */
@@ -1064,7 +1086,7 @@ export async function getUserProfileSettings(
     db
       .from("user_profiles")
       .select(
-        "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier, youtube_handle, tiktok_handle"
+        "display_name, display_slug, avatar_url, theme, locale, lgpd_consent_at, lgpd_consent_version, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle"
       )
       .eq("id", userId)
       .maybeSingle(),

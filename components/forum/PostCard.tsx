@@ -20,7 +20,7 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useSavedPosts } from "@/components/providers/saved-posts-context"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
-import { TIER_CAPABILITIES, type AccountTier } from "@/lib/account-tier"
+import { TIER_CAPABILITIES, isVipActive, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
@@ -35,6 +35,7 @@ export type PostCardData = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_vip_expires_at: string | null
   author_display_slug: string | null
   category: ForumCategoryInfo | null
   media_image_urls: string[]
@@ -52,12 +53,15 @@ export type PostCardData = {
 }
 
 /** Selo de VIP ao lado do nome do autor — mesmo rótulo do tier usado no perfil. */
-export function AuthorTierBadge({ tier }: { tier: AccountTier }) {
-  if (tier === "common") return null
+export function AuthorTierBadge({ tier, vipExpiresAt = null }: { tier: AccountTier; vipExpiresAt?: string | null }) {
+  if (!isVipActive(tier, vipExpiresAt)) return null
   return (
-    <span className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium bg-fuchsia-400/15 text-fuchsia-400">
+    <span
+      className="inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[10px] font-medium"
+      style={{ backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+    >
       <Crown className="size-2.5" />
-      {TIER_CAPABILITIES[tier].label}
+      {TIER_CAPABILITIES.vip.label}
     </span>
   )
 }
@@ -372,7 +376,7 @@ export function PostCard({
               onClick={(event) => event.stopPropagation()}
               className="pointer-events-auto relative z-10 font-semibold"
             />
-            <AuthorTierBadge tier={post.author_account_tier} />
+            <AuthorTierBadge tier={post.author_account_tier} vipExpiresAt={post.author_vip_expires_at} />
             <AuthorSpecialTagBadge slug={post.author_display_slug} />
             <span>·</span>
             <span>{format(new Date(post.created_at), "dd MMM yyyy", { locale: ptBR })}</span>

@@ -10,10 +10,10 @@ const csp = [
 	"img-src 'self' data: blob: https:",
 	"font-src 'self' data:",
 	`connect-src 'self' https://*.supabase.co wss://*.supabase.co${isDev ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
-	"frame-src https://www.youtube.com https://www.youtube-nocookie.com https://checkout.stripe.com",
+	"frame-src https://www.youtube.com https://www.youtube-nocookie.com",
 	"object-src 'none'",
 	"base-uri 'self'",
-	"form-action 'self' https://checkout.stripe.com",
+	"form-action 'self'",
 	"frame-ancestors 'self'",
 ].join("; ")
 

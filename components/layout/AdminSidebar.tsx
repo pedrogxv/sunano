@@ -13,6 +13,7 @@ import {
   Home,
   LifeBuoy,
   Medal,
+  Sparkles,
   Megaphone,
   MessageSquare,
   Mouse,
@@ -100,6 +101,7 @@ export function AdminSidebar() {
         { href: "/admin/forum",  label: t.admin.sidebar.forum,          icon: MessageSquare, permission: "forum_read" },
         { href: "/admin/videos", label: "Vídeos",                       icon: PlaySquare },
         { href: "/admin/eventos", label: "Conquistas",                 icon: Medal,          permission: "events_read" },
+        { href: "/admin/aura-itens", label: "Itens de Aura",           icon: Sparkles,       permission: "events_read" },
       ],
     },
     {

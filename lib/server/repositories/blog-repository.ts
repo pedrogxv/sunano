@@ -32,6 +32,7 @@ export type BlogAuthor = {
 export type AuthorPublicProfile = {
   avatar_url: string | null
   account_tier: AccountTier
+  vip_expires_at: string | null
   display_slug: string | null
 } | null
 
@@ -109,6 +110,7 @@ export type BlogCommentDetail = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_vip_expires_at: string | null
   author_display_slug: string | null
   author_streak: number
 }
@@ -215,7 +217,7 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("user_profiles")
-    .select("id, avatar_url, account_tier, display_slug")
+    .select("id, avatar_url, account_tier, vip_expires_at, display_slug")
     .in("id", ids)
   if (error) {
     console.error("[blog-repository] getAuthorProfiles:", error.message)
@@ -226,6 +228,7 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
     map[row.id] = {
       avatar_url: row.avatar_url ?? null,
       account_tier: coerceAccountTier(row.account_tier),
+      vip_expires_at: row.vip_expires_at ?? null,
       display_slug: row.display_slug ?? null,
     }
   }
@@ -493,6 +496,7 @@ function mapCommentRows(
     author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
+    author_vip_expires_at: c.user_id ? profileMap[c.user_id]?.vip_expires_at ?? null : null,
     author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
     author_streak: c.user_id ? profileMap[c.user_id]?.streak ?? 0 : 0,
   }))

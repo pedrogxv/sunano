@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import {
   getAdminProfileSummary,
   getUserProfile,
+  getUserVipStatus,
 } from "@/lib/server/repositories/users-repository"
 import { countMySupportTicketsAwaitingUser, hasAnySupportTicket } from "@/lib/server/repositories/support-repository"
 
@@ -22,7 +23,15 @@ export async function GET() {
   const { data: authData } = await supabase.auth.getUser()
 
   if (!authData.user) {
-    return NextResponse.json({ user: null, userProfile: null, adminProfile: null, hasSupportTicket: false, supportTicketsAwaitingMe: 0 })
+    return NextResponse.json({
+      user: null,
+      userProfile: null,
+      adminProfile: null,
+      hasSupportTicket: false,
+      supportTicketsAwaitingMe: 0,
+      accountTier: "common",
+      vipExpiresAt: null,
+    })
   }
 
   // Sessão aal1 com fator verificado: o usuário ainda não concluiu o 2FA.
@@ -30,7 +39,15 @@ export async function GET() {
   // exibam dados do perfil antes da autenticação estar completa.
   const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
   if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
-    return NextResponse.json({ user: null, userProfile: null, adminProfile: null, hasSupportTicket: false, supportTicketsAwaitingMe: 0 })
+    return NextResponse.json({
+      user: null,
+      userProfile: null,
+      adminProfile: null,
+      hasSupportTicket: false,
+      supportTicketsAwaitingMe: 0,
+      accountTier: "common",
+      vipExpiresAt: null,
+    })
   }
 
   const user = { id: authData.user.id, email: authData.user.email ?? null }
@@ -39,12 +56,21 @@ export async function GET() {
   // (já feito uma vez por sessão pelo AuthProvider) pra alimentar o item
   // "Meus Tickets" do dropdown e o indicador amber no sino sem nenhum request
   // adicional.
-  const [userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe] = await Promise.all([
+  const [userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, vipStatus] = await Promise.all([
     getUserProfile(user.id),
     getAdminProfileSummary(user.id),
     hasAnySupportTicket(user.id),
     countMySupportTicketsAwaitingUser(user.id),
+    getUserVipStatus(user.id),
   ])
 
-  return NextResponse.json({ user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe })
+  return NextResponse.json({
+    user,
+    userProfile,
+    adminProfile,
+    hasSupportTicket,
+    supportTicketsAwaitingMe,
+    accountTier: vipStatus?.account_tier ?? "common",
+    vipExpiresAt: vipStatus?.vip_expires_at ?? null,
+  })
 }

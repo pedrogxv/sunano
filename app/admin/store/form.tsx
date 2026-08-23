@@ -33,7 +33,7 @@ import { formatBRL } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
 import { removeBackground } from "@/lib/client/remove-background"
 import { compressImageFile } from "@/lib/client/compress-image"
-import { VARIANT_ICONS, VARIANT_ICON_NAMES } from "@/lib/variant-icons"
+import { EmojiPicker } from "@/components/ui/emoji-picker"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 
 interface StoreProductSpec {
@@ -1675,29 +1675,13 @@ export function StoreProductForm({
                 </div>
 
                 {/* Ícone */}
-                <div className="flex items-center gap-1">
-                  <span className="mr-0.5 text-[10px] text-muted-foreground">Ícone</span>
-                  {VARIANT_ICON_NAMES.map((name) => {
-                    const IconComp = VARIANT_ICONS[name]
-                    const isSelected = variant.icon === name
-                    return (
-                      <button
-                        key={name}
-                        type="button"
-                        onClick={() => setVariantIcon(idx, name)}
-                        aria-label={`Ícone ${name}`}
-                        aria-pressed={isSelected}
-                        className={cn(
-                          "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
-                          isSelected
-                            ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
-                            : "border-border text-muted-foreground hover:border-foreground/20"
-                        )}
-                      >
-                        <IconComp className="size-3.5" />
-                      </button>
-                    )
-                  })}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">Ícone</span>
+                  <EmojiPicker
+                    value={variant.icon}
+                    onChange={(emoji) => setVariantIcon(idx, emoji)}
+                    aria-label="Ícone da variante"
+                  />
                 </div>
 
                 {/* Imagem de capa da variante */}

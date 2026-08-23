@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { isMfaStepUpRequired, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
+import { getAccountBanStatus } from "@/lib/server/repositories/account-ban-repository"
 import {
   isAdminUser,
   resolveAvailableDisplayName,
@@ -49,6 +50,14 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
   const { data: authData } = await supabase.auth.getUser()
   if (!authData.user) {
     return { error: "invalid_credentials" }
+  }
+
+  // Conta banida: abortar antes de qualquer outra coisa (upsert de perfil,
+  // 2FA) — não deve nem chegar a progredir por essas etapas.
+  const banStatus = await getAccountBanStatus(authData.user.id)
+  if (banStatus.isBanned) {
+    await supabase.auth.signOut()
+    return { error: "account_banned" }
   }
 
   // Garante o perfil do usuário para login por e-mail/senha. Mesmo cuidado do

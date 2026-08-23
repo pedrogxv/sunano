@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { useEffect, useState } from "react"
 import type { ChangeEvent } from "react"
-import { Camera, Crown, Sparkles, Youtube } from "lucide-react"
+import { Camera, Crown, Pencil, Sparkles, Youtube } from "lucide-react"
 import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
@@ -28,11 +28,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import BoxLoader from "@/components/ui/box-loader"
 import { useAccountTier } from "@/lib/hooks/use-account-tier"
-import {
-  DISPLAY_NAME_MAX_LENGTH,
-  slugifyDisplayName,
-  validateDisplayName,
-} from "@/lib/profile-name"
+import { slugifyDisplayName } from "@/lib/profile-name"
+import { ChangeDisplayNameModal } from "@/components/profile/ChangeDisplayNameModal"
 import {
   BIO_MAX_LENGTH,
   normalizeSocialHandle,
@@ -61,6 +58,7 @@ export type ProfileData = {
   mini_banner_url?: string | null
   bio?: string | null
   account_tier?: string | null
+  vip_expires_at?: string | null
   youtube_handle?: string | null
   tiktok_handle?: string | null
   media_adjustments?: unknown
@@ -134,7 +132,8 @@ async function uploadProfileMedia(
  */
 export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps) {
   const { tier, favoriteLimit, medalLimit, capabilities, animatedMedia, isVip } = useAccountTier(
-    profile.account_tier
+    profile.account_tier,
+    profile.vip_expires_at ?? null
   )
 
   // ── Identidade ──
@@ -170,18 +169,13 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
 
   const [saving, setSaving] = useState(false)
-
-  // Estado do nome: o conflito precisa aparecer enquanto a pessoa digita, não
-  // só quando ela tenta salvar.
-  const [nameCheck, setNameCheck] = useState<{
-    state: "idle" | "checking" | "free" | "taken"
-    message: string | null
-  }>({ state: "idle", message: null })
+  // Troca de nome saiu do fluxo de "Salvar alterações": agora é uma compra
+  // paga com Aura, feita pelo modal reutilizável (ver ChangeDisplayNameModal).
+  const [nameModalOpen, setNameModalOpen] = useState(false)
 
   const previewName = displayName.trim() || (profile.email?.split("@")[0] ?? "Usuário")
   const specialTag = getSpecialTag(profile.display_slug)
-  const slugPreview = slugifyDisplayName(displayName) || profile.display_slug || "seu-nome"
-  const nameChanged = displayName.trim() !== (profile.display_name ?? "").trim()
+  const slugPreview = profile.display_slug || slugifyDisplayName(displayName) || "seu-nome"
   // GIF só entra no seletor de arquivos de quem pode usá-lo; a API valida de novo.
   const imageAccept = animatedMedia
     ? "image/jpeg,image/png,image/webp,image/gif"
@@ -232,46 +226,6 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       mounted = false
     }
   }, [])
-
-  useEffect(() => {
-    if (!nameChanged) {
-      setNameCheck({ state: "idle", message: null })
-      return
-    }
-
-    const invalid = validateDisplayName(displayName)
-    if (invalid) {
-      setNameCheck({ state: "taken", message: invalid })
-      return
-    }
-
-    setNameCheck({ state: "checking", message: null })
-    let cancelled = false
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(
-          `/api/profile/name-check?name=${encodeURIComponent(displayName.trim())}`
-        )
-        const data = (await res.json().catch(() => null)) as
-          | { available?: boolean; error?: string | null }
-          | null
-        if (cancelled) return
-        setNameCheck(
-          data?.available
-            ? { state: "free", message: null }
-            : { state: "taken", message: data?.error ?? "Esse nome já está em uso." }
-        )
-      } catch {
-        // Sem rede a UI não afirma nada; o índice único do banco ainda barra.
-        if (!cancelled) setNameCheck({ state: "idle", message: null })
-      }
-    }, 400)
-
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [displayName, nameChanged])
 
   function updateSlot(slot: SetupSlot, peripheral: ShowcasePeripheral | null) {
     setSetup((prev) => prev.map((item) => (item.slot === slot ? { ...item, peripheral } : item)))
@@ -349,7 +303,6 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          display_name: displayName,
           avatar_url: avatarUrl,
           banner_url: bannerUrl,
           mini_banner_url: miniBannerUrl,
@@ -545,31 +498,40 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Nome de exibição
                 </label>
-                <Input
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className={cn(
-                    "border-border bg-background",
-                    nameCheck.state === "taken" && "border-red-500/50"
-                  )}
-                  placeholder="ex: Pedro"
-                  maxLength={DISPLAY_NAME_MAX_LENGTH}
-                  aria-invalid={nameCheck.state === "taken"}
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={displayName}
+                    readOnly
+                    className="border-border bg-muted/20 text-muted-foreground"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setNameModalOpen(true)}
+                    title="Trocar nome"
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                </div>
                 <p className="truncate text-[10px] text-muted-foreground/60">
                   sunano.com.br/perfil/<span className="text-muted-foreground">{slugPreview}</span>
                 </p>
-                {nameCheck.state === "checking" && (
-                  <p className="text-[10px] text-muted-foreground/60">Verificando disponibilidade…</p>
-                )}
-                {nameCheck.state === "free" && (
-                  <p className="text-[10px] text-emerald-400">Nome disponível.</p>
-                )}
-                {nameCheck.state === "taken" && nameCheck.message && (
-                  <p className="text-[10px] text-red-400">{nameCheck.message}</p>
-                )}
+                <p className="text-[10px] text-muted-foreground/60">
+                  Trocar nome custa 100 de Aura e tem cooldown de 3 dias.
+                </p>
               </div>
             </div>
+
+            <ChangeDisplayNameModal
+              open={nameModalOpen}
+              onOpenChange={setNameModalOpen}
+              currentName={displayName}
+              onChanged={(newName, newSlug) => {
+                setDisplayName(newName)
+                onProfileChange({ ...profile, display_name: newName, display_slug: newSlug })
+              }}
+            />
 
             <div className="space-y-1.5">
               <div className="flex items-baseline justify-between">
@@ -656,15 +618,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
         </p>
         <Button
           onClick={save}
-          disabled={
-            saving ||
-            uploading ||
-            uploadingBanner ||
-            uploadingMiniBanner ||
-            loadingShowcase ||
-            nameCheck.state === "taken" ||
-            nameCheck.state === "checking"
-          }
+          disabled={saving || uploading || uploadingBanner || uploadingMiniBanner || loadingShowcase}
           className="min-w-40"
         >
           {saving ? "Salvando..." : "Salvar alterações"}
@@ -738,6 +692,7 @@ function ProfilePagePreview({
           "relative h-36 w-full overflow-hidden sm:h-48",
           !banner.src && "bg-gradient-to-br from-primary/20 via-muted/40 to-background"
         )}
+        style={isVip ? { boxShadow: "inset 0 0 0 3px var(--vip-accent)" } : undefined}
       >
         {banner.src && (
           <Image
@@ -777,10 +732,8 @@ function ProfilePagePreview({
         <div className="absolute -top-10 left-4 sm:-top-12">
           <div className="relative">
             <div
-              className={cn(
-                "relative size-20 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-24",
-                isVip ? "border-amber-300" : "border-border"
-              )}
+              className={cn("relative size-20 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-24", !isVip && "border-border")}
+              style={isVip ? { borderColor: "var(--vip-accent)" } : undefined}
             >
               {avatarSrc ? (
                 <Image
@@ -797,6 +750,15 @@ function ProfilePagePreview({
                 </div>
               )}
             </div>
+            {isVip && (
+              <span
+                className="absolute -bottom-1.5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border-2 border-background px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-black shadow-sm"
+                style={{ backgroundColor: "var(--vip-accent)" }}
+              >
+                <Crown className="size-2.5" />
+                VIP
+              </span>
+            )}
             <label
               className={cn(
                 "absolute -bottom-1 -right-1 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
@@ -821,10 +783,9 @@ function ProfilePagePreview({
           <span
             className={cn(
               "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-              isVip
-                ? "border-amber-400/40 bg-amber-400/10 text-amber-300"
-                : "border-border bg-muted/40 text-muted-foreground"
+              !isVip && "border-border bg-muted/40 text-muted-foreground"
             )}
+            style={isVip ? { borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" } : undefined}
           >
             {isVip && <Crown className="size-2.5" />}
             {tierLabel}
@@ -948,7 +909,7 @@ function MiniBannerCardPreview({
         <div className="-mt-11 flex flex-col items-center px-3 pb-3">
           <div className="relative">
             <Avatar
-              className={cn("size-[86px] ring-4", isVip ? "ring-amber-400/70" : "ring-background")}
+              className={cn("size-[86px] ring-4", isVip ? "ring-[var(--vip-accent-soft)]" : "ring-background")}
             >
               <AvatarImage
                 src={avatarSrc ?? undefined}
@@ -980,7 +941,7 @@ function MiniBannerCardPreview({
 
           <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
             <span className="truncate">{name}</span>
-            {isVip && <Crown className="size-3.5 shrink-0 text-amber-400" />}
+            {isVip && <Crown className="size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />}
             {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
           </p>
 

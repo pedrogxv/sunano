@@ -18,6 +18,7 @@ const LOGIN_ERRORS: Record<string, string> = {
   missing_credentials: "Informe email e senha.",
   invalid_credentials: "Email ou senha incorretos.",
   too_many_attempts: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+  account_banned: "Conta suspensa ou banida.",
 }
 
 function ForgotSubmitButton() {

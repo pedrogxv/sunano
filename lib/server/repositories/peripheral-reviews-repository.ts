@@ -250,6 +250,7 @@ export type PeripheralReviewDetail = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_vip_expires_at: string | null
   author_display_slug: string | null
   author_streak: number
 }
@@ -359,6 +360,7 @@ export async function getPeripheralReviewsWithStats(
       author_display_name: profileMap[r.user_id]?.display_name ?? "Usuário",
       author_avatar_url: profileMap[r.user_id]?.avatar_url ?? null,
       author_account_tier: profileMap[r.user_id]?.account_tier ?? "common",
+      author_vip_expires_at: profileMap[r.user_id]?.vip_expires_at ?? null,
       author_display_slug: profileMap[r.user_id]?.display_slug ?? null,
       author_streak: profileMap[r.user_id]?.streak ?? 0,
     }))

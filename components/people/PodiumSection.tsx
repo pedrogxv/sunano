@@ -6,7 +6,7 @@ import { Crown, Sparkles } from "lucide-react"
 import { FollowButton } from "@/components/people/FollowButton"
 import { ProfileMetrics } from "@/components/people/ProfileCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia } from "@/lib/account-tier"
+import { resolveProfileMedia, isVipActive } from "@/lib/account-tier"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
@@ -101,7 +101,7 @@ function PodiumCard({
   const initials =
     profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
     "?"
-  const isVip = profile.account_tier !== "common"
+  const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
   const specialTag = getSpecialTag(profile.display_slug)
   const hue = profileAccentHue(profile.id)
 
@@ -199,7 +199,7 @@ function PodiumCard({
 
             <p className="mt-2 flex w-full items-center justify-center gap-1 text-[13px] font-bold leading-tight text-foreground">
               <span className="truncate">{profile.display_name}</span>
-              {isVip && <Crown className="size-3 shrink-0 text-amber-400" />}
+              {isVip && <Crown className="size-3 shrink-0" style={{ color: "var(--vip-accent)" }} />}
               {specialTag && <Sparkles className="size-3 shrink-0 text-cyan-400" />}
             </p>
 

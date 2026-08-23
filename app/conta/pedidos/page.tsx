@@ -2,10 +2,30 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Package, QrCode, ShoppingBag } from "lucide-react"
+import { toast } from "sonner"
+import {
+  CalendarIcon,
+  ChevronsUpDown,
+  Package,
+  QrCode,
+  ShoppingBag,
+  X,
+  XCircle,
+} from "lucide-react"
+import type { DateRange } from "react-day-picker"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
 import BoxLoader from "@/components/ui/box-loader"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -13,8 +33,19 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
-import { useUserOrders, type UserOrder } from "@/lib/hooks/use-user-orders"
+import { useUserOrders, pendingPaymentHref, type UserOrder } from "@/lib/hooks/use-user-orders"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { cn } from "@/lib/utils"
@@ -39,6 +70,101 @@ const STATUS_STYLE: Record<UserOrder["status"], string> = {
   cancelled: "bg-muted text-muted-foreground",
   refunded: "bg-sky-500/15 text-sky-400",
   expired: "bg-orange-500/15 text-orange-400",
+}
+
+const STATUS_FILTERS: Array<{ value: UserOrder["status"] | "all"; label: string }> = [
+  { value: "all", label: "Todos os status" },
+  { value: "pending", label: STATUS_LABEL.pending },
+  { value: "paid", label: STATUS_LABEL.paid },
+  { value: "awaiting_shipping_info", label: STATUS_LABEL.awaiting_shipping_info },
+  { value: "shipped", label: STATUS_LABEL.shipped },
+  { value: "delivered", label: STATUS_LABEL.delivered },
+  { value: "cancelled", label: STATUS_LABEL.cancelled },
+  { value: "refunded", label: STATUS_LABEL.refunded },
+  { value: "expired", label: STATUS_LABEL.expired },
+]
+
+const PAGE_SIZE = 10
+
+/** yyyy-mm-dd local (sem componente de hora) — evita off-by-one por fuso ao converter de/para `Date`. */
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+function fromDateInputValue(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function formatDateShort(value: string): string {
+  return fromDateInputValue(value).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
+}
+
+function DateRangeFilter({
+  dateFrom,
+  dateTo,
+  onChange,
+}: {
+  dateFrom: string
+  dateTo: string
+  onChange: (range: { dateFrom: string; dateTo: string }) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  const range: DateRange | undefined = dateFrom
+    ? { from: fromDateInputValue(dateFrom), to: dateTo ? fromDateInputValue(dateTo) : undefined }
+    : undefined
+
+  const label = dateFrom
+    ? dateTo
+      ? `${formatDateShort(dateFrom)} – ${formatDateShort(dateTo)}`
+      : `A partir de ${formatDateShort(dateFrom)}`
+    : "Filtrar por período"
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn("w-full justify-between font-normal sm:w-56", !dateFrom && "text-muted-foreground")}
+        >
+          <span className="flex min-w-0 items-center gap-1.5 truncate">
+            <CalendarIcon className="size-3.5 shrink-0" />
+            <span className="truncate">{label}</span>
+          </span>
+          {dateFrom ? (
+            <X
+              className="ml-2 size-3.5 shrink-0 opacity-60 hover:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation()
+                onChange({ dateFrom: "", dateTo: "" })
+              }}
+            />
+          ) : (
+            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-auto p-0">
+        <Calendar
+          mode="range"
+          selected={range}
+          defaultMonth={range?.from}
+          onSelect={(next) => {
+            onChange({
+              dateFrom: next?.from ? toDateInputValue(next.from) : "",
+              dateTo: next?.to ? toDateInputValue(next.to) : "",
+            })
+          }}
+          numberOfMonths={1}
+        />
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function formatDate(iso: string): string {
@@ -93,7 +219,76 @@ function OrderThumbs({ order }: { order: UserOrder }) {
   )
 }
 
-function OrderCard({ order, onViewDetails }: { order: UserOrder; onViewDetails: (order: UserOrder) => void }) {
+function CancelOrderButton({
+  order,
+  onCancelled,
+  className,
+}: {
+  order: UserOrder
+  onCancelled: () => void
+  className?: string
+}) {
+  const [cancelling, setCancelling] = useState(false)
+
+  async function handleCancel() {
+    setCancelling(true)
+    try {
+      const res = await fetch(`/api/store/orders/${order.id}/cancel`, { method: "POST" })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao cancelar pedido")
+      toast.success("Pedido cancelado", { description: `#${orderNumber(order.id)}` })
+      onCancelled()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao cancelar pedido"
+      toast.error("Erro ao cancelar pedido", { description: message })
+    } finally {
+      setCancelling(false)
+    }
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20",
+            className
+          )}
+        >
+          <XCircle className="size-3.5" />
+          Cancelar pedido
+        </button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Cancelar este pedido?</AlertDialogTitle>
+          <AlertDialogDescription>
+            O pedido #{orderNumber(order.id)} será cancelado e a cobrança pendente será encerrada. Essa
+            ação não pode ser desfeita — se ainda quiser comprar, será preciso fazer um novo pedido.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={cancelling}>Voltar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleCancel} disabled={cancelling}>
+            {cancelling ? "Cancelando..." : "Confirmar cancelamento"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+function OrderCard({
+  order,
+  onViewDetails,
+  onCancelled,
+}: {
+  order: UserOrder
+  onViewDetails: (order: UserOrder) => void
+  onCancelled: () => void
+}) {
   const itemCount = order.items.reduce((sum, i) => sum + (i.quantity ?? 1), 0)
   const summary = order.items.map((i) => i.name).filter(Boolean).join(", ")
 
@@ -125,24 +320,39 @@ function OrderCard({ order, onViewDetails }: { order: UserOrder; onViewDetails: 
         </span>
         <span className="text-sm font-bold text-foreground">{formatBRL(order.total_cents)}</span>
         {order.status === "pending" && (
-          <Link
-            href={`/checkout/pix?orderId=${order.id}`}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
-          >
-            <QrCode className="size-3.5" />
-            Pagar com PIX
-          </Link>
+          <>
+            <Link
+              href={pendingPaymentHref(order)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
+            >
+              <QrCode className="size-3.5" />
+              {order.payment_method === "credit_card" ? "Continuar pagamento" : "Pagar com PIX"}
+            </Link>
+            <CancelOrderButton order={order} onCancelled={onCancelled} />
+          </>
         )}
       </div>
     </div>
   )
 }
 
-function OrderDetailsDialog({ order, onOpenChange }: { order: UserOrder | null; onOpenChange: (open: boolean) => void }) {
+function OrderDetailsDialog({
+  order,
+  onOpenChange,
+  onCancelled,
+}: {
+  order: UserOrder | null
+  onOpenChange: (open: boolean) => void
+  onCancelled: () => void
+}) {
   const receipt =
     order?.status === "paid" ? order.misticpay_e2e ?? order.asaas_payment_id ?? null : null
   const receiptUrl = order?.status === "paid" ? order.asaas_receipt_url : null
-  const showPix = order?.status === "pending" && (order.pix_copy_paste || order.pix_qr_code_base64)
+  const showPix =
+    order?.status === "pending" &&
+    order.payment_method !== "credit_card" &&
+    (order.pix_copy_paste || order.pix_qr_code_base64)
+  const showCardContinue = order?.status === "pending" && order.payment_method === "credit_card"
 
   return (
     <Dialog open={order !== null} onOpenChange={onOpenChange}>
@@ -193,6 +403,17 @@ function OrderDetailsDialog({ order, onOpenChange }: { order: UserOrder | null; 
               </div>
             )}
 
+            {order.status === "pending" && (
+              <CancelOrderButton
+                order={order}
+                onCancelled={() => {
+                  onCancelled()
+                  onOpenChange(false)
+                }}
+                className="w-full justify-center"
+              />
+            )}
+
             {order.tracking_code && (
               <div className="space-y-1 border-t border-border/60 pt-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rastreio</p>
@@ -203,7 +424,7 @@ function OrderDetailsDialog({ order, onOpenChange }: { order: UserOrder | null; 
               </div>
             )}
 
-            {(receipt || showPix) && (
+            {(receipt || showPix || showCardContinue) && (
               <div className="space-y-2 border-t border-border/60 pt-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comprovante</p>
                 {receipt && (
@@ -237,13 +458,21 @@ function OrderDetailsDialog({ order, onOpenChange }: { order: UserOrder | null; 
                       </p>
                     )}
                     <Link
-                      href={`/checkout/pix?orderId=${order.id}`}
+                      href={pendingPaymentHref(order)}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:underline"
                     >
                       <QrCode className="size-3.5" />
                       Abrir pagamento PIX
                     </Link>
                   </div>
+                )}
+                {showCardContinue && (
+                  <Link
+                    href={pendingPaymentHref(order)}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:underline"
+                  >
+                    Continuar pagamento com cartão
+                  </Link>
                 )}
               </div>
             )}
@@ -254,10 +483,64 @@ function OrderDetailsDialog({ order, onOpenChange }: { order: UserOrder | null; 
   )
 }
 
+function OrderCardSkeleton() {
+  return (
+    <div className="flex animate-pulse flex-col gap-3 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3">
+        <div className="size-10 shrink-0 rounded-lg bg-muted" />
+        <div className="min-w-0 space-y-2">
+          <div className="h-3.5 w-40 rounded bg-muted" />
+          <div className="h-3 w-24 rounded bg-muted" />
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1.5">
+        <div className="h-4 w-20 rounded-full bg-muted" />
+        <div className="h-3.5 w-16 rounded bg-muted" />
+      </div>
+    </div>
+  )
+}
+
 export default function PedidosPage() {
   const { profile, loading: profileLoading } = useOwnProfile()
-  const { orders, loading: ordersLoading } = useUserOrders()
+  const [statusFilter, setStatusFilter] = useState<UserOrder["status"] | "all">("all")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [page, setPage] = useState(1)
+
+  const { orders, total, hasMore, loading: ordersLoading, refetch } = useUserOrders({
+    page,
+    pageSize: PAGE_SIZE,
+    filters: {
+      status: statusFilter === "all" ? undefined : statusFilter,
+      dateFrom: dateFrom ? fromDateInputValue(dateFrom).toISOString() : undefined,
+      dateTo: dateTo ? new Date(`${dateTo}T23:59:59.999`).toISOString() : undefined,
+    },
+  })
   const [selectedOrder, setSelectedOrder] = useState<UserOrder | null>(null)
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const hasActiveFilters = statusFilter !== "all" || dateFrom !== "" || dateTo !== ""
+
+  // Qualquer mudança de filtro volta pra primeira página — aplicado no
+  // próprio handler (não em efeito) pra não disparar uma renderização extra.
+  function applyStatusFilter(next: UserOrder["status"] | "all") {
+    setStatusFilter(next)
+    setPage(1)
+  }
+
+  function applyDateRange(range: { dateFrom: string; dateTo: string }) {
+    setDateFrom(range.dateFrom)
+    setDateTo(range.dateTo)
+    setPage(1)
+  }
+
+  function clearFilters() {
+    setStatusFilter("all")
+    setDateFrom("")
+    setDateTo("")
+    setPage(1)
+  }
 
   if (profileLoading || !profile) {
     return (
@@ -277,28 +560,102 @@ export default function PedidosPage() {
           <p className="text-xs text-muted-foreground">Histórico de compras na Loja.</p>
         </div>
 
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+          <Select value={statusFilter} onValueChange={(v) => applyStatusFilter(v as UserOrder["status"] | "all")}>
+            <SelectTrigger className="w-full border-border bg-card text-sm sm:w-56">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_FILTERS.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={applyDateRange} />
+
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
+              <X className="size-3.5" />
+              Limpar filtros
+            </Button>
+          )}
+        </div>
+
         {ordersLoading ? (
-          <div className="flex justify-center py-12">
-            <BoxLoader />
+          <div className="space-y-3">
+            {Array.from({ length: 3 }, (_, i) => (
+              <OrderCardSkeleton key={i} />
+            ))}
           </div>
         ) : orders.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
             <ShoppingBag className="size-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Você ainda não fez nenhum pedido.</p>
-            <Link href="/loja" className="text-xs font-medium text-emerald-400 hover:underline">
-              Ir para a loja
-            </Link>
+            {hasActiveFilters ? (
+              <>
+                <p className="text-sm text-muted-foreground">Nenhum pedido encontrado com esses filtros.</p>
+                <Button variant="ghost" size="sm" className="gap-1.5 text-emerald-400" onClick={clearFilters}>
+                  <X className="size-3.5" />
+                  Limpar filtros
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">Você ainda não fez nenhum pedido.</p>
+                <Link href="/loja" className="text-xs font-medium text-emerald-400 hover:underline">
+                  Ir para a loja
+                </Link>
+              </>
+            )}
           </div>
         ) : (
-          <div className="space-y-3">
-            {orders.map((order) => (
-              <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} />
-            ))}
-          </div>
+          <>
+            <div className="space-y-3">
+              {orders.map((order) => (
+                <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} onCancelled={refetch} />
+              ))}
+            </div>
+
+            {(totalPages > 1 || total > 0) && (
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  Página {page} de {totalPages} · {total} pedido{total === 1 ? "" : "s"}
+                </p>
+                {totalPages > 1 && (
+                  <div className="flex gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border text-xs disabled:opacity-40"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                    >
+                      Anterior
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border text-xs disabled:opacity-40"
+                      onClick={() => setPage((p) => p + 1)}
+                      disabled={!hasMore}
+                    >
+                      Próxima
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      <OrderDetailsDialog order={selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)} />
+      <OrderDetailsDialog
+        order={selectedOrder}
+        onOpenChange={(open) => !open && setSelectedOrder(null)}
+        onCancelled={refetch}
+      />
     </div>
   )
 }

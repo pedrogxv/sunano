@@ -3,7 +3,7 @@ import * as z from "zod"
 
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
-import { advanceOrderStatus, refundOrder } from "@/lib/server/repositories/orders-repository"
+import { advanceOrderStatus, cancelOrder, refundOrder } from "@/lib/server/repositories/orders-repository"
 
 const patchSchema = z.discriminatedUnion("action", [
   z.object({
@@ -15,6 +15,10 @@ const patchSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("refund"),
     valueCents: z.number().int().positive().optional(),
+    reason: z.string().trim().max(300).optional(),
+  }),
+  z.object({
+    action: z.literal("cancel"),
     reason: z.string().trim().max(300).optional(),
   }),
 ])
@@ -43,7 +47,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           { trackingCode: parsed.data.trackingCode, carrier: parsed.data.carrier },
           auth.profile.id
         )
-      : await refundOrder(id, { valueCents: parsed.data.valueCents, reason: parsed.data.reason }, auth.profile.id)
+      : parsed.data.action === "refund"
+        ? await refundOrder(id, { valueCents: parsed.data.valueCents, reason: parsed.data.reason }, auth.profile.id)
+        : await cancelOrder(id, { reason: parsed.data.reason }, auth.profile.id)
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })

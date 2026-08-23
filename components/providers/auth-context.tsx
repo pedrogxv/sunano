@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname } from "next/navigation"
 
 import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { isVipActive } from "@/lib/account-tier"
 
 export type AuthContextUser = {
   id: string
@@ -15,6 +16,8 @@ export type AuthContextUser = {
   hasSupportTicket: boolean
   /** Quantos tickets abertos estão aguardando resposta do usuário — alimenta o ponto amber no sino e em "Meus Tickets". */
   supportTicketsAwaitingMe: number
+  /** VIP ativo agora (já considera expiração) — alimenta a tag roxa no dropdown do topbar. */
+  isVip: boolean
 }
 
 type AuthContextValue = {
@@ -79,6 +82,8 @@ type MeResponse = {
   adminProfile?: { email?: string | null; display_name?: string | null; avatar_url?: string | null } | null
   hasSupportTicket?: boolean
   supportTicketsAwaitingMe?: number
+  accountTier?: string | null
+  vipExpiresAt?: string | null
 }
 
 /**
@@ -92,7 +97,7 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
   if (!res.ok) throw new Error(`auth/me respondeu ${res.status}`)
 
   const data = (await res.json()) as MeResponse
-  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe } = data
+  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, accountTier, vipExpiresAt } = data
   if (!user) return null
 
   return {
@@ -107,6 +112,7 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
     isAdmin: Boolean(adminProfile),
     hasSupportTicket: Boolean(hasSupportTicket),
     supportTicketsAwaitingMe: supportTicketsAwaitingMe ?? 0,
+    isVip: isVipActive(accountTier, vipExpiresAt),
   }
 }
 

@@ -10,12 +10,17 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
  * ação já aconteceu; perder o registro de auditoria é preferível a bloquear
  * ou reverter algo que já foi feito).
  */
-export type StoreAuditAction = "product.delete" | "order.advance" | "order.refund"
+export type StoreAuditAction =
+  | "product.delete"
+  | "order.advance"
+  | "order.refund"
+  | "order.cancel"
+  | "store_settings.update"
 
 type LogAdminActionParams = {
   adminId: string
   action: StoreAuditAction
-  entityType: "store_product" | "store_order"
+  entityType: "store_product" | "store_order" | "store_settings"
   entityId: string
   before?: Record<string, unknown> | null
   after?: Record<string, unknown> | null

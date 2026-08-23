@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { isMfaStepUpRequired, sanitizeNextPath } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { getAccountBanStatus } from "@/lib/server/repositories/account-ban-repository"
 import {
   hasRecordedLgpdConsent,
   isAdminUser,
@@ -79,6 +80,14 @@ export async function GET(request: NextRequest) {
 
   const { data: authData } = await supabase.auth.getUser()
   if (authData.user) {
+    // Conta banida: abortar antes de qualquer outra coisa (upsert de perfil,
+    // 2FA, LGPD) — não deve nem chegar a progredir por essas etapas.
+    const banStatus = await getAccountBanStatus(authData.user.id)
+    if (banStatus.isBanned) {
+      await supabase.auth.signOut()
+      return NextResponse.redirect(`${origin}/login?error=account_banned`)
+    }
+
     // Garante o perfil do usuário a partir dos metadados do OAuth.
     // O nome vindo do Google/Discord pode já pertencer a outra conta — e não
     // dá para parar o login e pedir outro. Entra o primeiro livre derivado

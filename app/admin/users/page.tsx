@@ -15,6 +15,8 @@ import {
   Search,
   Trash2,
   ShieldAlert,
+  ShieldBan,
+  ShieldOff,
   UserCog,
   User as UserIcon,
   Pencil,
@@ -50,6 +52,14 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { RoleBadge, adminRoleLabel } from "@/components/people/RoleBadge"
@@ -64,6 +74,8 @@ type AdminUser = Omit<AdminProfile, "role"> & {
   originalRole: UserRole
   account_tier: AccountTier
   display_slug: string | null
+  account_banned_at: string | null
+  account_ban_reason: string | null
   created_at: string
   updated_at: string
 }
@@ -160,9 +172,27 @@ function TierBadge({ tier }: { tier: AccountTier }) {
   if (tier === "common") return null
   const { label } = getTierCapabilities(tier)
   return (
-    <Badge className="bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30 hover:bg-fuchsia-500/20">
+    <Badge
+      className="border"
+      style={{ backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)", borderColor: "var(--vip-accent-soft)" }}
+    >
       <Crown className="mr-1 size-3" />
       {label}
+    </Badge>
+  )
+}
+
+/* ── Banned badge — mostra o motivo no tooltip ──────────────── */
+function BannedBadge({ reason }: { reason: string | null }) {
+  const t = useT()
+  return (
+    <Badge
+      variant="destructive"
+      className="gap-1"
+      title={reason ? `${t.admin.users.banReasonPrefix}: ${reason}` : undefined}
+    >
+      <ShieldBan className="size-3" />
+      {t.admin.users.bannedBadge}
     </Badge>
   )
 }
@@ -187,10 +217,13 @@ function UserCard({
   savingId,
   deletingId,
   vipSavingId,
+  banningId,
   onRoleChange,
   onSave,
   onDelete,
   onVipToggle,
+  onBan,
+  onUnban,
 }: {
   user: AdminUser
   isCurrentUser: boolean
@@ -198,10 +231,13 @@ function UserCard({
   savingId: string | null
   deletingId: string | null
   vipSavingId: string | null
+  banningId: string | null
   onRoleChange: (id: string, role: UserRole) => void
   onSave: (user: AdminUser) => void
   onDelete: (user: AdminUser) => Promise<void>
   onVipToggle: (user: AdminUser) => Promise<void>
+  onBan: (user: AdminUser, reason: string) => Promise<void>
+  onUnban: (user: AdminUser) => Promise<void>
 }) {
   const t = useT()
   const [expanded, setExpanded] = useState(false)
@@ -210,6 +246,9 @@ function UserCard({
   const [savingPassword, setSavingPassword] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const [banDialogOpen, setBanDialogOpen] = useState(false)
+  const [banReason, setBanReason] = useState("")
+  const [unbanDialogOpen, setUnbanDialogOpen] = useState(false)
   // A trava usa o cargo PERSISTIDO (não o que está sendo editado no select),
   // senão escolher "WEB Master" travaria a própria linha antes de salvar.
   const isPersistedWebMaster = user.originalRole === "webmaster"
@@ -225,10 +264,27 @@ function UserCard({
   const canChangeThisPassword = isCurrentUserWebMaster && (!isPersistedWebMaster || isCurrentUser)
   // Excluir é exclusivo do WEB Master, nunca a própria conta nem outro WEB Master.
   const canDeleteThisUser = isCurrentUserWebMaster && !isCurrentUser && !isPersistedWebMaster
+  // Banir tem as mesmas travas do excluir — exclusivo do WEB Master, nunca a
+  // própria conta nem outro WEB Master.
+  const canBanThisUser = isCurrentUserWebMaster && !isCurrentUser && !isPersistedWebMaster
+  const isBanned = Boolean(user.account_banned_at)
+  const isBanning = banningId === user.id
   const initials = (user.display_name ?? user.email ?? "?").slice(0, 2).toUpperCase()
   const isDeleting = deletingId === user.id
   const deleteConfirmMatches =
     !!user.email && deleteConfirmText.trim().toLowerCase() === user.email.trim().toLowerCase()
+
+  async function handleBanConfirm() {
+    if (!banReason.trim()) return
+    await onBan(user, banReason.trim())
+    setBanDialogOpen(false)
+    setBanReason("")
+  }
+
+  async function handleUnbanConfirm() {
+    await onUnban(user)
+    setUnbanDialogOpen(false)
+  }
 
   async function handlePasswordSave() {
     if (!newPassword || newPassword.length < 8) return
@@ -283,6 +339,7 @@ function UserCard({
             <RoleBadge role={user.role} />
             <TierBadge tier={user.account_tier} />
             <SpecialTagBadge slug={user.display_slug} />
+            {isBanned && <BannedBadge reason={user.account_ban_reason} />}
             {isCurrentUser && <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">Você</Badge>}
           </div>
           <p className="text-xs text-muted-foreground truncate">{user.email}</p>
@@ -339,6 +396,79 @@ function UserCard({
               <KeyRound className="size-3.5" />
               <span className="hidden sm:inline">{t.admin.users.password}</span>
             </Button>
+          )}
+          {canBanThisUser && (
+            isBanned ? (
+              <Dialog open={unbanDialogOpen} onOpenChange={setUnbanDialogOpen}>
+                <DialogContent className="border border-border bg-card">
+                  <DialogHeader>
+                    <DialogTitle>{t.admin.users.unbanUserTitle(user.display_name || user.email || "")}</DialogTitle>
+                    <DialogDescription>{t.admin.users.unbanUserDesc}</DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setUnbanDialogOpen(false)} disabled={isBanning}>
+                      {t.admin.users.cancel}
+                    </Button>
+                    <Button onClick={handleUnbanConfirm} disabled={isBanning}>
+                      <ShieldOff className="mr-1.5 size-3.5" />
+                      {isBanning ? t.admin.users.saving : t.admin.users.confirmUnban}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isBanning}
+                  onClick={() => setUnbanDialogOpen(true)}
+                  className="gap-1.5 text-xs"
+                >
+                  <ShieldOff className="size-3.5" />
+                  <span className="hidden sm:inline">{t.admin.users.unbanUser}</span>
+                </Button>
+              </Dialog>
+            ) : (
+              <Dialog open={banDialogOpen} onOpenChange={(open) => { setBanDialogOpen(open); if (!open) setBanReason("") }}>
+                <DialogContent className="border border-border bg-card">
+                  <DialogHeader>
+                    <DialogTitle>{t.admin.users.banUserTitle(user.display_name || user.email || "")}</DialogTitle>
+                    <DialogDescription>{t.admin.users.banUserDesc}</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">{t.admin.users.banReasonLabel}</label>
+                    <Input
+                      value={banReason}
+                      onChange={(e) => setBanReason(e.target.value)}
+                      placeholder={t.admin.users.banReasonPlaceholder}
+                      autoComplete="off"
+                      className="border-border bg-background"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setBanDialogOpen(false)} disabled={isBanning}>
+                      {t.admin.users.cancel}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleBanConfirm}
+                      disabled={!banReason.trim() || isBanning}
+                    >
+                      <ShieldBan className="mr-1.5 size-3.5" />
+                      {isBanning ? t.admin.users.saving : t.admin.users.confirmBan}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isBanning}
+                  onClick={() => setBanDialogOpen(true)}
+                  className="gap-1.5 border-red-500/30 text-xs text-red-400 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300"
+                >
+                  <ShieldBan className="size-3.5" />
+                  <span className="hidden sm:inline">{t.admin.users.banUser}</span>
+                </Button>
+              </Dialog>
+            )
           )}
           {canDeleteThisUser && (
             <AlertDialog
@@ -451,10 +581,8 @@ function UserCard({
                   variant="outline"
                   disabled={vipSavingId === user.id}
                   onClick={() => onVipToggle(user)}
-                  className={cn(
-                    "gap-1.5 text-xs",
-                    isVip && "border-fuchsia-500/40 text-fuchsia-300 hover:border-fuchsia-500/60 hover:bg-fuchsia-500/10"
-                  )}
+                  className="gap-1.5 text-xs"
+                  style={isVip ? { borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" } : undefined}
                 >
                   <Crown className="size-3.5" />
                   {vipSavingId === user.id
@@ -537,10 +665,13 @@ function UserListSection({
   savingId,
   deletingId,
   vipSavingId,
+  banningId,
   onRoleChange,
   onSave,
   onDelete,
   onVipToggle,
+  onBan,
+  onUnban,
 }: {
   title: string
   icon: React.ElementType
@@ -551,10 +682,13 @@ function UserListSection({
   savingId: string | null
   deletingId: string | null
   vipSavingId: string | null
+  banningId: string | null
   onRoleChange: (id: string, role: UserRole) => void
   onSave: (user: AdminUser) => void
   onDelete: (user: AdminUser) => Promise<void>
   onVipToggle: (user: AdminUser) => Promise<void>
+  onBan: (user: AdminUser, reason: string) => Promise<void>
+  onUnban: (user: AdminUser) => Promise<void>
 }) {
   return (
     <Card className="border-border bg-card/90">
@@ -581,10 +715,13 @@ function UserListSection({
               savingId={savingId}
               deletingId={deletingId}
               vipSavingId={vipSavingId}
+              banningId={banningId}
               onRoleChange={onRoleChange}
               onSave={onSave}
               onDelete={onDelete}
               onVipToggle={onVipToggle}
+              onBan={onBan}
+              onUnban={onUnban}
             />
           </div>
         ))}
@@ -641,6 +778,7 @@ export default function AdminUsersPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [vipSavingId, setVipSavingId] = useState<string | null>(null)
+  const [banningId, setBanningId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
@@ -751,6 +889,46 @@ export default function AdminUsersPage() {
       toast.error(t.admin.users.failedToUpdateVip, { description: message })
     } finally {
       setVipSavingId(null)
+    }
+  }
+
+  async function banUser(user: AdminUser, reason: string) {
+    try {
+      setBanningId(user.id)
+      const res = await fetch("/api/admin/users/ban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, reason }),
+      })
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToBan)
+      toast.success(t.admin.users.userBanned, { description: user.display_name || user.email || undefined })
+      await loadUsers()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.users.failedToBan
+      toast.error(t.admin.users.failedToBan, { description: message })
+    } finally {
+      setBanningId(null)
+    }
+  }
+
+  async function unbanUser(user: AdminUser) {
+    try {
+      setBanningId(user.id)
+      const res = await fetch("/api/admin/users/ban", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      })
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToUnban)
+      toast.success(t.admin.users.userUnbanned, { description: user.display_name || user.email || undefined })
+      await loadUsers()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.users.failedToUnban
+      toast.error(t.admin.users.failedToUnban, { description: message })
+    } finally {
+      setBanningId(null)
     }
   }
 
@@ -970,10 +1148,13 @@ export default function AdminUsersPage() {
             savingId={savingId}
             deletingId={deletingId}
             vipSavingId={vipSavingId}
+            banningId={banningId}
             onRoleChange={updateUserRole}
             onSave={saveUser}
             onDelete={deleteUser}
             onVipToggle={toggleVip}
+            onBan={banUser}
+            onUnban={unbanUser}
           />
           <UserListSection
             title={t.admin.users.membersSectionTitle}
@@ -985,10 +1166,13 @@ export default function AdminUsersPage() {
             savingId={savingId}
             deletingId={deletingId}
             vipSavingId={vipSavingId}
+            banningId={banningId}
             onRoleChange={updateUserRole}
             onSave={saveUser}
             onDelete={deleteUser}
             onVipToggle={toggleVip}
+            onBan={banUser}
+            onUnban={unbanUser}
           />
         </div>
       )}

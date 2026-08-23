@@ -16,6 +16,7 @@ export default async function LoginPage({
   const passwordUpdated = params.password_updated === "1"
   const isRecoveryError = params.error === "recovery_error"
   const isConfirmationError = params.error === "confirmation_error"
+  const isAccountBanned = params.error === "account_banned"
   const accountDeleted = params.deleted === "1"
   const emailConfirmed = params.confirmed === "1"
 
@@ -78,6 +79,14 @@ export default async function LoginPage({
                 Cadastre-se novamente
               </a>{" "}
               ou solicite um novo e-mail de confirmação.
+            </div>
+          </AuthMotionBanner>
+        )}
+
+        {isAccountBanned && (
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Conta suspensa ou banida.
             </div>
           </AuthMotionBanner>
         )}

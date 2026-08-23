@@ -43,6 +43,12 @@
   --amber-accent: oklch(0.8 0.15 85);
   --emerald-accent: oklch(0.7 0.15 160);
 
+  /* Cor única do selo/badge VIP em todo o site (roxo/púrpura) — mesmo hue do
+     gradiente já usado em .vip-badge-text abaixo. Usar sempre esta var (não
+     classes soltas de fuchsia ou amber) para ring/border/glow/ícone Crown de VIP. */
+  --vip-accent: oklch(0.75 0.19 320);
+  --vip-accent-soft: oklch(0.75 0.19 320 / 0.4);
+
   /* Backdrop behind product photos (PeripheralCard image area) */
   --card-image-bg: #1a1a1a;
 
@@ -368,6 +374,72 @@ button,
     filter: drop-shadow(0 0 3px oklch(0.7 0.2 40 / 0.7));
   }
   .nav-fire-holder::before {
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
+/* Item "Promoções" da sidebar — mesma técnica de .nav-fire-*, paleta azul elétrica
+   em vez de fogo (Promoções não compete visualmente com a Central de Aura). */
+@keyframes bolt-text-flow {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+@keyframes bolt-icon-glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px oklch(0.75 0.16 230 / 0.55)) drop-shadow(0 0 5px oklch(0.7 0.19 235 / 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 5px oklch(0.8 0.18 225 / 0.9)) drop-shadow(0 0 11px oklch(0.65 0.2 240 / 0.6));
+  }
+}
+
+@keyframes bolt-holder-glow-pulse {
+  0%, 100% { opacity: 0.35; transform: scale(0.97); }
+  50%      { opacity: 0.85; transform: scale(1.05); }
+}
+
+.nav-bolt-text {
+  background-image: linear-gradient(90deg, #38bdf8, #2563eb, #0ea5e9, #60a5fa);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: bolt-text-flow 3s ease-in-out infinite;
+}
+
+.nav-bolt-icon {
+  color: #38bdf8;
+  animation: bolt-icon-glow-pulse 2.6s ease-in-out infinite;
+}
+
+.nav-bolt-holder {
+  isolation: isolate;
+}
+
+.nav-bolt-holder::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 30% 50%, oklch(0.65 0.2 235 / 0.45), transparent 70%);
+  filter: blur(7px);
+  pointer-events: none;
+  animation: bolt-holder-glow-pulse 2.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-bolt-text {
+    animation: none;
+    background-position: 35% 50%;
+  }
+  .nav-bolt-icon {
+    animation: none;
+    filter: drop-shadow(0 0 3px oklch(0.7 0.19 235 / 0.7));
+  }
+  .nav-bolt-holder::before {
     animation: none;
     opacity: 0.55;
   }
@@ -1020,5 +1092,81 @@ button:not(:disabled):hover .aura-icon-holder {
   .trending-post-card::before {
     animation: none;
     opacity: 0.5;
+  }
+}
+
+/* Central de Aura (/aura) — título "banner de brasa": faixa de fogo correndo
+   atrás do texto (mesma técnica de .nav-fire-text, mais lenta e mais larga
+   pra caber um título grande) + brasas subindo por trás, como fagulhas de
+   fogueira. Tudo CSS puro, sem lib de partículas. */
+@keyframes aura-title-ember-flow {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
+.aura-title-banner {
+  position: relative;
+  isolation: isolate;
+}
+
+.aura-title-text {
+  background-image: linear-gradient(100deg, #ff8f00, #ffb703, #ff3d00, #ff5f1f, #ffb703);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: aura-title-ember-flow 6s ease-in-out infinite;
+}
+
+@keyframes aura-ember-rise {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { transform: translate(var(--ember-drift, 6px), -46px) scale(0.3); opacity: 0; }
+}
+
+.aura-ember {
+  position: absolute;
+  bottom: -4px;
+  width: var(--ember-size, 3px);
+  height: var(--ember-size, 3px);
+  border-radius: 9999px;
+  background: var(--ember-color, oklch(0.75 0.19 55));
+  box-shadow: 0 0 6px 1px var(--ember-color, oklch(0.75 0.19 55));
+  pointer-events: none;
+  animation: aura-ember-rise var(--ember-duration, 3.2s) ease-in var(--ember-delay, 0s) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-title-text {
+    animation: none;
+    background-position: 35% 50%;
+  }
+  .aura-ember {
+    display: none;
+  }
+}
+
+/* Ícone hero de Aura (topo da Central de Aura) — mesmo halo giratório de
+   .aura-icon-holder[data-given], só maior/mais lento pra um ícone grande
+   parado em vez de um botão pequeno reagindo a clique. */
+@keyframes aura-hero-flame-flicker {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25%      { transform: scale(1.05) rotate(-3deg); }
+  50%      { transform: scale(0.97) rotate(2deg); }
+  75%      { transform: scale(1.03) rotate(-1deg); }
+}
+
+.aura-hero-icon-holder {
+  isolation: isolate;
+}
+
+.aura-hero-icon-flame {
+  animation: aura-hero-flame-flicker 2.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 2px oklch(0.7 0.2 40 / 0.6));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-hero-icon-flame {
+    animation: none;
   }
 }

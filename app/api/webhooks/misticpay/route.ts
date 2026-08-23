@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { checkTransaction } from "@/lib/server/integrations/misticpay"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { checkRateLimit } from "@/lib/server/rate-limit"
+import { orderOwnerId } from "@/lib/server/repositories/orders-repository"
+import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 
 export const runtime = "nodejs"
 export const maxDuration = 20
@@ -63,7 +65,7 @@ export async function POST(request: NextRequest) {
     // já foi reservado atomicamente no checkout (ver
     // app/api/store/checkout/route.ts e 20260918000000_store_orders_stock_reservation.sql);
     // decrementar de novo neste ponto duplicaria o desconto.
-    await db
+    const { data: updatedOrders } = await db
       .from("store_orders")
       .update({
         status: "paid",
@@ -72,6 +74,13 @@ export async function POST(request: NextRequest) {
       })
       .eq("misticpay_transaction_id", transactionId)
       .neq("status", "paid")
+      .select("id, metadata")
+
+    for (const order of updatedOrders ?? []) {
+      const ownerId = orderOwnerId(order.metadata as Record<string, unknown> | null)
+      if (!ownerId) continue
+      await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "paid" })
+    }
 
     return NextResponse.json({ received: true })
   } catch (err) {

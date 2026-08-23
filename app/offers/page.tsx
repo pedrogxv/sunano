@@ -4,7 +4,7 @@ import Image from "next/image"
 import { useEffect, useState } from "react"
 import { format, formatDistanceToNow } from "date-fns"
 import { enUS, ptBR } from "date-fns/locale"
-import { AlertCircle, ExternalLink, MessageCircle, RefreshCw } from "lucide-react"
+import { AlertCircle, ExternalLink, MessageCircle, RefreshCw, Zap } from "lucide-react"
 
 import BoxLoader from "@/components/ui/box-loader"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -84,12 +84,12 @@ function TextWithLinks({ text }: { text: string }) {
 
 function LivePill({ label }: { label: string }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-1">
+    <div className="inline-flex items-center gap-2 rounded-full border border-sky-500/25 bg-sky-500/[0.08] px-3 py-1">
       <span className="relative flex size-2">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-        <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-60" />
+        <span className="relative inline-flex size-2 rounded-full bg-sky-500" />
       </span>
-      <span className="text-[11px] font-semibold tracking-wide text-emerald-400">{label}</span>
+      <span className="text-[11px] font-semibold tracking-wide text-sky-400">{label}</span>
     </div>
   )
 }
@@ -138,16 +138,20 @@ export default function OffersPage() {
     <div className="mx-auto max-w-2xl space-y-5 px-2 py-8 sm:px-4 md:px-6">
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-2xl border border-border/40 bg-card/60 px-6 py-10">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-sky-500/[0.06] to-transparent" />
-        <div className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-sky-500/[0.04] blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl border border-sky-500/20 bg-gradient-to-b from-sky-500/[0.07] via-card/60 to-card/60 px-6 py-10">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-gradient-to-b from-sky-500/[0.08] to-transparent" />
+        <div className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-sky-500/[0.08] blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 size-48 rounded-full bg-blue-500/[0.06] blur-3xl" />
 
         <div className="relative space-y-4">
           <LivePill label={t.offers.livePill} />
 
           <div className="flex items-end justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-black tracking-tight text-foreground md:text-4xl">
+            <div className="flex items-center gap-3">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-sky-500/25 bg-sky-500/10 text-sky-400 shadow-sm shadow-sky-900/20">
+                <Zap className="size-5" fill="currentColor" />
+              </div>
+              <h1 className="bg-gradient-to-r from-sky-300 via-sky-400 to-blue-400 bg-clip-text text-3xl font-black tracking-tight text-transparent md:text-4xl">
                 {t.offers.title}
               </h1>
             </div>
@@ -165,7 +169,7 @@ export default function OffersPage() {
                 href={TELEGRAM_URL}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/25 bg-sky-500/[0.07] px-3 py-2 text-xs font-semibold text-sky-400 transition-all hover:border-sky-500/40 hover:bg-sky-500/[0.12] hover:text-sky-300"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-400 transition-all hover:border-sky-500/50 hover:bg-sky-500/[0.16] hover:text-sky-300"
               >
                 <MessageCircle className="size-3.5" />
                 {t.offers.join}
@@ -177,9 +181,9 @@ export default function OffersPage() {
       </div>
 
       {/* ── Disclaimer ───────────────────────────────────────────────────── */}
-      <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/15 bg-amber-500/[0.04] px-4 py-3">
+      <div className="flex items-start gap-2.5 rounded-xl border border-sky-500/15 bg-sky-500/[0.04] px-4 py-3">
         <span className="mt-px shrink-0 text-base">📌</span>
-        <p className="text-xs leading-relaxed text-amber-200/60">
+        <p className="text-xs leading-relaxed text-sky-200/60">
           {t.offers.disclaimer}
         </p>
       </div>
@@ -204,8 +208,8 @@ export default function OffersPage() {
           <BoxLoader />
         </div>
       ) : offers.length === 0 ? (
-        <div className="rounded-2xl border border-border bg-card/40 py-20 text-center">
-          <MessageCircle className="mx-auto mb-3 size-10 text-muted-foreground/20" />
+        <div className="rounded-2xl border border-sky-500/10 bg-card/40 py-20 text-center">
+          <Zap className="mx-auto mb-3 size-10 text-sky-500/20" />
           <p className="text-sm font-medium text-foreground">
             {t.offers.noMessages}
           </p>
@@ -228,7 +232,7 @@ export default function OffersPage() {
               return (
                 <article
                   key={offer.id}
-                  className="overflow-hidden rounded-2xl border border-border/50 bg-card/50 transition-all duration-200 hover:border-border/80 hover:bg-card/70 hover:shadow-lg hover:shadow-black/20"
+                  className="overflow-hidden rounded-2xl border border-border/50 bg-card/50 transition-all duration-200 hover:border-sky-500/40 hover:bg-card/70 hover:shadow-lg hover:shadow-sky-950/30"
                 >
                   {/* Card header */}
                   <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-5">
@@ -265,7 +269,8 @@ export default function OffersPage() {
 
                     {/* "Novo" badge */}
                     {isNew && (
-                      <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                      <span className="flex shrink-0 items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-400">
+                        <Zap className="size-2.5" fill="currentColor" />
                         {t.offers.new}
                       </span>
                     )}
@@ -296,7 +301,7 @@ export default function OffersPage() {
                         href={offer.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border/50 bg-muted/20 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-sky-500/30 hover:bg-sky-500/5 hover:text-sky-400"
                       >
                         <MessageCircle className="size-3.5" />
                         {t.offers.openInTelegram}
@@ -327,7 +332,7 @@ export default function OffersPage() {
                   className={cn(
                     "flex size-9 items-center justify-center rounded-lg text-sm font-medium transition-all",
                     p === safePage
-                      ? "bg-primary text-primary-foreground shadow-sm shadow-primary/30"
+                      ? "bg-sky-600 text-white shadow-sm shadow-sky-900/40"
                       : "border border-border/50 bg-muted/20 text-muted-foreground hover:bg-muted/40 hover:text-foreground"
                   )}
                 >

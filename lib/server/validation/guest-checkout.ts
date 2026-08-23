@@ -48,3 +48,33 @@ export const payerInfoSchema = z.object({
 })
 
 export type PayerInfo = z.infer<typeof payerInfoSchema>
+
+/**
+ * Telefone + endereço do pagador — só exigidos no checkout de CARTÃO: a
+ * Asaas Checkout recusa criar o customer sem esses campos (`invalid_object`
+ * em `phone`/`address`/`addressNumber`/`postalCode`/`province`/`city`), mas
+ * o PIX segue funcionando sem eles. `state` aqui é a UF (sigla de 2 letras),
+ * que mapeamos para `province` na chamada à Asaas.
+ */
+export const payerAddressSchema = z.object({
+  guestPhone: z
+    .string("Informe um telefone válido.")
+    .transform((value) => value.replace(/\D/g, ""))
+    .refine((value) => value.length === 10 || value.length === 11, "Informe um telefone válido."),
+  guestPostalCode: z
+    .string("Informe um CEP válido.")
+    .transform((value) => value.replace(/\D/g, ""))
+    .refine((value) => value.length === 8, "Informe um CEP válido."),
+  guestStreet: z.string("Informe o endereço.").trim().min(2, "Informe o endereço.").max(200, "Informe o endereço."),
+  guestNumber: z.string("Informe o número.").trim().min(1, "Informe o número.").max(20, "Informe o número."),
+  guestComplement: z.string().trim().max(100).optional(),
+  guestNeighborhood: z.string("Informe o bairro.").trim().min(1, "Informe o bairro.").max(100, "Informe o bairro."),
+  guestCity: z.string("Informe a cidade.").trim().min(1, "Informe a cidade.").max(100, "Informe a cidade."),
+  guestState: z
+    .string("Informe o estado (UF).")
+    .trim()
+    .length(2, "Informe o estado (UF).")
+    .transform((value) => value.toUpperCase()),
+})
+
+export type PayerAddress = z.infer<typeof payerAddressSchema>

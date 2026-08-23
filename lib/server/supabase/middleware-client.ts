@@ -91,12 +91,24 @@ export async function updateSession(
   // Usa o mesmo client autenticado da sessão (RLS: "auth.uid() = id" cobre a
   // leitura do próprio registro), sem precisar do client de service-role.
   let needsLgpdConsent = false
+  let isAccountBanned = false
   if (data.user) {
+    // Mesma query que já buscava lgpd_consent_at — ban geral entra de graça
+    // no round-trip existente (ver account-ban-repository.ts para o resto do
+    // enforcement: aqui só precisamos saber se expulsa a sessão ou não).
     const { data: userProfile } = await supabase
       .from("user_profiles")
-      .select("lgpd_consent_at")
+      .select("lgpd_consent_at, account_banned_at")
       .eq("id", data.user.id)
       .maybeSingle()
+
+    isAccountBanned = Boolean(userProfile?.account_banned_at)
+    if (isAccountBanned) {
+      // Encerra a sessão já neste response — o cookie sai invalidado junto
+      // com o redirect que proxy.ts monta a partir daqui.
+      await supabase.auth.signOut()
+    }
+
     const pendingConsent = userProfile !== null && !userProfile.lgpd_consent_at
 
     if (pendingConsent) {
@@ -121,5 +133,6 @@ export async function updateSession(
     profile: (profile as AdminProfile | null) ?? null,
     aal,
     needsLgpdConsent,
+    isAccountBanned,
   }
 }

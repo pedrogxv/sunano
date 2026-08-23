@@ -5,10 +5,12 @@ import Link from "next/link"
 import { Plus, ShoppingCart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon } from "@/lib/store-category-icons"
-import { getVariantIcon } from "@/lib/variant-icons"
 import { formatBRL } from "@/lib/format"
+import { computeCardPriceCents } from "@/lib/store-pricing"
+import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { useCart } from "@/components/providers/cart-context"
 import { Skeleton } from "@/components/ui/skeleton"
+import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import type { StoreCardVariant } from "@/lib/server/repositories/store-repository"
 
@@ -41,6 +43,7 @@ interface ProductCardProps {
 
 export function ProductCard(props: ProductCardProps) {
   const { add, setOpen } = useCart()
+  const { cardSurchargePercent } = useStoreSettings()
   const href = `/loja/${props.slug}`
   const variants = props.variants ?? []
   const hasVariants = (props.has_variants ?? false) && variants.length > 0
@@ -49,6 +52,7 @@ export function ProductCard(props: ProductCardProps) {
   )
   const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) ?? null : null
   const [imageLoaded, setImageLoaded] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const outOfStock = hasVariants
     ? Boolean(props.is_sold_out) || (activeVariant ? activeVariant.stock !== null && activeVariant.stock === 0 : false)
@@ -78,6 +82,13 @@ export function ProductCard(props: ProductCardProps) {
     e.preventDefault()
     if (outOfStock) return
     if (hasVariants && !activeVariant) return
+    // Produto com variante: abre popup pra confirmar a seleção (cor +
+    // grupos como Switch/Voltagem, que o card não conhece de antemão)
+    // em vez de assumir a cor pré-selecionada nos swatches do card.
+    if (hasVariants) {
+      setPickerOpen(true)
+      return
+    }
     add({
       productId: props.id,
       variantId: activeVariant?.id ?? null,
@@ -98,10 +109,10 @@ export function ProductCard(props: ProductCardProps) {
   }
 
   return (
-    <Link href={href} className="group block">
+    <Link href={href} className="group flex h-full flex-col">
       <div className={cn(
-        "relative flex flex-col overflow-hidden rounded-[18px] border border-[#262626] bg-card transition-all duration-200",
-        "hover:-translate-y-1 hover:border-[#3a3a3a] hover:shadow-xl hover:shadow-black/40",
+        "relative z-0 flex h-full flex-col overflow-hidden rounded-[18px] border border-[#262626] bg-card transition-all duration-200",
+        "hover:z-10 hover:-translate-y-1 hover:border-[#3a3a3a] hover:shadow-xl hover:shadow-black/40",
         outOfStock && "opacity-55"
       )}>
         {/* Imagem: fundo #141414 com um respiro da cor da categoria no topo,
@@ -187,12 +198,14 @@ export function ProductCard(props: ProductCardProps) {
 
         {/* Info */}
         <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
-          {props.category && (
-            <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[#7a7a7a]">{props.category}</p>
-          )}
+          {/* Altura fixa mesmo sem categoria, pra não desalinhar o card com os vizinhos. */}
+          <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[#7a7a7a]">
+            {props.category ?? " "}
+          </p>
           {/* `font-sans tracking-normal` desfaz o reset global de h3 (Space
-              Grotesk + tracking negativo): no mock o nome do produto é Manrope. */}
-          <h3 className="line-clamp-2 font-sans text-[13.5px] font-semibold leading-[1.35] tracking-normal text-white">
+              Grotesk + tracking negativo): no mock o nome do produto é Manrope.
+              `min-h` reserva 2 linhas sempre, pra não variar a altura entre nomes de 1 e 2 linhas. */}
+          <h3 className="line-clamp-2 min-h-[36px] font-sans text-[13.5px] font-semibold leading-[1.35] tracking-normal text-white">
             {props.name}
           </h3>
 
@@ -203,7 +216,6 @@ export function ProductCard(props: ProductCardProps) {
               variants.map((v) => {
                 const isActive = v.id === selectedVariantId
                 const variantOutOfStock = v.stock !== null && v.stock === 0
-                const VariantIcon = getVariantIcon(v.icon)
                 return (
                   <button
                     key={v.id}
@@ -220,9 +232,7 @@ export function ProductCard(props: ProductCardProps) {
                     )}
                     style={{ backgroundColor: v.color ?? "#1c1c1c" }}
                   >
-                    {VariantIcon && (
-                      <VariantIcon className="size-[10px]" style={{ color: v.color ? "#fff" : "#9a9a9a" }} strokeWidth={2.2} />
-                    )}
+                    {v.icon && <span className="text-[10px] leading-none">{v.icon}</span>}
                   </button>
                 )
               })
@@ -242,27 +252,45 @@ export function ProductCard(props: ProductCardProps) {
             ) : (
               <p className="font-display text-lg font-bold text-white">{formatBRL(basePriceCents)}</p>
             )}
+            <p className="text-[10px] text-[#7a7a7a]">
+              ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão
+            </p>
             {(() => {
               const displayStock = activeVariant ? activeVariant.stock : props.stock
-              return displayStock !== null && displayStock > 0 && displayStock <= 3 && (
-                <p className="mt-1 text-[10px] font-semibold text-amber-400">Últimas {displayStock} unidades!</p>
+              const lowStock = displayStock !== null && displayStock > 0 && displayStock <= 3
+              return (
+                <p className="mt-1 h-[14px] text-[10px] font-semibold text-amber-400">
+                  {lowStock ? `Últimas ${displayStock} unidades!` : ""}
+                </p>
               )
             })()}
           </div>
         </div>
       </div>
+      {hasVariants && (
+        <VariantPickerDialog
+          slug={props.slug}
+          name={props.name}
+          category={props.category}
+          fallbackImage={image}
+          open={pickerOpen}
+          onOpenChange={setPickerOpen}
+        />
+      )}
     </Link>
   )
 }
 
 export function ProductCardSkeleton() {
   return (
-    <div className="flex flex-col overflow-hidden rounded-[18px] border border-[#262626] bg-card">
+    <div className="flex h-full flex-col overflow-hidden rounded-[18px] border border-[#262626] bg-card">
       <Skeleton className="aspect-square w-full rounded-none" />
       <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
         <Skeleton className="h-2.5 w-2/5" />
-        <Skeleton className="h-3 w-4/5" />
+        <Skeleton className="h-[36px] w-4/5" />
+        <Skeleton className="h-5 w-16" />
         <Skeleton className="mt-auto h-5 w-1/2" />
+        <Skeleton className="h-3 w-2/5" />
       </div>
     </div>
   )

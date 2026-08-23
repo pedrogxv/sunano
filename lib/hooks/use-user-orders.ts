@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useAuthUser } from "@/components/providers/auth-context"
 
 export type UserOrderItem = {
@@ -29,32 +29,87 @@ export type UserOrder = {
   carrier: string | null
 }
 
+export type UserOrderFilters = {
+  status?: UserOrder["status"]
+  dateFrom?: string
+  dateTo?: string
+}
+
+export type UseUserOrdersOptions = {
+  page?: number
+  pageSize?: number
+  filters?: UserOrderFilters
+}
+
 export type UseUserOrdersResult = {
   orders: UserOrder[]
   pendingOrder: UserOrder | null
+  total: number
+  hasMore: boolean
   loading: boolean
+  refetch: () => void
+}
+
+/** Rota de continuação do pagamento de acordo com o método escolhido no pedido. */
+export function pendingPaymentHref(order: UserOrder): string {
+  return order.payment_method === "credit_card"
+    ? `/checkout/card?orderId=${order.id}`
+    : `/checkout/pix?orderId=${order.id}`
 }
 
 /**
  * Pedidos do usuário logado. Usado tanto pelo aviso de pendência no popover
  * do miniperfil quanto pela página /conta/pedidos — uma única fonte evita
- * duas chamadas divergentes pra mesma lista.
+ * duas chamadas divergentes pra mesma lista. Paginado no banco (ver
+ * `listOrdersByUser`); sem `options`, traz só a primeira página recente
+ * (suficiente pro popover de pendência e pro seletor do formulário de
+ * suporte, que não precisam do histórico inteiro).
  */
-export function useUserOrders(): UseUserOrdersResult {
+export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResult {
   const { user } = useAuthUser()
   const [orders, setOrders] = useState<UserOrder[]>([])
+  const [total, setTotal] = useState(0)
+  const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(Boolean(user))
+  const [reloadToken, setReloadToken] = useState(0)
+
+  const page = options?.page ?? 1
+  const pageSize = options?.pageSize ?? 20
+  const status = options?.filters?.status
+  const dateFrom = options?.filters?.dateFrom
+  const dateTo = options?.filters?.dateTo
+
+  const queryString = useMemo(() => {
+    const params = new URLSearchParams()
+    params.set("page", String(page))
+    params.set("pageSize", String(pageSize))
+    if (status) params.set("status", status)
+    if (dateFrom) params.set("dateFrom", dateFrom)
+    if (dateTo) params.set("dateTo", dateTo)
+    return params.toString()
+  }, [page, pageSize, status, dateFrom, dateTo])
 
   useEffect(() => {
     if (!user) return
     let cancelled = false
-    fetch("/api/store/orders")
-      .then((res) => (res.ok ? res.json() : { orders: [] }))
-      .then((data: { orders?: UserOrder[] }) => {
-        if (!cancelled) setOrders(data.orders ?? [])
+    // Disparado fora do corpo síncrono do efeito para não encadear duas
+    // renderizações seguidas (setLoading + os setters do fetch abaixo).
+    queueMicrotask(() => {
+      if (!cancelled) setLoading(true)
+    })
+    fetch(`/api/store/orders?${queryString}`)
+      .then((res) => (res.ok ? res.json() : { orders: [], total: 0, hasMore: false }))
+      .then((data: { orders?: UserOrder[]; total?: number; hasMore?: boolean }) => {
+        if (cancelled) return
+        setOrders(data.orders ?? [])
+        setTotal(data.total ?? 0)
+        setHasMore(data.hasMore ?? false)
       })
       .catch(() => {
-        if (!cancelled) setOrders([])
+        if (cancelled) return
+        setOrders([])
+        setTotal(0)
+        setHasMore(false)
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -62,9 +117,10 @@ export function useUserOrders(): UseUserOrdersResult {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [user, queryString, reloadToken])
 
   const pendingOrder = orders.find((o) => o.status === "pending") ?? null
+  const refetch = () => setReloadToken((n) => n + 1)
 
-  return { orders, pendingOrder, loading }
+  return { orders, pendingOrder, total, hasMore, loading, refetch }
 }

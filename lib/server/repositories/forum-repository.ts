@@ -47,6 +47,7 @@ export type ForumListPost = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_vip_expires_at: string | null
   /** Slug do autor — resolve tag especial (ex: SUNANO) junto do badge de tier. */
   author_display_slug: string | null
 }
@@ -68,6 +69,7 @@ export type ForumCommentDetail = {
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
+  author_vip_expires_at: string | null
   author_display_slug: string | null
   author_streak: number
 }
@@ -186,6 +188,7 @@ export async function enrichForumPostRows(rows: ForumPostRow[]): Promise<ForumLi
     author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
     author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
+    author_vip_expires_at: p.user_id ? profileMap[p.user_id]?.vip_expires_at ?? null : null,
     author_display_slug: p.user_id ? profileMap[p.user_id]?.display_slug ?? null : null,
   }))
 }
@@ -513,6 +516,7 @@ function mapForumCommentRows(
     author_display_name: c.user_id ? profileMap[c.user_id]?.display_name ?? c.author_name : c.author_name,
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
+    author_vip_expires_at: c.user_id ? profileMap[c.user_id]?.vip_expires_at ?? null : null,
     author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
     author_streak: c.user_id ? profileMap[c.user_id]?.streak ?? 0 : 0,
   }))
@@ -706,6 +710,7 @@ export const getForumPostBySlug = cache(async (
       : post.author_name,
     author_avatar_url: post.user_id ? profileMap[post.user_id]?.avatar_url ?? null : null,
     author_account_tier: post.user_id ? profileMap[post.user_id]?.account_tier ?? "common" : "common",
+    author_vip_expires_at: post.user_id ? profileMap[post.user_id]?.vip_expires_at ?? null : null,
     author_display_slug: post.user_id ? profileMap[post.user_id]?.display_slug ?? null : null,
   }
 

@@ -27,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { data: order, error } = await db
     .from("store_orders")
     .select(
-      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, access_token, metadata, items, created_at, payment_method, misticpay_e2e, asaas_payment_id, asaas_receipt_url"
+      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, access_token, metadata, items, created_at, payment_method, misticpay_e2e, asaas_payment_id, asaas_receipt_url, installment_count, pix_price_cents, card_surcharge_percent"
     )
     .eq("id", id)
     .single()
@@ -57,6 +57,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     items: order.items,
     createdAt: order.created_at,
     paymentMethod: order.payment_method,
+    installmentCount: order.installment_count,
+    pixPriceCents: order.pix_price_cents,
+    cardSurchargePercent: order.card_surcharge_percent,
     // Comprovantes: só existem depois de pago. E2E é o identificador oficial
     // do Banco Central pro PIX (MisticPay); o Asaas devolve um link de
     // comprovante (transactionReceiptUrl/invoiceUrl) cacheado pelo webhook.

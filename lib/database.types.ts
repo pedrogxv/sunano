@@ -117,6 +117,8 @@ export type Database = {
           media_adjustments: Record<string, unknown>
           bio: string | null
           account_tier: "common" | "vip"
+          /** Validade do VIP comprado com Aura. NULL = sem expiração (VIP manual do admin, ou nunca comprado). */
+          vip_expires_at: string | null
           /** Handle sem "@" — exibido como ícone clicável no perfil público. */
           youtube_handle: string | null
           tiktok_handle: string | null
@@ -125,10 +127,17 @@ export type Database = {
           /** Ban restrito ao Mercado — não impede login nem o resto da conta. */
           market_banned_at: string | null
           market_ban_reason: string | null
+          /** Ban geral da conta — bloqueia login e some das listagens públicas (fórum/blog/reviews ocultos, fora de rankings). Distinto de market_banned_at. */
+          account_banned_at: string | null
+          account_ban_reason: string | null
           /** Aceite do termo de integridade das mini reviews (item 1.2) — registrado 1x, nunca reexibido depois. */
           reviews_integrity_accepted_at: string | null
           /** Cache do id de cliente no Asaas — evita recriar o customer a cada compra. */
           asaas_customer_id: string | null
+          /** Item (kind=avatar_frame) equipado — deve estar em `user_aura_items` do mesmo usuário, reforçado na aplicação. */
+          equipped_avatar_frame_id: string | null
+          /** Timestamp da última troca paga de nome — usado para o cooldown de 3 dias em `change_display_name_with_aura`. */
+          display_name_changed_at: string | null
           created_at: string
           updated_at: string
         }
@@ -167,6 +176,37 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["medals"]["Row"], "id" | "created_at" | "category"> &
           Partial<Pick<Database["public"]["Tables"]["medals"]["Row"], "category">>
         Update: Partial<Database["public"]["Tables"]["medals"]["Insert"]>
+      }
+      aura_items: {
+        Relationships: []
+        Row: {
+          id: string
+          slug: string
+          name: string
+          description: string | null
+          kind: "avatar_frame" | "vip_month" | "display_name_change"
+          image_url: string | null
+          frame_asset_url: string
+          aura_cost: number
+          active: boolean
+          sort_order: number
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["aura_items"]["Row"], "id" | "created_at" | "kind" | "active" | "sort_order"> &
+          Partial<Pick<Database["public"]["Tables"]["aura_items"]["Row"], "kind" | "active" | "sort_order">>
+        Update: Partial<Database["public"]["Tables"]["aura_items"]["Insert"]>
+      }
+      user_aura_items: {
+        Relationships: []
+        Row: {
+          user_id: string
+          item_id: string
+          acquired_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["user_aura_items"]["Row"], "acquired_at"> & {
+          acquired_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_aura_items"]["Insert"]>
       }
       achievements: {
         Relationships: []
@@ -253,6 +293,18 @@ export type Database = {
           pinned_order?: number | null
         }
         Update: Partial<Database["public"]["Tables"]["user_medals"]["Insert"]>
+      }
+      user_youtube_subscription: {
+        Relationships: []
+        Row: {
+          user_id: string
+          confirmed_at: string
+        }
+        Insert: {
+          user_id: string
+          confirmed_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_youtube_subscription"]["Insert"]>
       }
       events: {
         Relationships: []
@@ -656,6 +708,11 @@ export type Database = {
             | "peripheral_comment_aura_undisliked"
             | "peripheral_comment_created"
             | "peripheral_review_created"
+            | "aura_item_redeemed"
+            | "youtube_subscription_confirmed"
+            | "vip_purchased"
+            | "display_name_changed"
+            | "account_banned_adjustment"
           source_post_id: string | null
           source_comment_id: string | null
           source_blog_post_id: string | null
@@ -1185,6 +1242,11 @@ export type Database = {
           affiliate_id: string | null
           affiliate_code: string | null
           user_id: string | null
+          asaas_checkout_id: string | null
+          asaas_installment_id: string | null
+          installment_count: number | null
+          pix_price_cents: number | null
+          card_surcharge_percent: number | null
           created_at: string
           updated_at: string
         }
@@ -1218,6 +1280,11 @@ export type Database = {
           affiliate_id?: string | null
           affiliate_code?: string | null
           user_id?: string | null
+          asaas_checkout_id?: string | null
+          asaas_installment_id?: string | null
+          installment_count?: number | null
+          pix_price_cents?: number | null
+          card_surcharge_percent?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1251,9 +1318,100 @@ export type Database = {
           affiliate_id?: string | null
           affiliate_code?: string | null
           user_id?: string | null
+          asaas_checkout_id?: string | null
+          asaas_installment_id?: string | null
+          installment_count?: number | null
+          pix_price_cents?: number | null
+          card_surcharge_percent?: number | null
           created_at?: string
           updated_at?: string
         }
+      }
+      store_settings: {
+        Relationships: []
+        Row: {
+          id: boolean
+          card_surcharge_percent: number
+          card_max_installments: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: boolean
+          card_surcharge_percent?: number
+          card_max_installments?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: boolean
+          card_surcharge_percent?: number
+          card_max_installments?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+      }
+      user_tierlist_items: {
+        Relationships: []
+        Row: {
+          user_id: string
+          peripheral_id: string
+          tier: "S" | "A" | "B" | "C" | "D"
+          position: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          peripheral_id: string
+          tier: "S" | "A" | "B" | "C" | "D"
+          position?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_tierlist_items"]["Insert"]>
+      }
+      vip_subscriptions: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          asaas_checkout_id: string
+          asaas_subscription_id: string | null
+          asaas_customer_id: string
+          status: "pending" | "active" | "past_due" | "canceled" | "expired"
+          current_period_end: string | null
+          created_at: string
+          updated_at: string
+          canceled_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          asaas_checkout_id: string
+          asaas_subscription_id?: string | null
+          asaas_customer_id: string
+          status?: "pending" | "active" | "past_due" | "canceled" | "expired"
+          current_period_end?: string | null
+          created_at?: string
+          updated_at?: string
+          canceled_at?: string | null
+        }
+        Update: Partial<Database["public"]["Tables"]["vip_subscriptions"]["Insert"]>
+      }
+      vip_subscription_payments: {
+        Relationships: []
+        Row: {
+          asaas_payment_id: string
+          subscription_id: string
+          processed_at: string
+        }
+        Insert: {
+          asaas_payment_id: string
+          subscription_id: string
+          processed_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["vip_subscription_payments"]["Insert"]>
       }
       support_tickets: {
         Relationships: []
@@ -1781,6 +1939,58 @@ export type Database = {
       }
       claim_event_medal: {
         Args: { p_event_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      redeem_aura_item: {
+        Args: { p_user_id: string; p_item_id: string }
+        Returns: boolean
+      }
+      purchase_vip_with_aura: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      is_vip_active: {
+        Args: { p_account_tier: string; p_vip_expires_at: string | null }
+        Returns: boolean
+      }
+      expire_vip_accounts: {
+        Args: Record<string, never>
+        Returns: number
+      }
+      activate_vip_subscription: {
+        Args: { p_asaas_checkout_id: string; p_asaas_subscription_id: string; p_asaas_payment_id: string }
+        Returns: boolean
+      }
+      renew_vip_subscription: {
+        Args: { p_asaas_subscription_id: string; p_asaas_payment_id: string }
+        Returns: boolean
+      }
+      mark_vip_subscription_past_due: {
+        Args: { p_asaas_subscription_id: string }
+        Returns: boolean
+      }
+      cancel_vip_subscription: {
+        Args: {
+          p_user_id?: string | null
+          p_asaas_subscription_id?: string | null
+          p_asaas_checkout_id?: string | null
+        }
+        Returns: boolean
+      }
+      change_display_name_with_aura: {
+        Args: { p_user_id: string; p_new_name: string }
+        Returns: boolean
+      }
+      admin_ban_account: {
+        Args: { p_user_id: string; p_reason: string }
+        Returns: undefined
+      }
+      admin_unban_account: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
+      confirm_youtube_subscription: {
+        Args: { p_user_id: string }
         Returns: boolean
       }
       toggle_forum_aura: {

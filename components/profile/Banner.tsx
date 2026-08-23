@@ -1,5 +1,5 @@
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
+import { isVipActive, resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
 import {
   DEFAULT_ADJUST,
   mediaAdjustStyle,
@@ -11,6 +11,8 @@ import { ProfileImageLightbox } from "./ProfileImageLightbox"
 interface BannerProps {
   bannerUrl: string | null
   tier: AccountTier
+  /** Quando expira o VIP (`null` = sem expiração) — decide a moldura roxa. */
+  vipExpiresAt?: string | null
   /** Enquadramento escolhido pelo dono no editor de perfil. */
   adjust?: MediaAdjust
   className?: string
@@ -23,9 +25,14 @@ interface BannerProps {
  * O redimensionamento vem do storage (ver `lib/image-loader.ts`). A capa de um
  * VIP com GIF pula esse caminho (`unoptimized`) e chega como foi enviada, sem
  * perder quadros na reamostragem.
+ *
+ * VIP também ganha a mesma borda/brilho roxo da foto (`AvatarQuadrado`) — as
+ * duas molduras formam um conjunto só, em vez da capa ficar sem nenhum sinal
+ * de tier enquanto só a foto o exibe.
  */
-export function Banner({ bannerUrl, tier, adjust = DEFAULT_ADJUST, className }: BannerProps) {
+export function Banner({ bannerUrl, tier, vipExpiresAt = null, adjust = DEFAULT_ADJUST, className }: BannerProps) {
   const { src, animated } = resolveProfileMedia(bannerUrl, tier)
+  const isVip = isVipActive(tier, vipExpiresAt)
 
   const image = (
     <div
@@ -33,6 +40,7 @@ export function Banner({ bannerUrl, tier, adjust = DEFAULT_ADJUST, className }: 
         // O gradiente fica sempre no fundo: capa ausente — ou que falhe ao
         // carregar — descobre ele em vez de deixar uma faixa vazia.
         "relative h-32 w-full overflow-hidden bg-gradient-to-br from-primary/20 via-muted/40 to-background sm:h-44 md:h-56",
+        isVip && "border-[3px] border-[var(--vip-accent)] shadow-[0_0_22px_-3px_var(--vip-accent-soft)]",
         className
       )}
     >

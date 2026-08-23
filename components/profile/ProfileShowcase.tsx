@@ -13,6 +13,7 @@ import { MedalhasGrid } from "./MedalhasGrid"
 import { MeusReviewsGrid } from "./MeusReviewsGrid"
 import { SetupGrid } from "./SetupGrid"
 import { SocialLinks } from "./SocialLinks"
+import { PersonalTierlistSummaryCard } from "@/components/tierlist-pessoal/PersonalTierlistSummaryCard"
 import { profilePath } from "@/lib/profile-name"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
 
@@ -74,6 +75,7 @@ export function ProfileShowcase({
         <Banner
           bannerUrl={profile.banner_url}
           tier={profile.account_tier}
+          vipExpiresAt={profile.vip_expires_at}
           adjust={profile.media_adjustments.banner}
           className={cn("rounded-2xl", BANNER_HEIGHT)}
         />
@@ -94,7 +96,9 @@ export function ProfileShowcase({
             avatarUrl={profile.avatar_url}
             name={profile.display_name}
             tier={profile.account_tier}
+            vipExpiresAt={profile.vip_expires_at}
             adjust={profile.media_adjustments.avatar}
+            frameUrl={profile.equipped_avatar_frame_url}
           />
         </div>
 
@@ -115,12 +119,14 @@ export function ProfileShowcase({
         <InfoBasica
           name={profile.display_name}
           tier={profile.account_tier}
+          vipExpiresAt={profile.vip_expires_at}
           memberSince={profile.member_since}
           displaySlug={profile.display_slug}
           auraRank={profile.aura_rank}
           activityRank={profile.activity_rank}
           streak={profile.streak.current}
           bio={profile.bio}
+          isOwner={isOwner}
         />
         <SocialLinks
           youtubeHandle={profile.youtube_handle}
@@ -155,6 +161,7 @@ export function ProfileShowcase({
             followers: profile.followers,
             aura_earned: profile.aura_total_earned,
           }}
+          youtubeSubscribed={profile.youtube_subscribed}
         />
 
         <SetupGrid setup={profile.setup} isOwner={isOwner} />
@@ -163,6 +170,11 @@ export function ProfileShowcase({
           favorites={profile.favorites}
           tier={profile.account_tier}
           isOwner={isOwner}
+        />
+
+        <PersonalTierlistSummaryCard
+          itemCount={profile.tierlist_item_count}
+          tierlistHref={`${profilePath(profile.display_slug ?? profile.id)}/tierlist`}
         />
 
         <MeusReviewsGrid

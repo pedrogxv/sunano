@@ -208,17 +208,21 @@ export async function broadcastSystemNotification(params: {
  * entre os dois repositories.
  */
 const ORDER_STATUS_LABEL: Record<string, string> = {
+  pending: "Aguardando pagamento",
   paid: "Pago",
   awaiting_shipping_info: "Aguardando dados de entrega",
   shipped: "Enviado",
   delivered: "Entregue",
+  cancelled: "Cancelado",
+  expired: "Expirado",
   refunded: "Reembolsado",
 }
 
 /**
- * Notifica o dono de um pedido que o status mudou. Chamada explícita (não
- * trigger) a partir de orders-repository.ts — pedidos de convidado
- * (metadata.user_id null) simplesmente não chamam isto.
+ * Notifica o dono de um pedido que o status mudou (ou que o pedido foi
+ * criado, com status "pending"). Chamada explícita (não trigger) a partir de
+ * orders-repository.ts, do checkout e dos webhooks de pagamento — pedidos de
+ * convidado (metadata.user_id null) simplesmente não chamam isto.
  *
  * Diferente dos outros tipos, grava `title`/`body` já formatados em
  * português no momento da criação (mesmo padrão do tipo `system`) em vez de
@@ -226,7 +230,7 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
  * site, então não há necessidade de respeitar troca de idioma aqui.
  *
  * Best-effort: nunca lança. Uma falha aqui não pode derrubar a resposta da
- * API que avançou/estornou o pedido.
+ * API que avançou/estornou/criou o pedido.
  */
 export async function notifyOrderStatusChange(params: {
   userId: string

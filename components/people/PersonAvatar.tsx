@@ -1,7 +1,7 @@
 import { Crown, Sparkles } from "lucide-react"
 
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia } from "@/lib/account-tier"
+import { resolveProfileMedia, isVipActive } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 import type { PublicProfileSummary } from "@/lib/user-directory"
@@ -26,7 +26,7 @@ export function PersonAvatar({
   size = "md",
   className,
 }: {
-  profile: Pick<PublicProfileSummary, "display_name" | "avatar_url" | "account_tier"> & {
+  profile: Pick<PublicProfileSummary, "display_name" | "avatar_url" | "account_tier" | "vip_expires_at"> & {
     /** Pode ser `null` fora do diretório de pessoas (ex: byline de notícia). */
     display_slug: string | null
   }
@@ -36,7 +36,7 @@ export function PersonAvatar({
   const { src, animated } = resolveProfileMedia(profile.avatar_url, profile.account_tier)
   const initials =
     profile.display_name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2) || "?"
-  const isVip = profile.account_tier !== "common"
+  const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
   const specialTag = getSpecialTag(profile.display_slug)
 
   return (
@@ -57,8 +57,11 @@ export function PersonAvatar({
         />
       </div>
       {isVip && (
-        <span className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full border border-background bg-amber-400 p-[3px]">
-          <Crown className={cn(CROWN_SIZE[size], "text-amber-950")} />
+        <span
+          className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full border border-background p-[3px]"
+          style={{ backgroundColor: "var(--vip-accent)" }}
+        >
+          <Crown className={cn(CROWN_SIZE[size], "text-black")} />
         </span>
       )}
       {specialTag && (

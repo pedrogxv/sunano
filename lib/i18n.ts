@@ -508,6 +508,22 @@ type Translations = {
       cannotDeleteWebMaster: string
       staffSectionTitle: string
       membersSectionTitle: string
+      banUser: string
+      unbanUser: string
+      banUserTitle: (name: string) => string
+      banUserDesc: string
+      banReasonLabel: string
+      banReasonPlaceholder: string
+      confirmBan: string
+      unbanUserTitle: (name: string) => string
+      unbanUserDesc: string
+      confirmUnban: string
+      userBanned: string
+      userUnbanned: string
+      failedToBan: string
+      failedToUnban: string
+      bannedBadge: string
+      banReasonPrefix: string
     }
     offers: {
       failedToLoad: string
@@ -1305,6 +1321,22 @@ export const translations: Record<LocaleCode, Translations> = {
         cannotDeleteWebMaster: "Uma conta WEB Master não pode ser excluída por este painel.",
         staffSectionTitle: "Staff - Sunano",
         membersSectionTitle: "Membros",
+        banUser: "Banir",
+        unbanUser: "Desbanir",
+        banUserTitle: (name: string) => `Banir ${name}?`,
+        banUserDesc: "A conta é impedida de logar, some das listagens públicas (diretório, rankings, busca) e tem posts, comentários e reviews ocultos. O saldo de Aura é zerado, com o ajuste registrado no extrato. A ação fica no log de auditoria e pode ser revertida (o login volta a funcionar, mas o conteúdo permanece oculto).",
+        banReasonLabel: "Motivo do banimento",
+        banReasonPlaceholder: "Descreva o motivo do banimento...",
+        confirmBan: "Sim, banir conta",
+        unbanUserTitle: (name: string) => `Desbanir ${name}?`,
+        unbanUserDesc: "O login volta a funcionar e a conta volta a aparecer nas listagens públicas. Posts, comentários e reviews ocultos pelo ban NÃO são reexibidos automaticamente, e o saldo de Aura zerado não é devolvido.",
+        confirmUnban: "Sim, desbanir conta",
+        userBanned: "Conta banida",
+        userUnbanned: "Conta desbanida",
+        failedToBan: "Erro ao banir conta",
+        failedToUnban: "Erro ao desbanir conta",
+        bannedBadge: "Banido",
+        banReasonPrefix: "Motivo",
       },
       offers: {
         failedToLoad: "Erro ao carregar ofertas",
@@ -1567,6 +1599,16 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
+        {
+          version: "v0.3.4 · Damnatio Memoriae",
+          date: "23 de agosto",
+          title: "Primeira leva de banimentos por farm de Aura",
+          description: "Foi aplicada a primeira onda de banimentos do Sunano — a Damnatio Memoriae — contra contas flagradas farmando Aura de forma artificial, com multicontas e automação para inflar saldo, ofensiva e posição nos rankings.",
+          items: [
+            "Damnatio Memoriae: primeira leva de banimentos aplicada contra contas que farmavam Aura de forma artificial — uso de multicontas e automação (bots) para gerar curtidas, comentários e missões diárias em massa, inflando saldo, ofensiva e posição nos rankings sem uso legítimo do site",
+            "Casos identificados após revisão manual da equipe, cruzando padrões de atividade suspeitos nas contas envolvidas",
+          ],
+        },
         {
           version: "v0.3.3",
           date: "19 de agosto",
@@ -2394,6 +2436,22 @@ export const translations: Record<LocaleCode, Translations> = {
         cannotDeleteWebMaster: "A WEB Master account cannot be deleted from this panel.",
         staffSectionTitle: "Staff - Sunano",
         membersSectionTitle: "Members",
+        banUser: "Ban",
+        unbanUser: "Unban",
+        banUserTitle: (name: string) => `Ban ${name}?`,
+        banUserDesc: "The account is blocked from logging in, disappears from public listings (directory, rankings, search), and has its posts, comments and reviews hidden. The Aura balance is zeroed, with the adjustment recorded in the ledger. The action is logged in the audit trail and can be reversed (login works again, but content stays hidden).",
+        banReasonLabel: "Ban reason",
+        banReasonPlaceholder: "Describe the reason for the ban...",
+        confirmBan: "Yes, ban account",
+        unbanUserTitle: (name: string) => `Unban ${name}?`,
+        unbanUserDesc: "Login works again and the account reappears in public listings. Posts, comments and reviews hidden by the ban are NOT automatically restored, and the zeroed Aura balance is not refunded.",
+        confirmUnban: "Yes, unban account",
+        userBanned: "Account banned",
+        userUnbanned: "Account unbanned",
+        failedToBan: "Failed to ban account",
+        failedToUnban: "Failed to unban account",
+        bannedBadge: "Banned",
+        banReasonPrefix: "Reason",
       },
       offers: {
         failedToLoad: "Failed to load offers",
@@ -2656,6 +2714,16 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.3.4 · Damnatio Memoriae",
+          date: "August 23",
+          title: "First wave of bans for Aura farming",
+          description: "Sunano's first wave of bans was carried out — the Damnatio Memoriae — against accounts caught artificially farming Aura, using multi-accounting and automation to inflate balance, streak, and ranking position.",
+          items: [
+            "Damnatio Memoriae: first wave of bans applied against accounts artificially farming Aura — multi-accounting and automation (bots) used to mass-generate likes, comments, and daily missions, inflating balance, streak, and ranking position without genuine site use",
+            "Cases identified after manual staff review, cross-referencing suspicious activity patterns across the accounts involved",
+          ],
+        },
         {
           version: "v0.3.3",
           date: "August 19",

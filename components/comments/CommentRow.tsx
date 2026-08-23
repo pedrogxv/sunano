@@ -180,7 +180,7 @@ export function CommentRow({
           <AuthorNameLink
             author={{ userId: comment.user_id, displayName: comment.author_display_name, displaySlug: comment.author_display_slug }}
           />
-          <AuthorTierBadge tier={comment.author_account_tier} />
+          <AuthorTierBadge tier={comment.author_account_tier} vipExpiresAt={comment.author_vip_expires_at} />
           <AuthorSpecialTagBadge slug={comment.author_display_slug} />
           <StreakBadge days={comment.author_streak} size="sm" />
           <span>·</span>

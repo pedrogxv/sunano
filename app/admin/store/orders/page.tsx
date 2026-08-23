@@ -835,6 +835,10 @@ function OrderManageDialog({
   const [refundReason, setRefundReason] = useState("")
   const [refunding, setRefunding] = useState(false)
 
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState("")
+  const [cancelling, setCancelling] = useState(false)
+
   useEffect(() => {
     if (!order) return
     setTrackingCode(order.tracking_code ?? "")
@@ -842,6 +846,8 @@ function OrderManageDialog({
     setRefundOpen(false)
     setRefundValue("")
     setRefundReason("")
+    setCancelOpen(false)
+    setCancelReason("")
   }, [order?.id])
 
   if (!order) {
@@ -919,6 +925,30 @@ function OrderManageDialog({
       toast.error("Erro ao extornar pedido", { description: message })
     } finally {
       setRefunding(false)
+    }
+  }
+
+  async function handleCancel() {
+    if (!order) return
+    setCancelling(true)
+    try {
+      const res = await fetch(`/api/admin/store/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel", reason: cancelReason.trim() || undefined }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao cancelar pedido")
+
+      onOrderPatched(order.id, { status: "cancelled" })
+      toast.success("Pedido cancelado", { description: `#${orderNumber(order.id)}` })
+      setCancelOpen(false)
+      setCancelReason("")
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao cancelar pedido"
+      toast.error("Erro ao cancelar pedido", { description: message })
+    } finally {
+      setCancelling(false)
     }
   }
 
@@ -1045,6 +1075,61 @@ function OrderManageDialog({
                 <PackageCheck className="size-4" />
                 {advancing ? "Salvando..." : `Marcar como "${STATUS_LABEL[next]}"`}
               </Button>
+            </div>
+          )}
+
+          {/* Cancelamento — só pedidos aguardando pagamento */}
+          {order.status === "pending" && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Cancelamento
+              </p>
+
+              {!cancelOpen ? (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  onClick={() => setCancelOpen(true)}
+                >
+                  <Ban className="size-4" />
+                  Cancelar pedido
+                </Button>
+              ) : (
+                <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    O pedido será cancelado{order.gateway === "asaas" ? " e a cobrança removida no Asaas" : ""}
+                    , e o estoque reservado será devolvido.
+                  </p>
+                  <div className="space-y-1">
+                    <Label htmlFor="cancel-reason" className="text-xs">Motivo (opcional)</Label>
+                    <Textarea
+                      id="cancel-reason"
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                      placeholder="Ex: Cliente desistiu, suspeita de fraude..."
+                      rows={2}
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setCancelOpen(false)}
+                      disabled={cancelling}
+                    >
+                      Voltar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      className="flex-1 gap-2"
+                      onClick={handleCancel}
+                      disabled={cancelling}
+                    >
+                      {cancelling ? "Cancelando..." : "Confirmar cancelamento"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

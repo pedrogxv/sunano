@@ -1,12 +1,13 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Medal, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 
 import { EventCard } from "@/components/events/EventCard"
 import { AchievementsGrid } from "@/components/profile/AchievementsGrid"
+import { YoutubeSubscribeButton } from "@/components/auth/YoutubeSubscribeButton"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
 import type { EventDisplay } from "@/lib/events"
 import type { AchievementTrack, ShowcaseAchievement } from "@/lib/achievements"
@@ -19,6 +20,7 @@ interface EventsContentProps {
   /** Conquistas gerais (posts/comentários/seguidores) já desbloqueadas — vazio quando deslogado. */
   achievements: ShowcaseAchievement[]
   achievementCounts: Record<AchievementTrack, number>
+  youtubeConfirmed: boolean
 }
 
 /**
@@ -36,12 +38,34 @@ export function EventsContent({
   isLoggedIn,
   achievements,
   achievementCounts,
+  youtubeConfirmed: initialYoutubeConfirmed,
 }: EventsContentProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [events, setEvents] = useState(initialEvents)
   const [claimedMedalIds, setClaimedMedalIds] = useState(() => new Set(initialClaimedMedalIds))
   const [auraBalance, setAuraBalance] = useState(initialAuraBalance)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [youtubeConfirmed, setYoutubeConfirmed] = useState(initialYoutubeConfirmed)
+
+  // Feedback do redirect de app/auth/youtube/callback/route.ts (usuário pode
+  // ter iniciado o fluxo daqui em vez de /aura).
+  useEffect(() => {
+    const youtubeStatus = searchParams.get("youtube")
+    if (!youtubeStatus) return
+    if (youtubeStatus === "confirmed") {
+      toast.success("Inscrição confirmada! +50 de Aura e a conquista Inscrito.")
+      setYoutubeConfirmed(true)
+      setAuraBalance((prev) => prev + 50)
+      notifyAuraChanged()
+    } else if (youtubeStatus === "not_subscribed") {
+      toast.error("Não encontramos sua inscrição no canal. Inscreva-se e tente de novo.")
+    } else {
+      toast.error("Não foi possível confirmar sua inscrição. Tente novamente.")
+    }
+    router.replace("/conquistas", { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const { active, ended } = useMemo(() => {
     const active: EventDisplay[] = []
@@ -106,7 +130,20 @@ export function EventsContent({
               Gerais
             </h2>
           </div>
-          <AchievementsGrid achievements={achievements} counts={achievementCounts} showTitle={false} />
+          <AchievementsGrid
+            achievements={achievements}
+            counts={achievementCounts}
+            showTitle={false}
+            youtubeSubscribed={youtubeConfirmed}
+          />
+          {!youtubeConfirmed && (
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-600/30 bg-red-600/5 px-4 py-3">
+              <p className="flex-1 text-sm text-foreground">
+                Ganhe uma conquista especial por ser inscrito no nosso canal — só rola uma vez! <span className="font-bold text-red-500">+50 de Aura</span>
+              </p>
+              <YoutubeSubscribeButton />
+            </div>
+          )}
         </section>
       )}
 

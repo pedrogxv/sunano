@@ -7,6 +7,8 @@ import {
   BarChart2,
   BookOpen,
   Clock3,
+  Crown,
+  Flame,
   Home,
   Medal,
   MessageCircle,
@@ -21,6 +23,9 @@ import {
 import { useEffect, useState } from "react"
 
 import { SunanoIcon } from "@/components/ui/SunanoLogo"
+import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
+import { useAuthModal } from "@/components/providers/auth-modal-context"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { useCart } from "@/components/providers/cart-context"
 import { useT } from "@/lib/use-t"
@@ -90,8 +95,11 @@ export function PublicSidebar() {
   const isCollapsed = false
   const pathname = usePathname()
   const { count: cartCount, setOpen: openCart } = useCart()
+  const { user: authUser } = useAuthUser()
+  const { openLogin } = useAuthModal()
 
   const [claimableEvents, setClaimableEvents] = useState(0)
+  const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -240,28 +248,68 @@ export function PublicSidebar() {
                 "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                 isCollapsed && "justify-center",
                 isActive("/offers")
+                  ? "bg-sky-600 text-white shadow-sm shadow-sky-900/40"
+                  : "nav-bolt-holder border border-sky-500/40 bg-sky-500/10 hover:border-sky-500/60 hover:bg-sky-500/20"
+              )}
+            >
+              <BadgePercent
+                className={cn("size-[18px] shrink-0", !isActive("/offers") && "nav-bolt-icon")}
+              />
+              <span className={cn(isCollapsed && "hidden", !isActive("/offers") && "nav-bolt-text")}>
+                {t.nav.offers}
+              </span>
+            </Link>
+
+            {/* Central de Aura */}
+            <Link
+              href="/aura"
+              onClick={close}
+              className={cn(
+                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                isCollapsed && "justify-center",
+                isActive("/aura")
                   ? "bg-orange-600 text-white shadow-sm shadow-orange-900/40"
                   : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
               )}
             >
-              <BadgePercent
-                className={cn("size-[18px] shrink-0", !isActive("/offers") && "nav-fire-icon")}
+              <Flame
+                className={cn("size-[18px] shrink-0", !isActive("/aura") && "nav-fire-icon")}
+                fill={isActive("/aura") ? "currentColor" : "none"}
               />
-              <span className={cn(isCollapsed && "hidden", !isActive("/offers") && "nav-fire-text")}>
-                {t.nav.offers}
+              <span className={cn(isCollapsed && "hidden", !isActive("/aura") && "nav-fire-text")}>
+                Central de Aura
               </span>
             </Link>
           </div>
         </nav>
 
-        {/* Changelog — público */}
+        {/* Changelog para quem já é VIP — quem não é vê um convite pra virar VIP no lugar. */}
         <div className="border-t border-border px-3 py-3">
-          <NavLink
-            item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
-            isActive={isActive("/changelog")}
-            collapsed={isCollapsed}
-            onClick={close}
-          />
+          {authUser?.isVip ? (
+            <NavLink
+              item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
+              isActive={isActive("/changelog")}
+              collapsed={isCollapsed}
+              onClick={close}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                close()
+                if (authUser) setVipUpsellOpen(true)
+                else openLogin()
+              }}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-lg border border-[var(--vip-accent-soft)] px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--vip-accent-soft)]",
+                isCollapsed && "justify-center"
+              )}
+              style={{ color: "var(--vip-accent)" }}
+            >
+              <Crown className="size-[18px] shrink-0 vip-badge-crown" />
+              <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>Vire VIP</span>
+            </button>
+          )}
         </div>
 
         {/* Links legais — ocultos quando colapsado */}
@@ -297,6 +345,8 @@ export function PublicSidebar() {
           </div>
         )}
       </aside>
+
+      <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />
     </>
   )
 }

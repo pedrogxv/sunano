@@ -6,7 +6,7 @@ import { Activity, Bird, Crown, Eye, Flame, Sparkles, Users } from "lucide-react
 import { FollowButton } from "@/components/people/FollowButton"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia } from "@/lib/account-tier"
+import { resolveProfileMedia, isVipActive } from "@/lib/account-tier"
 import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -20,15 +20,15 @@ import {
 
 const TIER_RING = {
   common: "ring-background",
-  vip: "ring-fuchsia-400/70",
+  vip: "ring-[var(--vip-accent-soft)]",
 } as const
 
 /**
- * Matiz do neon. Contas VIP acendem na cor do próprio tier (fúcsia); as
- * demais acendem na cor que o card já usa na faixa e nas iniciais, então
- * a luz parece emitida pelo próprio card.
+ * Matiz do neon. Contas VIP acendem na cor única do selo VIP (roxo/púrpura,
+ * hue 320 em `--vip-accent`); as demais acendem na cor que o card já usa na
+ * faixa e nas iniciais, então a luz parece emitida pelo próprio card.
  */
-const TIER_GLOW_HUE: Record<string, number> = { vip: 300 }
+const TIER_GLOW_HUE: Record<string, number> = { vip: 320 }
 
 /**
  * Ouro, prata e bronze do badge de posição. Só aparecem quando a lista é curta
@@ -143,10 +143,11 @@ export function ProfileCard({
   const initials =
     profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
     "?"
-  const isVip = profile.account_tier !== "common"
+  const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
+  const effectiveTier = isVip ? "vip" : "common"
   const specialTag = getSpecialTag(profile.display_slug)
   const hue = profileAccentHue(profile.id)
-  const glowHue = TIER_GLOW_HUE[profile.account_tier] ?? hue
+  const glowHue = TIER_GLOW_HUE[effectiveTier] ?? hue
 
   // A cor do neon é dinâmica (vem do perfil), então o Tailwind não consegue
   // gerar a classe no build: as intensidades ficam em classes estáticas que
@@ -217,7 +218,7 @@ export function ProfileCard({
             <div
               className={cn(
                 "relative size-16 overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 group-hover:scale-105 sm:size-[86px]",
-                TIER_RING[profile.account_tier]
+                TIER_RING[effectiveTier]
               )}
             >
               <ImageWithFallback
@@ -243,7 +244,7 @@ export function ProfileCard({
 
             <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
               <span className="truncate">{profile.display_name}</span>
-              {isVip && <Crown className="size-3.5 shrink-0 text-amber-400" />}
+              {isVip && <Crown className="size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />}
               {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
             </p>
 

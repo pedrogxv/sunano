@@ -17,7 +17,7 @@ export default function TermosPage() {
           Condições de uso da plataforma
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Versão <strong>2026-08</strong> · Em vigor a partir de 10 de agosto de 2026.
+          Versão <strong>2026-08.1</strong> · Em vigor a partir de 23 de agosto de 2026.
         </p>
       </header>
 
@@ -63,6 +63,13 @@ export default function TermosPage() {
               O Sunano pode suspender ou encerrar contas que violem estes Termos, sem aviso prévio
               em casos de violação grave.
             </li>
+            <li>
+              A decisão de banir, suspender ou restringir uma conta é tomada a critério exclusivo
+              da equipe do Sunano, com base na análise disponível no momento (denúncias, padrões de
+              atividade e demais evidências). Essa análise não segue um processo público nem
+              formulário fixo, e o Sunano não é obrigado a detalhar publicamente todos os critérios
+              ou provas usados em cada caso individual.
+            </li>
           </ul>
         </section>
 
@@ -80,6 +87,13 @@ export default function TermosPage() {
               Não usar nome de exibição ou biografia com palavrões, xingamentos ou termos
               discriminatórios/ofensivos.
             </li>
+            <li>
+              Não farmar Aura de forma artificial: é proibido usar múltiplas contas (multicontas),
+              bots, automação, scripts ou qualquer meio artificial para gerar curtidas, comentários,
+              posts, missões diárias, reviews ou ofensiva (streak) fora do uso genuíno e manual da
+              plataforma. Isso vale tanto para inflar o próprio saldo de Aura quanto para beneficiar
+              terceiros.
+            </li>
           </ul>
           <p>
             Conteúdos que violem estas regras podem ser removidos a qualquer momento pelos
@@ -91,6 +105,12 @@ export default function TermosPage() {
             termos são recusados e precisam ser reescritos antes de salvar. Perfis que já
             continham um termo ofensivo antes da adoção deste filtro tiveram o termo
             substituído por asteriscos, com aviso enviado à conta afetada.
+          </p>
+          <p>
+            Contas flagradas farmando Aura de forma artificial (multicontas, bots ou automação)
+            estão sujeitas a perda do saldo de Aura obtido de forma ilegítima, remoção de
+            conquistas/medalhas associadas e banimento da conta, sem aviso prévio e a critério da
+            equipe, conforme o item 3 acima.
           </p>
         </section>
 
@@ -202,7 +222,7 @@ export default function TermosPage() {
 
       <footer className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
         <p>
-          Versão 2026-08 · Última atualização: 10 de agosto de 2026.{" "}
+          Versão 2026-08.1 · Última atualização: 23 de agosto de 2026.{" "}
           <Link href="/privacidade" className="text-primary hover:underline">
             Política de Privacidade
           </Link>

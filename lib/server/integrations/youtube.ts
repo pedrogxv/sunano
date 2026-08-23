@@ -181,7 +181,7 @@ function parseFeedPayload(payload: unknown): ChannelFeedData | null {
   }
 }
 
-async function resolveChannelId(apiKey: string): Promise<string> {
+export async function resolveChannelId(apiKey: string): Promise<string> {
   const directChannelId = process.env.YOUTUBE_CHANNEL_ID?.trim()
   if (directChannelId) return directChannelId
 

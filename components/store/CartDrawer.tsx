@@ -6,8 +6,9 @@ import { Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "luci
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
+import { computeCardPriceCents } from "@/lib/store-pricing"
+import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { cn } from "@/lib/utils"
-import { getVariantIcon } from "@/lib/variant-icons"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 
 export function CartButton() {
@@ -33,8 +34,10 @@ export function CartButton() {
 
 export function CartDrawer() {
   const { items, count, remove, increment, decrement, clear, isOpen, setOpen } = useCart()
+  const { cardSurchargePercent } = useStoreSettings()
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
+  const cardTotal = computeCardPriceCents(total, cardSurchargePercent)
   const hasPreOrderItem = items.some((i) => i.sale_type === "pre_order")
 
   useEffect(() => {
@@ -137,19 +140,13 @@ export function CartDrawer() {
                     <p className="flex items-center gap-1.5 truncate text-[15px] font-semibold text-foreground">
                       <span className="truncate">{item.name}</span>
                       {(() => {
-                        const VariantIcon = getVariantIcon(item.variantIcon)
-                        if (!item.variantColor && !VariantIcon) return null
+                        if (!item.variantColor && !item.variantIcon) return null
                         return (
                           <span
                             className="flex size-4 shrink-0 items-center justify-center rounded-full border border-black/10"
                             style={{ backgroundColor: item.variantColor ?? "transparent" }}
                           >
-                            {VariantIcon && (
-                              <VariantIcon
-                                className="size-2.5"
-                                style={{ color: item.variantColor ? "#fff" : undefined }}
-                              />
-                            )}
+                            {item.variantIcon && <span className="text-[9px] leading-none">{item.variantIcon}</span>}
                           </span>
                         )
                       })()}
@@ -234,7 +231,7 @@ export function CartDrawer() {
             </div>
 
             <p className="text-[10px] text-muted-foreground">
-              Pagamento via PIX
+              PIX: {formatBRL(total)} · Cartão: {formatBRL(cardTotal)} (+{cardSurchargePercent}%)
             </p>
 
             {hasPreOrderItem && (

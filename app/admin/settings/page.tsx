@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import type { ChangeEvent } from "react"
-import { Upload, Camera, KeyRound, Youtube, RefreshCw, CheckCircle2, AlertTriangle, Clock, User } from "lucide-react"
+import { Upload, Camera, KeyRound, Youtube, RefreshCw, CheckCircle2, AlertTriangle, Clock, User, CreditCard } from "lucide-react"
 import { toast } from "sonner"
 
 import BoxLoader from "@/components/ui/box-loader"
@@ -56,11 +56,57 @@ export default function SettingsPage() {
     stale: boolean
     lastError: string | null
   } | null>(null)
+  const [storeSettingsLoading, setStoreSettingsLoading] = useState(true)
+  const [storeSettingsSaving, setStoreSettingsSaving] = useState(false)
+  const [cardSurchargePercent, setCardSurchargePercent] = useState("5")
+  const [cardMaxInstallments, setCardMaxInstallments] = useState("6")
 
   useEffect(() => {
     loadProfile()
     loadVideoSnapshotStatus()
+    loadStoreSettings()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadStoreSettings() {
+    try {
+      setStoreSettingsLoading(true)
+      const res = await fetch("/api/admin/store-settings", { method: "GET" })
+      if (!res.ok) return // 403 pra quem não é webmaster — card nem aparece
+      const data = (await res.json()) as { cardSurchargePercent?: number; cardMaxInstallments?: number }
+      if (data.cardSurchargePercent != null) setCardSurchargePercent(String(data.cardSurchargePercent))
+      if (data.cardMaxInstallments != null) setCardMaxInstallments(String(data.cardMaxInstallments))
+    } catch { /* ignore */ } finally {
+      setStoreSettingsLoading(false)
+    }
+  }
+
+  async function saveStoreSettings() {
+    const surcharge = Number(cardSurchargePercent)
+    const installments = Number(cardMaxInstallments)
+    if (!Number.isFinite(surcharge) || surcharge < 0 || surcharge > 100) {
+      toast.error("Percentual de acréscimo deve estar entre 0 e 100.")
+      return
+    }
+    if (!Number.isInteger(installments) || installments < 1 || installments > 6) {
+      toast.error("Parcelas máximas deve ser um número inteiro entre 1 e 6.")
+      return
+    }
+    try {
+      setStoreSettingsSaving(true)
+      const res = await fetch("/api/admin/store-settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cardSurchargePercent: surcharge, cardMaxInstallments: installments }),
+      })
+      const data = (await res.json().catch(() => null)) as { error?: string } | null
+      if (!res.ok) throw new Error(data?.error ?? "")
+      toast.success("Configurações da Loja salvas.")
+    } catch (err) {
+      toast.error("Falha ao salvar", { description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setStoreSettingsSaving(false)
+    }
+  }
 
   async function loadVideoSnapshotStatus() {
     try {
@@ -355,6 +401,67 @@ export default function SettingsPage() {
                 {t.settings.updatePassword}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Store payment settings card (webmaster only) ── */}
+      {role === "webmaster" && (
+        <Card className="border-border bg-card/90">
+          <CardHeader className="border-b border-border">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CreditCard className="size-4 text-primary" />
+              Pagamento da Loja
+            </CardTitle>
+            <CardDescription>
+              Acréscimo cobrado no cartão de crédito (via Asaas Checkout) sobre o preço no PIX, e o teto de
+              parcelas oferecido ao cliente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-5">
+            {storeSettingsLoading ? (
+              <div className="flex justify-center py-4">
+                <BoxLoader />
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Acréscimo do cartão (%)
+                    </label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      value={cardSurchargePercent}
+                      onChange={(e) => setCardSurchargePercent(e.target.value)}
+                      className="border-border bg-background"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Parcelas máximas
+                    </label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={6}
+                      step="1"
+                      value={cardMaxInstallments}
+                      onChange={(e) => setCardMaxInstallments(e.target.value)}
+                      className="border-border bg-background"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end border-t border-border pt-4">
+                  <Button onClick={saveStoreSettings} disabled={storeSettingsSaving} className="gap-2 min-w-32">
+                    {storeSettingsSaving ? "Salvando..." : "Salvar"}
+                  </Button>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       )}

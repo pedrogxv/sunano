@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { formatVipPrice } from "@/lib/vip-plan"
+import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
 
 interface VipMonthCardProps {
@@ -27,6 +28,7 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
   const [loading, setLoading] = useState(false)
   const [subscribing, setSubscribing] = useState(false)
   const canAfford = balance >= item.auraCost
+  const subscriptionEnabled = isVipSubscriptionEnabled()
 
   async function handlePurchase() {
     if (!requireLogin()) return
@@ -129,16 +131,18 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
                 {canAfford ? "Ativar com Aura" : "Saldo insuficiente"}
               </button>
 
-              <button
-                type="button"
-                onClick={handleSubscribe}
-                disabled={loading || subscribing}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:bg-[var(--vip-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
-                style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
-              >
-                {subscribing && <Loader2 className="size-3.5 animate-spin" />}
-                Assinar por {formatVipPrice()}/mês
-              </button>
+              {subscriptionEnabled && (
+                <button
+                  type="button"
+                  onClick={handleSubscribe}
+                  disabled={loading || subscribing}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:bg-[var(--vip-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+                >
+                  {subscribing && <Loader2 className="size-3.5 animate-spin" />}
+                  Assinar por {formatVipPrice()}/mês
+                </button>
+              )}
             </div>
           )}
         </div>

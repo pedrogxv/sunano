@@ -19,6 +19,7 @@ import {
   type PurchaseProfileInput,
 } from "@/lib/server/repositories/users-repository"
 import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
+import { verifyTurnstileToken } from "@/lib/server/integrations/turnstile"
 
 export type RegisterState = {
   error: string | null
@@ -131,6 +132,18 @@ export async function registerUserAction(
   }
 
   const headersList = await headers()
+
+  // Verificado antes do rate limit (mesmo raciocínio do login): uma tentativa
+  // sem captcha válido não deve consumir a cota de cadastro.
+  const turnstileToken = formData.get("cf_turnstile_response")
+  const clientIp = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
+  const captcha = await verifyTurnstileToken(
+    typeof turnstileToken === "string" ? turnstileToken : null,
+    clientIp
+  )
+  if (!captcha.success) {
+    return { error: "captcha_failed", values }
+  }
 
   const identifier = getClientIdentifierFromHeaders(headersList)
   const rateLimit = await checkRateLimit({

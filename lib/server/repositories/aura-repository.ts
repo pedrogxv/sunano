@@ -1,10 +1,11 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import type { Database } from "@/lib/database.types"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { completeDailyMission } from "@/lib/server/repositories/achievements-repository"
-import { isVipActive, getTierCapabilities } from "@/lib/account-tier"
+import { getTierCapabilities, isVipActive } from "@/lib/account-tier"
 
 type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reason"]
 
@@ -29,7 +30,7 @@ type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reas
 export type ToggleAuraTarget = "comment" | "blog_comment"
 export type ReactionKind = "like" | "dislike"
 
-export type ToggleAuraErrorCode = "self_reaction" | "not_found" | "daily_limit" | "rate_limited" | "unauthenticated" | "unknown"
+export type ToggleAuraErrorCode = "self_reaction" | "not_found" | "daily_limit" | "daily_pair_limit" | "rate_limited" | "unauthenticated" | "unknown"
 
 export type ToggleAuraResult =
   | { ok: true; reaction: ReactionKind | null; auraCount: number }
@@ -58,8 +59,11 @@ export async function toggleAura(params: {
     if (error.message?.includes("target not found")) {
       return { ok: false, error: "Comentário não encontrado.", code: "not_found", status: 404 }
     }
+    if (error.message?.includes("daily_pair_aura_limit_reached")) {
+      return { ok: false, error: "Você já reagiu o máximo permitido pra esse usuário hoje.", code: "daily_pair_limit", status: 429 }
+    }
     if (error.message?.includes("daily_aura_limit_reached")) {
-      return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
+      return { ok: false, error: "Você atingiu o limite de reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
     }
     console.error("[aura-repository] toggleAura:", error)
     return { ok: false, error: "Erro ao reagir.", code: "unknown", status: 400 }
@@ -92,8 +96,11 @@ export async function togglePostAura(giverId: string, postId: string): Promise<T
     if (error.message?.includes("target not found")) {
       return { ok: false, error: "Post não encontrado.", code: "not_found", status: 404 }
     }
+    if (error.message?.includes("daily_pair_aura_limit_reached")) {
+      return { ok: false, error: "Você já reagiu o máximo permitido pra esse usuário hoje.", code: "daily_pair_limit", status: 429 }
+    }
     if (error.message?.includes("daily_aura_limit_reached")) {
-      return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
+      return { ok: false, error: "Você atingiu o limite de reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
     }
     console.error("[aura-repository] togglePostAura:", error)
     return { ok: false, error: "Erro ao dar aura.", code: "unknown", status: 400 }
@@ -196,7 +203,12 @@ const DAILY_LIMIT_REASONS: AuraLedgerReason[] = [
 /** Limite de conta comum — VIP dobra para 100 (ver `TIER_CAPABILITIES.vip.dailyAuraGiveLimit`). */
 export const DAILY_AURA_GIVE_LIMIT = 50
 
-/** Limite diário de reações dadas conforme o tier — espelha o `v_daily_limit` das RPCs de toggle. */
+/**
+ * Limite diário de reações dadas conforme o tier — espelha o `v_daily_limit`
+ * das RPCs de toggle quando o doador não é conta nova. Mantido por
+ * compatibilidade com quem só tem `isVip` à mão; prefira `getUserAuraUsage`
+ * (chama `get_aura_trust_limits` no banco), que já cobre o tier 'new'.
+ */
 export function getDailyAuraGiveLimit(isVip: boolean): number {
   return getTierCapabilities(isVip ? "vip" : "common").dailyAuraGiveLimit
 }
@@ -215,20 +227,25 @@ export type AuraUsage = {
    * quando o usuário não está perto do limite (não vale a pena calcular).
    */
   nextSlotAt: string | null
+  /** Nível de confiança do doador (ver `get_giver_trust_tier`, 20260923000002_aura_trust_tiers.sql). */
+  trustTier: "new" | "normal" | "verified"
+  /** Máximo de reações que este usuário pode dar por dia a um único destinatário (ver `get_aura_trust_limits`). */
+  pairLimit: number
 }
 
 /**
- * Saldo + quanto do limite diário de "dar reação" (50/24h, rolling window —
- * não é um contador que zera à meia-noite) o usuário já consumiu, pra
- * exibir na TopBar. Espelha a mesma contagem de `toggle_forum_aura` no
- * banco; se a lógica de lá mudar, atualizar aqui também.
+ * Saldo + quanto do limite diário de "dar reação" (rolling window — não é
+ * um contador que zera à meia-noite) o usuário já consumiu, pra exibir na
+ * TopBar. `limit`/`trustTier`/`pairLimit` vêm de `get_aura_trust_limits`
+ * (mesma RPC lida pelas 3 funções de toggle) — se a lógica de lá mudar, o
+ * valor aqui muda junto, sem duplicar a tabela de números em TS.
  */
 export async function getUserAuraUsage(userId: string): Promise<AuraUsage> {
   const db = createSupabaseAdminClient()
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-  const [{ data: profile }, { data: wallet }, { data: ledgerRows, count }] = await Promise.all([
-    db.from("user_profiles").select("account_tier, vip_expires_at").eq("id", userId).maybeSingle(),
+  const [{ data: limitsRows }, { data: wallet }, { data: ledgerRows, count }] = await Promise.all([
+    db.rpc("get_aura_trust_limits", { p_giver_id: userId }),
     db.from("user_aura_wallet").select("balance").eq("user_id", userId).maybeSingle(),
     db
       .from("aura_ledger")
@@ -240,8 +257,8 @@ export async function getUserAuraUsage(userId: string): Promise<AuraUsage> {
       .limit(1),
   ])
 
-  const isVip = isVipActive(profile?.account_tier, profile?.vip_expires_at)
-  const limit = getDailyAuraGiveLimit(isVip)
+  const limits = limitsRows?.[0]
+  const limit = limits?.daily_limit ?? DAILY_AURA_GIVE_LIMIT
   const givenToday = count ?? 0
   const limitReached = givenToday >= limit
   const oldest = ledgerRows?.[0]?.created_at ?? null
@@ -254,6 +271,8 @@ export async function getUserAuraUsage(userId: string): Promise<AuraUsage> {
     limit,
     limitReached,
     nextSlotAt,
+    trustTier: (limits?.trust_tier as AuraUsage["trustTier"]) ?? "normal",
+    pairLimit: limits?.pair_limit ?? 3,
   }
 }
 
@@ -375,8 +394,11 @@ export async function togglePeripheralCommentAura(
     if (error.message?.includes("target not found")) {
       return { ok: false, error: "Comentário não encontrado.", code: "not_found", status: 404 }
     }
+    if (error.message?.includes("daily_pair_aura_limit_reached")) {
+      return { ok: false, error: "Você já reagiu o máximo permitido pra esse usuário hoje.", code: "daily_pair_limit", status: 429 }
+    }
     if (error.message?.includes("daily_aura_limit_reached")) {
-      return { ok: false, error: "Você atingiu o limite de 50 reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
+      return { ok: false, error: "Você atingiu o limite de reações dadas hoje. Volte amanhã!", code: "daily_limit", status: 429 }
     }
     console.error("[aura-repository] togglePeripheralCommentAura:", error)
     return { ok: false, error: "Erro ao reagir.", code: "unknown", status: 400 }
@@ -545,4 +567,147 @@ export async function getUserAuraGiven(
   }
 
   return { comments, blogComments }
+}
+
+// ── Ranking (modal "Ranking" da Central de Aura: Tudo / Hoje / Semana) ──
+
+export type AuraRankingWindow = "all" | "today" | "week"
+
+export type AuraRankingEntry = {
+  userId: string
+  displayName: string
+  displaySlug: string
+  avatarUrl: string | null
+  isVip: boolean
+  /** Saldo total (janela "all") ou Aura ganha na janela (today/week). */
+  value: number
+}
+
+const AURA_RANKING_LIMIT = 10
+const RANKING_PROFILE_COLUMNS = "id, display_name, display_slug, avatar_url, account_tier, vip_expires_at"
+
+type RankingProfileRow = {
+  id: string
+  display_name: string | null
+  display_slug: string
+  avatar_url: string | null
+  account_tier: string | null
+  vip_expires_at: string | null
+}
+
+/** Perfis públicos (exclui dono do site e contas banidas), na ordem dos ids pedidos. */
+async function hydrateRankingProfiles(
+  db: ReturnType<typeof createSupabaseAdminClient>,
+  orderedIds: string[],
+  valueByUser: Map<string, number>
+): Promise<AuraRankingEntry[]> {
+  if (orderedIds.length === 0) return []
+
+  const { data, error } = await db
+    .from("user_profiles")
+    .select(RANKING_PROFILE_COLUMNS)
+    .in("id", orderedIds)
+    .neq("display_slug", SITE_OWNER_SLUG)
+    .is("account_banned_at", null)
+
+  if (error) {
+    console.error("[aura-repository] hydrateRankingProfiles:", error)
+    return []
+  }
+
+  const bySlug = new Map((data as RankingProfileRow[]).map((row) => [row.id, row]))
+  return orderedIds.flatMap((id) => {
+    const profile = bySlug.get(id)
+    if (!profile) return []
+    return [
+      {
+        userId: profile.id,
+        displayName: profile.display_name ?? "Usuário",
+        displaySlug: profile.display_slug,
+        avatarUrl: profile.avatar_url,
+        isVip: isVipActive(profile.account_tier, profile.vip_expires_at),
+        value: valueByUser.get(id) ?? 0,
+      },
+    ]
+  })
+}
+
+/** Top 10 por saldo total (mesma fonte de `getUserAuraRank`/`/pessoas`, aba "Mais Aura"). */
+async function fetchAuraRankingAllTime(): Promise<AuraRankingEntry[]> {
+  const db = createSupabaseAdminClient()
+
+  const { data: wallets, error } = await db
+    .from("user_aura_wallet")
+    .select("user_id, balance")
+    .gt("balance", 0)
+    .order("balance", { ascending: false })
+    .limit(AURA_RANKING_LIMIT + 5) // folga pra sobrar 10 após excluir dono/banidos
+
+  if (error) {
+    console.error("[aura-repository] fetchAuraRankingAllTime:", error)
+    return []
+  }
+
+  const rows = (wallets ?? []) as Array<{ user_id: string; balance: number }>
+  const valueByUser = new Map(rows.map((r) => [r.user_id, r.balance]))
+  const entries = await hydrateRankingProfiles(db, rows.map((r) => r.user_id), valueByUser)
+  return entries.slice(0, AURA_RANKING_LIMIT)
+}
+
+/** Top 10 por Aura ganha (soma de créditos positivos no `aura_ledger`) desde `since`. */
+async function fetchAuraRankingSince(since: string): Promise<AuraRankingEntry[]> {
+  const db = createSupabaseAdminClient()
+
+  const { data: rows, error } = await db.rpc("get_aura_ranking_by_period", {
+    p_since: since,
+    p_limit: AURA_RANKING_LIMIT + 5,
+  })
+
+  if (error) {
+    console.error("[aura-repository] fetchAuraRankingSince:", error)
+    return []
+  }
+
+  const typed = (rows ?? []) as Array<{ user_id: string; gained: number }>
+  const valueByUser = new Map(typed.map((r) => [r.user_id, r.gained]))
+  const entries = await hydrateRankingProfiles(db, typed.map((r) => r.user_id), valueByUser)
+  return entries.slice(0, AURA_RANKING_LIMIT)
+}
+
+/**
+ * Ranking "Hoje" e "Semana" cacheados (`unstable_cache`, 5 min) — mesmo
+ * padrão de `getActivityCounts` (users-repository.ts): o agregado em
+ * `aura_ledger` filtrado por período não é uma leitura O(1) como o ranking
+ * geral (que só lê `user_aura_wallet`), então evitar refazer a cada abertura
+ * do modal é o que mantém isso barato. "Hoje" usa meia-noite UTC — mesmo
+ * corte que `daily_missions`/streak já usam em todo o resto do sistema.
+ */
+const getCachedAuraRankingToday = unstable_cache(
+  async (): Promise<AuraRankingEntry[]> => {
+    const todayUtc = new Date()
+    todayUtc.setUTCHours(0, 0, 0, 0)
+    return fetchAuraRankingSince(todayUtc.toISOString())
+  },
+  ["aura-repository:rankingToday"],
+  { revalidate: 300 }
+)
+
+const getCachedAuraRankingWeek = unstable_cache(
+  async (): Promise<AuraRankingEntry[]> => {
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    return fetchAuraRankingSince(since.toISOString())
+  },
+  ["aura-repository:rankingWeek"],
+  { revalidate: 300 }
+)
+
+const getCachedAuraRankingAllTime = unstable_cache(fetchAuraRankingAllTime, ["aura-repository:rankingAllTime"], {
+  revalidate: 300,
+})
+
+/** Top 10 de Aura da janela pedida — sempre servido do cache de 5 min (ver acima). */
+export async function getAuraRanking(window: AuraRankingWindow): Promise<AuraRankingEntry[]> {
+  if (window === "today") return getCachedAuraRankingToday()
+  if (window === "week") return getCachedAuraRankingWeek()
+  return getCachedAuraRankingAllTime()
 }

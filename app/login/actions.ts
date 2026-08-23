@@ -13,6 +13,7 @@ import {
 } from "@/lib/server/repositories/users-repository"
 import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
 import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
+import { verifyTurnstileToken } from "@/lib/server/integrations/turnstile"
 
 type AuthState = { error: string | null; success?: boolean; mfaNext?: string }
 
@@ -29,7 +30,22 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
     return { error: "missing_credentials" }
   }
 
-  const identifier = getClientIdentifierFromHeaders(await headers())
+  const headersList = await headers()
+
+  // Verificado antes do rate limit: uma tentativa sem captcha válido não deve
+  // nem consumir a cota de login de quem está sendo atacado por credential
+  // stuffing.
+  const turnstileToken = formData.get("cf_turnstile_response")
+  const clientIp = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
+  const captcha = await verifyTurnstileToken(
+    typeof turnstileToken === "string" ? turnstileToken : null,
+    clientIp
+  )
+  if (!captcha.success) {
+    return { error: "captcha_failed" }
+  }
+
+  const identifier = getClientIdentifierFromHeaders(headersList)
   const rateLimit = await checkRateLimit({
     action: "login",
     identifier: `${identifier}:${email.toLowerCase()}`,

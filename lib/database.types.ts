@@ -1953,6 +1953,18 @@ export type Database = {
         Args: { p_account_tier: string; p_vip_expires_at: string | null }
         Returns: boolean
       }
+      get_giver_trust_tier: {
+        Args: { p_giver_id: string }
+        Returns: string
+      }
+      get_aura_trust_limits: {
+        Args: { p_giver_id: string }
+        Returns: { trust_tier: string; daily_limit: number; pair_limit: number; skip_gain_bonus: boolean }[]
+      }
+      get_aura_ranking_by_period: {
+        Args: { p_since: string; p_limit?: number }
+        Returns: { user_id: string; gained: number }[]
+      }
       expire_vip_accounts: {
         Args: Record<string, never>
         Returns: number

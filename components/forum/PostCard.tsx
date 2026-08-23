@@ -154,7 +154,7 @@ function PostAuraButton({
       setReacted(!nextReacted)
       setCount((c) => c + (nextReacted ? -1 : 1))
       const data = await res?.json().catch(() => null)
-      if (data?.code === "daily_limit") {
+      if (data?.code === "daily_limit" || data?.code === "daily_pair_limit") {
         toast.error(data.error ?? "Limite diário de aura esgotado.")
       } else if (data?.code !== "self_reaction") {
         toast.error(data?.error ?? "Erro ao dar aura.")

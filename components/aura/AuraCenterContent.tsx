@@ -6,6 +6,9 @@ import { useEffect, useState, type CSSProperties } from "react"
 import { toast } from "sonner"
 import { Bird, Check, Flame, MessageSquare, Sparkles, SquarePen, Trophy } from "lucide-react"
 
+import { AuraFaqSection } from "@/components/aura/AuraFaqSection"
+import { AuraRankingModal } from "@/components/aura/AuraRankingModal"
+
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
@@ -115,6 +118,7 @@ export function AuraCenterContent({
   const [nameCooldownState, setNameCooldownState] = useState(nameCooldown)
   const [currentName, setCurrentName] = useState(displayName)
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
+  const [rankingOpen, setRankingOpen] = useState(false)
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -153,11 +157,11 @@ export function AuraCenterContent({
     <>
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:py-12">
       {/* Título "banner de fogueira": texto em brasa correndo + fagulhas subindo */}
-      <div className="aura-title-banner relative flex items-center gap-4 overflow-visible pb-2">
+      <div className="aura-title-banner relative flex flex-wrap items-center gap-4 overflow-visible pb-2">
         <span className="aura-hero-icon-holder relative flex size-14 shrink-0 items-center justify-center sm:size-16">
           <Flame className="aura-hero-icon-flame size-8 text-orange-500 sm:size-9" fill="currentColor" strokeWidth={1.2} />
         </span>
-        <div className="space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <h1 className="aura-title-text font-display text-3xl font-black leading-tight sm:text-4xl">
             Central de Aura
           </h1>
@@ -165,6 +169,14 @@ export function AuraCenterContent({
             Ganhe Aura participando da comunidade e troque por itens exclusivos de perfil.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setRankingOpen(true)}
+          className="relative z-[1] ml-auto flex shrink-0 items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-3.5 py-2 text-xs font-bold text-orange-400 transition-colors hover:bg-orange-500/20"
+        >
+          <Trophy className="size-3.5" />
+          Ranking
+        </button>
         {EMBERS.map((ember, i) => (
           <span key={i} className="aura-ember" style={{ left: ember.left, ...ember.style }} aria-hidden />
         ))}
@@ -377,8 +389,12 @@ export function AuraCenterContent({
           </div>
         )}
       </div>
+
+      {/* FAQ: todas as fontes de ganho/gasto, boost e trust tier, com números reais do usuário — por último, depois de todo o resto já ter dado o contexto prático */}
+      <AuraFaqSection streak={streak.current} isVip={vip.active} />
     </div>
     <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />
+    <AuraRankingModal open={rankingOpen} onOpenChange={setRankingOpen} />
     </>
   )
 }

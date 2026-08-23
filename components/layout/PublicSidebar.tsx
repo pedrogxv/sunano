@@ -24,6 +24,7 @@ import { useEffect, useState } from "react"
 
 import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
+import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useSidebar } from "@/components/providers/sidebar-context"
@@ -292,7 +293,7 @@ export function PublicSidebar() {
               collapsed={isCollapsed}
               onClick={close}
             />
-          ) : (
+          ) : isVipSubscriptionEnabled() ? (
             <button
               type="button"
               onClick={() => {
@@ -309,6 +310,13 @@ export function PublicSidebar() {
               <Crown className="size-[18px] shrink-0 vip-badge-crown" />
               <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>Vire VIP</span>
             </button>
+          ) : (
+            <NavLink
+              item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
+              isActive={isActive("/changelog")}
+              collapsed={isCollapsed}
+              onClick={close}
+            />
           )}
         </div>
 

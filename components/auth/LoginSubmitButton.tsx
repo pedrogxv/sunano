@@ -26,7 +26,7 @@ const PARTICLES = Array.from({ length: 10 }, (_, i) => {
  * — mesma paleta do AuthBackground/AuthModalGlow) e o botão reage com um pulso
  * de energia, antes do form realmente submeter via pending state do React.
  */
-export function LoginSubmitButton() {
+export function LoginSubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
   const [burst, setBurst] = useState(false)
   const burstTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -44,7 +44,7 @@ export function LoginSubmitButton() {
           "relative w-full overflow-hidden transition-[box-shadow,transform] duration-300",
           burst && "scale-[0.97]"
         )}
-        disabled={pending}
+        disabled={pending || disabled}
         type="submit"
         onClick={handleClick}
       >

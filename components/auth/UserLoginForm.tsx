@@ -10,6 +10,7 @@ import { forgotPasswordAction } from "@/app/forgot-password/actions"
 import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { LoginSubmitButton } from "@/components/auth/LoginSubmitButton"
+import { TurnstileWidget } from "@/components/auth/TurnstileWidget"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuthUser } from "@/components/providers/auth-context"
@@ -19,6 +20,7 @@ const LOGIN_ERRORS: Record<string, string> = {
   invalid_credentials: "Email ou senha incorretos.",
   too_many_attempts: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
   account_banned: "Conta suspensa ou banida.",
+  captcha_failed: "Não foi possível confirmar que você não é um robô. Tente novamente.",
 }
 
 function ForgotSubmitButton() {
@@ -112,6 +114,7 @@ interface UserLoginFormProps {
 export function UserLoginForm({ embedded = false, next = "/forum", onSuccess, onSwitchToRegister }: UserLoginFormProps = {}) {
   const [mode, setMode] = useState<"login" | "forgot">("login")
   const [loginState, loginAction] = useActionState(loginUserAction, { error: null })
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const { refresh } = useAuthUser()
 
   useEffect(() => {
@@ -180,13 +183,16 @@ export function UserLoginForm({ embedded = false, next = "/forum", onSuccess, on
           </div>
         </div>
 
+        <TurnstileWidget onTokenChange={setCaptchaToken} error={loginState.error === "captcha_failed"} />
+        <input type="hidden" name="cf_turnstile_response" value={captchaToken ?? ""} />
+
         {errorMessage && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {errorMessage}
           </div>
         )}
 
-        <LoginSubmitButton />
+        <LoginSubmitButton disabled={Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) && !captchaToken} />
       </form>
 
       <p className="text-center text-xs text-muted-foreground">

@@ -48,7 +48,15 @@ export default async function AuraCenterPage() {
     userId ? getUserStreak(userId) : Promise.resolve({ current: 0, longest: 0 }),
     userId
       ? getUserAuraUsage(userId)
-      : Promise.resolve({ balance: 0, givenToday: 0, limit: 50, limitReached: false, nextSlotAt: null }),
+      : Promise.resolve({
+          balance: 0,
+          givenToday: 0,
+          limit: 50,
+          limitReached: false,
+          nextSlotAt: null,
+          trustTier: "normal" as const,
+          pairLimit: 3,
+        }),
     listActiveAuraItems(),
     userId ? getUserAuraItemIds(userId) : Promise.resolve(new Set<string>()),
     userId ? getEquippedAvatarFrameId(userId) : Promise.resolve(null),

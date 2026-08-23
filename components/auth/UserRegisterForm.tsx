@@ -14,6 +14,7 @@ import {
 import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter"
+import { TurnstileWidget } from "@/components/auth/TurnstileWidget"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { isLocalhostHost } from "@/lib/password-policy"
@@ -27,6 +28,7 @@ const REGISTER_ERRORS: Record<string, string> = {
   signup_failed: "Não foi possível concluir o cadastro. Tente novamente.",
   lgpd_consent_required: "Você precisa aceitar a Política de Privacidade para criar uma conta.",
   too_many_attempts: "Muitas tentativas de cadastro. Aguarde alguns minutos e tente novamente.",
+  captcha_failed: "Não foi possível confirmar que você não é um robô. Tente novamente.",
   // Falhas de servidor: dizem que o problema não é o preenchimento e apontam o
   // cadastro social, que não depende do envio de e-mail e segue funcionando.
   email_send_limit:
@@ -49,10 +51,10 @@ const RESEND_COOLDOWN_SECONDS = 60
 const initialState: RegisterState = { error: null }
 const initialResendState: ResendConfirmationState = { error: null, success: false }
 
-function RegisterSubmitButton() {
+function RegisterSubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
   return (
-    <Button className="w-full" disabled={pending} type="submit">
+    <Button className="w-full" disabled={pending || disabled} type="submit">
       {pending ? "Criando conta…" : "Criar conta"}
     </Button>
   )
@@ -153,6 +155,7 @@ export function UserRegisterForm({ embedded = false, next = "/forum", onSwitchTo
   const [lgpdConsent, setLgpdConsent] = useState(false)
   const [relaxed, setRelaxed] = useState(false)
   const [password, setPassword] = useState("")
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
 
   // `<form action={fn}>` reseta os campos não controlados assim que a action
   // termina, mesmo em erro (comportamento do React, não um bug do form). Para
@@ -169,6 +172,7 @@ export function UserRegisterForm({ embedded = false, next = "/forum", onSwitchTo
     }
     setFormKey((key) => key + 1)
     setPassword("")
+    setCaptchaToken(null)
   }, [state])
 
   useEffect(() => {
@@ -311,13 +315,16 @@ export function UserRegisterForm({ embedded = false, next = "/forum", onSwitchTo
           </label>
         </div>
 
+        <TurnstileWidget onTokenChange={setCaptchaToken} error={state.error === "captcha_failed"} />
+        <input type="hidden" name="cf_turnstile_response" value={captchaToken ?? ""} />
+
         {errorMessage && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {errorMessage}
           </div>
         )}
 
-        <RegisterSubmitButton />
+        <RegisterSubmitButton disabled={Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) && !captchaToken} />
       </form>
 
       <p className="text-center text-xs text-muted-foreground">

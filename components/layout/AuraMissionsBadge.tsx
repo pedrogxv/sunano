@@ -19,6 +19,7 @@ import {
   type UserStreak,
 } from "@/lib/achievements"
 import { cn } from "@/lib/utils"
+import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
 type AuraUsage = {
   balance: number
@@ -84,6 +85,7 @@ export function AuraMissionsBadge() {
   }, [])
 
   const loadYoutubeStatus = useCallback(async () => {
+    if (!isYoutubeSubscriptionEnabled()) return
     try {
       const res = await fetch("/api/youtube/subscription-status")
       const data = res.ok ? await res.json() : null
@@ -212,7 +214,7 @@ export function AuraMissionsBadge() {
           })}
         </ul>
 
-        {!youtubeConfirmed && (
+        {isYoutubeSubscriptionEnabled() && !youtubeConfirmed && (
           <div className="border-t border-border p-3">
             <button
               type="button"

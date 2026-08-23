@@ -4,6 +4,7 @@ import { sanitizeNextPath } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { resolveChannelId } from "@/lib/server/integrations/youtube"
 import { confirmYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
+import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
 /**
  * Callback dedicado do fluxo "Confirmar inscrição no YouTube" — separado de
@@ -18,6 +19,10 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get("code")
   const next = sanitizeNextPath(searchParams.get("next"), "/aura")
+
+  if (!isYoutubeSubscriptionEnabled()) {
+    return NextResponse.redirect(`${origin}${next}?youtube=error`)
+  }
 
   if (!code) {
     return NextResponse.redirect(`${origin}${next}?youtube=error`)

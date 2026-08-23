@@ -91,9 +91,7 @@ function NavLink({
 
 export function PublicSidebar() {
   const t = useT()
-  const { isMobileOpen, setMobileOpen } = useSidebar()
-  // A sidebar pública sempre exibe os nomes; no desktop nunca recolhe para só ícones.
-  const isCollapsed = false
+  const { publicCollapsed: isCollapsed, isMobileOpen, setMobileOpen } = useSidebar()
   const pathname = usePathname()
   const { count: cartCount, setOpen: openCart } = useCart()
   const { user: authUser } = useAuthUser()
@@ -145,8 +143,9 @@ export function PublicSidebar() {
         className={cn(
           // h-dvh e não h-screen: 100vh é o viewport *sem* a barra de URL do navegador
           // mobile, o que empurra o rodapé (Changelog, links legais) para fora da tela.
-          "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col border-border bg-background transition-all duration-300 md:relative md:inset-auto md:h-full md:w-60 md:translate-x-0",
-          isMobileOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col border-border bg-background transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
+          isMobileOpen ? "translate-x-0" : "-translate-x-full",
+          isCollapsed ? "md:w-16" : "md:w-60"
         )}
       >
         <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-4">

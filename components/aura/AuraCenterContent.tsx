@@ -31,6 +31,7 @@ import { VipMonthCard } from "@/components/aura/VipMonthCard"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import { DisplayNameChangeCard } from "@/components/aura/DisplayNameChangeCard"
 import { YoutubeSubscriptionCard } from "@/components/aura/YoutubeSubscriptionCard"
+import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
 type AuraUsage = {
   balance: number
@@ -320,7 +321,9 @@ export function AuraCenterContent({
       </div>
 
       {/* Conquista especial "Inscrito" — binária, fora da grade de missões/loja */}
-      <YoutubeSubscriptionCard confirmed={youtubeConfirmed} requireLogin={requireLogin} />
+      {isYoutubeSubscriptionEnabled() && (
+        <YoutubeSubscriptionCard confirmed={youtubeConfirmed} requireLogin={requireLogin} />
+      )}
 
       {/* Loja de itens */}
       <div className="space-y-3">

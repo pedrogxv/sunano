@@ -36,8 +36,8 @@ export default async function ProductPage({ params }: PageProps) {
       return (
         <ComingSoon
           icon={ShoppingBag}
-          title="Mercado"
-          description="O Mercado, com produtos selecionados pelo Sunano, está sendo preparado. Fique de olho nas redes para o lançamento."
+          title="Loja"
+          description="A Loja, com produtos selecionados pelo Sunano, está sendo preparada. Fique de olho nas redes para o lançamento."
           accent="emerald"
           launchAt={getStoreLaunchAt()}
         />

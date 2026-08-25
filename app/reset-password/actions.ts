@@ -49,6 +49,7 @@ export async function resetPasswordAction(_: State, formData: FormData): Promise
   const { error } = await supabase.auth.updateUser({ password })
 
   if (error) {
+    console.error("[reset-password] updateUser failed", error.status, error.code, error.message)
     return { error: "Não foi possível atualizar a senha. O link pode ter expirado." }
   }
 

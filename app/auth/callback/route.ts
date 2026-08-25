@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
       if (user) {
         return NextResponse.redirect(`${origin}/reset-password`)
       }
+      return NextResponse.redirect(`${origin}/login?error=recovery_error`)
     }
     return NextResponse.redirect(`${origin}/login?error=oauth_error`)
   }

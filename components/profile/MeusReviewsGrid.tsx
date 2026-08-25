@@ -117,9 +117,9 @@ export function MeusReviewsGrid({
                   type="button"
                   onClick={() => goTo(currentIndex - 1)}
                   aria-label="Categoria anterior"
-                  className="absolute left-0 top-1/2 -translate-y-1/2 rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  className="group absolute left-0 top-1/2 -translate-y-1/2 rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:text-foreground active:scale-90"
                 >
-                  <ChevronLeft className="size-4" />
+                  <ChevronLeft className="size-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
                 </button>
               )}
 
@@ -138,9 +138,9 @@ export function MeusReviewsGrid({
                   type="button"
                   onClick={() => goTo(currentIndex + 1)}
                   aria-label="Próxima categoria"
-                  className="absolute right-0 top-1/2 -translate-y-1/2 rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  className="group absolute right-0 top-1/2 -translate-y-1/2 rounded-full border border-border bg-card p-1.5 text-muted-foreground transition-colors hover:text-foreground active:scale-90"
                 >
-                  <ChevronRight className="size-4" />
+                  <ChevronRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </button>
               )}
             </div>

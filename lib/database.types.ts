@@ -635,6 +635,18 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["peripheral_votes"]["Row"], "id" | "created_at">
         Update: Partial<Database["public"]["Tables"]["peripheral_votes"]["Insert"]>
       }
+      peripheral_review_votes: {
+        Relationships: []
+        Row: {
+          id: string
+          review_id: string
+          voter_id: string
+          kind: "like" | "dislike"
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["peripheral_review_votes"]["Row"], "id" | "created_at">
+        Update: Partial<Database["public"]["Tables"]["peripheral_review_votes"]["Insert"]>
+      }
       peripheral_reviews: {
         Relationships: []
         Row: {
@@ -648,6 +660,8 @@ export type Database = {
           body_preview: string | null
           /** Coluna gerada (`body is not null and length(btrim(body)) > 0`) — nunca enviada no Insert/Update. */
           has_text: boolean
+          /** Upvotes - downvotes (`peripheral_review_votes`), denormalizado. */
+          score: number
           is_hidden: boolean
           edited_at: string | null
           /** Coluna gerada (`edited_at is not null`) — nunca enviada no Insert/Update. */
@@ -657,8 +671,8 @@ export type Database = {
         }
         Insert: Omit<
           Database["public"]["Tables"]["peripheral_reviews"]["Row"],
-          "id" | "body_preview" | "has_text" | "is_edited" | "edited_at" | "created_at" | "updated_at"
-        > & { edited_at?: string | null }
+          "id" | "body_preview" | "has_text" | "score" | "is_edited" | "edited_at" | "created_at" | "updated_at"
+        > & { edited_at?: string | null; score?: number }
         Update: Partial<Database["public"]["Tables"]["peripheral_reviews"]["Insert"]>
       }
       user_aura_wallet: {
@@ -2045,6 +2059,10 @@ export type Database = {
       toggle_peripheral_vote: {
         Args: { p_voter_id: string; p_peripheral_id: string; p_kind: "like" | "dislike" }
         Returns: { reaction: "like" | "dislike" | null; likes: number; dislikes: number }[]
+      }
+      toggle_peripheral_review_vote: {
+        Args: { p_voter_id: string; p_review_id: string; p_kind: "like" | "dislike" }
+        Returns: { reaction: "like" | "dislike" | null; score: number }[]
       }
       credit_peripheral_review_creation_aura: {
         Args: { p_user_id: string; p_peripheral_id: string; p_review_id: string }

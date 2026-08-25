@@ -28,7 +28,7 @@ const CONDITIONS = [
   },
 ] as const
 
-/** Botão de ajuda + modal explicando os termos do Mercado (Loja, condições). */
+/** Botão de ajuda + modal explicando os termos da Loja (condições). */
 export function MarketInfoDialog() {
   return (
     <Dialog>
@@ -38,14 +38,14 @@ export function MarketInfoDialog() {
           variant="ghost"
           size="icon"
           className="size-7 text-muted-foreground hover:text-foreground"
-          aria-label="Como funciona o Mercado"
+          aria-label="Como funciona a Loja"
         >
           <HelpCircle className="size-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Como funciona o Mercado</DialogTitle>
+          <DialogTitle>Como funciona a Loja</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5 text-sm">

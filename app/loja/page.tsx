@@ -12,8 +12,8 @@ import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-mainten
 export const revalidate = 60
 
 export const metadata: Metadata = {
-  title: "Mercado",
-  description: "Mercado Sunano: periféricos novos e usados, com filtros de marca, categoria, estado e preço.",
+  title: "Loja",
+  description: "Loja Sunano: periféricos novos e usados, com filtros de marca, categoria, estado e preço.",
   alternates: { canonical: "/loja" },
 }
 
@@ -27,8 +27,8 @@ export default async function LojaPage() {
       return (
         <ComingSoon
           icon={ShoppingBag}
-          title="Mercado"
-          description="O Mercado, com produtos selecionados pelo Sunano, está sendo preparado. Fique de olho nas redes para o lançamento."
+          title="Loja"
+          description="A Loja, com produtos selecionados pelo Sunano, está sendo preparada. Fique de olho nas redes para o lançamento."
           accent="emerald"
           launchAt={getStoreLaunchAt()}
         />
@@ -91,8 +91,8 @@ export default async function LojaPage() {
     return (
       <ComingSoon
         icon={ShoppingBag}
-        title="Mercado"
-        description="O Mercado, com produtos selecionados pelo Sunano, está sendo preparado. Fique de olho nas redes para o lançamento."
+        title="Loja"
+        description="A Loja, com produtos selecionados pelo Sunano, está sendo preparada. Fique de olho nas redes para o lançamento."
         accent="emerald"
       />
     )

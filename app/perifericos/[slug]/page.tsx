@@ -63,7 +63,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     .sort((a, b) => a.category.localeCompare(b.category))
 
   return (
-    <div className="mx-auto max-w-6xl px-2 py-4 sm:px-4 md:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1600px] px-2 py-4 sm:px-4 md:px-6 lg:px-8">
       <div className="mb-3">
         <BackButton />
       </div>

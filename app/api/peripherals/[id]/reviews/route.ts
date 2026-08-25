@@ -32,7 +32,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       : PERIPHERAL_REVIEWS_PAGE_SIZE
 
   try {
-    const stats = await getPeripheralReviewsWithStats(id, { page, limit })
+    const viewer = await getRequestUser(request)
+    const stats = await getPeripheralReviewsWithStats(id, { page, limit, viewerId: viewer?.id })
     return NextResponse.json({ ok: true, ...stats })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar avaliações." }, { status: 500 })

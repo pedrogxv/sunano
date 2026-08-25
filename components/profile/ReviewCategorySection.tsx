@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Pencil, Trash2 } from "lucide-react"
+import { ExternalLink, Pencil, Trash2 } from "lucide-react"
 
 import {
   AlertDialog,
@@ -17,6 +17,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { StarRating } from "@/components/ui/star-rating"
+import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { cn } from "@/lib/utils"
 import type { ShowcaseReview, ShowcaseReviewCategoryBlock } from "@/lib/profile-showcase"
@@ -57,7 +58,7 @@ export function ReviewCategorySection({ block, isOwner, onEdit, onDelete, compac
 
       <ul className={compact ? "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4" : "space-y-2"}>
         {block.reviews.map((review) => {
-          const href = `/perifericos/${buildPeripheralSlug(review.peripheral.name, review.peripheral.id)}`
+          const href = `/perifericos/${buildPeripheralSlug(review.peripheral.name, review.peripheral.id)}#review-${review.id}`
           const actions = isOwner && (
             <div
               className={cn(
@@ -149,7 +150,7 @@ export function ReviewCategorySection({ block, isOwner, onEdit, onDelete, compac
           return (
             <li
               key={review.id}
-              className="group relative flex gap-3 rounded-xl border border-border bg-card/60 p-3"
+              className={cn("group relative flex gap-3 rounded-xl border p-3 transition-colors", CARD_SURFACE_INTERACTIVE)}
             >
               <Link href={href} className="relative size-14 shrink-0 self-start">
                 {review.peripheral.image_url ? (
@@ -174,6 +175,14 @@ export function ReviewCategorySection({ block, isOwner, onEdit, onDelete, compac
                   <p className="line-clamp-2 text-xs text-muted-foreground">{review.body}</p>
                 )}
               </div>
+
+              <Link
+                href={href}
+                aria-label="Ver review no periférico"
+                className="absolute bottom-2 right-2 shrink-0 rounded-md bg-background/80 p-1.5 text-muted-foreground opacity-0 transition-opacity hover:text-primary group-hover:opacity-100 group-focus-within:opacity-100"
+              >
+                <ExternalLink className="size-3.5" />
+              </Link>
 
               {actions}
             </li>

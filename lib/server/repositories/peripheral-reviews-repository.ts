@@ -253,6 +253,10 @@ export type PeripheralReviewDetail = {
   author_vip_expires_at: string | null
   author_display_slug: string | null
   author_streak: number
+  /** Upvotes - downvotes, estilo Reddit (`peripheral_review_votes`). */
+  score: number
+  /** Voto do usuário autenticado atual nesta review, ou `null` se não votou (ou anônimo). */
+  my_vote: "like" | "dislike" | null
 }
 
 export type PeripheralReviewStats = {
@@ -261,6 +265,116 @@ export type PeripheralReviewStats = {
   average: number | null
   totalCount: number
   hasMore: boolean
+}
+
+/**
+ * Uma review pontual (por id), já enriquecida com dados do autor — usada para
+ * abrir a página do periférico direto numa review específica (link "Meus
+ * Reviews" do perfil) sem depender de em qual página da lista paginada
+ * (ordenada por Aura do autor) ela cairia.
+ */
+export async function getPeripheralReviewById(
+  reviewId: string,
+  viewerId?: string | null
+): Promise<PeripheralReviewDetail | null> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("peripheral_reviews")
+    .select("id, user_id, rating, body, created_at, edited_at, is_edited, score")
+    .eq("id", reviewId)
+    .eq("is_hidden", false)
+    .maybeSingle()
+
+  if (error || !data) return null
+
+  const row = data as {
+    id: string
+    user_id: string
+    rating: number
+    body: string | null
+    created_at: string
+    edited_at: string | null
+    is_edited: boolean
+    score: number
+  }
+
+  const [profileMap, myVote] = await Promise.all([
+    buildProfileMap([row.user_id]),
+    getOwnPeripheralReviewVote(db, viewerId, [row.id]),
+  ])
+  const profile = profileMap[row.user_id]
+
+  return {
+    id: row.id,
+    rating: row.rating,
+    body: row.body,
+    created_at: row.created_at,
+    edited_at: row.edited_at,
+    is_edited: row.is_edited ?? false,
+    user_id: row.user_id,
+    author_display_name: profile?.display_name ?? "Usuário",
+    author_avatar_url: profile?.avatar_url ?? null,
+    author_account_tier: profile?.account_tier ?? "common",
+    author_vip_expires_at: profile?.vip_expires_at ?? null,
+    author_display_slug: profile?.display_slug ?? null,
+    author_streak: profile?.streak ?? 0,
+    score: row.score ?? 0,
+    my_vote: myVote.get(row.id) ?? null,
+  }
+}
+
+/** Votos (like/dislike) do usuário atual num conjunto de reviews — vazio (sem query) se `viewerId` for nulo (visitante anônimo). */
+async function getOwnPeripheralReviewVote(
+  db: ReturnType<typeof createSupabaseAdminClient>,
+  viewerId: string | null | undefined,
+  reviewIds: string[]
+): Promise<Map<string, "like" | "dislike">> {
+  const votes = new Map<string, "like" | "dislike">()
+  if (!viewerId || reviewIds.length === 0) return votes
+
+  const { data } = await db
+    .from("peripheral_review_votes")
+    .select("review_id, kind")
+    .eq("voter_id", viewerId)
+    .in("review_id", reviewIds)
+
+  for (const row of (data ?? []) as Array<{ review_id: string; kind: "like" | "dislike" }>) {
+    votes.set(row.review_id, row.kind)
+  }
+  return votes
+}
+
+export type ToggleReviewVoteResult =
+  | { ok: true; reaction: "like" | "dislike" | null; score: number }
+  | { ok: false; error: string; status: number }
+
+/** Dá, troca ou remove (toggle) o upvote/downvote do usuário atual numa review — estilo Reddit, mutuamente exclusivo. */
+export async function togglePeripheralReviewVote(
+  voterId: string,
+  reviewId: string,
+  kind: "like" | "dislike"
+): Promise<ToggleReviewVoteResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db.rpc("toggle_peripheral_review_vote", {
+    p_voter_id: voterId,
+    p_review_id: reviewId,
+    p_kind: kind,
+  })
+
+  if (error) {
+    if (error.message?.includes("target not found")) {
+      return { ok: false, error: "Review não encontrada.", status: 404 }
+    }
+    console.error("[peripheral-reviews-repository] togglePeripheralReviewVote:", error)
+    return { ok: false, error: "Erro ao votar.", status: 400 }
+  }
+
+  const result = data?.[0]
+  if (!result) {
+    return { ok: false, error: "Erro ao votar.", status: 400 }
+  }
+  return { ok: true, reaction: result.reaction as "like" | "dislike" | null, score: result.score }
 }
 
 export const PERIPHERAL_REVIEWS_PAGE_SIZE = 4
@@ -275,7 +389,7 @@ export const PERIPHERAL_REVIEWS_PAGE_SIZE = 4
  */
 export async function getPeripheralReviewsWithStats(
   peripheralId: string,
-  { page = 1, limit = PERIPHERAL_REVIEWS_PAGE_SIZE }: { page?: number; limit?: number } = {}
+  { page = 1, limit = PERIPHERAL_REVIEWS_PAGE_SIZE, viewerId }: { page?: number; limit?: number; viewerId?: string | null } = {}
 ): Promise<PeripheralReviewStats> {
   const db = createSupabaseAdminClient()
 
@@ -326,7 +440,7 @@ export async function getPeripheralReviewsWithStats(
 
   const { data: pageRows, error: pageError } = await db
     .from("peripheral_reviews")
-    .select("id, user_id, rating, body, created_at, edited_at, is_edited")
+    .select("id, user_id, rating, body, created_at, edited_at, is_edited, score")
     .in("id", pageIds)
 
   if (pageError) {
@@ -342,9 +456,13 @@ export async function getPeripheralReviewsWithStats(
     created_at: string
     edited_at: string | null
     is_edited: boolean
+    score: number
   }
   const rowById = new Map(((pageRows ?? []) as PageRow[]).map((r) => [r.id, r]))
-  const profileMap = await buildProfileMap(pageIds.map((id) => rowById.get(id)?.user_id ?? null))
+  const [profileMap, myVotes] = await Promise.all([
+    buildProfileMap(pageIds.map((id) => rowById.get(id)?.user_id ?? null)),
+    getOwnPeripheralReviewVote(db, viewerId, pageIds),
+  ])
 
   const reviews = pageIds
     .map((id) => rowById.get(id))
@@ -363,6 +481,8 @@ export async function getPeripheralReviewsWithStats(
       author_vip_expires_at: profileMap[r.user_id]?.vip_expires_at ?? null,
       author_display_slug: profileMap[r.user_id]?.display_slug ?? null,
       author_streak: profileMap[r.user_id]?.streak ?? 0,
+      score: r.score ?? 0,
+      my_vote: myVotes.get(r.id) ?? null,
     }))
 
   return { reviews, average, totalCount, hasMore }

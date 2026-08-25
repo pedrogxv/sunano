@@ -279,7 +279,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // propósito: o grupo esquerdo da TopBar é `shrink-0` (TopBar.tsx), então
   // o `truncate` do span nunca entra em ação — uma string longa empurra os
   // botões da direita (carrinho/login) pra fora da tela no mobile.
-  usePageHeader("Mercado", "PIX na hora, testado antes de anunciar")
+  usePageHeader("Loja", "PIX na hora, testado antes de anunciar")
 
   const [query, setQuery] = useState(searchParams.get("q") ?? "")
   const debouncedQuery = useDebouncedValue(query, 400)

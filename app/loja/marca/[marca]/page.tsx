@@ -17,8 +17,8 @@ export async function generateMetadata({ params }: MarcaPageProps): Promise<Meta
   const { marca } = await params
   const brand = decodeURIComponent(marca)
   return {
-    title: `${brand} — Mercado`,
-    description: `Produtos da marca ${brand} no Mercado Sunano: periféricos testados antes de anunciar, com PIX na hora.`,
+    title: `${brand} — Loja`,
+    description: `Produtos da marca ${brand} na Loja Sunano: periféricos testados antes de anunciar, com PIX na hora.`,
     alternates: { canonical: `/loja/marca/${encodeURIComponent(brand)}` },
   }
 }

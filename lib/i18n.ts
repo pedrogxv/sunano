@@ -733,6 +733,7 @@ type Translations = {
     myOrders: string
     myTickets: string
     savedPosts: string
+    affiliates: string
     adminPanel: string
     signOut: string
     settings: string
@@ -1546,6 +1547,7 @@ export const translations: Record<LocaleCode, Translations> = {
       myOrders: "Meus Pedidos",
       myTickets: "Meus Tickets",
       savedPosts: "Posts Salvos",
+      affiliates: "Programa de Afiliados",
       adminPanel: "Painel admin",
       signOut: "Sair",
       settings: "Configurações",
@@ -2661,6 +2663,7 @@ export const translations: Record<LocaleCode, Translations> = {
       myOrders: "My Orders",
       myTickets: "My Tickets",
       savedPosts: "Saved Posts",
+      affiliates: "Affiliate Program",
       adminPanel: "Admin panel",
       signOut: "Sign out",
       settings: "Settings",

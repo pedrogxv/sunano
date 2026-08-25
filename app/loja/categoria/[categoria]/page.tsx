@@ -18,8 +18,8 @@ export async function generateMetadata({ params }: CategoriaPageProps): Promise<
   const category = decodeURIComponent(categoria)
   const categoryLabel = getCategoryLabel(category)
   return {
-    title: `${categoryLabel} — Mercado`,
-    description: `Produtos da categoria ${categoryLabel} no Mercado Sunano: periféricos testados antes de anunciar, com PIX na hora.`,
+    title: `${categoryLabel} — Loja`,
+    description: `Produtos da categoria ${categoryLabel} na Loja Sunano: periféricos testados antes de anunciar, com PIX na hora.`,
     alternates: { canonical: `/loja/categoria/${encodeURIComponent(category)}` },
   }
 }

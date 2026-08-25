@@ -1,6 +1,10 @@
 "use client"
 
-import { KeyRound, Link2, Shield, SlidersHorizontal } from "lucide-react"
+import Link from "next/link"
+import { ArrowRight, Handshake, KeyRound, Link2, Shield, SlidersHorizontal } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 
 import { LinkedAccountsTab } from "./LinkedAccountsTab"
 import { PreferencesTab } from "./PreferencesTab"
@@ -13,12 +17,14 @@ interface AccountSectionProps {
   lgpdConsentVersion: string | null
 }
 
-const GROUPS = [
+const BASE_GROUPS = [
   { id: "seguranca", label: "Segurança", Icon: KeyRound },
   { id: "conexoes", label: "Conexões", Icon: Link2 },
   { id: "preferencias", label: "Preferências", Icon: SlidersHorizontal },
   { id: "privacidade", label: "Privacidade e dados", Icon: Shield },
 ] as const
+
+const AFFILIATES_GROUP = { id: "afiliados", label: "Afiliados", Icon: Handshake } as const
 
 /**
  * Tudo que é da conta em si — senha e 2FA, logins sociais, aparência/idioma e
@@ -26,6 +32,9 @@ const GROUPS = [
  * então não há uma segunda navegação lateral.
  */
 export function AccountSection({ email, lgpdConsentAt, lgpdConsentVersion }: AccountSectionProps) {
+  const showAffiliates = !isStoreMaintenanceEnabled()
+  const GROUPS = showAffiliates ? [...BASE_GROUPS, AFFILIATES_GROUP] : BASE_GROUPS
+
   function scrollTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
@@ -75,6 +84,26 @@ export function AccountSection({ email, lgpdConsentAt, lgpdConsentVersion }: Acc
           lgpdConsentVersion={lgpdConsentVersion}
         />
       </section>
+
+      {showAffiliates && (
+        <section id="afiliados" className="scroll-mt-20 space-y-5">
+          <SectionHeading
+            title="Afiliados"
+            description="Indique a loja e receba comissão sobre as vendas confirmadas."
+          />
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border/60 bg-secondary/30 px-4 py-3.5">
+            <p className="text-sm text-muted-foreground">
+              Acompanhe seu saldo, extrato e link de indicação no painel do afiliado.
+            </p>
+            <Button asChild variant="outline" className="shrink-0">
+              <Link href="/afiliados">
+                Acessar painel
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bookmark, Crown, LayoutDashboard, LifeBuoy, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
+import { Bookmark, Crown, Handshake, LayoutDashboard, LifeBuoy, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
 
 import { useState } from "react"
 
@@ -21,6 +21,7 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useUserOrders, pendingPaymentHref } from "@/lib/hooks/use-user-orders"
 import { formatBRL } from "@/lib/format"
+import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
@@ -53,6 +54,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   const { pendingOrder } = useUserOrders()
   const ready = !loading
   const isAdmin = authUser?.isAdmin ?? false
+  const showAffiliates = !isStoreMaintenanceEnabled()
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
   // Só a topbar pública abre o modal — a sidebar de admin (/admin/login) segue
   // navegando de verdade, já que aquele login não é o alvo deste modal.
@@ -301,6 +303,17 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
                 {t.auth.savedPosts}
               </Link>
             </DropdownMenuItem>
+            {showAffiliates && (
+              <DropdownMenuItem asChild>
+                <Link
+                  href="/afiliados"
+                  className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
+                >
+                  <Handshake className="size-4 text-muted-foreground" />
+                  {t.auth.affiliates}
+                </Link>
+              </DropdownMenuItem>
+            )}
             {isAdmin && (
               <DropdownMenuItem asChild>
                 <Link

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Handshake } from "lucide-react"
 
+import { EditReferralCodeDialog } from "@/components/affiliates/EditReferralCodeDialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -118,8 +119,9 @@ export default async function AfiliadosPage() {
       </div>
 
       <Card className="mb-6">
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
           <CardTitle>Seu link de indicação</CardTitle>
+          {affiliate.code && <EditReferralCodeDialog currentCode={affiliate.code} />}
         </CardHeader>
         <CardContent>
           <code className="block break-all rounded-lg bg-muted px-3 py-2 text-sm">{referralLink}</code>

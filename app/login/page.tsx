@@ -17,6 +17,8 @@ export default async function LoginPage({
   const isRecoveryError = params.error === "recovery_error"
   const isConfirmationError = params.error === "confirmation_error"
   const isAccountBanned = params.error === "account_banned"
+  const isOAuthError = params.error === "oauth_error"
+  const isMissingCode = params.error === "missing_code"
   const accountDeleted = params.deleted === "1"
   const emailConfirmed = params.confirmed === "1"
 
@@ -87,6 +89,15 @@ export default async function LoginPage({
           <AuthMotionBanner>
             <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               Conta suspensa ou banida.
+            </div>
+          </AuthMotionBanner>
+        )}
+
+        {(isOAuthError || isMissingCode) && (
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Não foi possível concluir o login. O link pode ter expirado ou já foi usado. Tente
+              novamente.
             </div>
           </AuthMotionBanner>
         )}

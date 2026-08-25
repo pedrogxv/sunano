@@ -1,9 +1,8 @@
 import "server-only"
 
-import { randomBytes } from "crypto"
-
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
+import { normalizeAffiliateCode } from "@/lib/affiliate-code"
 
 /**
  * Repositório do sistema de afiliados — única porta de acesso a `affiliates`,
@@ -40,18 +39,6 @@ export type AffiliateRow = {
 const AFFILIATE_COLUMNS =
   "id, user_id, code, status, commission_bps, balance_cents, pix_key, pix_key_type, rejection_reason, reviewed_by, reviewed_at, approved_at, created_at, updated_at"
 
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // sem 0/O/1/I — evita confusão na hora de digitar o código
-const CODE_LENGTH = 8
-
-function generateCandidateCode(): string {
-  const bytes = randomBytes(CODE_LENGTH)
-  let code = ""
-  for (let i = 0; i < CODE_LENGTH; i++) {
-    code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length]
-  }
-  return code
-}
-
 export async function getAffiliateByUserId(userId: string): Promise<AffiliateRow | null> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db.from("affiliates").select(AFFILIATE_COLUMNS).eq("user_id", userId).maybeSingle()
@@ -79,16 +66,39 @@ export async function getAffiliateByCode(code: string): Promise<AffiliateRow | n
 }
 
 /**
+ * Checa se um código está livre para uso. `exceptAffiliateId` permite que o
+ * próprio dono da solicitação "reserve" o código que ele já tem (reenvio sem
+ * mudar o código não deve se autobloquear).
+ */
+export async function isAffiliateCodeAvailable(code: string, exceptAffiliateId?: string): Promise<boolean> {
+  const normalized = normalizeAffiliateCode(code)
+  if (!normalized) return false
+
+  const db = createSupabaseAdminClient()
+  let query = db.from("affiliates").select("id").eq("code", normalized).limit(1)
+  if (exceptAffiliateId) query = query.neq("id", exceptAffiliateId)
+
+  const { data, error } = await query
+  if (error) {
+    console.error("[affiliates-repository] isAffiliateCodeAvailable:", error)
+    return false // fail-closed
+  }
+  return (data ?? []).length === 0
+}
+
+/**
  * Cria (ou reenvia, se a solicitação anterior foi rejeitada) um pedido de
- * afiliação. `code` só é gerado na aprovação (ver `approveAffiliate`) — uma
- * solicitação pendente/rejeitada não tem código, evita poluir o namespace
- * único com códigos que nunca ficam ativos.
+ * afiliação. O código escolhido pelo usuário é reservado já no `pending`
+ * (grava direto em `code`, que é `unique`) — assim ninguém mais consegue
+ * pegá-lo enquanto a solicitação está em análise. Se for rejeitada, o código
+ * é liberado (`rejectAffiliate` zera a coluna).
  */
 export async function requestAffiliation(
   userId: string,
-  params: { pixKey: string; pixKeyType: PixKeyType }
+  params: { pixKey: string; pixKeyType: PixKeyType; code: string }
 ): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
+  const code = normalizeAffiliateCode(params.code)
 
   const { data: existing } = await db
     .from("affiliates")
@@ -100,12 +110,18 @@ export async function requestAffiliation(
     return { ok: false, error: "Você já tem uma solicitação de afiliação em andamento ou ativa.", status: 409 }
   }
 
+  const available = await isAffiliateCodeAvailable(code, existing?.id)
+  if (!available) {
+    return { ok: false, error: "Esse código já está em uso. Escolha outro.", status: 409 }
+  }
+
   if (existing) {
     // Reaproveita a linha de uma solicitação rejeitada — permite reenvio sem duplicar o cadastro (user_id é unique).
     const { error } = await db
       .from("affiliates")
       .update({
         status: "pending",
+        code,
         pix_key: params.pixKey,
         pix_key_type: params.pixKeyType,
         rejection_reason: null,
@@ -114,6 +130,9 @@ export async function requestAffiliation(
       })
       .eq("id", existing.id)
     if (error) {
+      if (error.code === "23505") {
+        return { ok: false, error: "Esse código já está em uso. Escolha outro.", status: 409 }
+      }
       console.error("[affiliates-repository] requestAffiliation — reenvio:", error)
       return { ok: false, error: "Não foi possível enviar sua solicitação.", status: 500 }
     }
@@ -123,12 +142,52 @@ export async function requestAffiliation(
   const { error } = await db.from("affiliates").insert({
     user_id: userId,
     status: "pending",
+    code,
     pix_key: params.pixKey,
     pix_key_type: params.pixKeyType,
   })
   if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: "Esse código já está em uso. Escolha outro.", status: 409 }
+    }
     console.error("[affiliates-repository] requestAffiliation — insert:", error)
     return { ok: false, error: "Não foi possível enviar sua solicitação.", status: 500 }
+  }
+  return { ok: true }
+}
+
+/**
+ * Troca o código de um afiliado já aprovado. Links antigos com o código
+ * anterior param de resolver assim que a troca é gravada — é o mesmo trade-off
+ * de trocar um nome de usuário, e fica explícito na UI que chama isto.
+ */
+export async function updateAffiliateCode(userId: string, code: string): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+  const normalized = normalizeAffiliateCode(code)
+
+  const { data: existing } = await db
+    .from("affiliates")
+    .select("id, status")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (!existing) return { ok: false, error: "Você ainda não é afiliado.", status: 404 }
+  if (existing.status !== "approved") {
+    return { ok: false, error: "Só é possível alterar o código com o cadastro aprovado.", status: 409 }
+  }
+
+  const available = await isAffiliateCodeAvailable(normalized, existing.id)
+  if (!available) {
+    return { ok: false, error: "Esse código já está em uso. Escolha outro.", status: 409 }
+  }
+
+  const { error } = await db.from("affiliates").update({ code: normalized }).eq("id", existing.id)
+  if (error) {
+    if (error.code === "23505") {
+      return { ok: false, error: "Esse código já está em uso. Escolha outro.", status: 409 }
+    }
+    console.error("[affiliates-repository] updateAffiliateCode:", error)
+    return { ok: false, error: "Não foi possível alterar o código.", status: 500 }
   }
   return { ok: true }
 }
@@ -398,7 +457,7 @@ export async function listAffiliateApplications(
   return { affiliates: (data ?? []) as AffiliateRow[], total: count ?? 0 }
 }
 
-/** Gera o `code` definitivo só aqui — solicitações pendentes/rejeitadas nunca têm código ativo. */
+/** O `code` já foi reservado na solicitação (`requestAffiliation`) — aprovar só muda o status. */
 export async function approveAffiliate(affiliateId: string, reviewerId: string): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -407,33 +466,25 @@ export async function approveAffiliate(affiliateId: string, reviewerId: string):
   if (existing.status === "approved") return { ok: true }
 
   const now = new Date().toISOString()
+  const { error } = await db
+    .from("affiliates")
+    .update({
+      status: "approved",
+      reviewed_by: reviewerId,
+      reviewed_at: now,
+      approved_at: now,
+      rejection_reason: null,
+    })
+    .eq("id", affiliateId)
 
-  // Retry em colisão de código (unique constraint) — extremamente raro no
-  // espaço de 32^8, mas o mesmo cuidado de `generateUniqueDisplaySlug`.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const code = generateCandidateCode()
-    const { error } = await db
-      .from("affiliates")
-      .update({
-        status: "approved",
-        code,
-        reviewed_by: reviewerId,
-        reviewed_at: now,
-        approved_at: now,
-        rejection_reason: null,
-      })
-      .eq("id", affiliateId)
-
-    if (!error) return { ok: true }
-    if (error.code !== "23505") {
-      console.error("[affiliates-repository] approveAffiliate:", error)
-      return { ok: false, error: "Não foi possível aprovar o afiliado.", status: 500 }
-    }
+  if (error) {
+    console.error("[affiliates-repository] approveAffiliate:", error)
+    return { ok: false, error: "Não foi possível aprovar o afiliado.", status: 500 }
   }
-
-  return { ok: false, error: "Não foi possível gerar um código único. Tente novamente.", status: 500 }
+  return { ok: true }
 }
 
+/** Libera o `code` reservado (volta a ficar disponível para outra solicitação). */
 export async function rejectAffiliate(
   affiliateId: string,
   reviewerId: string,
@@ -444,6 +495,7 @@ export async function rejectAffiliate(
     .from("affiliates")
     .update({
       status: "rejected",
+      code: null,
       reviewed_by: reviewerId,
       reviewed_at: new Date().toISOString(),
       rejection_reason: reason ?? null,

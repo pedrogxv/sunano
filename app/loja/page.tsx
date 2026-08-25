@@ -43,6 +43,7 @@ export default async function LojaPage() {
     { items: preOrderItems },
     { items: readyStockItems },
     { items: siteItems },
+    { items: serviceItems },
     bestSellingItems,
     sectionBanners,
   ] = await Promise.all([
@@ -76,6 +77,12 @@ export default async function LojaPage() {
       page: 1,
       pageSize: 12,
     }),
+    listStoreProductsPaginated({
+      type: "store",
+      categories: ["services"],
+      page: 1,
+      pageSize: 12,
+    }),
     listBestSellingProducts(12),
     listActiveBannersBySection(),
   ])
@@ -101,6 +108,7 @@ export default async function LojaPage() {
         preOrderItems={preOrderItems}
         readyStockItems={readyStockItems}
         siteItems={siteItems}
+        serviceItems={serviceItems}
         bestSellingItems={bestSellingItems}
         sectionBanners={sectionBanners}
         pageSize={PAGE_SIZE}

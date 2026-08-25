@@ -36,3 +36,26 @@ export function getCategoryIcon(category: string | null | undefined): { icon: Lu
   const rule = CATEGORY_ICON_RULES.find((r) => r.match.test(category))
   return rule ? { icon: rule.icon, tint: rule.tint } : FALLBACK
 }
+
+/** Categoria salva no banco é o `value` em inglês do select do admin (ver
+ *  CATEGORIES em app/admin/store/form.tsx) — aqui traduz pra pt-BR na Loja
+ *  pública, com fallback pro valor cru pra categorias não mapeadas. */
+const STORE_CATEGORY_LABELS: Record<string, string> = {
+  mouse: "Mouse",
+  keyboard: "Teclado",
+  mousepad: "Mousepad",
+  glasspad: "Glasspad",
+  headset: "Headset",
+  iem: "IEM",
+  switches: "Switches",
+  dac_amp: "DAC/AMP",
+  feet: "Feet",
+  acessorio: "Acessório",
+  services: "Serviços",
+  outro: "Outro",
+}
+
+export function getCategoryLabel(category: string | null | undefined): string {
+  if (!category) return ""
+  return STORE_CATEGORY_LABELS[category] ?? category
+}

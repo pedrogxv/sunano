@@ -3,6 +3,7 @@ import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { StoreContent } from "@/components/store/StoreContent"
+import { getCategoryLabel } from "@/lib/store-category-icons"
 
 export const revalidate = 60
 
@@ -15,9 +16,10 @@ interface CategoriaPageProps {
 export async function generateMetadata({ params }: CategoriaPageProps): Promise<Metadata> {
   const { categoria } = await params
   const category = decodeURIComponent(categoria)
+  const categoryLabel = getCategoryLabel(category)
   return {
-    title: `${category} — Mercado`,
-    description: `Produtos da categoria ${category} no Mercado Sunano: periféricos testados antes de anunciar, com PIX na hora.`,
+    title: `${categoryLabel} — Mercado`,
+    description: `Produtos da categoria ${categoryLabel} no Mercado Sunano: periféricos testados antes de anunciar, com PIX na hora.`,
     alternates: { canonical: `/loja/categoria/${encodeURIComponent(category)}` },
   }
 }

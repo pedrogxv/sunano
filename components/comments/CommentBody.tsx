@@ -2,7 +2,7 @@ import { Fragment } from "react"
 import Link from "next/link"
 
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
-import { parseTextMarkdown } from "@/lib/comment-markdown"
+import { parseTextLines, type TextSegment } from "@/lib/comment-markdown"
 import { profilePath } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
 import type { CommentMention } from "./types"
@@ -57,15 +57,61 @@ function MentionChip({ mention, text }: { mention: CommentMention | null; text: 
   )
 }
 
+/** Monta os elementos inline (negrito/itálico/sublinhado/destaque/link/@menção) de uma linha já parseada. */
+function renderSegments(segments: TextSegment[], mentions: CommentMention[]) {
+  return segments.map((segment, index) => {
+    if (segment.href) {
+      return (
+        <a
+          key={index}
+          href={segment.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary"
+        >
+          {segment.text}
+        </a>
+      )
+    }
+    if (segment.bold) {
+      return (
+        <strong key={index} className="font-semibold">
+          {segment.text}
+        </strong>
+      )
+    }
+    if (segment.italic) {
+      return <em key={index}>{segment.text}</em>
+    }
+    if (segment.underline) {
+      return <u key={index}>{segment.text}</u>
+    }
+    if (segment.highlight) {
+      return (
+        <mark key={index} className="rounded bg-primary/25 px-0.5 text-foreground">
+          {segment.text}
+        </mark>
+      )
+    }
+    return (
+      <Fragment key={index}>
+        {splitMentions(segment.text, mentions).map((part, partIndex) => (
+          <MentionChip key={partIndex} mention={part.mention} text={part.text} />
+        ))}
+      </Fragment>
+    )
+  })
+}
+
 /**
- * Corpo do comentário com o markdown mínimo aplicado (`**negrito**`, `*itálico*`)
- * e as @menções destacadas como link para o perfil (com Mini Perfil ao
- * passar o cursor).
+ * Corpo do comentário com o markdown mínimo aplicado (`**negrito**`, `*itálico*`,
+ * `- item` para lista) e as @menções destacadas como link para o perfil (com
+ * Mini Perfil ao passar o cursor).
  *
- * Os trechos vêm de `parseTextMarkdown` como texto puro e viram elementos
- * React aqui — nada de `dangerouslySetInnerHTML`, então o React escapa o que
- * o usuário escreveu e não há HTML para sanitizar. Um comentário com
- * `<img onerror=...>` continua sendo exibido como texto literal.
+ * Os trechos vêm de `parseTextLines`/`parseTextMarkdown` como texto puro e
+ * viram elementos React aqui — nada de `dangerouslySetInnerHTML`, então o
+ * React escapa o que o usuário escreveu e não há HTML para sanitizar. Um
+ * comentário com `<img onerror=...>` continua sendo exibido como texto literal.
  */
 export function CommentBody({
   body,
@@ -76,50 +122,44 @@ export function CommentBody({
   mentions?: CommentMention[]
   className?: string
 }) {
+  const lines = parseTextLines(body)
+
+  const blocks: { bullet: boolean; lines: (typeof lines)[number][] }[] = []
+  for (const line of lines) {
+    const last = blocks[blocks.length - 1]
+    if (last && last.bullet === line.bullet) {
+      last.lines.push(line)
+    } else {
+      blocks.push({ bullet: line.bullet, lines: [line] })
+    }
+  }
+
   return (
-    <p className={cn("whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground", className)}>
-      {parseTextMarkdown(body).map((segment, index) => {
-        if (segment.href) {
+    <div className={cn("whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground", className)}>
+      {blocks.map((block, blockIndex) => {
+        if (block.bullet) {
           return (
-            <a
-              key={index}
-              href={segment.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary"
-            >
-              {segment.text}
-            </a>
-          )
-        }
-        if (segment.bold) {
-          return (
-            <strong key={index} className="font-semibold">
-              {segment.text}
-            </strong>
-          )
-        }
-        if (segment.italic) {
-          return <em key={index}>{segment.text}</em>
-        }
-        if (segment.underline) {
-          return <u key={index}>{segment.text}</u>
-        }
-        if (segment.highlight) {
-          return (
-            <mark key={index} className="rounded bg-primary/25 px-0.5 text-foreground">
-              {segment.text}
-            </mark>
+            <ul key={blockIndex} className="my-1 space-y-1">
+              {block.lines.map((line, lineIndex) => (
+                <li key={lineIndex} className="flex gap-2">
+                  <span aria-hidden className="mt-[0.5em] size-1.5 shrink-0 rounded-full bg-primary" />
+                  <span>{renderSegments(line.segments, mentions)}</span>
+                </li>
+              ))}
+            </ul>
           )
         }
         return (
-          <Fragment key={index}>
-            {splitMentions(segment.text, mentions).map((part, partIndex) => (
-              <MentionChip key={partIndex} mention={part.mention} text={part.text} />
+          <Fragment key={blockIndex}>
+            {block.lines.map((line, lineIndex) => (
+              <Fragment key={lineIndex}>
+                {lineIndex > 0 && "\n"}
+                {renderSegments(line.segments, mentions)}
+              </Fragment>
             ))}
           </Fragment>
         )
       })}
-    </p>
+    </div>
   )
 }

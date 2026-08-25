@@ -10,7 +10,7 @@ export interface StoreSettings {
 
 // Usado só se a linha única faltar por algum motivo (não deveria acontecer —
 // a migração já garante 1 linha via `insert ... on conflict do nothing`).
-const DEFAULT_SETTINGS: StoreSettings = { cardSurchargePercent: 5, cardMaxInstallments: 6 }
+const DEFAULT_SETTINGS: StoreSettings = { cardSurchargePercent: 10, cardMaxInstallments: 6 }
 
 export async function getStoreSettings(): Promise<StoreSettings> {
   const db = createSupabaseAdminClient()

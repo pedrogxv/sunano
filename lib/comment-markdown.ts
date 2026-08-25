@@ -1,6 +1,8 @@
 /**
- * Markdown mínimo de comentários e posts do fórum: `**negrito**`, `*itálico*`,
- * `__sublinhado__`, `==destaque==` e `[texto](url)` para link.
+ * Markdown mínimo de comentários, posts do fórum e descrições de produto:
+ * `**negrito**`, `*itálico*`, `__sublinhado__`, `==destaque==`,
+ * `[texto](url)` para link, `- item` (início de linha) para lista com bolinha
+ * e `#`/`##`/`###` (início de linha) para título (h1/h2/h3).
  *
  * Devolve segmentos de texto em vez de uma string de HTML. Quem renderiza
  * monta `<strong>`/`<em>`/`<u>`/`<a>` como elemento React (ver `components/comments/CommentBody`),
@@ -35,6 +37,42 @@ const UNDERLINE_PATTERN = /__(.+?)__/g
 const HIGHLIGHT_PATTERN = /==(.+?)==/g
 
 const PLAIN_SEGMENT = { bold: false, italic: false, underline: false, highlight: false, href: null }
+
+export type TextLine = {
+  /** true quando a linha começa com "- " — vira item de lista com bolinha. */
+  bullet: boolean
+  /** 1/2/3 quando a linha começa com "#"/"##"/"###", null senão — vira h1/h2/h3. */
+  heading: 1 | 2 | 3 | null
+  segments: TextSegment[]
+}
+
+// Só no início da linha (após espaços) — "- " no meio do texto é hífen normal.
+const BULLET_PATTERN = /^[ \t]*-[ \t]+/
+// Idem para "#": só conta como heading no início da linha, até 3 níveis
+// (h4+ não tem caso de uso aqui — descrição de produto, não documento longo).
+const HEADING_PATTERN = /^[ \t]*(#{1,3})[ \t]+/
+
+/**
+ * Quebra o corpo em linhas, marcando quais começam com "- " (bullet) ou
+ * "#"/"##"/"###" (heading). Cada linha já vem com o markdown inline
+ * (`parseTextMarkdown`) aplicado ao restante do texto. Quem renderiza agrupa
+ * linhas-bullet consecutivas num `<ul>` e as demais em parágrafos (ver
+ * `FormattedText`/`CommentBody`).
+ */
+export function parseTextLines(body: string): TextLine[] {
+  return body.split("\n").map((line) => {
+    const bulletMatch = line.match(BULLET_PATTERN)
+    if (bulletMatch) {
+      return { bullet: true, heading: null, segments: parseTextMarkdown(line.slice(bulletMatch[0].length)) }
+    }
+    const headingMatch = line.match(HEADING_PATTERN)
+    if (headingMatch) {
+      const level = headingMatch[1].length as 1 | 2 | 3
+      return { bullet: false, heading: level, segments: parseTextMarkdown(line.slice(headingMatch[0].length)) }
+    }
+    return { bullet: false, heading: null, segments: parseTextMarkdown(line) }
+  })
+}
 
 /** Quebra o corpo em trechos normais, negrito, itálico, sublinhado e link. */
 export function parseTextMarkdown(body: string): TextSegment[] {

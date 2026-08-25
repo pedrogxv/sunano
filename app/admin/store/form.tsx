@@ -1479,7 +1479,7 @@ export function StoreProductForm({
           )}
         />
         <p className="text-[10px] text-muted-foreground/60">
-          Suporta **negrito**, *itálico*, __sublinhado__, ==destaque== e [texto](url) para link.
+          Suporta **negrito**, *itálico*, __sublinhado__, ==destaque==, [texto](url) para link e "- item" no início da linha para lista.
         </p>
         <p className="text-[10px] text-amber-600 dark:text-amber-500">
           Não repita aqui specs como Plate, Keycaps, Layout, Carcaça etc. — esses dados já aparecem na tabela de "Especificação Técnica".

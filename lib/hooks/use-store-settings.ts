@@ -8,7 +8,7 @@ export type UseStoreSettingsResult = {
   loading: boolean
 }
 
-const DEFAULTS: Omit<UseStoreSettingsResult, "loading"> = { cardSurchargePercent: 5, cardMaxInstallments: 6 }
+const DEFAULTS: Omit<UseStoreSettingsResult, "loading"> = { cardSurchargePercent: 10, cardMaxInstallments: 6 }
 
 // Cache em módulo (não em contexto React) — várias instâncias de
 // ProductCard renderizam na mesma página e todas precisam do mesmo

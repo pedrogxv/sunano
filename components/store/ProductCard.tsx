@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { Plus, ShoppingCart } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getCategoryIcon } from "@/lib/store-category-icons"
+import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
 import { computeCardPriceCents } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
@@ -43,7 +43,7 @@ interface ProductCardProps {
 
 export function ProductCard(props: ProductCardProps) {
   const { add, setOpen } = useCart()
-  const { cardSurchargePercent } = useStoreSettings()
+  const { cardSurchargePercent, cardMaxInstallments } = useStoreSettings()
   const href = `/loja/${props.slug}`
   const variants = props.variants ?? []
   const hasVariants = (props.has_variants ?? false) && variants.length > 0
@@ -200,7 +200,7 @@ export function ProductCard(props: ProductCardProps) {
         <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
           {/* Altura fixa mesmo sem categoria, pra não desalinhar o card com os vizinhos. */}
           <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[#7a7a7a]">
-            {props.category ?? " "}
+            {getCategoryLabel(props.category) || " "}
           </p>
           {/* `font-sans tracking-normal` desfaz o reset global de h3 (Space
               Grotesk + tracking negativo): no mock o nome do produto é Manrope.
@@ -254,6 +254,7 @@ export function ProductCard(props: ProductCardProps) {
             )}
             <p className="text-[10px] text-[#7a7a7a]">
               ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão
+              {cardMaxInstallments > 1 && ` em até ${cardMaxInstallments}x`}
             </p>
             {(() => {
               const displayStock = activeVariant ? activeVariant.stock : props.stock

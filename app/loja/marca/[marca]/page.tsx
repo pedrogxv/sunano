@@ -10,6 +10,7 @@ const PAGE_SIZE = 24
 
 interface MarcaPageProps {
   params: Promise<{ marca: string }>
+  searchParams: Promise<{ categoria?: string }>
 }
 
 export async function generateMetadata({ params }: MarcaPageProps): Promise<Metadata> {
@@ -22,19 +23,26 @@ export async function generateMetadata({ params }: MarcaPageProps): Promise<Meta
   }
 }
 
-export default async function LojaMarcaPage({ params }: MarcaPageProps) {
+export default async function LojaMarcaPage({ params, searchParams }: MarcaPageProps) {
   const { marca } = await params
+  const { categoria } = await searchParams
   const brand = decodeURIComponent(marca)
+  const category = categoria ? decodeURIComponent(categoria) : null
 
   const filterOptions = await getStoreFilterOptions("store")
   if (!filterOptions.brands.includes(brand)) {
     notFound()
   }
+  // Categoria vinda do menu (ex: clicou na marca dentro do grupo "Mouse")
+  // pode não existir mais — ignora silenciosamente em vez de 404, já que a
+  // marca em si continua válida.
+  const validCategory = category && filterOptions.categories.includes(category) ? category : null
 
   const [{ items, total }, { items: featuredItems }] = await Promise.all([
     listStoreProductsPaginated({
       type: "store",
       brands: [brand],
+      categories: validCategory ? [validCategory] : undefined,
       page: 1,
       pageSize: PAGE_SIZE,
     }),
@@ -55,6 +63,7 @@ export default async function LojaMarcaPage({ params }: MarcaPageProps) {
         initialFeatured={featuredItems}
         pageSize={PAGE_SIZE}
         banner={{ type: "brand", value: brand }}
+        initialCategory={validCategory}
       />
     </Suspense>
   )

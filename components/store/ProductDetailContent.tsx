@@ -5,15 +5,12 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   ArrowLeft,
-  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
   Minus,
   Plus,
-  QrCode,
   Rocket,
-  ShieldCheck,
   ShoppingCart,
   Trophy,
   Zap,
@@ -27,7 +24,7 @@ import { computeCardPriceCents } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
-import { getCategoryIcon } from "@/lib/store-category-icons"
+import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import type { LinkedPeripheralRef, StoreProductDetailResult, StoreProductVariantGroup, StoreFilterOptions, StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { ProductReviews } from "@/components/store/ProductReviews"
@@ -80,7 +77,7 @@ export function ProductDetailContent({
 }: ProductDetailContentProps) {
   const router = useRouter()
   const { add, setOpen } = useCart()
-  const { cardSurchargePercent } = useStoreSettings()
+  const { cardSurchargePercent, cardMaxInstallments } = useStoreSettings()
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
 
@@ -177,6 +174,11 @@ export function ProductDetailContent({
   const [activeImage, setActiveImage] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [zoomed, setZoomed] = useState(false)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const dragState = useState<{ startX: number; startY: number; panX: number; panY: number; moved: boolean } | null>(
+    null
+  )
+  const [drag, setDrag] = dragState
   const [loadedDialog, setLoadedDialog] = useState<number | null>(null)
   const [mainImageLoaded, setMainImageLoaded] = useState<string | null>(null)
 
@@ -190,6 +192,44 @@ export function ProductDetailContent({
     event?.stopPropagation()
     setActiveImage((prev) => (prev + delta + images.length) % images.length)
     setZoomed(false)
+    setPan({ x: 0, y: 0 })
+  }
+
+  const ZOOM_SCALE = 2.5
+  const PAN_LIMIT = 220
+
+  function clampPan(x: number, y: number) {
+    return {
+      x: Math.min(PAN_LIMIT, Math.max(-PAN_LIMIT, x)),
+      y: Math.min(PAN_LIMIT, Math.max(-PAN_LIMIT, y)),
+    }
+  }
+
+  function handleZoomPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (!zoomed) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setDrag({ startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y, moved: false })
+  }
+
+  function handleZoomPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!zoomed || !drag) return
+    const dx = e.clientX - drag.startX
+    const dy = e.clientY - drag.startY
+    const next = clampPan(drag.panX + dx, drag.panY + dy)
+    setPan(next)
+    if (!drag.moved && Math.hypot(dx, dy) > 4) setDrag({ ...drag, moved: true })
+  }
+
+  function handleZoomPointerUp() {
+    setDrag(null)
+  }
+
+  function toggleZoom() {
+    if (drag?.moved) return
+    setZoomed((z) => {
+      if (z) setPan({ x: 0, y: 0 })
+      return !z
+    })
   }
   const backHref = "/loja"
 
@@ -249,14 +289,17 @@ export function ProductDetailContent({
         previewPool={previewPool}
       />
       <div className="mx-auto max-w-7xl px-4 pb-12 md:px-6 lg:pb-16 pt-5">
-      <div className="grid gap-10 md:grid-cols-2 lg:gap-16">
+      <div className="flex flex-col gap-10 md:flex-row md:items-start lg:gap-16">
         {/* Images */}
-        <div className="space-y-4">
+        <div className="space-y-4 md:w-1/2">
           <Dialog
             open={lightboxOpen}
             onOpenChange={(next) => {
               setLightboxOpen(next)
-              if (!next) setZoomed(false)
+              if (!next) {
+                setZoomed(false)
+                setPan({ x: 0, y: 0 })
+              }
             }}
           >
             <div className="group/zoom relative aspect-square overflow-hidden rounded-[24px] border border-border bg-[var(--card-image-bg)]">
@@ -303,12 +346,15 @@ export function ProductDetailContent({
             >
               <DialogTitle className="sr-only">{product.name}</DialogTitle>
               <div className="relative w-full">
-                <button
-                  type="button"
-                  onClick={() => setZoomed((z) => !z)}
+                <div
+                  onPointerDown={handleZoomPointerDown}
+                  onPointerMove={handleZoomPointerMove}
+                  onPointerUp={handleZoomPointerUp}
+                  onPointerLeave={handleZoomPointerUp}
+                  onDoubleClick={toggleZoom}
                   className={cn(
-                    "relative mx-auto h-[85vh] w-full overflow-hidden rounded-lg",
-                    zoomed ? "cursor-zoom-out" : "cursor-zoom-in"
+                    "relative mx-auto h-[85vh] w-full touch-none overflow-hidden rounded-lg select-none",
+                    zoomed ? (drag ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in"
                   )}
                 >
                   {images[activeImage] && (
@@ -317,15 +363,27 @@ export function ProductDetailContent({
                       key={images[activeImage] as string}
                       src={images[activeImage] as string}
                       alt={product.name}
+                      draggable={false}
+                      onClick={toggleZoom}
                       onLoad={() => setLoadedDialog(activeImage)}
                       className={cn(
-                        "h-full w-full object-contain transition-[opacity,transform] duration-200",
-                        zoomed ? "scale-[2]" : "scale-100",
+                        "h-full w-full object-contain",
+                        !drag && "transition-[opacity,transform] duration-200",
                         loadedDialog === activeImage ? "opacity-100" : "opacity-0"
                       )}
+                      style={{
+                        transform: zoomed
+                          ? `scale(${ZOOM_SCALE}) translate(${pan.x / ZOOM_SCALE}px, ${pan.y / ZOOM_SCALE}px)`
+                          : "scale(1)",
+                      }}
                     />
                   )}
-                </button>
+                  {!zoomed && (
+                    <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm">
+                      Clique para ampliar
+                    </span>
+                  )}
+                </div>
 
                 {images.length > 1 && (
                   <>
@@ -384,10 +442,34 @@ export function ProductDetailContent({
               ))}
             </div>
           )}
+
+          <div className="hidden space-y-10 md:block">
+            <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
+
+            {specs.length > 0 && (
+              <div>
+                <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Especificação Técnica</h2>
+                <dl className="overflow-hidden rounded-2xl border border-border">
+                  {specs.map((spec, idx) => (
+                    <div
+                      key={spec.id}
+                      className={cn(
+                        "grid grid-cols-2 gap-2 px-5 py-3.5 text-[14.5px]",
+                        idx % 2 === 0 ? "bg-muted/20" : "bg-transparent"
+                      )}
+                    >
+                      <dt className="text-muted-foreground">{spec.label}</dt>
+                      <dd className="font-medium text-foreground">{spec.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Info */}
-        <div className="space-y-6 pt-1.5">
+        <div className="space-y-6 pt-1.5 md:w-1/2">
           <div>
             {product.sale_type !== "normal" && (() => {
               const SaleTypeIcon = SALE_TYPE_ICON[product.sale_type]
@@ -407,7 +489,7 @@ export function ProductDetailContent({
             })()}
             <h1 className="font-display text-[38px] font-bold leading-[1.05] tracking-tight text-foreground">{product.name}</h1>
             {product.category && (
-              <p className="mt-2 text-[15px] capitalize text-muted-foreground">{product.category}</p>
+              <p className="mt-2 text-[15px] text-muted-foreground">{getCategoryLabel(product.category)}</p>
             )}
           </div>
 
@@ -433,6 +515,12 @@ export function ProductDetailContent({
               ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão de crédito
               (+{cardSurchargePercent}%)
             </p>
+            {cardMaxInstallments > 1 && (
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                em até {cardMaxInstallments}x de{" "}
+                {formatBRL(Math.ceil(computeCardPriceCents(effectivePriceCents, cardSurchargePercent) / cardMaxInstallments))}
+              </p>
+            )}
           </div>
 
           {allLinkedPeripherals.length > 0 && (
@@ -521,8 +609,8 @@ export function ProductDetailContent({
                 <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">
                   <Rocket className="mt-0.5 size-4 shrink-0" />
                   <p>
-                    <span className="font-bold">Produto em pré-venda.</span> A compra é garantida agora, mas o envio
-                    só acontece quando o estoque chegar — acompanhe o status na sua conta.
+                    <span className="font-bold">Produto em pré-venda:</span> Seja um dos primeiros no Brasil a ter
+                    esse produto, alguns lançamentos são limitados então garanta já o seu!!!
                   </p>
                 </div>
               )}
@@ -566,53 +654,37 @@ export function ProductDetailContent({
             </div>
           )}
 
-          <div className="flex flex-wrap items-center gap-5 pt-1">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <QrCode className="size-3.5 text-emerald-400" />
-              PIX ou cartão de crédito
-            </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <CheckCircle2 className="size-3.5 text-emerald-400" />
-              Testado pelo Sunano
-            </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-              <ShieldCheck className="size-3.5 text-emerald-400" />
-              Compra acompanhada na sua conta
-            </div>
-          </div>
-
           {product.description && (
-            <p className="whitespace-pre-line text-[15px] leading-relaxed text-muted-foreground">
+            <div className="whitespace-pre-line text-[16.5px] leading-relaxed text-foreground/85">
               <FormattedText text={product.description} />
-            </p>
+            </div>
           )}
 
-        </div>
+          <div className="space-y-10 md:hidden">
+            <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
 
-        <div className="pt-2 md:col-start-1">
-          <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
+            {specs.length > 0 && (
+              <div>
+                <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Especificação Técnica</h2>
+                <dl className="overflow-hidden rounded-2xl border border-border">
+                  {specs.map((spec, idx) => (
+                    <div
+                      key={spec.id}
+                      className={cn(
+                        "grid grid-cols-2 gap-2 px-5 py-3.5 text-[14.5px]",
+                        idx % 2 === 0 ? "bg-muted/20" : "bg-transparent"
+                      )}
+                    >
+                      <dt className="text-muted-foreground">{spec.label}</dt>
+                      <dd className="font-medium text-foreground">{spec.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-
-      {specs.length > 0 && (
-        <div className="mt-20">
-          <h2 className="font-display mb-5 text-2xl font-bold text-foreground">Especificação Técnica</h2>
-          <dl className="overflow-hidden rounded-2xl border border-border md:max-w-xl">
-            {specs.map((spec, idx) => (
-              <div
-                key={spec.id}
-                className={cn(
-                  "grid grid-cols-2 gap-2 px-5 py-3.5 text-[14.5px]",
-                  idx % 2 === 0 ? "bg-muted/20" : "bg-transparent"
-                )}
-              >
-                <dt className="text-muted-foreground">{spec.label}</dt>
-                <dd className="font-medium text-foreground">{spec.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      )}
       </div>
     </>
   )

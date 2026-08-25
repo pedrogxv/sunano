@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { ArrowRight, ChevronDown, Home, LifeBuoy, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getCategoryIcon, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
+import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
 import { StoreSearchBox } from "@/components/store/StoreSearchBox"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
@@ -235,7 +235,7 @@ export function StoreCategoryNav({
                         <Icon className="size-6" style={{ color: tint }} strokeWidth={1.4} />
                       </span>
                       <span className="flex flex-col gap-0.5">
-                        <span className="text-[13px] font-bold capitalize text-white">{cat}</span>
+                        <span className="text-[13px] font-bold text-white">{getCategoryLabel(cat)}</span>
                         <span className="text-[11px] font-medium text-[#7a7a7a]">
                           {categoryCounts[cat] ?? 0} produto{categoryCounts[cat] === 1 ? "" : "s"}
                         </span>
@@ -244,7 +244,7 @@ export function StoreCategoryNav({
                   )
                 })()
               ) : (
-                <div className="flex flex-col gap-1.5">
+                <div className="flex flex-col gap-2">
                   {openCategories.map((cat) => {
                     const { icon: Icon, tint } = getCategoryIcon(cat)
                     return (
@@ -254,7 +254,7 @@ export function StoreCategoryNav({
                         className="flex items-center gap-2.5 rounded-[11px] border border-[#262626] bg-[#0e0e0e] px-[13px] py-2.5 text-left transition-colors hover:border-foreground/25"
                       >
                         <Icon className="size-4 shrink-0" style={{ color: tint }} strokeWidth={1.6} />
-                        <span className="flex-1 text-[13px] font-semibold capitalize text-white">{cat}</span>
+                        <span className="flex-1 text-[13px] font-semibold text-white">{getCategoryLabel(cat)}</span>
                         <span className="text-[11px] text-[#7a7a7a]">{categoryCounts[cat] ?? 0}</span>
                       </Link>
                     )
@@ -267,16 +267,25 @@ export function StoreCategoryNav({
             <div className="flex flex-col gap-3">
               <span className="text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">Marcas</span>
               <div className="flex flex-col">
-                {openBrands.slice(0, 6).map(({ brand, count: brandCount }) => (
-                  <Link
-                    key={brand}
-                    href={`/loja/marca/${encodeURIComponent(brand)}`}
-                    className="flex items-center justify-between gap-2.5 py-[7px] text-left text-[13px] font-medium text-[#b4b4b4] transition-colors hover:text-white"
-                  >
-                    <span>{brand}</span>
-                    <span className="text-[11px] text-[#5e5e5e]">{brandCount}</span>
-                  </Link>
-                ))}
+                {openBrands.slice(0, 6).map(({ brand, count: brandCount }) => {
+                  // Com 1 categoria só no grupo, manda a marca já filtrada por ela —
+                  // senão a página de marca mostra todo o catálogo da marca (outras
+                  // categorias juntas), o que não é o que o usuário veio ver aqui.
+                  const brandHref =
+                    openCategories.length === 1
+                      ? `/loja/marca/${encodeURIComponent(brand)}?categoria=${encodeURIComponent(openCategories[0])}`
+                      : `/loja/marca/${encodeURIComponent(brand)}`
+                  return (
+                    <Link
+                      key={brand}
+                      href={brandHref}
+                      className="flex items-center justify-between gap-2.5 py-[7px] text-left text-[13px] font-medium text-[#b4b4b4] transition-colors hover:text-white"
+                    >
+                      <span>{brand}</span>
+                      <span className="text-[11px] text-[#5e5e5e]">{brandCount}</span>
+                    </Link>
+                  )
+                })}
                 {openBrands.length === 0 && (
                   <p className="py-[7px] text-[13px] text-[#5e5e5e]">Sem marca cadastrada.</p>
                 )}

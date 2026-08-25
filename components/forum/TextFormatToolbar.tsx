@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, type RefObject } from "react"
-import { Bold, CaseUpper, Highlighter, Italic, Link2, Underline } from "lucide-react"
+import { Bold, CaseUpper, Highlighter, Italic, Link2, List, Underline } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -38,6 +38,39 @@ function toggleWrap(textarea: HTMLTextAreaElement, marker: string, onChange: (va
   requestAnimationFrame(() => {
     textarea.focus()
     textarea.setSelectionRange(cursorStart, cursorEnd)
+  })
+}
+
+const LINE_BULLET_PATTERN = /^[ \t]*-[ \t]+/
+
+/**
+ * Prefixa `- ` em cada linha tocada pela seleção (ou só a linha do cursor,
+ * sem seleção); remove o prefixo se todas já eram bullet. Mesmo marcador que
+ * `parseTextLines` reconhece na renderização.
+ */
+function toggleBulletLines(textarea: HTMLTextAreaElement, onChange: (value: string) => void) {
+  const { selectionStart, selectionEnd, value } = textarea
+
+  const blockStart = value.lastIndexOf("\n", selectionStart - 1) + 1
+  const nextBreak = value.indexOf("\n", selectionEnd)
+  const blockEnd = nextBreak === -1 ? value.length : nextBreak
+
+  const block = value.slice(blockStart, blockEnd)
+  const lines = block.split("\n")
+  const allBulleted = lines.every((line) => LINE_BULLET_PATTERN.test(line) || line.trim() === "")
+
+  const nextLines = lines.map((line) => {
+    if (allBulleted) return line.replace(LINE_BULLET_PATTERN, "")
+    if (line.trim() === "" || LINE_BULLET_PATTERN.test(line)) return line
+    return `- ${line}`
+  })
+  const nextBlock = nextLines.join("\n")
+
+  const next = value.slice(0, blockStart) + nextBlock + value.slice(blockEnd)
+  onChange(next)
+  requestAnimationFrame(() => {
+    textarea.focus()
+    textarea.setSelectionRange(blockStart, blockStart + nextBlock.length)
   })
 }
 
@@ -187,6 +220,14 @@ export function TextFormatToolbar({
         <Highlighter className="size-3.5" />
       </button>
       <LinkFormatButton textareaRef={textareaRef} onChange={onChange} />
+      <button
+        type="button"
+        title="Lista (- item)"
+        onClick={withTextarea((t) => toggleBulletLines(t, onChange))}
+        className="rounded p-1.5 transition-colors hover:bg-muted hover:text-foreground"
+      >
+        <List className="size-3.5" />
+      </button>
       <button
         type="button"
         title="Maiúsculo"

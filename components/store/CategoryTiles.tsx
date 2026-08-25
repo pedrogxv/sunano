@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getCategoryIcon } from "@/lib/store-category-icons"
+import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 
 interface CategoryTilesProps {
   categories: string[]
@@ -41,11 +41,11 @@ export function CategoryTiles({ categories, categoryCounts }: CategoryTilesProps
             />
             <span
               className={cn(
-                "relative font-display text-base font-bold capitalize tracking-tight text-white",
+                "relative font-display text-base font-bold tracking-tight text-white",
                 big ? "lg:text-[26px]" : "lg:text-lg"
               )}
             >
-              {category}
+              {getCategoryLabel(category)}
             </span>
             <span className="relative flex items-center gap-1.5 text-[11px] font-semibold text-[#909090] lg:text-xs">
               {categoryCounts[category] ?? 0} produto{categoryCounts[category] === 1 ? "" : "s"}

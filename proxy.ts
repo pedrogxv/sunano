@@ -292,9 +292,15 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // sessão ali é de recovery (recém-criada pelo link de e-mail), e o GoTrue
   // recusa `updateUser({ password })` com 401 insufficient_aal mesmo com o
   // cookie de dispositivo confiável — só um step-up TOTP real eleva a aal2.
-  const isResetPasswordRoute = pathname === "/reset-password"
+  // Cobre também `/2fa?next=/reset-password`: sem checar o `next` aqui, o
+  // bloco abaixo (linha ~321) via o dispositivo como confiável e mandava de
+  // volta para `/reset-password` antes de pedir o código, que por sua vez
+  // mandava de volta para `/2fa` — loop infinito (ERR_TOO_MANY_REDIRECTS).
+  const targetsResetPassword =
+    pathname === "/reset-password" ||
+    (pathname === TWO_FACTOR_PATH && sanitizeNextPath(request.nextUrl.searchParams.get("next")) === "/reset-password")
   const trustedDevice =
-    user && isMfaStepUpRequired(aal) && !isResetPasswordRoute
+    user && isMfaStepUpRequired(aal) && !targetsResetPassword
       ? await isTrustedDevice(user.id, request.cookies.get(TRUSTED_DEVICE_COOKIE_NAME)?.value)
       : false
 

@@ -3,12 +3,9 @@ import type { Metadata } from "next"
 
 import { ProfileShowcase } from "@/components/profile/ProfileShowcase"
 import { profilePath } from "@/lib/profile-name"
+import { resolveProfileUserId } from "@/lib/server/profile-handle"
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
-import {
-  findUserIdByDisplaySlug,
-  incrementProfileViews,
-  isFollowing,
-} from "@/lib/server/repositories/users-repository"
+import { incrementProfileViews, isFollowing } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 // Server Component: chama o repositório direto (ARQUITETURA.md §1), sem
@@ -16,34 +13,47 @@ import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 // decidir se exibe os atalhos de edição do dono.
 export const dynamic = "force-dynamic"
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/**
- * O segmento é o slug do nome (`/perfil/joao-silva`), mas UUID continua
- * resolvendo: links antigos foram compartilhados antes do nome único existir.
- */
-async function resolveUserId(handle: string): Promise<string | null> {
-  const value = decodeURIComponent(handle)
-  if (UUID_PATTERN.test(value)) return value
-  return findUserIdByDisplaySlug(value)
-}
-
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ handle: string }>
 }): Promise<Metadata> {
   const { handle } = await params
-  const userId = await resolveUserId(handle)
+  const userId = await resolveProfileUserId(handle)
   const profile = userId ? await getProfileShowcase(userId) : null
   if (!profile) return { title: "Perfil não encontrado" }
+
+  const canonicalPath = profile.display_slug ? profilePath(profile.display_slug) : null
+  const ogTitle = profile.display_name
+  const ogDescription = `Perfil de ${profile.display_name} no Sunano.`
+  // Preview de compartilhamento (WhatsApp/Discord/Telegram/X): imagem gerada
+  // em `opengraph-image/route.tsx`, sempre uma URL direta e estável por
+  // perfil — sem redirecionamento, que o WhatsApp não segue. Título e
+  // descrição do embed são propositalmente mais curtos que os da aba/SEO
+  // (`title`/`description` acima), que continuam levando a bio do usuário.
+  const ogImage = canonicalPath
+    ? { url: `${canonicalPath}/opengraph-image`, width: 1200, height: 630, alt: ogDescription }
+    : { url: "/icon.png", width: 512, height: 512 }
 
   return {
     title: `${profile.display_name} — Perfil`,
     description: profile.bio ?? `Setup e periféricos favoritos de ${profile.display_name}.`,
-    alternates: profile.display_slug
-      ? { canonical: profilePath(profile.display_slug) }
-      : undefined,
+    alternates: canonicalPath ? { canonical: canonicalPath } : undefined,
+    openGraph: {
+      type: "website",
+      siteName: "Sunano",
+      locale: "pt_BR",
+      title: ogTitle,
+      description: ogDescription,
+      url: canonicalPath ?? undefined,
+      images: [ogImage],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: ogTitle,
+      description: ogDescription,
+      images: [ogImage.url],
+    },
   }
 }
 
@@ -53,7 +63,7 @@ export default async function PerfilPublicoPage({
   params: Promise<{ handle: string }>
 }) {
   const { handle } = await params
-  const userId = await resolveUserId(handle)
+  const userId = await resolveProfileUserId(handle)
   if (!userId) notFound()
 
   const profile = await getProfileShowcase(userId)

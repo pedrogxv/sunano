@@ -37,9 +37,11 @@ export default async function TwoFactorPage({
   }
 
   // Dispositivo marcado como confiável (ver TwoFactorVerifyForm): dispensa o
-  // código mesmo com a sessão ainda em aal1.
+  // código mesmo com a sessão ainda em aal1 — exceto indo para /reset-password,
+  // onde a sessão é de recovery (criada agora pelo link de e-mail) e o GoTrue
+  // recusa `updateUser` com 401 insufficient_aal mesmo em dispositivo confiável.
   const trustedToken = (await cookies()).get(TRUSTED_DEVICE_COOKIE_NAME)?.value
-  if (await isTrustedDevice(user.id, trustedToken)) {
+  if (next !== "/reset-password" && (await isTrustedDevice(user.id, trustedToken))) {
     redirect(next)
   }
 

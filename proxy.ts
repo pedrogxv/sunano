@@ -287,8 +287,14 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // Sessão em aal1 com fator verificado pendente: a sessão existe mas ainda
   // não vale como autenticada para fins de acesso. Bloqueia tudo até o
   // step-up, exceto a própria página de verificação e as rotas de auth.
+  //
+  // `/reset-password` nunca aceita o atalho de dispositivo confiável: a
+  // sessão ali é de recovery (recém-criada pelo link de e-mail), e o GoTrue
+  // recusa `updateUser({ password })` com 401 insufficient_aal mesmo com o
+  // cookie de dispositivo confiável — só um step-up TOTP real eleva a aal2.
+  const isResetPasswordRoute = pathname === "/reset-password"
   const trustedDevice =
-    user && isMfaStepUpRequired(aal)
+    user && isMfaStepUpRequired(aal) && !isResetPasswordRoute
       ? await isTrustedDevice(user.id, request.cookies.get(TRUSTED_DEVICE_COOKIE_NAME)?.value)
       : false
 

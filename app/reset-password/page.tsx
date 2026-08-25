@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { isMfaStepUpRequired } from "@/lib/auth-mfa"
 import { AuthBackground } from "@/components/auth/AuthBackground"
 import { ResetPasswordForm } from "@/components/auth/ResetPasswordForm"
 
@@ -12,6 +13,16 @@ export default async function ResetPasswordPage() {
 
   if (!user) {
     redirect("/forgot-password?expired=1")
+  }
+
+  // O link de recuperação por e-mail só eleva a sessão a aal1, nunca a aal2 —
+  // o GoTrue recusa `updateUser({ password })` com 401 insufficient_aal para
+  // quem tem 2FA ativo. Diferente do resto do site, aqui o step-up é exigido
+  // mesmo em dispositivo marcado como confiável: é uma sessão de recovery
+  // nova, não o login normal que esse cookie foi pensado para dispensar.
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel()
+  if (isMfaStepUpRequired({ current: aal?.currentLevel ?? null, next: aal?.nextLevel ?? null })) {
+    redirect("/2fa?next=/reset-password")
   }
 
   return (

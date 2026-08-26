@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { ORDER_FULFILLMENT_FLOW } from "@/lib/server/repositories/orders-repository"
 
 /**
  * Repositório de Reviews de Produto — reviews de usuários (só compradores
@@ -97,6 +98,10 @@ export async function getUserReviewForProduct(userId: string, productId: string)
 /**
  * Checa se o usuário tem um pedido pago contendo este produto — só quem
  * comprou pode deixar review (evita reviews falsas/astroturfing).
+ *
+ * Considera qualquer status a partir de "paid" no fluxo pós-venda
+ * (ORDER_FULFILLMENT_FLOW), não só "paid": o pedido continua pago quando
+ * avança para awaiting_shipping_info/shipped/delivered.
  */
 export async function hasVerifiedPurchase(
   userId: string,
@@ -106,7 +111,7 @@ export async function hasVerifiedPurchase(
   const { data, error } = await db
     .from("store_orders")
     .select("id, items")
-    .eq("status", "paid")
+    .in("status", ORDER_FULFILLMENT_FLOW)
     .contains("metadata", { user_id: userId })
 
   if (error || !data) {

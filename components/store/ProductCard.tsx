@@ -248,13 +248,17 @@ export function ProductCard(props: ProductCardProps) {
               <div className="flex flex-wrap items-baseline gap-2">
                 <p className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(basePriceCents)}</p>
                 <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(effectivePriceCents)}</p>
+                <span className="text-[9.5px] font-semibold uppercase tracking-wide text-emerald-400/80">à vista no PIX</span>
               </div>
             ) : (
-              <p className="font-display text-lg font-bold text-white">{formatBRL(basePriceCents)}</p>
+              <div className="flex flex-wrap items-baseline gap-2">
+                <p className="font-display text-lg font-bold text-white">{formatBRL(basePriceCents)}</p>
+                <span className="text-[9.5px] font-semibold uppercase tracking-wide text-emerald-400/80">à vista no PIX</span>
+              </div>
             )}
             <p className="text-[10px] text-[#7a7a7a]">
               ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão
-              {cardMaxInstallments > 1 && ` em até ${cardMaxInstallments}x`}
+              {cardMaxInstallments > 1 && ` em até ${cardMaxInstallments}x sem juros`}
             </p>
             {(() => {
               const displayStock = activeVariant ? activeVariant.stock : props.stock

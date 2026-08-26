@@ -7,6 +7,7 @@ import { ComingSoon } from "@/components/store/ComingSoon"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { isWebMaster } from "@/lib/admin-permissions"
 import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
+import { SITE_URL } from "@/lib/site-url"
 
 export const revalidate = 120
 
@@ -21,10 +22,28 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const detail = await getStoreProductDetail(slug)
   if (!detail) return {}
 
+  const title = detail.product.name
+  const description = detail.product.description ?? `${detail.product.name} — disponível na Loja Sunano.`
+  const canonical = `/loja/${slug}`
+  const image = detail.product.images[0]
+
   return {
-    title: detail.product.name,
-    description: detail.product.description ?? `${detail.product.name} — disponível na Loja Sunano.`,
-    alternates: { canonical: `/loja/${slug}` },
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      url: `${SITE_URL}${canonical}`,
+      images: image ? [{ url: image }] : undefined,
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: image ? [image] : undefined,
+    },
   }
 }
 

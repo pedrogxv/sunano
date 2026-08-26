@@ -163,7 +163,9 @@ export function ProductDetailContent({
 
   const hasUnselectableGroup = variantGroups.some((g) => !selectedOptionByGroup[g.id])
   const outOfStock =
-    product.is_sold_out || (effectiveStock !== null && effectiveStock === 0) || hasUnselectableGroup
+    product.is_sold_out ||
+    (activeVariant ? isColorSoldOut(activeVariant) : effectiveStock !== null && effectiveStock === 0) ||
+    hasUnselectableGroup
   const baseImages: (string | null)[] = product.images?.length > 0 ? product.images : [null]
   const variantImages = activeVariant
     ? [...(activeVariant.image_url ? [activeVariant.image_url] : []), ...activeVariant.images].filter(
@@ -511,13 +513,14 @@ export function ProductDetailContent({
             ) : (
               <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
             )}
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-emerald-400/80">à vista no PIX</p>
+            <p className="mt-2 text-sm text-muted-foreground">
               ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão de crédito
               (+{cardSurchargePercent}%)
             </p>
             {cardMaxInstallments > 1 && (
               <p className="mt-0.5 text-sm text-muted-foreground">
-                em até {cardMaxInstallments}x de{" "}
+                em até {cardMaxInstallments}x sem juros de{" "}
                 {formatBRL(Math.ceil(computeCardPriceCents(effectivePriceCents, cardSurchargePercent) / cardMaxInstallments))}
               </p>
             )}
@@ -542,8 +545,7 @@ export function ProductDetailContent({
                     <button
                       key={v.id}
                       type="button"
-                      onClick={() => !variantSoldOut && handleSelectVariant(v.id)}
-                      disabled={variantSoldOut}
+                      onClick={() => handleSelectVariant(v.id)}
                       className={cn(
                         "flex items-center gap-2.5 rounded-xl border-[1.5px] px-4 py-3 text-sm font-semibold transition-colors",
                         isActive

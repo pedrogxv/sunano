@@ -79,6 +79,7 @@ export function VariantPickerDialog({ slug, name, category, fallbackImage, open,
   const hasVariants = variants.length > 0
   const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) ?? null : null
   const { icon: CategoryIcon, tint: categoryTint } = getCategoryIcon(category)
+  const isColorSoldOut = (v: StoreProductVariant) => v.is_sold_out || (v.stock !== null && v.stock === 0)
 
   let baseEffectivePriceCents = activeVariant?.price_cents_override ?? product?.price_cents ?? 0
   const selectedOptions = variantGroups
@@ -98,10 +99,11 @@ export function VariantPickerDialog({ slug, name, category, fallbackImage, open,
   const effectivePriceCents = hasDiscount ? (activePromoPriceCents as number) : baseEffectivePriceCents
   const effectiveStock = activeVariant ? activeVariant.stock : product?.stock ?? null
   const hasUnselectableGroup = variantGroups.some((g) => !selectedOptionByGroup[g.id])
-  const outOfStock = Boolean(product?.is_sold_out) || (effectiveStock !== null && effectiveStock === 0) || hasUnselectableGroup
+  const outOfStock =
+    Boolean(product?.is_sold_out) ||
+    (activeVariant ? isColorSoldOut(activeVariant) : effectiveStock !== null && effectiveStock === 0) ||
+    hasUnselectableGroup
   const image = activeVariant?.image_url ?? product?.images?.[0] ?? fallbackImage
-
-  const isColorSoldOut = (v: StoreProductVariant) => v.is_sold_out || (v.stock !== null && v.stock === 0)
 
   function handleSelectVariant(id: string) {
     setSelectedVariantId(id)
@@ -197,8 +199,7 @@ export function VariantPickerDialog({ slug, name, category, fallbackImage, open,
                       <button
                         key={v.id}
                         type="button"
-                        onClick={() => !variantSoldOut && handleSelectVariant(v.id)}
-                        disabled={variantSoldOut}
+                        onClick={() => handleSelectVariant(v.id)}
                         className={cn(
                           "flex items-center gap-2 rounded-xl border-[1.5px] px-3 py-2 text-[13px] font-semibold transition-colors",
                           isActive

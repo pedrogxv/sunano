@@ -217,13 +217,11 @@ export function PublicSidebar() {
                 "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                 isCollapsed && "justify-center",
                 isLojaActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-foreground/75 hover:bg-muted hover:text-foreground"
+                  ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/40"
+                  : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:border-emerald-500/60 hover:bg-emerald-500/20 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
               )}
             >
-              <ShoppingBag
-                className={cn("size-[18px] shrink-0", !isLojaActive && "text-emerald-600 dark:text-emerald-400")}
-              />
+              <ShoppingBag className="size-[18px] shrink-0" />
               <span className={cn("flex-1", isCollapsed && "hidden")}>
                 {t.nav.store}
               </span>
@@ -250,14 +248,14 @@ export function PublicSidebar() {
                 "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                 isCollapsed && "justify-center",
                 isActive("/offers")
-                  ? "bg-primary text-primary-foreground"
-                  : "text-foreground/75 hover:bg-muted hover:text-foreground"
+                  ? "bg-sky-600 text-white shadow-sm shadow-sky-900/40"
+                  : "nav-bolt-holder border border-sky-500/40 bg-sky-500/10 hover:border-sky-500/60 hover:bg-sky-500/20"
               )}
             >
               <BadgePercent
                 className={cn("size-[18px] shrink-0", !isActive("/offers") && "nav-bolt-icon")}
               />
-              <span className={cn("flex-1", isCollapsed && "hidden")}>
+              <span className={cn(isCollapsed && "hidden", !isActive("/offers") && "nav-bolt-text")}>
                 {t.nav.offers}
               </span>
             </Link>
@@ -270,15 +268,15 @@ export function PublicSidebar() {
                 "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
                 isCollapsed && "justify-center",
                 isActive("/aura")
-                  ? "bg-primary text-primary-foreground"
-                  : "text-foreground/75 hover:bg-muted hover:text-foreground"
+                  ? "bg-orange-600 text-white shadow-sm shadow-orange-900/40"
+                  : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
               )}
             >
               <Flame
                 className={cn("size-[18px] shrink-0", !isActive("/aura") && "nav-fire-icon")}
                 fill={isActive("/aura") ? "currentColor" : "none"}
               />
-              <span className={cn("flex-1", isCollapsed && "hidden")}>
+              <span className={cn(isCollapsed && "hidden", !isActive("/aura") && "nav-fire-text")}>
                 Central de Aura
               </span>
             </Link>

@@ -69,8 +69,61 @@ function safeImageUrl(raw: string | null): string | undefined {
 /** Acima disso a imagem não vale o custo de decodificar dentro do card. */
 const MAX_SOURCE_BYTES = 8 * 1024 * 1024
 
+/** PNG 1×1 transparente, usado para validar que o conversor realmente roda. */
+const PROBE_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+
 /** Quanto esperamos pela imagem de conteúdo antes de desistir dela. */
 const IMAGE_FETCH_TIMEOUT_MS = 4000
+
+type ImageConverter = (input: Buffer) => Promise<Buffer>
+
+/** Memoiza a resolução do módulo entre invocações da mesma instância. */
+let converterPromise: Promise<ImageConverter | null> | undefined
+
+/**
+ * Resolve um conversor de imagem para PNG.
+ *
+ * O Satori (motor do `next/og`) decodifica só PNG e JPEG, e os uploads do site
+ * são majoritariamente WebP — sem conversão o card sai com a moldura vazia.
+ *
+ * `sharp` é um módulo **nativo** e foi a causa de o `og:image` ter respondido
+ * 500 em produção: o binário linux-x64 (`libvips-cpp.so`) não chegava ao bundle
+ * da função na Vercel. Duas medidas fecham isso:
+ *
+ * - `sharp` e `@img/sharp-wasm32` estão em `dependencies` (não em `dev` nem em
+ *   opcional). O wasm32 não é importado direto — quem o carrega é o próprio
+ *   `sharp`, como fallback automático quando não acha binário nativo para a
+ *   plataforma. Por ser WebAssembly, ele não depende de `.so` nenhum.
+ * - A sonda abaixo confirma que a conversão roda de fato antes de prometermos
+ *   que ela funciona.
+ *
+ * Se nada resolver, devolvemos `null` e o card sai sem a imagem — nunca um erro.
+ */
+async function loadImageConverter(): Promise<ImageConverter | null> {
+  converterPromise ??= (async () => {
+    try {
+      const sharp = (await import("sharp")).default
+      // Uma conversão real: o `import` sozinho não dispara o dlopen do binário,
+      // então um `sharp` sem libvips passaria daqui e só falharia na primeira
+      // imagem de verdade — já dentro do render do card.
+      await sharp(Buffer.from(PROBE_PNG_BASE64, "base64")).png().toBuffer()
+
+      return (input: Buffer) =>
+        sharp(input)
+          // `inside` preserva a proporção original; o recorte final
+          // (cover/contain) fica com o CSS do card.
+          .resize(860, 860, { fit: "inside", withoutEnlargement: true })
+          .png({ quality: 90 })
+          .toBuffer()
+    } catch (error) {
+      console.error("[api/og] sharp indisponível, card sai sem imagem:", error)
+      return null
+    }
+  })()
+
+  return converterPromise
+}
 
 /**
  * Baixa a imagem do conteúdo e devolve um data URI PNG.
@@ -100,21 +153,10 @@ async function loadImageAsDataUri(url: string): Promise<string | undefined> {
     const buffer = Buffer.from(await response.arrayBuffer())
     if (buffer.byteLength > MAX_SOURCE_BYTES) return undefined
 
-    // Import dinâmico: `sharp` é um módulo nativo e já falhou em produção na
-    // Vercel (`ERR_DLOPEN_FAILED: libvips-cpp.so`) quando o binário linux-x64
-    // não estava no bundle. Com o import no topo do arquivo, essa falha
-    // derrubava a rota inteira — inclusive `?title=` sem imagem nenhuma — e
-    // TODA página do site ficava com `og:image` respondendo HTTP 500.
-    // Aqui a falha custa no máximo a imagem: o card tipográfico ainda sai.
-    const sharp = (await import("sharp")).default
+    const convert = await loadImageConverter()
+    if (!convert) return undefined
 
-    const png = await sharp(buffer)
-      // `inside` preserva a proporção original; o recorte final (cover/contain)
-      // fica com o CSS do card.
-      .resize(860, 860, { fit: "inside", withoutEnlargement: true })
-      .png({ quality: 90 })
-      .toBuffer()
-
+    const png = await convert(buffer)
     return `data:image/png;base64,${png.toString("base64")}`
   } catch (error) {
     console.error("[api/og] falha ao preparar a imagem de conteúdo:", error)

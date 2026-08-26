@@ -1,6 +1,5 @@
 import { ImageResponse } from "next/og"
 import type { NextRequest } from "next/server"
-import sharp from "sharp"
 
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH, SITE_NAME } from "@/lib/seo"
 import { SITE_URL } from "@/lib/site-url"
@@ -101,6 +100,14 @@ async function loadImageAsDataUri(url: string): Promise<string | undefined> {
     const buffer = Buffer.from(await response.arrayBuffer())
     if (buffer.byteLength > MAX_SOURCE_BYTES) return undefined
 
+    // Import dinâmico: `sharp` é um módulo nativo e já falhou em produção na
+    // Vercel (`ERR_DLOPEN_FAILED: libvips-cpp.so`) quando o binário linux-x64
+    // não estava no bundle. Com o import no topo do arquivo, essa falha
+    // derrubava a rota inteira — inclusive `?title=` sem imagem nenhuma — e
+    // TODA página do site ficava com `og:image` respondendo HTTP 500.
+    // Aqui a falha custa no máximo a imagem: o card tipográfico ainda sai.
+    const sharp = (await import("sharp")).default
+
     const png = await sharp(buffer)
       // `inside` preserva a proporção original; o recorte final (cover/contain)
       // fica com o CSS do card.
@@ -109,7 +116,8 @@ async function loadImageAsDataUri(url: string): Promise<string | undefined> {
       .toBuffer()
 
     return `data:image/png;base64,${png.toString("base64")}`
-  } catch {
+  } catch (error) {
+    console.error("[api/og] falha ao preparar a imagem de conteúdo:", error)
     return undefined
   }
 }
@@ -128,7 +136,57 @@ function titleFontSize(length: number): number {
   return 46
 }
 
+/**
+ * Card mínimo, só com a marca.
+ *
+ * Rede de segurança para quando o card completo falha por qualquer motivo:
+ * é melhor entregar um preview simples que uma resposta 500, porque o
+ * crawler do Facebook/X cacheia a falha e o link fica sem imagem por dias
+ * mesmo depois de o bug ser corrigido.
+ */
+function fallbackCard() {
+  return new ImageResponse(
+    (
+      <div
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 20,
+          background: "#000000",
+          fontFamily: "sans-serif",
+          color: "#FFFFFF",
+        }}
+      >
+        <div style={{ display: "flex", fontSize: 64, fontWeight: 700, letterSpacing: -2 }}>
+          {SITE_NAME}
+        </div>
+        <div style={{ display: "flex", fontSize: 28, color: "#A3A3A3" }}>
+          Tierlist de Periféricos
+        </div>
+      </div>
+    ),
+    { width: OG_IMAGE_WIDTH, height: OG_IMAGE_HEIGHT }
+  )
+}
+
 export async function GET(request: NextRequest) {
+  try {
+    return await renderCard(request)
+  } catch (error) {
+    console.error("[api/og] falha ao gerar o card:", error)
+    const fallback = fallbackCard()
+    // Cache curto: a falha pode ser transitória e não deve ficar grudada na
+    // CDN como o card bom fica.
+    fallback.headers.set("Cache-Control", "public, max-age=60, s-maxage=60")
+    return fallback
+  }
+}
+
+async function renderCard(request: NextRequest) {
   const { searchParams } = request.nextUrl
 
   const title = (searchParams.get("title") ?? SITE_NAME).slice(0, TITLE_LIMIT)

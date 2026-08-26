@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 import { Suspense } from "react"
 import { ShoppingBag } from "lucide-react"
 import { listStoreProductsPaginated, getStoreFilterOptions, listBestSellingProducts } from "@/lib/server/repositories/store-repository"
@@ -11,11 +12,14 @@ import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-mainten
 
 export const revalidate = 60
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildMetadata({
   title: "Loja",
-  description: "Loja Sunano: periféricos novos e usados, com filtros de marca, categoria, estado e preço.",
-  alternates: { canonical: "/loja" },
-}
+  socialTitle: "Loja: periféricos novos e usados",
+  description: "Loja Sunano: periféricos novos e usados testados antes de anunciar, com filtros de marca, categoria, estado e preço.",
+  path: "/loja",
+  eyebrow: "Loja",
+  subtitle: "Periféricos novos e usados",
+})
 
 const PAGE_SIZE = 24
 

@@ -527,6 +527,30 @@ export type StoreProductDetailResult = {
  * `React.cache`: dispara 6 queries; `generateMetadata` e a página chamam com
  * o mesmo slug na mesma requisição — sem isso, dobra tudo por visita.
  */
+/**
+ * Slugs dos produtos ativos da Loja, para o sitemap.
+ *
+ * Mesmos filtros de `getStoreProductDetail` (`type=store` + `is_active`):
+ * enviar ao Google uma URL que responde 404 gasta orçamento de rastreio e
+ * derruba a confiança no sitemap inteiro.
+ */
+export async function listAllStoreSlugsForSitemap(): Promise<{ slug: string; updated_at: string | null }[]> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db
+    .from("store_products")
+    .select("slug, updated_at")
+    .eq("type", "store")
+    .eq("is_active", true)
+
+  if (error) {
+    console.error("[store-repository] listAllStoreSlugsForSitemap:", error)
+    return []
+  }
+
+  return (data ?? []).map((p) => ({ slug: p.slug, updated_at: p.updated_at ?? null }))
+}
+
 export const getStoreProductDetail = cache(async (
   slug: string
 ): Promise<StoreProductDetailResult | null> => {

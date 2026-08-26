@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
 import { AllReviewsClient } from "@/components/profile/AllReviewsClient"
 import { profilePath } from "@/lib/profile-name"
@@ -29,7 +30,20 @@ export async function generateMetadata({
   const userId = await resolveUserId(handle)
   const profile = userId ? await getProfileShowcase(userId) : null
   if (!profile) return { title: "Reviews não encontrados" }
-  return { title: `Reviews de ${profile.display_name}` }
+
+  const canonical = profile.display_slug
+    ? `${profilePath(profile.display_slug)}/reviews`
+    : `/perfil/${handle}/reviews`
+
+  return buildMetadata({
+    title: `Reviews de ${profile.display_name}`,
+    description: `Reviews de periféricos escritas por ${profile.display_name} na Sunano: nota, prós, contras e veredito de quem realmente usou.`,
+    path: canonical,
+    eyebrow: "Reviews",
+    subtitle: "Reviews de periféricos",
+    image: profile.avatar_url,
+    imageVariant: "avatar",
+  })
 }
 
 export default async function PerfilReviewsPage({

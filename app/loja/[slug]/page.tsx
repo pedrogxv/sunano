@@ -7,12 +7,19 @@ import { ComingSoon } from "@/components/store/ComingSoon"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { isWebMaster } from "@/lib/admin-permissions"
 import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
+import { buildDescription, buildMetadata } from "@/lib/seo"
 import { SITE_URL } from "@/lib/site-url"
 
 export const revalidate = 120
 
 interface PageProps {
   params: Promise<{ slug: string }>
+}
+
+const CONDITION_LABEL: Record<string, string> = {
+  new: "Novo",
+  used: "Usado",
+  opened: "Aberto",
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -22,29 +29,32 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const detail = await getStoreProductDetail(slug)
   if (!detail) return {}
 
-  const title = detail.product.name
-  const description = detail.product.description ?? `${detail.product.name} — disponível na Loja Sunano.`
-  const canonical = `/loja/${slug}`
-  const image = detail.product.images[0]
+  const { product } = detail
+  const priceCents = product.promo_price_cents ?? product.price_cents
+  const price = (priceCents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  })
+  const condition = CONDITION_LABEL[product.condition] ?? ""
 
-  return {
-    title,
-    description,
-    alternates: { canonical },
-    openGraph: {
-      title,
-      description,
-      type: "website",
-      url: `${SITE_URL}${canonical}`,
-      images: image ? [{ url: image }] : undefined,
-    },
-    twitter: {
-      card: image ? "summary_large_image" : "summary",
-      title,
-      description,
-      images: image ? [image] : undefined,
-    },
-  }
+  return buildMetadata({
+    title: product.name,
+    titleSuffix: " | Loja Sunano",
+    // Sem descrição própria a página caía numa frase de 40 chars ("X —
+    // disponível na Loja Sunano"), abaixo do mínimo útil de card. O
+    // complemento carrega preço e condição, que é o que decide o clique.
+    description: buildDescription(product.description, product.name, {
+      context: `${condition} por ${price} na Loja Sunano.`,
+      extraContext: "Testado antes de anunciar, com PIX na hora e envio para todo o Brasil.",
+    }),
+    path: `/loja/${slug}`,
+    eyebrow: "Loja",
+    subtitle: `${condition} · ${price}`,
+    // `product` desenha a foto com `contain`: recortar foto de produto corta o
+    // próprio produto. Antes ela ia crua em 800×800 (1:1) e saía distorcida.
+    image: product.images[0],
+    imageVariant: "product",
+  })
 }
 
 export default async function ProductPage({ params }: PageProps) {
@@ -73,5 +83,57 @@ export default async function ProductPage({ params }: PageProps) {
     listStoreProductsPaginated({ type: "store", page: 1, pageSize: 24 }),
   ])
 
-  return <ProductDetailContent {...detail} filterOptions={filterOptions} previewPool={previewPool} />
+  const { product } = detail
+  const url = `${SITE_URL}/loja/${slug}`
+  const priceCents = product.promo_price_cents ?? product.price_cents
+
+  /**
+   * JSON-LD Product: é o que habilita o resultado rico da busca (preço,
+   * disponibilidade e condição direto na SERP). Sem ele o produto concorre
+   * como link de texto puro contra marketplaces que enviam esse schema.
+   */
+  const productJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "@id": url,
+    name: product.name,
+    description: buildDescription(product.description, product.name, {
+      context: `Disponível na Loja Sunano.`,
+    }),
+    // Absolutas: o Google descarta imagem relativa no schema.
+    image: product.images.map((image) => new URL(image, SITE_URL).toString()),
+    sku: product.id,
+    ...(product.category ? { category: product.category } : {}),
+    itemCondition:
+      product.condition === "new"
+        ? "https://schema.org/NewCondition"
+        : "https://schema.org/UsedCondition",
+    offers: {
+      "@type": "Offer",
+      url,
+      priceCurrency: "BRL",
+      price: (priceCents / 100).toFixed(2),
+      availability: product.is_sold_out
+        ? "https://schema.org/OutOfStock"
+        : product.sale_type === "pre_order"
+          ? "https://schema.org/PreOrder"
+          : "https://schema.org/InStock",
+      itemCondition:
+        product.condition === "new"
+          ? "https://schema.org/NewCondition"
+          : "https://schema.org/UsedCondition",
+      seller: { "@id": `${SITE_URL}/#organization` },
+    },
+  }
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
+      <ProductDetailContent {...detail} filterOptions={filterOptions} previewPool={previewPool} />
+    </>
+  )
 }

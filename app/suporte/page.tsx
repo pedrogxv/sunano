@@ -1,10 +1,15 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 import { SupportTicketForm } from "@/components/store/SupportTicketForm"
 
-export const metadata: Metadata = {
-  title: "Suporte | Sunano",
-  description: "Abra um chamado de suporte da Sunano sobre um pedido, produto ou dúvida da Loja.",
-}
+export const metadata: Metadata = buildMetadata({
+  title: "Suporte",
+  socialTitle: "Suporte: abra um chamado",
+  description: "Abra um chamado de suporte da Sunano sobre um pedido, um produto da Loja ou uma dúvida da sua conta.",
+  path: "/suporte",
+  eyebrow: "Suporte",
+  subtitle: "Atendimento de pedidos e conta",
+})
 
 export default function SuportePage() {
   return (

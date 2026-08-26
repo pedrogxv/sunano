@@ -1,10 +1,15 @@
 import Link from "next/link"
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
-export const metadata: Metadata = {
-  title: "Quem Somos | Sunano",
-  description: "Identificação do vendedor responsável pelo Mercado Sunano, e canais de atendimento ao consumidor.",
-}
+export const metadata: Metadata = buildMetadata({
+  title: "Quem Somos",
+  socialTitle: "Quem Somos: por trás da Sunano",
+  description: "Quem é o vendedor responsável pela Loja Sunano, dados da empresa e os canais oficiais de atendimento ao consumidor.",
+  path: "/quem-somos",
+  eyebrow: "Institucional",
+  subtitle: "Identificação e atendimento",
+})
 
 export default function QuemSomosPage() {
   return (

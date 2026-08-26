@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
@@ -17,11 +18,13 @@ export async function generateMetadata({ params }: CategoriaPageProps): Promise<
   const { categoria } = await params
   const category = decodeURIComponent(categoria)
   const categoryLabel = getCategoryLabel(category)
-  return {
+  return buildMetadata({
     title: `${categoryLabel} — Loja`,
-    description: `Produtos da categoria ${categoryLabel} na Loja Sunano: periféricos testados antes de anunciar, com PIX na hora.`,
-    alternates: { canonical: `/loja/categoria/${encodeURIComponent(category)}` },
-  }
+    description: `Todos os produtos da categoria ${categoryLabel} na Loja Sunano: periféricos novos e usados testados antes de anunciar, com PIX na hora e envio para todo o Brasil.`,
+    path: `/loja/categoria/${encodeURIComponent(category)}`,
+    eyebrow: "Loja",
+    subtitle: `Periféricos da categoria ${categoryLabel}`,
+  })
 }
 
 export default async function LojaCategoriaPage({ params }: CategoriaPageProps) {

@@ -1,4 +1,8 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+
+import { buildMetadata } from "@/lib/seo"
+import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 
 import { getPeripheralByIdOrSlug, listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { listProductsByPeripheral } from "@/lib/server/repositories/store-repository"
@@ -11,6 +15,46 @@ interface PerifericoPageProps {
 }
 
 export const revalidate = 120
+
+const CATEGORY_LABEL: Record<string, string> = {
+  mouse: "Mouse",
+  keyboard: "Teclado",
+  headset: "Headset",
+  mousepad: "Mousepad",
+  monitor: "Monitor",
+  switch: "Switch",
+}
+
+export async function generateMetadata({ params }: PerifericoPageProps): Promise<Metadata> {
+  const resolvedParams = await params
+  const slug = decodeURIComponent(resolvedParams.slug)
+  const data = await getPeripheralByIdOrSlug(slug)
+  if (!data) return { title: "Periférico não encontrado" }
+
+  const categoryLabel = CATEGORY_LABEL[data.category] ?? data.category
+  const fullName = `${data.brand} ${data.name}`.trim()
+  const tierLabel = data.tier ? `Tier ${data.tier}` : null
+
+  return buildMetadata({
+    title: fullName,
+    titleSuffix: ` — ${categoryLabel} | Sunano`,
+    // Sem `generateMetadata` esta página herdava o card genérico do layout
+    // raiz: TODO periférico era compartilhado com o mesmo título e a mesma
+    // imagem, sem dizer qual produto era.
+    description: [
+      `Ficha técnica, tier e reviews do ${fullName}`,
+      tierLabel ? `${tierLabel} na tierlist da Sunano` : `Avaliado pela comunidade da Sunano`,
+      `Veja nota, specs e o que quem usa achou antes de comprar.`,
+    ].join(". "),
+    // Canonical no formato slug--id: é a URL que a navegação do site gera, e
+    // sem isso um acesso por UUID viraria uma segunda URL do mesmo conteúdo.
+    path: `/perifericos/${buildPeripheralSlug(data.name, data.id)}`,
+    eyebrow: categoryLabel,
+    subtitle: tierLabel ? `${tierLabel} · ${data.brand}` : data.brand,
+    image: data.image_url,
+    imageVariant: "product",
+  })
+}
 
 export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const resolvedParams = await params

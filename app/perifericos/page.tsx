@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
 import {
   listPeripheralsPaginated,
@@ -12,11 +13,14 @@ import type { Category } from "@/lib/tag-options"
 
 export const revalidate = 60
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildMetadata({
   title: "Periféricos",
-  description: "Wiki completa de periféricos gamers: mouses, teclados, headsets e mais, com ficha técnica, tier e reviews.",
-  alternates: { canonical: "/perifericos" },
-}
+  socialTitle: "Periféricos: a wiki completa",
+  description: "Wiki completa de periféricos gamers: mouses, teclados, headsets e mais, com ficha técnica, tier e reviews da comunidade.",
+  path: "/perifericos",
+  eyebrow: "Wiki",
+  subtitle: "Ficha técnica, tier e reviews",
+})
 
 const DEFAULT_CATEGORY: Category = "mouse"
 const PAGE_SIZE = 24

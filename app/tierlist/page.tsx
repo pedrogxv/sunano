@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 import { Suspense } from "react"
 
 import { listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
@@ -12,11 +13,14 @@ import { extractPeripheralRatings } from "@/lib/peripheral-ratings"
 // re-renderizar (com nova query ao banco) em toda requisição.
 export const revalidate = 120
 
-export const metadata: Metadata = {
+export const metadata: Metadata = buildMetadata({
   title: "Tierlist",
+  socialTitle: "Tierlist de periféricos, do S ao F",
   description: "A tierlist definitiva de periféricos gamers, com filtros avançados por categoria, preço e modo de avaliação.",
-  alternates: { canonical: "/tierlist" },
-}
+  path: "/tierlist",
+  eyebrow: "Tierlist",
+  subtitle: "Do S ao F, com nota de verdade",
+})
 
 export default async function TierlistPage() {
   const [peripheralsList, tierlistMeta] = await Promise.all([

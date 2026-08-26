@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
@@ -16,11 +17,13 @@ interface MarcaPageProps {
 export async function generateMetadata({ params }: MarcaPageProps): Promise<Metadata> {
   const { marca } = await params
   const brand = decodeURIComponent(marca)
-  return {
+  return buildMetadata({
     title: `${brand} — Loja`,
-    description: `Produtos da marca ${brand} na Loja Sunano: periféricos testados antes de anunciar, com PIX na hora.`,
-    alternates: { canonical: `/loja/marca/${encodeURIComponent(brand)}` },
-  }
+    description: `Todos os produtos da marca ${brand} na Loja Sunano: periféricos novos e usados testados antes de anunciar, com PIX na hora e envio para todo o Brasil.`,
+    path: `/loja/marca/${encodeURIComponent(brand)}`,
+    eyebrow: "Loja",
+    subtitle: `Periféricos da marca ${brand}`,
+  })
 }
 
 export default async function LojaMarcaPage({ params, searchParams }: MarcaPageProps) {

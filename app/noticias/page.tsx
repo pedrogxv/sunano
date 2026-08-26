@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 import Link from "next/link"
 import Image from "next/image"
 import { Clock, MessageCircle, Newspaper } from "lucide-react"
@@ -19,19 +20,14 @@ export const revalidate = 120
 
 // Sem isto a página herdava título e canonical da home, então o Google via
 // duas URLs distintas se declarando a mesma página e indexava só uma.
-export const metadata: Metadata = {
+export const metadata: Metadata = buildMetadata({
   title: "Notícias",
-  description:
-    "As últimas notícias do mundo dos periféricos gamers: lançamentos, novidades de marcas e o que está movimentando a comunidade.",
-  alternates: { canonical: "/noticias" },
-  openGraph: {
-    title: "Notícias Sunano",
-    description:
-      "As últimas notícias do mundo dos periféricos gamers: lançamentos, novidades de marcas e o que está movimentando a comunidade.",
-    url: "/noticias",
-    type: "website",
-  },
-}
+  socialTitle: "Notícias do mundo dos periféricos",
+  description: "As últimas notícias do mundo dos periféricos gamers: lançamentos, novidades de marcas e o que move a comunidade.",
+  path: "/noticias",
+  eyebrow: "Notícias",
+  subtitle: "Lançamentos e novidades do mercado",
+})
 
 // Quantas notícias entram no header de manchetes — controlado manualmente
 // pelo toggle "Destacar no header" em /admin/blog.

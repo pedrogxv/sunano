@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
 import { VideosFeedContent } from "@/components/videos/videos-feed-content"
 
@@ -6,17 +7,14 @@ export const revalidate = 300
 
 // Sem metadata própria a página herdava título e canonical da home, e o
 // Google tratava as duas URLs como a mesma coisa.
-export const metadata: Metadata = {
+export const metadata: Metadata = buildMetadata({
   title: "Vídeos",
-  description: "Reviews, unboxings e testes de periféricos gamers em vídeo, direto do canal da Sunano.",
-  alternates: { canonical: "/videos" },
-  openGraph: {
-    title: "Vídeos Sunano",
-    description: "Reviews, unboxings e testes de periféricos gamers em vídeo, direto do canal da Sunano.",
-    url: "/videos",
-    type: "website",
-  },
-}
+  socialTitle: "Vídeos: reviews e unboxings no YouTube",
+  description: "Reviews, unboxings e testes de periféricos gamers em vídeo, direto do canal da Sunano no YouTube, com veredito no final.",
+  path: "/videos",
+  eyebrow: "Vídeos",
+  subtitle: "Reviews e unboxings do canal",
+})
 
 export default async function VideosPage() {
   return <VideosFeedContent />

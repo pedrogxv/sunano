@@ -1,10 +1,14 @@
 import Link from "next/link"
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
-export const metadata: Metadata = {
-  title: "Trocas e Devoluções | Sunano",
-  description: "Política de trocas, devoluções e direito de arrependimento das compras na Loja Sunano.",
-}
+export const metadata: Metadata = buildMetadata({
+  title: "Trocas e Devoluções",
+  description: "Política de trocas, devoluções e direito de arrependimento das compras na Loja Sunano, com prazos e como solicitar.",
+  path: "/trocas-e-devolucoes",
+  eyebrow: "Legal",
+  subtitle: "Prazos e como solicitar",
+})
 
 export default function TrocasEDevolucoesPage() {
   return (

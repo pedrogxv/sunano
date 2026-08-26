@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
 import { listForumPosts } from "@/lib/server/repositories/forum-repository"
 import {
@@ -12,20 +13,14 @@ import { ForumContent, type ForumPost } from "./forum-content"
 // buscava os dados via /api/forum/posts.
 export const revalidate = 120
 
-export const metadata: Metadata = {
-  // Sem o sufixo "| Sunano": o `title.template` do layout raiz já o acrescenta.
+export const metadata: Metadata = buildMetadata({
   title: "Fórum",
-  description:
-    "Discussões, dúvidas e opiniões da comunidade sobre mouses, teclados, headsets e outros periféricos gamers.",
-  alternates: { canonical: "/forum" },
-  openGraph: {
-    title: "Fórum Sunano",
-    description:
-      "Discussões, dúvidas e opiniões da comunidade sobre mouses, teclados, headsets e outros periféricos gamers.",
-    url: "/forum",
-    type: "website",
-  },
-}
+  socialTitle: "Fórum: a comunidade de periféricos",
+  description: "Discussões, dúvidas e opiniões da comunidade sobre mouses, teclados, headsets e outros periféricos gamers.",
+  path: "/forum",
+  eyebrow: "Fórum",
+  subtitle: "Discussões da comunidade",
+})
 
 export default async function ForumPage() {
   const [{ posts: initialPosts, hasMore: initialHasMore }, topActive, moderators] = await Promise.all([

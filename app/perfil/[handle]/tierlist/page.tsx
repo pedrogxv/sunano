@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
 import { profilePath } from "@/lib/profile-name"
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
@@ -31,7 +32,20 @@ export async function generateMetadata({
   const userId = await resolveUserId(handle)
   const profile = userId ? await getProfileShowcase(userId) : null
   if (!profile) return { title: "Tierlist não encontrada" }
-  return { title: `Tierlist de ${profile.display_name}` }
+
+  const canonical = profile.display_slug
+    ? `${profilePath(profile.display_slug)}/tierlist`
+    : `/perfil/${handle}/tierlist`
+
+  return buildMetadata({
+    title: `Tierlist de ${profile.display_name}`,
+    description: `A tierlist pessoal de ${profile.display_name} na Sunano: como esse membro classifica os periféricos que já usou, do S ao F.`,
+    path: canonical,
+    eyebrow: "Tierlist",
+    subtitle: "Tierlist pessoal do membro",
+    image: profile.avatar_url,
+    imageVariant: "avatar",
+  })
 }
 
 export default async function PerfilTierlistPage({

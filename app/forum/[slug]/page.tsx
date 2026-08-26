@@ -5,6 +5,7 @@ import { getForumPostBySlug, getForumSidebarData } from "@/lib/server/repositori
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { ForumPostContent } from "./forum-post-content"
+import { buildDescription, buildMetadata, truncate } from "@/lib/seo"
 import { SITE_URL } from "@/lib/site-url"
 
 
@@ -12,12 +13,6 @@ import { SITE_URL } from "@/lib/site-url"
 // SEO, já que a busca por um periférico específico precisa encontrar o HTML
 // da discussão, não um shell vazio esperando fetch client-side.
 export const revalidate = 120
-
-function truncate(text: string, max: number): string {
-  const clean = text.replace(/\s+/g, " ").trim()
-  if (clean.length <= max) return clean
-  return clean.slice(0, max - 1).trimEnd() + "…"
-}
 
 export async function generateMetadata({
   params,
@@ -28,37 +23,36 @@ export async function generateMetadata({
   const supabase = await createSupabaseServerClient()
   const { data: authData } = await supabase.auth.getUser()
   const result = await getForumPostBySlug(slug, authData.user?.id ?? null)
-  if (!result) return { title: "Post não encontrado | Fórum Sunano" }
+  if (!result) return { title: "Post não encontrado" }
 
   const { post } = result
   const categoryName = post.category?.name
-  const title = categoryName
-    ? `${truncate(post.title, 70)} — ${categoryName} | Fórum Sunano`
-    : `${truncate(post.title, 70)} | Fórum Sunano`
-  const description = truncate(post.body ?? post.title, 160)
-  const url = `${SITE_URL}/forum/${post.slug}`
+  const authorName = post.author_display_name || undefined
 
-  return {
-    title,
-    description,
-    alternates: { canonical: url },
-    // Oculto só é visível pro próprio dono (pra ele reativar) — não deve ser indexado.
-    ...(post.is_hidden ? { robots: { index: false, follow: false } } : {}),
-    openGraph: {
-      title,
-      description,
-      url,
-      type: "article",
-      publishedTime: post.created_at,
-      images: post.media_image_urls.length > 0 ? post.media_image_urls.map((url) => ({ url })) : undefined,
-    },
-    twitter: {
-      card: post.media_image_urls.length > 0 ? "summary_large_image" : "summary",
-      title,
-      description,
-      images: post.media_image_urls.length > 0 ? post.media_image_urls : undefined,
-    },
-  }
+  return buildMetadata({
+    title: post.title,
+    titleSuffix: categoryName ? ` — ${categoryName} | Fórum` : " | Fórum Sunano",
+    // O corpo é markdown: `buildDescription` limpa a marcação antes de cortar,
+    // senão `##`/`**`/`![](...)` vazavam pro preview. O complemento entra só
+    // quando o post é curto demais pra formar uma descrição informativa.
+    description: buildDescription(post.body, post.title, {
+      context: categoryName
+        ? `Discussão sobre ${categoryName} no fórum da Sunano.`
+        : "Discussão da comunidade no fórum da Sunano.",
+      extraContext: "Veja as respostas da comunidade e participe.",
+    }),
+    path: `/forum/${post.slug}`,
+    type: "article",
+    eyebrow: categoryName ?? "Fórum",
+    // Primeira imagem do post entra composta no card 1200×630; sem imagem, o
+    // card tipográfico ainda sai completo.
+    image: post.media_image_urls[0],
+    imageVariant: "cover",
+    publishedTime: post.created_at,
+    authors: authorName ? [authorName] : undefined,
+    // Oculto só é visível pro próprio dono (pra ele reativar) — não indexar.
+    noIndex: post.is_hidden,
+  })
 }
 
 export default async function ForumPostPage({

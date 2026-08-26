@@ -1,10 +1,14 @@
 import Link from "next/link"
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
-export const metadata: Metadata = {
-  title: "Política de Privacidade | Sunano",
-  description: "Saiba como o Sunano coleta, usa e protege seus dados pessoais em conformidade com a LGPD.",
-}
+export const metadata: Metadata = buildMetadata({
+  title: "Política de Privacidade",
+  description: "Como a Sunano coleta, usa, compartilha e protege seus dados pessoais, e como exercer seus direitos sob a LGPD.",
+  path: "/privacidade",
+  eyebrow: "Legal",
+  subtitle: "Dados pessoais e LGPD",
+})
 
 const CURRENT_VERSION = "2026-08"
 

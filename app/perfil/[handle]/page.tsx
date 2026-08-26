@@ -10,7 +10,7 @@ import {
   isFollowing,
 } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
-import { SITE_URL } from "@/lib/site-url"
+import { buildDescription, buildMetadata } from "@/lib/seo"
 
 // Server Component: chama o repositório direto (ARQUITETURA.md §1), sem
 // spinner client-side. Renderiza por requisição porque lê a sessão para
@@ -39,29 +39,23 @@ export async function generateMetadata({
   const profile = userId ? await getProfileShowcase(userId) : null
   if (!profile) return { title: "Perfil não encontrado" }
 
-  const title = `${profile.display_name} — Perfil`
-  const description = profile.bio ?? `Setup e periféricos favoritos de ${profile.display_name}.`
-  const canonical = profile.display_slug ? profilePath(profile.display_slug) : undefined
-  const image = profile.avatar_url ?? profile.banner_url
+  const canonical = profile.display_slug ? profilePath(profile.display_slug) : `/perfil/${handle}`
 
-  return {
-    title,
-    description,
-    alternates: canonical ? { canonical } : undefined,
-    openGraph: {
-      title,
-      description,
-      type: "profile",
-      url: canonical ? `${SITE_URL}${canonical}` : undefined,
-      images: image ? [{ url: image, width: 512, height: 512 }] : undefined,
-    },
-    twitter: {
-      card: image ? "summary" : "summary_large_image",
-      title,
-      description,
-      images: image ? [image] : undefined,
-    },
-  }
+  return buildMetadata({
+    title: `${profile.display_name} — Perfil`,
+    description: buildDescription(profile.bio, `Setup e periféricos favoritos de ${profile.display_name}.`, {
+      context: "Veja a tierlist, as reviews e a Aura desse membro na Sunano.",
+    }),
+    path: canonical,
+    type: "profile",
+    eyebrow: "Perfil",
+    subtitle: `Setup, tierlist e reviews de ${profile.display_name}`,
+    // Avatar entra num recorte circular dentro do card 1200×630. Antes ele ia
+    // cru como og:image: 1:1 e frequentemente abaixo do mínimo de 200px que o
+    // X exige, então o card saía sem imagem.
+    image: profile.avatar_url ?? profile.banner_url,
+    imageVariant: profile.avatar_url ? "avatar" : "cover",
+  })
 }
 
 export default async function PerfilPublicoPage({

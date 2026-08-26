@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react"
 import { getForumPostsByCategorySlug } from "@/lib/server/repositories/forum-repository"
 import type { PostCardData } from "@/components/forum/PostCard"
 import { CategoryPostsList } from "./category-posts-list"
-import { SITE_URL } from "@/lib/site-url"
+import { buildMetadata } from "@/lib/seo"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
 
@@ -22,20 +22,19 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params
   const result = await getForumPostsByCategorySlug(slug)
-  if (!result) return { title: "Categoria não encontrada | Fórum Sunano" }
+  if (!result) return { title: "Categoria não encontrada" }
 
   const { category } = result
   const label = category.parent ? `${category.parent.name} — ${category.name}` : category.name
-  const title = `Discussões sobre ${label} | Fórum Sunano`
-  const description = `Veja tópicos, dúvidas e opiniões da comunidade sobre ${label} no fórum da Sunano.`
-  const url = `${SITE_URL}/forum/categoria/${category.slug}`
 
-  return {
-    title,
-    description,
-    alternates: { canonical: url },
-    openGraph: { title, description, url, type: "website" },
-  }
+  return buildMetadata({
+    title: `Discussões sobre ${label}`,
+    titleSuffix: " | Fórum Sunano",
+    description: `Tópicos, dúvidas e opiniões da comunidade sobre ${label}: quem já usou, o que vale a pena e o que evitar, no fórum da Sunano.`,
+    path: `/forum/categoria/${category.slug}`,
+    eyebrow: "Fórum",
+    subtitle: `Discussões da comunidade sobre ${label}`,
+  })
 }
 
 export default async function ForumCategoryPage({

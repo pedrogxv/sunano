@@ -1,10 +1,14 @@
 import Link from "next/link"
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
-export const metadata: Metadata = {
-  title: "Termos de Uso | Sunano",
-  description: "Termos e condições de uso da plataforma Sunano.",
-}
+export const metadata: Metadata = buildMetadata({
+  title: "Termos de Uso",
+  description: "Termos e condições de uso da plataforma Sunano: regras da comunidade, da Loja, da conta e responsabilidades de cada parte.",
+  path: "/termos",
+  eyebrow: "Legal",
+  subtitle: "Regras de uso da plataforma",
+})
 
 export default function TermosPage() {
   return (

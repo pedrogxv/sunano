@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
 
 import { listPublishedPosts } from "@/lib/server/repositories/blog-repository"
 import { BlogContent, type BlogPost } from "./blog-content"
@@ -7,19 +8,14 @@ import { BlogContent, type BlogPost } from "./blog-content"
 // eliminando o fetch client-side (que mostrava um spinner a cada visita).
 export const revalidate = 120
 
-export const metadata: Metadata = {
-  // Sem o sufixo "| Sunano": o `title.template` do layout raiz já o acrescenta,
-  // e repetir aqui gerava "Blog | Sunano | Sunano" na SERP.
+export const metadata: Metadata = buildMetadata({
   title: "Blog",
-  description: "Reviews, comparativos e novidades sobre periféricos gamers: mouses, teclados, headsets e mais.",
-  alternates: { canonical: "/blog" },
-  openGraph: {
-    title: "Blog Sunano",
-    description: "Reviews, comparativos e novidades sobre periféricos gamers: mouses, teclados, headsets e mais.",
-    url: "/blog",
-    type: "website",
-  },
-}
+  socialTitle: "Blog: reviews e comparativos de periféricos",
+  description: "Reviews, comparativos e novidades sobre periféricos gamers: mouses, teclados, headsets e mais, testados pelo Sunano.",
+  path: "/blog",
+  eyebrow: "Blog",
+  subtitle: "Reviews e comparativos de periféricos",
+})
 
 export default async function BlogPage({
   searchParams,

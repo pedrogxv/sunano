@@ -168,12 +168,15 @@ export function ProductDetailContent({
     (activeVariant ? isColorSoldOut(activeVariant) : effectiveStock !== null && effectiveStock === 0) ||
     hasUnselectableGroup
   const baseImages: (string | null)[] = product.images?.length > 0 ? product.images : [null]
-  const variantImages = activeVariant
-    ? [...(activeVariant.image_url ? [activeVariant.image_url] : []), ...activeVariant.images].filter(
-        (url, idx, arr) => arr.indexOf(url) === idx
-      )
-    : []
-  const images = variantImages.length > 0 ? variantImages : baseImages
+  function getVariantImages(variant: typeof activeVariant) {
+    const variantImages = variant
+      ? [...(variant.image_url ? [variant.image_url] : []), ...variant.images].filter(
+          (url, idx, arr) => arr.indexOf(url) === idx
+        )
+      : []
+    return variantImages.length > 0 ? variantImages : baseImages
+  }
+  const images = getVariantImages(activeVariant)
   const [activeImage, setActiveImage] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [zoomed, setZoomed] = useState(false)
@@ -186,9 +189,11 @@ export function ProductDetailContent({
   const [mainImageLoaded, setMainImageLoaded] = useState<string | null>(null)
 
   function handleSelectVariant(id: string) {
+    const nextVariant = variants.find((v) => v.id === id) ?? null
+    const nextImages = getVariantImages(nextVariant)
     setSelectedVariantId(id)
     setQty(1)
-    setActiveImage(0)
+    setActiveImage((prev) => Math.min(prev, nextImages.length - 1))
   }
 
   function goToImage(delta: number, event?: React.MouseEvent) {

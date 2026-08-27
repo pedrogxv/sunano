@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { MultiCombobox } from "@/components/ui/combobox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
@@ -98,6 +99,16 @@ const PAGE_SIZE = 50
 
 const NO_CATEGORY_KEY = "__sem_categoria__"
 
+type SortOption = "name-asc" | "name-desc" | "price-asc" | "price-desc" | "recent"
+
+const SORT_LABEL: Record<SortOption, string> = {
+  "name-asc": "Nome (A-Z)",
+  "name-desc": "Nome (Z-A)",
+  "price-asc": "Preço (menor)",
+  "price-desc": "Preço (maior)",
+  recent: "Mais recentes",
+}
+
 /** Deriva o título do grupo a partir do valor de categoria salvo no produto — sem lista estática de labels. */
 function formatCategoryLabel(key: string): string {
   if (key === NO_CATEGORY_KEY) return "Sem categoria"
@@ -115,6 +126,7 @@ export default function AdminStorePage() {
   const debouncedSearch = useDebouncedValue(search, 400)
   const [categoryFilter, setCategoryFilter] = useState<string[]>([])
   const [brandFilter, setBrandFilter] = useState<string[]>([])
+  const [sort, setSort] = useState<SortOption>("name-asc")
   // Opções dos combobox vêm de todos os produtos já vistos nesta sessão (não só
   // a página atual), pra não sumir uma marca/categoria ao trocar de filtro.
   const [knownCategories, setKnownCategories] = useState<Set<string>>(new Set())
@@ -139,6 +151,7 @@ export default function AdminStorePage() {
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim())
       if (categoryFilter.length > 0) params.set("categories", categoryFilter.join(","))
       if (brandFilter.length > 0) params.set("brands", brandFilter.join(","))
+      params.set("sort", sort)
       const res = await fetch(`/api/admin/store/products?${params}`)
       const data = (await res.json()) as { products?: StoreProduct[]; total?: number; error?: string }
       if (!res.ok) throw new Error(data.error ?? "Erro ao carregar")
@@ -161,11 +174,11 @@ export default function AdminStorePage() {
     } finally {
       setLoading(false)
     }
-  }, [page, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter])
+  }, [page, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter, sort])
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => { setPage(1) }, [outOfStockOnly, debouncedSearch, categoryFilter, brandFilter])
+  useEffect(() => { setPage(1) }, [outOfStockOnly, debouncedSearch, categoryFilter, brandFilter, sort])
 
   async function handleDelete() {
     if (!deleteDialog.id) return
@@ -332,6 +345,18 @@ export default function AdminStorePage() {
           allLabel="Todas as marcas"
           className="h-9 w-auto min-w-[150px] border-border bg-card text-[13px] font-normal"
         />
+        <Select value={sort} onValueChange={(v) => setSort(v as SortOption)}>
+          <SelectTrigger className="h-9 w-auto min-w-[150px] border-border bg-card text-[13px] font-normal" aria-label="Ordenar por">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(SORT_LABEL) as SortOption[]).map((option) => (
+              <SelectItem key={option} value={option}>
+                {SORT_LABEL[option]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <button
           type="button"
           onClick={() => setOutOfStockOnly((prev) => !prev)}

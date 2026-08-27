@@ -44,10 +44,9 @@ export function ProductCard(props: ProductCardProps) {
   const href = `/loja/${props.slug}`
   const variants = props.variants ?? []
   const hasVariants = (props.has_variants ?? false) && variants.length > 0
-  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
-    hasVariants ? (variants.find((v) => v.stock === null || v.stock > 0)?.id ?? variants[0].id) : null
-  )
-  const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) ?? null : null
+  const activeVariant = hasVariants
+    ? variants.find((v) => v.stock === null || v.stock > 0) ?? variants[0]
+    : null
   const [imageLoaded, setImageLoaded] = useState<string | null>(null)
 
   const outOfStock = hasVariants
@@ -68,11 +67,6 @@ export function ProductCard(props: ProductCardProps) {
   const { icon: CategoryIcon, tint } = getCategoryIcon(props.category)
   const saleType = props.sale_type ?? "normal"
   const SaleTypeIcon = saleType !== "normal" ? SALE_TYPE_ICON[saleType] : null
-
-  function handleSelectVariant(e: React.MouseEvent, variantId: string) {
-    e.preventDefault()
-    setSelectedVariantId(variantId)
-  }
 
   return (
     <Link href={href} className="group flex h-full flex-col">
@@ -133,7 +127,7 @@ export function ProductCard(props: ProductCardProps) {
           )}
 
           {hasDiscount && (
-            <span className="absolute bottom-3 left-3 z-[1] rounded-lg bg-gradient-to-r from-red-600 to-yellow-400 px-2 py-1 text-[11px] font-extrabold text-white">
+            <span className="absolute bottom-3 left-3 z-[1] rounded-lg bg-red-600 px-2 py-1 text-[11px] font-extrabold text-white">
               -{discountPercent}%
             </span>
           )}
@@ -158,51 +152,26 @@ export function ProductCard(props: ProductCardProps) {
           {/* `font-sans tracking-normal` desfaz o reset global de h3 (Space
               Grotesk + tracking negativo): no mock o nome do produto é Manrope.
               `min-h` reserva 2 linhas sempre, pra não variar a altura entre nomes de 1 e 2 linhas. */}
-          <h3 className="line-clamp-2 min-h-[36px] font-sans text-[13.5px] font-semibold leading-[1.35] tracking-normal text-white">
+          <h3 className="line-clamp-2 min-h-[38px] font-sans text-[14.5px] font-semibold leading-[1.35] tracking-normal text-white">
             {props.name}
           </h3>
 
-          {/* Slot de altura fixa: variantes quando existem, senão uma info do
-              produto (condição/marca) — evita cards com heights diferentes no grid. */}
-          <div className="flex h-5 flex-wrap items-center gap-[5px]" onClick={hasVariants ? (e) => e.stopPropagation() : undefined}>
-            {hasVariants ? (
-              variants.map((v) => {
-                const isActive = v.id === selectedVariantId
-                const variantOutOfStock = v.stock !== null && v.stock === 0
-                return (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={(e) => handleSelectVariant(e, v.id)}
-                    title={v.label}
-                    aria-label={v.label}
-                    aria-pressed={isActive}
-                    disabled={variantOutOfStock}
-                    className={cn(
-                      "flex size-[20px] items-center justify-center rounded-full border-[1.5px] transition-colors",
-                      isActive ? "border-emerald-500" : "border-[#333333] hover:border-[#5a5a5a]",
-                      variantOutOfStock && "cursor-not-allowed opacity-35"
-                    )}
-                    style={{ backgroundColor: v.color ?? "#1c1c1c" }}
-                  >
-                    {v.icon && <span className="text-[10px] leading-none">{v.icon}</span>}
-                  </button>
-                )
-              })
-            ) : (
-              <p className="line-clamp-1 text-[10.5px] font-medium text-[#7a7a7a]">
-                {props.condition !== "new" ? CONDITION_LABEL[props.condition] : (props.brand ?? " ")}
-              </p>
-            )}
+          {/* Slot de altura fixa: info do produto (condição/marca) — evita
+              cards com heights diferentes no grid. As opções de variante (cor/versão)
+              só aparecem na página do produto, não na listagem. */}
+          <div className="flex h-5 flex-wrap items-center gap-[5px]">
+            <p className="line-clamp-1 text-[10.5px] font-medium text-[#7a7a7a]">
+              {props.condition !== "new" ? CONDITION_LABEL[props.condition] : (props.brand ?? " ")}
+            </p>
           </div>
 
-          <div className="mt-auto">
+          <div className="mt-auto text-center">
             {hasDiscount && (
               <p className="text-[11px] leading-tight text-[#6e6e6e] line-through">{formatBRL(basePriceCents)}</p>
             )}
-            <div className="flex flex-wrap items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline justify-center gap-2">
               <p className={cn(
-                "font-display text-lg font-bold leading-tight",
+                "font-display text-xl font-bold leading-tight",
                 hasDiscount ? "text-emerald-400" : "text-white"
               )}>
                 {formatBRL(effectivePriceCents)}

@@ -63,6 +63,11 @@ export async function GET(request: NextRequest) {
     return list.length > 0 ? list : undefined
   }
 
+  function parseSort(value: string | null): StoreProductListFilters["sort"] {
+    const valid: StoreProductListFilters["sort"][] = ["recent", "name-asc", "name-desc", "price-asc", "price-desc"]
+    return valid.includes(value as StoreProductListFilters["sort"]) ? (value as StoreProductListFilters["sort"]) : undefined
+  }
+
   const filters: StoreProductListFilters = {
     type: "store",
     includeInactive: true,
@@ -71,6 +76,7 @@ export async function GET(request: NextRequest) {
     brands: parseCsv(searchParams.get("brands")),
     outOfStockOnly: searchParams.get("outOfStock") === "1",
     featured: searchParams.get("featured") === "1" ? true : undefined,
+    sort: parseSort(searchParams.get("sort")),
     page: parseNumber(searchParams.get("page")),
     pageSize: parseNumber(searchParams.get("pageSize")) ?? 100,
   }

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 type MediaTab = "image" | "video"
 
 const MAX_IMAGES = 5
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 /** Abas Imagem/Vídeo mutuamente exclusivas do formulário de post — até 5 imagens sobem de verdade, vídeo é só um link do YouTube. */
 export function PostMediaField({
@@ -43,6 +44,12 @@ export function PostMediaField({
     const room = MAX_IMAGES - imageUrls.length
     if (room <= 0) return
     const toUpload = files.slice(0, room)
+
+    const oversized = toUpload.find((file) => file.size > MAX_FILE_SIZE_BYTES)
+    if (oversized) {
+      setError(`Arquivo deve ter no máximo ${Math.floor(MAX_FILE_SIZE_BYTES / (1024 * 1024))}MB.`)
+      return
+    }
 
     try {
       setUploading(true)

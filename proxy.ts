@@ -48,8 +48,14 @@ function isLgpdConsentPendingAllowedPath(pathname: string) {
 // Detecta a presença de cookies de sessão do Supabase (`sb-<ref>-auth-token`)
 // sem chamada de rede. Permite pular toda a verificação para visitantes
 // anônimos em rotas públicas.
+// O `sb-<ref>-auth-token-code-verifier` não conta: ele é gravado por 400 dias
+// só por pedir "esqueci minha senha" (o @supabase/ssr força flowType PKCE) e
+// não representa sessão nenhuma. Contá-lo fazia todo visitante que um dia
+// usou o /forgot-password pagar um `getUser()` de rede em cada pageview.
 function hasSupabaseSession(request: NextRequest) {
-  return request.cookies.getAll().some((cookie) => cookie.name.startsWith("sb-"))
+  return request.cookies
+    .getAll()
+    .some((cookie) => cookie.name.startsWith("sb-") && !cookie.name.endsWith("-code-verifier"))
 }
 
 function copyCookies(source: NextResponse, destination: NextResponse) {

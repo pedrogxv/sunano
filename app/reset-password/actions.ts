@@ -26,6 +26,18 @@ export async function confirmRecoveryAction(formData: FormData): Promise<void> {
     : await supabase.auth.exchangeCodeForSession(code)
 
   if (error) {
+    // Sem este log a falha era indistinguível: token realmente expirado,
+    // token já consumido, ou `code_verifier` ausente (o modo PKCE do
+    // @supabase/ssr guarda o verifier num cookie do navegador que PEDIU a
+    // recuperação — abrir o e-mail em outro navegador/app faz o
+    // `exchangeCodeForSession` falhar mesmo com o link novinho).
+    console.error(
+      "[reset-password] confirmRecovery falhou",
+      tokenHash ? "verifyOtp" : "exchangeCodeForSession",
+      error.status,
+      error.code,
+      error.message
+    )
     redirect("/login?error=recovery_error")
   }
 

@@ -16,9 +16,26 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code")
   const tokenHash = searchParams.get("token_hash")
   const type = searchParams.get("type")
+  const authError = searchParams.get("error") || searchParams.get("error_code")
   const next = sanitizeNextPath(searchParams.get("next"))
 
   const supabase = await createSupabaseServerClient()
+
+  // O GoTrue devolve o erro na própria query quando o link de e-mail já não
+  // vale (`?error=access_denied&error_code=otp_expired`). Sem tratar isso a
+  // requisição caía no `missing_code` lá embaixo e a pessoa via "não foi
+  // possível concluir o login" — mensagem errada para um link de recuperação.
+  if (authError) {
+    console.error(
+      "[auth/callback] provedor retornou erro",
+      type,
+      authError,
+      searchParams.get("error_description")
+    )
+    return NextResponse.redirect(
+      `${origin}/login?error=${type === "recovery" ? "recovery_error" : "oauth_error"}`
+    )
+  }
 
   if (tokenHash && type === "recovery") {
     // Não consome o token aqui: scanners de segurança de e-mail corporativos
@@ -53,16 +70,32 @@ export async function GET(request: NextRequest) {
   }
 
   // PKCE recovery: Supabase envia code + type=recovery (em vez de token_hash).
-  // Mesmo raciocínio do ramo `token_hash` acima — o `code` também é de uso
-  // único, então não trocamos por sessão aqui; só repassamos pro
-  // `/reset-password`, que exige o clique explícito antes de consumir.
-  if (type === "recovery") {
-    return NextResponse.redirect(`${origin}/reset-password?code=${encodeURIComponent(code)}`)
-  }
-
+  // Aqui, ao contrário do ramo `token_hash`, NÃO adianta adiar o consumo até
+  // um clique: quem queima o token de uso único é o `/auth/v1/verify` do
+  // próprio Supabase (o endereço que está no e-mail), antes de qualquer
+  // requisição chegar neste callback. Se um scanner abriu o link, o `code`
+  // foi emitido pra ele e o clique da pessoa já chega aqui como
+  // `?error=otp_expired` — tratado no topo. Então trocamos na hora: adiar só
+  // alargaria a janela em que o `code` pode expirar.
   const { error } = await supabase.auth.exchangeCodeForSession(code)
   if (error) {
+    if (type === "recovery") {
+      // Reabrir o mesmo link (ou o duplo clique) cai aqui com o code já
+      // consumido; se a primeira abertura criou a sessão, segue pro reset.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (user) {
+        return NextResponse.redirect(`${origin}/reset-password`)
+      }
+      console.error("[auth/callback] exchangeCodeForSession (recovery) falhou", error.status, error.code, error.message)
+      return NextResponse.redirect(`${origin}/login?error=recovery_error`)
+    }
     return NextResponse.redirect(`${origin}/login?error=oauth_error`)
+  }
+
+  if (type === "recovery") {
+    return NextResponse.redirect(`${origin}/reset-password`)
   }
 
   const { data: authData } = await supabase.auth.getUser()

@@ -21,20 +21,14 @@ export async function GET(request: NextRequest) {
   const supabase = await createSupabaseServerClient()
 
   if (tokenHash && type === "recovery") {
-    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" })
-    if (error) {
-      // O token de recuperação é de uso único: ao reabrir o link ele já foi
-      // consumido. Se a primeira abertura já criou a sessão de recuperação,
-      // seguimos para o reset em vez de mostrar erro.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user) {
-        return NextResponse.redirect(`${origin}/reset-password`)
-      }
-      return NextResponse.redirect(`${origin}/login?error=recovery_error`)
-    }
-    return NextResponse.redirect(`${origin}/reset-password`)
+    // Não consome o token aqui: scanners de segurança de e-mail corporativos
+    // (Outlook Safe Links, Defender etc.) seguem todo link de um e-mail
+    // recebido com um GET automático, e o token de recuperação é de uso
+    // único — se essa varredura chegasse a chamar `verifyOtp`, o clique real
+    // da pessoa encontraria o link já "expirado". Só repassamos o hash pra
+    // `/reset-password`, que exige um clique explícito (POST) antes de
+    // verificar de fato — algo que um bot de varredura não faz.
+    return NextResponse.redirect(`${origin}/reset-password?token_hash=${encodeURIComponent(tokenHash)}`)
   }
 
   if (tokenHash && type === "signup") {
@@ -58,25 +52,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`)
   }
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code)
-  if (error) {
-    // PKCE recovery reaberto: o code também é de uso único. Se a sessão de
-    // recuperação já foi criada na primeira abertura, segue para o reset.
-    if (type === "recovery") {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user) {
-        return NextResponse.redirect(`${origin}/reset-password`)
-      }
-      return NextResponse.redirect(`${origin}/login?error=recovery_error`)
-    }
-    return NextResponse.redirect(`${origin}/login?error=oauth_error`)
+  // PKCE recovery: Supabase envia code + type=recovery (em vez de token_hash).
+  // Mesmo raciocínio do ramo `token_hash` acima — o `code` também é de uso
+  // único, então não trocamos por sessão aqui; só repassamos pro
+  // `/reset-password`, que exige o clique explícito antes de consumir.
+  if (type === "recovery") {
+    return NextResponse.redirect(`${origin}/reset-password?code=${encodeURIComponent(code)}`)
   }
 
-  // PKCE recovery: Supabase envia code + type=recovery (em vez de token_hash)
-  if (type === "recovery") {
-    return NextResponse.redirect(`${origin}/reset-password`)
+  const { error } = await supabase.auth.exchangeCodeForSession(code)
+  if (error) {
+    return NextResponse.redirect(`${origin}/login?error=oauth_error`)
   }
 
   const { data: authData } = await supabase.auth.getUser()

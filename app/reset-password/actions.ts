@@ -9,6 +9,29 @@ import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rat
 
 type State = { error: string | null }
 
+/**
+ * Consome de fato o token de recuperação — só é chamada a partir do clique
+ * explícito em `/reset-password` (ver ConfirmRecoveryForm), nunca a partir de
+ * um GET automático. É isso que impede um scanner de segurança de e-mail
+ * (que só faz GET) de queimar o link antes da pessoa clicar de verdade.
+ */
+export async function confirmRecoveryAction(formData: FormData): Promise<void> {
+  const tokenHash = String(formData.get("token_hash") || "")
+  const code = String(formData.get("code") || "")
+
+  const supabase = await createSupabaseServerClient()
+
+  const { error } = tokenHash
+    ? await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" })
+    : await supabase.auth.exchangeCodeForSession(code)
+
+  if (error) {
+    redirect("/login?error=recovery_error")
+  }
+
+  redirect("/reset-password")
+}
+
 export async function resetPasswordAction(_: State, formData: FormData): Promise<State> {
   const password = String(formData.get("password") || "")
   const confirm = String(formData.get("confirm") || "")

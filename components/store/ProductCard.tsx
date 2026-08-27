@@ -2,15 +2,13 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Plus, ShoppingCart } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
+import { markImageSettled } from "@/lib/image-settled"
 import { computeCardPriceCents } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
-import { useCart } from "@/components/providers/cart-context"
 import { Skeleton } from "@/components/ui/skeleton"
-import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import type { StoreCardVariant } from "@/lib/server/repositories/store-repository"
 
@@ -42,7 +40,6 @@ interface ProductCardProps {
 }
 
 export function ProductCard(props: ProductCardProps) {
-  const { add, setOpen } = useCart()
   const { cardSurchargePercent, cardMaxInstallments } = useStoreSettings()
   const href = `/loja/${props.slug}`
   const variants = props.variants ?? []
@@ -52,7 +49,6 @@ export function ProductCard(props: ProductCardProps) {
   )
   const activeVariant = hasVariants ? variants.find((v) => v.id === selectedVariantId) ?? null : null
   const [imageLoaded, setImageLoaded] = useState<string | null>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   const outOfStock = hasVariants
     ? Boolean(props.is_sold_out) || (activeVariant ? activeVariant.stock !== null && activeVariant.stock === 0 : false)
@@ -78,36 +74,6 @@ export function ProductCard(props: ProductCardProps) {
     setSelectedVariantId(variantId)
   }
 
-  function handleAddToCart(e: React.MouseEvent) {
-    e.preventDefault()
-    if (outOfStock) return
-    if (hasVariants && !activeVariant) return
-    // Produto com variante: abre popup pra confirmar a seleção (cor +
-    // grupos como Switch/Voltagem, que o card não conhece de antemão)
-    // em vez de assumir a cor pré-selecionada nos swatches do card.
-    if (hasVariants) {
-      setPickerOpen(true)
-      return
-    }
-    add({
-      productId: props.id,
-      variantId: activeVariant?.id ?? null,
-      variantLabel: activeVariant?.label ?? null,
-      variantColor: activeVariant?.color ?? null,
-      variantIcon: activeVariant?.icon ?? null,
-      variantOptions: [],
-      slug: props.slug,
-      name: props.name,
-      priceCents: effectivePriceCents,
-      image,
-      stock: activeVariant ? activeVariant.stock : props.stock,
-      type: props.type,
-      condition: props.condition,
-      sale_type: saleType,
-    })
-    setOpen(true)
-  }
-
   return (
     <Link href={href} className="group flex h-full flex-col">
       <div className={cn(
@@ -130,7 +96,9 @@ export function ProductCard(props: ProductCardProps) {
                 key={image}
                 src={image}
                 alt={props.name}
+                ref={(el) => markImageSettled(el, () => setImageLoaded(image))}
                 onLoad={() => setImageLoaded(image)}
+                onError={() => setImageLoaded(image)}
                 className={cn(
                   "h-full w-full object-contain p-4 transition-[opacity,transform] duration-300 group-hover:scale-105",
                   imageLoaded === image ? "opacity-100" : "opacity-0"
@@ -164,23 +132,8 @@ export function ProductCard(props: ProductCardProps) {
             </span>
           )}
 
-          {!outOfStock && (
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              aria-label="Adicionar ao carrinho"
-              title="Adicionar ao carrinho"
-              className="absolute right-2.5 top-2.5 z-[1] flex size-[34px] shrink-0 items-center justify-center rounded-[10px] border border-[#2e2e2e] bg-[rgba(10,10,10,0.82)] text-[#999999] backdrop-blur-sm transition-colors hover:border-emerald-500/50 hover:bg-emerald-500/20 hover:text-emerald-400"
-            >
-              <span className="relative">
-                <ShoppingCart className="size-[15px]" />
-                <Plus className="absolute -right-[7px] -top-[7px] size-[10px] rounded-full bg-emerald-500 p-[1px] text-[#04140d]" strokeWidth={3} />
-              </span>
-            </button>
-          )}
-
           {hasDiscount && (
-            <span className="absolute bottom-3 left-3 z-[1] rounded-lg bg-emerald-500 px-2 py-1 text-[11px] font-extrabold text-[#04140d]">
+            <span className="absolute bottom-3 left-3 z-[1] rounded-lg bg-gradient-to-r from-red-600 to-yellow-400 px-2 py-1 text-[11px] font-extrabold text-white">
               -{discountPercent}%
             </span>
           )}
@@ -244,18 +197,18 @@ export function ProductCard(props: ProductCardProps) {
           </div>
 
           <div className="mt-auto">
-            {hasDiscount ? (
-              <div className="flex flex-wrap items-baseline gap-2">
-                <p className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(basePriceCents)}</p>
-                <p className="font-display text-lg font-bold text-emerald-400">{formatBRL(effectivePriceCents)}</p>
-                <span className="text-[9.5px] font-semibold uppercase tracking-wide text-emerald-400/80">à vista no PIX</span>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-baseline gap-2">
-                <p className="font-display text-lg font-bold text-white">{formatBRL(basePriceCents)}</p>
-                <span className="text-[9.5px] font-semibold uppercase tracking-wide text-emerald-400/80">à vista no PIX</span>
-              </div>
+            {hasDiscount && (
+              <p className="text-[11px] leading-tight text-[#6e6e6e] line-through">{formatBRL(basePriceCents)}</p>
             )}
+            <div className="flex flex-wrap items-baseline gap-2">
+              <p className={cn(
+                "font-display text-lg font-bold leading-tight",
+                hasDiscount ? "text-emerald-400" : "text-white"
+              )}>
+                {formatBRL(effectivePriceCents)}
+              </p>
+              <span className="text-[9.5px] font-semibold uppercase tracking-wide text-emerald-400/80">à vista no PIX</span>
+            </div>
             <p className="text-[10px] text-[#7a7a7a]">
               ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão
               {cardMaxInstallments > 1 && ` em até ${cardMaxInstallments}x sem juros`}
@@ -272,16 +225,6 @@ export function ProductCard(props: ProductCardProps) {
           </div>
         </div>
       </div>
-      {hasVariants && (
-        <VariantPickerDialog
-          slug={props.slug}
-          name={props.name}
-          category={props.category}
-          fallbackImage={image}
-          open={pickerOpen}
-          onOpenChange={setPickerOpen}
-        />
-      )}
     </Link>
   )
 }

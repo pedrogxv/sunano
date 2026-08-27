@@ -12,7 +12,7 @@ import {
 import { restrictToParentElement } from "@dnd-kit/modifiers"
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Ban, GripVertical, Loader2, Minus, Plus, Sparkles, Trash2, Upload, X } from "lucide-react"
+import { Ban, Boxes, GripVertical, Loader2, Minus, Plus, Sparkles, Trash2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -1486,8 +1486,8 @@ export function StoreProductForm({
         </p>
       </div>
 
-      {/* Price + Promo + Stock + Active */}
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Price + Promo */}
+      <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>Preço (R$) *</Label>
           <div className="relative">
@@ -1535,83 +1535,93 @@ export function StoreProductForm({
           )}
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label>Estoque {hasStock && "*"}</Label>
-            <button
-              type="button"
-              onClick={() => setHasStock((prev) => !prev)}
-              className="text-[10px] font-medium text-primary hover:underline"
-            >
-              {hasStock ? "Remover controle" : "Controlar estoque"}
-            </button>
-          </div>
-          {hasStock ? (
-            <>
-              <div className="flex items-stretch gap-1.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-8 shrink-0"
-                  onClick={() => bumpStock(-1)}
-                  disabled={parseInt(formData.stock, 10) <= 0}
-                  aria-label="Diminuir estoque"
-                >
-                  <Minus className="size-3.5" />
-                </Button>
-                <Input
-                  required
-                  type="number"
-                  min={0}
-                  max={MAX_STOCK}
-                  step={1}
-                  value={formData.stock}
-                  onChange={(e) => set("stock", e.target.value)}
-                  placeholder="1"
-                  className="no-spinner text-center"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  className="h-8 shrink-0"
-                  onClick={() => bumpStock(1)}
-                  disabled={parseInt(formData.stock, 10) >= MAX_STOCK}
-                  aria-label="Aumentar estoque"
-                >
-                  <Plus className="size-3.5" />
-                </Button>
-              </div>
-            </>
-          ) : (
-            <p className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-[10px] text-muted-foreground">
-              Sem controle de estoque — nunca esgota. Limite de {" "}
-              <span className="font-semibold text-foreground">15 unidades/dia por comprador</span>.
-            </p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label>Status</Label>
-          <Select
-            value={!formData.is_active ? "inactive" : formData.is_sold_out ? "sold_out" : "active"}
-            onValueChange={(v) => setStatus(v as "active" | "sold_out" | "inactive")}
-          >
-            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">✅ Ativo (visível)</SelectItem>
-              <SelectItem value="sold_out">⚠️ Esgotado (visível, não compra)</SelectItem>
-              <SelectItem value="inactive">🔒 Inativo (oculto)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
+      {/* Estoque & Variantes */}
+      <div className="space-y-4 rounded-xl border border-border bg-muted/10 p-4">
+        <div className="flex items-center gap-2">
+          <Boxes className="size-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">Estoque &amp; Variantes</h3>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Estoque {hasStock && "*"}</Label>
+              <button
+                type="button"
+                onClick={() => setHasStock((prev) => !prev)}
+                className="text-[10px] font-medium text-primary hover:underline"
+              >
+                {hasStock ? "Remover controle" : "Controlar estoque"}
+              </button>
+            </div>
+            {hasStock ? (
+              <>
+                <div className="flex items-stretch gap-1.5">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 shrink-0"
+                    onClick={() => bumpStock(-1)}
+                    disabled={parseInt(formData.stock, 10) <= 0}
+                    aria-label="Diminuir estoque"
+                  >
+                    <Minus className="size-3.5" />
+                  </Button>
+                  <Input
+                    required
+                    type="number"
+                    min={0}
+                    max={MAX_STOCK}
+                    step={1}
+                    value={formData.stock}
+                    onChange={(e) => set("stock", e.target.value)}
+                    placeholder="1"
+                    className="no-spinner text-center"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 shrink-0"
+                    onClick={() => bumpStock(1)}
+                    disabled={parseInt(formData.stock, 10) >= MAX_STOCK}
+                    aria-label="Aumentar estoque"
+                  >
+                    <Plus className="size-3.5" />
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <p className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-[10px] text-muted-foreground">
+                Sem controle de estoque — nunca esgota. Limite de {" "}
+                <span className="font-semibold text-foreground">15 unidades/dia por comprador</span>.
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <Select
+              value={!formData.is_active ? "inactive" : formData.is_sold_out ? "sold_out" : "active"}
+              onValueChange={(v) => setStatus(v as "active" | "sold_out" | "inactive")}
+            >
+              <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">✅ Ativo (visível)</SelectItem>
+                <SelectItem value="sold_out">⚠️ Esgotado (visível, não compra)</SelectItem>
+                <SelectItem value="inactive">🔒 Inativo (oculto)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
       {/* Cor */}
-      <div className="space-y-2">
+      <div className="space-y-2 border-t border-border/60 pt-4">
         <Label>Cor (Opcional)</Label>
         <p className="text-[10px] text-muted-foreground/60">
           Se o produto tem variações visuais (cor, modelo, etc.), cadastre aqui. Para um produto
@@ -1803,7 +1813,7 @@ export function StoreProductForm({
       </div>
 
       {/* Variantes */}
-      <div className="space-y-2">
+      <div className="space-y-2 border-t border-border/60 pt-4">
         <Label>Variantes (Opcional)</Label>
         <p className="text-[10px] text-muted-foreground/60">
           Outros tipos de opção do produto (Switch, Voltagem, Tamanho...). Cada opção é só um
@@ -1983,6 +1993,7 @@ export function StoreProductForm({
           </Button>
           <span className="text-[10px] text-muted-foreground">{variantGroups.length}/{MAX_VARIANT_GROUPS}</span>
         </div>
+      </div>
       </div>
 
       {/* Actions */}

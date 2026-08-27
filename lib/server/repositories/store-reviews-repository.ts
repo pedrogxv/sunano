@@ -180,6 +180,52 @@ export async function getReviewAggregate(productId: string): Promise<ReviewAggre
   return { avgRating, count: ratings.length }
 }
 
+export type StoreWideReview = ProductReview & {
+  product: { id: string; slug: string; name: string; images: string[]; category: string | null } | null
+}
+
+/** Média e total de todas as reviews publicadas da loja — usado na vitrine de avaliações gerais. */
+export async function getStoreWideReviewAggregate(): Promise<ReviewAggregate> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.from("store_product_reviews").select("rating").eq("status", "published")
+
+  if (error || !data || data.length === 0) return { avgRating: 0, count: 0 }
+  const ratings = (data as unknown as { rating: number }[]).map((r) => r.rating)
+  const avgRating = ratings.reduce((sum, r) => sum + r, 0) / ratings.length
+  return { avgRating, count: ratings.length }
+}
+
+/** Reviews publicadas de qualquer produto da loja, mais recentes primeiro — vitrine de avaliações gerais. */
+export async function listStoreWideReviews(limit = 40): Promise<StoreWideReview[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_product_reviews")
+    .select(
+      "id, product_id, user_id, rating, title, body, is_verified_purchase, status, created_at, product:store_products(id, slug, name, images, category)"
+    )
+    .eq("status", "published")
+    .order("created_at", { ascending: false })
+    .limit(limit)
+
+  if (error) {
+    console.error("[store-reviews-repository] listStoreWideReviews:", error)
+    return []
+  }
+  const rows = (data ?? []) as unknown as (Omit<ProductReview, "author"> & { product: StoreWideReview["product"] })[]
+  if (rows.length === 0) return []
+
+  const userIds = [...new Set(rows.map((r) => r.user_id))]
+  const { data: profiles } = await db.from("user_profiles").select("id, display_name, avatar_url").in("id", userIds)
+
+  const profileMap = new Map(
+    ((profiles ?? []) as unknown as { id: string; display_name: string | null; avatar_url: string | null }[]).map(
+      (p) => [p.id, { display_name: p.display_name, avatar_url: p.avatar_url }]
+    )
+  )
+
+  return rows.map((r) => ({ ...r, author: profileMap.get(r.user_id) ?? null }))
+}
+
 export async function getSunanoReview(productId: string, includeUnpublished = false): Promise<SunanoReview | null> {
   const db = createSupabaseAdminClient()
   let query = db

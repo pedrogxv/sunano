@@ -3,18 +3,20 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, Package, PackageSearch, ShieldCheck, SlidersHorizontal, Sparkles, Star, Tag, TrendingUp, Wrench, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, Package, PackageSearch, ShieldCheck, Sparkles, Star, Tag, TrendingUp, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Slider } from "@/components/ui/slider"
-import { MultiCombobox } from "@/components/ui/combobox"
-import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  countActiveFilters,
+  EMPTY_STORE_FILTERS,
+  StoreFilters,
+  type StoreFilterState,
+  type StoreSortKey,
+} from "@/components/store/StoreFilters"
 import { MarketInfoDialog } from "@/components/store/MarketInfoDialog"
 import { TrustStrip } from "@/components/store/TrustStrip"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
@@ -74,17 +76,6 @@ function toCarouselBanners(banners: StoreSectionBanner[]): SectionCarouselBanner
   }))
 }
 
-type SortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
-
-const PRICE_MIN = 0
-const SORT_LABEL: Record<SortKey, string> = {
-  recent: "Mais recentes",
-  "name-asc": "Nome A-Z",
-  "name-desc": "Nome Z-A",
-  "price-asc": "Menor preço",
-  "price-desc": "Maior preço",
-}
-
 function buildPageList(current: number, total: number): (number | "ellipsis")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
   const keep = new Set([1, total, current - 1, current, current + 1])
@@ -97,38 +88,6 @@ function buildPageList(current: number, total: number): (number | "ellipsis")[] 
     prev = p
   }
   return result
-}
-
-/** Chip da fileira de filtros do desktop (36 px, #141414 sobre #0a0a0a). */
-const TRIGGER_CLASS =
-  "flex h-9 w-auto items-center gap-[7px] whitespace-nowrap rounded-[10px] border border-[#2a2a2a] bg-[#141414] px-3.5 text-[12.5px] font-semibold text-[#cfcfcf] hover:border-foreground/25"
-
-/** Mesmo chip, empilhado e de largura cheia dentro do popover do mobile. */
-const MOBILE_TRIGGER_CLASS =
-  "flex h-11 w-full items-center justify-between gap-[7px] whitespace-nowrap rounded-xl border border-[#2a2a2a] bg-[#141414] px-4 text-[13px] font-semibold text-[#cfcfcf]"
-
-function PriceSlider({ value, onChange, max }: { value: [number, number]; onChange: (v: [number, number]) => void; max: number }) {
-  const [minVal, maxVal] = value
-  return (
-    <div className="flex flex-col gap-3 p-1">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Faixa de preço</span>
-        <span className="text-xs font-semibold text-foreground">R${minVal} – R${maxVal}</span>
-      </div>
-      <Slider
-        min={PRICE_MIN}
-        max={max}
-        step={10}
-        value={[minVal, maxVal]}
-        onValueChange={([min, max]) => onChange([min, max])}
-        className="w-full"
-      />
-      <div className="flex justify-between text-[10px] text-muted-foreground/60">
-        <span>R${PRICE_MIN}</span>
-        <span>R${max}</span>
-      </div>
-    </div>
-  )
 }
 
 /** Banner das landings de categoria/marca — substitui o hero padrão da Loja. */
@@ -157,6 +116,13 @@ function StoreBannerHero({
         strokeWidth={0.9}
       />
       <div className="relative mx-auto flex max-w-7xl flex-col gap-3 px-4 lg:px-8">
+        <Link
+          href="/loja"
+          className="inline-flex w-fit items-center gap-1.5 text-[13px] font-semibold text-[#9a9a9a] transition-colors hover:text-white"
+        >
+          <ArrowLeft className="size-3.5" />
+          Voltar à loja
+        </Link>
         <div className="flex items-center gap-3.5">
           <span
             className="flex size-14 shrink-0 items-center justify-center rounded-2xl border border-white/10"
@@ -259,9 +225,9 @@ function ProductCarouselSection({
           </div>
         )}
       </div>
-      <div ref={scrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 [scrollbar-width:thin] sm:gap-3.5 lg:-mx-8 lg:px-8">
+      <div ref={scrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 scrollbar-hide sm:gap-3.5 lg:-mx-8 lg:px-8">
         {items.map((product) => (
-          <div key={product.id} className="w-[168px] shrink-0 sm:w-[232px]">
+          <div key={product.id} className="w-[188px] shrink-0 sm:w-[258px]">
             <ProductCard {...product} />
           </div>
         ))}
@@ -281,19 +247,37 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // botões da direita (carrinho/login) pra fora da tela no mobile.
   usePageHeader("Loja", "PIX na hora, testado antes de anunciar")
 
-  const [query, setQuery] = useState(searchParams.get("q") ?? "")
-  const debouncedQuery = useDebouncedValue(query, 400)
-  // Landing de categoria/marca chega com o filtro correspondente pré-selecionado,
-  // mas o usuário continua livre pra trocar ou remover — igual a ter escolhido
-  // o filtro manualmente em /loja.
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    banner?.type === "category" ? [banner.value] : initialCategory ? [initialCategory] : []
-  )
-  const [selectedBrands, setSelectedBrands] = useState<string[]>(
-    banner?.type === "brand" ? [banner.value] : []
-  )
-  const [sortKey, setSortKey] = useState<SortKey>("recent")
+  // A landing manda no recorte: em /loja/categoria/mouse o cliente está dentro
+  // de "mouse" e ponto — a categoria some da barra de filtros em vez de virar
+  // um combo onde dava pra somar "teclado" e receber uma grade que não tem nada
+  // a ver com a página. Mesma regra pra marca em /loja/marca/<x>.
+  const lockedCategory = banner?.type === "category" ? banner.value : null
+  const lockedBrand = banner?.type === "brand" ? banner.value : null
+
+  const [filters, setFilters] = useState<StoreFilterState>(() => ({
+    ...EMPTY_STORE_FILTERS,
+    query: searchParams.get("q") ?? "",
+    categories: lockedCategory ? [lockedCategory] : initialCategory ? [initialCategory] : [],
+    brands: lockedBrand ? [lockedBrand] : [],
+  }))
+  const patchFilters = (patch: Partial<StoreFilterState>) => setFilters((prev) => ({ ...prev, ...patch }))
+  const resetFilters = () =>
+    setFilters({
+      ...EMPTY_STORE_FILTERS,
+      categories: lockedCategory ? [lockedCategory] : [],
+      brands: lockedBrand ? [lockedBrand] : [],
+    })
+
+  const debouncedQuery = useDebouncedValue(filters.query, 400)
+  const [sortKey, setSortKey] = useState<StoreSortKey>("recent")
   const [page, setPage] = useState(1)
+
+  // Buscar de novo estando já em /loja não remonta o componente — sem isso o
+  // `?q=` novo entrava na URL e a grade continuava mostrando a busca anterior.
+  const urlQuery = searchParams.get("q") ?? ""
+  useEffect(() => {
+    setFilters((prev) => (prev.query === urlQuery ? prev : { ...prev, query: urlQuery }))
+  }, [urlQuery])
 
   const [filterOptions, setFilterOptions] = useState<StoreFilterOptions>(initialFilterOptions)
   useEffect(() => {
@@ -305,30 +289,29 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       .catch(() => {})
   }, [])
 
-  const maxPriceCents = filterOptions.priceMaxCents || 0
-  const maxPrice = Math.ceil(maxPriceCents / 100 / 10) * 10
-
-  const [priceRangeOverride, setPriceRangeOverride] = useState<[number, number] | null>(null)
-  const priceRange = useMemo<[number, number]>(
-    () => priceRangeOverride ?? [PRICE_MIN, maxPrice],
-    [priceRangeOverride, maxPrice]
-  )
-  const setPriceRange = setPriceRangeOverride
-  const isPriceFiltered = priceRange[0] > PRICE_MIN || priceRange[1] < maxPrice
-
-  const categoryOptions = useMemo(
-    () => filterOptions.categories.map((c) => ({ value: c, label: getCategoryLabel(c) })),
-    [filterOptions.categories]
-  )
-  const brandOptions = useMemo(
-    () => filterOptions.brands.map((b) => ({ value: b, label: b })),
-    [filterOptions.brands]
-  )
+  // Facetas do recorte da página, não do catálogo inteiro: dentro de "mouse" as
+  // marcas, faixas de preço e contagens são as de mouse.
+  const facets = useMemo(() => {
+    if (lockedCategory) return filterOptions.facetsByCategory[lockedCategory] ?? filterOptions.facets
+    if (lockedBrand) return filterOptions.facetsByBrand[lockedBrand] ?? filterOptions.facets
+    return filterOptions.facets
+  }, [filterOptions, lockedCategory, lockedBrand])
 
   useEffect(() => {
-    setSelectedCategories((prev) => prev.filter((c) => filterOptions.categories.includes(c)))
-    setSelectedBrands((prev) => prev.filter((b) => filterOptions.brands.includes(b)))
+    setFilters((prev) => {
+      const categories = prev.categories.filter((c) => filterOptions.categories.includes(c))
+      const brands = prev.brands.filter((b) => filterOptions.brands.includes(b))
+      if (categories.length === prev.categories.length && brands.length === prev.brands.length) return prev
+      return { ...prev, categories, brands }
+    })
   }, [filterOptions.categories, filterOptions.brands])
+
+  // Uma chave só pros efeitos abaixo — o estado de filtro virou objeto, então
+  // comparar campo a campo na lista de dependências não escala mais.
+  const filterKey = useMemo(
+    () => JSON.stringify({ ...filters, query: debouncedQuery.trim() }),
+    [filters, debouncedQuery]
+  )
 
   // Estado de resultado: itens da página atual, servidos pelo servidor
   // (banco pagina/filtra, não mais o browser). `items`/`total` só trocam
@@ -348,17 +331,21 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // Volta pra página 1 sempre que um filtro (não a página em si) muda.
   useEffect(() => {
     setPage(1)
-  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], sortKey])
+  }, [filterKey, sortKey])
 
   useEffect(() => {
     const params = new URLSearchParams()
     params.set("type", "store")
-    if (selectedCategories.length > 0) params.set("categories", selectedCategories.join(","))
-    if (selectedBrands.length > 0) params.set("brands", selectedBrands.join(","))
+    if (filters.categories.length > 0) params.set("categories", filters.categories.join(","))
+    if (filters.brands.length > 0) params.set("brands", filters.brands.join(","))
+    if (filters.conditions.length > 0) params.set("conditions", filters.conditions.join(","))
+    if (filters.saleTypes.length > 0) params.set("saleTypes", filters.saleTypes.join(","))
+    if (filters.promoOnly) params.set("promo", "1")
+    if (filters.inStockOnly) params.set("inStock", "1")
     if (debouncedQuery.trim()) params.set("search", debouncedQuery.trim())
-    if (isPriceFiltered) {
-      params.set("priceMin", String(priceRange[0] * 100))
-      params.set("priceMax", String(priceRange[1] * 100))
+    if (filters.price) {
+      params.set("priceMin", String(filters.price[0] * 100))
+      params.set("priceMax", String(filters.price[1] * 100))
     }
     if (sortKey !== "recent") params.set("sort", sortKey)
     params.set("page", String(page))
@@ -390,21 +377,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       .finally(() => (appending ? setIsLoadingMore(false) : setIsFetching(false)))
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedCategories.join(","), selectedBrands.join(","), debouncedQuery, priceRange[0], priceRange[1], isPriceFiltered, sortKey, page, pageSize])
-
-  const activeFiltersCount =
-    selectedCategories.length +
-    selectedBrands.length +
-    (query.trim() ? 1 : 0) +
-    (isPriceFiltered ? 1 : 0)
-
-  const resetFilters = () => {
-    setQuery("")
-    setSelectedCategories([])
-    setSelectedBrands([])
-    setPriceRange(null)
-    setSortKey("recent")
-  }
+  }, [filterKey, sortKey, page, pageSize])
 
   // Mobile: acumula a próxima página no grid já visível, em vez da paginação
   // numérica do desktop.
@@ -439,73 +412,14 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
     [readyStockItems, preOrderItems]
   )
 
-  const activeCategory = selectedCategories.length === 1 ? selectedCategories[0] : null
+  const activeCategory = filters.categories.length === 1 ? filters.categories[0] : null
+  const activeFiltersCount = countActiveFilters(filters, lockedCategory, lockedBrand)
 
   // Com poucos itens todos já cabem na tela sem rolar — "ver tudo" e as setas
   // de carrossel não fazem sentido até que sobre item fora da área visível.
   const showFeaturedCarouselControls = featuredItems.length > 5
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
-
-  // Os mesmos controles aparecem em dois lugares: na fileira do desktop e
-  // empilhados dentro do popover "Filtros" do mobile (o artboard 390 troca a
-  // fileira inteira por um botão só).
-  const renderFilters = (triggerClass: string) => (
-    <>
-      {/* Termo de busca ativo (vindo do dropdown "ver todos" ou de ?q= direto)
-          — some quando vazio, já que a digitação em si vive no StoreSearchBox
-          da faixa de categorias, não aqui. */}
-      {query.trim() && (
-        <span className={cn(triggerClass, "gap-2 pr-2")}>
-          <span className="max-w-[160px] truncate">&ldquo;{query.trim()}&rdquo;</span>
-          <button
-            type="button"
-            onClick={() => setQuery("")}
-            aria-label="Limpar busca"
-            className="flex size-4 items-center justify-center rounded-full text-[#6e6e6e] hover:text-white"
-          >
-            <X className="size-3" />
-          </button>
-        </span>
-      )}
-
-      {categoryOptions.length > 0 && (
-        <MultiCombobox
-          options={categoryOptions}
-          values={selectedCategories}
-          onValuesChange={setSelectedCategories}
-          placeholder="Categoria"
-          searchPlaceholder="Buscar categoria"
-          allLabel="Todas as categorias"
-          className={triggerClass}
-        />
-      )}
-
-      {brandOptions.length > 0 && (
-        <MultiCombobox
-          options={brandOptions}
-          values={selectedBrands}
-          onValuesChange={setSelectedBrands}
-          placeholder="Marca"
-          searchPlaceholder="Buscar marca"
-          allLabel="Todas as marcas"
-          className={triggerClass}
-        />
-      )}
-
-      <Popover>
-        <PopoverTrigger asChild>
-          <button type="button" className={triggerClass}>
-            Preço
-            <ChevronDown className="size-[13px] text-[#6e6e6e]" strokeWidth={2.2} />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent className="w-72" align="start">
-          <PriceSlider value={priceRange} onChange={setPriceRange} max={maxPrice} />
-        </PopoverContent>
-      </Popover>
-    </>
-  )
 
   return (
     <div>
@@ -600,9 +514,9 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 </div>
               )}
             </div>
-            <div ref={featuredScrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 [scrollbar-width:thin] sm:gap-3.5 lg:-mx-8 lg:px-8">
+            <div ref={featuredScrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 scrollbar-hide sm:gap-3.5 lg:-mx-8 lg:px-8">
               {featuredItems.map((product) => (
-                <div key={product.id} className="w-[168px] shrink-0 sm:w-[232px]">
+                <div key={product.id} className="w-[188px] shrink-0 sm:w-[258px]">
                   <ProductCard {...product} />
                 </div>
               ))}
@@ -699,100 +613,25 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             só aparece quando há uma busca ativa (StoreSearchBox navega pra
             cá com ?q=...#produtos mesmo sem banner). Sem isso a busca fica
             sem lugar pra mostrar resultado na Home. */}
-        {(banner || query.trim()) && (
+        {(banner || filters.query.trim()) && (
         <section id="produtos" className="flex scroll-mt-20 flex-col gap-3.5 sm:gap-[18px]">
           <div className="flex flex-col gap-[3px] sm:gap-1">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Catálogo completo</p>
             <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Todos os produtos</h2>
           </div>
 
-          {/* Mobile: um botão "Filtros" com contador, e a contagem à direita. */}
-          <div className="flex items-center gap-2.5 md:hidden">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-11 items-center gap-[7px] rounded-xl border border-[#2a2a2a] bg-[#141414] px-4 text-[12.5px] font-bold text-[#e8e8e8]"
-                >
-                  <SlidersHorizontal className="size-[15px]" strokeWidth={1.9} />
-                  Filtros
-                  {activeFiltersCount > 0 && (
-                    <span className="flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9.5px] font-extrabold text-[#04140d]">
-                      {activeFiltersCount}
-                    </span>
-                  )}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="flex w-[calc(100vw-2rem)] max-w-sm flex-col gap-2.5">
-                {renderFilters(MOBILE_TRIGGER_CLASS)}
-                <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-                  <SelectTrigger className={MOBILE_TRIGGER_CLASS}>
-                    <SelectValue>{SORT_LABEL[sortKey]}</SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="recent">Mais recentes</SelectItem>
-                    <SelectItem value="name-asc">Nome A-Z</SelectItem>
-                    <SelectItem value="name-desc">Nome Z-A</SelectItem>
-                    <SelectItem value="price-asc">Menor preço</SelectItem>
-                    <SelectItem value="price-desc">Maior preço</SelectItem>
-                  </SelectContent>
-                </Select>
-                {activeFiltersCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={resetFilters} className="gap-1.5 text-muted-foreground">
-                    <X className="size-3.5" />
-                    Limpar ({activeFiltersCount})
-                  </Button>
-                )}
-              </PopoverContent>
-            </Popover>
-            <span className="ml-auto flex items-center gap-2 text-[12.5px] font-semibold text-[#8a8a8a]">
-              <b className="text-white">{total}</b> produto{total !== 1 ? "s" : ""}
-              {isFetching && <Loader2 className="size-3.5 animate-spin text-[#8a8a8a]" />}
-            </span>
-          </div>
-
-          {/* Desktop: a fileira compacta do mock — a busca não aparece aqui,
-              ela vive na faixa de categorias logo acima. */}
-          <div className="hidden flex-col gap-2.5 md:flex">
-            <div className="flex flex-wrap items-center gap-2.5 rounded-[14px] border border-[#262626] bg-card px-3.5 py-3">
-              <span className="inline-flex shrink-0 items-center gap-[7px] border-r border-[#262626] pr-3 text-xs font-bold text-[#8a8a8a]">
-                <SlidersHorizontal className="size-3.5" strokeWidth={1.9} />
-                Filtros
-              </span>
-
-              {renderFilters(TRIGGER_CLASS)}
-
-              {activeFiltersCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={resetFilters}
-                  className="ml-auto h-9 gap-1.5 text-[12.5px] text-[#8a8a8a] hover:text-white"
-                >
-                  <X className="size-3.5" />
-                  Limpar ({activeFiltersCount})
-                </Button>
-              )}
-
-              <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-                <SelectTrigger className={cn("flex h-9 w-auto items-center gap-[7px] whitespace-nowrap rounded-[10px] border border-white bg-white px-3.5 text-[12.5px] font-bold text-black hover:opacity-90 dark:bg-white dark:hover:bg-white", activeFiltersCount === 0 && "ml-auto")}>
-                  <SelectValue>{SORT_LABEL[sortKey]}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="recent">Mais recentes</SelectItem>
-                  <SelectItem value="name-asc">Nome A-Z</SelectItem>
-                  <SelectItem value="name-desc">Nome Z-A</SelectItem>
-                  <SelectItem value="price-asc">Menor preço</SelectItem>
-                  <SelectItem value="price-desc">Maior preço</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-[#8a8a8a]">
-              <b className="text-white">{total}</b> produto{total !== 1 ? "s" : ""}
-              {isFetching && <Loader2 className="size-3.5 animate-spin text-[#8a8a8a]" />}
-            </span>
-          </div>
+          <StoreFilters
+            state={filters}
+            onChange={patchFilters}
+            onReset={resetFilters}
+            facets={facets}
+            lockedCategory={lockedCategory}
+            lockedBrand={lockedBrand}
+            sortKey={sortKey}
+            onSortChange={setSortKey}
+            total={total}
+            isFetching={isFetching}
+          />
 
           {isFetching ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5 lg:grid-cols-4">
@@ -801,9 +640,20 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
               ))}
             </div>
           ) : items.length === 0 ? (
-            <div className="rounded-[18px] border border-[#262626] bg-card p-12 text-center">
+            <div className="flex flex-col items-center rounded-[18px] border border-[#262626] bg-card p-12 text-center">
               <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
-              <p className="mt-1 text-xs text-muted-foreground/60">Tente ajustar os filtros.</p>
+              <p className="mt-1 text-xs text-muted-foreground/60">
+                {activeFiltersCount > 0 ? "Nenhum produto bate com todos os filtros." : "Tente outra busca."}
+              </p>
+              {activeFiltersCount > 0 && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="mt-4 inline-flex h-9 items-center rounded-[10px] border border-[#2a2a2a] bg-[#141414] px-4 text-[12.5px] font-bold text-[#e8e8e8] transition-colors hover:border-foreground/25"
+                >
+                  Limpar filtros
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5 lg:grid-cols-4">
@@ -880,7 +730,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         {/* Categorias — só aparece na Loja geral. Na landing de categoria a
             navegação já vive inteira no menu do header (StoreCategoryNav),
             sem repetir a mesma lista aqui embaixo. */}
-        {categoryOptions.length > 0 && banner?.type !== "category" && (
+        {filterOptions.categories.length > 0 && banner?.type !== "category" && (
           <section className="flex flex-col gap-3.5 sm:gap-[18px]">
             <div className="flex flex-col gap-[3px] sm:gap-1">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>

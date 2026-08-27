@@ -157,9 +157,14 @@ export async function listActiveProducts(): Promise<StoreProductCard[]> {
   return ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
 }
 
+export type StoreCondition = "new" | "used" | "opened"
+export type StoreSaleType = "pre_order" | "ready_stock" | "normal"
+
 export type StoreProductListFilters = {
   type?: "store"
-  condition?: "new" | "used" | "opened"
+  condition?: StoreCondition
+  /** Multi-seleção da vitrine (o singular acima continua para chamadas antigas). */
+  conditions?: StoreCondition[]
   categories?: string[]
   brands?: string[]
   search?: string
@@ -170,7 +175,13 @@ export type StoreProductListFilters = {
   outOfStockOnly?: boolean
   /** Filtra só produtos marcados como destaque (`is_featured`). */
   featured?: boolean
-  saleType?: "pre_order" | "ready_stock" | "normal"
+  saleType?: StoreSaleType
+  /** Multi-seleção da vitrine (o singular acima continua para chamadas antigas). */
+  saleTypes?: StoreSaleType[]
+  /** Só produtos com preço promocional ativo. */
+  promoOnly?: boolean
+  /** Esconde esgotados (marcados na mão ou com estoque zerado). */
+  inStockOnly?: boolean
   sort?: "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
   page?: number
   pageSize?: number
@@ -181,6 +192,16 @@ export type StoreProductListFilters = {
 export type StoreProductListResult = {
   items: StoreProductCard[]
   total: number
+}
+
+/**
+ * Preço que o cliente realmente paga: promocional quando existe, senão o cheio.
+ * PostgREST não compara duas colunas, então a faixa vira uma árvore
+ * `or(and(...),and(...))` — sem isso um produto de R$400 em promo por R$280
+ * sumia do filtro "até R$300".
+ */
+function effectivePriceOr(op: "gte" | "lte", cents: number): string {
+  return `and(promo_price_cents.not.is.null,promo_price_cents.${op}.${cents}),and(promo_price_cents.is.null,price_cents.${op}.${cents})`
 }
 
 /**
@@ -205,11 +226,15 @@ export async function listStoreProductsPaginated(
     const term = escapeOrFilterValue(filters.search.trim())
     query = query.or(`name.ilike."%${term}%",brand.ilike."%${term}%"`)
   }
-  if (filters.priceMinCents != null) query = query.gte("price_cents", filters.priceMinCents)
-  if (filters.priceMaxCents != null) query = query.lte("price_cents", filters.priceMaxCents)
+  if (filters.priceMinCents != null) query = query.or(effectivePriceOr("gte", filters.priceMinCents))
+  if (filters.priceMaxCents != null) query = query.or(effectivePriceOr("lte", filters.priceMaxCents))
   if (filters.outOfStockOnly) query = query.eq("stock", 0)
   if (filters.featured) query = query.eq("is_featured", true)
   if (filters.saleType) query = query.eq("sale_type", filters.saleType)
+  if (filters.saleTypes?.length) query = query.in("sale_type", filters.saleTypes)
+  if (filters.conditions?.length) query = query.in("condition", filters.conditions)
+  if (filters.promoOnly) query = query.not("promo_price_cents", "is", null)
+  if (filters.inStockOnly) query = query.eq("is_sold_out", false).or("stock.is.null,stock.gt.0")
   if (filters.productIds) {
     if (filters.productIds.length === 0) return { items: [], total: 0 }
     query = query.in("id", filters.productIds)
@@ -307,6 +332,24 @@ export async function searchStoreProductsTop(
   return ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
 }
 
+/**
+ * Contagem por opção de filtro, usada pra mostrar "(12)" ao lado de cada
+ * faceta e pra esconder opção que não existe naquele recorte. Cada recorte
+ * (catálogo inteiro / uma categoria / uma marca) tem o seu.
+ */
+export type StoreFacetCounts = {
+  total: number
+  brands: { brand: string; count: number }[]
+  categories: { category: string; count: number }[]
+  conditions: Record<StoreCondition, number>
+  saleTypes: Record<StoreSaleType, number>
+  promoCount: number
+  inStockCount: number
+  /** Preço efetivo (promo quando existe) — é o que o filtro de faixa compara. */
+  priceMinCents: number
+  priceMaxCents: number
+}
+
 export type StoreFilterOptions = {
   categories: string[]
   categoryCounts: Record<string, number>
@@ -317,6 +360,12 @@ export type StoreFilterOptions = {
    * opções (cada linha já traz category + brand), sem custo extra.
    */
   brandsByCategory: Record<string, { brand: string; count: number }[]>
+  /** Facetas do catálogo inteiro. */
+  facets: StoreFacetCounts
+  /** Facetas recortadas por categoria — landing de categoria só oferece o que existe ali. */
+  facetsByCategory: Record<string, StoreFacetCounts>
+  /** Facetas recortadas por marca — mesma ideia, para a landing de marca. */
+  facetsByBrand: Record<string, StoreFacetCounts>
   priceMinCents: number
   priceMaxCents: number
   countByType: { store: number; all: number }
@@ -329,45 +378,83 @@ export type StoreFilterOptions = {
  */
 export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilterOptions> {
   const db = createSupabaseAdminClient()
-  let query = db.from("store_products").select("category, brand, price_cents, type").eq("is_active", true)
+  let query = db
+    .from("store_products")
+    .select("category, brand, price_cents, promo_price_cents, condition, sale_type, is_sold_out, stock, type")
+    .eq("is_active", true)
   if (type) query = query.eq("type", type)
 
   const { data, error } = await query
   if (error) {
     console.error("[store-repository] getStoreFilterOptions:", error)
-    return { categories: [], categoryCounts: {}, brands: [], brandsByCategory: {}, priceMinCents: 0, priceMaxCents: 0, countByType: { store: 0, all: 0 } }
+    return {
+      categories: [],
+      categoryCounts: {},
+      brands: [],
+      brandsByCategory: {},
+      facets: emptyFacets(),
+      facetsByCategory: {},
+      facetsByBrand: {},
+      priceMinCents: 0,
+      priceMaxCents: 0,
+      countByType: { store: 0, all: 0 },
+    }
   }
 
-  const rows = (data ?? []) as unknown as { category: string | null; brand: string | null; price_cents: number; type: "store" }[]
+  type FacetRow = {
+    category: string | null
+    brand: string | null
+    price_cents: number
+    promo_price_cents: number | null
+    condition: StoreCondition
+    sale_type: StoreSaleType | null
+    is_sold_out: boolean
+    stock: number | null
+    type: "store"
+  }
+  const rows = (data ?? []) as unknown as FacetRow[]
   const categories = new Set<string>()
   const categoryCounts: Record<string, number> = {}
   const brands = new Set<string>()
-  const brandCountsByCategory: Record<string, Record<string, number>> = {}
   const countByType = { store: 0, all: 0 }
-  let priceMinCents = Infinity
-  let priceMaxCents = 0
+
+  const all = createFacetAccumulator()
+  const byCategory = new Map<string, FacetAccumulator>()
+  const byBrand = new Map<string, FacetAccumulator>()
 
   for (const row of rows) {
     if (row.category) {
       categories.add(row.category)
       categoryCounts[row.category] = (categoryCounts[row.category] ?? 0) + 1
-      if (row.brand) {
-        const perCategory = (brandCountsByCategory[row.category] ??= {})
-        perCategory[row.brand] = (perCategory[row.brand] ?? 0) + 1
-      }
     }
     if (row.brand) brands.add(row.brand)
     countByType[row.type] += 1
     countByType.all += 1
-    priceMinCents = Math.min(priceMinCents, row.price_cents)
-    priceMaxCents = Math.max(priceMaxCents, row.price_cents)
+
+    accumulateFacet(all, row)
+    if (row.category) {
+      let acc = byCategory.get(row.category)
+      if (!acc) byCategory.set(row.category, (acc = createFacetAccumulator()))
+      accumulateFacet(acc, row)
+    }
+    if (row.brand) {
+      let acc = byBrand.get(row.brand)
+      if (!acc) byBrand.set(row.brand, (acc = createFacetAccumulator()))
+      accumulateFacet(acc, row)
+    }
   }
 
+  const facets = finalizeFacets(all)
+  const facetsByCategory: Record<string, StoreFacetCounts> = {}
+  for (const [category, acc] of byCategory) facetsByCategory[category] = finalizeFacets(acc)
+  const facetsByBrand: Record<string, StoreFacetCounts> = {}
+  for (const [brand, acc] of byBrand) facetsByBrand[brand] = finalizeFacets(acc)
+
+  // O mega menu já consumia essa forma antes das facetas existirem — sai delas
+  // agora em vez de um segundo acumulador com a mesma contagem.
   const brandsByCategory: Record<string, { brand: string; count: number }[]> = {}
-  for (const [category, counts] of Object.entries(brandCountsByCategory)) {
-    brandsByCategory[category] = Object.entries(counts)
-      .map(([brand, count]) => ({ brand, count }))
-      .sort((a, b) => b.count - a.count || a.brand.localeCompare(b.brand))
+  for (const [category, categoryFacets] of Object.entries(facetsByCategory)) {
+    brandsByCategory[category] = categoryFacets.brands
   }
 
   return {
@@ -375,10 +462,88 @@ export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilter
     categoryCounts,
     brands: [...brands].sort((a, b) => a.localeCompare(b)),
     brandsByCategory,
-    priceMinCents: Number.isFinite(priceMinCents) ? priceMinCents : 0,
-    priceMaxCents,
+    facets,
+    facetsByCategory,
+    facetsByBrand,
+    priceMinCents: facets.priceMinCents,
+    priceMaxCents: facets.priceMaxCents,
     countByType,
   }
+}
+
+type FacetAccumulator = {
+  total: number
+  brands: Record<string, number>
+  categories: Record<string, number>
+  conditions: Record<StoreCondition, number>
+  saleTypes: Record<StoreSaleType, number>
+  promoCount: number
+  inStockCount: number
+  priceMinCents: number
+  priceMaxCents: number
+}
+
+function createFacetAccumulator(): FacetAccumulator {
+  return {
+    total: 0,
+    brands: {},
+    categories: {},
+    conditions: { new: 0, opened: 0, used: 0 },
+    saleTypes: { ready_stock: 0, pre_order: 0, normal: 0 },
+    promoCount: 0,
+    inStockCount: 0,
+    priceMinCents: Infinity,
+    priceMaxCents: 0,
+  }
+}
+
+function accumulateFacet(
+  acc: FacetAccumulator,
+  row: {
+    category: string | null
+    brand: string | null
+    price_cents: number
+    promo_price_cents: number | null
+    condition: StoreCondition
+    sale_type: StoreSaleType | null
+    is_sold_out: boolean
+    stock: number | null
+  }
+): void {
+  acc.total += 1
+  if (row.brand) acc.brands[row.brand] = (acc.brands[row.brand] ?? 0) + 1
+  if (row.category) acc.categories[row.category] = (acc.categories[row.category] ?? 0) + 1
+  if (row.condition in acc.conditions) acc.conditions[row.condition] += 1
+  const saleType = row.sale_type ?? "normal"
+  if (saleType in acc.saleTypes) acc.saleTypes[saleType] += 1
+  const hasPromo = row.promo_price_cents != null && row.promo_price_cents < row.price_cents
+  if (hasPromo) acc.promoCount += 1
+  if (!row.is_sold_out && (row.stock == null || row.stock > 0)) acc.inStockCount += 1
+  const effective = hasPromo ? row.promo_price_cents! : row.price_cents
+  acc.priceMinCents = Math.min(acc.priceMinCents, effective)
+  acc.priceMaxCents = Math.max(acc.priceMaxCents, effective)
+}
+
+function finalizeFacets(acc: FacetAccumulator): StoreFacetCounts {
+  return {
+    total: acc.total,
+    brands: Object.entries(acc.brands)
+      .map(([brand, count]) => ({ brand, count }))
+      .sort((a, b) => b.count - a.count || a.brand.localeCompare(b.brand)),
+    categories: Object.entries(acc.categories)
+      .map(([category, count]) => ({ category, count }))
+      .sort((a, b) => b.count - a.count || a.category.localeCompare(b.category)),
+    conditions: acc.conditions,
+    saleTypes: acc.saleTypes,
+    promoCount: acc.promoCount,
+    inStockCount: acc.inStockCount,
+    priceMinCents: Number.isFinite(acc.priceMinCents) ? acc.priceMinCents : 0,
+    priceMaxCents: acc.priceMaxCents,
+  }
+}
+
+function emptyFacets(): StoreFacetCounts {
+  return finalizeFacets(createFacetAccumulator())
 }
 
 /**

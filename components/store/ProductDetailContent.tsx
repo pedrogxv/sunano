@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { markImageSettled } from "@/lib/image-settled"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
 import { computeCardPriceCents } from "@/lib/store-pricing"
@@ -291,6 +292,13 @@ export function ProductDetailContent({
         previewPool={previewPool}
       />
       <div className="mx-auto max-w-7xl px-4 pb-12 md:px-6 lg:pb-16 pt-5">
+      <Link
+        href={backHref}
+        className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-3.5" />
+        Voltar à loja
+      </Link>
       <div className="flex flex-col gap-10 md:flex-row md:items-start lg:gap-16">
         {/* Images */}
         <div className="space-y-4 md:w-1/2">
@@ -322,7 +330,9 @@ export function ProductDetailContent({
                     key={images[activeImage] as string}
                     src={images[activeImage] as string}
                     alt={product.name}
+                    ref={(el) => markImageSettled(el, () => setMainImageLoaded(images[activeImage] as string))}
                     onLoad={() => setMainImageLoaded(images[activeImage] as string)}
+                    onError={() => setMainImageLoaded(images[activeImage] as string)}
                     className={cn(
                       "h-full w-full object-contain p-8 transition-opacity duration-150",
                       mainImageLoaded === images[activeImage] ? "opacity-100" : "opacity-0"
@@ -367,7 +377,9 @@ export function ProductDetailContent({
                       alt={product.name}
                       draggable={false}
                       onClick={toggleZoom}
+                      ref={(el) => markImageSettled(el, () => setLoadedDialog(activeImage))}
                       onLoad={() => setLoadedDialog(activeImage)}
+                      onError={() => setLoadedDialog(activeImage)}
                       className={cn(
                         "h-full w-full object-contain",
                         !drag && "transition-[opacity,transform] duration-200",
@@ -502,21 +514,22 @@ export function ProductDetailContent({
           )}
 
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] px-6 py-5">
-            {hasDiscount ? (
-              <div className="flex flex-wrap items-baseline gap-3">
-                <p className="text-base text-muted-foreground line-through">{formatBRL(baseEffectivePriceCents)}</p>
-                <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
+            {hasDiscount && (
+              <p className="text-base text-muted-foreground line-through">{formatBRL(baseEffectivePriceCents)}</p>
+            )}
+            <div className="flex flex-wrap items-baseline gap-3">
+              <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
+              {hasDiscount && (
                 <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-bold text-emerald-400">
                   -{discountPercent}%
                 </span>
-              </div>
-            ) : (
-              <p className="font-display text-[42px] font-bold leading-none text-emerald-400">{formatBRL(effectivePriceCents)}</p>
-            )}
-            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-emerald-400/80">à vista no PIX</p>
+              )}
+            </div>
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-emerald-400/80">
+              {cardSurchargePercent}% de desconto à vista no PIX
+            </p>
             <p className="mt-2 text-sm text-muted-foreground">
               ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão de crédito
-              (+{cardSurchargePercent}%)
             </p>
             {cardMaxInstallments > 1 && (
               <p className="mt-0.5 text-sm text-muted-foreground">
@@ -545,7 +558,8 @@ export function ProductDetailContent({
                     <button
                       key={v.id}
                       type="button"
-                      onClick={() => handleSelectVariant(v.id)}
+                      onClick={() => !variantSoldOut && handleSelectVariant(v.id)}
+                      disabled={variantSoldOut}
                       className={cn(
                         "flex items-center gap-2.5 rounded-xl border-[1.5px] px-4 py-3 text-sm font-semibold transition-colors",
                         isActive

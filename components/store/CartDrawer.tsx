@@ -231,7 +231,7 @@ export function CartDrawer() {
             </div>
 
             <p className="text-[10px] text-muted-foreground">
-              PIX: {formatBRL(total)} · Cartão: {formatBRL(cardTotal)} (+{cardSurchargePercent}%)
+              PIX: {formatBRL(total)} ({cardSurchargePercent}% de desconto) · Cartão: {formatBRL(cardTotal)}
             </p>
 
             {hasPreOrderItem && (

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { listStoreProductsPaginated, type StoreProductListFilters } from "@/lib/server/repositories/store-repository"
+import { listStoreProductsPaginated, type StoreCondition, type StoreProductListFilters } from "@/lib/server/repositories/store-repository"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -12,12 +12,18 @@ export const runtime = "nodejs"
 
 const SORT_KEYS = ["recent", "name-asc", "name-desc", "price-asc", "price-desc"] as const
 const CONDITIONS = ["new", "used", "opened"] as const
+const SALE_TYPES = ["pre_order", "ready_stock", "normal"] as const
 
 function parseCsv(value: string | null): string[] | undefined {
   const trimmed = value?.trim()
   if (!trimmed) return undefined
   const list = trimmed.split(",").map((v) => v.trim()).filter(Boolean)
   return list.length > 0 ? list : undefined
+}
+
+function parseEnumCsv<T extends string>(value: string | null, allowed: readonly T[]): T[] | undefined {
+  const list = parseCsv(value)?.filter((v): v is T => (allowed as readonly string[]).includes(v))
+  return list && list.length > 0 ? list : undefined
 }
 
 function parseNumber(value: string | null): number | undefined {
@@ -31,8 +37,13 @@ export async function GET(request: NextRequest) {
 
   const conditionParam = searchParams.get("condition")?.trim()
   const condition = (CONDITIONS as readonly string[]).includes(conditionParam ?? "")
-    ? (conditionParam as "new" | "used" | "opened")
+    ? (conditionParam as StoreCondition)
     : undefined
+
+  // Facetas multi-seleção da vitrine: valores desconhecidos caem fora em vez
+  // de virarem `in.(...)` inválido no banco.
+  const conditions = parseEnumCsv(searchParams.get("conditions"), CONDITIONS)
+  const saleTypes = parseEnumCsv(searchParams.get("saleTypes"), SALE_TYPES)
 
   const sortParam = searchParams.get("sort")?.trim()
   const sort = (SORT_KEYS as readonly string[]).includes(sortParam ?? "") ? (sortParam as StoreProductListFilters["sort"]) : undefined
@@ -47,6 +58,10 @@ export async function GET(request: NextRequest) {
     priceMaxCents: parseNumber(searchParams.get("priceMax")),
     productIds: parseCsv(searchParams.get("productIds")),
     featured: searchParams.get("featured") === "1" ? true : undefined,
+    conditions,
+    saleTypes,
+    promoOnly: searchParams.get("promo") === "1" ? true : undefined,
+    inStockOnly: searchParams.get("inStock") === "1" ? true : undefined,
     sort,
     page: parseNumber(searchParams.get("page")),
     pageSize: parseNumber(searchParams.get("pageSize")),

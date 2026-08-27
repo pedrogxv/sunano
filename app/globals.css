@@ -134,6 +134,16 @@ h3,
   background: var(--muted-foreground);
 }
 
+/* Esconde a scrollbar em carrosséis que já têm navegação por setas. */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Esconde as setas nativas de input[type=number] para usar um stepper custom. */
 .no-spinner::-webkit-outer-spin-button,
 .no-spinner::-webkit-inner-spin-button {

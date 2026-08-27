@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, ChevronDown, Home, LifeBuoy, Star } from "lucide-react"
+import { ArrowRight, ChevronDown, Home, LifeBuoy, MessageSquareText, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
@@ -45,6 +45,11 @@ const GROUP_LABEL: Record<StoreNavGroup, string> = {
 /** Ordem fixa do menu — não segue mais a lista alfabética de categorias do banco. */
 const GROUP_ORDER: StoreNavGroup[] = ["mouse", "teclado", "mousepad", "audio", "outros"]
 
+/** Intervalo de troca do card "Em destaque" enquanto o menu está aberto. */
+const PREVIEW_ROTATE_MS = 3200
+/** Quantos produtos entram no rodízio por grupo — o suficiente pra variar sem virar slideshow infinito. */
+const PREVIEW_MAX_CANDIDATES = 5
+
 export function StoreCategoryNav({
   categories,
   categoryCounts,
@@ -53,7 +58,13 @@ export function StoreCategoryNav({
   previewPool,
 }: StoreCategoryNavProps) {
   const [hovered, setHovered] = useState<StoreNavGroup | null>(null)
-  if (categories.length === 0) return null
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const [previewPaused, setPreviewPaused] = useState(false)
+
+  const hoverGroup = (group: StoreNavGroup | null) => {
+    setHovered(group)
+    setPreviewIndex(0)
+  }
 
   const grouped = new Map<StoreNavGroup, string[]>()
   for (const category of categories) {
@@ -75,14 +86,40 @@ export function StoreCategoryNav({
           }, {})
       ).sort((a, b) => b.count - a.count)
     : []
-  const previewProduct = openCategories.length
-    ? previewPool.find((p) => p.category != null && openCategories.includes(p.category) && p.promo_price_cents != null && p.promo_price_cents < p.price_cents)
-      ?? previewPool.find((p) => p.category != null && openCategories.includes(p.category))
-      ?? null
-    : null
+  // Rodízio do card "Em destaque": prioriza os marcados manualmente pelo admin
+  // (`is_featured`), completa com promoções e por fim com qualquer produto da
+  // categoria — sempre deduplicado e limitado pra não virar slideshow infinito.
+  const previewCandidates: StoreProductCard[] = []
+  if (openCategories.length) {
+    const inGroup = previewPool.filter((p) => p.category != null && openCategories.includes(p.category))
+    const isPromo = (p: StoreProductCard) => p.promo_price_cents != null && p.promo_price_cents < p.price_cents
+    const ranked = [
+      ...inGroup.filter((p) => p.is_featured),
+      ...inGroup.filter((p) => !p.is_featured && isPromo(p)),
+      ...inGroup.filter((p) => !p.is_featured && !isPromo(p)),
+    ]
+    const seen = new Set<string>()
+    for (const p of ranked) {
+      if (seen.has(p.id)) continue
+      seen.add(p.id)
+      previewCandidates.push(p)
+      if (previewCandidates.length === PREVIEW_MAX_CANDIDATES) break
+    }
+  }
+  const previewProduct = previewCandidates.length ? previewCandidates[previewIndex % previewCandidates.length] : null
+
+  useEffect(() => {
+    if (!hovered || previewPaused || previewCandidates.length < 2) return
+    const id = setInterval(() => {
+      setPreviewIndex((i) => (i + 1) % previewCandidates.length)
+    }, PREVIEW_ROTATE_MS)
+    return () => clearInterval(id)
+  }, [hovered, previewPaused, previewCandidates.length])
+
+  if (categories.length === 0) return null
 
   return (
-    <div className="relative" onMouseLeave={() => setHovered(null)}>
+    <div className="relative" onMouseLeave={() => hoverGroup(null)}>
       {/* Desktop: layout space-between em 3 blocos — Home | Categorias | Busca+Suporte. */}
       <nav className="hidden items-center justify-between border-b border-[#262626] bg-card px-4 md:flex lg:px-8">
         <Link
@@ -127,7 +164,7 @@ export function StoreCategoryNav({
               <Link
                 key={group}
                 href={singleHref}
-                onMouseEnter={() => setHovered(group)}
+                onMouseEnter={() => hoverGroup(group)}
                 style={{ borderColor: highlighted ? tint : "transparent" }}
                 className={sharedClass}
               >
@@ -137,7 +174,7 @@ export function StoreCategoryNav({
               <button
                 key={group}
                 type="button"
-                onMouseEnter={() => setHovered(group)}
+                onMouseEnter={() => hoverGroup(group)}
                 style={{ borderColor: highlighted ? tint : "transparent" }}
                 className={sharedClass}
               >
@@ -145,6 +182,13 @@ export function StoreCategoryNav({
               </button>
             )
           })}
+          <Link
+            href="/loja/avaliacoes"
+            className="flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 border-transparent text-[13.5px] font-semibold text-[#b4b4b4] transition-colors hover:text-white"
+          >
+            <MessageSquareText className="size-[13px]" strokeWidth={2.2} />
+            Avaliações
+          </Link>
         </div>
 
         {/* Busca vive aqui, na faixa de categorias — é onde o mock a coloca,
@@ -203,6 +247,12 @@ export function StoreCategoryNav({
           )
         })}
         <Link
+          href="/loja/avaliacoes"
+          className="inline-flex h-[34px] shrink-0 items-center rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
+        >
+          Avaliações
+        </Link>
+        <Link
           href="/suporte"
           className="inline-flex h-[34px] shrink-0 items-center rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
         >
@@ -212,38 +262,21 @@ export function StoreCategoryNav({
 
       {openGroup && (
         <div className="absolute inset-x-0 top-full z-10 hidden border-b border-[#262626] bg-card shadow-[0_28px_60px_-20px_rgba(0,0,0,0.9)] md:block">
-          <div className="mx-auto grid max-w-7xl grid-cols-[1.35fr_0.75fr_1fr] gap-[34px] px-4 pb-8 pt-7 lg:px-8">
-            {/* Coluna 1: se o grupo tem 1 categoria só, mostra o card grande de
-                sempre; se agrupa várias (Audio, Outros...), lista cada uma. */}
-            <div className="flex flex-col gap-3.5">
-              <span className="text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">
-                {openCategories.length > 1 ? GROUP_LABEL[openGroup] : "Categoria"}
-              </span>
-              {openCategories.length === 1 ? (
-                (() => {
-                  const cat = openCategories[0]
-                  const { icon: Icon, tint } = getCategoryIcon(cat)
-                  return (
-                    <Link
-                      href={`/loja/categoria/${encodeURIComponent(cat)}`}
-                      className="flex items-center gap-[13px] rounded-[13px] border border-[#262626] bg-[#0e0e0e] px-[15px] py-[13px] text-left transition-colors hover:border-foreground/25"
-                    >
-                      <span
-                        className="flex size-[46px] shrink-0 items-center justify-center rounded-[11px]"
-                        style={{ background: `radial-gradient(110% 110% at 50% 20%, color-mix(in oklab, ${tint} 22%, #171717), #171717)` }}
-                      >
-                        <Icon className="size-6" style={{ color: tint }} strokeWidth={1.4} />
-                      </span>
-                      <span className="flex flex-col gap-0.5">
-                        <span className="text-[13px] font-bold text-white">{getCategoryLabel(cat)}</span>
-                        <span className="text-[11px] font-medium text-[#7a7a7a]">
-                          {categoryCounts[cat] ?? 0} produto{categoryCounts[cat] === 1 ? "" : "s"}
-                        </span>
-                      </span>
-                    </Link>
-                  )
-                })()
-              ) : (
+          <div
+            className={cn(
+              "mx-auto grid max-w-7xl gap-[34px] px-4 pb-8 pt-7 lg:px-8",
+              openCategories.length === 1 ? "grid-cols-[0.9fr_1fr]" : "grid-cols-[1.35fr_0.75fr_1fr]"
+            )}
+          >
+            {/* Coluna 1: só existe quando o grupo agrupa várias categorias
+                (Audio, Outros...) — com 1 categoria só, o próprio nome no menu
+                e o "Ver todos" da coluna de marcas já cobrem a navegação, então
+                não duplica um card de categoria aqui. */}
+            {openCategories.length > 1 && (
+              <div className="flex flex-col gap-3.5">
+                <span className="text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">
+                  {GROUP_LABEL[openGroup]}
+                </span>
                 <div className="flex flex-col gap-2">
                   {openCategories.map((cat) => {
                     const { icon: Icon, tint } = getCategoryIcon(cat)
@@ -260,8 +293,8 @@ export function StoreCategoryNav({
                     )
                   })}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Coluna 2: marcas reais do grupo */}
             <div className="flex flex-col gap-3">
@@ -309,53 +342,76 @@ export function StoreCategoryNav({
                 Em destaque
               </span>
               {previewProduct ? (
-                <Link
-                  href={`/loja/${previewProduct.slug}`}
-                  className="flex gap-4 rounded-2xl border border-[#262626] p-4 transition-colors hover:border-foreground/25"
-                  style={{ background: `radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, ${getCategoryIcon(previewProduct.category).tint} 12%, #0e0e0e), #0e0e0e)` }}
+                <div
+                  className="flex flex-col gap-2.5"
+                  onMouseEnter={() => setPreviewPaused(true)}
+                  onMouseLeave={() => setPreviewPaused(false)}
                 >
-                  {previewProduct.images?.[0] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={previewProduct.images[0]}
-                      alt=""
-                      className="size-[108px] shrink-0 rounded-[13px] bg-[#171717] object-contain p-2"
-                    />
-                  ) : (
-                    (() => {
-                      const { icon: Icon, tint } = getCategoryIcon(previewProduct.category)
-                      return (
-                        <span className="flex size-[108px] shrink-0 items-center justify-center rounded-[13px] bg-[#171717]">
-                          <Icon className="size-[62px] opacity-55" style={{ color: tint }} strokeWidth={1.15} />
-                        </span>
-                      )
-                    })()
-                  )}
-                  <span className="flex min-w-0 flex-col gap-[7px]">
-                    <span
-                      className="inline-flex self-start items-center gap-[5px] rounded-full border px-[9px] py-[3px] text-[9px] font-bold uppercase tracking-[0.06em]"
-                      style={{
-                        borderColor: `color-mix(in oklab, ${CONDITION_TINT[previewProduct.condition]} 32%, transparent)`,
-                        background: `color-mix(in oklab, ${CONDITION_TINT[previewProduct.condition]} 14%, #000)`,
-                        color: CONDITION_TINT[previewProduct.condition],
-                      }}
-                    >
-                      {CONDITION_LABEL[previewProduct.condition]}
-                    </span>
-                    <span className="text-[13.5px] font-semibold leading-[1.35] text-white">{previewProduct.name}</span>
-                    <span className="flex items-baseline gap-2">
-                      {previewProduct.promo_price_cents != null && previewProduct.promo_price_cents < previewProduct.price_cents && (
-                        <span className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(previewProduct.price_cents)}</span>
-                      )}
-                      <span className="font-display text-[19px] font-bold text-emerald-400">
-                        {formatBRL(previewProduct.promo_price_cents ?? previewProduct.price_cents)}
-                      </span>
-                    </span>
-                    {previewProduct.brand && (
-                      <span className="text-[11.5px] font-medium leading-[1.45] text-[#8a8a8a]">{previewProduct.brand}</span>
+                  <Link
+                    key={previewProduct.id}
+                    href={`/loja/${previewProduct.slug}`}
+                    className="flex animate-fade-in-up gap-4 rounded-2xl border border-[#262626] p-4 transition-colors hover:border-foreground/25"
+                    style={{ background: `radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, ${getCategoryIcon(previewProduct.category).tint} 12%, #0e0e0e), #0e0e0e)` }}
+                  >
+                    {previewProduct.images?.[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={previewProduct.images[0]}
+                        alt=""
+                        className="size-[108px] shrink-0 rounded-[13px] bg-[#171717] object-contain p-2"
+                      />
+                    ) : (
+                      (() => {
+                        const { icon: Icon, tint } = getCategoryIcon(previewProduct.category)
+                        return (
+                          <span className="flex size-[108px] shrink-0 items-center justify-center rounded-[13px] bg-[#171717]">
+                            <Icon className="size-[62px] opacity-55" style={{ color: tint }} strokeWidth={1.15} />
+                          </span>
+                        )
+                      })()
                     )}
-                  </span>
-                </Link>
+                    <span className="flex min-w-0 flex-col gap-[7px]">
+                      <span
+                        className="inline-flex self-start items-center gap-[5px] rounded-full border px-[9px] py-[3px] text-[9px] font-bold uppercase tracking-[0.06em]"
+                        style={{
+                          borderColor: `color-mix(in oklab, ${CONDITION_TINT[previewProduct.condition]} 32%, transparent)`,
+                          background: `color-mix(in oklab, ${CONDITION_TINT[previewProduct.condition]} 14%, #000)`,
+                          color: CONDITION_TINT[previewProduct.condition],
+                        }}
+                      >
+                        {CONDITION_LABEL[previewProduct.condition]}
+                      </span>
+                      <span className="text-[13.5px] font-semibold leading-[1.35] text-white">{previewProduct.name}</span>
+                      <span className="flex items-baseline gap-2">
+                        {previewProduct.promo_price_cents != null && previewProduct.promo_price_cents < previewProduct.price_cents && (
+                          <span className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(previewProduct.price_cents)}</span>
+                        )}
+                        <span className="font-display text-[19px] font-bold text-emerald-400">
+                          {formatBRL(previewProduct.promo_price_cents ?? previewProduct.price_cents)}
+                        </span>
+                      </span>
+                      {previewProduct.brand && (
+                        <span className="text-[11.5px] font-medium leading-[1.45] text-[#8a8a8a]">{previewProduct.brand}</span>
+                      )}
+                    </span>
+                  </Link>
+                  {previewCandidates.length > 1 && (
+                    <div className="flex items-center justify-center gap-1.5">
+                      {previewCandidates.map((p, i) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          aria-label={`Ver ${p.name}`}
+                          onClick={() => setPreviewIndex(i)}
+                          className={cn(
+                            "h-1.5 rounded-full transition-all",
+                            i === previewIndex % previewCandidates.length ? "w-4 bg-white" : "w-1.5 bg-[#3a3a3a] hover:bg-[#5a5a5a]"
+                          )}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               ) : (
                 <p className="text-[13px] text-[#5e5e5e]">Nenhum produto carregado ainda.</p>
               )}

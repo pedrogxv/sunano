@@ -510,3 +510,37 @@ export async function listPeripheralIdsWithYoutubeReview(): Promise<Set<string>>
   }
   return new Set((data ?? []).map((row) => row.peripheral_id as string))
 }
+
+/**
+ * Todos os periféricos para o sitemap.
+ *
+ * As páginas de detalhe já tinham metadata, canonical e OG corretos, mas
+ * ficavam de fora do sitemap: só a listagem `/perifericos` era anunciada. O
+ * Google dependia de rastrear os links da listagem paginada para descobrir
+ * cada produto, o que é lento e prioriza mal — e são justamente essas páginas
+ * que respondem a busca de cauda longa ("<marca> <modelo> review/ficha
+ * técnica"), o tráfego não-marca que faltava no Search Console.
+ *
+ * Consulta enxuta de propósito (`listAllPeripherals` traz `FULL_COLUMNS`,
+ * incluindo `specs` jsonb inteiro): o sitemap só precisa de slug e data.
+ */
+export async function listAllPeripheralSlugsForSitemap(): Promise<
+  { name: string; id: string; updated_at: string }[]
+> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("peripherals")
+    .select("id, name, updated_at, created_at")
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("[peripherals-repository] listAllPeripheralSlugsForSitemap:", error)
+    return []
+  }
+
+  return (data ?? []).map((p) => ({
+    name: p.name as string,
+    id: p.id as string,
+    updated_at: (p.updated_at ?? p.created_at) as string,
+  }))
+}

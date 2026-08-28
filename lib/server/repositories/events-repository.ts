@@ -1,5 +1,7 @@
 import "server-only"
 
+import { revalidateTag, unstable_cache } from "next/cache"
+
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { parseSlug } from "@/lib/format"
 import type { MedalRarity } from "@/lib/profile-showcase"
@@ -59,7 +61,7 @@ function toEventDisplay(row: EventRow): EventDisplay | null {
 }
 
 /** Todos os eventos (ativos e encerrados) para a página pública `/eventos`. */
-export async function listActiveEventsForDisplay(): Promise<EventDisplay[]> {
+async function fetchActiveEventsForDisplay(): Promise<EventDisplay[]> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("events")
@@ -77,9 +79,35 @@ export async function listActiveEventsForDisplay(): Promise<EventDisplay[]> {
   })
 }
 
-/** Mesma listagem, para a tabela do admin. */
+/**
+ * `unstable_cache` (5 min): a lista de eventos é igual para todo mundo e muda
+ * só quando um admin edita, mas era relida a cada pageview de `/conquistas`
+ * — que é `force-dynamic` por causa do progresso individual (medalhas
+ * resgatadas, saldo de aura), não por causa desta query.
+ */
+/**
+ * `{ expire: 0 }` no `revalidateTag` = expira agora. O `updateTag` (que
+ * dispensa o segundo argumento) só funciona dentro de Server Action, e estas
+ * escritas vêm de Route Handler — ver app/api/admin/events/**.
+ */
+const EVENTS_LIST_TAG = "events:list"
+
+const getCachedActiveEvents = unstable_cache(
+  fetchActiveEventsForDisplay,
+  ["events-repository:activeEventsForDisplay"],
+  { revalidate: 300, tags: [EVENTS_LIST_TAG] }
+)
+
+export function listActiveEventsForDisplay(): Promise<EventDisplay[]> {
+  return getCachedActiveEvents()
+}
+
+/**
+ * Mesma listagem, para a tabela do admin — sem passar pelo cache: quem acabou
+ * de salvar um evento precisa ver a mudança na hora, não em até 5 minutos.
+ */
 export async function listEventsForAdmin(): Promise<EventDisplay[]> {
-  return listActiveEventsForDisplay()
+  return fetchActiveEventsForDisplay()
 }
 
 export async function getEventForAdmin(id: string): Promise<EventDisplay | null> {
@@ -171,6 +199,7 @@ export async function createEvent(input: EventInput): Promise<EventDisplay> {
 
   const display = toEventDisplay(event as unknown as EventRow)
   if (!display) throw new Error("Erro ao montar o evento criado.")
+  revalidateTag(EVENTS_LIST_TAG, { expire: 0 })
   return display
 }
 
@@ -219,6 +248,7 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
   const { error: eventError } = await (db.from("events") as any).update(eventUpdate).eq("id", id)
   if (eventError) throw eventError
 
+  revalidateTag(EVENTS_LIST_TAG, { expire: 0 })
   return getEventForAdmin(id)
 }
 
@@ -226,6 +256,7 @@ export async function deleteEvent(id: string): Promise<void> {
   const db = createSupabaseAdminClient()
   // A medalha do evento não é apagada: quem já ganhou continua com ela no perfil.
   await db.from("events").delete().eq("id", id)
+  revalidateTag(EVENTS_LIST_TAG, { expire: 0 })
 }
 
 /** IDs das medalhas que o usuário já possui — usado em `/eventos` para marcar quais já foram resgatadas. */

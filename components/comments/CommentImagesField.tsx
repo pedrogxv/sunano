@@ -14,8 +14,8 @@ const MAX_IMAGES = 2
 // Supabase, e mirar bem abaixo disso reduz o storage/egress consumido.
 const COMPRESS_OPTIONS = {
   maxDimension: 1280,
-  targetBytes: 480 * 1024,
-  skipBelowBytes: 200 * 1024,
+  targetBytes: 300 * 1024,
+  skipBelowBytes: 120 * 1024,
 }
 
 /**

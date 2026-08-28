@@ -27,6 +27,7 @@ export async function forgotPasswordAction(_: State, formData: FormData): Promis
     identifier: `${identifier}:${email}`,
     maxAttempts: 5,
     windowSeconds: 300,
+    onError: "closed",
   })
   if (!rateLimit.allowed) {
     return { error: "Muitas tentativas. Aguarde alguns minutos antes de pedir um novo link.", success: false }

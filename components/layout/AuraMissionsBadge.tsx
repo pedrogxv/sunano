@@ -44,8 +44,14 @@ const MISSION_HREFS: Record<DailyMissionKey, string> = {
 
 const EMPTY_STREAK: UserStreak = { current: 0, longest: 0 }
 
-/** Mesmo intervalo de fallback do sino de notificações — cobre missões cumpridas fora do evento de aura (criar post/comentário). */
-const POLL_MS = 60_000
+/**
+ * Fallback lento: cobre missões cumpridas fora do evento de aura (criar
+ * post/comentário). Toda ação de aura feita na própria aba já dispara
+ * `AURA_CHANGED_EVENT`, que recarrega na hora — o polling só existe para
+ * mudanças vindas de outro dispositivo/aba, que não têm urgência nenhuma.
+ * A 60s isto era o maior gerador de invocações do projeto.
+ */
+const POLL_MS = 180_000
 
 /**
  * Ícone único de Aura + missões na TopBar (substitui os antigos `MissionsBadge`
@@ -63,23 +69,18 @@ export function AuraMissionsBadge() {
   const [youtubeConfirmed, setYoutubeConfirmed] = useState(true)
   const [youtubeLoading, setYoutubeLoading] = useState(false)
 
-  const loadMissions = useCallback(async () => {
+  // Missões, ofensiva e saldo vêm juntos de /api/aura/badge — eram duas
+  // chamadas separadas por tick, cada uma repetindo o auth.getUser().
+  const loadBadge = useCallback(async () => {
     try {
-      const res = await fetch("/api/achievements/missions")
+      const res = await fetch("/api/aura/badge")
       if (!res.ok) throw new Error("failed")
       const data = await res.json()
       setMissions(data.missions ?? EMPTY_DAILY_MISSIONS)
       setStreak(data.streak ?? EMPTY_STREAK)
+      setUsage(data.usage ?? null)
     } catch {
       setMissions(EMPTY_DAILY_MISSIONS)
-    }
-  }, [])
-
-  const loadUsage = useCallback(async () => {
-    try {
-      const res = await fetch("/api/aura/summary")
-      setUsage(res.ok ? await res.json() : null)
-    } catch {
       setUsage(null)
     }
   }, [])
@@ -96,10 +97,9 @@ export function AuraMissionsBadge() {
   }, [])
 
   const loadAll = useCallback(() => {
-    void loadMissions()
-    void loadUsage()
+    void loadBadge()
     void loadYoutubeStatus()
-  }, [loadMissions, loadUsage, loadYoutubeStatus])
+  }, [loadBadge, loadYoutubeStatus])
 
   async function handleYoutubeConfirm() {
     setYoutubeLoading(true)
@@ -121,10 +121,37 @@ export function AuraMissionsBadge() {
   useEffect(() => {
     if (!user) return
     loadAll()
-    const id = setInterval(loadAll, POLL_MS)
+
+    // Aba em segundo plano não recarrega: antes, uma aba esquecida aberta a
+    // noite toda continuava chamando a API a cada minuto sem ninguém olhando.
+    // Ao voltar ao primeiro plano recarrega na hora, então o dado que o
+    // usuário vê nunca é o de antes de ele sair.
+    let id: ReturnType<typeof setInterval> | null = null
+
+    const start = () => {
+      if (id === null) id = setInterval(loadAll, POLL_MS)
+    }
+    const stop = () => {
+      if (id !== null) {
+        clearInterval(id)
+        id = null
+      }
+    }
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stop()
+      } else {
+        loadAll()
+        start()
+      }
+    }
+
+    if (!document.hidden) start()
+    document.addEventListener("visibilitychange", handleVisibility)
     window.addEventListener(AURA_CHANGED_EVENT, loadAll)
     return () => {
-      clearInterval(id)
+      stop()
+      document.removeEventListener("visibilitychange", handleVisibility)
       window.removeEventListener(AURA_CHANGED_EVENT, loadAll)
     }
   }, [user, loadAll])

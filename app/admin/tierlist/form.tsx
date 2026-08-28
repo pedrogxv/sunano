@@ -273,10 +273,14 @@ const BUY_LINK_PLATFORMS: {
 
 const MAX_IMAGES = 8
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
+// Primeira poda, ainda no navegador: economiza upload e mantém o corpo da
+// requisição longe do teto de ~4.5MB da Vercel. O servidor recomprime de novo
+// para WebP (ver lib/server/image-compression.ts) — este passo é sobre o que
+// sai da máquina do admin, não sobre o que fica no bucket.
 const IMAGE_COMPRESS_OPTIONS = {
-  maxDimension: 2000,
-  targetBytes: 1.5 * 1024 * 1024,
-  skipBelowBytes: 800 * 1024,
+  maxDimension: 1600,
+  targetBytes: 400 * 1024,
+  skipBelowBytes: 150 * 1024,
 }
 
 function SortableImageThumb({

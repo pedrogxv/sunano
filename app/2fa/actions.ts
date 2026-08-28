@@ -43,6 +43,7 @@ export async function verifyTotpAction(
     identifier: user.id,
     maxAttempts: 5,
     windowSeconds: 300,
+    onError: "closed",
   })
   if (!limit.allowed) {
     return { error: "Muitas tentativas. Aguarde alguns minutos e tente novamente." }

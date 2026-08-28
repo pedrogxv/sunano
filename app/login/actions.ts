@@ -51,6 +51,7 @@ export async function loginUserAction(_: AuthState, formData: FormData): Promise
     identifier: `${identifier}:${email.toLowerCase()}`,
     maxAttempts: 10,
     windowSeconds: 300,
+    onError: "closed",
   })
   if (!rateLimit.allowed) {
     return { error: "too_many_attempts" }

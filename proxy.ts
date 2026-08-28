@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { hasAdminPermission, isWebMaster, type AdminPermissionKey, type AdminProfile } from "@/lib/admin-permissions"
 import { isMfaStepUpRequired, sanitizeNextPath, TRUSTED_DEVICE_COOKIE_NAME, TWO_FACTOR_PATH } from "@/lib/auth-mfa"
 import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
+import { hashVisitor, recordVisit } from "@/lib/server/repositories/visits-repository"
 import { updateSession } from "@/lib/server/supabase/middleware-client"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 
@@ -104,12 +105,19 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
-// Dispara o registro de visita (dashboard admin) sem bloquear a navegação:
-// `event.waitUntil` deixa o fetch terminar em segundo plano depois da
+// Registra a visita (dashboard admin) sem bloquear a navegação:
+// `event.waitUntil` deixa o trabalho terminar em segundo plano depois da
 // resposta já ter sido enviada, sem atrasar o visitante nem arriscar ser
-// cancelado ao fim da função (diferente de um fetch solto sem await). Só
-// para navegação de página (não API, não asset) de visitante anônimo em
-// rota pública — é o cenário que este arquivo já isola no early-return.
+// cancelado ao fim da função. Só para navegação de página (não API, não
+// asset) de visitante anônimo em rota pública — é o cenário que este arquivo
+// já isola no early-return.
+//
+// Grava direto pelo repositório em vez de dar um `fetch` em
+// /api/track-visit: aquele salto de rede custava uma invocação de function
+// inteira por visitante/dia só para chamar uma função que o proxy já podia
+// chamar sozinho (o proxy roda no servidor e já importa outros repositórios,
+// ex. `isTrustedDevice`). A rota continua existindo e protegida pelo
+// `x-internal-token` — não é mais o caminho usado aqui.
 function trackVisit(request: NextRequest, event: NextFetchEvent, response: NextResponse) {
   if (request.method !== "GET" || request.nextUrl.pathname.startsWith("/api")) return
 
@@ -122,15 +130,16 @@ function trackVisit(request: NextRequest, event: NextFetchEvent, response: NextR
     httpOnly: true,
   })
 
+  const forwardedFor = request.headers.get("x-forwarded-for")
+  const ip = forwardedFor?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
+  const userAgent = request.headers.get("user-agent") || "unknown"
+
+  // Falha aqui nunca pode afetar a navegação — o dashboard perder uma visita
+  // é irrelevante perto de derrubar a página do visitante.
   event.waitUntil(
-    fetch(new URL("/api/track-visit", request.url), {
-      method: "POST",
-      headers: {
-        "x-forwarded-for": request.headers.get("x-forwarded-for") ?? "",
-        "x-real-ip": request.headers.get("x-real-ip") ?? "",
-        "user-agent": request.headers.get("user-agent") ?? "",
-      },
-    }).catch(() => {})
+    Promise.resolve()
+      .then(() => recordVisit(hashVisitor(ip, userAgent), today))
+      .catch(() => {})
   )
 }
 

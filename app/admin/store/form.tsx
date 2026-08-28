@@ -297,10 +297,12 @@ const VARIANT_COLOR_PRESETS: { label: string; color: string }[] = [
 const MAX_OPTIONS_PER_VARIANT_GROUP = 12
 const MIN_PRICE_CENTS = 600
 const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
+// Ver nota em app/admin/tierlist/form.tsx: o servidor recomprime depois; aqui
+// o objetivo é só não subir 2MB de foto de câmera à toa.
 const IMAGE_COMPRESS_OPTIONS = {
-  maxDimension: 2000,
-  targetBytes: 1.5 * 1024 * 1024,
-  skipBelowBytes: 800 * 1024,
+  maxDimension: 1600,
+  targetBytes: 400 * 1024,
+  skipBelowBytes: 150 * 1024,
 }
 
 function SortableImageThumb({

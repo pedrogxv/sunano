@@ -2,11 +2,13 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { buildMetadata } from "@/lib/seo"
-import { buildPeripheralSlug } from "@/lib/peripheral-slug"
+import { buildPeripheralDisplayName, buildPeripheralSlug } from "@/lib/peripheral-slug"
+import { SITE_URL } from "@/lib/site-url"
 
 import { getPeripheralByIdOrSlug, listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { listProductsByPeripheral } from "@/lib/server/repositories/store-repository"
 import { listPublishedPostsByPeripheral } from "@/lib/server/repositories/blog-repository"
+import { getPeripheralReviewsWithStats } from "@/lib/server/repositories/peripheral-reviews-repository"
 import { BackButton } from "@/components/ui/back-button"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
 
@@ -32,7 +34,7 @@ export async function generateMetadata({ params }: PerifericoPageProps): Promise
   if (!data) return { title: "Periférico não encontrado" }
 
   const categoryLabel = CATEGORY_LABEL[data.category] ?? data.category
-  const fullName = `${data.brand} ${data.name}`.trim()
+  const fullName = buildPeripheralDisplayName(data.brand, data.name)
   const tierLabel = data.tier ? `Tier ${data.tier}` : null
 
   return buildMetadata({
@@ -71,7 +73,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   // As quatro buscas abaixo só dependem de `data`/`details`, não umas das
   // outras — rodam em paralelo em vez de em série para não empilhar 4
   // round-trips sequenciais numa página com revalidate=30.
-  const [linkedSwitch, linkedProducts, relatedPosts, allPeripherals] = await Promise.all([
+  const [linkedSwitch, linkedProducts, relatedPosts, allPeripherals, reviewStats] = await Promise.all([
     // Switch vinculado: se o admin apontou este teclado/mouse a um Switch
     // cadastrado, a linha "Switch" vira um link para a página daquele switch.
     details.switchPeripheralId
@@ -80,6 +82,10 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     listProductsByPeripheral(data.id),
     listPublishedPostsByPeripheral(data.id),
     listAllPeripherals(),
+    // Só as agregadas interessam aqui (média + total) para o `aggregateRating`
+    // do JSON-LD; a lista paginada de reviews é carregada pelo próprio
+    // componente de detalhe.
+    getPeripheralReviewsWithStats(data.id, { limit: 1 }),
   ])
 
   const linkedStore = linkedProducts.find((p) => p.type === "store") ?? null
@@ -106,8 +112,49 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     .map((p) => ({ id: p.id, name: p.name, category: p.category, tier: p.tier }))
     .sort((a, b) => a.category.localeCompare(b.category))
 
+  /**
+   * JSON-LD Product: a ficha de periférico competia na SERP como link de texto
+   * puro contra lojas e agregadores que enviam esse schema. Com
+   * `aggregateRating` o resultado passa a poder exibir estrelas, que é o que
+   * separa um clique de uma impressão perdida numa busca por modelo.
+   *
+   * `aggregateRating` só entra quando existe review de verdade: o Google trata
+   * rating vazio ou zerado como marcação inválida e pode desqualificar o rich
+   * result da página inteira.
+   */
+  const canonicalUrl = `${SITE_URL}/perifericos/${buildPeripheralSlug(data.name, data.id)}`
+  const fullProductName = buildPeripheralDisplayName(data.brand, data.name)
+
+  const peripheralJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "@id": canonicalUrl,
+    name: fullProductName,
+    ...(data.brand ? { brand: { "@type": "Brand", name: data.brand } } : {}),
+    ...(data.image_url ? { image: [new URL(data.image_url, SITE_URL).toString()] } : {}),
+    ...(CATEGORY_LABEL[data.category] ? { category: CATEGORY_LABEL[data.category] } : {}),
+    description: `Ficha técnica, tier e reviews do ${fullProductName} na Sunano.`,
+    ...(reviewStats.average != null && reviewStats.totalCount > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: reviewStats.average,
+            reviewCount: reviewStats.totalCount,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
+    ...(linkedStore ? { offers: { "@type": "Offer", url: `${SITE_URL}/loja/${linkedStore.slug}`, priceCurrency: "BRL", seller: { "@id": `${SITE_URL}/#organization` } } } : {}),
+  }
+
   return (
     <div className="mx-auto max-w-[1600px] px-2 py-4 sm:px-4 md:px-6 lg:px-8">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(peripheralJsonLd) }}
+      />
       <div className="mb-3">
         <BackButton />
       </div>

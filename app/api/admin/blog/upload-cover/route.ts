@@ -3,9 +3,19 @@ import { NextResponse } from "next/server"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { validateImageUpload } from "@/lib/server/upload-validation"
+import {
+  compressUploadedImage,
+  IMAGE_PRESETS,
+  IMMUTABLE_CACHE_CONTROL,
+} from "@/lib/server/image-compression"
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
-const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+]
 
 function sanitizeSlug(value: string) {
   return value
@@ -35,7 +45,10 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (!profile || !hasAdminPermission(profile, "blog_write")) {
-      return NextResponse.json({ error: "Sem permissão para enviar imagens." }, { status: 403 })
+      return NextResponse.json(
+        { error: "Sem permissão para enviar imagens." },
+        { status: 403 }
+      )
     }
 
     const formData = await request.formData()
@@ -45,10 +58,7 @@ export async function POST(request: Request) {
     const variantEntry = formData.get("variant")
 
     if (!(fileEntry instanceof File)) {
-      return NextResponse.json(
-        { error: "Arquivo inválido." },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Arquivo inválido." }, { status: 400 })
     }
 
     const validated = await validateImageUpload(fileEntry, {
@@ -67,23 +77,32 @@ export async function POST(request: Request) {
           : "blog"
     const slug = sanitizeSlug(fileSeed) || "blog"
     const variant = variantEntry === "thumbnail" ? "thumbnail" : "header"
-    const fileName = `blog-cover-${variant}-${slug}-${Date.now()}.${validated.extension}`
+    // Recomprime antes de gravar: nenhum transformador roda em runtime
+    // (ver lib/server/image-compression.ts), então o objeto do bucket já
+    // precisa nascer no tamanho de exibição.
+    const compressed = await compressUploadedImage(
+      validated.bytes,
+      validated.mime,
+      IMAGE_PRESETS.banner
+    )
+
+    const fileName = `blog-cover-${variant}-${slug}-${Date.now()}.${compressed.extension}`
 
     const { error: uploadError } = await supabase.storage
       .from("peripherals")
-      .upload(fileName, validated.bytes, {
+      .upload(fileName, compressed.bytes, {
         upsert: false,
-        contentType: validated.mime,
+        contentType: compressed.mime,
+        cacheControl: IMMUTABLE_CACHE_CONTROL,
       })
 
     if (uploadError) {
-      return NextResponse.json(
-        { error: uploadError.message },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: uploadError.message }, { status: 400 })
     }
 
-    const { data: publicData } = supabase.storage.from("peripherals").getPublicUrl(fileName)
+    const { data: publicData } = supabase.storage
+      .from("peripherals")
+      .getPublicUrl(fileName)
 
     return NextResponse.json({ ok: true, publicUrl: publicData.publicUrl })
   } catch {

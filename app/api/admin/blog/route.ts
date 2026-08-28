@@ -4,6 +4,7 @@ import * as z from "zod"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { revalidateBlogPost } from "@/lib/server/seo/revalidate-public"
 
 const blogPostSchema = z
   .object({
@@ -58,7 +59,9 @@ function slugify(value: string) {
 function generateRandomSuffix() {
   const randomBytes = new Uint8Array(4)
   crypto.getRandomValues(randomBytes)
-  return Array.from(randomBytes, (value) => value.toString(16).padStart(2, "0")).join("")
+  return Array.from(randomBytes, (value) =>
+    value.toString(16).padStart(2, "0")
+  ).join("")
 }
 
 function calculateReadTimeMinutes(content: string) {
@@ -69,7 +72,10 @@ function calculateReadTimeMinutes(content: string) {
   return Math.max(1, Math.ceil(words / 200))
 }
 
-async function generateUniqueSlug(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, title: string) {
+async function generateUniqueSlug(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  title: string
+) {
   const baseSlug = slugify(title) || "review"
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -121,7 +127,10 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (!profile || !hasAdminPermission(profile, "blog_write")) {
-      return NextResponse.json({ error: "Sem permissão para salvar artigos." }, { status: 403 })
+      return NextResponse.json(
+        { error: "Sem permissão para salvar artigos." },
+        { status: 403 }
+      )
     }
 
     const profileEnsurePayload: Record<string, unknown> = {
@@ -131,25 +140,38 @@ export async function POST(request: Request) {
       avatar_url: null,
     }
 
-    const { error: profileEnsureError } = await supabase.from("admin_profiles").upsert(
-      profileEnsurePayload as any,
-      { onConflict: "id", ignoreDuplicates: true }
-    )
+    const { error: profileEnsureError } = await supabase
+      .from("admin_profiles")
+      .upsert(profileEnsurePayload as any, {
+        onConflict: "id",
+        ignoreDuplicates: true,
+      })
 
-    if (profileEnsureError && !profileEnsureError.message.includes("admin_profiles")) {
-      const { body, status } = dbErrorResponse(profileEnsureError, "Erro ao validar perfil do admin.")
+    if (
+      profileEnsureError &&
+      !profileEnsureError.message.includes("admin_profiles")
+    ) {
+      const { body, status } = dbErrorResponse(
+        profileEnsureError,
+        "Erro ao validar perfil do admin."
+      )
       return NextResponse.json(body, { status })
     }
 
     const payload = {
       post_type: parsed.data.post_type,
-      peripheral_id: parsed.data.post_type === "review" ? parsed.data.peripheral_id : null,
+      peripheral_id:
+        parsed.data.post_type === "review" ? parsed.data.peripheral_id : null,
       title: parsed.data.title,
       excerpt: parsed.data.excerpt?.trim() || null,
       cover_image_url:
-        parsed.data.cover_image_url?.trim() || parsed.data.cover_thumbnail_url?.trim() || null,
+        parsed.data.cover_image_url?.trim() ||
+        parsed.data.cover_thumbnail_url?.trim() ||
+        null,
       cover_thumbnail_url:
-        parsed.data.cover_thumbnail_url?.trim() || parsed.data.cover_image_url?.trim() || null,
+        parsed.data.cover_thumbnail_url?.trim() ||
+        parsed.data.cover_image_url?.trim() ||
+        null,
       read_time_minutes: calculateReadTimeMinutes(parsed.data.content),
       video_url: parsed.data.video_url?.trim() || null,
       content: parsed.data.content,
@@ -202,13 +224,20 @@ export async function POST(request: Request) {
       ...payloadWithoutThumbnail,
     }
 
-    const isMissingColumnError = (message: string | null | undefined, column: string) =>
-      Boolean(message && message.includes(column))
+    const isMissingColumnError = (
+      message: string | null | undefined,
+      column: string
+    ) => Boolean(message && message.includes(column))
 
     let result = parsed.data.id
-      ? await (supabase.from("blog_posts") as any).update(payload as any).eq("id", parsed.data.id)
+      ? await (supabase.from("blog_posts") as any)
+          .update(payload as any)
+          .eq("id", parsed.data.id)
       : await (supabase.from("blog_posts") as any).insert([
-          { ...payloadWithAuthor, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+          {
+            ...payloadWithAuthor,
+            slug: await generateUniqueSlug(supabase, parsed.data.title),
+          },
         ])
 
     // Fallback: migração `blog_post_type.sql` ainda não aplicada. Reviews
@@ -216,12 +245,20 @@ export async function POST(request: Request) {
     if (isMissingColumnError(result.error?.message, "post_type")) {
       const payloadNoType = { ...payload } as Record<string, unknown>
       delete payloadNoType.post_type
-      const payloadWithAuthorNoType = { ...payloadWithAuthor } as Record<string, unknown>
+      const payloadWithAuthorNoType = { ...payloadWithAuthor } as Record<
+        string,
+        unknown
+      >
       delete payloadWithAuthorNoType.post_type
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any).update(payloadNoType as any).eq("id", parsed.data.id)
+        ? await (supabase.from("blog_posts") as any)
+            .update(payloadNoType as any)
+            .eq("id", parsed.data.id)
         : await (supabase.from("blog_posts") as any).insert([
-            { ...payloadWithAuthorNoType, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+            {
+              ...payloadWithAuthorNoType,
+              slug: await generateUniqueSlug(supabase, parsed.data.title),
+            },
           ])
     }
 
@@ -229,28 +266,46 @@ export async function POST(request: Request) {
     if (isMissingColumnError(result.error?.message, "is_featured")) {
       const payloadNoFeatured = { ...payload } as Record<string, unknown>
       delete payloadNoFeatured.is_featured
-      const payloadWithAuthorNoFeatured = { ...payloadWithAuthor } as Record<string, unknown>
+      const payloadWithAuthorNoFeatured = { ...payloadWithAuthor } as Record<
+        string,
+        unknown
+      >
       delete payloadWithAuthorNoFeatured.is_featured
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any).update(payloadNoFeatured as any).eq("id", parsed.data.id)
+        ? await (supabase.from("blog_posts") as any)
+            .update(payloadNoFeatured as any)
+            .eq("id", parsed.data.id)
         : await (supabase.from("blog_posts") as any).insert([
-            { ...payloadWithAuthorNoFeatured, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+            {
+              ...payloadWithAuthorNoFeatured,
+              slug: await generateUniqueSlug(supabase, parsed.data.title),
+            },
           ])
     }
 
     if (isMissingColumnError(result.error?.message, "cover_thumbnail_url")) {
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any).update(payloadWithoutThumbnail as any).eq("id", parsed.data.id)
+        ? await (supabase.from("blog_posts") as any)
+            .update(payloadWithoutThumbnail as any)
+            .eq("id", parsed.data.id)
         : await (supabase.from("blog_posts") as any).insert([
-            { ...payloadWithoutThumbnail, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+            {
+              ...payloadWithoutThumbnail,
+              slug: await generateUniqueSlug(supabase, parsed.data.title),
+            },
           ])
     }
 
     if (isMissingColumnError(result.error?.message, "author_id")) {
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any).update(payloadWithoutAuthor as any).eq("id", parsed.data.id)
+        ? await (supabase.from("blog_posts") as any)
+            .update(payloadWithoutAuthor as any)
+            .eq("id", parsed.data.id)
         : await (supabase.from("blog_posts") as any).insert([
-            { ...payloadWithoutAuthor, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+            {
+              ...payloadWithoutAuthor,
+              slug: await generateUniqueSlug(supabase, parsed.data.title),
+            },
           ])
     }
 
@@ -261,13 +316,21 @@ export async function POST(request: Request) {
         : { ...payloadWithoutReadTime, author_id: authData.user.id }
 
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any).update(insertPayload as any).eq("id", parsed.data.id)
+        ? await (supabase.from("blog_posts") as any)
+            .update(insertPayload as any)
+            .eq("id", parsed.data.id)
         : await (supabase.from("blog_posts") as any).insert([
-            { ...insertPayload, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+            {
+              ...insertPayload,
+              slug: await generateUniqueSlug(supabase, parsed.data.title),
+            },
           ])
     }
 
-    if (isMissingColumnError(result.error?.message, "read_time_minutes") && isMissingColumnError(result.error?.message, "cover_thumbnail_url")) {
+    if (
+      isMissingColumnError(result.error?.message, "read_time_minutes") &&
+      isMissingColumnError(result.error?.message, "cover_thumbnail_url")
+    ) {
       // For updates, create a payload without thumbnail but WITH read_time_minutes
       const payloadForThisCase = {
         peripheral_id: payload.peripheral_id,
@@ -285,28 +348,55 @@ export async function POST(request: Request) {
         : { ...payloadWithoutReadTimeOrThumbnail, author_id: authData.user.id }
 
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any).update(insertPayload as any).eq("id", parsed.data.id)
+        ? await (supabase.from("blog_posts") as any)
+            .update(insertPayload as any)
+            .eq("id", parsed.data.id)
         : await (supabase.from("blog_posts") as any).insert([
-            { ...insertPayload, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+            {
+              ...insertPayload,
+              slug: await generateUniqueSlug(supabase, parsed.data.title),
+            },
           ])
     }
 
-    if (isMissingColumnError(result.error?.message, "cover_thumbnail_url") && isMissingColumnError(result.error?.message, "author_id")) {
+    if (
+      isMissingColumnError(result.error?.message, "cover_thumbnail_url") &&
+      isMissingColumnError(result.error?.message, "author_id")
+    ) {
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any).update(payloadWithoutThumbnailOrAuthor as any).eq("id", parsed.data.id)
+        ? await (supabase.from("blog_posts") as any)
+            .update(payloadWithoutThumbnailOrAuthor as any)
+            .eq("id", parsed.data.id)
         : await (supabase.from("blog_posts") as any).insert([
-            { ...payloadWithoutThumbnailOrAuthor, slug: await generateUniqueSlug(supabase, parsed.data.title) },
+            {
+              ...payloadWithoutThumbnailOrAuthor,
+              slug: await generateUniqueSlug(supabase, parsed.data.title),
+            },
           ])
     }
 
     if (result.error) {
-      const { body, status } = dbErrorResponse(result.error, "Erro ao salvar artigo.")
+      const { body, status } = dbErrorResponse(
+        result.error,
+        "Erro ao salvar artigo."
+      )
       return NextResponse.json(body, { status })
     }
 
-    const savedId = Array.isArray(result.data) ? result.data[0]?.id : result.data?.id
+    const savedId = Array.isArray(result.data)
+      ? result.data[0]?.id
+      : result.data?.id
 
-    return NextResponse.json({ ok: true, id: savedId ?? parsed.data.id ?? null })
+    // Sem slug: ele é gerado dentro de cada branch de insert
+    // (`generateUniqueSlug`) e não volta no retorno do update, então revalidar
+    // as listagens + sitemap cobre o que importa — a página do post em si já
+    // nasce com o conteúdo novo, por ainda não estar em cache.
+    revalidateBlogPost(null)
+
+    return NextResponse.json({
+      ok: true,
+      id: savedId ?? parsed.data.id ?? null,
+    })
   } catch {
     return NextResponse.json(
       { error: "Erro inesperado ao salvar artigo." },

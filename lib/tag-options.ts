@@ -175,3 +175,32 @@ export function sanitizeTagsForCategory(category: Category, tags: readonly strin
   const fallback = validKeys[0]
   return fallback ? [fallback] : kept
 }
+
+/**
+ * Rótulo no plural de cada categoria, para título e descrição das páginas de
+ * categoria (`/perifericos?category=`).
+ *
+ * O mapa singular ("Teclado") já existia repetido em quatro telas; nenhuma
+ * delas serve para SEO de listagem, onde o termo buscado é o plural
+ * ("melhores teclados", "mousepads gamer"). Fica junto de `ALL_CATEGORIES`
+ * para que uma categoria nova apareça no type-check dos dois lados de uma vez.
+ */
+export const CATEGORY_PLURAL_LABELS: Record<Category, string> = {
+  keyboard: "Teclados",
+  pcb: "PCBs",
+  mouse: "Mouses",
+  mousepad: "Mousepads",
+  glasspad: "Glasspads",
+  iem: "IEMs",
+  headset: "Headsets",
+  feet: "Feet",
+  chairs: "Cadeiras",
+  monitors: "Monitores",
+  switches: "Switches",
+  dac_amp: "DAC/AMP",
+}
+
+/** `true` quando a string é uma categoria conhecida — filtra `?category=` inválido. */
+export function isCategory(value: string | undefined | null): value is Category {
+  return !!value && (ALL_CATEGORIES as string[]).includes(value)
+}

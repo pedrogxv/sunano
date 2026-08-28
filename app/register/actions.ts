@@ -151,6 +151,7 @@ export async function registerUserAction(
     identifier,
     maxAttempts: 5,
     windowSeconds: 3600,
+    onError: "closed",
   })
   if (!rateLimit.allowed) {
     return { error: "too_many_attempts", values }

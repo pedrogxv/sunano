@@ -9,25 +9,56 @@ import {
 } from "@/lib/server/repositories/peripherals-repository"
 import { PerifericosContent } from "./perifericos-content"
 import { mapTier } from "@/lib/tier-utils"
-import type { Category } from "@/lib/tag-options"
+import { CATEGORY_PLURAL_LABELS, isCategory, type Category } from "@/lib/tag-options"
 
 export const revalidate = 60
 
-export const metadata: Metadata = buildMetadata({
-  title: "Periféricos",
-  socialTitle: "Periféricos: a wiki completa",
-  description: "Wiki completa de periféricos gamers: mouses, teclados, headsets e mais, com ficha técnica, tier e reviews da comunidade.",
-  path: "/perifericos",
-  eyebrow: "Wiki",
-  subtitle: "Ficha técnica, tier e reviews",
-})
-
-const DEFAULT_CATEGORY: Category = "mouse"
-const PAGE_SIZE = 24
-
+/**
+ * Metadata por categoria.
+ *
+ * Antes isto era um `metadata` estático: as 12 variantes de `?category=`
+ * serviam listas diferentes mas declaravam todas o mesmo canonical
+ * (`/perifericos`) e o mesmo título. Cada uma se anunciava ao Google como
+ * cópia da listagem genérica, então nenhuma podia ranquear para o termo que
+ * as pessoas realmente buscam ("melhores teclados", "mousepads gamer") — o
+ * tráfego não-marca que faltava no Search Console.
+ *
+ * Com canonical próprio, cada categoria vira uma página legítima. O
+ * `?category=` inválido cai no default em vez de gerar uma URL canônica
+ * inventada.
+ */
 interface PerifericosPageProps {
   searchParams: Promise<{ category?: string }>
 }
+
+export async function generateMetadata({ searchParams }: PerifericosPageProps): Promise<Metadata> {
+  const { category } = await searchParams
+
+  if (!isCategory(category)) {
+    return buildMetadata({
+      title: "Periféricos",
+      socialTitle: "Periféricos: a wiki completa",
+      description: "Wiki completa de periféricos gamers: mouses, teclados, headsets e mais, com ficha técnica, tier e reviews da comunidade.",
+      path: "/perifericos",
+      eyebrow: "Wiki",
+      subtitle: "Ficha técnica, tier e reviews",
+    })
+  }
+
+  const label = CATEGORY_PLURAL_LABELS[category]
+
+  return buildMetadata({
+    title: label,
+    socialTitle: `${label}: ficha técnica e tier`,
+    description: `Os melhores ${label.toLowerCase()} avaliados pela comunidade: ficha técnica, tier, ranking e reviews de quem usa. Compare antes de comprar.`,
+    path: `/perifericos?category=${category}`,
+    eyebrow: "Wiki",
+    subtitle: "Ficha técnica, tier e reviews",
+  })
+}
+
+const DEFAULT_CATEGORY: Category = "mouse"
+const PAGE_SIZE = 24
 
 export default async function PerifericosPage({ searchParams }: PerifericosPageProps) {
   const { category: categoryParam } = await searchParams

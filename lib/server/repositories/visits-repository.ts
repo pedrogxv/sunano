@@ -15,12 +15,27 @@ import { addDaysIso, startOfDayUtc, todayIso } from "@/lib/server/time"
  * anteriores e assim distinguir "único" de "recorrente".
  */
 
+/**
+ * O fallback para `SUPABASE_SERVICE_ROLE_KEY` mantém o hash funcionando sem
+ * configuração, mas acopla um segredo de acesso total do banco a um valor de
+ * analytics — e rotacionar essa chave (o que deve ser possível a qualquer
+ * momento) mudaria todo hash e zeraria o histórico de visitantes únicos, já
+ * que a comparação entre dias depende do salt ser estável para sempre.
+ * Por isso ele fica só para dev; em produção a env dedicada é obrigatória.
+ */
 function getVisitorSalt() {
-  const salt = process.env.VISITOR_HASH_SALT || process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!salt) {
+  const salt = process.env.VISITOR_HASH_SALT
+  if (salt) return salt
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("VISITOR_HASH_SALT não configurado em produção.")
+  }
+
+  const fallback = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!fallback) {
     throw new Error("VISITOR_HASH_SALT (ou SUPABASE_SERVICE_ROLE_KEY) não configurado.")
   }
-  return salt
+  return fallback
 }
 
 /** Hash irreversível de IP + User-Agent — identifica o visitante sem guardar dado pessoal. */

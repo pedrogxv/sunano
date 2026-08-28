@@ -33,3 +33,35 @@ export function slugToSearchPattern(slug: string) {
   const core = slug.replace(/-/g, "%")
   return `%${core}%`
 }
+
+/**
+ * Nome de exibição do periférico, sem repetir a marca.
+ *
+ * `brand` vem de uma tabela separada (`brands`), mas o `name` cadastrado no
+ * admin quase sempre já começa pela marca ("Razer DeathAdder V3 Pro"). Concatenar
+ * os dois cru produzia "Razer Razer DeathAdder V3 Pro" no `<title>`, no
+ * `og:title`, na meta description e no JSON-LD — em praticamente todo o
+ * catálogo. Além de parecer descuidado na SERP, um título que gasta a palavra
+ * mais buscada duas vezes desperdiça o orçamento de ~60 chars antes do corte.
+ *
+ * A comparação é acento/caixa-insensível e só remove a marca quando ela é o
+ * primeiro token completo — "Razer" não pode sumir de um nome como
+ * "Razerblade" nem de "Pro Razer Edition".
+ */
+export function buildPeripheralDisplayName(brand: string | null | undefined, name: string): string {
+  const cleanName = name.trim()
+  const cleanBrand = brand?.trim()
+  if (!cleanBrand) return cleanName
+
+  const norm = (v: string) => slugify(v)
+  const brandSlug = norm(cleanBrand)
+  if (!brandSlug) return cleanName
+
+  const nameSlug = norm(cleanName)
+  // Só considera prefixo se terminar em limite de token ("-" ou fim da string),
+  // evitando cortar "razer" de "razerblade".
+  if (nameSlug === brandSlug) return cleanName
+  if (nameSlug.startsWith(`${brandSlug}-`)) return cleanName
+
+  return `${cleanBrand} ${cleanName}`
+}

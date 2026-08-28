@@ -4,6 +4,11 @@ import { hasAdminPermission } from "@/lib/admin-permissions"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { validateImageUpload } from "@/lib/server/upload-validation"
+import {
+  compressUploadedImage,
+  IMAGE_PRESETS,
+  IMMUTABLE_CACHE_CONTROL,
+} from "@/lib/server/image-compression"
 
 /**
  * O tamanho *recomendado* de um banner é 500KB (ver painel `/admin/banners`);
@@ -21,7 +26,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status })
   }
   if (!hasAdminPermission(auth.profile, "banners_write")) {
-    return NextResponse.json({ error: "Sem permissão para enviar banners." }, { status: 403 })
+    return NextResponse.json(
+      { error: "Sem permissão para enviar banners." },
+      { status: 403 }
+    )
   }
 
   const form = await request.formData()
@@ -29,7 +37,10 @@ export async function POST(request: NextRequest) {
   const variant = form.get("variant") === "mobile" ? "mobile" : "desktop"
 
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Nenhum arquivo enviado." }, { status: 400 })
+    return NextResponse.json(
+      { error: "Nenhum arquivo enviado." },
+      { status: 400 }
+    )
   }
 
   const validated = await validateImageUpload(file, {
@@ -40,12 +51,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: validated.error }, { status: 400 })
   }
 
-  const filename = `home-banner-${variant}-${Date.now()}-${crypto.randomUUID()}.${validated.extension}`
+  // Recomprime antes de gravar: nenhum transformador roda em runtime
+  // (ver lib/server/image-compression.ts), então o objeto do bucket já
+  // precisa nascer no tamanho de exibição.
+  const compressed = await compressUploadedImage(
+    validated.bytes,
+    validated.mime,
+    IMAGE_PRESETS.banner
+  )
+
+  const filename = `home-banner-${variant}-${Date.now()}-${crypto.randomUUID()}.${compressed.extension}`
   const db = createSupabaseAdminClient()
 
   const { error } = await db.storage
     .from("peripherals")
-    .upload(filename, validated.bytes, { contentType: validated.mime, upsert: false })
+    .upload(filename, compressed.bytes, {
+      contentType: compressed.mime,
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      upsert: false,
+    })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

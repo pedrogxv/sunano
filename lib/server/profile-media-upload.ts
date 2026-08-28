@@ -3,6 +3,11 @@ import "server-only"
 import { canUseAnimatedMedia } from "@/lib/account-tier"
 import { getAccountTier } from "@/lib/server/repositories/profile-showcase-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import {
+  compressUploadedImage,
+  IMAGE_PRESETS,
+  IMMUTABLE_CACHE_CONTROL,
+} from "@/lib/server/image-compression"
 import { detectImageType } from "@/lib/server/upload-validation"
 
 /**
@@ -45,6 +50,17 @@ const FIELD_CONFIG: Record<ProfileMediaField, FieldConfig> = {
     maxSizeBytes: 16 * 1024 * 1024,
     gifErrorMessage: "Fundo animado (GIF) no Mini Perfil é exclusivo para membros VIP.",
   },
+}
+
+/**
+ * Avatar é exibido no máximo a ~200px; banner e mini banner ocupam a largura
+ * do card de perfil. Nenhum deles justifica os 16MB que o passo 1 aceita —
+ * esse teto existe só para o arquivo original caber na signed URL.
+ */
+const PRESET_BY_FIELD: Record<ProfileMediaField, (typeof IMAGE_PRESETS)[keyof typeof IMAGE_PRESETS]> = {
+  avatar: IMAGE_PRESETS.avatar,
+  banner: IMAGE_PRESETS.banner,
+  "mini-banner": IMAGE_PRESETS.banner,
 }
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
@@ -135,9 +151,23 @@ export async function finalizeProfileMediaUpload(
     }
   }
 
+  // O objeto já está no bucket (foi direto do navegador pela signed URL), e
+  // este é o único ponto do fluxo que enxerga os bytes — então é aqui que a
+  // recompressão acontece. Sem isso, o limite de 16MB acima virava 16MB
+  // trafegados a cada exibição do perfil: nenhum transformador roda em
+  // runtime (ver lib/server/image-compression.ts). GIF do VIP passa intacto.
+  const compressed = await compressUploadedImage(bytes, detected.mime, PRESET_BY_FIELD[field])
+
   // O upload via signed URL pode não ter gravado o content-type correto —
-  // regrava com o tipo real detectado pelos magic bytes.
-  await supabase.storage.from(BUCKET).update(path, bytes, { contentType: detected.mime, upsert: true })
+  // regrava com o tipo real detectado pelos magic bytes (ou o WebP recém
+  // gerado). `upsert` mantém o mesmo path, então a URL pública não muda.
+  await supabase.storage
+    .from(BUCKET)
+    .update(path, compressed.bytes, {
+      contentType: compressed.mime,
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      upsert: true,
+    })
 
   const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return { ok: true, publicUrl: publicData.publicUrl }

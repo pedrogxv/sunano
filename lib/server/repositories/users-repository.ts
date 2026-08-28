@@ -366,7 +366,7 @@ export async function getMostVisitedProfiles(limit = 12): Promise<PublicProfileS
  * preencher a vaga. Buscamos um item a mais que `limit` na carteira só para
  * cobrir o caso dele estar entre os top N; o `slice` abaixo recorta de volta.
  */
-export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+async function fetchTopAuraProfiles(limit: number): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
 
   const { data: wallets, error: walletsError } = await db
@@ -425,6 +425,26 @@ export async function getTopAuraProfiles(limit = 12): Promise<PublicProfileSumma
   // `withCounters` preserva a ordem que chega — ranqueados por aura, depois o
   // preenchimento — e é ele quem carimba o saldo em cada card.
   return withCounters([...ranked, ...fillers])
+}
+
+/**
+ * `unstable_cache` (5 min): o resultado é idêntico para todo mundo — é um
+ * ranking público, não depende de quem está olhando. `/pessoas` é
+ * `force-dynamic` (precisa da sessão para marcar quem o visitante já segue) e
+ * pedia 100 perfis, então cada pageview refazia a carteira inteira, dois
+ * `select` em `user_profiles` e o `withCounters` por cima. O que varia por
+ * usuário (`getFollowedIdsAmong`) fica de fora do cache, na página.
+ *
+ * Mesmo raciocínio e mesma janela de `getActivityCounts` acima.
+ */
+const getCachedTopAuraProfiles = unstable_cache(
+  fetchTopAuraProfiles,
+  ["users-repository:topAuraProfiles"],
+  { revalidate: 300, tags: ["users:top-aura"] }
+)
+
+export function getTopAuraProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+  return getCachedTopAuraProfiles(limit)
 }
 
 /**

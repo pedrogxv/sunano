@@ -18,6 +18,7 @@ export async function POST(request: Request) {
       identifier: `${identifier}:${email.toLowerCase()}`,
       maxAttempts: 5,
       windowSeconds: 900,
+      onError: "closed",
     })
     if (!rateLimit.allowed) {
       // Resposta genérica de propósito — não revela rate limit a quem tenta abusar.
@@ -25,7 +26,8 @@ export async function POST(request: Request) {
     }
 
     const supabase = await createSupabaseServerClient()
-    const siteUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin
+    const siteUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin
     const redirectTo = `${siteUrl}/auth/callback?type=recovery`
 
     await supabase.auth.resetPasswordForEmail(email, {

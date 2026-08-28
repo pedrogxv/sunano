@@ -9,6 +9,11 @@ import {
   MAX_SUPPORT_IMAGE_BYTES,
 } from "@/lib/server/support-media"
 import { validateImageUpload } from "@/lib/server/upload-validation"
+import {
+  compressUploadedImage,
+  IMAGE_PRESETS,
+  IMMUTABLE_CACHE_CONTROL,
+} from "@/lib/server/image-compression"
 
 /** Upload de imagem anexada a uma resposta do admin — mesmo bucket `support`, prefixo `support-admin-` (ver isOwnedAdminSupportImageUrl). */
 export async function POST(request: NextRequest) {
@@ -27,7 +32,10 @@ export async function POST(request: NextRequest) {
     windowSeconds: 3600,
   })
   if (!rateLimit.allowed) {
-    return NextResponse.json({ error: "Muitos envios seguidos. Aguarde um instante." }, { status: 429 })
+    return NextResponse.json(
+      { error: "Muitos envios seguidos. Aguarde um instante." },
+      { status: 429 }
+    )
   }
 
   const formData = await request.formData()
@@ -44,12 +52,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: validated.error }, { status: 400 })
   }
 
-  const fileName = `support-admin-${auth.profile.id}-${Date.now()}.${validated.extension}`
+  // Recomprime antes de gravar: nenhum transformador roda em runtime
+  // (ver lib/server/image-compression.ts), então o objeto do bucket já
+  // precisa nascer no tamanho de exibição.
+  const compressed = await compressUploadedImage(
+    validated.bytes,
+    validated.mime,
+    IMAGE_PRESETS.content
+  )
+
+  const fileName = `support-admin-${auth.profile.id}-${Date.now()}.${compressed.extension}`
 
   const db = createSupabaseAdminClient()
   const { error: uploadError } = await db.storage
     .from("support")
-    .upload(fileName, validated.bytes, { upsert: false, contentType: validated.mime })
+    .upload(fileName, compressed.bytes, {
+      upsert: false,
+      contentType: compressed.mime,
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+    })
 
   if (uploadError) {
     return NextResponse.json({ error: uploadError.message }, { status: 400 })

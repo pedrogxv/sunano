@@ -19,8 +19,14 @@ export type Notification = {
   createdAt: string
 }
 
-/** Intervalo do polling. Não há realtime aqui; 60s é o suficiente para um sino. */
-const POLL_MS = 60_000
+/**
+ * Intervalo do polling. Não há realtime aqui. Era 60s, mas um sino de
+ * notificação não precisa dessa resolução: junto com o badge de Aura, esses
+ * dois timers eram o maior gerador de invocações do projeto (uma chamada por
+ * minuto por aba aberta, indefinidamente). O polling só para quando a aba vai
+ * pro segundo plano — ao voltar, recarrega imediatamente.
+ */
+const POLL_MS = 180_000
 
 export type UseNotificationsOptions = {
   pageSize?: number
@@ -89,8 +95,33 @@ export function useNotifications(options: UseNotificationsOptions = {}): UseNoti
     }
     void reload()
     if (!poll) return
-    const id = setInterval(() => void reload(), POLL_MS)
-    return () => clearInterval(id)
+
+    let id: ReturnType<typeof setInterval> | null = null
+
+    const start = () => {
+      if (id === null) id = setInterval(() => void reload(), POLL_MS)
+    }
+    const stop = () => {
+      if (id !== null) {
+        clearInterval(id)
+        id = null
+      }
+    }
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stop()
+      } else {
+        void reload()
+        start()
+      }
+    }
+
+    if (!document.hidden) start()
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => {
+      stop()
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
   }, [user, reload, poll])
 
   const loadMore = useCallback(async () => {

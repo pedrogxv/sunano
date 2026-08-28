@@ -2,10 +2,18 @@ import { randomUUID } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 import { createPixTransaction } from "@/lib/server/integrations/misticpay"
-import { findOrCreateCustomer, createPixPayment, getPixQrCode, createCheckout } from "@/lib/server/integrations/asaas"
+import {
+  findOrCreateCustomer,
+  createPixPayment,
+  getPixQrCode,
+  createCheckout,
+} from "@/lib/server/integrations/asaas"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser } from "@/lib/server/auth/current-user"
-import { payerInfoSchema, payerAddressSchema } from "@/lib/server/validation/guest-checkout"
+import {
+  payerInfoSchema,
+  payerAddressSchema,
+} from "@/lib/server/validation/guest-checkout"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
 import {
@@ -28,7 +36,11 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export const runtime = "nodejs"
 export const maxDuration = 20
 
-type DecrementedLine = { productId: string; variantId: string | null; quantity: number }
+type DecrementedLine = {
+  productId: string
+  variantId: string | null
+  quantity: number
+}
 
 const MAX_ITEM_LINES = 50
 const MAX_QUANTITY_PER_LINE = 20
@@ -37,9 +49,13 @@ const AFFILIATE_REF_COOKIE = "sn_aff_ref"
 const AFFILIATE_REF_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 const checkoutItemSchema = z.object({
-  productId: z.string("Quantidade inválida no carrinho.").min(1, "Quantidade inválida no carrinho."),
+  productId: z
+    .string("Quantidade inválida no carrinho.")
+    .min(1, "Quantidade inválida no carrinho."),
   variantId: z.string().min(1, "Quantidade inválida no carrinho.").nullish(),
-  variantOptionIds: z.array(z.string().min(1, "Quantidade inválida no carrinho.")).nullish(),
+  variantOptionIds: z
+    .array(z.string().min(1, "Quantidade inválida no carrinho."))
+    .nullish(),
   quantity: z
     .number("Quantidade inválida no carrinho.")
     .int("Quantidade inválida no carrinho.")
@@ -85,7 +101,8 @@ async function resolveAffiliateAttribution(
     return null
   }
 
-  if (typeof parsed.code !== "string" || typeof parsed.clickedAt !== "number") return null
+  if (typeof parsed.code !== "string" || typeof parsed.clickedAt !== "number")
+    return null
   if (Date.now() - parsed.clickedAt > AFFILIATE_REF_MAX_AGE_MS) return null
 
   const affiliate = await getAffiliateByCode(parsed.code)
@@ -102,17 +119,30 @@ async function resolveAffiliateAttribution(
  * transação real via PostgREST entre o decremento e o insert do pedido, então
  * o rollback é manual.
  */
-async function revertDecrements(db: SupabaseClient<Database>, lines: DecrementedLine[]) {
+async function revertDecrements(
+  db: SupabaseClient<Database>,
+  lines: DecrementedLine[]
+) {
   await Promise.all(
     lines.map(async (line) => {
       try {
         if (line.variantId) {
-          await db.rpc("increment_variant_stock", { p_variant_id: line.variantId, p_quantity: line.quantity })
+          await db.rpc("increment_variant_stock", {
+            p_variant_id: line.variantId,
+            p_quantity: line.quantity,
+          })
         } else {
-          await db.rpc("increment_store_stock", { p_product_id: line.productId, p_quantity: line.quantity })
+          await db.rpc("increment_store_stock", {
+            p_product_id: line.productId,
+            p_quantity: line.quantity,
+          })
         }
       } catch (err) {
-        console.error("[checkout] falha ao reverter reserva de estoque:", line, err)
+        console.error(
+          "[checkout] falha ao reverter reserva de estoque:",
+          line,
+          err
+        )
       }
     })
   )
@@ -131,12 +161,18 @@ export async function POST(request: NextRequest) {
   if (isStoreMaintenanceEnabled()) {
     const maintenanceUser = await getRequestUser(request)
     const { data: maintenanceProfile } = maintenanceUser
-      ? await db.from("admin_profiles").select("id, role, permissions").eq("id", maintenanceUser.id).maybeSingle()
+      ? await db
+          .from("admin_profiles")
+          .select("id, role, permissions")
+          .eq("id", maintenanceUser.id)
+          .maybeSingle()
       : { data: null }
 
     if (!isWebMaster(maintenanceProfile)) {
       return NextResponse.json(
-        { error: "A Loja está temporariamente indisponível para novos pedidos." },
+        {
+          error: "A Loja está temporariamente indisponível para novos pedidos.",
+        },
         { status: 503 }
       )
     }
@@ -152,10 +188,14 @@ export async function POST(request: NextRequest) {
       identifier: clientId,
       maxAttempts: 10,
       windowSeconds: 600,
+      onError: "closed",
     })
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: "Muitas tentativas de compra. Aguarde alguns minutos e tente novamente." },
+        {
+          error:
+            "Muitas tentativas de compra. Aguarde alguns minutos e tente novamente.",
+        },
         { status: 429 }
       )
     }
@@ -167,7 +207,10 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
-    const affiliateAttribution = await resolveAffiliateAttribution(request, user.id)
+    const affiliateAttribution = await resolveAffiliateAttribution(
+      request,
+      user.id
+    )
 
     const rawBody = await request.json().catch(() => null)
     const parsedBody = checkoutBodySchema.safeParse(rawBody)
@@ -190,10 +233,14 @@ export async function POST(request: NextRequest) {
         identifier: clientId,
         maxAttempts: 3,
         windowSeconds: 600,
+        onError: "closed",
       })
       if (!cardRateLimit.allowed) {
         return NextResponse.json(
-          { error: "Muitas tentativas de compra no cartão. Aguarde alguns minutos e tente novamente." },
+          {
+            error:
+              "Muitas tentativas de compra no cartão. Aguarde alguns minutos e tente novamente.",
+          },
           { status: 429 }
         )
       }
@@ -204,11 +251,19 @@ export async function POST(request: NextRequest) {
     // passava pela checagem de estoque por linha mesmo pedindo, no total,
     // mais unidades do que existem. Combinações diferentes do mesmo produto
     // NÃO são mescladas — cada uma tem seu próprio estoque/preço.
-    const lineKey = (productId: string, variantId: string | null, optionIds: string[]) =>
-      `${productId}:${variantId ?? ""}:${[...optionIds].sort().join(",")}`
+    const lineKey = (
+      productId: string,
+      variantId: string | null,
+      optionIds: string[]
+    ) => `${productId}:${variantId ?? ""}:${[...optionIds].sort().join(",")}`
     const quantityByLine = new Map<
       string,
-      { productId: string; variantId: string | null; optionIds: string[]; quantity: number }
+      {
+        productId: string
+        variantId: string | null
+        optionIds: string[]
+        quantity: number
+      }
     >()
     for (const item of items) {
       const variantId = item.variantId ?? null
@@ -223,8 +278,15 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if ([...quantityByLine.values()].some((line) => line.quantity > MAX_QUANTITY_PER_LINE)) {
-      return NextResponse.json({ error: "Quantidade por produto excede o limite permitido." }, { status: 400 })
+    if (
+      [...quantityByLine.values()].some(
+        (line) => line.quantity > MAX_QUANTITY_PER_LINE
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Quantidade por produto excede o limite permitido." },
+        { status: 400 }
+      )
     }
 
     // Preço e estoque SEMPRE vêm do banco — o corpo da requisição só informa
@@ -232,13 +294,28 @@ export async function POST(request: NextRequest) {
     // price_cents: isso fecha a brecha de manipular o valor cobrado pelo carrinho.
     const mergedItems = [...quantityByLine.values()]
     const productIds = [...new Set(mergedItems.map((line) => line.productId))]
-    const variantIds = [...new Set(mergedItems.map((line) => line.variantId).filter((id): id is string => id != null))]
-    const optionIds = [...new Set(mergedItems.flatMap((line) => line.optionIds))]
+    const variantIds = [
+      ...new Set(
+        mergedItems
+          .map((line) => line.variantId)
+          .filter((id): id is string => id != null)
+      ),
+    ]
+    const optionIds = [
+      ...new Set(mergedItems.flatMap((line) => line.optionIds)),
+    ]
 
-    const [{ data: products, error: dbError }, variants, variantOptions, soldOutCombinations] = await Promise.all([
+    const [
+      { data: products, error: dbError },
+      variants,
+      variantOptions,
+      soldOutCombinations,
+    ] = await Promise.all([
       db
         .from("store_products")
-        .select("id, name, price_cents, stock, images, type, condition, is_active, is_sold_out")
+        .select(
+          "id, name, price_cents, stock, images, type, condition, is_active, is_sold_out"
+        )
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
       getVariantOptionsForCheckout(optionIds),
@@ -249,20 +326,32 @@ export async function POST(request: NextRequest) {
     )
 
     if (dbError) {
-      const { body, status } = dbErrorResponse(dbError, "Não foi possível carregar os produtos do carrinho.")
+      const { body, status } = dbErrorResponse(
+        dbError,
+        "Não foi possível carregar os produtos do carrinho."
+      )
       return NextResponse.json(body, { status })
     }
 
     if (!products || products.length !== productIds.length) {
-      return NextResponse.json({ error: "Um ou mais produtos não encontrados" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Um ou mais produtos não encontrados" },
+        { status: 404 }
+      )
     }
 
     if (variants.length !== variantIds.length) {
-      return NextResponse.json({ error: "Uma ou mais variantes não encontradas" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Uma ou mais variantes não encontradas" },
+        { status: 404 }
+      )
     }
 
     if (variantOptions.length !== optionIds.length) {
-      return NextResponse.json({ error: "Uma ou mais variantes não encontradas" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Uma ou mais variantes não encontradas" },
+        { status: 404 }
+      )
     }
 
     // Validação síncrona (sem query) de cada linha antes de tocar o banco —
@@ -278,45 +367,77 @@ export async function POST(request: NextRequest) {
     for (const cartItem of mergedItems) {
       const product = products.find((p) => p.id === cartItem.productId)
       if (!product) {
-        return NextResponse.json({ error: `Produto não encontrado: ${cartItem.productId}` }, { status: 404 })
+        return NextResponse.json(
+          { error: `Produto não encontrado: ${cartItem.productId}` },
+          { status: 404 }
+        )
       }
       if (!product.is_active) {
-        return NextResponse.json({ error: `Produto indisponível: ${product.name}` }, { status: 400 })
+        return NextResponse.json(
+          { error: `Produto indisponível: ${product.name}` },
+          { status: 400 }
+        )
       }
       if (product.is_sold_out) {
-        return NextResponse.json({ error: `Produto esgotado: ${product.name}` }, { status: 400 })
+        return NextResponse.json(
+          { error: `Produto esgotado: ${product.name}` },
+          { status: 400 }
+        )
       }
 
-      const variant = cartItem.variantId ? variants.find((v) => v.id === cartItem.variantId) : null
+      const variant = cartItem.variantId
+        ? variants.find((v) => v.id === cartItem.variantId)
+        : null
       if (cartItem.variantId) {
         if (!variant || variant.product_id !== product.id) {
-          return NextResponse.json({ error: `Variante não encontrada para "${product.name}"` }, { status: 404 })
+          return NextResponse.json(
+            { error: `Variante não encontrada para "${product.name}"` },
+            { status: 404 }
+          )
         }
         if (!variant.is_active || variant.is_sold_out) {
-          return NextResponse.json({ error: `Variante indisponível: ${product.name} — ${variant.label}` }, { status: 400 })
+          return NextResponse.json(
+            {
+              error: `Variante indisponível: ${product.name} — ${variant.label}`,
+            },
+            { status: 400 }
+          )
         }
       }
 
-      const options = cartItem.optionIds.map((id) => variantOptions.find((o) => o.id === id)).filter(
-        (o): o is (typeof variantOptions)[number] => o != null
-      )
+      const options = cartItem.optionIds
+        .map((id) => variantOptions.find((o) => o.id === id))
+        .filter((o): o is (typeof variantOptions)[number] => o != null)
       if (options.length !== cartItem.optionIds.length) {
-        return NextResponse.json({ error: `Variante não encontrada para "${product.name}"` }, { status: 404 })
+        return NextResponse.json(
+          { error: `Variante não encontrada para "${product.name}"` },
+          { status: 404 }
+        )
       }
       for (const option of options) {
         if (option.group.product_id !== product.id) {
-          return NextResponse.json({ error: `Variante não encontrada para "${product.name}"` }, { status: 404 })
+          return NextResponse.json(
+            { error: `Variante não encontrada para "${product.name}"` },
+            { status: 404 }
+          )
         }
         if (option.is_sold_out) {
           return NextResponse.json(
-            { error: `Variante indisponível: ${product.name} — ${option.label}` },
+            {
+              error: `Variante indisponível: ${product.name} — ${option.label}`,
+            },
             { status: 400 }
           )
         }
       }
       // Uma opção por grupo, no máximo.
       if (new Set(options.map((o) => o.group.id)).size !== options.length) {
-        return NextResponse.json({ error: `Selecione só uma opção por grupo de variantes: "${product.name}"` }, { status: 400 })
+        return NextResponse.json(
+          {
+            error: `Selecione só uma opção por grupo de variantes: "${product.name}"`,
+          },
+          { status: 400 }
+        )
       }
 
       // Combinação Cor × Variante esgotada — checado à parte dos flags
@@ -326,7 +447,9 @@ export async function POST(request: NextRequest) {
         for (const option of options) {
           if (soldOutCombinationKeys.has(`${variant.id}:${option.id}`)) {
             return NextResponse.json(
-              { error: `Combinação indisponível: ${product.name} — ${variant.label} + ${option.label}` },
+              {
+                error: `Combinação indisponível: ${product.name} — ${variant.label} + ${option.label}`,
+              },
               { status: 400 }
             )
           }
@@ -336,7 +459,9 @@ export async function POST(request: NextRequest) {
       validatedLines.push({
         product,
         variant: variant ?? null,
-        options: [...options].sort((a, b) => a.group.position - b.group.position),
+        options: [...options].sort(
+          (a, b) => a.group.position - b.group.position
+        ),
         quantity: cartItem.quantity,
       })
     }
@@ -350,26 +475,37 @@ export async function POST(request: NextRequest) {
     // duas variantes sem estoque do mesmo produto competem pelo mesmo teto.
     const unlimitedStockQuantityByProduct = new Map<string, number>()
     for (const line of validatedLines) {
-      const effectiveStock = line.variant ? line.variant.stock : line.product.stock
+      const effectiveStock = line.variant
+        ? line.variant.stock
+        : line.product.stock
       if (effectiveStock !== null) continue
       unlimitedStockQuantityByProduct.set(
         line.product.id,
-        (unlimitedStockQuantityByProduct.get(line.product.id) ?? 0) + line.quantity
+        (unlimitedStockQuantityByProduct.get(line.product.id) ?? 0) +
+          line.quantity
       )
     }
     if (unlimitedStockQuantityByProduct.size > 0) {
       const checks = await Promise.all(
-        [...unlimitedStockQuantityByProduct.entries()].map(async ([productId, quantity]) => {
-          const alreadyBought = await getRecentProductPurchaseQuantity(user.id, productId)
-          return { productId, quantity, alreadyBought }
-        })
+        [...unlimitedStockQuantityByProduct.entries()].map(
+          async ([productId, quantity]) => {
+            const alreadyBought = await getRecentProductPurchaseQuantity(
+              user.id,
+              productId
+            )
+            return { productId, quantity, alreadyBought }
+          }
+        )
       )
       const exceeded = checks.find(
         (c) => c.alreadyBought + c.quantity > DAILY_PURCHASE_LIMIT_NO_STOCK
       )
       if (exceeded) {
         const product = products.find((p) => p.id === exceeded.productId)
-        const remaining = Math.max(0, DAILY_PURCHASE_LIMIT_NO_STOCK - exceeded.alreadyBought)
+        const remaining = Math.max(
+          0,
+          DAILY_PURCHASE_LIMIT_NO_STOCK - exceeded.alreadyBought
+        )
         return NextResponse.json(
           {
             error:
@@ -396,10 +532,13 @@ export async function POST(request: NextRequest) {
       validatedLines.map(async (line) => {
         const { product, variant, quantity } = line
         if (variant) {
-          const { data: decremented } = await db.rpc("decrement_variant_stock", {
-            p_variant_id: variant.id,
-            p_quantity: quantity,
-          })
+          const { data: decremented } = await db.rpc(
+            "decrement_variant_stock",
+            {
+              p_variant_id: variant.id,
+              p_quantity: quantity,
+            }
+          )
           return { line, ok: Boolean(decremented) }
         }
         const { data: decremented } = await db.rpc("decrement_store_stock", {
@@ -423,8 +562,13 @@ export async function POST(request: NextRequest) {
     if (failed) {
       await revertDecrements(db, decrementedLines)
       const { product, variant } = failed.line
-      const label = variant ? `${product.name} — ${variant.label}` : product.name
-      return NextResponse.json({ error: `Estoque insuficiente para "${label}".` }, { status: 409 })
+      const label = variant
+        ? `${product.name} — ${variant.label}`
+        : product.name
+      return NextResponse.json(
+        { error: `Estoque insuficiente para "${label}".` },
+        { status: 409 }
+      )
     }
 
     let totalCents = 0
@@ -434,9 +578,11 @@ export async function POST(request: NextRequest) {
       // Overrides se acumulam nesta ordem, o último presente vence: preço
       // base → cor → cada opção de grupo selecionada, na ordem de
       // `group.position` — mesma regra usada em ProductDetailContent.
-      let effectivePriceCents = variant?.price_cents_override ?? product.price_cents
+      let effectivePriceCents =
+        variant?.price_cents_override ?? product.price_cents
       for (const option of options) {
-        if (option.price_cents_override != null) effectivePriceCents = option.price_cents_override
+        if (option.price_cents_override != null)
+          effectivePriceCents = option.price_cents_override
       }
 
       totalCents += effectivePriceCents * quantity
@@ -447,14 +593,20 @@ export async function POST(request: NextRequest) {
         quantity,
         variant_id: variant?.id ?? null,
         variant_label: variant?.label ?? null,
-        variant_options: options.map((o) => ({ group: o.group.name, label: o.label })),
+        variant_options: options.map((o) => ({
+          group: o.group.name,
+          label: o.label,
+        })),
         image: product.images?.[0] ?? null,
       })
     }
 
     if (totalCents <= 0) {
       await revertDecrements(db, decrementedLines)
-      return NextResponse.json({ error: "Valor do pedido inválido." }, { status: 400 })
+      return NextResponse.json(
+        { error: "Valor do pedido inválido." },
+        { status: 400 }
+      )
     }
 
     const { data: profile } = await db
@@ -465,7 +617,8 @@ export async function POST(request: NextRequest) {
     let payerName: string | null = profile?.full_name ?? null
     let payerDocument: string | null = profile?.cpf ?? null
     const customerEmail: string | null = user.email
-    const cachedAsaasCustomerId: string | null = profile?.asaas_customer_id ?? null
+    const cachedAsaasCustomerId: string | null =
+      profile?.asaas_customer_id ?? null
 
     // Perfil sem nome/CPF: o próprio checkout aceita esses dados no corpo
     // da requisição (a tela mostra os campos quando o perfil está
@@ -476,7 +629,11 @@ export async function POST(request: NextRequest) {
       if (!payer.success) {
         await revertDecrements(db, decrementedLines)
         return NextResponse.json(
-          { error: payer.error.issues[0]?.message ?? "Informe seu nome e CPF para finalizar a compra." },
+          {
+            error:
+              payer.error.issues[0]?.message ??
+              "Informe seu nome e CPF para finalizar a compra.",
+          },
           { status: 400 }
         )
       }
@@ -523,18 +680,20 @@ export async function POST(request: NextRequest) {
     if (paymentMethod === "credit_card") {
       const { data: addressProfile } = await db
         .from("user_profiles")
-        .select("phone, postal_code, street, number, complement, neighborhood, city, state")
+        .select(
+          "phone, postal_code, street, number, complement, neighborhood, city, state"
+        )
         .eq("id", user.id)
         .single()
 
       const hasCompleteAddress = Boolean(
         addressProfile?.phone &&
-          addressProfile?.postal_code &&
-          addressProfile?.street &&
-          addressProfile?.number &&
-          addressProfile?.neighborhood &&
-          addressProfile?.city &&
-          addressProfile?.state
+        addressProfile?.postal_code &&
+        addressProfile?.street &&
+        addressProfile?.number &&
+        addressProfile?.neighborhood &&
+        addressProfile?.city &&
+        addressProfile?.state
       )
 
       if (hasCompleteAddress) {
@@ -553,7 +712,11 @@ export async function POST(request: NextRequest) {
         if (!address.success) {
           await revertDecrements(db, decrementedLines)
           return NextResponse.json(
-            { error: address.error.issues[0]?.message ?? "Informe seu telefone e endereço para pagar com cartão." },
+            {
+              error:
+                address.error.issues[0]?.message ??
+                "Informe seu telefone e endereço para pagar com cartão.",
+            },
             { status: 400 }
           )
         }
@@ -594,7 +757,9 @@ export async function POST(request: NextRequest) {
 
     const description = `Pedido Sunano — ${orderItems.length} ${orderItems.length === 1 ? "item" : "itens"}`
 
-    let orderInsert: Partial<Database["public"]["Tables"]["store_orders"]["Insert"]>
+    let orderInsert: Partial<
+      Database["public"]["Tables"]["store_orders"]["Insert"]
+    >
     let qrCodeBase64: string | null = null
     let copyPaste: string | null = null
     let checkoutUrl: string | null = null
@@ -605,7 +770,9 @@ export async function POST(request: NextRequest) {
       // digita os dados na página da própria Asaas; nosso backend nunca
       // recebe número de cartão, validade ou CVV (ver createCheckout).
       const settings = await getStoreSettings()
-      const cardTotalCents = Math.round(totalCents * (1 + settings.cardSurchargePercent / 100))
+      const cardTotalCents = Math.round(
+        totalCents * (1 + settings.cardSurchargePercent / 100)
+      )
 
       const customer = await findOrCreateCustomer({
         name: payerName,
@@ -621,7 +788,10 @@ export async function POST(request: NextRequest) {
         state: payerAddress!.state,
       })
       if (customer.id !== cachedAsaasCustomerId) {
-        await db.from("user_profiles").update({ asaas_customer_id: customer.id }).eq("id", user.id)
+        await db
+          .from("user_profiles")
+          .update({ asaas_customer_id: customer.id })
+          .eq("id", user.id)
       }
 
       // Gera o id do pedido antes do insert (Supabase aceita PK explícita)
@@ -653,7 +823,10 @@ export async function POST(request: NextRequest) {
         console.error("[checkout] createCheckout falhou:", checkoutError)
         await revertDecrements(db, decrementedLines)
         return NextResponse.json(
-          { error: "Não foi possível iniciar o pagamento com cartão. Tente novamente ou use PIX." },
+          {
+            error:
+              "Não foi possível iniciar o pagamento com cartão. Tente novamente ou use PIX.",
+          },
           { status: 402 }
         )
       }
@@ -686,18 +859,26 @@ export async function POST(request: NextRequest) {
 
       if (insertError || !order) {
         await revertDecrements(db, decrementedLines)
-        const { body, status } = dbErrorResponse(insertError, "Não foi possível registrar o pedido.")
+        const { body, status } = dbErrorResponse(
+          insertError,
+          "Não foi possível registrar o pedido."
+        )
         return NextResponse.json(body, { status })
       }
 
-      await notifyOrderStatusChange({ userId: user.id, orderId: order.id, status: "pending" })
+      await notifyOrderStatusChange({
+        userId: user.id,
+        orderId: order.id,
+        status: "pending",
+      })
 
       return NextResponse.json({ orderId: order.id, checkoutUrl })
     }
 
     // MisticPay é o gateway padrão hoje — Asaas fica atrás de
     // PAYMENT_GATEWAY=asaas até a migração ser concluída.
-    const gateway = process.env.PAYMENT_GATEWAY === "asaas" ? "asaas" : "misticpay"
+    const gateway =
+      process.env.PAYMENT_GATEWAY === "asaas" ? "asaas" : "misticpay"
 
     if (gateway === "asaas") {
       // externalReference próprio (não o id do pedido) para não vazar UUID
@@ -714,7 +895,10 @@ export async function POST(request: NextRequest) {
       // Cacheia o customer no perfil de usuários logados para não recriar
       // (nem depender da busca por CPF) na próxima compra.
       if (customer.id !== cachedAsaasCustomerId) {
-        await db.from("user_profiles").update({ asaas_customer_id: customer.id }).eq("id", user.id)
+        await db
+          .from("user_profiles")
+          .update({ asaas_customer_id: customer.id })
+          .eq("id", user.id)
       }
 
       const payment = await createPixPayment({
@@ -759,7 +943,9 @@ export async function POST(request: NextRequest) {
         // da Asaas, que devolve `expirationDate` real) — aplicamos a mesma
         // janela fixa usada pelo cron de expiração (`PIX_EXPIRATION_MINUTES`)
         // como fonte de verdade única em `pix_expires_at` para os dois gateways.
-        pix_expires_at: new Date(Date.now() + PIX_EXPIRATION_MINUTES * 60_000).toISOString(),
+        pix_expires_at: new Date(
+          Date.now() + PIX_EXPIRATION_MINUTES * 60_000
+        ).toISOString(),
       }
     }
 
@@ -782,11 +968,18 @@ export async function POST(request: NextRequest) {
 
     if (insertError || !order) {
       await revertDecrements(db, decrementedLines)
-      const { body, status } = dbErrorResponse(insertError, "Não foi possível registrar o pedido.")
+      const { body, status } = dbErrorResponse(
+        insertError,
+        "Não foi possível registrar o pedido."
+      )
       return NextResponse.json(body, { status })
     }
 
-    await notifyOrderStatusChange({ userId: user.id, orderId: order.id, status: "pending" })
+    await notifyOrderStatusChange({
+      userId: user.id,
+      orderId: order.id,
+      status: "pending",
+    })
 
     return NextResponse.json({
       orderId: order.id,
@@ -798,7 +991,10 @@ export async function POST(request: NextRequest) {
     if (decrementedLines.length > 0) {
       await revertDecrements(db, decrementedLines)
     }
-    const { body, status } = dbErrorResponse(err, "Não foi possível finalizar a compra. Tente novamente.")
+    const { body, status } = dbErrorResponse(
+      err,
+      "Não foi possível finalizar a compra. Tente novamente."
+    )
     return NextResponse.json(body, { status })
   }
 }

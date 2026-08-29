@@ -8,6 +8,7 @@ import {
   listStoreProductsPaginated,
   recordPriceHistoryIfChanged,
   type StoreProductListFilters,
+  type StoreSaleType,
 } from "@/lib/server/repositories/store-repository"
 import { parseSlug } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
@@ -68,6 +69,10 @@ export async function GET(request: NextRequest) {
     return valid.includes(value as StoreProductListFilters["sort"]) ? (value as StoreProductListFilters["sort"]) : undefined
   }
 
+  const saleTypes = parseCsv(searchParams.get("saleTypes"))?.filter(
+    (v): v is StoreSaleType => v === "pre_order" || v === "ready_stock" || v === "normal"
+  )
+
   const filters: StoreProductListFilters = {
     type: "store",
     includeInactive: true,
@@ -76,6 +81,8 @@ export async function GET(request: NextRequest) {
     brands: parseCsv(searchParams.get("brands")),
     outOfStockOnly: searchParams.get("outOfStock") === "1",
     featured: searchParams.get("featured") === "1" ? true : undefined,
+    pinnedBestSellersOnly: searchParams.get("pinnedBestSellers") === "1" ? true : undefined,
+    saleTypes: saleTypes?.length ? saleTypes : undefined,
     sort: parseSort(searchParams.get("sort")),
     page: parseNumber(searchParams.get("page")),
     pageSize: parseNumber(searchParams.get("pageSize")) ?? 100,

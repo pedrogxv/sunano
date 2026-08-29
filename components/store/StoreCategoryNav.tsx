@@ -121,11 +121,11 @@ export function StoreCategoryNav({
   return (
     <div className="relative" onMouseLeave={() => hoverGroup(null)}>
       {/* Desktop: layout space-between em 3 blocos — Home | Categorias | Busca+Suporte. */}
-      <nav className="hidden items-center justify-between border-b border-[#262626] bg-card px-4 md:flex lg:px-8">
+      <nav className="hidden grid-cols-[1fr_auto_1fr] items-center border-b border-[#262626] bg-card px-4 md:grid lg:px-8">
         <Link
           href="/loja"
           className={cn(
-            "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
+            "flex h-[54px] shrink-0 items-center justify-self-start gap-[5px] border-b-2 text-[13.5px] transition-colors",
             activeCategory === null
               ? "border-white font-bold text-white"
               : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
@@ -194,7 +194,7 @@ export function StoreCategoryNav({
         {/* Busca vive aqui, na faixa de categorias — é onde o mock a coloca,
             em vez de ocupar uma linha inteira dentro da barra de filtros.
             O carrinho não duplica aqui: já vive na TopBar. */}
-        <div className="flex shrink-0 items-center gap-[22px]">
+        <div className="flex shrink-0 items-center justify-self-end gap-[22px]">
           <StoreSearchBox
             className="w-[260px]"
             inputClassName="h-[34px] w-full rounded-[10px] border border-[#2a2a2a] bg-[#141414] pl-[34px] pr-3 text-[12.5px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"

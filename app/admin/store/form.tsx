@@ -713,7 +713,7 @@ export function StoreProductForm({
     setUploadingVariantImage(index)
     setError(null)
     try {
-      const url = await uploadImage(await prepareProductImage(file, { removeBg: false }))
+      const url = await uploadImage(await prepareProductImage(file))
       setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, image_url: url } : v)))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
@@ -744,7 +744,7 @@ export function StoreProductForm({
     setUploadingVariantImage(index)
     setError(null)
     try {
-      const url = await uploadImage(await prepareProductImage(file, { removeBg: false }))
+      const url = await uploadImage(await prepareProductImage(file))
       setVariants((prev) => prev.map((v, i) => (i === index ? { ...v, images: [...v.images, url] } : v)))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
@@ -844,16 +844,16 @@ export function StoreProductForm({
   }
 
   /**
-   * Prepara a foto antes de subir. Só as fotos principais do anúncio passam
-   * pela remoção de fundo (`removeBackground`); capa e galeria da variante de
-   * cor usam sempre a compressão normal (`removeBg: false`), sem remoção de
-   * fundo. Sem fallback: se a etapa falhar, o upload falha com o erro à
-   * mostra, em vez de subir a foto crua e parecer que o tratamento simplesmente
-   * não foi aplicado.
+   * Prepara a foto antes de subir, removendo o fundo e recortando pro
+   * conteúdo (`removeBackground`) — os três pontos de envio da Loja (fotos
+   * principais do anúncio, capa da variante e galeria da variante) passam por
+   * aqui, pra que o tratamento seja exatamente o mesmo nos três e o produto
+   * ocupe o quadro de forma consistente entre cores. Sem fallback: se a
+   * remoção falhar, o upload falha com o erro à mostra, em vez de subir a
+   * foto crua e parecer que o tratamento simplesmente não foi aplicado.
    */
-  async function prepareProductImage(file: File, options?: { removeBg?: boolean }): Promise<File> {
-    const removeBg = options?.removeBg ?? true
-    if (!removeBg || disableBackgroundRemoval) {
+  async function prepareProductImage(file: File): Promise<File> {
+    if (disableBackgroundRemoval) {
       const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
       if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
         throw new Error(

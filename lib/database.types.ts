@@ -823,6 +823,8 @@ export type Database = {
           is_active: boolean
           is_sold_out: boolean
           is_featured: boolean
+          pin_best_seller: boolean
+          best_seller_position: number | null
           peripheral_id: string | null
           features: string[]
           video_url: string | null
@@ -847,6 +849,8 @@ export type Database = {
           is_active?: boolean
           is_sold_out?: boolean
           is_featured?: boolean
+          pin_best_seller?: boolean
+          best_seller_position?: number | null
           peripheral_id?: string | null
           features?: string[]
           video_url?: string | null
@@ -871,6 +875,8 @@ export type Database = {
           is_active?: boolean
           is_sold_out?: boolean
           is_featured?: boolean
+          pin_best_seller?: boolean
+          best_seller_position?: number | null
           peripheral_id?: string | null
           features?: string[]
           video_url?: string | null

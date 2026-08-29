@@ -31,6 +31,10 @@ export type StoreProductCard = {
   is_active: boolean
   is_sold_out: boolean
   is_featured: boolean
+  /** Fixado manualmente na seção "Mais vendidos" da Home, à frente do ranking de vendas. */
+  pin_best_seller: boolean
+  /** Ordem manual entre os fixados (menor = mais à frente). `null` se não fixado. */
+  best_seller_position: number | null
   created_at: string
 }
 
@@ -105,7 +109,7 @@ export type LinkedProduct = {
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, created_at, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, pin_best_seller, best_seller_position, created_at, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position)"
 
 type RawCardRow = Omit<StoreProductCard, "has_variants" | "variants"> & {
   variants: (StoreCardVariant & { position: number })[] | null
@@ -175,6 +179,8 @@ export type StoreProductListFilters = {
   outOfStockOnly?: boolean
   /** Filtra só produtos marcados como destaque (`is_featured`). */
   featured?: boolean
+  /** Filtra só produtos fixados em "Mais vendidos" (`pin_best_seller`), ordenados por `best_seller_position`. */
+  pinnedBestSellersOnly?: boolean
   saleType?: StoreSaleType
   /** Multi-seleção da vitrine (o singular acima continua para chamadas antigas). */
   saleTypes?: StoreSaleType[]
@@ -230,6 +236,7 @@ export async function listStoreProductsPaginated(
   if (filters.priceMaxCents != null) query = query.or(effectivePriceOr("lte", filters.priceMaxCents))
   if (filters.outOfStockOnly) query = query.eq("stock", 0)
   if (filters.featured) query = query.eq("is_featured", true)
+  if (filters.pinnedBestSellersOnly) query = query.eq("pin_best_seller", true)
   if (filters.saleType) query = query.eq("sale_type", filters.saleType)
   if (filters.saleTypes?.length) query = query.in("sale_type", filters.saleTypes)
   if (filters.conditions?.length) query = query.in("condition", filters.conditions)
@@ -238,6 +245,10 @@ export async function listStoreProductsPaginated(
   if (filters.productIds) {
     if (filters.productIds.length === 0) return { items: [], total: 0 }
     query = query.in("id", filters.productIds)
+  }
+
+  if (filters.pinnedBestSellersOnly) {
+    query = query.order("best_seller_position", { ascending: true, nullsFirst: false })
   }
 
   switch (filters.sort) {
@@ -277,28 +288,65 @@ export async function listStoreProductsPaginated(
  * `store_orders.items` (jsonb). A RPC pode devolver ids de itens de bazar
  * (cart-context também aceita type "bazaar"); como `listStoreProductsPaginated`
  * já filtra `type: "store"` e `is_active: true`, esses ids somem sozinhos.
+ *
+ * Produtos marcados com `pin_best_seller` (toggle manual em /admin/store)
+ * entram na frente do ranking de vendas, na ordem definida em
+ * `best_seller_position` (arrastar-e-soltar no painel "Mais vendidos" do
+ * admin) — dá pro admin garantir que um produto específico apareça aqui
+ * mesmo sem vendas suficientes nos últimos 90 dias, e na ordem que quiser.
  */
 export async function listBestSellingProducts(limit = 12): Promise<StoreProductCard[]> {
   const db = createSupabaseAdminClient()
   const from = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
-  const { data, error } = await db.rpc("get_top_selling_products", {
-    p_from: from.toISOString(),
-    p_to: new Date().toISOString(),
-    p_limit: limit,
-  })
-  if (error) {
-    console.error("[store-repository] listBestSellingProducts (rpc):", error)
-    return []
-  }
 
-  const rankedIds = ((data ?? []) as { product_id: string }[]).map((row) => row.product_id)
-  if (rankedIds.length === 0) return []
+  const [{ data: pinnedRows, error: pinnedError }, { data: rankedRows, error: rankedError }] = await Promise.all([
+    db
+      .from("store_products")
+      .select("id")
+      .eq("type", "store")
+      .eq("pin_best_seller", true)
+      .order("best_seller_position", { ascending: true, nullsFirst: false }),
+    db.rpc("get_top_selling_products", {
+      p_from: from.toISOString(),
+      p_to: new Date().toISOString(),
+      p_limit: limit,
+    }),
+  ])
+  if (pinnedError) console.error("[store-repository] listBestSellingProducts (pinned):", pinnedError)
+  if (rankedError) console.error("[store-repository] listBestSellingProducts (rpc):", rankedError)
 
-  const { items } = await listStoreProductsPaginated({ type: "store", productIds: rankedIds, pageSize: rankedIds.length })
-  const rank = new Map(rankedIds.map((id, index) => [id, index]))
+  const pinnedIds = ((pinnedRows ?? []) as { id: string }[]).map((row) => row.id)
+  const rankedIds = ((rankedRows ?? []) as { product_id: string }[]).map((row) => row.product_id)
+  const orderedIds = [...pinnedIds, ...rankedIds.filter((id) => !pinnedIds.includes(id))].slice(0, limit)
+  if (orderedIds.length === 0) return []
+
+  const { items } = await listStoreProductsPaginated({ type: "store", productIds: orderedIds, pageSize: orderedIds.length })
+  const rank = new Map(orderedIds.map((id, index) => [id, index]))
   return items
     .filter((item) => rank.has(item.id))
     .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!)
+}
+
+/**
+ * Regrava `best_seller_position` (0, 1, 2...) pra cada id na ordem recebida —
+ * arrastar-e-soltar no painel "Mais vendidos" do admin. Mesmo padrão de
+ * `reorderBanners` em store-banners-repository.ts. O filtro `pin_best_seller`
+ * é só uma trava extra: a lista de ids já vem restrita aos fixados.
+ */
+export async function reorderPinnedBestSellers(orderedIds: string[]): Promise<void> {
+  const db = createSupabaseAdminClient()
+
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      db.from("store_products").update({ best_seller_position: index }).eq("id", id).eq("pin_best_seller", true)
+    )
+  )
+
+  const failed = results.find((result) => result.error)
+  if (failed?.error) {
+    console.error("[store-repository] reorderPinnedBestSellers:", failed.error)
+    throw failed.error
+  }
 }
 
 /**

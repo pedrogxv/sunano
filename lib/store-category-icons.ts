@@ -5,7 +5,7 @@ import { Camera, Cable, Gamepad2, Headphones, Keyboard, Mic, Monitor, Mouse, Pac
 export type StoreNavGroup = "mouse" | "teclado" | "mousepad" | "audio" | "outros"
 
 export function classifyStoreNavGroup(category: string): StoreNavGroup {
-  if (/mouse\s*pad/i.test(category)) return "mousepad"
+  if (/mouse\s*pad|glasspad/i.test(category)) return "mousepad"
   if (/mouse/i.test(category)) return "mouse"
   if (/teclado|keyboard/i.test(category)) return "teclado"
   if (/headset|fone|headphone|\biem\b|\bdac\b/i.test(category)) return "audio"
@@ -18,7 +18,7 @@ export function classifyStoreNavGroup(category: string): StoreNavGroup {
  * de imagem da Loja, com fallback neutro pra categorias não reconhecidas.
  */
 const CATEGORY_ICON_RULES: { match: RegExp; icon: LucideIcon; tint: string }[] = [
-  { match: /mouse\s*pad/i, icon: RectangleHorizontal, tint: "oklch(0.7 0.15 160)" },
+  { match: /mouse\s*pad|glasspad/i, icon: RectangleHorizontal, tint: "oklch(0.7 0.15 160)" },
   { match: /mouse/i, icon: Mouse, tint: "oklch(0.75 0.15 195)" },
   { match: /teclado|keyboard/i, icon: Keyboard, tint: "oklch(0.8 0.15 85)" },
   { match: /headset|fone|headphone|\biem\b|\bdac\b/i, icon: Headphones, tint: "oklch(0.7 0.15 340)" },

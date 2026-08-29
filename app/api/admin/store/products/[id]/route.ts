@@ -38,6 +38,7 @@ const updateProductSchema = z.object({
   is_active: z.boolean().optional(),
   is_sold_out: z.boolean().optional(),
   is_featured: z.boolean().optional(),
+  pin_best_seller: z.boolean().optional(),
   features: z.array(z.string().trim().min(1).max(200)).max(30).optional(),
   video_url: z
     .string()
@@ -145,6 +146,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (typeof patch.video_url === "string") patch.video_url = patch.video_url || null
 
   const db = createSupabaseAdminClient()
+
+  // Fixar/desfixar em "Mais vendidos": entra no fim da fila manual (editável
+  // depois em /admin/store, arrastar-e-soltar) e sai da fila ao desfixar —
+  // sem isso o produto reaparecia na posição antiga se fosse refixado depois.
+  if (patch.pin_best_seller === true) {
+    const { data: last } = await db
+      .from("store_products")
+      .select("best_seller_position")
+      .eq("pin_best_seller", true)
+      .order("best_seller_position", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
+    patch.best_seller_position = (last?.best_seller_position ?? -1) + 1
+  } else if (patch.pin_best_seller === false) {
+    patch.best_seller_position = null
+  }
 
   if ("promo_price_cents" in patch) {
     const effectivePriceCents =

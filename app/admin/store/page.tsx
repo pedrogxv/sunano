@@ -3,10 +3,22 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers"
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import {
   AlertCircle,
   AlertTriangle,
   Check,
   Edit,
+  GripVertical,
   Loader2,
   MessageSquare,
   MoreVertical,
@@ -16,6 +28,7 @@ import {
   Star,
   Store,
   Trash2,
+  TrendingUp,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -57,9 +70,12 @@ interface StoreProduct {
   category: string | null
   brand: string | null
   condition: "new" | "used" | "opened"
+  sale_type: "pre_order" | "ready_stock" | "normal"
   is_active: boolean
   is_sold_out: boolean
   is_featured: boolean
+  pin_best_seller: boolean
+  best_seller_position: number | null
   has_variants: boolean
   created_at: string
 }
@@ -95,6 +111,27 @@ const CONDITION_COLOR: Record<string, string> = {
   used: "text-orange-400 bg-orange-500/10 border-orange-500/30",
 }
 
+type SaleType = "pre_order" | "ready_stock" | "normal"
+
+const SALE_TYPE_LABEL: Record<SaleType, string> = {
+  normal: "Normal",
+  pre_order: "🚀 Pré-venda",
+  ready_stock: "📦 Pronta entrega",
+}
+
+const SALE_TYPE_FILTER_OPTIONS: { value: "all" | SaleType; label: string }[] = [
+  { value: "all", label: "Todas" },
+  { value: "ready_stock", label: "📦 Pronta entrega" },
+  { value: "pre_order", label: "🚀 Pré-venda" },
+  { value: "normal", label: "Normal" },
+]
+
+const SALE_TYPE_BADGE_COLOR: Record<SaleType, string> = {
+  normal: "",
+  pre_order: "bg-orange-500/10 text-orange-400 border-orange-500/30",
+  ready_stock: "bg-sky-500/10 text-sky-400 border-sky-500/30",
+}
+
 const PAGE_SIZE = 50
 
 const NO_CATEGORY_KEY = "__sem_categoria__"
@@ -115,6 +152,76 @@ function formatCategoryLabel(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// ────────────────────────────────────────────
+// Linha arrastável do painel "Mais vendidos — ordem manual"
+// ────────────────────────────────────────────
+function SortablePinnedRow({
+  product,
+  position,
+  onUnpin,
+  isBusy,
+}: {
+  product: StoreProduct
+  position: number
+  onUnpin: (product: StoreProduct) => void
+  isBusy: boolean
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: product.id,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        "flex items-center gap-3 rounded-xl border border-border bg-card p-2.5 transition-colors",
+        isDragging && "z-10 border-primary/40 shadow-lg"
+      )}
+    >
+      <button
+        type="button"
+        aria-label={`Reordenar ${product.name}`}
+        className="cursor-grab touch-none rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-4" />
+      </button>
+
+      <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">{position}</span>
+
+      <div className="relative size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
+        {product.images[0] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={product.images[0]} alt="" className="size-full object-cover" />
+        ) : (
+          <div className="flex size-full items-center justify-center text-muted-foreground">
+            <Package className="size-4" />
+          </div>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-foreground">{product.name}</p>
+        <p className="text-xs text-muted-foreground">{formatBRL(product.promo_price_cents ?? product.price_cents)}</p>
+      </div>
+
+      <Button
+        size="icon"
+        variant="ghost"
+        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
+        aria-label="Desfixar de Mais vendidos"
+        title="Desfixar de Mais vendidos"
+        disabled={isBusy}
+        onClick={() => onUnpin(product)}
+      >
+        <X className="size-3.5" />
+      </Button>
+    </div>
+  )
+}
+
 export default function AdminStorePage() {
   const [products, setProducts] = useState<StoreProduct[]>([])
   const [total, setTotal] = useState(0)
@@ -126,6 +233,7 @@ export default function AdminStorePage() {
   const debouncedSearch = useDebouncedValue(search, 400)
   const [categoryFilter, setCategoryFilter] = useState<string[]>([])
   const [brandFilter, setBrandFilter] = useState<string[]>([])
+  const [saleTypeFilter, setSaleTypeFilter] = useState<"all" | SaleType>("all")
   const [sort, setSort] = useState<SortOption>("name-asc")
   // Opções dos combobox vêm de todos os produtos já vistos nesta sessão (não só
   // a página atual), pra não sumir uma marca/categoria ao trocar de filtro.
@@ -133,6 +241,14 @@ export default function AdminStorePage() {
   const [knownBrands, setKnownBrands] = useState<Set<string>>(new Set())
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
   const [deleting, setDeleting] = useState(false)
+
+  // Painel "Mais vendidos — ordem manual": lista à parte dos produtos
+  // fixados, carregada independente da tabela paginada/filtrada abaixo, pra
+  // sempre mostrar todos os fixados (mesmo os que a busca/filtro atual esconde).
+  const [pinnedProducts, setPinnedProducts] = useState<StoreProduct[]>([])
+  const [loadingPinned, setLoadingPinned] = useState(true)
+  const [reorderingPinned, setReorderingPinned] = useState(false)
+  const dragSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   // Detalhe do produto (specs/variantes/descrição) — só buscado quando o
   // admin abre o dropdown daquela linha pela primeira vez, e cacheado aqui
@@ -151,6 +267,7 @@ export default function AdminStorePage() {
       if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim())
       if (categoryFilter.length > 0) params.set("categories", categoryFilter.join(","))
       if (brandFilter.length > 0) params.set("brands", brandFilter.join(","))
+      if (saleTypeFilter !== "all") params.set("saleTypes", saleTypeFilter)
       params.set("sort", sort)
       const res = await fetch(`/api/admin/store/products?${params}`)
       const data = (await res.json()) as { products?: StoreProduct[]; total?: number; error?: string }
@@ -174,11 +291,61 @@ export default function AdminStorePage() {
     } finally {
       setLoading(false)
     }
-  }, [page, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter, sort])
+  }, [page, outOfStockOnly, debouncedSearch, categoryFilter, brandFilter, saleTypeFilter, sort])
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => { setPage(1) }, [outOfStockOnly, debouncedSearch, categoryFilter, brandFilter, sort])
+  useEffect(() => { setPage(1) }, [outOfStockOnly, debouncedSearch, categoryFilter, brandFilter, saleTypeFilter, sort])
+
+  const loadPinned = useCallback(async () => {
+    setLoadingPinned(true)
+    try {
+      const res = await fetch("/api/admin/store/products?pinnedBestSellers=1&pageSize=100")
+      const data = (await res.json()) as { products?: StoreProduct[]; error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao carregar")
+      setPinnedProducts(data.products ?? [])
+    } catch (err) {
+      toast.error("Erro ao carregar produtos fixados", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setLoadingPinned(false)
+    }
+  }, [])
+
+  useEffect(() => { loadPinned() }, [loadPinned])
+
+  async function handlePinnedDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = pinnedProducts.findIndex((p) => p.id === active.id)
+    const newIndex = pinnedProducts.findIndex((p) => p.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const previous = pinnedProducts
+    const reordered = arrayMove(pinnedProducts, oldIndex, newIndex)
+    setPinnedProducts(reordered)
+    setReorderingPinned(true)
+    try {
+      const res = await fetch("/api/admin/store/products/reorder-best-sellers", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: reordered.map((p) => p.id) }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(data?.error ?? "Erro ao reordenar.")
+      }
+    } catch (err) {
+      setPinnedProducts(previous)
+      toast.error("Não foi possível reordenar", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setReorderingPinned(false)
+    }
+  }
 
   async function handleDelete() {
     if (!deleteDialog.id) return
@@ -218,9 +385,10 @@ export default function AdminStorePage() {
 
   async function patchProduct(id: string, patch: Record<string, unknown>) {
     const previous = products.find((p) => p.id === id)
-    if (!previous) return
-    // Atualização otimista — evita recarregar a listagem inteira a cada ação rápida.
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
+    // Atualização otimista só quando o produto está na tabela visível — o
+    // painel "Mais vendidos" chama isso também pra produtos fora da
+    // página/filtro atual, e o PATCH precisa disparar do mesmo jeito.
+    if (previous) setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
     setSavingId(id)
     try {
       const res = await fetch(`/api/admin/store/products/${id}`, {
@@ -232,7 +400,7 @@ export default function AdminStorePage() {
       if (!res.ok) throw new Error(data.error ?? "Erro ao salvar")
       return true
     } catch (err) {
-      setProducts((prev) => prev.map((p) => (p.id === id ? previous : p)))
+      if (previous) setProducts((prev) => prev.map((p) => (p.id === id ? previous : p)))
       toast.error("Erro ao salvar alteração", {
         description: err instanceof Error ? err.message : undefined,
       })
@@ -251,12 +419,29 @@ export default function AdminStorePage() {
     }
   }
 
+  async function togglePinBestSeller(product: StoreProduct) {
+    const ok = await patchProduct(product.id, { pin_best_seller: !product.pin_best_seller })
+    if (ok) {
+      toast.success(
+        !product.pin_best_seller ? "Produto fixado em Mais vendidos" : "Removido de Mais vendidos",
+        { description: product.name }
+      )
+      loadPinned()
+    }
+  }
+
   async function toggleActive(product: StoreProduct) {
     await patchProduct(product.id, { is_active: !product.is_active })
   }
 
   async function toggleSoldOut(product: StoreProduct) {
     await patchProduct(product.id, { is_sold_out: !product.is_sold_out })
+  }
+
+  async function setSaleType(product: StoreProduct, saleType: SaleType) {
+    if (product.sale_type === saleType) return
+    const ok = await patchProduct(product.id, { sale_type: saleType })
+    if (ok) toast.success(`Marcado como "${SALE_TYPE_LABEL[saleType]}"`, { description: product.name })
   }
 
   async function applyPromoPrice(product: StoreProduct) {
@@ -315,6 +500,45 @@ export default function AdminStorePage() {
         </div>
       </div>
 
+      {/* Mais vendidos — ordem manual */}
+      <div className="space-y-2.5 rounded-xl border border-border bg-card/50 p-3.5">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="size-4 text-emerald-400" />
+          <p className="text-sm font-semibold text-foreground">Mais vendidos — ordem manual</p>
+          <p className="text-xs text-muted-foreground">
+            {pinnedProducts.length > 0
+              ? "Arraste pra reordenar. Aparecem na Home nessa ordem, à frente do ranking de vendas."
+              : "Fixe um produto pelo ícone de tendência na lista abaixo pra ele aparecer aqui."}
+          </p>
+        </div>
+        {loadingPinned ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : pinnedProducts.length > 0 ? (
+          <DndContext
+            sensors={dragSensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+            onDragEnd={handlePinnedDragEnd}
+          >
+            <SortableContext items={pinnedProducts.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-1.5">
+                {pinnedProducts.map((p, index) => (
+                  <SortablePinnedRow
+                    key={p.id}
+                    product={p}
+                    position={index + 1}
+                    onUnpin={togglePinBestSeller}
+                    isBusy={reorderingPinned || savingId === p.id}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        ) : null}
+      </div>
+
       {/* Busca e filtros */}
       <div className="flex flex-wrap items-center gap-2.5">
         <div className="relative min-w-[220px] flex-1">
@@ -371,7 +595,19 @@ export default function AdminStorePage() {
           <AlertTriangle className="size-3.5" />
           Sem estoque
         </button>
-        {(search.trim() || categoryFilter.length > 0 || brandFilter.length > 0 || outOfStockOnly) && (
+        <Select value={saleTypeFilter} onValueChange={(v) => setSaleTypeFilter(v as "all" | SaleType)}>
+          <SelectTrigger className="h-9 w-auto min-w-[150px] border-border bg-card text-[13px] font-normal" aria-label="Filtrar por tipo de venda">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SALE_TYPE_FILTER_OPTIONS.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(search.trim() || categoryFilter.length > 0 || brandFilter.length > 0 || saleTypeFilter !== "all" || outOfStockOnly) && (
           <Button
             variant="ghost"
             size="sm"
@@ -379,6 +615,7 @@ export default function AdminStorePage() {
               setSearch("")
               setCategoryFilter([])
               setBrandFilter([])
+              setSaleTypeFilter("all")
               setOutOfStockOnly(false)
             }}
             className="h-9 gap-1.5 text-muted-foreground hover:text-foreground"
@@ -461,10 +698,23 @@ export default function AdminStorePage() {
                             {p.is_featured && (
                               <Star className="size-3.5 shrink-0 fill-amber-400 text-amber-400" />
                             )}
+                            {p.pin_best_seller && (
+                              <TrendingUp className="size-3.5 shrink-0 text-emerald-400" />
+                            )}
                           </div>
-                          {p.category && (
-                            <p className="text-[10px] text-muted-foreground">{p.category}</p>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {p.category && (
+                              <p className="text-[10px] text-muted-foreground">{p.category}</p>
+                            )}
+                            {p.sale_type !== "normal" && (
+                              <span className={cn(
+                                "rounded-full border px-1.5 py-0 text-[9px] font-semibold",
+                                SALE_TYPE_BADGE_COLOR[p.sale_type]
+                              )}>
+                                {SALE_TYPE_LABEL[p.sale_type]}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -527,6 +777,19 @@ export default function AdminStorePage() {
                           onClick={() => toggleFeatured(p)}
                         >
                           <Star className={cn("size-3.5", p.is_featured && "fill-current")} />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className={cn(
+                            "size-8",
+                            p.pin_best_seller ? "text-emerald-400 hover:text-emerald-300" : "text-muted-foreground hover:text-foreground"
+                          )}
+                          title={p.pin_best_seller ? "Remover de Mais vendidos" : "Fixar em Mais vendidos"}
+                          disabled={isSaving}
+                          onClick={() => togglePinBestSeller(p)}
+                        >
+                          <TrendingUp className="size-3.5" />
                         </Button>
                         <Link href={`/admin/store/${p.id}`}>
                           <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
@@ -607,6 +870,30 @@ export default function AdminStorePage() {
                                   {p.is_active ? <Check className="size-3" /> : <X className="size-3" />}
                                   {p.is_active ? "Ativo" : "Inativo"}
                                 </button>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <span className="text-xs font-semibold text-foreground">Tipo de venda</span>
+                                <div className="flex flex-wrap gap-1">
+                                  {(Object.keys(SALE_TYPE_LABEL) as SaleType[]).map((type) => (
+                                    <button
+                                      key={type}
+                                      type="button"
+                                      disabled={isSaving}
+                                      onClick={() => setSaleType(p, type)}
+                                      className={cn(
+                                        "rounded-full border px-2 py-1 text-[11px] font-semibold transition-colors",
+                                        p.sale_type === type
+                                          ? type === "normal"
+                                            ? "border-foreground/40 bg-foreground/10 text-foreground"
+                                            : SALE_TYPE_BADGE_COLOR[type]
+                                          : "border-border bg-muted text-muted-foreground"
+                                      )}
+                                    >
+                                      {SALE_TYPE_LABEL[type]}
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
 
                               <div className="flex items-center justify-between gap-2">

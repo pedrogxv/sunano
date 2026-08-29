@@ -303,7 +303,7 @@ export function ProductDetailContent({
               }
             }}
           >
-            <div className="group/zoom relative aspect-square overflow-hidden rounded-[24px] bg-transparent">
+            <div className="group/zoom relative aspect-square overflow-hidden rounded-[24px] border border-border/40 bg-transparent">
               {images[activeImage] ? (
                 <button
                   type="button"

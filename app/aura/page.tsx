@@ -16,6 +16,7 @@ import {
   listActiveAuraItems,
 } from "@/lib/server/repositories/aura-store-repository"
 import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
+import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { getUserProfileSettings } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { AuraCenterContent } from "@/components/aura/AuraCenterContent"
@@ -61,7 +62,9 @@ export default async function AuraCenterPage() {
     userId ? getUserAuraItemIds(userId) : Promise.resolve(new Set<string>()),
     userId ? getEquippedAvatarFrameId(userId) : Promise.resolve(null),
     userId ? getDailyMissionsToday(userId) : Promise.resolve(EMPTY_DAILY_MISSIONS),
-    userId ? hasConfirmedYoutubeSubscription(userId) : Promise.resolve(false),
+    userId && isYoutubeSubscriptionEnabled()
+      ? hasConfirmedYoutubeSubscription(userId)
+      : Promise.resolve(false),
     userId ? getVipStatus(userId) : Promise.resolve({ active: false, expiresAt: null }),
     userId
       ? getDisplayNameCooldown(userId)

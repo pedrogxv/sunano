@@ -16,6 +16,7 @@ import { SocialLinks } from "./SocialLinks"
 import { PersonalTierlistSummaryCard } from "@/components/tierlist-pessoal/PersonalTierlistSummaryCard"
 import { profilePath } from "@/lib/profile-name"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
+import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
 /**
  * Altura da capa. Fica isolada aqui porque é o número que estamos calibrando
@@ -161,7 +162,7 @@ export function ProfileShowcase({
             followers: profile.followers,
             aura_earned: profile.aura_total_earned,
           }}
-          youtubeSubscribed={profile.youtube_subscribed}
+          youtubeSubscribed={isYoutubeSubscriptionEnabled() ? profile.youtube_subscribed : undefined}
         />
 
         <SetupGrid setup={profile.setup} isOwner={isOwner} />

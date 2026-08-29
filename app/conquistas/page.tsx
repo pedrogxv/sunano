@@ -7,6 +7,7 @@ import { countForumActivity } from "@/lib/server/repositories/profile-showcase-r
 import { countFollowers } from "@/lib/server/repositories/users-repository"
 import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { EventsContent } from "./events-content"
 
 export const dynamic = "force-dynamic"
@@ -33,7 +34,9 @@ export default async function ConquistasPage() {
     userId ? getUserAchievements(userId) : Promise.resolve([]),
     userId ? countForumActivity(userId) : Promise.resolve({ posts: 0, comments: 0 }),
     userId ? countFollowers(userId) : Promise.resolve(0),
-    userId ? hasConfirmedYoutubeSubscription(userId) : Promise.resolve(false),
+    userId && isYoutubeSubscriptionEnabled()
+      ? hasConfirmedYoutubeSubscription(userId)
+      : Promise.resolve(false),
   ])
 
   return (
@@ -50,6 +53,7 @@ export default async function ConquistasPage() {
           followers,
           aura_earned: auraTotalEarned,
         }}
+        youtubeEnabled={isYoutubeSubscriptionEnabled()}
         youtubeConfirmed={youtubeConfirmed}
       />
     </Suspense>

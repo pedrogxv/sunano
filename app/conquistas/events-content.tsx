@@ -20,6 +20,7 @@ interface EventsContentProps {
   /** Conquistas gerais (posts/comentários/seguidores) já desbloqueadas — vazio quando deslogado. */
   achievements: ShowcaseAchievement[]
   achievementCounts: Record<AchievementTrack, number>
+  youtubeEnabled: boolean
   youtubeConfirmed: boolean
 }
 
@@ -38,6 +39,7 @@ export function EventsContent({
   isLoggedIn,
   achievements,
   achievementCounts,
+  youtubeEnabled,
   youtubeConfirmed: initialYoutubeConfirmed,
 }: EventsContentProps) {
   const router = useRouter()
@@ -51,6 +53,7 @@ export function EventsContent({
   // Feedback do redirect de app/auth/youtube/callback/route.ts (usuário pode
   // ter iniciado o fluxo daqui em vez de /aura).
   useEffect(() => {
+    if (!youtubeEnabled) return
     const youtubeStatus = searchParams.get("youtube")
     if (!youtubeStatus) return
     if (youtubeStatus === "confirmed") {
@@ -134,9 +137,9 @@ export function EventsContent({
             achievements={achievements}
             counts={achievementCounts}
             showTitle={false}
-            youtubeSubscribed={youtubeConfirmed}
+            youtubeSubscribed={youtubeEnabled ? youtubeConfirmed : undefined}
           />
-          {!youtubeConfirmed && (
+          {youtubeEnabled && !youtubeConfirmed && (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-600/30 bg-red-600/5 px-4 py-3">
               <p className="flex-1 text-sm text-foreground">
                 Ganhe uma conquista especial por ser inscrito no nosso canal — só rola uma vez! <span className="font-bold text-red-500">+50 de Aura</span>

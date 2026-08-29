@@ -11,6 +11,7 @@ import { getUserAuraBalance, getUserAuraRank, getUserAuraTotalEarned } from "@/l
 import { getUserActivityRank } from "@/lib/server/repositories/users-repository"
 import { getUserAchievements, getUserStreak } from "@/lib/server/repositories/achievements-repository"
 import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
+import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { countUserTierlistItems } from "@/lib/server/repositories/user-tierlist-repository"
 import {
   coerceAccountTier,
@@ -150,7 +151,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     getUserReviewsByCategory(userId, { limitPerCategory: MINI_REVIEWS_PER_CATEGORY_LIMIT }),
     countUserReviews(userId),
     getReviewedPeripheralIds(userId),
-    hasConfirmedYoutubeSubscription(userId),
+    isYoutubeSubscriptionEnabled() ? hasConfirmedYoutubeSubscription(userId) : Promise.resolve(false),
     countUserTierlistItems(userId),
   ])
 

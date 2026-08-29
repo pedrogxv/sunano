@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
+import { IMMUTABLE_CACHE_CONTROL } from "@/lib/server/image-compression"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { validateVideoUpload } from "@/lib/server/upload-validation"
 
@@ -41,7 +42,15 @@ export async function POST(request: NextRequest) {
 
   const { error } = await db.storage
     .from(STORAGE_BUCKET)
-    .upload(filename, validated.bytes, { contentType: validated.mime, upsert: false })
+    // Sem `cacheControl` o Storage usa 1h, e um MP4 de até 15MB voltaria a
+    // custar egresso a cada hora por visitante. O nome carrega timestamp e
+    // nunca é reaproveitado (trocar o vídeo gera path novo), então cachear
+    // por um ano é seguro — mesmo raciocínio das imagens.
+    .upload(filename, validated.bytes, {
+      contentType: validated.mime,
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      upsert: false,
+    })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

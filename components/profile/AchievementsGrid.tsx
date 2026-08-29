@@ -79,9 +79,9 @@ export function AchievementsGrid({
                 <Youtube className="size-6" />
               </div>
             </TooltipTrigger>
-            <TooltipContent className="flex-col items-start gap-0.5">
+            <TooltipContent>
               <p className="font-semibold">Inscrito</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-background/70">
                 {youtubeSubscribed
                   ? "Confirmou a inscrição no canal do Sunano no YouTube."
                   : "Confirme sua inscrição no canal para desbloquear."}
@@ -148,20 +148,20 @@ export function AchievementsGrid({
                   <Icon className="size-6" />
                 </div>
               </TooltipTrigger>
-              <TooltipContent className="flex-col items-start gap-0.5">
+              <TooltipContent>
                 <p className="font-semibold">
                   {ACHIEVEMENT_TRACK_LABELS[progress.track]} — {tierName ?? "Sem nível ainda"}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-background/70">
                   {formatAchievementCount(progress.count)} {ACHIEVEMENT_TRACK_LABELS[progress.track].toLowerCase()}
                 </p>
                 {progress.nextTier && progress.nextThreshold ? (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-background/70">
                     Faltam {formatAchievementCount(progress.nextThreshold - progress.count)} para{" "}
                     {ACHIEVEMENT_TIER_NAMES[progress.track][progress.nextTier]}
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">Nível máximo alcançado</p>
+                  <p className="text-xs text-background/70">Nível máximo alcançado</p>
                 )}
               </TooltipContent>
             </Tooltip>

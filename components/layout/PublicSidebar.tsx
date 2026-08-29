@@ -91,7 +91,12 @@ function NavLink({
 
 export function PublicSidebar() {
   const t = useT()
-  const { publicCollapsed: isCollapsed, isMobileOpen, setMobileOpen } = useSidebar()
+  const { publicCollapsed, isMobileOpen, setMobileOpen } = useSidebar()
+
+  // `publicCollapsed` é o estado do *desktop* (largura md:w-16). O drawer mobile
+  // é sempre largo, então renderizar seu conteúdo colapsado deixava só os ícones
+  // num painel de 240px. No mobile aberto, o colapso nunca se aplica.
+  const isCollapsed = publicCollapsed && !isMobileOpen
   const pathname = usePathname()
   const { count: cartCount, setOpen: openCart } = useCart()
   const { user: authUser } = useAuthUser()

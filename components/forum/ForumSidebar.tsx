@@ -5,14 +5,14 @@ import Link from "next/link"
 import { Activity, Flame, ShieldCheck, UserCog } from "lucide-react"
 
 import { DiscordIcon } from "@/components/auth/provider-icons"
+import { CollapsibleSidebarCard } from "@/components/forum/CollapsibleSidebarCard"
+import { useFollowSticky } from "@/lib/hooks/use-follow-sticky"
 import { PersonAvatar } from "@/components/people/PersonAvatar"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { profilePath } from "@/lib/profile-name"
 import { SOCIAL_LINKS } from "@/lib/social-links"
-import { CARD_SURFACE } from "@/lib/ui-styles"
-import { cn } from "@/lib/utils"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
 const RULES = [
@@ -27,18 +27,22 @@ const discordLink = SOCIAL_LINKS.find((l) => l.label === "Discord")
 
 function DescriptionCard() {
   return (
-    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
-      <div className="mb-2 flex items-center gap-2">
-        <Flame className="size-4 shrink-0 text-orange-500" fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
-        <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Fórum</h2>
-      </div>
+    <CollapsibleSidebarCard
+      id="lista-descricao"
+      header={
+        <span className="flex items-center gap-2">
+          <Flame className="size-4 shrink-0 text-orange-500" fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
+          <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Fórum</h2>
+        </span>
+      }
+    >
       <p className="text-xs leading-relaxed text-foreground">
         Nosso espaço para vocês farmarem Aura 🔥
       </p>
       <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
         Interaja e Reaja para receber ou perder Aura, dúvidas são sempre bem vindas!!
       </p>
-    </section>
+    </CollapsibleSidebarCard>
   )
 }
 
@@ -68,11 +72,15 @@ function ProfileRow({ profile, place }: { profile: PublicProfileSummary; place?:
 function ActiveUsersCard({ profiles }: { profiles: PublicProfileSummary[] }) {
   if (profiles.length === 0) return null
   return (
-    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
-      <div className="mb-3 flex items-center gap-2">
-        <Activity className="size-4 shrink-0 text-emerald-400" aria-hidden="true" />
-        <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Mais Ativos</h2>
-      </div>
+    <CollapsibleSidebarCard
+      id="lista-ativos"
+      header={
+        <span className="flex items-center gap-2">
+          <Activity className="size-4 shrink-0 text-emerald-400" aria-hidden="true" />
+          <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Mais Ativos</h2>
+        </span>
+      }
+    >
       <ul className="space-y-1.5">
         {profiles.map((profile, index) => (
           <li key={profile.id}>
@@ -83,19 +91,23 @@ function ActiveUsersCard({ profiles }: { profiles: PublicProfileSummary[] }) {
       <Link href="/pessoas" className="mt-3 inline-block text-[11px] font-medium text-primary hover:underline">
         Ver ranking completo →
       </Link>
-    </section>
+    </CollapsibleSidebarCard>
   )
 }
 
 function RulesCard() {
   return (
-    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
-      <div className="mb-3 flex items-center gap-2">
-        <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
-        <h2 className="font-display text-sm font-bold tracking-tight text-foreground">
-          Regras do Fórum
-        </h2>
-      </div>
+    <CollapsibleSidebarCard
+      id="lista-regras"
+      header={
+        <span className="flex items-center gap-2">
+          <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
+          <h2 className="font-display text-sm font-bold tracking-tight text-foreground">
+            Regras do Fórum
+          </h2>
+        </span>
+      }
+    >
       <ol className="space-y-2.5">
         {RULES.map((rule, i) => (
           <li key={i} className="flex gap-2 text-xs leading-relaxed text-muted-foreground">
@@ -110,18 +122,22 @@ function RulesCard() {
       >
         Ver termos completos →
       </Link>
-    </section>
+    </CollapsibleSidebarCard>
   )
 }
 
 function ModeratorsCard({ moderators }: { moderators: PublicProfileSummary[] }) {
   if (moderators.length === 0) return null
   return (
-    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
-      <div className="mb-3 flex items-center gap-2">
-        <UserCog className="size-4 shrink-0 text-primary" aria-hidden="true" />
-        <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Moderadores</h2>
-      </div>
+    <CollapsibleSidebarCard
+      id="lista-moderadores"
+      header={
+        <span className="flex items-center gap-2">
+          <UserCog className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Moderadores</h2>
+        </span>
+      }
+    >
       <ul className="space-y-1.5">
         {moderators.map((profile) => (
           <li key={profile.id}>
@@ -129,20 +145,24 @@ function ModeratorsCard({ moderators }: { moderators: PublicProfileSummary[] }) 
           </li>
         ))}
       </ul>
-    </section>
+    </CollapsibleSidebarCard>
   )
 }
 
 function CommunityCard() {
   if (!discordLink) return null
   return (
-    <section className={cn("rounded-2xl p-4", CARD_SURFACE)}>
-      <div className="mb-2 flex items-center gap-2">
-        <DiscordIcon className="size-4 shrink-0" />
-        <h2 className="font-display text-sm font-bold tracking-tight text-foreground">
-          Comunidade
-        </h2>
-      </div>
+    <CollapsibleSidebarCard
+      id="lista-comunidade"
+      header={
+        <span className="flex items-center gap-2">
+          <DiscordIcon className="size-4 shrink-0" />
+          <h2 className="font-display text-sm font-bold tracking-tight text-foreground">
+            Comunidade
+          </h2>
+        </span>
+      }
+    >
       <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
         Bata um papo em tempo real, tire dúvidas e acompanhe as novidades no nosso Discord.
       </p>
@@ -155,7 +175,7 @@ function CommunityCard() {
         <DiscordIcon className="size-4 shrink-0" fill="#ffffff" />
         Entrar no Discord
       </a>
-    </section>
+    </CollapsibleSidebarCard>
   )
 }
 
@@ -166,15 +186,21 @@ type ForumSidebarProps = {
 
 /**
  * Coluna fixa e sticky ao lado da lista de posts — telas `lg`+.
- * Ganha scroll próprio (`max-h` + `overflow-y-auto`) porque, sem isso, o
- * sticky recorta contra o viewport quando a soma dos cards é mais alta que
- * a tela — a única forma de ver o resto era rolar a página inteira até o
- * fim, escondendo cards como "Moderadores" no meio do caminho.
+ *
+ * Fica visível durante toda a rolagem: gruda logo abaixo do header e, quando
+ * a soma dos cards passa da altura da tela, desliza junto com o scroll até
+ * dar pra ler o fim (ver `useFollowSticky`). Não usa scroll aninhado, que
+ * brigava com o scroll da página e cortava o último card.
  */
 export function ForumSidebar({ topActive, moderators }: ForumSidebarProps) {
+  const stickyRef = useFollowSticky<HTMLElement>()
+
   return (
-    <aside className="hidden w-72 shrink-0 lg:sticky lg:top-[var(--sticky-header-h)] lg:block lg:max-h-[calc(100vh-var(--sticky-header-h)-1rem)] lg:self-start lg:overflow-y-auto">
-      <div className="space-y-4 pb-1">
+    <aside
+      ref={stickyRef}
+      className="hidden w-72 shrink-0 lg:sticky lg:top-[calc(var(--sticky-header-h)+1rem)] lg:block lg:self-start lg:will-change-transform"
+    >
+      <div className="space-y-4">
         <DescriptionCard />
         <ActiveUsersCard profiles={topActive} />
         <RulesCard />

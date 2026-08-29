@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, ChevronDown, Home, LifeBuoy, MessageSquareText, Star } from "lucide-react"
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Home, LifeBuoy, MessageSquareText, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
@@ -300,7 +300,7 @@ export function StoreCategoryNav({
             <div className="flex flex-col gap-3">
               <span className="text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">Marcas</span>
               <div className="flex flex-col">
-                {openBrands.slice(0, 6).map(({ brand, count: brandCount }) => {
+                {openBrands.slice(0, 6).map(({ brand }) => {
                   // Com 1 categoria só no grupo, manda a marca já filtrada por ela —
                   // senão a página de marca mostra todo o catálogo da marca (outras
                   // categorias juntas), o que não é o que o usuário veio ver aqui.
@@ -315,7 +315,6 @@ export function StoreCategoryNav({
                       className="flex items-center justify-between gap-2.5 py-[7px] text-left text-[13px] font-medium text-[#b4b4b4] transition-colors hover:text-white"
                     >
                       <span>{brand}</span>
-                      <span className="text-[11px] text-[#5e5e5e]">{brandCount}</span>
                     </Link>
                   )
                 })}
@@ -347,6 +346,7 @@ export function StoreCategoryNav({
                   onMouseEnter={() => setPreviewPaused(true)}
                   onMouseLeave={() => setPreviewPaused(false)}
                 >
+                  <div className="relative">
                   <Link
                     key={previewProduct.id}
                     href={`/loja/${previewProduct.slug}`}
@@ -358,7 +358,7 @@ export function StoreCategoryNav({
                       <img
                         src={previewProduct.images[0]}
                         alt=""
-                        className="size-[108px] shrink-0 rounded-[13px] bg-[#171717] object-contain p-2"
+                        className="size-[108px] shrink-0 rounded-[13px] object-contain p-2"
                       />
                     ) : (
                       (() => {
@@ -395,6 +395,30 @@ export function StoreCategoryNav({
                       )}
                     </span>
                   </Link>
+                  {/* Setas laterais: as bolinhas abaixo continuam existindo, mas
+                      só como indicador de posição — quem quer passar o card
+                      usa o chevron, que é alvo de clique bem maior. */}
+                  {previewCandidates.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label="Destaque anterior"
+                        onClick={() => setPreviewIndex((i) => (i - 1 + previewCandidates.length) % previewCandidates.length)}
+                        className="absolute -left-3 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] text-[#b4b4b4] transition-colors hover:border-foreground/30 hover:text-white"
+                      >
+                        <ChevronLeft className="size-4" strokeWidth={2.2} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Próximo destaque"
+                        onClick={() => setPreviewIndex((i) => (i + 1) % previewCandidates.length)}
+                        className="absolute -right-3 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] text-[#b4b4b4] transition-colors hover:border-foreground/30 hover:text-white"
+                      >
+                        <ChevronRight className="size-4" strokeWidth={2.2} />
+                      </button>
+                    </>
+                  )}
+                  </div>
                   {previewCandidates.length > 1 && (
                     <div className="flex items-center justify-center gap-1.5">
                       {previewCandidates.map((p, i) => (

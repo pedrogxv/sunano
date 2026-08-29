@@ -94,6 +94,8 @@ type Translations = {
     supportStatusResolved: string
     supportStatusCancelled: string
     supportStatusReopened: string
+    /** `{product}` = nome do produto que voltou ao estoque. */
+    storeRestock: string
     viewAll: string
     historyTitle: string
     historySubtitle: string
@@ -844,6 +846,7 @@ export const translations: Record<LocaleCode, Translations> = {
       supportStatusResolved: "Marcado como resolvido",
       supportStatusCancelled: "Cancelado",
       supportStatusReopened: "Reaberto",
+      storeRestock: "{product} voltou ao estoque!",
       viewAll: "Ver histórico completo",
       historyTitle: "Histórico de notificações",
       historySubtitle: "Todas as suas notificações, das mais recentes às mais antigas.",
@@ -1960,6 +1963,7 @@ export const translations: Record<LocaleCode, Translations> = {
       supportStatusResolved: "Marked as resolved",
       supportStatusCancelled: "Cancelled",
       supportStatusReopened: "Reopened",
+      storeRestock: "{product} is back in stock!",
       viewAll: "View full history",
       historyTitle: "Notification history",
       historySubtitle: "All your notifications, from newest to oldest.",

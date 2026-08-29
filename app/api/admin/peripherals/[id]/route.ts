@@ -10,6 +10,10 @@ import {
 } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
+  removeImageIfUnreferenced,
+  removeReplacedStorageObjects,
+} from "@/lib/server/storage-cleanup"
+import {
   cascadeRerank,
   getRankingFromSpecs,
 } from "@/lib/server/peripherals/ranking-cascade"
@@ -140,7 +144,7 @@ export async function PATCH(
   const { data: current } = await (db.from("peripherals") as any)
     // `name` entra junto de `category`/`specs` porque a revalidação da rota
     // pública precisa remontar o slug (`nome--id`) da ficha que foi apagada.
-    .select("id, name, category, specs")
+    .select("id, name, category, specs, image_url")
     .eq("id", id)
     .single()
 
@@ -169,6 +173,12 @@ export async function PATCH(
       "Erro ao atualizar periférico."
     )
     return NextResponse.json(body, { status })
+  }
+
+  // Trocar a foto grava um path novo no bucket; sem isso a anterior ficaria
+  // paga e sem exibição (ver lib/server/storage-cleanup.ts).
+  if (current && parsed.data.image_url !== undefined) {
+    await removeReplacedStorageObjects([current.image_url], [parsed.data.image_url])
   }
 
   if (current) {
@@ -220,7 +230,7 @@ export async function DELETE(
   const { data: current } = await (db.from("peripherals") as any)
     // `name` entra junto de `category`/`specs` porque a revalidação da rota
     // pública precisa remontar o slug (`nome--id`) da ficha que foi apagada.
-    .select("id, name, category, specs")
+    .select("id, name, category, specs, image_url")
     .eq("id", id)
     .single()
 
@@ -232,6 +242,11 @@ export async function DELETE(
       "Erro ao deletar periférico."
     )
     return NextResponse.json(body, { status })
+  }
+
+  // A ficha se foi; a foto no bucket continuaria sendo cobrada.
+  if (current) {
+    await removeImageIfUnreferenced(current.image_url, "peripherals", "image_url")
   }
 
   if (current) {

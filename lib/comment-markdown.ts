@@ -2,7 +2,8 @@
  * Markdown mínimo de comentários, posts do fórum e descrições de produto:
  * `**negrito**`, `*itálico*`, `__sublinhado__`, `==destaque==`,
  * `[texto](url)` para link, `- item` (início de linha) para lista com bolinha
- * e `#`/`##`/`###` (início de linha) para título (h1/h2/h3).
+ * e `#`/`##`/`###` (início de linha) para título (h1/h2/h3). URL digitada solta
+ * também vira link, com o próprio endereço como texto (ver `parseAutoLinks`).
  *
  * Devolve segmentos de texto em vez de uma string de HTML. Quem renderiza
  * monta `<strong>`/`<em>`/`<u>`/`<a>` como elemento React (ver `components/comments/CommentBody`),
@@ -31,6 +32,13 @@ export type TextSegment = {
 // outro marcador parágrafos abaixo. Negrito/itálico/sublinhado/link são
 // sempre dentro de uma linha.
 const LINK_PATTERN = /\[([^[\]]+)\]\((https?:\/\/[^\s()]+)\)/g
+// URL solta, digitada sem o `[texto](url)`. Cobre só http(s): esquemas como
+// `javascript:` nunca viram link (e `classifyLink` recusaria de novo na hora
+// de renderizar). O `[^\s<>"']` deixa o link terminar no primeiro espaço.
+const BARE_URL_PATTERN = /https?:\/\/[^\s<>"']+/g
+// Pontuação de fechamento colada no fim ("veja https://x.com/a." ou
+// "(https://x.com/a)") é do texto, não do link — mesma limpeza de `extractFirstUrl`.
+const TRAILING_PUNCTUATION = /[.,;:!?)\]]+$/
 const BOLD_PATTERN = /\*\*(.+?)\*\*/g
 const ITALIC_PATTERN = /\*(.+?)\*/g
 const UNDERLINE_PATTERN = /__(.+?)__/g
@@ -82,7 +90,7 @@ export function parseTextMarkdown(body: string): TextSegment[] {
   for (const match of body.matchAll(LINK_PATTERN)) {
     const start = match.index ?? 0
     if (start < cursor) continue
-    if (start > cursor) segments.push(...parseBold(body.slice(cursor, start)))
+    if (start > cursor) segments.push(...parseAutoLinks(body.slice(cursor, start)))
     // O texto do link não passa pelas outras camadas (negrito/itálico dentro
     // de um link não é um caso que a UI precisa cobrir) — mesma simplicidade
     // do resto do parser: um marcador, um tipo de segmento.
@@ -90,7 +98,33 @@ export function parseTextMarkdown(body: string): TextSegment[] {
     cursor = start + match[0].length
   }
 
-  if (cursor < body.length) segments.push(...parseBold(body.slice(cursor)))
+  if (cursor < body.length) segments.push(...parseAutoLinks(body.slice(cursor)))
+  return segments
+}
+
+/**
+ * Transforma URL digitada solta em link, com o próprio endereço como texto.
+ *
+ * Roda depois do `[texto](url)` (a URL de dentro dos parênteses já foi
+ * consumida ali) e antes de negrito/itálico, senão um `*` no meio de uma
+ * query string viraria marcador de itálico e picaria o endereço no meio.
+ */
+function parseAutoLinks(text: string): TextSegment[] {
+  const segments: TextSegment[] = []
+  let cursor = 0
+
+  for (const match of text.matchAll(BARE_URL_PATTERN)) {
+    const start = match.index ?? 0
+    if (start < cursor) continue
+    const url = match[0].replace(TRAILING_PUNCTUATION, "")
+    // Sobrou só pontuação depois de limpar ("https://." e afins): não é link.
+    if (!/^https?:\/\/[^\s.]/.test(url)) continue
+    if (start > cursor) segments.push(...parseBold(text.slice(cursor, start)))
+    segments.push({ text: url, ...PLAIN_SEGMENT, href: url })
+    cursor = start + url.length
+  }
+
+  if (cursor < text.length) segments.push(...parseBold(text.slice(cursor)))
   return segments
 }
 

@@ -8,7 +8,6 @@ import {
   ChevronDown,
   Eye,
   GalleryHorizontalEnd,
-  Gift,
   Handshake,
   Home,
   LifeBuoy,
@@ -70,7 +69,11 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
 export function AdminSidebar() {
   const t = useT()
   const pathname = usePathname()
-  const { adminCollapsed: isCollapsed, isAdminMobileOpen, setAdminMobileOpen } = useSidebar()
+  const { adminCollapsed, isAdminMobileOpen, setAdminMobileOpen } = useSidebar()
+
+  // Mesmo motivo do PublicSidebar: o colapso é do desktop, o drawer mobile é
+  // sempre largo e não deve herdar o modo só-ícones.
+  const isCollapsed = adminCollapsed && !isAdminMobileOpen
 
   const [profile, setProfile] = useState<AdminProfile | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
@@ -107,7 +110,6 @@ export function AdminSidebar() {
     {
       label: t.admin.sidebar.shop,
       items: [
-        { href: "/admin/offers", label: t.admin.sidebar.offers,         icon: Gift,       permission: "offers_read" },
         {
           href: "/admin/store",
           label: t.admin.sidebar.store,

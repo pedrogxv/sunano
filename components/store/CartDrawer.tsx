@@ -137,20 +137,7 @@ export function CartDrawer() {
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1.5 truncate text-[15px] font-semibold text-foreground">
-                      <span className="truncate">{item.name}</span>
-                      {(() => {
-                        if (!item.variantColor && !item.variantIcon) return null
-                        return (
-                          <span
-                            className="flex size-4 shrink-0 items-center justify-center rounded-full border border-black/10"
-                            style={{ backgroundColor: item.variantColor ?? "transparent" }}
-                          >
-                            {item.variantIcon && <span className="text-[9px] leading-none">{item.variantIcon}</span>}
-                          </span>
-                        )
-                      })()}
-                    </p>
+                    <p className="truncate text-[15px] font-semibold text-foreground">{item.name}</p>
                     {(item.variantLabel || item.variantOptions.length > 0) && (
                       <p className="truncate text-xs text-muted-foreground">
                         {[item.variantLabel, ...item.variantOptions.map((o) => `${o.groupName}: ${o.label}`)]

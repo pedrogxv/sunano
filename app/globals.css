@@ -1180,3 +1180,278 @@ button:not(:disabled):hover .aura-icon-holder {
     animation: none;
   }
 }
+
+/* ==========================================================================
+   Toasts (Sonner) — deck empilhado
+   --------------------------------------------------------------------------
+   O Sonner é montado com `unstyled`, então todo o visual vem daqui. A pilha
+   fica colapsada (um card sobre o outro) e só se abre no hover/foco, mantendo
+   a área ocupada constante mesmo com vários toasts simultâneos.
+   ========================================================================== */
+
+:root {
+  --toast-accent: oklch(0.72 0.13 250);
+  --toast-glow: oklch(0.72 0.13 250 / 0.28);
+}
+
+/* O container do Sonner usa custom properties próprias; sobrescrevemos as que
+   controlam largura e cor do anel de foco para casar com o tema. */
+[data-sonner-toaster] {
+  --width: 380px;
+  font-family: var(--font-sans);
+  /* Acima do CookieBanner e dos FABs, que ficam em z-50. */
+  z-index: 60;
+}
+
+.sunano-toast {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.875rem 0.9375rem;
+  overflow: hidden;
+  border-radius: 0.875rem;
+  border: 1px solid color-mix(in oklab, var(--toast-accent) 22%, var(--border));
+  color: var(--foreground);
+  /* Vidro escuro com um leve wash da cor do tipo do toast vindo da esquerda. */
+  background-image:
+    linear-gradient(
+      100deg,
+      color-mix(in oklab, var(--toast-accent) 14%, transparent) 0%,
+      transparent 55%
+    ),
+    linear-gradient(to bottom, oklch(0.19 0 0 / 0.92), oklch(0.11 0 0 / 0.94));
+  background-color: oklch(0.13 0 0 / 0.86);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  box-shadow:
+    0 1px 0 0 oklch(1 0 0 / 0.07) inset,
+    0 10px 30px -10px oklch(0 0 0 / 0.75),
+    0 0 0 1px oklch(0 0 0 / 0.35),
+    0 0 24px -8px var(--toast-glow);
+}
+
+/* Barra de progresso da duração, desenhada na base do card. */
+.sunano-toast::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  transform-origin: left;
+  background: linear-gradient(
+    to right,
+    var(--toast-accent),
+    color-mix(in oklab, var(--toast-accent) 30%, transparent)
+  );
+  animation: sunano-toast-progress var(--sunano-toast-duration, 4500ms) linear forwards;
+}
+
+/* Toasts sem auto-dismiss (loading, duration: Infinity) não têm progresso, e
+   nos cards de trás do deck a barra poluiria a silhueta. */
+.sunano-toast[data-type="loading"]::after,
+.sunano-toast[data-expanded="false"][data-front="false"]::after {
+  animation: none;
+  opacity: 0;
+}
+
+/* Pausa a barra junto com o timer do Sonner (hover/foco na pilha). */
+[data-sonner-toaster]:where(:hover, :focus-within) .sunano-toast::after {
+  animation-play-state: paused;
+}
+
+@keyframes sunano-toast-progress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+/* --- Tipos ---------------------------------------------------------------- */
+
+.sunano-toast--success {
+  --toast-accent: var(--emerald-accent);
+  --toast-glow: oklch(0.7 0.15 160 / 0.3);
+}
+
+.sunano-toast--error {
+  --toast-accent: oklch(0.68 0.19 25);
+  --toast-glow: oklch(0.68 0.19 25 / 0.32);
+}
+
+.sunano-toast--warning {
+  --toast-accent: var(--amber-accent);
+  --toast-glow: oklch(0.8 0.15 85 / 0.3);
+}
+
+.sunano-toast--info,
+.sunano-toast--loading {
+  --toast-accent: var(--cyan-accent);
+  --toast-glow: oklch(0.75 0.15 195 / 0.28);
+}
+
+/* --- Conteúdo ------------------------------------------------------------- */
+
+.sunano-toast__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  border-radius: 0.5rem;
+  color: var(--toast-accent);
+  background: color-mix(in oklab, var(--toast-accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--toast-accent) 30%, transparent);
+}
+
+.sunano-toast__content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  min-width: 0;
+  flex: 1;
+  padding-top: 0.125rem;
+}
+
+.sunano-toast__title {
+  font-family: var(--font-display);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  /* Mensagens de erro de API podem ser longas; quebramos sem estourar o card. */
+  overflow-wrap: anywhere;
+}
+
+.sunano-toast__description {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+  /* Enquanto a pilha está colapsada, a descrição fica curta pra não empurrar o
+     layout; ao expandir, mostramos tudo. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.sunano-toast[data-expanded="true"] .sunano-toast__description {
+  -webkit-line-clamp: 6;
+}
+
+/* --- Botões --------------------------------------------------------------- */
+
+.sunano-toast__action,
+.sunano-toast__cancel {
+  flex-shrink: 0;
+  align-self: center;
+  height: 1.75rem;
+  padding-inline: 0.625rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.sunano-toast__action {
+  color: var(--toast-accent);
+  background: color-mix(in oklab, var(--toast-accent) 15%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--toast-accent) 35%, transparent);
+}
+
+.sunano-toast__action:hover {
+  background: color-mix(in oklab, var(--toast-accent) 26%, transparent);
+}
+
+.sunano-toast__cancel {
+  color: var(--muted-foreground);
+  background: oklch(1 0 0 / 0.06);
+}
+
+.sunano-toast__cancel:hover {
+  color: var(--foreground);
+  background: oklch(1 0 0 / 0.12);
+}
+
+/* Fechar: só aparece no hover/foco no desktop pra não poluir o card.
+   Com `unstyled`, o Sonner não aplica seu próprio posicionamento (as regras
+   dele são todas gated em [data-styled="true"]), então o `position` e os
+   offsets precisam vir daqui — senão o botão escapa do card. */
+.sunano-toast__close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  background: oklch(0.16 0 0 / 0.9);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: opacity 150ms ease, transform 150ms ease, color 150ms ease;
+}
+
+.sunano-toast:where(:hover, :focus-within) .sunano-toast__close,
+.sunano-toast__close:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.sunano-toast__close:hover {
+  color: var(--foreground);
+  border-color: var(--muted-foreground);
+}
+
+/* Toque não tem hover: no mobile o botão fica sempre visível e maior. */
+@media (hover: none) {
+  .sunano-toast__close {
+    opacity: 1;
+    transform: none;
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
+/* --- Pilha ---------------------------------------------------------------- */
+
+/* Colapsado, só o card da frente mostra conteúdo. O Sonner tem essa regra
+   nativa (`> * { opacity: 0 }`), mas gated em [data-styled="true"] — como
+   usamos `unstyled`, ela nunca casa e o texto dos toasts de trás vazava por
+   baixo do da frente. Replicamos aqui. */
+.sunano-toast[data-expanded="false"][data-front="false"] > * {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+/* Escurece os cards de trás pra reforçar a profundidade do deck. */
+.sunano-toast[data-expanded="false"][data-front="false"] {
+  filter: brightness(0.72) saturate(0.85);
+}
+
+/* Breakpoint alinhado ao do Sonner, que troca pro modo mobile em 600px. */
+@media (max-width: 600px) {
+  .sunano-toast {
+    padding: 0.8125rem 0.875rem;
+    border-radius: 1rem;
+  }
+
+  .sunano-toast__title {
+    font-size: 0.8125rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sunano-toast::after {
+    animation: none;
+    opacity: 0;
+  }
+}

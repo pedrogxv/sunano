@@ -171,10 +171,9 @@ export async function getMySupportTicket(
 /**
  * Cria o ticket + a mensagem inicial (duas inserções sequenciais — não há
  * transação multi-statement disponível no client do Supabase). Se a 2ª
- * inserção falhar após a 1ª ter sucesso, sobra um ticket órfão sem mensagem:
- * cenário raro e inofensivo (nunca aparece em nenhuma listagem porque
- * `message_count` fica 0 e a UI sempre mostra `last_message_preview`, que
- * também fica nulo — visualmente vazio, sem quebrar nada).
+ * inserção falhar após a 1ª ter sucesso, o ticket é apagado logo em seguida:
+ * um ticket sem mensagem ainda aparece em "Meus Tickets" (visualmente vazio)
+ * e conta pro cap de tickets abertos, então não pode simplesmente ficar lá.
  */
 export async function createSupportTicket(params: {
   userId: string
@@ -232,6 +231,11 @@ export async function createSupportTicket(params: {
 
   if (messageError) {
     console.error("[support-repository] createSupportTicket insert message:", messageError)
+    // Desfaz o ticket recém-criado: sem a mensagem inicial ele é inútil, mas
+    // ainda apareceria em "Meus Tickets" e consumiria o cap de tickets
+    // abertos do usuário. É seguro apagar — acabou de ser criado por esta
+    // requisição e comprovadamente não tem nenhuma mensagem.
+    await db.from("support_tickets").delete().eq("id", ticket.id)
     return { ok: false, error: "Não foi possível enviar sua mensagem inicial.", status: 500 }
   }
 

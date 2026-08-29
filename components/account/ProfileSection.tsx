@@ -84,6 +84,17 @@ const COVER_IMAGE_COMPRESS_OPTIONS = {
   skipBelowBytes: 200 * 1024,
 }
 
+// O avatar nunca é exibido acima de ~128px (`AvatarFoto`, `UserAvatar`), então
+// não há motivo pra subir a foto original da câmera: 512px cobre tela 2x com
+// folga. Sem isso o navegador enviava o arquivo cru — o servidor recomprimia
+// no finalize, mas o upload gastava banda à toa e, se o passo de confirmação
+// falhasse, o original gigante ficava órfão no bucket sem nunca ser reduzido.
+const AVATAR_COMPRESS_OPTIONS = {
+  maxDimension: 512,
+  targetBytes: 120 * 1024,
+  skipBelowBytes: 120 * 1024,
+}
+
 /**
  * Upload em duas etapas: pede uma signed URL ao endpoint (que valida sessão,
  * tier e tamanho declarado), sobe os bytes direto pro Storage do Supabase —
@@ -244,7 +255,8 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
       const reader = new FileReader()
       reader.onloadend = () => setAvatarPreview(reader.result as string)
       reader.readAsDataURL(file)
-      const result = await uploadProfileMedia("/api/profile/upload-avatar", file)
+      const compressed = await compressImageFile(file, AVATAR_COMPRESS_OPTIONS)
+      const result = await uploadProfileMedia("/api/profile/upload-avatar", compressed)
       if (!result.ok) throw new Error(result.error)
       setAvatarUrl(result.publicUrl)
       setAvatarPreview(result.publicUrl)

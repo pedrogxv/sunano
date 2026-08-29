@@ -8,6 +8,7 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { isWebMaster } from "@/lib/admin-permissions"
 import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
 import { buildDescription, buildMetadata } from "@/lib/seo"
+import { getCategoryLabel } from "@/lib/store-category-icons"
 import { SITE_URL } from "@/lib/site-url"
 
 export const revalidate = 120
@@ -126,12 +127,49 @@ export default async function ProductPage({ params }: PageProps) {
     },
   }
 
+  /**
+   * JSON-LD BreadcrumbList: espelha a trilha visual do topo da página. Com
+   * ele o Google troca a URL crua do resultado por "Loja > Categoria >
+   * Marca", que é o mesmo caminho que o usuário vê ao chegar.
+   */
+  const breadcrumbItems = [
+    { name: "Loja", item: `${SITE_URL}/loja` },
+    ...(product.category
+      ? [
+          {
+            name: getCategoryLabel(product.category),
+            item: `${SITE_URL}/loja/categoria/${encodeURIComponent(product.category)}`,
+          },
+        ]
+      : []),
+    ...(product.brand
+      ? [{ name: product.brand, item: `${SITE_URL}/loja/marca/${encodeURIComponent(product.brand)}` }]
+      : []),
+    { name: product.name, item: url },
+  ]
+
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: breadcrumbItems.map((entry, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: entry.name,
+      item: entry.item,
+    })),
+  }
+
   return (
     <>
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
       <ProductDetailContent {...detail} filterOptions={filterOptions} previewPool={previewPool} />
     </>

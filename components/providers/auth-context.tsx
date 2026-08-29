@@ -12,6 +12,8 @@ export type AuthContextUser = {
   displayName: string
   avatarUrl: string | null
   isAdmin: boolean
+  /** WEB MASTER — ignora o modo de manutenção da Loja e do Programa de Afiliados. */
+  isWebMaster: boolean
   /** Se já abriu algum chamado de suporte — controla o item "Meus Tickets" do dropdown/nav (só aparece com histórico). */
   hasSupportTicket: boolean
   /** Quantos tickets abertos estão aguardando resposta do usuário — alimenta o ponto amber no sino e em "Meus Tickets". */
@@ -79,7 +81,12 @@ function sessionCookieSignature(): string {
 type MeResponse = {
   user?: { id: string; email: string | null } | null
   userProfile?: { display_name?: string | null; avatar_url?: string | null } | null
-  adminProfile?: { email?: string | null; display_name?: string | null; avatar_url?: string | null } | null
+  adminProfile?: {
+    email?: string | null
+    display_name?: string | null
+    avatar_url?: string | null
+    role?: string | null
+  } | null
   hasSupportTicket?: boolean
   supportTicketsAwaitingMe?: number
   accountTier?: string | null
@@ -110,6 +117,7 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
       "Usuário",
     avatarUrl: adminProfile?.avatar_url || userProfile?.avatar_url || null,
     isAdmin: Boolean(adminProfile),
+    isWebMaster: adminProfile?.role === "webmaster",
     hasSupportTicket: Boolean(hasSupportTicket),
     supportTicketsAwaitingMe: supportTicketsAwaitingMe ?? 0,
     isVip: isVipActive(accountTier, vipExpiresAt),

@@ -3,6 +3,10 @@ import { NextResponse } from "next/server"
 import { normalizeAffiliateCode, validateAffiliateCode } from "@/lib/affiliate-code"
 import { getAffiliateByUserId, isAffiliateCodeAvailable } from "@/lib/server/repositories/affiliates-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import {
+  AFFILIATES_MAINTENANCE_MESSAGE,
+  isAffiliatesBlockedByMaintenance,
+} from "@/lib/server/auth/affiliate-access"
 
 export const dynamic = "force-dynamic"
 
@@ -16,6 +20,13 @@ export const dynamic = "force-dynamic"
  * o código atual dele não se autobloqueia.
  */
 export async function GET(request: Request) {
+  // Segunda checagem da mesma regra que o proxy já aplica (proxy.ts) — fechado
+  // por padrão, caso o matcher/lógica do proxy mude e esta rota deixe de passar
+  // por lá. WEB MASTER ignora a manutenção, igual na Loja.
+  if (await isAffiliatesBlockedByMaintenance()) {
+    return NextResponse.json({ error: AFFILIATES_MAINTENANCE_MESSAGE }, { status: 503 })
+  }
+
   try {
     const supabase = await createSupabaseServerClient()
     const { data: authData } = await supabase.auth.getUser()

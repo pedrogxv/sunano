@@ -649,6 +649,7 @@ export type StoreProductDetail = {
   stock: number | null
   images: string[]
   category: string | null
+  brand: string | null
   type: "store"
   condition: "new" | "used" | "opened"
   condition_notes: string | null
@@ -724,7 +725,7 @@ export const getStoreProductDetail = cache(async (
   const { data: product, error } = await db
     .from("store_products")
     .select(
-      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, type, condition, condition_notes, sale_type, is_sold_out, peripheral_id, features, video_url"
+      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_sold_out, peripheral_id, features, video_url"
     )
     .eq("slug", slug)
     .eq("type", "store")
@@ -754,7 +755,12 @@ export const getStoreProductDetail = cache(async (
       )
       .eq("product_id", detail.id)
       .eq("is_active", true)
-      .order("position", { ascending: true }),
+      // `id` como desempate: variantes soft-deletadas guardam a posição antiga
+      // e podem empatar com uma ativa reindexada (ver replaceProductVariants).
+      // Sem critério estável, o Postgres devolve empates em ordem arbitrária e
+      // as cores trocam de lugar entre requisições.
+      .order("position", { ascending: true })
+      .order("id", { ascending: true }),
     db
       .from("store_product_variant_groups")
       .select(
@@ -851,7 +857,10 @@ export async function listProductVariants(
       "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, is_sold_out, variant_images:store_product_variant_images(url, position)"
     )
     .eq("product_id", productId)
+    // Mesmo desempate de getStoreProductDetail: posição pode empatar entre uma
+    // ativa e uma soft-deletada antiga.
     .order("position", { ascending: true })
+    .order("id", { ascending: true })
 
   if (!opts?.includeInactive) {
     query = query.eq("is_active", true)
@@ -1408,9 +1417,14 @@ export async function replaceProductVariants(
   }
 
   if (toDeactivate.length > 0) {
+    // `position` das ativas é reatribuído por índice (0..n-1) a cada save, mas
+    // a variante desativada mantinha a posição antiga — duas linhas do mesmo
+    // produto acabavam com a mesma posição e o empate embaralhava a ordem das
+    // cores na página. Jogar as inativas para fora da faixa das ativas mantém
+    // `position` único entre as que aparecem.
     const { error } = await db
       .from("store_product_variants")
-      .update({ is_active: false })
+      .update({ is_active: false, position: MAX_VARIANTS_PER_PRODUCT + 1 })
       .in("id", toDeactivate)
     if (error) {
       console.error("[store-repository] replaceProductVariants deactivate:", error)

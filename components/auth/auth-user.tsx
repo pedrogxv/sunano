@@ -54,7 +54,9 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   const { pendingOrder } = useUserOrders()
   const ready = !loading
   const isAdmin = authUser?.isAdmin ?? false
-  const showAffiliates = !isStoreMaintenanceEnabled()
+  // Afiliados acompanha a manutenção da Loja (ver lib/server/auth/affiliate-access.ts).
+  // O WEB MASTER continua vendo o item, igual ao que faz na Loja.
+  const showAffiliates = !isStoreMaintenanceEnabled() || (authUser?.isWebMaster ?? false)
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
   // Só a topbar pública abre o modal — a sidebar de admin (/admin/login) segue
   // navegando de verdade, já que aquele login não é o alvo deste modal.

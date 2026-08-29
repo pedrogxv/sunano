@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowRight, Handshake, KeyRound, Link2, Shield, SlidersHorizontal } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 
 import { LinkedAccountsTab } from "./LinkedAccountsTab"
@@ -32,7 +33,10 @@ const AFFILIATES_GROUP = { id: "afiliados", label: "Afiliados", Icon: Handshake 
  * então não há uma segunda navegação lateral.
  */
 export function AccountSection({ email, lgpdConsentAt, lgpdConsentVersion }: AccountSectionProps) {
-  const showAffiliates = !isStoreMaintenanceEnabled()
+  const { user: authUser } = useAuthUser()
+  // Afiliados acompanha a manutenção da Loja (ver lib/server/auth/affiliate-access.ts).
+  // O WEB MASTER continua vendo a seção, igual ao que faz na Loja.
+  const showAffiliates = !isStoreMaintenanceEnabled() || (authUser?.isWebMaster ?? false)
   const GROUPS = showAffiliates ? [...BASE_GROUPS, AFFILIATES_GROUP] : BASE_GROUPS
 
   function scrollTo(id: string) {

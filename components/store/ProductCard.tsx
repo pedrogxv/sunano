@@ -75,9 +75,11 @@ export function ProductCard(props: ProductCardProps) {
         "hover:z-10 hover:-translate-y-1 hover:border-[#3a3a3a] hover:shadow-xl hover:shadow-black/40",
         outOfStock && "opacity-55"
       )}>
-        {/* Imagem: fundo #141414 com um respiro da cor da categoria no topo,
-            como no mock — não o --card-image-bg genérico dos outros cards. */}
-        <div className="relative aspect-square overflow-hidden bg-[#141414]">
+        {/* Imagem sem placa própria: o fundo é o do card, então a foto (quase
+            sempre PNG recortado em fundo branco) não fica dentro de um
+            retângulo cinza destacado. O respiro da cor da categoria só
+            aparece no fallback sem imagem, logo abaixo. */}
+        <div className="relative aspect-square overflow-hidden bg-transparent">
           {image ? (
             <>
               {imageLoaded !== image && (

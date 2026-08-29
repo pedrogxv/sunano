@@ -1,5 +1,6 @@
 import { Fragment } from "react"
 
+import { SmartLink } from "@/components/ui/smart-link"
 import { parseTextLines, type TextSegment } from "@/lib/comment-markdown"
 
 /** Monta os elementos inline (negrito/itálico/sublinhado/destaque/link) de uma linha já parseada. */
@@ -7,15 +8,9 @@ export function renderTextSegments(segments: TextSegment[]) {
   return segments.map((segment, index) => {
     if (segment.href) {
       return (
-        <a
-          key={index}
-          href={segment.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary"
-        >
+        <SmartLink key={index} href={segment.href}>
           {segment.text}
-        </a>
+        </SmartLink>
       )
     }
     if (segment.bold) {

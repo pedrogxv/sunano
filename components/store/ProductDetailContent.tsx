@@ -1,10 +1,9 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   ExternalLink,
@@ -27,10 +26,13 @@ import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
+import { getColorSwatchStyle } from "@/lib/color-swatch"
 import type { LinkedPeripheralRef, StoreProductDetailResult, StoreProductVariantGroup, StoreFilterOptions, StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { ProductReviews } from "@/components/store/ProductReviews"
+import { RestockAlertButton } from "@/components/store/RestockAlertButton"
 import { FormattedText } from "@/components/ui/formatted-text"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
+import { ProductBreadcrumb } from "@/components/store/ProductBreadcrumb"
 
 function LinkedPeripheralCard({ peripheral }: { peripheral: LinkedPeripheralRef }) {
   return (
@@ -108,28 +110,11 @@ export function ProductDetailContent({
     )
   )
 
-  // Quando a cor selecionada muda, a opção já escolhida em cada grupo pode
-  // virar uma combinação esgotada (ex: trocou pra "Preto" e a opção
-  // "Fechada" só existe esgotada nessa cor) — troca pra primeira disponível
-  // nessa cor, mesmo fallback usado na seleção inicial acima.
-  useEffect(() => {
-    setSelectedOptionByGroup((prev) => {
-      let changed = false
-      const next = { ...prev }
-      for (const g of variantGroups) {
-        const current = prev[g.id]
-        const currentOption = g.options.find((o) => o.id === current)
-        if (currentOption && !isOptionSoldOut(currentOption, activeVariant)) continue
-        const fallback = g.options.find((o) => !isOptionSoldOut(o, activeVariant))?.id ?? g.options[0]?.id ?? null
-        if (fallback !== current) {
-          next[g.id] = fallback
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedVariantId])
+  // Nada de trocar a opção sozinho ao mudar de cor: agora que esgotado é
+  // selecionável, escolher uma cor cuja combinação está esgotada é um estado
+  // válido — a página mostra o produto e oferece o "avise-me". O fallback
+  // automático só existe na seleção inicial (useState acima), pra abrir a
+  // página já em algo comprável quando isso for possível.
 
   function handleSelectGroupOption(group: StoreProductVariantGroup, optionId: string) {
     setSelectedOptionByGroup((prev) => ({ ...prev, [group.id]: optionId }))
@@ -163,9 +148,14 @@ export function ProductDetailContent({
   const effectiveStock = activeVariant ? activeVariant.stock : product.stock
 
   const hasUnselectableGroup = variantGroups.some((g) => !selectedOptionByGroup[g.id])
+  // Uma opção esgotada agora pode ficar selecionada (o usuário clicou nela de
+  // propósito), então ela também precisa derrubar a compra — antes isso era
+  // garantido pelo fallback automático, que não existe mais.
+  const hasSoldOutOption = selectedOptions.some((o) => isOptionSoldOut(o, activeVariant))
   const outOfStock =
     product.is_sold_out ||
     (activeVariant ? isColorSoldOut(activeVariant) : effectiveStock !== null && effectiveStock === 0) ||
+    hasSoldOutOption ||
     hasUnselectableGroup
   const baseImages: (string | null)[] = product.images?.length > 0 ? product.images : [null]
   function getVariantImages(variant: typeof activeVariant) {
@@ -239,8 +229,6 @@ export function ProductDetailContent({
       return !z
     })
   }
-  const backHref = "/loja"
-
   // `linkedPeripheral` (FK única) e `linkedPeripherals` (M:N) podem apontar
   // pro mesmo periférico — mostra cada um só uma vez.
   const allLinkedPeripherals = linkedPeripheral
@@ -297,13 +285,11 @@ export function ProductDetailContent({
         previewPool={previewPool}
       />
       <div className="mx-auto max-w-7xl px-4 pb-12 md:px-6 lg:pb-16 pt-5">
-      <Link
-        href={backHref}
-        className="mb-5 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" />
-        Voltar à loja
-      </Link>
+      <ProductBreadcrumb
+        productName={product.name}
+        category={product.category}
+        brand={product.brand}
+      />
       <div className="flex flex-col gap-10 md:flex-row md:items-start lg:gap-16">
         {/* Images */}
         <div className="space-y-4 md:w-1/2">
@@ -317,7 +303,7 @@ export function ProductDetailContent({
               }
             }}
           >
-            <div className="group/zoom relative aspect-square overflow-hidden rounded-[24px] border border-border bg-[var(--card-image-bg)]">
+            <div className="group/zoom relative aspect-square overflow-hidden rounded-[24px] bg-transparent">
               {images[activeImage] ? (
                 <button
                   type="button"
@@ -445,8 +431,8 @@ export function ProductDetailContent({
                   key={idx}
                   onClick={() => setActiveImage(idx)}
                   className={cn(
-                    "size-[84px] shrink-0 overflow-hidden rounded-2xl border-[1.5px] bg-[var(--card-image-bg)]",
-                    idx === activeImage ? "border-emerald-500" : "border-border"
+                    "size-[84px] shrink-0 overflow-hidden rounded-2xl border-[1.5px] bg-transparent",
+                    idx === activeImage ? "border-emerald-500" : "border-border/60"
                   )}
                 >
                   {img ? (
@@ -560,23 +546,25 @@ export function ProductDetailContent({
                   const isActive = v.id === selectedVariantId
                   const variantSoldOut = isColorSoldOut(v)
                   return (
+                    /* Esgotado continua clicável: selecionar troca fotos, preço
+                       e specs normalmente — só o bloco de compra vira "esgotado"
+                       + "avise-me". Bloquear o clique escondia as fotos da cor. */
                     <button
                       key={v.id}
                       type="button"
-                      onClick={() => !variantSoldOut && handleSelectVariant(v.id)}
-                      disabled={variantSoldOut}
+                      onClick={() => handleSelectVariant(v.id)}
                       className={cn(
                         "flex items-center gap-2.5 rounded-xl border-[1.5px] px-4 py-3 text-sm font-semibold transition-colors",
                         isActive
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                           : "border-border text-muted-foreground hover:border-foreground/20",
-                        variantSoldOut && "cursor-not-allowed opacity-50 hover:border-border"
+                        variantSoldOut && !isActive && "opacity-60"
                       )}
                     >
                       {(v.color || v.icon) && (
                         <span
-                          className="flex size-[18px] shrink-0 items-center justify-center rounded-full border border-black/10"
-                          style={{ backgroundColor: v.color ?? "transparent" }}
+                          className="flex size-[18px] shrink-0 items-center justify-center rounded-full"
+                          style={getColorSwatchStyle(v.color).style}
                         >
                           {v.icon && <span className="text-[11px] leading-none">{v.icon}</span>}
                         </span>
@@ -601,14 +589,13 @@ export function ProductDetailContent({
                     <button
                       key={option.id}
                       type="button"
-                      onClick={() => !optionSoldOut && handleSelectGroupOption(group, option.id)}
-                      disabled={optionSoldOut}
+                      onClick={() => handleSelectGroupOption(group, option.id)}
                       className={cn(
                         "rounded-xl border-[1.5px] px-4 py-3 text-sm font-semibold transition-colors",
                         isActive
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                           : "border-border text-muted-foreground hover:border-foreground/20",
-                        optionSoldOut && "cursor-not-allowed opacity-50 hover:border-border"
+                        optionSoldOut && !isActive && "opacity-60"
                       )}
                     >
                       <span className={cn(optionSoldOut && "line-through")}>{option.label}</span>
@@ -621,9 +608,38 @@ export function ProductDetailContent({
           ))}
 
           {outOfStock ? (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400">
-              Produto esgotado
-            </div>
+            /* Esgotado continua visível e navegável — a seleção acima segue
+               trocando fotos, preço e specs normalmente; só este bloco perde o
+               botão de compra e ganha o "avise-me". A inscrição mira o que
+               está esgotado: o produto inteiro (variantId null) ou a cor
+               selecionada. */
+            (() => {
+              // Produto inteiro esgotado tem precedência: nem adianta assinar
+              // uma cor se nada do produto está à venda.
+              const productLevel = product.is_sold_out || !activeVariant
+              const soldOutOption = selectedOptions.find((o) => isOptionSoldOut(o, activeVariant))
+              const label = productLevel
+                ? "Produto esgotado"
+                : isColorSoldOut(activeVariant)
+                  ? `Cor "${activeVariant.label}" esgotada`
+                  : soldOutOption
+                    ? `"${activeVariant.label}" com "${soldOutOption.label}" esgotado`
+                    : "Produto esgotado"
+              return (
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400">
+                    {label}
+                  </div>
+                  {!hasUnselectableGroup && (
+                    <RestockAlertButton
+                      productId={product.id}
+                      variantId={productLevel ? null : activeVariant.id}
+                      variantLabel={productLevel ? null : activeVariant.label}
+                    />
+                  )}
+                </div>
+              )
+            })()
           ) : (
             <div className="space-y-4">
               {product.sale_type === "pre_order" && (

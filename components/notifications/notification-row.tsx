@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Newspaper,
   Package,
+  PackageCheck,
   Reply,
   UserPlus,
   X,
@@ -35,6 +36,7 @@ export const ICONS: Record<NotificationType, typeof Bell> = {
   support_new_ticket: LifeBuoy,
   support_user_reply: LifeBuoy,
   support_status: CircleCheck,
+  store_restock: PackageCheck,
 }
 
 export const ICON_TONE: Record<NotificationType, string> = {
@@ -50,6 +52,7 @@ export const ICON_TONE: Record<NotificationType, string> = {
   support_new_ticket: "bg-cyan-500/15 text-cyan-400",
   support_user_reply: "bg-cyan-500/15 text-cyan-400",
   support_status: "bg-cyan-500/15 text-cyan-400",
+  store_restock: "bg-emerald-500/15 text-emerald-400",
 }
 
 export function fill(template: string, values: Record<string, string | number>) {
@@ -121,6 +124,8 @@ export function buildMessage(n: Notification, t: ReturnType<typeof useT>): strin
       return fill(t.notifications.supportUserReply, { name })
     case "support_status":
       return fill(t.notifications.supportStatus, { subject: n.title ?? "" })
+    case "store_restock":
+      return fill(t.notifications.storeRestock, { product: n.title ?? "" })
   }
 }
 
@@ -169,7 +174,10 @@ export function NotificationRow({
     n.type === "order_status" ||
     n.type === "support_reply" ||
     n.type === "support_new_ticket" ||
-    n.type === "support_user_reply"
+    n.type === "support_user_reply" ||
+    // `store_restock` grava a cor que voltou em `body` (null quando o aviso
+    // era do produto inteiro).
+    n.type === "store_restock"
       ? n.body
       : n.type === "support_status"
         ? supportStatusLabel(n.body, t)

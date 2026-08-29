@@ -24,6 +24,7 @@ export type NotificationType =
   | "support_new_ticket"
   | "support_user_reply"
   | "support_status"
+  | "store_restock"
 
 export type NotificationEntityType =
   | "forum_post"
@@ -33,6 +34,7 @@ export type NotificationEntityType =
   | "user"
   | "order"
   | "support_ticket"
+  | "store_product"
 
 export type Database = {
   public: {
@@ -1074,6 +1076,34 @@ export type Database = {
           variant_id?: string
           url?: string
           position?: number
+          created_at?: string
+        }
+      }
+      store_restock_alerts: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          product_id: string
+          /** null = inscrito no produto inteiro ("qualquer cor"). */
+          variant_id: string | null
+          notified_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          product_id: string
+          variant_id?: string | null
+          notified_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          product_id?: string
+          variant_id?: string | null
+          notified_at?: string | null
           created_at?: string
         }
       }

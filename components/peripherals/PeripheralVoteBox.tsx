@@ -95,7 +95,7 @@ export function PeripheralVoteBox({ peripheralId }: PeripheralVoteBoxProps) {
               {verdictTitle[verdict]}
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" className="max-w-56 text-center">
+          <TooltipContent side="bottom" className="max-w-56">
             {verdictTooltip[verdict]}
           </TooltipContent>
         </Tooltip>

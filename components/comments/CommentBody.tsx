@@ -2,6 +2,7 @@ import { Fragment } from "react"
 import Link from "next/link"
 
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
+import { SmartLink } from "@/components/ui/smart-link"
 import { parseTextLines, type TextSegment } from "@/lib/comment-markdown"
 import { profilePath } from "@/lib/profile-name"
 import { cn } from "@/lib/utils"
@@ -62,15 +63,9 @@ function renderSegments(segments: TextSegment[], mentions: CommentMention[]) {
   return segments.map((segment, index) => {
     if (segment.href) {
       return (
-        <a
-          key={index}
-          href={segment.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary"
-        >
+        <SmartLink key={index} href={segment.href}>
           {segment.text}
-        </a>
+        </SmartLink>
       )
     }
     if (segment.bold) {

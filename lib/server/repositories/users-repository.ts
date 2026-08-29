@@ -6,6 +6,7 @@ import { coerceAccountTier } from "@/lib/account-tier"
 import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { removeReplacedStorageObjects } from "@/lib/server/storage-cleanup"
 import {
   coerceMediaAdjustments,
   DEFAULT_ADJUSTMENTS,
@@ -31,6 +32,7 @@ export type AdminProfileSummary = {
   display_name: string | null
   avatar_url: string | null
   email: string | null
+  role: string | null
 }
 
 /** Perfil público de um usuário do fórum. */
@@ -1015,7 +1017,7 @@ export async function getAdminProfileSummary(
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("admin_profiles")
-    .select("display_name, avatar_url, email")
+    .select("display_name, avatar_url, email, role")
     .eq("id", userId)
     .maybeSingle()
   return (data ?? null) as AdminProfileSummary | null
@@ -1144,6 +1146,24 @@ export async function updateUserProfileSettings(
   }
 ): Promise<void> {
   const db = createSupabaseAdminClient()
+
+  // Estado anterior das três mídias, para apagar do bucket a que for
+  // substituída — sem isso cada troca de avatar/banner deixa o arquivo antigo
+  // pago e sem exibição (ver lib/server/storage-cleanup.ts).
+  const replacesMedia =
+    changes.avatarUrl !== undefined ||
+    changes.bannerUrl !== undefined ||
+    changes.miniBannerUrl !== undefined
+  const previousMedia = replacesMedia
+    ? ((
+        await db
+          .from("user_profiles")
+          .select("avatar_url, banner_url, mini_banner_url")
+          .eq("id", userId)
+          .maybeSingle()
+      ).data as ProfileMediaUrls | null)
+    : null
+
   const payload: Record<string, unknown> = { id: userId }
   if (changes.displayName !== undefined) payload.display_name = changes.displayName
   if (changes.avatarUrl !== undefined) payload.avatar_url = changes.avatarUrl
@@ -1167,9 +1187,44 @@ export async function updateUserProfileSettings(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const retry = await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
     if (retry.error) throw retry.error
+    await cleanupReplacedProfileMedia(previousMedia, changes)
     return
   }
   if (error) throw error
+  // Só depois do upsert dar certo: se a gravação falhar, o arquivo antigo
+  // continua sendo o que o perfil exibe e não pode ser apagado.
+  await cleanupReplacedProfileMedia(previousMedia, changes)
+}
+
+type ProfileMediaUrls = {
+  avatar_url: string | null
+  banner_url: string | null
+  mini_banner_url: string | null
+}
+
+/**
+ * Apaga do bucket a mídia de perfil que acabou de ser trocada.
+ *
+ * O valor novo de cada campo entra como "ainda referenciado" para cobrir o
+ * salvamento que não mexe na imagem (o formulário reenvia a mesma URL) e o
+ * caso de a mesma arte ser usada em dois campos.
+ */
+async function cleanupReplacedProfileMedia(
+  previous: ProfileMediaUrls | null,
+  changes: { avatarUrl?: string | null; bannerUrl?: string | null; miniBannerUrl?: string | null }
+): Promise<void> {
+  if (!previous) return
+
+  const replaced: Array<string | null> = []
+  if (changes.avatarUrl !== undefined) replaced.push(previous.avatar_url)
+  if (changes.bannerUrl !== undefined) replaced.push(previous.banner_url)
+  if (changes.miniBannerUrl !== undefined) replaced.push(previous.mini_banner_url)
+
+  await removeReplacedStorageObjects(replaced, [
+    changes.avatarUrl ?? previous.avatar_url,
+    changes.bannerUrl ?? previous.banner_url,
+    changes.miniBannerUrl ?? previous.mini_banner_url,
+  ])
 }
 
 /**

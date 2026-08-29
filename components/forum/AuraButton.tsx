@@ -205,7 +205,7 @@ export function AuraButton({
       <TooltipTrigger asChild>
         <span className="inline-flex">{button}</span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-56 text-center">
+      <TooltipContent side="top" className="max-w-56">
         {tooltipText}
       </TooltipContent>
     </Tooltip>

@@ -149,10 +149,16 @@ export function TopBar() {
   const isCollapsed = isAdmin ? adminCollapsed : publicCollapsed
   const toggleCollapsed = isAdmin ? toggleAdmin : togglePublic
 
-  // On desktop this collapses/expands the sidebar; on mobile it opens/closes the
-  // drawer. Each action is inert at the other breakpoint, so we fire both.
+  // No desktop colapsa/expande a sidebar; no mobile abre/fecha o drawer.
+  // As duas ações NÃO são intercambiáveis: `toggleCollapsed` também vale no
+  // mobile, e disparar os dois juntos abria o drawer já colapsado (só ícones)
+  // no primeiro toque. Por isso o breakpoint é checado de verdade aqui.
   const handleSidebarToggle = () => {
-    toggleCollapsed()
+    const isDesktop = window.matchMedia("(min-width: 768px)").matches
+    if (isDesktop) {
+      toggleCollapsed()
+      return
+    }
     if (isAdmin) {
       setAdminMobileOpen(!isAdminMobileOpen)
     } else {

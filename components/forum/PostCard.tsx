@@ -200,7 +200,7 @@ function PostAuraButton({
           </button>
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-56 text-center">
+      <TooltipContent side="top" className="max-w-56">
         {tooltipText}
       </TooltipContent>
     </Tooltip>
@@ -305,7 +305,7 @@ function PostSaveButton({
           </button>
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-56 text-center">
+      <TooltipContent side="top" className="max-w-56">
         {tooltipText}
       </TooltipContent>
     </Tooltip>
@@ -401,7 +401,14 @@ export function PostCard({
           </p>
 
           {!compact && post.body && (
-            <CommentBody body={post.body} className="mt-1 text-muted-foreground" />
+            // Com o card inteiro clicável a camada acima desliga os cliques (o
+            // link de fundo é quem recebe). Reabrir só nos links (`[&_a]`), e
+            // não no bloco todo, mantém as duas coisas: clicar no texto do post
+            // continua abrindo o post, e clicar num link escrito nele vai pro
+            // endereço em vez de abrir o post.
+            <div className="relative z-10 mt-1 [&_a]:pointer-events-auto">
+              <CommentBody body={post.body} className="text-muted-foreground" />
+            </div>
           )}
 
           {post.media_image_urls.length > 0 && (

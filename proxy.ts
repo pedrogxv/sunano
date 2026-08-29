@@ -19,6 +19,13 @@ function isMaintenanceEnabled() {
 // fechado por padrão, qualquer requisição que crie um pedido novo.
 const STORE_ORDER_WRITE_PATHS = ["/api/store/checkout"]
 
+// O Programa de Afiliados acompanha a manutenção da Loja: sem loja aberta não
+// existe venda para comissionar, então a área inteira (páginas e API) fecha
+// para todo mundo que não é WEB MASTER. Diferente da Loja, aqui não é só a
+// escrita: `/afiliados` não deve nem abrir, porque a proposta da página é
+// justamente indicar a loja.
+const AFFILIATE_PATHS = ["/afiliados", "/api/afiliados"]
+
 // Rotas públicas de autenticação que continuam acessíveis mesmo em manutenção,
 // para que usuários comuns possam entrar / redefinir senha / concluir o 2FA.
 function isPublicAuthRoute(pathname: string) {
@@ -57,6 +64,28 @@ function hasSupabaseSession(request: NextRequest) {
   return request.cookies
     .getAll()
     .some((cookie) => cookie.name.startsWith("sb-") && !cookie.name.endsWith("-code-verifier"))
+}
+
+// Recusa padronizada da manutenção da Loja. Rotas de API respondem 503 em JSON;
+// páginas (só o caso dos afiliados, já que a Loja se fecha sozinha em
+// app/loja/**) vão para a home, porque devolver JSON cru numa navegação
+// deixaria o usuário olhando para um `{"error":...}` sem layout.
+function storeMaintenanceResponse(request: NextRequest, isAffiliatePath: boolean) {
+  // A mensagem dos afiliados é repetida aqui (e não importada de
+  // lib/server/auth/affiliate-access.ts) porque aquele módulo é `server-only`
+  // e o proxy não pode importá-lo. Mantenha as duas iguais.
+  const message = isAffiliatePath
+    ? "O Programa de Afiliados está temporariamente indisponível."
+    : "A Loja está temporariamente indisponível para novos pedidos."
+
+  if (request.nextUrl.pathname.startsWith("/api")) {
+    return NextResponse.json({ error: message }, { status: 503 })
+  }
+
+  const homeUrl = request.nextUrl.clone()
+  homeUrl.pathname = "/"
+  homeUrl.search = ""
+  return NextResponse.redirect(homeUrl)
 }
 
 function copyCookies(source: NextResponse, destination: NextResponse) {
@@ -214,7 +243,8 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const isLoginRoute = pathname === "/admin/login"
   const maintenanceMode = isMaintenanceEnabled()
   const isStoreOrderWritePath = STORE_ORDER_WRITE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
-  const storeMaintenanceMode = isStoreMaintenanceEnabled() && isStoreOrderWritePath
+  const isAffiliatePath = AFFILIATE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
+  const storeMaintenanceMode = isStoreMaintenanceEnabled() && (isStoreOrderWritePath || isAffiliatePath)
 
   if (pathname === "/maintenance") {
     const redirectUrl = request.nextUrl.clone()
@@ -230,10 +260,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // banco — só quando existe sessão a checagem espera o perfil ser resolvido
   // abaixo, para que um WEB MASTER logado possa passar direto.
   if (storeMaintenanceMode && !hasSupabaseSession(request)) {
-    return NextResponse.json(
-      { error: "A Loja está temporariamente indisponível para novos pedidos." },
-      { status: 503 }
-    )
+    return storeMaintenanceResponse(request, isAffiliatePath)
   }
 
   // Mercado desativado temporariamente — bloqueia a rota pública inteira.
@@ -286,12 +313,9 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // Loja em manutenção, mas há sessão: só o WEB MASTER passa. Qualquer outro
   // usuário logado (ou perfil ausente) continua recusado.
   if (storeMaintenanceMode && !isWebMaster(profile)) {
-    const apiResponse = NextResponse.json(
-      { error: "A Loja está temporariamente indisponível para novos pedidos." },
-      { status: 503 }
-    )
-    copyCookies(response, apiResponse)
-    return apiResponse
+    const blockedResponse = storeMaintenanceResponse(request, isAffiliatePath)
+    copyCookies(response, blockedResponse)
+    return blockedResponse
   }
   // Cobre também o caminho autenticado (visitante com sessão clicando num
   // link de afiliado) — o cookie é copiado adiante em todo `redirectResponse`

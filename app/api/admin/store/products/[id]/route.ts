@@ -68,7 +68,14 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
         .order("position", { ascending: true }),
       db
         .from("store_product_variants")
-        .select("id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, is_sold_out")
+        .select(
+          // `variant_images` precisa vir junto: o formulário de edição reenvia
+          // as variantes inteiras a cada save e `replaceProductVariants` faz
+          // delete-then-insert da galeria. Sem as imagens aqui o form monta o
+          // estado com `images: []` e qualquer edição — trocar o "esgotado",
+          // por exemplo — apagava silenciosamente a galeria das variantes.
+          "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, is_sold_out, variant_images:store_product_variant_images(url, position)"
+        )
         .eq("product_id", id)
         .eq("is_active", true)
         .order("position", { ascending: true }),
@@ -83,10 +90,21 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   if (error) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
 
+  // Achata o join em `images: string[]`, que é o formato que o formulário
+  // consome e que a rota de save (PUT .../variants) espera de volta.
+  type RawVariantRow = { variant_images?: { url: string; position: number }[] | null }
+  const variantsWithImages = (variants ?? []).map((variant) => {
+    const { variant_images, ...rest } = variant as typeof variant & RawVariantRow
+    return {
+      ...rest,
+      images: [...(variant_images ?? [])].sort((a, b) => a.position - b.position).map((img) => img.url),
+    }
+  })
+
   return NextResponse.json({
     product: data,
     specs: specs ?? [],
-    variants: variants ?? [],
+    variants: variantsWithImages,
     variantGroups,
     combinations,
     peripheralIds: (peripherals ?? []).map((row) => row.peripheral_id),

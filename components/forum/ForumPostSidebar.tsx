@@ -1,9 +1,13 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Award, Eye, Flame, MessageCircle, MessagesSquare, Tag, User, Users } from "lucide-react"
 
+import { CollapsibleSidebarCard } from "@/components/forum/CollapsibleSidebarCard"
+import { useFollowSticky } from "@/lib/hooks/use-follow-sticky"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,8 +17,6 @@ import { getSpecialTag } from "@/lib/special-tag"
 import { MEDAL_RARITY_STYLES } from "@/lib/profile-showcase"
 import type { ProfileShowcase } from "@/lib/profile-showcase"
 import type { ForumCategoryInfo, ForumSidebarData } from "@/lib/server/repositories/forum-repository"
-import { CARD_SURFACE } from "@/lib/ui-styles"
-import { cn } from "@/lib/utils"
 
 function formatCount(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
@@ -32,6 +34,10 @@ function truncate(text: string, max: number): string {
  * categoria do tópico, estatísticas gerais do fórum, o autor e outros
  * tópicos recentes da mesma categoria — tudo já resolvido no servidor,
  * sem fetch adicional no cliente.
+ *
+ * No desktop ela é `sticky` e acompanha a rolagem; quando o conteúdo passa
+ * da altura da viewport o excedente rola dentro do próprio card, e cada
+ * seção pode ser recolhida pelo chevron do cabeçalho.
  */
 export function ForumPostSidebar({
   category,
@@ -52,17 +58,27 @@ export function ForumPostSidebar({
 }) {
   const specialTag = getSpecialTag(author.display_slug)
   const categoryLabel = category ? (category.parent ? `${category.parent.name} / ${category.name}` : category.name) : null
+  // Gruda no topo e, quando os cards passam da altura da tela, desliza junto
+  // até dar pra ler o fim — sem scroll aninhado.
+  const stickyRef = useFollowSticky<HTMLElement>()
 
   return (
-    <aside className="lg:sticky lg:top-[var(--sticky-header-h)] lg:max-h-[calc(100vh-var(--sticky-header-h)-1rem)] lg:self-start lg:overflow-y-auto">
-      <div className="space-y-4 pb-1">
+    <aside
+      ref={stickyRef}
+      className="lg:sticky lg:top-[calc(var(--sticky-header-h)+1rem)] lg:self-start lg:will-change-transform"
+    >
+      <div className="space-y-4">
       {/* Card da categoria — equivalente ao "r/keyboards" do Reddit */}
-      <div className={cn("rounded-xl p-4", CARD_SURFACE)}>
-        <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-          <Tag className="size-4 text-primary" />
-          {categoryLabel ?? "Fórum Sunano"}
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
+      <CollapsibleSidebarCard
+        id="post-categoria"
+        header={
+          <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Tag className="size-4 shrink-0 text-primary" />
+            <span className="truncate">{categoryLabel ?? "Fórum Sunano"}</span>
+          </span>
+        }
+      >
+        <p className="text-xs text-muted-foreground">
           {categoryLabel
             ? `Discussões da comunidade sobre ${categoryLabel.toLowerCase()}.`
             : "Compartilhe dicas, tire dúvidas e discuta periféricos."}
@@ -87,15 +103,18 @@ export function ForumPostSidebar({
             Ver {stats.categoryPostCount} tópicos em {category.name}
           </Link>
         )}
-      </div>
+      </CollapsibleSidebarCard>
 
       {/* Autor — equivalente ao "USER FLAIR" do Reddit, com aura/seguidores/medalhas */}
-      <div className={cn("rounded-xl p-4", CARD_SURFACE)}>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Autor</p>
-
+      <CollapsibleSidebarCard
+        id="post-autor"
+        header={
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Autor</span>
+        }
+      >
         <Link
           href={author.display_slug ? `/perfil/${author.display_slug}` : "#"}
-          className="mt-3 flex items-center gap-2.5 group"
+          className="flex items-center gap-2.5 group"
         >
           <UserAvatar name={author.display_name} avatarUrl={author.avatar_url} size={9} />
           <div className="min-w-0">
@@ -174,7 +193,7 @@ export function ForumPostSidebar({
                       <TooltipContent>
                         <p className="font-semibold">{medal.name}</p>
                         {medal.description && (
-                          <p className="text-xs text-muted-foreground">{medal.description}</p>
+                          <p className="text-xs text-background/70">{medal.description}</p>
                         )}
                       </TooltipContent>
                     </Tooltip>
@@ -193,16 +212,20 @@ export function ForumPostSidebar({
             </Link>
           </Button>
         )}
-      </div>
+      </CollapsibleSidebarCard>
 
       {/* Tópicos recentes da mesma categoria */}
       {stats.relatedPosts.length > 0 && (
-        <div className={cn("rounded-xl p-4", CARD_SURFACE)}>
-          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <MessagesSquare className="size-3.5" />
-            Tópicos relacionados
-          </div>
-          <ul className="mt-3 space-y-3">
+        <CollapsibleSidebarCard
+          id="post-relacionados"
+          header={
+            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <MessagesSquare className="size-3.5" />
+              Tópicos relacionados
+            </span>
+          }
+        >
+          <ul className="space-y-3">
             {stats.relatedPosts.map((post) => (
               <li key={post.slug}>
                 <Link href={`/forum/${post.slug}`} className="block group">
@@ -220,7 +243,7 @@ export function ForumPostSidebar({
               </li>
             ))}
           </ul>
-        </div>
+        </CollapsibleSidebarCard>
       )}
 
       <Link

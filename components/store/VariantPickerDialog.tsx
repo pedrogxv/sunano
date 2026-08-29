@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { getCategoryIcon } from "@/lib/store-category-icons"
+import { getColorSwatchStyle } from "@/lib/color-swatch"
 import { useCart, type CartVariantOption } from "@/components/providers/cart-context"
 import type {
   StoreProductDetailResult,
@@ -205,13 +206,13 @@ export function VariantPickerDialog({ slug, name, category, fallbackImage, open,
                           isActive
                             ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                             : "border-border text-muted-foreground hover:border-foreground/20",
-                          variantSoldOut && "cursor-not-allowed opacity-50 hover:border-border"
+                          variantSoldOut && !isActive && "opacity-60"
                         )}
                       >
                         {(v.color || v.icon) && (
                           <span
-                            className="flex size-[16px] shrink-0 items-center justify-center rounded-full border border-black/10"
-                            style={{ backgroundColor: v.color ?? "transparent" }}
+                            className="flex size-[16px] shrink-0 items-center justify-center rounded-full"
+                            style={getColorSwatchStyle(v.color).style}
                           >
                             {v.icon && <span className="text-[10px] leading-none">{v.icon}</span>}
                           </span>
@@ -236,14 +237,13 @@ export function VariantPickerDialog({ slug, name, category, fallbackImage, open,
                       <button
                         key={option.id}
                         type="button"
-                        onClick={() => !optionSoldOut && handleSelectGroupOption(group, option.id)}
-                        disabled={optionSoldOut}
+                        onClick={() => handleSelectGroupOption(group, option.id)}
                         className={cn(
                           "rounded-xl border-[1.5px] px-3 py-2 text-[13px] font-semibold transition-colors",
                           isActive
                             ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                             : "border-border text-muted-foreground hover:border-foreground/20",
-                          optionSoldOut && "cursor-not-allowed opacity-50 hover:border-border"
+                          optionSoldOut && !isActive && "opacity-60"
                         )}
                       >
                         <span className={cn(optionSoldOut && "line-through")}>{option.label}</span>

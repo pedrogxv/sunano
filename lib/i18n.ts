@@ -1605,6 +1605,20 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.3.5",
+          date: "29 de agosto",
+          title: "Notificações de Aura agrupadas e recompensas fixas de volta ao valor cheio",
+          description: "Uma única ação virava até 4 notificações de Aura seguidas, o que dava a impressão de bug na ofensiva diária. Agora os ganhos de uma mesma leva aparecem somados em um aviso só, e as recompensas de valor fixo (missões, bônus da ofensiva e conquistas) voltaram a pagar exatamente o número anunciado.",
+          items: [
+            "Notificações de Aura ganha por conta própria (criar post, missões, bônus da ofensiva, conquistas) são agrupadas em um único aviso somado — antes cada crédito virava uma notificação separada, e uma leva de missões diárias enchia o sino de uma vez",
+            "Comentar no próprio post não some mais com a notificação da Aura de criação do post: os dois avisos eram gravados com a mesma chave e o segundo era descartado em silêncio",
+            "Recompensas de valor fixo voltaram a pagar o número exato anunciado: missões diárias (+5/+3/+1), bônus por completar as 3 do dia (+10) e conquistas (10/25/50/100/250) não passam mais pelo multiplicador de Ofensiva/VIP — uma conquista anunciada como 25 estava creditando 26",
+            "O multiplicador de Ofensiva/VIP continua valendo integralmente onde sempre deveria: criar post, comentar, reviews de periférico e curtidas recebidas",
+            "Trilha de conquistas \"Aura farmada\" parou de contar a própria Aura que ela paga — a recompensa por farmar empurrava o contador que decide a próxima recompensa; os totais foram recalculados e nenhuma conquista já desbloqueada foi removida",
+            "Corrigida uma falha rara que podia pagar a recompensa de uma conquista duas vezes quando um único ganho cruzava dois níveis da mesma trilha de uma só vez",
+          ],
+        },
+        {
           version: "v0.3.4 · Damnatio Memoriae",
           date: "23 de agosto",
           title: "Primeira leva de banimentos por farm de Aura",
@@ -2721,6 +2735,20 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.3.5",
+          date: "August 29",
+          title: "Grouped Aura notifications and fixed rewards back to their full value",
+          description: "A single action could produce up to 4 back-to-back Aura notifications, which looked like a daily streak bug. Gains from the same burst are now summed into one notice, and fixed-value rewards (missions, streak bonus, and achievements) pay exactly the announced number again.",
+          items: [
+            "Notifications for Aura you earn on your own (creating a post, missions, streak bonus, achievements) are grouped into a single summed notice — previously every credit became its own notification, and a round of daily missions flooded the bell at once",
+            "Commenting on your own post no longer swallows the notification for the post-creation Aura: both were stored under the same key and the second was silently dropped",
+            "Fixed-value rewards pay exactly the announced number again: daily missions (+5/+3/+1), the bonus for completing all 3 in a day (+10), and achievements (10/25/50/100/250) no longer go through the Streak/VIP multiplier — an achievement announced as 25 was crediting 26",
+            "The Streak/VIP multiplier still applies in full where it always should: creating posts, commenting, peripheral reviews, and likes received",
+            "The \"Aura farmed\" achievement track stopped counting the Aura it pays out itself — the reward for farming was pushing the very counter that decides the next reward; totals were recalculated and no already-unlocked achievement was removed",
+            "Fixed a rare flaw that could pay an achievement reward twice when a single gain crossed two tiers of the same track at once",
+          ],
+        },
         {
           version: "v0.3.4 · Damnatio Memoriae",
           date: "August 23",

@@ -1,7 +1,15 @@
+-- ATENÇÃO: as seções 3c e 3d deste arquivo foram reescritas depois que ele
+-- foi criado, para casar com 20260930000000_aura_fixed_rewards.sql. Missão
+-- diária, bônus de ofensiva e conquista de trilha são recompensa de valor
+-- FIXO e não passam pelo multiplicador — ele vale só para ganho por
+-- atividade. Os dois arquivos definem essas funções com o mesmo corpo de
+-- propósito: como esta migration ainda pode estar pendente em produção (o
+-- nome é datado à frente), a ordem de aplicação não pode mudar o resultado.
+--
 -- Multiplicador de Aura por Ofensiva (streak) — quanto mais dias seguidos
--- completando as missões diárias, maior o bônus percentual em cima de TODO
--- ganho positivo de aura (curtidas recebidas em post/comentário/blog, missão
--- diária, bônus de ofensiva, conquistas). Remoções/undo de aura continuam
+-- completando as missões diárias, maior o bônus percentual em cima do ganho
+-- de aura por ATIVIDADE (curtidas recebidas em post/comentário/blog, criação
+-- de post/comentário, reviews). Remoções/undo de aura continuam
 -- desfazendo o valor exato que foi dado — o multiplicador só entra na hora
 -- de ganhar, nunca no estorno, senão dar+desfazer deixaria de ser neutro.
 --
@@ -49,6 +57,11 @@ $$;
 --    sempre > 0 — para remoções/undo continue somando direto na wallet como
 --    hoje, sem passar por aqui.
 -- ────────────────────────────────────────────
+-- ⚠️  SUPERSEDIDA por 20260922000005_apply_aura_gain_vip_bonus.sql (bônus
+--     passivo de VIP). Se as duas migrations existirem no banco, a que rodou
+--     por ÚLTIMO vence — nunca aplique só este arquivo isoladamente contra um
+--     banco que já rodou a 20260922000005, ou o bônus de VIP some sem erro
+--     nenhum. Ver [[supabase-migration-drift]] na memória do projeto.
 create or replace function public.apply_aura_gain(
   p_user_id     uuid,
   p_base_amount integer
@@ -103,6 +116,12 @@ grant execute on function public.apply_aura_gain(uuid, integer) to service_role;
 
 -- 3a. toggle_forum_aura (comment | blog_comment) — mesma assinatura de
 --     20260823000000_forum_post_aura_from_comments.sql.
+-- ⚠️  SUPERSEDIDA por 20260922000006_daily_aura_limit_vip_double.sql e,
+--     por fim, 20260923000002_aura_trust_tiers.sql (teto diário/por par por
+--     tier de confiança — é a proteção antifraude por trás da leva de
+--     banimentos "Damnatio Memoriae", v0.3.4). A que rodar por ÚLTIMO no
+--     banco vence. Nunca aplique só este arquivo isoladamente contra um banco
+--     que já tem essas duas — reverteria os limites antifarm em silêncio.
 create or replace function public.toggle_forum_aura(
   p_giver_id    uuid,
   p_target_type text,
@@ -299,6 +318,9 @@ grant execute on function public.toggle_forum_aura(uuid, text, uuid, text) to se
 
 -- 3b. toggle_forum_post_aura (post like/undo, sem dislike) — mesma
 --     assinatura de 20260824000000_forum_post_direct_aura.sql.
+-- ⚠️  SUPERSEDIDA por 20260922000006_daily_aura_limit_vip_double.sql e
+--     20260923000002_aura_trust_tiers.sql — mesmo risco e mesmo motivo do
+--     aviso em toggle_forum_aura acima.
 create or replace function public.toggle_forum_post_aura(
   p_giver_id uuid,
   p_post_id  uuid
@@ -371,13 +393,14 @@ $$;
 revoke execute on function public.toggle_forum_post_aura(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.toggle_forum_post_aura(uuid, uuid) to service_role;
 
--- 3c. complete_daily_mission — o crédito por missão (+5 post, +3 comentário,
---     +1 aura — ver 20260811000000_daily_mission_reward_rebalance.sql — e o
---     +10 de bônus ao fechar as 3) passa a levar o multiplicador. O avanço do
---     streak em si (current_streak/longest_streak) não muda — o multiplicador
---     é lido ANTES de avançar `user_streaks`, então o bônus do dia de hoje
---     usa a ofensiva que o usuário TINHA ao entrar no dia (streak já contava
---     ontem), não a que ele acabou de destravar completando a 3ª missão.
+-- 3c. complete_daily_mission — repassada aqui só para manter os valores por
+--     missão (+5 post, +3 comentário, +1 aura — ver
+--     20260811000000_daily_mission_reward_rebalance.sql) e o +10 de bônus ao
+--     fechar as 3. Missão e bônus são recompensa de valor FIXO e não passam
+--     pelo multiplicador (ver o aviso no topo do arquivo e
+--     20260930000000_aura_fixed_rewards.sql) — o corpo abaixo é idêntico ao
+--     de lá de propósito, para que a ordem de aplicação das duas migrations
+--     não mude o resultado.
 create or replace function public.complete_daily_mission(
   p_user_id uuid,
   p_mission text
@@ -391,7 +414,6 @@ declare
   v_prev_date       date;
   v_prev_streak     integer;
   v_new_streak      integer;
-  v_credited        integer;
   v_mission_reward  integer;
 begin
   if p_mission not in ('post', 'aura', 'comment') then
@@ -421,16 +443,24 @@ begin
   if (p_mission = 'post' and not v_before.created_post and v_after.created_post)
      or (p_mission = 'comment' and not v_before.wrote_comment and v_after.wrote_comment)
      or (p_mission = 'aura' and not v_before.gave_aura and v_after.gave_aura) then
-    v_credited := public.apply_aura_gain(p_user_id, v_mission_reward);
-    insert into public.aura_ledger (user_id, delta, reason) values (p_user_id, v_credited, 'daily_mission_completed');
+    insert into public.user_aura_wallet (user_id, balance) values (p_user_id, v_mission_reward)
+      on conflict (user_id) do update
+        set balance = user_aura_wallet.balance + v_mission_reward, updated_at = now();
+
+    insert into public.aura_ledger (user_id, delta, reason)
+      values (p_user_id, v_mission_reward, 'daily_mission_completed');
   end if;
 
   if v_after.created_post and v_after.wrote_comment and v_after.gave_aura and not v_after.bonus_claimed then
     update public.daily_missions set bonus_claimed = true
       where user_id = p_user_id and mission_date = v_date;
 
-    v_credited := public.apply_aura_gain(p_user_id, 10);
-    insert into public.aura_ledger (user_id, delta, reason) values (p_user_id, v_credited, 'daily_streak_bonus');
+    insert into public.user_aura_wallet (user_id, balance) values (p_user_id, 10)
+      on conflict (user_id) do update
+        set balance = user_aura_wallet.balance + 10, updated_at = now();
+
+    insert into public.aura_ledger (user_id, delta, reason)
+      values (p_user_id, 10, 'daily_streak_bonus');
 
     select last_completed_date, current_streak into v_prev_date, v_prev_streak
       from public.user_streaks where user_id = p_user_id;
@@ -460,8 +490,11 @@ $$;
 revoke execute on function public.complete_daily_mission(uuid, text) from public, anon, authenticated;
 grant execute on function public.complete_daily_mission(uuid, text) to service_role;
 
--- 3d. check_and_award_track_achievements — recompensa de conquista também
---     passa pelo multiplicador.
+-- 3d. check_and_award_track_achievements — recompensa de conquista é valor
+--     fixo (10/25/50/100/250) e NÃO passa pelo multiplicador; o `get
+--     diagnostics` garante que só paga quando a linha em `user_achievements`
+--     realmente entrou nesta iteração. Corpo idêntico ao de
+--     20260930000000_aura_fixed_rewards.sql, pelo mesmo motivo do 3c.
 create or replace function public.check_and_award_track_achievements(
   p_user_id uuid,
   p_track   text,
@@ -470,7 +503,7 @@ create or replace function public.check_and_award_track_achievements(
 set search_path = public as $$
 declare
   v_achievement record;
-  v_credited    integer;
+  v_awarded     integer;
 begin
   for v_achievement in
     select a.id, a.aura_reward
@@ -481,14 +514,24 @@ begin
         select 1 from public.user_achievements ua
         where ua.user_id = p_user_id and ua.achievement_id = a.id
       )
+    order by a.threshold
   loop
     insert into public.user_achievements (user_id, achievement_id)
     values (p_user_id, v_achievement.id)
     on conflict (user_id, achievement_id) do nothing;
 
+    get diagnostics v_awarded = row_count;
+    if v_awarded = 0 then
+      continue;
+    end if;
+
     if v_achievement.aura_reward > 0 then
-      v_credited := public.apply_aura_gain(p_user_id, v_achievement.aura_reward);
-      insert into public.aura_ledger (user_id, delta, reason) values (p_user_id, v_credited, 'achievement_unlocked');
+      insert into public.user_aura_wallet (user_id, balance) values (p_user_id, v_achievement.aura_reward)
+        on conflict (user_id) do update
+          set balance = user_aura_wallet.balance + v_achievement.aura_reward, updated_at = now();
+
+      insert into public.aura_ledger (user_id, delta, reason)
+        values (p_user_id, v_achievement.aura_reward, 'achievement_unlocked');
     end if;
   end loop;
 end;

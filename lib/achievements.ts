@@ -21,7 +21,10 @@ export type AchievementTier = (typeof ACHIEVEMENT_TIERS)[number]
  * Limiares dos 5 níveis por trilha — posts/comments/followers compartilham a
  * mesma progressão (1/10/50/100/1000); aura_earned (total histórico de Aura
  * ganha, ver `user_aura_wallet.total_earned`) tem a sua própria
- * (10/300/1000/10000/50000).
+ * (10/300/1000/10000/50000). O contador de aura_earned ignora a Aura paga
+ * pelas próprias conquistas (20260930000001_aura_earned_excludes_achievement_rewards.sql),
+ * senão a recompensa por farmar empurraria o contador que decide a próxima
+ * recompensa.
  */
 export const ACHIEVEMENT_THRESHOLDS: Record<AchievementTrack, Record<AchievementTier, number>> = {
   posts: { bronze: 1, silver: 10, gold: 50, platinum: 100, diamond: 1000 },

@@ -10,9 +10,14 @@
  * - Comentar em periférico: `credit_peripheral_comment_creation_aura` (20260830010000_peripheral_comments_and_votes.sql)
  * - Review de periférico: `credit_peripheral_review_creation_aura` (20260901000000_peripheral_reviews.sql)
  * - Curtida recebida: `toggle_forum_aura`/`toggle_forum_post_aura`/`toggle_peripheral_comment_aura` (20260923000002_aura_trust_tiers.sql)
- * - Missões diárias: `complete_daily_mission` (20260811000000_daily_mission_reward_rebalance.sql)
+ * - Missões diárias: `complete_daily_mission` (20260930000000_aura_fixed_rewards.sql)
  * - Inscrição YouTube: `confirm_youtube_subscription` (20260921120000_youtube_subscription_achievement.sql)
- * - Conquistas por trilha: seeds de `20260808_achievements_streak.sql` e `20260919000000_aura_earned_achievements.sql`
+ * - Conquistas por trilha: seeds de `20260808_achievements_streak.sql` e `20260919000000_aura_earned_achievements.sql`,
+ *   creditadas por `check_and_award_track_achievements` (20260930000000_aura_fixed_rewards.sql)
+ *
+ * A divisão "passa / não passa pelo multiplicador" é a de
+ * 20260930000000_aura_fixed_rewards.sql: multiplicador só em ganho por
+ * atividade; recompensa de valor fixo paga o número cheio.
  * - Gastos (loja/VIP/nome): `redeem_aura_item`, `purchase_vip_with_aura`, `change_display_name_with_aura` (20260921*.sql, 20260922000007_redeem_aura_item_vip_discount.sql)
  */
 
@@ -67,7 +72,7 @@ export const AURA_GAIN_ENTRIES: AuraFaqEntry[] = [
     id: "achievements",
     question: "Desbloquear conquistas (posts, comentários, seguidores, Aura farmada)",
     answer:
-      "Cada trilha tem 5 níveis (Bronze a Diamante) que pagam Aura ao serem alcançados: 10 / 25 / 50 / 100 / 250. A trilha \"Aura farmada\" usa o total histórico ganho, não o saldo atual.",
+      "Cada trilha tem 5 níveis (Bronze a Diamante) que pagam Aura ao serem alcançados: 10 / 25 / 50 / 100 / 250. Esses valores são fixos — não passam pelo multiplicador. A trilha \"Aura farmada\" usa o total histórico ganho (não o saldo atual), e a Aura que vem das próprias conquistas não conta nesse total.",
   },
 ]
 

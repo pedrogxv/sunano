@@ -1,10 +1,24 @@
--- ATENÇÃO: as seções 3c e 3d deste arquivo foram reescritas depois que ele
--- foi criado, para casar com 20260930000000_aura_fixed_rewards.sql. Missão
--- diária, bônus de ofensiva e conquista de trilha são recompensa de valor
--- FIXO e não passam pelo multiplicador — ele vale só para ganho por
--- atividade. Os dois arquivos definem essas funções com o mesmo corpo de
--- propósito: como esta migration ainda pode estar pendente em produção (o
--- nome é datado à frente), a ordem de aplicação não pode mudar o resultado.
+-- ATENÇÃO: várias seções deste arquivo foram reescritas depois que ele foi
+-- criado, para casar com o que superou cada função:
+--   - 3c/3d (complete_daily_mission, check_and_award_track_achievements):
+--     casam com 20260930000000_aura_fixed_rewards.sql. Missão diária, bônus
+--     de ofensiva e conquista de trilha são recompensa de valor FIXO e não
+--     passam pelo multiplicador — ele vale só para ganho por atividade.
+--   - apply_aura_gain, toggle_forum_aura, toggle_forum_post_aura: casam com
+--     20260922000005_apply_aura_gain_vip_bonus.sql e
+--     20260923000002_aura_trust_tiers.sql (bônus de VIP e limites por tier
+--     de confiança). Reescritas depois de um INCIDENTE REAL em 29/08/2026:
+--     uma edição neste arquivo tocando só 3c/3d fez o processo de deploy
+--     reexecutar o arquivo INTEIRO, revertendo essas três funções para a
+--     versão de agosto (sem VIP, sem tier de confiança) em produção por
+--     alguns minutos, até ser corrigido por
+--     20260930000003_restore_apply_aura_gain_vip_bonus_and_trust_tiers.sql.
+--     Ver [[editing-old-migrations-reruns-whole-file]] na memória do
+--     projeto.
+-- Cada uma dessas funções mantém corpo IDÊNTICO ao do arquivo que a supera,
+-- de propósito: como esta migration ainda pode estar pendente em produção
+-- (o nome é datado à frente), a ordem de aplicação não pode mudar o
+-- resultado, e reexecutar este arquivo por inteiro nunca mais reverte nada.
 --
 -- Multiplicador de Aura por Ofensiva (streak) — quanto mais dias seguidos
 -- completando as missões diárias, maior o bônus percentual em cima do ganho
@@ -57,11 +71,15 @@ $$;
 --    sempre > 0 — para remoções/undo continue somando direto na wallet como
 --    hoje, sem passar por aqui.
 -- ────────────────────────────────────────────
--- ⚠️  SUPERSEDIDA por 20260922000005_apply_aura_gain_vip_bonus.sql (bônus
---     passivo de VIP). Se as duas migrations existirem no banco, a que rodou
---     por ÚLTIMO vence — nunca aplique só este arquivo isoladamente contra um
---     banco que já rodou a 20260922000005, ou o bônus de VIP some sem erro
---     nenhum. Ver [[supabase-migration-drift]] na memória do projeto.
+-- Corpo mantido IDÊNTICO ao de 20260922000005_apply_aura_gain_vip_bonus.sql
+-- (bônus passivo de VIP) de propósito, pelo mesmo motivo do aviso em 3c/3d
+-- mais abaixo: um incidente real em 29/08/2026 mostrou que editar este
+-- arquivo faz o Postgres reexecutar TODAS as funções dele, não só a que foi
+-- tocada — inclusive esta, que ninguém pretendia mudar. Manter os dois
+-- arquivos com o mesmo corpo verbatim é o que impede uma futura edição
+-- (ou reaplicação) deste arquivo de reverter o bônus de VIP em silêncio. Ver
+-- 20260930000003_restore_apply_aura_gain_vip_bonus_and_trust_tiers.sql e
+-- [[editing-old-migrations-reruns-whole-file]] na memória do projeto.
 create or replace function public.apply_aura_gain(
   p_user_id     uuid,
   p_base_amount integer
@@ -69,10 +87,14 @@ create or replace function public.apply_aura_gain(
 language plpgsql security definer
 set search_path = public as $$
 declare
-  v_streak_days integer;
-  v_bps         integer;
-  v_bonus       integer;
-  v_total       integer;
+  v_streak_days    integer;
+  v_streak_bps     integer;
+  v_vip_bps        integer;
+  v_bps            integer;
+  v_bonus          integer;
+  v_total          integer;
+  v_account_tier   text;
+  v_vip_expires_at timestamptz;
 begin
   if p_base_amount <= 0 then
     return p_base_amount;
@@ -87,7 +109,20 @@ begin
   from public.user_streaks
   where user_id = p_user_id;
 
-  v_bps := public.streak_aura_multiplier_bps(coalesce(v_streak_days, 0));
+  v_streak_days := coalesce(v_streak_days, 0);
+  v_streak_bps := public.streak_aura_multiplier_bps(v_streak_days);
+
+  select account_tier, vip_expires_at into v_account_tier, v_vip_expires_at
+  from public.user_profiles
+  where id = p_user_id;
+
+  v_vip_bps := case
+    when not public.is_vip_active(v_account_tier, v_vip_expires_at) then 0
+    when v_streak_days > 0 then 25
+    else 40
+  end;
+
+  v_bps := v_streak_bps + v_vip_bps;
   -- Arredonda pra cima: um bônus de "1.1%" sobre um ganho de 1 não pode virar
   -- 0 por truncamento e desaparecer.
   v_bonus := ceil(p_base_amount * v_bps / 10000.0)::integer;
@@ -107,21 +142,22 @@ revoke execute on function public.apply_aura_gain(uuid, integer) from public, an
 grant execute on function public.apply_aura_gain(uuid, integer) to service_role;
 
 -- ────────────────────────────────────────────
--- 3. Repassa toggle_forum_aura (comment/blog_comment), toggle_forum_post_aura
---    e complete_daily_mission para creditar ganhos via apply_aura_gain — só
---    o "insert ... on conflict" de crédito positivo muda; undo/remoção e
---    troca like<->dislike continuam ajustando a wallet direto pelo delta
---    líquido, sem multiplicador (é estorno, não ganho novo).
+-- 3. toggle_forum_aura (comment/blog_comment), toggle_forum_post_aura,
+--    complete_daily_mission e check_and_award_track_achievements. Nas duas
+--    primeiras, undo/remoção e troca like<->dislike continuam ajustando a
+--    wallet direto pelo delta líquido, sem multiplicador (é estorno, não
+--    ganho novo) e sem consumir o teto por par. Os corpos abaixo já
+--    refletem tudo que superou a versão original de agosto (ver ATENÇÃO no
+--    topo do arquivo), não a versão original desta migration.
 -- ────────────────────────────────────────────
 
 -- 3a. toggle_forum_aura (comment | blog_comment) — mesma assinatura de
 --     20260823000000_forum_post_aura_from_comments.sql.
--- ⚠️  SUPERSEDIDA por 20260922000006_daily_aura_limit_vip_double.sql e,
---     por fim, 20260923000002_aura_trust_tiers.sql (teto diário/por par por
---     tier de confiança — é a proteção antifraude por trás da leva de
---     banimentos "Damnatio Memoriae", v0.3.4). A que rodar por ÚLTIMO no
---     banco vence. Nunca aplique só este arquivo isoladamente contra um banco
---     que já tem essas duas — reverteria os limites antifarm em silêncio.
+-- Corpo mantido IDÊNTICO ao de 20260923000002_aura_trust_tiers.sql (teto
+-- diário/por par por tier de confiança — a proteção antifraude por trás da
+-- leva de banimentos "Damnatio Memoriae", v0.3.4), pelo mesmo motivo do
+-- aviso em apply_aura_gain acima: ver
+-- [[editing-old-migrations-reruns-whole-file]].
 create or replace function public.toggle_forum_aura(
   p_giver_id    uuid,
   p_target_type text,
@@ -136,6 +172,10 @@ declare
   v_existing_kind     text;
   v_new_count         integer;
   v_given_today       integer;
+  v_given_to_pair     integer;
+  v_daily_limit       integer;
+  v_pair_limit        integer;
+  v_skip_gain_bonus   boolean;
   v_received_reason   text;
   v_removed_reason    text;
   v_disliked_reason   text;
@@ -151,6 +191,13 @@ begin
   if p_kind not in ('like', 'dislike') then
     raise exception 'invalid kind';
   end if;
+
+  select daily_limit, pair_limit, skip_gain_bonus
+    into v_daily_limit, v_pair_limit, v_skip_gain_bonus
+  from public.get_aura_trust_limits(p_giver_id);
+  v_daily_limit := coalesce(v_daily_limit, 50);
+  v_pair_limit := coalesce(v_pair_limit, 3);
+  v_skip_gain_bonus := coalesce(v_skip_gain_bonus, false);
 
   if p_target_type = 'comment' then
     select user_id, post_id into v_author_id, v_post_id from public.forum_comments where id = p_target_id for update;
@@ -190,8 +237,22 @@ begin
         'comment_aura_disliked', 'blog_comment_aura_disliked'
       );
 
-    if v_given_today >= 50 then
+    if v_given_today >= v_daily_limit then
       raise exception 'daily_aura_limit_reached';
+    end if;
+
+    select count(*) into v_given_to_pair
+    from public.aura_ledger
+    where giver_id = p_giver_id
+      and user_id = v_author_id
+      and created_at >= now() - interval '24 hours'
+      and reason in (
+        'comment_aura_received', 'blog_comment_aura_received',
+        'comment_aura_disliked', 'blog_comment_aura_disliked'
+      );
+
+    if v_given_to_pair >= v_pair_limit then
+      raise exception 'daily_pair_aura_limit_reached';
     end if;
 
     if p_target_type = 'comment' then
@@ -204,9 +265,18 @@ begin
     v_ledger_reason := case when p_kind = 'like' then v_received_reason else v_disliked_reason end;
 
     if p_kind = 'like' then
-      -- Só o "like" é ganho de verdade — passa pelo multiplicador; o
-      -- "dislike" tira aura do autor, então segue o caminho antigo (sem bônus).
-      v_credited := public.apply_aura_gain(v_author_id, v_count_delta);
+      -- Só o "like" é ganho de verdade — passa pelo multiplicador, exceto
+      -- quando o doador é conta nova (v_skip_gain_bonus): aí credita o
+      -- delta puro, sem bônus de streak/VIP do receptor, mesma régua já
+      -- usada pro "dislike" (que também nunca passou pelo multiplicador).
+      if v_skip_gain_bonus then
+        v_credited := v_count_delta;
+        insert into public.user_aura_wallet (user_id, balance) values (v_author_id, greatest(v_credited, 0))
+          on conflict (user_id) do update
+            set balance = greatest(user_aura_wallet.balance + v_credited, 0), updated_at = now();
+      else
+        v_credited := public.apply_aura_gain(v_author_id, v_count_delta);
+      end if;
       insert into public.aura_ledger (user_id, delta, reason, source_comment_id, source_blog_comment_id, giver_id)
       values (
         v_author_id, v_credited, v_ledger_reason,
@@ -228,7 +298,8 @@ begin
     end if;
 
   elsif v_existing_kind = p_kind then
-    -- Desfaz (undo): estorno do que foi dado, sem multiplicador.
+    -- Desfaz (undo): estorno do que foi dado, sem multiplicador, não
+    -- consome o teto por par.
     if p_target_type = 'comment' then
       delete from public.forum_aura where giver_id = p_giver_id and comment_id = p_target_id;
     else
@@ -254,7 +325,7 @@ begin
 
   else
     -- Trocando like<->dislike: sem multiplicador (é ajuste líquido, não
-    -- ganho novo) — mesma régua da versão anterior.
+    -- ganho novo), mas conta como concessão nova pros dois tetos.
     select count(*) into v_given_today
     from public.aura_ledger
     where giver_id = p_giver_id
@@ -264,8 +335,22 @@ begin
         'comment_aura_disliked', 'blog_comment_aura_disliked'
       );
 
-    if v_given_today >= 50 then
+    if v_given_today >= v_daily_limit then
       raise exception 'daily_aura_limit_reached';
+    end if;
+
+    select count(*) into v_given_to_pair
+    from public.aura_ledger
+    where giver_id = p_giver_id
+      and user_id = v_author_id
+      and created_at >= now() - interval '24 hours'
+      and reason in (
+        'comment_aura_received', 'blog_comment_aura_received',
+        'comment_aura_disliked', 'blog_comment_aura_disliked'
+      );
+
+    if v_given_to_pair >= v_pair_limit then
+      raise exception 'daily_pair_aura_limit_reached';
     end if;
 
     if p_target_type = 'comment' then
@@ -317,10 +402,9 @@ revoke execute on function public.toggle_forum_aura(uuid, text, uuid, text) from
 grant execute on function public.toggle_forum_aura(uuid, text, uuid, text) to service_role;
 
 -- 3b. toggle_forum_post_aura (post like/undo, sem dislike) — mesma
---     assinatura de 20260824000000_forum_post_direct_aura.sql.
--- ⚠️  SUPERSEDIDA por 20260922000006_daily_aura_limit_vip_double.sql e
---     20260923000002_aura_trust_tiers.sql — mesmo risco e mesmo motivo do
---     aviso em toggle_forum_aura acima.
+--     assinatura de 20260824000000_forum_post_direct_aura.sql. Corpo
+--     mantido IDÊNTICO ao de 20260923000002_aura_trust_tiers.sql, mesmo
+--     motivo do aviso em apply_aura_gain acima.
 create or replace function public.toggle_forum_post_aura(
   p_giver_id uuid,
   p_post_id  uuid
@@ -328,12 +412,23 @@ create or replace function public.toggle_forum_post_aura(
 language plpgsql security definer
 set search_path = public as $$
 declare
-  v_author_id   uuid;
-  v_exists      boolean;
-  v_new_count   integer;
-  v_given_today integer;
-  v_credited    integer;
+  v_author_id       uuid;
+  v_exists          boolean;
+  v_new_count       integer;
+  v_given_today     integer;
+  v_given_to_pair   integer;
+  v_daily_limit     integer;
+  v_pair_limit      integer;
+  v_skip_gain_bonus boolean;
+  v_credited        integer;
 begin
+  select daily_limit, pair_limit, skip_gain_bonus
+    into v_daily_limit, v_pair_limit, v_skip_gain_bonus
+  from public.get_aura_trust_limits(p_giver_id);
+  v_daily_limit := coalesce(v_daily_limit, 50);
+  v_pair_limit := coalesce(v_pair_limit, 3);
+  v_skip_gain_bonus := coalesce(v_skip_gain_bonus, false);
+
   select user_id into v_author_id from public.forum_posts where id = p_post_id for update;
 
   if v_author_id is null then
@@ -371,8 +466,22 @@ begin
         'comment_aura_disliked', 'blog_comment_aura_disliked'
       );
 
-    if v_given_today >= 50 then
+    if v_given_today >= v_daily_limit then
       raise exception 'daily_aura_limit_reached';
+    end if;
+
+    select count(*) into v_given_to_pair
+    from public.aura_ledger
+    where giver_id = p_giver_id
+      and user_id = v_author_id
+      and created_at >= now() - interval '24 hours'
+      and reason in (
+        'post_aura_received', 'comment_aura_received', 'blog_comment_aura_received',
+        'comment_aura_disliked', 'blog_comment_aura_disliked'
+      );
+
+    if v_given_to_pair >= v_pair_limit then
+      raise exception 'daily_pair_aura_limit_reached';
     end if;
 
     insert into public.forum_aura (giver_id, post_id, kind) values (p_giver_id, p_post_id, 'like');
@@ -380,7 +489,14 @@ begin
     update public.forum_posts set aura_count = forum_posts.aura_count + 1 where id = p_post_id
       returning forum_posts.aura_count into v_new_count;
 
-    v_credited := public.apply_aura_gain(v_author_id, 1);
+    if v_skip_gain_bonus then
+      v_credited := 1;
+      insert into public.user_aura_wallet (user_id, balance) values (v_author_id, greatest(v_credited, 0))
+        on conflict (user_id) do update
+          set balance = greatest(user_aura_wallet.balance + v_credited, 0), updated_at = now();
+    else
+      v_credited := public.apply_aura_gain(v_author_id, 1);
+    end if;
 
     insert into public.aura_ledger (user_id, delta, reason, source_post_id, giver_id)
     values (v_author_id, v_credited, 'post_aura_received', p_post_id, p_giver_id);

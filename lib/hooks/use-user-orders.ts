@@ -27,6 +27,22 @@ export type UserOrder = {
   pix_qr_code_base64: string | null
   tracking_code: string | null
   carrier: string | null
+  /**
+   * Para onde o pedido vai. Null = ainda não informado — o cliente pulou o
+   * endereço no checkout e precisa completar aqui antes do despacho.
+   */
+  shipping_address: {
+    recipient: string
+    phone: string
+    postal_code: string
+    street: string
+    number: string
+    complement: string | null
+    neighborhood: string
+    city: string
+    state: string
+    filled_at: string
+  } | null
 }
 
 export type UserOrderFilters = {

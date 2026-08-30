@@ -17,10 +17,6 @@ import {
   Trash2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BR_STATES } from "@/lib/br-states"
 import { useCart } from "@/components/providers/cart-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
@@ -30,63 +26,77 @@ import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
 import { CARD_SURFACE, CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
+import {
+  CheckoutPayerCard,
+  formatCepInput,
+  formatCpfInput,
+  formatPhoneInput,
+  type PayerForm,
+} from "@/components/store/CheckoutPayerCard"
+import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/RemoveCartItemDialog"
+import { CheckoutShippingCard } from "@/components/store/CheckoutShippingCard"
+import {
+  EMPTY_SHIPPING_FORM,
+  isShippingFormComplete,
+  shippingFormToPayload,
+  type ShippingForm,
+} from "@/components/store/ShippingAddressFields"
 
 type PaymentMethod = "pix" | "credit_card"
 
-function formatCpfInput(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 11)
-  return digits
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d)/, "$1.$2")
-    .replace(/(\d{3})(\d{1,2})$/, "$1-$2")
+const EMPTY_PAYER_FORM: PayerForm = {
+  name: "",
+  document: "",
+  phone: "",
+  postalCode: "",
+  street: "",
+  number: "",
+  complement: "",
+  neighborhood: "",
+  city: "",
+  state: "",
 }
 
-function formatPhoneInput(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 11)
-  if (digits.length <= 10) {
-    return digits.replace(/(\d{2})(\d{4})(\d{0,4})/, (_, ddd, p1, p2) => (p2 ? `(${ddd}) ${p1}-${p2}` : `(${ddd}) ${p1}`))
-  }
-  return digits.replace(/(\d{2})(\d{5})(\d{0,4})/, (_, ddd, p1, p2) => (p2 ? `(${ddd}) ${p1}-${p2}` : `(${ddd}) ${p1}`))
-}
-
-function formatCepInput(value: string): string {
-  const digits = value.replace(/\D/g, "").slice(0, 8)
-  return digits.replace(/(\d{5})(\d{1,3})/, "$1-$2")
-}
-
-interface CepLookupResponse {
-  error?: string
-  street?: string
-  neighborhood?: string
-  city?: string
-  state?: string
+interface PayerInfoResponse {
+  fullName?: string | null
+  cpf?: string | null
+  email?: string | null
+  phone?: string | null
+  postalCode?: string | null
+  street?: string | null
+  number?: string | null
+  complement?: string | null
+  neighborhood?: string | null
+  city?: string | null
+  state?: string | null
+  hasCompletePayerInfo?: boolean
+  hasCompleteAddressInfo?: boolean
+  shippingAddressRequired?: boolean
 }
 
 export default function CheckoutPage() {
-  const { items, increment, decrement, remove } = useCart()
+  const { items, increment, decrement, remove, clear } = useCart()
   const { user, loading: authLoading } = useAuthUser()
   const { openLogin, openRegister } = useAuthModal()
 
-  const [guestName, setGuestName] = useState("")
-  const [guestDocument, setGuestDocument] = useState("")
-  const [guestPhone, setGuestPhone] = useState("")
-  const [guestPostalCode, setGuestPostalCode] = useState("")
-  const [guestStreet, setGuestStreet] = useState("")
-  const [guestNumber, setGuestNumber] = useState("")
-  const [guestComplement, setGuestComplement] = useState("")
-  const [guestNeighborhood, setGuestNeighborhood] = useState("")
-  const [guestCity, setGuestCity] = useState("")
-  const [guestState, setGuestState] = useState("")
-  const [cepLoading, setCepLoading] = useState(false)
-  const [cepError, setCepError] = useState<string | null>(null)
+  const [payerForm, setPayerForm] = useState<PayerForm>(EMPTY_PAYER_FORM)
+  const [shippingForm, setShippingForm] = useState<ShippingForm>(EMPTY_SHIPPING_FORM)
+  const [editingShipping, setEditingShipping] = useState(false)
+  // "Informar depois": o pedido nasce sem endereço e a pessoa completa em
+  // "Meus Pedidos". Só existe enquanto o endereço é opcional no servidor.
+  const [shippingSkipped, setShippingSkipped] = useState(false)
+  const [shippingRequired, setShippingRequired] = useState(false)
+  const [payerEmail, setPayerEmail] = useState<string | null>(null)
+  const [editingPayer, setEditingPayer] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix")
+  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
   const { cardSurchargePercent } = useStoreSettings()
 
   // Para usuário logado: só sabemos se falta nome/CPF (ou endereço, no caso
   // de cartão) no perfil depois de consultar o servidor — até lá, não
-  // mostramos nem escondemos os campos para não "piscar" o formulário à toa.
+  // mostramos nem escondemos o card para não "piscar" o formulário à toa.
   const [payerInfoChecked, setPayerInfoChecked] = useState(false)
   const [needsPayerInfo, setNeedsPayerInfo] = useState(false)
   const [needsAddressInfo, setNeedsAddressInfo] = useState(false)
@@ -100,10 +110,38 @@ export default function CheckoutPage() {
     let cancelled = false
     fetch("/api/store/checkout/payer-info")
       .then((res) => (res.ok ? res.json() : { hasCompletePayerInfo: true, hasCompleteAddressInfo: true }))
-      .then((data: { hasCompletePayerInfo?: boolean; hasCompleteAddressInfo?: boolean }) => {
+      .then((data: PayerInfoResponse) => {
         if (cancelled) return
         setNeedsPayerInfo(!data.hasCompletePayerInfo)
         setNeedsAddressInfo(!data.hasCompleteAddressInfo)
+        setShippingRequired(Boolean(data.shippingAddressRequired))
+        setPayerEmail(data.email ?? null)
+        // Pré-preenche a entrega com o último endereço salvo no perfil — é o
+        // mesmo conjunto de campos, e na esmagadora maioria das compras
+        // entrega e cobrança são o mesmo lugar. A pessoa pode editar.
+        setShippingForm({
+          recipient: data.fullName ?? "",
+          phone: data.phone ? formatPhoneInput(data.phone) : "",
+          postalCode: data.postalCode ? formatCepInput(data.postalCode) : "",
+          street: data.street ?? "",
+          number: data.number ?? "",
+          complement: data.complement ?? "",
+          neighborhood: data.neighborhood ?? "",
+          city: data.city ?? "",
+          state: data.state ?? "",
+        })
+        setPayerForm({
+          name: data.fullName ?? "",
+          document: data.cpf ? formatCpfInput(data.cpf) : "",
+          phone: data.phone ? formatPhoneInput(data.phone) : "",
+          postalCode: data.postalCode ? formatCepInput(data.postalCode) : "",
+          street: data.street ?? "",
+          number: data.number ?? "",
+          complement: data.complement ?? "",
+          neighborhood: data.neighborhood ?? "",
+          city: data.city ?? "",
+          state: data.state ?? "",
+        })
       })
       .catch(() => {
         // Falha na checagem não deve bloquear a compra: a rota de checkout
@@ -117,39 +155,56 @@ export default function CheckoutPage() {
     }
   }, [user, authLoading])
 
-  const showAddressFields = paymentMethod === "credit_card" && needsAddressInfo
+  const requireAddress = paymentMethod === "credit_card"
+  // Cartão exige endereço; se o perfil não tem, o card já abre em edição.
+  const payerIncomplete = needsPayerInfo || (requireAddress && needsAddressInfo)
 
-  async function handleCepChange(value: string) {
-    const formatted = formatCepInput(value)
-    setGuestPostalCode(formatted)
-    setCepError(null)
+  // Trocar para cartão com endereço faltando abre a edição sozinho — a
+  // pessoa não precisa descobrir que tem um botão "Editar" para clicar.
+  useEffect(() => {
+    if (payerIncomplete) setEditingPayer(true)
+  }, [payerIncomplete])
 
-    const digits = formatted.replace(/\D/g, "")
-    if (digits.length !== 8) return
-
-    setCepLoading(true)
-    try {
-      const res = await fetch(`/api/cep/${digits}`)
-      const data = (await res.json()) as CepLookupResponse
-      if (!res.ok) {
-        setCepError(data.error ?? "Não foi possível buscar o CEP.")
-        return
-      }
-      setGuestStreet(data.street ?? "")
-      setGuestNeighborhood(data.neighborhood ?? "")
-      setGuestCity(data.city ?? "")
-      setGuestState(data.state ?? "")
-    } catch {
-      setCepError("Não foi possível buscar o CEP.")
-    } finally {
-      setCepLoading(false)
+  // Endereço obrigatório e ainda incompleto: abre a edição sozinho em vez de
+  // deixar a pessoa clicar em "Gerar PIX" e tomar um erro.
+  useEffect(() => {
+    if (payerInfoChecked && shippingRequired && !isShippingFormComplete(shippingForm)) {
+      setEditingShipping(true)
     }
-  }
+    // Só na primeira checagem — reabrir a cada tecla digitada travaria a edição.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payerInfoChecked, shippingRequired])
+
+  // O servidor decide de verdade se o pedido precisa de envio (coluna
+  // `requires_shipping` dos produtos) — aqui só mostramos o card, já que
+  // hoje todo item da loja é físico. Endereço enviado num pedido que não
+  // precisa de envio é descartado no backend, não gravado.
+  const shippingComplete = isShippingFormComplete(shippingForm)
+  const shippingPending = shippingRequired && !shippingComplete
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
   const cardTotal = computeCardPriceCents(total, cardSurchargePercent)
   const payableTotal = paymentMethod === "credit_card" ? cardTotal : total
   const hasPreOrderItem = items.some((i) => i.sale_type === "pre_order")
+
+  function requestRemoval(item: (typeof items)[number], fromDecrement: boolean) {
+    setPendingRemoval({
+      productId: item.productId,
+      variantId: item.variantId,
+      optionIds: item.variantOptions.map((o) => o.optionId),
+      name: item.name,
+      image: item.image,
+      quantity: item.quantity,
+      priceCents: item.priceCents,
+      fromDecrement,
+    })
+  }
+
+  function confirmRemoval() {
+    if (!pendingRemoval) return
+    remove(pendingRemoval.productId, pendingRemoval.variantId, pendingRemoval.optionIds)
+    setPendingRemoval(null)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -157,6 +212,22 @@ export default function CheckoutPage() {
 
     if (!user) {
       openLogin("/checkout")
+      return
+    }
+
+    if (editingPayer) {
+      setError("Confirme os dados da cobrança antes de continuar.")
+      return
+    }
+
+    if (editingShipping) {
+      setError("Confirme o endereço de entrega antes de continuar.")
+      return
+    }
+
+    if (shippingPending) {
+      setError("Informe o endereço de entrega para finalizar a compra.")
+      setEditingShipping(true)
       return
     }
 
@@ -174,19 +245,25 @@ export default function CheckoutPage() {
             quantity: i.quantity,
           })),
           paymentMethod,
-          ...(needsPayerInfo ? { guestName, guestDocument: guestDocument.replace(/\D/g, "") } : {}),
-          ...(showAddressFields
+          guestName: payerForm.name,
+          guestDocument: payerForm.document.replace(/\D/g, ""),
+          ...(requireAddress
             ? {
-                guestPhone: guestPhone.replace(/\D/g, ""),
-                guestPostalCode: guestPostalCode.replace(/\D/g, ""),
-                guestStreet,
-                guestNumber,
-                guestComplement: guestComplement || undefined,
-                guestNeighborhood,
-                guestCity,
-                guestState,
+                guestPhone: payerForm.phone.replace(/\D/g, ""),
+                guestPostalCode: payerForm.postalCode.replace(/\D/g, ""),
+                guestStreet: payerForm.street,
+                guestNumber: payerForm.number,
+                guestComplement: payerForm.complement || undefined,
+                guestNeighborhood: payerForm.neighborhood,
+                guestCity: payerForm.city,
+                guestState: payerForm.state,
               }
             : {}),
+          // Só manda o endereço quando está completo e não foi pulado: o
+          // servidor recusa um endereço pela metade (e faz bem — pedido com
+          // rua e sem número parece pronto para despachar e não é).
+          ...(shippingComplete && !shippingSkipped ? shippingFormToPayload(shippingForm) : {}),
+          ...(shippingSkipped ? { skipShippingAddress: true } : {}),
         }),
       })
 
@@ -200,6 +277,12 @@ export default function CheckoutPage() {
       if (!res.ok || !data.orderId) {
         throw new Error(data.error ?? "Erro ao iniciar checkout")
       }
+
+      // Cobrança criada: o pedido já existe (aguardando pagamento) e o
+      // estoque já foi reservado, então o carrinho cumpriu seu papel. Deixar
+      // os itens ali faz a pessoa achar que a compra não foi registrada — e
+      // um segundo checkout geraria um pedido duplicado.
+      clear()
 
       // Cartão: a Asaas hospeda a página de pagamento — redireciona pra lá
       // (não é navegação client-side, é troca completa de domínio).
@@ -217,6 +300,20 @@ export default function CheckoutPage() {
       setError(err instanceof Error ? err.message : "Erro ao iniciar checkout")
       setLoading(false)
     }
+  }
+
+  // `loading` continua true depois do clear() até a navegação acontecer: sem
+  // isso, esvaziar o carrinho renderizaria o estado "carrinho vazio" por uma
+  // fração de segundo, como se a compra tivesse sumido.
+  if (items.length === 0 && loading) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-4 text-center">
+        <Loader2 className="size-8 animate-spin text-emerald-400" />
+        <p className="text-sm text-muted-foreground">
+          {paymentMethod === "pix" ? "Gerando sua cobrança PIX..." : "Redirecionando para o pagamento..."}
+        </p>
+      </div>
+    )
   }
 
   if (items.length === 0) {
@@ -304,7 +401,7 @@ export default function CheckoutPage() {
             {/* Qty controls + line total */}
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <button
-                onClick={() => remove(item.productId, item.variantId, optionIds)}
+                onClick={() => requestRemoval(item, false)}
                 aria-label={`Remover ${item.name}`}
                 className="text-muted-foreground/60 transition-colors hover:text-red-400"
               >
@@ -312,8 +409,12 @@ export default function CheckoutPage() {
               </button>
               <div className="flex items-center gap-1">
                 <button
-                  onClick={() => decrement(item.productId, item.variantId, optionIds)}
-                  aria-label="Diminuir quantidade"
+                  onClick={() =>
+                    item.quantity <= 1
+                      ? requestRemoval(item, true)
+                      : decrement(item.productId, item.variantId, optionIds)
+                  }
+                  aria-label={item.quantity <= 1 ? `Remover ${item.name}` : "Diminuir quantidade"}
                   className="flex size-6 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
                 >
                   <Minus className="size-3" />
@@ -453,158 +554,28 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {!authLoading && user && payerInfoChecked && needsPayerInfo && (
-          <div className={cn("space-y-4 rounded-xl border p-4", CARD_SURFACE)}>
-            <p className="text-xs text-muted-foreground">
-              Faltam alguns dados para gerar a cobrança PIX. Eles ficam salvos no seu perfil.
-            </p>
-
-            <div className="space-y-2">
-              <Label>Nome completo *</Label>
-              <Input
-                required
-                minLength={2}
-                maxLength={200}
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
-                placeholder="Seu nome completo"
-                className="border-border/80 bg-muted/30"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>CPF *</Label>
-              <Input
-                required
-                inputMode="numeric"
-                value={guestDocument}
-                onChange={(e) => setGuestDocument(formatCpfInput(e.target.value))}
-                placeholder="000.000.000-00"
-                maxLength={14}
-                className="border-border/80 bg-muted/30"
-              />
-              <p className="text-[10px] text-muted-foreground/60">
-                Exigido pelo Banco Central para identificar o pagador de transações PIX.
-              </p>
-            </div>
-          </div>
+        {!authLoading && user && payerInfoChecked && (
+          <CheckoutPayerCard
+            form={payerForm}
+            onChange={setPayerForm}
+            email={payerEmail}
+            requireAddress={requireAddress}
+            editing={editingPayer}
+            onEditingChange={setEditingPayer}
+            incomplete={payerIncomplete}
+          />
         )}
 
-        {!authLoading && user && payerInfoChecked && showAddressFields && (
-          <div className={cn("space-y-4 rounded-xl border p-4", CARD_SURFACE)}>
-            <p className="text-xs text-muted-foreground">
-              Pagamentos com cartão exigem telefone e endereço de cobrança. Eles ficam salvos no seu perfil.
-            </p>
-
-            <div className="space-y-2">
-              <Label>Telefone *</Label>
-              <Input
-                required
-                inputMode="numeric"
-                value={guestPhone}
-                onChange={(e) => setGuestPhone(formatPhoneInput(e.target.value))}
-                placeholder="(00) 00000-0000"
-                maxLength={15}
-                className="border-border/80 bg-muted/30"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>CEP *</Label>
-                <div className="relative">
-                  <Input
-                    required
-                    inputMode="numeric"
-                    value={guestPostalCode}
-                    onChange={(e) => handleCepChange(e.target.value)}
-                    placeholder="00000-000"
-                    maxLength={9}
-                    className="border-border/80 bg-muted/30"
-                  />
-                  {cepLoading && (
-                    <Loader2 className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-                  )}
-                </div>
-                {cepError && <p className="text-[10px] text-red-400">{cepError}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label>Número *</Label>
-                <Input
-                  required
-                  maxLength={20}
-                  value={guestNumber}
-                  onChange={(e) => setGuestNumber(e.target.value)}
-                  placeholder="123"
-                  className="border-border/80 bg-muted/30"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Endereço *</Label>
-              <Input
-                required
-                maxLength={200}
-                value={guestStreet}
-                onChange={(e) => setGuestStreet(e.target.value)}
-                placeholder="Rua, avenida..."
-                className="border-border/80 bg-muted/30"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Complemento</Label>
-              <Input
-                maxLength={100}
-                value={guestComplement}
-                onChange={(e) => setGuestComplement(e.target.value)}
-                placeholder="Apto, bloco... (opcional)"
-                className="border-border/80 bg-muted/30"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Bairro *</Label>
-              <Input
-                required
-                maxLength={100}
-                value={guestNeighborhood}
-                onChange={(e) => setGuestNeighborhood(e.target.value)}
-                placeholder="Seu bairro"
-                className="border-border/80 bg-muted/30"
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2 space-y-2">
-                <Label>Cidade *</Label>
-                <Input
-                  required
-                  maxLength={100}
-                  value={guestCity}
-                  onChange={(e) => setGuestCity(e.target.value)}
-                  placeholder="Sua cidade"
-                  className="border-border/80 bg-muted/30"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>UF *</Label>
-                <Select value={guestState} onValueChange={setGuestState} required>
-                  <SelectTrigger className="w-full border-border/80 bg-muted/30">
-                    <SelectValue placeholder="UF" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {BR_STATES.map((state) => (
-                      <SelectItem key={state.uf} value={state.uf}>
-                        {state.uf}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
+        {!authLoading && user && payerInfoChecked && (
+          <CheckoutShippingCard
+            form={shippingForm}
+            onChange={setShippingForm}
+            required={shippingRequired}
+            editing={editingShipping}
+            onEditingChange={setEditingShipping}
+            skipped={shippingSkipped}
+            onSkippedChange={setShippingSkipped}
+          />
         )}
 
         {error && (
@@ -615,13 +586,17 @@ export default function CheckoutPage() {
           <Button
             type="submit"
             className="w-full gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:hover:translate-y-0"
-            disabled={loading || authLoading || !payerInfoChecked}
+            disabled={loading || authLoading || !payerInfoChecked || editingPayer || editingShipping}
           >
             {loading ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
                 {paymentMethod === "pix" ? "Gerando cobrança PIX..." : "Preparando pagamento..."}
               </>
+            ) : editingPayer ? (
+              "Confirme os dados da cobrança"
+            ) : editingShipping ? (
+              "Confirme o endereço de entrega"
             ) : paymentMethod === "pix" ? (
               "Gerar PIX"
             ) : (
@@ -636,6 +611,14 @@ export default function CheckoutPage() {
           </Link>
         </div>
       </form>
+
+      <RemoveCartItemDialog
+        pending={pendingRemoval}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoval(null)
+        }}
+        onConfirm={confirmRemoval}
+      />
     </div>
   )
 }

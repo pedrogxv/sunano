@@ -31,6 +31,20 @@ interface AsaasSubscriptionWebhookPayload {
   subscription?: { id: string }
 }
 
+/**
+ * As RPCs `activate_vip_subscription`/`renew_vip_subscription` sinalizam
+ * "essa assinatura não existe aqui" com `raise exception
+ * 'subscription_not_found'`, que o supabase-js entrega como um PostgrestError
+ * de code P0001 (raise_exception) e `message` igual ao texto levantado.
+ */
+function isSubscriptionNotFound(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { message?: unknown }).message === "subscription_not_found"
+  )
+}
+
 function safeTokenMatch(provided: string, expected: string): boolean {
   const a = Buffer.from(provided)
   const b = Buffer.from(expected)
@@ -162,6 +176,23 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true, ignored: payload.event })
   } catch (err) {
+    // `subscription_not_found` é erro PERMANENTE, não transitório: a Asaas
+    // está entregando um evento de uma assinatura que não existe aqui
+    // (assinatura criada num ambiente/base anterior, ou cujo CHECKOUT_PAID
+    // nunca chegou ao servidor — comum em sandbox, onde a URL do ngrok muda
+    // e os eventos ficam presos na fila). Retentar não vai mudar o
+    // resultado, e devolver 500 só faz a Asaas penalizar o webhook e
+    // reenfileirar para sempre. Reconhecemos com 200 + `ignored` e logamos
+    // para investigação. Qualquer outro erro (rede, banco fora) continua
+    // 500, que é onde o retry da Asaas de fato ajuda.
+    if (isSubscriptionNotFound(err)) {
+      console.error(
+        "[webhooks/asaas-subscription] assinatura desconhecida — evento descartado:",
+        payload.event,
+        payload.payment?.subscription ?? payload.subscription?.id ?? payload.checkout?.id
+      )
+      return NextResponse.json({ received: true, ignored: "subscription_not_found" })
+    }
     console.error("[webhooks/asaas-subscription] Handler error:", err)
     return NextResponse.json({ error: "Handler error" }, { status: 500 })
   }

@@ -46,14 +46,21 @@ function AlertDialogOverlay({
 
 function AlertDialogContent({
   className,
+  overlayClassName,
   size = "default",
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   size?: "default" | "sm"
+  /**
+   * Para diálogos abertos de dentro de camadas que já sobem o z-index (o
+   * CartDrawer usa z-[60]): sem isso, o overlay padrão (z-50) fica atrás e
+   * o diálogo aparece "por baixo" da tela que o abriu.
+   */
+  overlayClassName?: string
 }) {
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      <AlertDialogOverlay className={overlayClassName} />
       <AlertDialogPrimitive.Content
         data-slot="alert-dialog-content"
         data-size={size}

@@ -1,5 +1,7 @@
 import "server-only"
 
+import { PIX_EXPIRATION_MINUTES } from "@/lib/server/repositories/orders-repository"
+
 /**
  * Cliente Asaas — SERVIDOR APENAS.
  *
@@ -127,8 +129,10 @@ export interface AsaasPayment {
 }
 
 /**
- * Cria a cobrança PIX. `dueDate` é obrigatório pela API mas, para PIX, só
- * define o vencimento do QR code (hoje mesmo — cobrança à vista).
+ * Cria a cobrança PIX. `dueDate` é obrigatório pela API e marca o vencimento
+ * da COBRANÇA (hoje mesmo — à vista), mas não o do QR code: a Asaas devolve
+ * `expirationDate` um ano à frente independente do `dueDate` (verificado na
+ * API). Quem limita o prazo de verdade é `getPixQrCode`.
  */
 export async function createPixPayment(params: CreatePixPaymentParams): Promise<AsaasPayment> {
   const dueDate = new Date().toISOString().slice(0, 10)
@@ -154,15 +158,31 @@ export interface PixQrCode {
 
 export async function getPixQrCode(paymentId: string): Promise<PixQrCode> {
   const result = await asaasFetch<PixQrCode>(`/payments/${encodeURIComponent(paymentId)}/pixQrCode`)
+
+  // Asaas devolve "2022-06-24 23:59:59" (sem fuso, sem "T") — normaliza para
+  // ISO 8601 antes de gravar em coluna timestamptz.
+  const gatewayExpiration = new Date(result.expirationDate.replace(" ", "T") + "-03:00")
+
+  // O prazo da Asaas é o do QR code, não o nosso: ela devolve um ano à frente
+  // (o QR PIX dela é de longa validade, independente do `dueDate`). Quem
+  // cancela o pedido e devolve o estoque é o cron, que usa
+  // PIX_EXPIRATION_MINUTES — gravar o prazo cru fazia o cliente ver "expira em
+  // 8781:12:43" e, pior, deixava o pedido pending pra sempre segurando
+  // estoque, porque o cron filtra justamente por `pix_expires_at < now`.
+  // Vale o que vencer primeiro.
+  const ourExpiration = new Date(Date.now() + PIX_EXPIRATION_MINUTES * 60_000)
+  const expiration =
+    Number.isNaN(gatewayExpiration.getTime()) || gatewayExpiration > ourExpiration
+      ? ourExpiration
+      : gatewayExpiration
+
   return {
     ...result,
     // Asaas devolve só o base64 cru; a MisticPay já devolve um data URI
     // completo, então normalizamos aqui para os dois terem o mesmo contrato
     // (consumido direto por <img src>).
     encodedImage: `data:image/png;base64,${result.encodedImage}`,
-    // Asaas devolve "2022-06-24 23:59:59" (sem fuso, sem "T") — normaliza para
-    // ISO 8601 antes de gravar em coluna timestamptz.
-    expirationDate: result.expirationDate.replace(" ", "T") + "-03:00",
+    expirationDate: expiration.toISOString(),
   }
 }
 
@@ -307,6 +327,10 @@ export interface AsaasPaymentRefund {
 export interface AsaasPaymentStatus {
   id: string
   status: string
+  // Cobrança removida no painel. A Asaas NÃO devolve 404 para ela — o objeto
+  // vem normalmente com esta flag —, então é por aqui que confirmamos um
+  // evento PAYMENT_DELETED em vez de confiar só no webhook.
+  deleted?: boolean
   // Preenchido quando o payment pertence a uma assinatura recorrente
   // (subscription) — é assim que descobrimos o `asaas_subscription_id` real
   // após o primeiro pagamento de um checkout com chargeTypes: ["RECURRENT"],

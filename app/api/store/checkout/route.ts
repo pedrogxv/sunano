@@ -14,6 +14,10 @@ import {
   payerInfoSchema,
   payerAddressSchema,
 } from "@/lib/server/validation/guest-checkout"
+import {
+  isShippingAddressRequired,
+  parseOptionalShippingAddress,
+} from "@/lib/server/validation/shipping-address"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
 import {
@@ -78,6 +82,22 @@ const checkoutBodySchema = z.object({
   guestCity: payerAddressSchema.shape.guestCity.optional(),
   guestState: payerAddressSchema.shape.guestState.optional(),
   paymentMethod: z.enum(["pix", "credit_card"]).default("pix"),
+  // Endereço de ENTREGA (distinto do endereço de cobrança `guest*` acima,
+  // que a Asaas exige no customer do cartão). Cada campo é `unknown` aqui
+  // porque a validação real acontece em `parseOptionalShippingAddress`, que
+  // precisa distinguir "não mandou nada" (legítimo enquanto é opcional) de
+  // "mandou pela metade" (recusado).
+  shippingRecipient: z.unknown().optional(),
+  shippingPhone: z.unknown().optional(),
+  shippingPostalCode: z.unknown().optional(),
+  shippingStreet: z.unknown().optional(),
+  shippingNumber: z.unknown().optional(),
+  shippingComplement: z.unknown().optional(),
+  shippingNeighborhood: z.unknown().optional(),
+  shippingCity: z.unknown().optional(),
+  shippingState: z.unknown().optional(),
+  /** Marca explícita de "não quero informar agora" — só aceita enquanto o endereço for opcional. */
+  skipShippingAddress: z.boolean().optional(),
 })
 
 /**
@@ -314,7 +334,7 @@ export async function POST(request: NextRequest) {
       db
         .from("store_products")
         .select(
-          "id, name, price_cents, stock, images, type, condition, is_active, is_sold_out"
+          "id, name, price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping"
         )
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
@@ -623,8 +643,13 @@ export async function POST(request: NextRequest) {
     // Perfil sem nome/CPF: o próprio checkout aceita esses dados no corpo
     // da requisição (a tela mostra os campos quando o perfil está
     // incompleto) e completa o cadastro aqui — não existe uma tela separada
-    // de "editar perfil" para isso hoje.
-    if (!payerName || !payerDocument) {
+    // de "editar perfil" para isso hoje. O corpo também chega com o perfil
+    // já completo quando o usuário clica em "Editar" no card de dados da
+    // cobrança: nesse caso o que ele digitou vale mais que o que está salvo.
+    const payerInfoSubmitted =
+      parsedBody.data.guestName !== undefined ||
+      parsedBody.data.guestDocument !== undefined
+    if (!payerName || !payerDocument || payerInfoSubmitted) {
       const payer = payerInfoSchema.safeParse(parsedBody.data)
       if (!payer.success) {
         await revertDecrements(db, decrementedLines)
@@ -696,7 +721,12 @@ export async function POST(request: NextRequest) {
         addressProfile?.state
       )
 
-      if (hasCompleteAddress) {
+      const addressSubmitted =
+        parsedBody.data.guestPostalCode !== undefined ||
+        parsedBody.data.guestStreet !== undefined ||
+        parsedBody.data.guestPhone !== undefined
+
+      if (hasCompleteAddress && !addressSubmitted) {
         payerAddress = {
           phone: addressProfile!.phone!,
           postalCode: addressProfile!.postal_code!,
@@ -752,6 +782,82 @@ export async function POST(request: NextRequest) {
           )
           return NextResponse.json(errBody, { status })
         }
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // Endereço de ENTREGA
+    // -----------------------------------------------------------------
+    // Só faz sentido pedir se o carrinho tem algo para despachar. Hoje toda a
+    // loja é física (`requires_shipping` default true), mas a decisão vem da
+    // coluna, não de uma suposição — um item digital futuro não deve travar o
+    // checkout pedindo CEP.
+    const needsShipping = validatedLines.some(
+      (line) => line.product.requires_shipping !== false
+    )
+
+    const shippingParse = parseOptionalShippingAddress(parsedBody.data)
+    if (!shippingParse.ok) {
+      await revertDecrements(db, decrementedLines)
+      return NextResponse.json({ error: shippingParse.error }, { status: 400 })
+    }
+    let shippingAddress = shippingParse.address
+
+    // Opcional por ora; vira obrigatório só ligando SHIPPING_ADDRESS_REQUIRED
+    // (env), sem migration nem deploy de código. `skipShippingAddress` é uma
+    // escolha do cliente enquanto é opcional — não pode servir de bypass
+    // depois que passar a ser exigido.
+    if (needsShipping && !shippingAddress && isShippingAddressRequired()) {
+      await revertDecrements(db, decrementedLines)
+      return NextResponse.json(
+        { error: "Informe o endereço de entrega para finalizar a compra." },
+        { status: 400 }
+      )
+    }
+
+    // Endereço informado num carrinho que não precisa de envio é descartado —
+    // não guardamos PII que o pedido não usa (minimização, LGPD Art. 6, III).
+    if (!needsShipping) shippingAddress = null
+
+    // Reaproveita nome e telefone já conhecidos quando o cliente não os
+    // digitou: quem recebe é, por padrão, quem comprou.
+    const shippingColumns = shippingAddress
+      ? {
+          shipping_recipient: shippingAddress.shippingRecipient,
+          shipping_phone: shippingAddress.shippingPhone,
+          shipping_postal_code: shippingAddress.shippingPostalCode,
+          shipping_street: shippingAddress.shippingStreet,
+          shipping_number: shippingAddress.shippingNumber,
+          shipping_complement: shippingAddress.shippingComplement ?? null,
+          shipping_neighborhood: shippingAddress.shippingNeighborhood,
+          shipping_city: shippingAddress.shippingCity,
+          shipping_state: shippingAddress.shippingState,
+          shipping_address_filled_at: new Date().toISOString(),
+        }
+      : {}
+
+    // Guarda o endereço no perfil para pré-preencher a próxima compra. Falha
+    // aqui não derruba o checkout: o dado que importa para despachar é o
+    // snapshot no pedido, gravado logo abaixo no mesmo insert.
+    if (shippingAddress) {
+      const { error: shippingProfileError } = await db
+        .from("user_profiles")
+        .update({
+          phone: shippingAddress.shippingPhone,
+          postal_code: shippingAddress.shippingPostalCode,
+          street: shippingAddress.shippingStreet,
+          number: shippingAddress.shippingNumber,
+          complement: shippingAddress.shippingComplement ?? null,
+          neighborhood: shippingAddress.shippingNeighborhood,
+          city: shippingAddress.shippingCity,
+          state: shippingAddress.shippingState,
+        })
+        .eq("id", user.id)
+      if (shippingProfileError) {
+        console.error(
+          "[checkout] falha ao salvar endereço de entrega no perfil:",
+          shippingProfileError
+        )
       }
     }
 
@@ -844,6 +950,7 @@ export async function POST(request: NextRequest) {
         .from("store_orders")
         .insert({
           ...orderInsert,
+          ...shippingColumns,
           items: orderItems,
           total_cents: cardTotalCents,
           status: "pending",
@@ -953,6 +1060,7 @@ export async function POST(request: NextRequest) {
       .from("store_orders")
       .insert({
         ...orderInsert,
+        ...shippingColumns,
         items: orderItems,
         total_cents: totalCents,
         status: "pending",

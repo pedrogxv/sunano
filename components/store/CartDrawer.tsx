@@ -1,9 +1,20 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/RemoveCartItemDialog"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
 import { computeCardPriceCents } from "@/lib/store-pricing"
@@ -35,6 +46,27 @@ export function CartButton() {
 export function CartDrawer() {
   const { items, count, remove, increment, decrement, clear, isOpen, setOpen } = useCart()
   const { cardSurchargePercent } = useStoreSettings()
+  const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
+  const [confirmingClear, setConfirmingClear] = useState(false)
+
+  function requestRemoval(item: (typeof items)[number], fromDecrement: boolean) {
+    setPendingRemoval({
+      productId: item.productId,
+      variantId: item.variantId,
+      optionIds: item.variantOptions.map((o) => o.optionId),
+      name: item.name,
+      image: item.image,
+      quantity: item.quantity,
+      priceCents: item.priceCents,
+      fromDecrement,
+    })
+  }
+
+  function confirmRemoval() {
+    if (!pendingRemoval) return
+    remove(pendingRemoval.productId, pendingRemoval.variantId, pendingRemoval.optionIds)
+    setPendingRemoval(null)
+  }
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
   const cardTotal = computeCardPriceCents(total, cardSurchargePercent)
@@ -43,7 +75,9 @@ export function CartDrawer() {
   useEffect(() => {
     if (!isOpen) return
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false)
+      // Com um AlertDialog aberto por cima, o Escape é dele — fechar o
+      // drawer junto levaria o usuário embora da tela sem querer.
+      if (e.key === "Escape" && !pendingRemoval && !confirmingClear) setOpen(false)
     }
     document.addEventListener("keydown", onKeyDown)
     document.body.style.overflow = "hidden"
@@ -51,7 +85,7 @@ export function CartDrawer() {
       document.removeEventListener("keydown", onKeyDown)
       document.body.style.overflow = ""
     }
-  }, [isOpen, setOpen])
+  }, [isOpen, setOpen, pendingRemoval, confirmingClear])
 
   if (!isOpen) return null
 
@@ -84,7 +118,7 @@ export function CartDrawer() {
           <div className="flex items-center gap-1">
             {items.length > 0 && (
               <button
-                onClick={clear}
+                onClick={() => setConfirmingClear(true)}
                 className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
               >
                 <Trash2 className="size-3.5" />
@@ -172,7 +206,7 @@ export function CartDrawer() {
                   {/* Qty */}
                   <div className="flex flex-col items-end gap-2">
                     <button
-                      onClick={() => remove(item.productId, item.variantId, optionIds)}
+                      onClick={() => requestRemoval(item, false)}
                       aria-label={`Remover ${item.name}`}
                       className="flex size-8 items-center justify-center rounded-md text-muted-foreground/60 opacity-100 transition-all hover:text-red-400 md:opacity-0 md:group-hover:opacity-100"
                     >
@@ -180,8 +214,12 @@ export function CartDrawer() {
                     </button>
                     <div className="flex items-center gap-1.5">
                       <button
-                        onClick={() => decrement(item.productId, item.variantId, optionIds)}
-                        aria-label="Diminuir quantidade"
+                        onClick={() =>
+                          item.quantity <= 1
+                            ? requestRemoval(item, true)
+                            : decrement(item.productId, item.variantId, optionIds)
+                        }
+                        aria-label={item.quantity <= 1 ? `Remover ${item.name}` : "Diminuir quantidade"}
                         className="flex size-9 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground md:size-7"
                       >
                         <Minus className="size-3.5" />
@@ -238,6 +276,41 @@ export function CartDrawer() {
           </div>
         )}
       </div>
+
+      <RemoveCartItemDialog
+        pending={pendingRemoval}
+        onOpenChange={(open) => {
+          if (!open) setPendingRemoval(null)
+        }}
+        onConfirm={confirmRemoval}
+        elevated
+      />
+
+      <AlertDialog open={confirmingClear} onOpenChange={setConfirmingClear}>
+        <AlertDialogContent className="z-[70]" overlayClassName="z-[69]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar o carrinho?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {count === 1
+                ? "O único item do carrinho será removido."
+                : `Os ${count} itens do carrinho serão removidos.`}{" "}
+              Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                clear()
+                setConfirmingClear(false)
+              }}
+              className="bg-red-600 text-white hover:bg-red-500"
+            >
+              Limpar carrinho
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

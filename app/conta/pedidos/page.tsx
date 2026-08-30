@@ -9,6 +9,7 @@ import {
   Package,
   QrCode,
   ShoppingBag,
+  Truck,
   X,
   XCircle,
 } from "lucide-react"
@@ -49,6 +50,8 @@ import { useUserOrders, pendingPaymentHref, type UserOrder } from "@/lib/hooks/u
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { cn } from "@/lib/utils"
+import { OrderShippingAddressDialog } from "@/components/store/OrderShippingAddressDialog"
+import { formatShippingAddressLine } from "@/components/store/ShippingAddressFields"
 
 const STATUS_LABEL: Record<UserOrder["status"], string> = {
   pending: "Aguardando pagamento",
@@ -280,14 +283,28 @@ function CancelOrderButton({
   )
 }
 
+/**
+ * Estados em que ainda faz sentido o cliente mexer no endereço. Depois de
+ * `shipped` a etiqueta já saiu — o servidor recusa a alteração, então nem
+ * oferecemos o botão. Espelha `SHIPPING_EDITABLE_STATUSES` no repositório.
+ */
+const SHIPPING_EDITABLE: UserOrder["status"][] = ["pending", "paid", "awaiting_shipping_info"]
+
+/** Pago e sem endereço = o pedido está parado esperando o cliente. */
+function needsShippingAddress(order: UserOrder): boolean {
+  return !order.shipping_address && (order.status === "paid" || order.status === "awaiting_shipping_info")
+}
+
 function OrderCard({
   order,
   onViewDetails,
   onCancelled,
+  onEditShipping,
 }: {
   order: UserOrder
   onViewDetails: (order: UserOrder) => void
   onCancelled: () => void
+  onEditShipping: (order: UserOrder) => void
 }) {
   const itemCount = order.items.reduce((sum, i) => sum + (i.quantity ?? 1), 0)
   const summary = order.items.map((i) => i.name).filter(Boolean).join(", ")
@@ -331,6 +348,16 @@ function OrderCard({
             <CancelOrderButton order={order} onCancelled={onCancelled} />
           </>
         )}
+        {needsShippingAddress(order) && (
+          <button
+            type="button"
+            onClick={() => onEditShipping(order)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/40 bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-300 transition-colors hover:bg-blue-500/20"
+          >
+            <Truck className="size-3.5" />
+            Informar endereço
+          </button>
+        )}
       </div>
     </div>
   )
@@ -340,10 +367,12 @@ function OrderDetailsDialog({
   order,
   onOpenChange,
   onCancelled,
+  onEditShipping,
 }: {
   order: UserOrder | null
   onOpenChange: (open: boolean) => void
   onCancelled: () => void
+  onEditShipping: (order: UserOrder) => void
 }) {
   const receipt =
     order?.status === "paid" ? order.misticpay_e2e ?? order.asaas_payment_id ?? null : null
@@ -413,6 +442,34 @@ function OrderDetailsDialog({
                 className="w-full justify-center"
               />
             )}
+
+            <div className="space-y-2 border-t border-border/60 pt-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Endereço de entrega
+              </p>
+              {order.shipping_address ? (
+                <>
+                  <p className="text-sm text-foreground">{order.shipping_address.recipient}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatShippingAddressLine(order.shipping_address)}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-amber-400">
+                  Ainda não informado — o pedido não é despachado até você preencher.
+                </p>
+              )}
+              {SHIPPING_EDITABLE.includes(order.status) && (
+                <button
+                  type="button"
+                  onClick={() => onEditShipping(order)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:underline"
+                >
+                  <Truck className="size-3.5" />
+                  {order.shipping_address ? "Alterar endereço" : "Informar endereço"}
+                </button>
+              )}
+            </div>
 
             {order.tracking_code && (
               <div className="space-y-1 border-t border-border/60 pt-3">
@@ -518,6 +575,8 @@ export default function PedidosPage() {
     },
   })
   const [selectedOrder, setSelectedOrder] = useState<UserOrder | null>(null)
+  // Pedido cujo endereço de entrega está sendo informado/corrigido.
+  const [shippingOrder, setShippingOrder] = useState<UserOrder | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const hasActiveFilters = statusFilter !== "all" || dateFrom !== "" || dateTo !== ""
@@ -614,7 +673,13 @@ export default function PedidosPage() {
           <>
             <div className="space-y-3">
               {orders.map((order) => (
-                <OrderCard key={order.id} order={order} onViewDetails={setSelectedOrder} onCancelled={refetch} />
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  onViewDetails={setSelectedOrder}
+                  onCancelled={refetch}
+                  onEditShipping={setShippingOrder}
+                />
               ))}
             </div>
 
@@ -655,6 +720,20 @@ export default function PedidosPage() {
         order={selectedOrder}
         onOpenChange={(open) => !open && setSelectedOrder(null)}
         onCancelled={refetch}
+        onEditShipping={(order) => {
+          // Fecha o detalhe antes de abrir o endereço: dois dialogs
+          // empilhados brigam pelo foco e pelo scroll lock.
+          setSelectedOrder(null)
+          setShippingOrder(order)
+        }}
+      />
+
+      <OrderShippingAddressDialog
+        orderId={shippingOrder?.id ?? null}
+        existing={shippingOrder?.shipping_address ?? null}
+        open={shippingOrder !== null}
+        onOpenChange={(open) => !open && setShippingOrder(null)}
+        onSaved={refetch}
       />
     </div>
   )

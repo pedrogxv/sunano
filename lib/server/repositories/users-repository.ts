@@ -1455,6 +1455,16 @@ export type UserDataExport = {
     payment_method: string | null
     items: Record<string, unknown>[]
     created_at: string
+    /** Endereço de entrega gravado no pedido (snapshot) — nulo se nunca informado. */
+    shipping_recipient?: string | null
+    shipping_phone?: string | null
+    shipping_postal_code?: string | null
+    shipping_street?: string | null
+    shipping_number?: string | null
+    shipping_complement?: string | null
+    shipping_neighborhood?: string | null
+    shipping_city?: string | null
+    shipping_state?: string | null
   }>
   /** Perfis que este usuário segue. */
   following: Array<{ user_id: string; created_at: string }>
@@ -1507,7 +1517,9 @@ export async function getUserDataExport(
       .order("created_at", { ascending: false }),
     db
       .from("store_orders")
-      .select("id, total_cents, status, payment_method, items, created_at")
+      .select(
+        "id, total_cents, status, payment_method, items, created_at, shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
+      )
       .contains("metadata", { user_id: userId })
       .order("created_at", { ascending: false }),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

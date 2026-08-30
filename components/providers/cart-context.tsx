@@ -184,7 +184,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
-  const clear = useCallback(() => setItems([]), [])
+  /**
+   * Esvazia o carrinho. Grava no localStorage na hora, sem esperar o efeito
+   * de persistência: o checkout limpa o carrinho e navega para a tela do PIX
+   * com `window.location.href` no mesmo tick, e o efeito nunca chegaria a
+   * rodar — o carrinho voltava do storage já na próxima página.
+   */
+  const clear = useCallback(() => {
+    setItems([])
+    try {
+      localStorage.setItem(STORAGE_KEY, "[]")
+    } catch {
+      // Storage indisponível (modo privado, cota): o efeito de persistência
+      // cobre o caso normal, sem navegação.
+    }
+  }, [])
 
   const count = items.reduce((sum, i) => sum + i.quantity, 0)
 

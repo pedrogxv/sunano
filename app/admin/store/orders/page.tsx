@@ -107,6 +107,31 @@ type AdminOrder = {
   misticpay_e2e: string | null
   user_id: string | null
   user_display_name: string | null
+  oversold: OrderOversoldFlag | null
+  /** Para onde despachar. Null = o cliente ainda não informou. */
+  shipping_address: {
+    recipient: string
+    phone: string
+    postal_code: string
+    street: string
+    number: string
+    complement: string | null
+    neighborhood: string
+    city: string
+    state: string
+    filled_at: string
+  } | null
+}
+
+/**
+ * Pedido pago depois de expirar cujo estoque não pôde ser re-reservado — o
+ * item esgotou entre a expiração (que devolveu o estoque) e a confirmação do
+ * pagamento. Precisa de decisão humana: repor ou estornar.
+ */
+type OrderOversoldFlag = {
+  reason: string
+  items: string[]
+  detected_at: string
 }
 
 type OrderCustomer = {
@@ -737,7 +762,18 @@ export default function AdminOrdersPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={order.status} />
+                    <div className="flex flex-col items-start gap-1">
+                      <StatusBadge status={order.status} />
+                      {order.oversold && (
+                        <span
+                          title="Pago após expirar, sem estoque para re-reservar"
+                          className="inline-flex items-center gap-1 rounded-md bg-red-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-red-400"
+                        >
+                          <AlertCircle className="size-2.5" strokeWidth={2.5} />
+                          SEM ESTOQUE
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground">{formatDateTime(order.created_at)}</span>
@@ -952,6 +988,12 @@ function OrderManageDialog({
     }
   }
 
+  // O flag guarda ids (produto ou variante); mostrar o nome do item é bem
+  // mais útil que um UUID para quem vai decidir repor ou estornar.
+  const oversoldNames = (order.oversold?.items ?? [])
+    .map((id) => order.items.find((item) => item.id === id)?.name)
+    .filter((name): name is string => Boolean(name))
+
   return (
     <Dialog open={order !== null} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto border border-border bg-card sm:max-w-lg">
@@ -964,6 +1006,30 @@ function OrderManageDialog({
         </DialogHeader>
 
         <div className="space-y-5">
+          {/* Estoque insuficiente: pago depois de expirar. Vem primeiro no
+              diálogo de propósito — é uma decisão a tomar antes de avançar
+              o pedido no fluxo. */}
+          {order.oversold && (
+            <Alert className="border-red-500/40 bg-red-500/10">
+              <AlertCircle className="size-4 text-red-400" />
+              <AlertDescription className="space-y-1.5 text-xs">
+                <p className="font-bold text-red-400">Vendido sem estoque</p>
+                <p className="text-foreground">
+                  O pagamento foi confirmado depois do PIX expirar. O estoque já tinha sido
+                  devolvido e não havia mais unidades para reservar de novo
+                  {oversoldNames.length > 0 ? ": " : "."}
+                  {oversoldNames.length > 0 && (
+                    <span className="font-semibold">{oversoldNames.join(", ")}</span>
+                  )}
+                </p>
+                <p className="text-muted-foreground">
+                  Detectado em {formatDateTime(order.oversold.detected_at)}. Reponha o estoque
+                  para enviar normalmente, ou extorne o pagamento abaixo.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Cliente */}
           <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
             <p className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -979,6 +1045,36 @@ function OrderManageDialog({
             <p className="text-[10px] text-muted-foreground">
               {order.user_id ? "Usuário cadastrado" : "Compra como convidado"}
             </p>
+          </div>
+
+          {/* Endereço de entrega — snapshot do pedido, não o do perfil atual do cliente */}
+          <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/20 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Endereço de entrega
+            </p>
+            {order.shipping_address ? (
+              <>
+                <p className="text-sm text-foreground">{order.shipping_address.recipient}</p>
+                <p className="text-xs text-muted-foreground">
+                  {[
+                    `${order.shipping_address.street}, ${order.shipping_address.number}`,
+                    order.shipping_address.complement || null,
+                    order.shipping_address.neighborhood,
+                    `${order.shipping_address.city}/${order.shipping_address.state}`,
+                    order.shipping_address.postal_code,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+                {order.shipping_address.phone && (
+                  <p className="text-xs text-muted-foreground">Tel.: {order.shipping_address.phone}</p>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-amber-400">
+                Não informado — o cliente ainda precisa preencher em &ldquo;Meus Pedidos&rdquo;.
+              </p>
+            )}
           </div>
 
           {/* Itens */}
@@ -1071,7 +1167,16 @@ function OrderManageDialog({
                   </div>
                 </div>
               )}
-              <Button onClick={handleAdvance} disabled={advancing} className="w-full gap-2">
+              {next === "shipped" && !order.shipping_address && (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                  Sem endereço de entrega informado — não há para onde despachar.
+                </p>
+              )}
+              <Button
+                onClick={handleAdvance}
+                disabled={advancing || (next === "shipped" && !order.shipping_address)}
+                className="w-full gap-2"
+              >
                 <PackageCheck className="size-4" />
                 {advancing ? "Salvando..." : `Marcar como "${STATUS_LABEL[next]}"`}
               </Button>

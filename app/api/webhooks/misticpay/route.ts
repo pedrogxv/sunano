@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { checkTransaction } from "@/lib/server/integrations/misticpay"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { checkRateLimit } from "@/lib/server/rate-limit"
-import { orderOwnerId } from "@/lib/server/repositories/orders-repository"
+import {
+  orderOwnerId,
+  reReserveStockForLatePayment,
+} from "@/lib/server/repositories/orders-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 
 export const runtime = "nodejs"
@@ -65,6 +68,18 @@ export async function POST(request: NextRequest) {
     // já foi reservado atomicamente no checkout (ver
     // app/api/store/checkout/route.ts e 20260918000000_store_orders_stock_reservation.sql);
     // decrementar de novo neste ponto duplicaria o desconto.
+    // Status ANTES da transição: um pedido que já estava `expired` teve o
+    // estoque devolvido pelo cron de expiração, e precisa reservá-lo de novo
+    // agora que o pagamento entrou (senão a loja vende a mesma unidade duas
+    // vezes). Lido antes do UPDATE porque depois dele a informação some.
+    const { data: priorOrders } = await db
+      .from("store_orders")
+      .select("id, status")
+      .eq("misticpay_transaction_id", transactionId)
+    const wasExpired = new Set(
+      (priorOrders ?? []).filter((o) => o.status === "expired").map((o) => o.id)
+    )
+
     const { data: updatedOrders } = await db
       .from("store_orders")
       .update({
@@ -75,6 +90,15 @@ export async function POST(request: NextRequest) {
       .eq("misticpay_transaction_id", transactionId)
       .neq("status", "paid")
       .select("id, metadata")
+
+    for (const order of updatedOrders ?? []) {
+      if (!wasExpired.has(order.id)) continue
+      try {
+        await reReserveStockForLatePayment(order.id)
+      } catch (err) {
+        console.error("[webhooks/misticpay] reReserveStockForLatePayment:", err)
+      }
+    }
 
     for (const order of updatedOrders ?? []) {
       const ownerId = orderOwnerId(order.metadata as Record<string, unknown> | null)

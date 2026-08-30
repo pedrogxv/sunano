@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import type { Database } from "@/lib/database.types"
 import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
@@ -47,6 +48,74 @@ export const ORDER_FULFILLMENT_FLOW: OrderStatus[] = [
   "delivered",
 ]
 
+/**
+ * Endereço de ENTREGA gravado no pedido. Snapshot: o que vale é para onde
+ * ESTE pedido foi/vai, mesmo que o cliente mude o endereço do perfil depois.
+ * Não confundir com o endereço de COBRANÇA em `user_profiles`, que só existe
+ * porque a Asaas exige no customer do checkout de cartão.
+ */
+export type OrderShippingAddress = {
+  recipient: string
+  phone: string
+  postal_code: string
+  street: string
+  number: string
+  complement: string | null
+  neighborhood: string
+  city: string
+  state: string
+  filled_at: string
+}
+
+/** Colunas cruas de entrega, como vêm do banco (todas nulas até ser preenchido). */
+type RawShippingColumns = {
+  shipping_recipient: string | null
+  shipping_phone: string | null
+  shipping_postal_code: string | null
+  shipping_street: string | null
+  shipping_number: string | null
+  shipping_complement: string | null
+  shipping_neighborhood: string | null
+  shipping_city: string | null
+  shipping_state: string | null
+  shipping_address_filled_at: string | null
+}
+
+const SHIPPING_COLUMNS =
+  "shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state, shipping_address_filled_at"
+
+/**
+ * Colapsa as colunas cruas num objeto único — ou `null` se o endereço ainda
+ * não foi informado. `filled_at` é o marcador oficial de "tem endereço":
+ * checar campo a campo espalharia a mesma regra por várias telas.
+ */
+export function mapShippingAddress(row: Partial<RawShippingColumns> | null | undefined): OrderShippingAddress | null {
+  if (!row?.shipping_address_filled_at) return null
+  if (
+    !row.shipping_recipient ||
+    !row.shipping_postal_code ||
+    !row.shipping_street ||
+    !row.shipping_number ||
+    !row.shipping_neighborhood ||
+    !row.shipping_city ||
+    !row.shipping_state
+  ) {
+    return null
+  }
+  return {
+    recipient: row.shipping_recipient,
+    phone: row.shipping_phone ?? "",
+    postal_code: row.shipping_postal_code,
+    street: row.shipping_street,
+    number: row.shipping_number,
+    complement: row.shipping_complement ?? null,
+    neighborhood: row.shipping_neighborhood,
+    city: row.shipping_city,
+    state: row.shipping_state,
+    filled_at: row.shipping_address_filled_at,
+  }
+}
+
 export type UserOrderSummary = {
   id: string
   status: OrderStatus
@@ -61,10 +130,12 @@ export type UserOrderSummary = {
   pix_qr_code_base64: string | null
   tracking_code: string | null
   carrier: string | null
+  shipping_address: OrderShippingAddress | null
 }
 
 const ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, payment_method, misticpay_e2e, asaas_payment_id, asaas_receipt_url, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier"
+  "id, status, total_cents, items, created_at, payment_method, misticpay_e2e, asaas_payment_id, asaas_receipt_url, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, " +
+  SHIPPING_COLUMNS
 
 /**
  * Lista os pedidos de um usuário logado, mais recentes primeiro.
@@ -103,10 +174,19 @@ export async function listOrdersByUser(
   }
   const total = count ?? 0
   return {
-    orders: (data ?? []) as unknown as UserOrderSummary[],
+    orders: (data ?? []).map(toUserOrderSummary),
     total,
     hasMore: currentPage * size < total,
   }
+}
+
+/**
+ * Converte a linha crua (colunas `shipping_*` achatadas) no formato que as
+ * telas consomem, com o endereço já colapsado em um objeto só.
+ */
+function toUserOrderSummary(row: unknown): UserOrderSummary {
+  const raw = row as UserOrderSummary & RawShippingColumns
+  return { ...raw, shipping_address: mapShippingAddress(raw) }
 }
 
 /** Pedido pendente mais recente do usuário — usado no popover do miniperfil. */
@@ -125,12 +205,23 @@ export async function getLatestPendingOrderByUser(userId: string): Promise<UserO
     console.error("[orders-repository] getLatestPendingOrderByUser:", error)
     return null
   }
-  return data as unknown as UserOrderSummary | null
+  return data ? toUserOrderSummary(data) : null
 }
 
 // ---------------------------------------------------------------------------
 // Admin
 // ---------------------------------------------------------------------------
+
+/**
+ * Pedido pago depois de expirar cujo estoque não pôde ser re-reservado (o
+ * item esgotou no intervalo). Gravado por `reReserveStockForLatePayment`;
+ * exige ação manual: repor o estoque ou estornar o pagamento.
+ */
+export type OrderOversoldFlag = {
+  reason: string
+  items: string[]
+  detected_at: string
+}
 
 export type AdminOrderRow = {
   id: string
@@ -157,10 +248,15 @@ export type AdminOrderRow = {
   /** Presente quando o pedido foi feito por um usuário logado (metadata.user_id). */
   user_id: string | null
   user_display_name: string | null
+  /** Não-nulo = vendido sem estoque, precisa de intervenção manual. */
+  oversold: OrderOversoldFlag | null
+  /** Para onde despachar. Null = o cliente ainda não informou (fluxo awaiting_shipping_info). */
+  shipping_address: OrderShippingAddress | null
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, updated_at, payment_method, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, misticpay_transaction_id, misticpay_e2e"
+  "id, status, total_cents, items, created_at, updated_at, payment_method, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, misticpay_transaction_id, misticpay_e2e, " +
+  SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
   id: string
@@ -183,7 +279,7 @@ type AdminOrderRawRow = {
   asaas_payment_id: string | null
   misticpay_transaction_id: string | null
   misticpay_e2e: string | null
-}
+} & RawShippingColumns
 
 export type AdminOrderListResult = {
   orders: AdminOrderRow[]
@@ -271,6 +367,8 @@ export async function listOrdersForAdmin(filters?: {
       misticpay_e2e: row.misticpay_e2e,
       user_id: userId,
       user_display_name: userId ? profiles[userId]?.display_name ?? null : null,
+      oversold: (row.metadata?.oversold as OrderOversoldFlag | undefined) ?? null,
+      shipping_address: mapShippingAddress(row),
     }
   })
 
@@ -408,12 +506,23 @@ export async function advanceOrderStatus(
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, metadata")
+    .select(`id, status, metadata, ${SHIPPING_COLUMNS}`)
     .eq("id", id)
     .maybeSingle()
 
   if (!existing) {
     return { ok: false, error: "Pedido não encontrado.", status: 404 }
+  }
+
+  // Marcar como enviado sem saber para onde é um erro operacional que só
+  // aparece depois, quando o pacote não chega. O admin já não vê o botão
+  // nesse caso; aqui é a trava que vale (a UI pode mudar, esta não).
+  if (nextStatus === "shipped" && !mapShippingAddress(existing as Partial<RawShippingColumns>)) {
+    return {
+      ok: false,
+      error: "Este pedido não tem endereço de entrega informado — não é possível marcá-lo como enviado.",
+      status: 400,
+    }
   }
 
   const currentStatus = existing.status as OrderStatus
@@ -723,6 +832,88 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
   return { expired_count: orders.length, stock_restored_count: stockRestoredCount, errors }
 }
 
+export type ExpireOrderByPaymentResult = {
+  /** `false` quando nenhum pedido `pending` casou — já pago, já expirado, ou não é da loja. */
+  expired: boolean
+  orderId: string | null
+  errors: string[]
+}
+
+/**
+ * Expira UM pedido a partir do id da cobrança no gateway, devolvendo o
+ * estoque — versão pontual do que `expireStalePendingOrders` faz em lote.
+ *
+ * Existe para os webhooks de vencimento/remoção da Asaas
+ * (`PAYMENT_OVERDUE`, `PAYMENT_DELETED`): esperar o cron significaria até 15
+ * min com o estoque preso e o cliente vendo um QR code morto na tela. Aqui a
+ * própria origem já avisou que a cobrança não é mais pagável.
+ *
+ * Mesma proteção de corrida do cron, e ela é o ponto central desta função: o
+ * `.eq("status", "pending")` faz parte do UPDATE, então quem decide se o
+ * estoque volta é o banco, não uma leitura anterior. Se um webhook de
+ * pagamento marcou o pedido como `paid` no mesmo instante, o UPDATE não
+ * afeta nenhuma linha e nada é devolvido ao inventário.
+ */
+export async function expireOrderByPaymentId(
+  paymentId: string
+): Promise<ExpireOrderByPaymentResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: expiredOrders, error } = await db
+    .from("store_orders")
+    .update({ status: "expired", updated_at: new Date().toISOString() })
+    .eq("asaas_payment_id", paymentId)
+    .eq("status", "pending")
+    .select("id, items, metadata")
+
+  if (error) {
+    console.error("[orders-repository] expireOrderByPaymentId — update:", error)
+    return { expired: false, orderId: null, errors: [error.message] }
+  }
+
+  const order = (expiredOrders ?? [])[0] as
+    | { id: string; items: Record<string, unknown>[]; metadata: Record<string, unknown> | null }
+    | undefined
+
+  if (!order) return { expired: false, orderId: null, errors: [] }
+
+  const ownerId = orderOwnerId(order.metadata)
+  if (ownerId) {
+    await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
+  }
+
+  const cart = (order.items ?? []) as Array<{
+    id: string
+    quantity: number
+    variant_id?: string | null
+  }>
+
+  const results = await Promise.all(
+    cart.map(async (item) => {
+      const { data: restored } = item.variant_id
+        ? await db.rpc("increment_variant_stock", {
+            p_variant_id: item.variant_id,
+            p_quantity: item.quantity,
+          })
+        : await db.rpc("increment_store_stock", {
+            p_product_id: item.id,
+            p_quantity: item.quantity,
+          })
+      return { item, restored: Boolean(restored) }
+    })
+  )
+
+  const errors: string[] = []
+  for (const { item, restored } of results) {
+    if (restored) continue
+    const message = `Falha ao devolver estoque do pedido expirado ${order.id} (item ${item.variant_id ?? item.id})`
+    console.error("[orders-repository] expireOrderByPaymentId —", message)
+    errors.push(message)
+  }
+
+  return { expired: true, orderId: order.id, errors }
+}
+
 /**
  * Reconcilia `refunded_cents`/`status` de um pedido a partir do estado real
  * do pagamento na Asaas. Existe porque `refundOrder` só cobre estornos
@@ -733,6 +924,84 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
  * porque um estorno pode ficar `PENDING` ou virar `CANCELLED` sem que
  * dinheiro tenha voltado de fato.
  */
+/**
+ * Re-reserva o estoque de um pedido que foi pago DEPOIS de já ter expirado.
+ *
+ * Janela real: o cron de expiração devolve o estoque ao inventário, mas o
+ * gateway ainda pode confirmar um PIX pago pouco antes do vencimento (ou
+ * reentregar o webhook atrasado). Sem isso o pedido vira `paid` com as
+ * unidades de volta na prateleira — a loja vende o mesmo item duas vezes.
+ *
+ * Quando o item já esgotou nesse meio tempo o decremento falha (a RPC é
+ * atômica e recusa estoque insuficiente): aí o pedido é sinalizado para
+ * revisão manual em vez de mentir sobre o estoque — o dinheiro entrou e
+ * alguém precisa decidir entre repor ou estornar.
+ */
+export async function reReserveStockForLatePayment(orderId: string): Promise<{
+  restocked: boolean
+  oversoldItems: string[]
+}> {
+  const db = createSupabaseAdminClient()
+
+  const { data: order } = await db
+    .from("store_orders")
+    .select("items, metadata")
+    .eq("id", orderId)
+    .single()
+
+  const cart = (order?.items ?? []) as Array<{
+    id: string
+    quantity: number
+    variant_id?: string | null
+  }>
+
+  const results = await Promise.all(
+    cart.map(async (item) => {
+      const { data: ok } = item.variant_id
+        ? await db.rpc("decrement_variant_stock", {
+            p_variant_id: item.variant_id,
+            p_quantity: item.quantity,
+          })
+        : await db.rpc("decrement_store_stock", {
+            p_product_id: item.id,
+            p_quantity: item.quantity,
+          })
+      return { item, ok: Boolean(ok) }
+    })
+  )
+
+  const oversoldItems = results.filter((r) => !r.ok).map((r) => r.item.variant_id ?? r.item.id)
+
+  if (oversoldItems.length > 0) {
+    console.error(
+      `[orders-repository] reReserveStockForLatePayment — pedido ${orderId} pago após expirar, sem estoque para: ${oversoldItems.join(", ")}`
+    )
+
+    // Sinaliza no próprio pedido para o admin agir (repor ou estornar) sem
+    // depender de alguém ler o log do servidor. Vai em `metadata` porque o
+    // admin já carrega essa coluna — nenhuma migration nem coluna nova.
+    const metadata = (order?.metadata ?? {}) as Record<string, unknown>
+    const { error: flagError } = await db
+      .from("store_orders")
+      .update({
+        metadata: {
+          ...metadata,
+          oversold: {
+            reason: "late_payment_after_expiry",
+            items: oversoldItems,
+            detected_at: new Date().toISOString(),
+          },
+        },
+      })
+      .eq("id", orderId)
+    if (flagError) {
+      console.error("[orders-repository] reReserveStockForLatePayment — flag:", flagError)
+    }
+  }
+
+  return { restocked: oversoldItems.length === 0, oversoldItems }
+}
+
 export async function syncOrderRefundState(paymentId: string): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -795,6 +1064,107 @@ export async function syncOrderRefundState(paymentId: string): Promise<Repositor
     )
   } catch (err) {
     console.error("[orders-repository] syncOrderRefundState — syncCommissionForRefund:", err)
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Estados em que o dono do pedido ainda pode informar/corrigir o endereço de
+ * entrega. Depois de `shipped` a etiqueta já foi gerada — mudar o destino
+ * aqui só criaria divergência entre o que o cliente vê e para onde o pacote
+ * foi; nesse ponto o caminho é o suporte, não a auto-edição.
+ */
+const SHIPPING_EDITABLE_STATUSES: OrderStatus[] = ["pending", "paid", "awaiting_shipping_info"]
+
+/**
+ * Grava o endereço de entrega de um pedido — chamada tanto pelo checkout
+ * (via insert direto, não por aqui) quanto pela tela "Meus Pedidos" quando o
+ * cliente pulou o preenchimento e o pedido já foi pago.
+ *
+ * Autorização: exige o `userId` do dono e filtra por `metadata->>user_id` no
+ * próprio UPDATE. Não basta checar antes e gravar depois — o filtro no
+ * comando é o que impede que um id de pedido adivinhado/vazado seja
+ * sobrescrito por outra conta.
+ *
+ * Efeito colateral deliberado: um pedido `paid` que ganha endereço avança
+ * para `awaiting_shipping_info` — é exatamente o significado desse status na
+ * fila do admin ("tem endereço, falta despachar"). Pedido ainda `pending`
+ * não muda de status: o pagamento é que manda.
+ */
+export async function setOrderShippingAddress(
+  orderId: string,
+  userId: string,
+  address: {
+    recipient: string
+    phone: string
+    postalCode: string
+    street: string
+    number: string
+    complement?: string | null
+    neighborhood: string
+    city: string
+    state: string
+  }
+): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: existing } = await db
+    .from("store_orders")
+    .select("id, status, metadata")
+    .eq("id", orderId)
+    .eq("metadata->>user_id", userId)
+    .maybeSingle()
+
+  // Mesma resposta para "não existe" e "não é seu": responder 403 aqui
+  // confirmaria a existência de um pedido de outra pessoa.
+  if (!existing) {
+    return { ok: false, error: "Pedido não encontrado.", status: 404 }
+  }
+
+  const currentStatus = existing.status as OrderStatus
+  if (!SHIPPING_EDITABLE_STATUSES.includes(currentStatus)) {
+    return {
+      ok: false,
+      error:
+        currentStatus === "shipped" || currentStatus === "delivered"
+          ? "Este pedido já foi despachado — fale com o suporte para alterar o endereço."
+          : "Não é possível informar endereço para este pedido.",
+      status: 400,
+    }
+  }
+
+  const update: Database["public"]["Tables"]["store_orders"]["Update"] = {
+    shipping_recipient: address.recipient,
+    shipping_phone: address.phone,
+    shipping_postal_code: address.postalCode,
+    shipping_street: address.street,
+    shipping_number: address.number,
+    shipping_complement: address.complement ?? null,
+    shipping_neighborhood: address.neighborhood,
+    shipping_city: address.city,
+    shipping_state: address.state,
+    shipping_address_filled_at: new Date().toISOString(),
+  }
+  if (currentStatus === "paid") update.status = "awaiting_shipping_info"
+
+  const { error } = await db
+    .from("store_orders")
+    .update(update)
+    .eq("id", orderId)
+    .eq("metadata->>user_id", userId)
+
+  if (error) {
+    console.error("[orders-repository] setOrderShippingAddress:", error)
+    return { ok: false, error: "Não foi possível salvar o endereço de entrega.", status: 500 }
+  }
+
+  if (update.status) {
+    await notifyOrderStatusChange({
+      userId,
+      orderId,
+      status: "awaiting_shipping_info",
+    })
   }
 
   return { ok: true }

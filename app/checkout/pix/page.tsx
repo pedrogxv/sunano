@@ -3,11 +3,12 @@
 import { Suspense, useEffect, useState, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CheckCircle, Copy, Loader2, ShoppingBag, Check, Receipt } from "lucide-react"
+import { CheckCircle, Clock, Copy, Loader2, ShoppingBag, Check, Receipt } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
+import { PixCountdown } from "@/components/store/PixCountdown"
 
 interface OrderItem {
   id?: string
@@ -32,6 +33,7 @@ interface OrderStatus {
   qrCodeBase64: string | null
   items: OrderItem[]
   createdAt: string
+  pixExpiresAt: string | null
   paymentMethod: string | null
   receipt: OrderReceipt | null
 }
@@ -48,6 +50,10 @@ function PixCheckoutContent() {
   const [order, setOrder] = useState<OrderStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  // O cron de expiração roda a cada 15 min, então o pedido pode continuar
+  // `pending` na API depois do prazo vencido. A contagem regressiva zerando
+  // já basta pra tratar a tela como expirada — o servidor confirma depois.
+  const [locallyExpired, setLocallyExpired] = useState(false)
 
   const fetchOrder = useCallback(async () => {
     if (!orderId) return
@@ -73,9 +79,12 @@ function PixCheckoutContent() {
       return
     }
     fetchOrder()
+    // Sem prazo não há mais o que confirmar: parar o polling evita bater na
+    // API a cada 4s pra sempre numa aba esquecida aberta.
+    if (locallyExpired) return
     const interval = setInterval(fetchOrder, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
-  }, [orderId, fetchOrder])
+  }, [orderId, fetchOrder, locallyExpired])
 
   useEffect(() => {
     if (order?.status === "paid") {
@@ -83,6 +92,8 @@ function PixCheckoutContent() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.status])
+
+  const handleExpired = useCallback(() => setLocallyExpired(true), [])
 
   function handleCopy() {
     if (!order?.copyPaste) return
@@ -224,15 +235,38 @@ function PixCheckoutContent() {
     )
   }
 
-  if (order.status === "expired") {
+  if (order.status === "expired" || locallyExpired) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
-        <p className="text-muted-foreground">
-          O tempo para pagamento deste PIX expirou. Volte à loja e finalize a compra novamente.
-        </p>
-        <Link href="/loja">
-          <Button variant="outline">Voltar à loja</Button>
-        </Link>
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-5 px-4 py-10 text-center">
+        <div className="flex size-16 items-center justify-center rounded-full bg-red-500/15">
+          <Clock className="size-8 text-red-400" />
+        </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-black text-foreground">PIX expirado</h1>
+          <p className="text-sm text-muted-foreground">
+            O prazo para pagar o pedido #{orderNumber(order.id)} acabou e o código PIX perdeu a
+            validade. <span className="font-semibold text-foreground">Nada foi cobrado</span> — os
+            itens voltaram ao estoque.
+          </p>
+          <p className="text-xs text-muted-foreground/70">
+            Se você pagou nos últimos minutos, não pague de novo: a confirmação pode levar um
+            instante e o pedido aparece como pago em Meus pedidos.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Link href="/loja">
+            <Button className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500">
+              <ShoppingBag className="size-4" />
+              Comprar novamente
+            </Button>
+          </Link>
+          <Link href="/conta/pedidos">
+            <Button variant="outline" className="gap-2">
+              <Receipt className="size-4" />
+              Ver meus pedidos
+            </Button>
+          </Link>
+        </div>
       </div>
     )
   }
@@ -258,6 +292,10 @@ function PixCheckoutContent() {
       </div>
 
       <div className="text-3xl font-black text-emerald-400">{formatBRL(order.totalCents)}</div>
+
+      {order.pixExpiresAt && (
+        <PixCountdown expiresAt={order.pixExpiresAt} onExpired={handleExpired} />
+      )}
 
       {order.qrCodeBase64 && (
         // eslint-disable-next-line @next/next/no-img-element

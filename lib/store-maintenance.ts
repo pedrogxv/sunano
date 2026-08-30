@@ -2,6 +2,13 @@
 // A checagem de segurança (bloquear pedidos) sempre depende só de
 // isStoreMaintenanceEnabled() — o countdown em getStoreLaunchAt() é
 // puramente informativo para a UI, nunca decide sozinho se a loja abre.
+//
+// IMPORTANTE: há consumidores client-side (`components/auth/auth-user.tsx` e
+// `components/account/AccountSection.tsx`, que escondem o item "Programa de
+// Afiliados"). No browser a variante sem NEXT_PUBLIC_ não existe, então
+// STORE_MAINTENANCE_MODE sozinha faz esta função retornar false no client e a
+// UI vaza. Sempre defina NEXT_PUBLIC_STORE_MAINTENANCE_MODE com o mesmo valor,
+// em TODOS os ambientes (local e Vercel). Ver .env.example.
 
 export function isStoreMaintenanceEnabled() {
   const value = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE

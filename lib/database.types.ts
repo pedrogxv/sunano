@@ -820,6 +820,8 @@ export type Database = {
           condition: "new" | "used" | "opened"
           condition_notes: string | null
           sale_type: "pre_order" | "ready_stock" | "normal"
+          /** false = produto que não é enviado (digital/serviço) — o checkout não pede endereço de entrega. */
+          requires_shipping: boolean
           is_active: boolean
           is_sold_out: boolean
           is_featured: boolean
@@ -846,6 +848,7 @@ export type Database = {
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
           sale_type?: "pre_order" | "ready_stock" | "normal"
+          requires_shipping?: boolean
           is_active?: boolean
           is_sold_out?: boolean
           is_featured?: boolean
@@ -872,6 +875,7 @@ export type Database = {
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
           sale_type?: "pre_order" | "ready_stock" | "normal"
+          requires_shipping?: boolean
           is_active?: boolean
           is_sold_out?: boolean
           is_featured?: boolean
@@ -1297,6 +1301,24 @@ export type Database = {
           installment_count: number | null
           pix_price_cents: number | null
           card_surcharge_percent: number | null
+          /**
+           * Endereço de ENTREGA — snapshot congelado no pedido (o cliente pode
+           * mudar de endereço depois; o pedido registra para onde foi de fato).
+           * Distinto do endereço de COBRANÇA em `user_profiles`, que existe só
+           * porque a Asaas exige no customer do checkout de cartão.
+           * Nulo enquanto o endereço for opcional / ainda não preenchido.
+           */
+          shipping_recipient: string | null
+          shipping_phone: string | null
+          shipping_postal_code: string | null
+          shipping_street: string | null
+          shipping_number: string | null
+          shipping_complement: string | null
+          shipping_neighborhood: string | null
+          shipping_city: string | null
+          shipping_state: string | null
+          /** Não-nulo = endereço de entrega já informado (no checkout ou depois do pagamento). */
+          shipping_address_filled_at: string | null
           created_at: string
           updated_at: string
         }
@@ -1335,6 +1357,16 @@ export type Database = {
           installment_count?: number | null
           pix_price_cents?: number | null
           card_surcharge_percent?: number | null
+          shipping_recipient?: string | null
+          shipping_phone?: string | null
+          shipping_postal_code?: string | null
+          shipping_street?: string | null
+          shipping_number?: string | null
+          shipping_complement?: string | null
+          shipping_neighborhood?: string | null
+          shipping_city?: string | null
+          shipping_state?: string | null
+          shipping_address_filled_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1373,6 +1405,16 @@ export type Database = {
           installment_count?: number | null
           pix_price_cents?: number | null
           card_surcharge_percent?: number | null
+          shipping_recipient?: string | null
+          shipping_phone?: string | null
+          shipping_postal_code?: string | null
+          shipping_street?: string | null
+          shipping_number?: string | null
+          shipping_complement?: string | null
+          shipping_neighborhood?: string | null
+          shipping_city?: string | null
+          shipping_state?: string | null
+          shipping_address_filled_at?: string | null
           created_at?: string
           updated_at?: string
         }

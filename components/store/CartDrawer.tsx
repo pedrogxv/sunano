@@ -3,16 +3,6 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/RemoveCartItemDialog"
 import { useCart } from "@/components/providers/cart-context"
@@ -47,7 +37,6 @@ export function CartDrawer() {
   const { items, count, remove, increment, decrement, clear, isOpen, setOpen } = useCart()
   const { cardSurchargePercent } = useStoreSettings()
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
-  const [confirmingClear, setConfirmingClear] = useState(false)
 
   function requestRemoval(item: (typeof items)[number], fromDecrement: boolean) {
     setPendingRemoval({
@@ -77,7 +66,7 @@ export function CartDrawer() {
     function onKeyDown(e: KeyboardEvent) {
       // Com um AlertDialog aberto por cima, o Escape é dele — fechar o
       // drawer junto levaria o usuário embora da tela sem querer.
-      if (e.key === "Escape" && !pendingRemoval && !confirmingClear) setOpen(false)
+      if (e.key === "Escape" && !pendingRemoval) setOpen(false)
     }
     document.addEventListener("keydown", onKeyDown)
     document.body.style.overflow = "hidden"
@@ -85,7 +74,7 @@ export function CartDrawer() {
       document.removeEventListener("keydown", onKeyDown)
       document.body.style.overflow = ""
     }
-  }, [isOpen, setOpen, pendingRemoval, confirmingClear])
+  }, [isOpen, setOpen, pendingRemoval])
 
   if (!isOpen) return null
 
@@ -118,7 +107,7 @@ export function CartDrawer() {
           <div className="flex items-center gap-1">
             {items.length > 0 && (
               <button
-                onClick={() => setConfirmingClear(true)}
+                onClick={() => clear()}
                 className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/10 hover:text-red-300"
               >
                 <Trash2 className="size-3.5" />
@@ -285,32 +274,6 @@ export function CartDrawer() {
         onConfirm={confirmRemoval}
         elevated
       />
-
-      <AlertDialog open={confirmingClear} onOpenChange={setConfirmingClear}>
-        <AlertDialogContent className="z-[70]" overlayClassName="z-[69]">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Limpar o carrinho?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {count === 1
-                ? "O único item do carrinho será removido."
-                : `Os ${count} itens do carrinho serão removidos.`}{" "}
-              Essa ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                clear()
-                setConfirmingClear(false)
-              }}
-              className="bg-red-600 text-white hover:bg-red-500"
-            >
-              Limpar carrinho
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }

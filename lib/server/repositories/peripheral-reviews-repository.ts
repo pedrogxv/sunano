@@ -380,16 +380,61 @@ export async function togglePeripheralReviewVote(
 export const PERIPHERAL_REVIEWS_PAGE_SIZE = 4
 
 /**
+ * Ordenação da lista de reviews de um periférico.
+ *
+ * - `aura`: ordem padrão (saldo de Aura do autor desc, empate por mais recente).
+ * - `random`: embaralhada de forma estável dentro de uma mesma `seed` — usada
+ *   pelo carrossel de flashcards da página do periférico, onde a graça é cada
+ *   visita começar por uma review diferente, mas a paginação da mesma visita
+ *   precisa continuar de onde parou (uma ordem sorteada a cada request
+ *   repetiria/puliria cards entre páginas).
+ */
+export type PeripheralReviewsOrder = "aura" | "random"
+
+/**
+ * Embaralhamento determinístico: mesma `seed` + mesmo conjunto de ids produz
+ * sempre a mesma ordem, então a página 2 continua exatamente de onde a 1
+ * parou. Hash simples (FNV-1a) do `seed + id` como chave de ordenação.
+ */
+function seededShuffle<T extends { id: string }>(rows: T[], seed: string): T[] {
+  const hash = (value: string) => {
+    let h = 0x811c9dc5
+    for (let i = 0; i < value.length; i += 1) {
+      h ^= value.charCodeAt(i)
+      h = Math.imul(h, 0x01000193) >>> 0
+    }
+    return h
+  }
+  return [...rows]
+    .map((row) => ({ row, key: hash(`${seed}:${row.id}`) }))
+    .sort((a, b) => a.key - b.key || a.row.id.localeCompare(b.row.id))
+    .map((entry) => entry.row)
+}
+
+/**
  * Reviews visíveis de um periférico + média/contagem, ordenadas por Aura do
- * autor (desc, empate por mais recente). PostgREST não ordena por coluna de
- * tabela relacionada, então a ordenação é feita em duas etapas: busca todas
- * as linhas (colunas mínimas) + saldo de Aura de cada autor, ordena em JS, aí
- * sim busca os dados completos só da página pedida — mesma estratégia de
- * `getTopAuraProfiles` (users-repository.ts).
+ * autor (desc, empate por mais recente) ou embaralhadas (`order: "random"`).
+ * PostgREST não ordena por coluna de tabela relacionada, então a ordenação é
+ * feita em duas etapas: busca todas as linhas (colunas mínimas) + saldo de
+ * Aura de cada autor, ordena em JS, aí sim busca os dados completos só da
+ * página pedida — mesma estratégia de `getTopAuraProfiles`
+ * (users-repository.ts).
  */
 export async function getPeripheralReviewsWithStats(
   peripheralId: string,
-  { page = 1, limit = PERIPHERAL_REVIEWS_PAGE_SIZE, viewerId }: { page?: number; limit?: number; viewerId?: string | null } = {}
+  {
+    page = 1,
+    limit = PERIPHERAL_REVIEWS_PAGE_SIZE,
+    viewerId,
+    order = "aura",
+    seed,
+  }: {
+    page?: number
+    limit?: number
+    viewerId?: string | null
+    order?: PeripheralReviewsOrder
+    seed?: string
+  } = {}
 ): Promise<PeripheralReviewStats> {
   const db = createSupabaseAdminClient()
 
@@ -418,17 +463,24 @@ export async function getPeripheralReviewsWithStats(
 
   const average = Math.round((rows.reduce((sum, r) => sum + r.rating, 0) / totalCount) * 10) / 10
 
-  const userIds = [...new Set(rows.map((r) => r.user_id))]
-  const { data: wallets } = await db.from("user_aura_wallet").select("user_id, balance").in("user_id", userIds)
-  const auraByUser = new Map(
-    ((wallets ?? []) as Array<{ user_id: string; balance: number }>).map((w) => [w.user_id, w.balance])
-  )
+  let sorted: typeof rows
+  if (order === "random") {
+    // Sem seed a ordem muda a cada request — só é seguro quando o chamador
+    // pede uma página só (o carrossel sempre manda a sua).
+    sorted = seededShuffle(rows, seed ?? String(Date.now()))
+  } else {
+    const userIds = [...new Set(rows.map((r) => r.user_id))]
+    const { data: wallets } = await db.from("user_aura_wallet").select("user_id, balance").in("user_id", userIds)
+    const auraByUser = new Map(
+      ((wallets ?? []) as Array<{ user_id: string; balance: number }>).map((w) => [w.user_id, w.balance])
+    )
 
-  const sorted = [...rows].sort((a, b) => {
-    const auraDiff = (auraByUser.get(b.user_id) ?? 0) - (auraByUser.get(a.user_id) ?? 0)
-    if (auraDiff !== 0) return auraDiff
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  })
+    sorted = [...rows].sort((a, b) => {
+      const auraDiff = (auraByUser.get(b.user_id) ?? 0) - (auraByUser.get(a.user_id) ?? 0)
+      if (auraDiff !== 0) return auraDiff
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+  }
 
   const from = (page - 1) * limit
   const pageIds = sorted.slice(from, from + limit).map((r) => r.id)

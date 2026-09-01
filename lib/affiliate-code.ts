@@ -56,3 +56,19 @@ export function validateAffiliateCode(code: string): string | null {
   }
   return null
 }
+
+/**
+ * Monta o link de indicação: o mesmo `path` que a pessoa está vendo, com
+ * `?ref=CODIGO` anexado. O proxy grava o cookie de atribuição a partir desse
+ * parâmetro em qualquer rota (`proxy.ts`), então dá para indicar a home, um
+ * produto específico ou qualquer outra página.
+ *
+ * `path` pode vir com querystring/hash — o `ref` é anexado sem atropelar o
+ * que já estiver lá, e substitui um `ref` anterior em vez de duplicar.
+ */
+export function buildAffiliateLink(siteUrl: string, code: string, path = "/"): string {
+  const base = siteUrl.replace(/\/+$/, "")
+  const url = new URL(path.startsWith("/") ? path : `/${path}`, `${base}/`)
+  url.searchParams.set("ref", normalizeAffiliateCode(code))
+  return `${base}${url.pathname}${url.search}${url.hash}`
+}

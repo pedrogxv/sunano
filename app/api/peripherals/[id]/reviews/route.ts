@@ -20,7 +20,15 @@ import {
 
 const MAX_LIMIT = 50
 
-/** Lista paginada dos reviews de um periférico + média/contagem, ordenada por Aura do autor (`?page=1&limit=4`). */
+/**
+ * Lista paginada dos reviews de um periférico + média/contagem
+ * (`?page=1&limit=4`).
+ *
+ * Ordem padrão: Aura do autor. Com `?order=random&seed=<algo>` a lista vem
+ * embaralhada — o carrossel de flashcards da página do periférico sorteia a
+ * seed uma vez por visita e a repete nas páginas seguintes, para não repetir
+ * nem pular cards enquanto o usuário avança.
+ */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params
   const searchParams = request.nextUrl.searchParams
@@ -30,10 +38,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     Number.isFinite(limitParam) && limitParam > 0
       ? Math.min(Math.floor(limitParam), MAX_LIMIT)
       : PERIPHERAL_REVIEWS_PAGE_SIZE
+  const order = searchParams.get("order") === "random" ? "random" : "aura"
+  const seed = searchParams.get("seed")?.slice(0, 64) || undefined
 
   try {
     const viewer = await getRequestUser(request)
-    const stats = await getPeripheralReviewsWithStats(id, { page, limit, viewerId: viewer?.id })
+    const stats = await getPeripheralReviewsWithStats(id, { page, limit, viewerId: viewer?.id, order, seed })
     return NextResponse.json({ ok: true, ...stats })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar avaliações." }, { status: 500 })

@@ -8,7 +8,8 @@ interface ComingSoonProps {
   title: string
   description: string
   accent?: "emerald" | "amber"
-  launchAt?: string
+  /** Data-alvo do lançamento; sem ela (env não configurada) o countdown não é exibido. */
+  launchAt?: string | null
 }
 
 const ACCENT_STYLE = {

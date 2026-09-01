@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { getAffiliateByUserId, getAffiliateSummary } from "@/lib/server/repositories/affiliates-repository"
+import { MIN_PAYOUT_CENTS } from "@/lib/affiliate-payout"
 import {
   AFFILIATES_MAINTENANCE_MESSAGE,
   isAffiliatesBlockedByMaintenance,
@@ -23,5 +24,16 @@ export async function GET(request: NextRequest) {
 
   const summary = affiliate.status === "approved" ? await getAffiliateSummary(affiliate.id) : null
 
-  return NextResponse.json({ affiliate, summary })
+  // `availableCents` vai calculado do servidor: é o número que a tela de saque
+  // usa para liberar/bloquear o botão, e derivá-lo no cliente já rendeu a
+  // divergência de "pedi o que aparecia disponível e deu saldo insuficiente".
+  const availableCents = summary
+    ? Math.max(summary.balanceCents - summary.totalRequestedPendingCents, 0)
+    : 0
+
+  return NextResponse.json({
+    affiliate,
+    summary: summary ? { ...summary, availableCents } : null,
+    minPayoutCents: MIN_PAYOUT_CENTS,
+  })
 }

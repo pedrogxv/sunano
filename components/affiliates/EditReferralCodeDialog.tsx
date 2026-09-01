@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { normalizeAffiliateCode, validateAffiliateCode } from "@/lib/affiliate-code"
+import { resetAffiliateCodeCache } from "@/lib/hooks/use-affiliate-code"
 import { cn } from "@/lib/utils"
 
 type CodeCheckState = "idle" | "checking" | "available" | "unavailable"
@@ -95,6 +96,9 @@ export function EditReferralCodeDialog({ currentCode }: { currentCode: string })
         return
       }
       setOpen(false)
+      // O botão de copiar link guarda o código em cache de módulo; sem isto
+      // ele continuaria montando a URL com o código antigo até dar reload.
+      resetAffiliateCodeCache()
       router.refresh()
     } catch {
       setError("Não foi possível alterar o código.")

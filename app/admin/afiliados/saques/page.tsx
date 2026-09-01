@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, Check, Package, X } from "lucide-react"
+import { AlertCircle, Check, Copy, Package, X } from "lucide-react"
 import { toast } from "sonner"
 
 import BoxLoader from "@/components/ui/box-loader"
@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { PIX_KEY_TYPE_LABELS, type PixKeyType } from "@/lib/pix-key"
 import { cn } from "@/lib/utils"
 
 type PayoutRequest = {
@@ -26,7 +27,7 @@ type PayoutRequest = {
   amount_cents: number
   status: "requested" | "paid" | "rejected" | "cancelled"
   pix_key: string
-  pix_key_type: string
+  pix_key_type: PixKeyType
   created_at: string
 }
 
@@ -156,9 +157,28 @@ export default function AdminAfiliadosSaquesPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-medium">{formatCents(payout.amount_cents)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Chave PIX: {payout.pix_key_type} — {payout.pix_key}
-                  </p>
+                  {/* Chave crua + copiar: quem paga cola no app do banco, e
+                      redigitar uma chave PIX é exatamente onde o dinheiro vai
+                      parar na conta errada. */}
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs text-muted-foreground">
+                      {PIX_KEY_TYPE_LABELS[payout.pix_key_type] ?? payout.pix_key_type}:{" "}
+                      <span className="font-mono text-foreground">{payout.pix_key}</span>
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="size-6 p-0 text-muted-foreground"
+                      title="Copiar chave PIX"
+                      onClick={() => {
+                        navigator.clipboard.writeText(payout.pix_key)
+                        toast.success("Chave PIX copiada.")
+                      }}
+                    >
+                      <Copy className="size-3" />
+                    </Button>
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Solicitado em {new Date(payout.created_at).toLocaleString("pt-BR")}
                   </p>

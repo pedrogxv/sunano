@@ -84,7 +84,7 @@ export default function SettingsPage() {
     const surcharge = Number(cardSurchargePercent)
     const installments = Number(cardMaxInstallments)
     if (!Number.isFinite(surcharge) || surcharge < 0 || surcharge > 100) {
-      toast.error("Percentual de acréscimo deve estar entre 0 e 100.")
+      toast.error("Percentual de desconto deve estar entre 0 e 100.")
       return
     }
     if (!Number.isInteger(installments) || installments < 1 || installments > 6) {
@@ -414,8 +414,8 @@ export default function SettingsPage() {
               Pagamento da Loja
             </CardTitle>
             <CardDescription>
-              Acréscimo cobrado no cartão de crédito (via Asaas Checkout) sobre o preço no PIX, e o teto de
-              parcelas oferecido ao cliente.
+              Desconto oferecido no PIX em relação ao preço no cartão de crédito (via Asaas Checkout), e o teto
+              de parcelas oferecido ao cliente.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6 space-y-5">
@@ -428,7 +428,7 @@ export default function SettingsPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Acréscimo do cartão (%)
+                      Desconto no PIX (%)
                     </label>
                     <Input
                       type="number"

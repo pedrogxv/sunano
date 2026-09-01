@@ -21,7 +21,7 @@ import { useCart } from "@/components/providers/cart-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
-import { computeCardPriceCents } from "@/lib/store-pricing"
+import { computeCardPriceCents, computePixDiscountCents } from "@/lib/store-pricing"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
@@ -455,7 +455,9 @@ export default function CheckoutPage() {
         >
           <QrCode className="size-5" />
           PIX
-          <span className="text-[10px] font-normal text-muted-foreground">{formatBRL(total)}</span>
+          <span className="text-[10px] font-normal text-muted-foreground">
+            {formatBRL(total)} (-{cardSurchargePercent}%)
+          </span>
         </button>
         <button
           type="button"
@@ -469,9 +471,7 @@ export default function CheckoutPage() {
         >
           <CreditCard className="size-5" />
           Cartão de crédito
-          <span className="text-[10px] font-normal text-muted-foreground">
-            {formatBRL(cardTotal)} (+{cardSurchargePercent}%)
-          </span>
+          <span className="text-[10px] font-normal text-muted-foreground">{formatBRL(cardTotal)}</span>
         </button>
       </div>
 
@@ -479,12 +479,12 @@ export default function CheckoutPage() {
       <div className={cn("mb-6 space-y-1.5 rounded-xl border px-4 py-3", CARD_SURFACE)}>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Subtotal ({itemCount} {itemCount === 1 ? "item" : "itens"})</span>
-          <span>{formatBRL(total)}</span>
+          <span>{formatBRL(cardTotal)}</span>
         </div>
-        {paymentMethod === "credit_card" && (
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Acréscimo do cartão ({cardSurchargePercent}%)</span>
-            <span>{formatBRL(cardTotal - total)}</span>
+        {paymentMethod === "pix" && (
+          <div className="flex items-center justify-between text-xs text-emerald-400">
+            <span>Desconto no PIX ({cardSurchargePercent}%)</span>
+            <span>-{formatBRL(computePixDiscountCents(total, cardSurchargePercent))}</span>
           </div>
         )}
         <div className="flex items-center justify-between text-xs text-muted-foreground">

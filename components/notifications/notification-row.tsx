@@ -15,6 +15,7 @@ import {
   PackageCheck,
   Reply,
   UserPlus,
+  Wallet,
   X,
 } from "lucide-react"
 
@@ -37,6 +38,7 @@ export const ICONS: Record<NotificationType, typeof Bell> = {
   support_user_reply: LifeBuoy,
   support_status: CircleCheck,
   store_restock: PackageCheck,
+  affiliate_payout: Wallet,
 }
 
 export const ICON_TONE: Record<NotificationType, string> = {
@@ -53,6 +55,7 @@ export const ICON_TONE: Record<NotificationType, string> = {
   support_user_reply: "bg-cyan-500/15 text-cyan-400",
   support_status: "bg-cyan-500/15 text-cyan-400",
   store_restock: "bg-emerald-500/15 text-emerald-400",
+  affiliate_payout: "bg-green-500/15 text-green-400",
 }
 
 export function fill(template: string, values: Record<string, string | number>) {
@@ -92,7 +95,8 @@ export function requestScrollToCommentHash(hash: string) {
 /**
  * Monta a frase da notificação na hora de exibir (e não na hora de gravar),
  * para que trocar de idioma reescreva também o histórico. Ver comentário em
- * `notifications-repository.ts`. Exceção: `system` e `order_status` gravam
+ * `notifications-repository.ts`. Exceção: `system`, `order_status` e
+ * `affiliate_payout` gravam
  * `title`/`body` prontos, porque não têm template bilíngue.
  */
 export function buildMessage(n: Notification, t: ReturnType<typeof useT>): string {
@@ -126,6 +130,10 @@ export function buildMessage(n: Notification, t: ReturnType<typeof useT>): strin
       return fill(t.notifications.supportStatus, { subject: n.title ?? "" })
     case "store_restock":
       return fill(t.notifications.storeRestock, { product: n.title ?? "" })
+    // Grava `title` pronto em pt-BR (mesmo caso de `order_status`): o valor
+    // do saque faz parte da frase e não cabe num template bilíngue.
+    case "affiliate_payout":
+      return n.title ?? t.notifications.affiliatePayoutFallback
   }
 }
 

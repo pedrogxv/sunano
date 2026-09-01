@@ -1,7 +1,7 @@
 "use client"
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
-import { formatBRL } from "@/lib/format"
+import { formatBRL, formatBRLCompact } from "@/lib/format"
 
 export type PriceHistoryPoint = {
   id: string
@@ -122,7 +122,7 @@ export function ProductPriceHistoryChart({
               axisLine={false}
               tickLine={false}
               tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
-              tickFormatter={(value: number) => formatBRL(Math.round(value * 100))}
+              tickFormatter={(value: number) => formatBRLCompact(Math.round(value * 100))}
               width={72}
             />
             <Tooltip content={<PriceHistoryTooltip seriesLabels={seriesLabels} />} cursor={{ stroke: "var(--border)", strokeWidth: 1 }} />

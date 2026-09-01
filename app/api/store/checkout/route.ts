@@ -33,6 +33,7 @@ import { getAffiliateByCode } from "@/lib/server/repositories/affiliates-reposit
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { isWebMaster } from "@/lib/admin-permissions"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
+import { computeCardPriceCents } from "@/lib/store-pricing"
 import { SITE_URL } from "@/lib/site-url"
 import type { Database } from "@/lib/database.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -876,8 +877,11 @@ export async function POST(request: NextRequest) {
       // digita os dados na página da própria Asaas; nosso backend nunca
       // recebe número de cartão, validade ou CVV (ver createCheckout).
       const settings = await getStoreSettings()
-      const cardTotalCents = Math.round(
-        totalCents * (1 + settings.cardSurchargePercent / 100)
+      // Mesmo helper usado na vitrine/checkout do cliente — o valor cobrado
+      // aqui tem que bater com o que a tela mostrou, centavo a centavo.
+      const cardTotalCents = computeCardPriceCents(
+        totalCents,
+        settings.cardSurchargePercent
       )
 
       const customer = await findOrCreateCustomer({

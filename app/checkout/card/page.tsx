@@ -179,7 +179,9 @@ function CardCheckoutContent() {
                     ? `Pago em ${order.installmentCount}x no cartão`
                     : "Pago no cartão à vista"}
                 </p>
-                <p>Acréscimo do cartão: {order.cardSurchargePercent}% (preço no PIX seria {formatBRL(order.pixPriceCents)})</p>
+                <p>
+                  No PIX sairia por {formatBRL(order.pixPriceCents)} — {order.cardSurchargePercent}% de desconto.
+                </p>
               </div>
             </div>
           )}

@@ -2,10 +2,12 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Handshake } from "lucide-react"
 
+import { AffiliateShareButton } from "@/components/affiliates/AffiliateShareButton"
 import { EditReferralCodeDialog } from "@/components/affiliates/EditReferralCodeDialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { buildAffiliateLink } from "@/lib/affiliate-code"
 import { getAffiliateByUserId, getAffiliateSummary } from "@/lib/server/repositories/affiliates-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { SITE_URL } from "@/lib/site-url"
@@ -86,7 +88,7 @@ export default async function AfiliadosPage() {
   }
 
   const summary = await getAffiliateSummary(affiliate.id)
-  const referralLink = `${SITE_URL}/?ref=${affiliate.code}`
+  const referralLink = buildAffiliateLink(SITE_URL, affiliate.code!)
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
@@ -123,8 +125,9 @@ export default async function AfiliadosPage() {
           <CardTitle>Seu link de indicação</CardTitle>
           {affiliate.code && <EditReferralCodeDialog currentCode={affiliate.code} />}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <code className="block break-all rounded-lg bg-muted px-3 py-2 text-sm">{referralLink}</code>
+          <AffiliateShareButton path="/" label="Copiar link" />
         </CardContent>
       </Card>
 

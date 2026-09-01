@@ -784,7 +784,7 @@ export function PeripheralDetailView({
                   <InfoCardTitle icon={MessageSquareText} accent="cyan">Reviews da comunidade</InfoCardTitle>
                 </CardHeader>
                 <CardContent>
-                  <PeripheralReviewsList peripheralId={data.id} />
+                  <PeripheralReviewsList peripheralId={data.id} peripheralSlug={buildPeripheralSlug(data.name, data.id)} />
                 </CardContent>
               </Card>
 

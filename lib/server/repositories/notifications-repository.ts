@@ -256,6 +256,57 @@ export async function notifyOrderStatusChange(params: {
   }
 }
 
+/**
+ * Notifica o afiliado que o saque dele mudou de status. Chamada explícita a
+ * partir de `affiliates-repository.ts` (`markPayoutPaid`/`rejectPayoutRequest`),
+ * mesmo desenho de `notifyOrderStatusChange`: `title`/`body` já em português
+ * na criação, e o dinheiro é o assunto — o valor entra no título para a
+ * pessoa não precisar abrir para saber quanto caiu.
+ *
+ * `rejected` explica que o valor voltou ao saldo, porque essa é exatamente a
+ * dúvida que uma recusa gera ("perdi minha comissão?"); a resposta é não —
+ * `balance_cents` nunca foi debitado, o saque só reservava o valor enquanto
+ * estava em análise.
+ *
+ * Best-effort: nunca lança. Falhar em avisar não pode desfazer um pagamento
+ * que o admin já marcou como feito.
+ */
+export async function notifyAffiliatePayoutStatus(params: {
+  userId: string
+  payoutId: string
+  status: "paid" | "rejected"
+  amountCents: number
+  reason?: string | null
+}): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const amount = (params.amountCents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  })
+
+  const isPaid = params.status === "paid"
+  const title = isPaid ? `Saque de ${amount} pago!` : `Saque de ${amount} recusado`
+  const body = isPaid
+    ? "O PIX já foi enviado para a chave cadastrada."
+    : params.reason
+      ? `${params.reason} — o valor voltou para o seu saldo disponível.`
+      : "O valor voltou para o seu saldo disponível."
+
+  const { error } = await db.from("notifications").insert({
+    user_id: params.userId,
+    type: "affiliate_payout",
+    entity_type: "affiliate_payout",
+    entity_id: params.payoutId,
+    link: "/afiliados/saques",
+    title,
+    body,
+  })
+
+  if (error) {
+    console.error("[notifications-repository] notifyAffiliatePayoutStatus:", error)
+  }
+}
+
 export type SentSystemNotice = {
   title: string
   body: string

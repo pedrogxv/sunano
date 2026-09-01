@@ -3,6 +3,7 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
 import { normalizeAffiliateCode } from "@/lib/affiliate-code"
+import { notifyAffiliatePayoutStatus } from "@/lib/server/repositories/notifications-repository"
 
 /**
  * Repositório do sistema de afiliados — única porta de acesso a `affiliates`,
@@ -13,6 +14,11 @@ import { normalizeAffiliateCode } from "@/lib/affiliate-code"
  */
 
 export type RepositoryResult = { ok: true } | { ok: false; error: string; status: number }
+
+/** BRL só para as mensagens de erro deste módulo (o `lib/format` é do cliente). */
+function formatCentsBRL(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+}
 
 export type AffiliateStatus = "pending" | "approved" | "rejected" | "suspended"
 export type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random"
@@ -283,7 +289,15 @@ export type PayoutRequestRow = {
 const PAYOUT_COLUMNS =
   "id, affiliate_id, amount_cents, status, pix_key, pix_key_type, admin_note, reviewed_by, reviewed_at, paid_at, created_at, updated_at"
 
-/** Chama `request_affiliate_payout` — guarda de saldo disponível é atômica, resolvida dentro da RPC. */
+/**
+ * Chama `request_affiliate_payout` — a guarda de saldo, o mínimo e o teto de
+ * saques simultâneos são atômicos, resolvidos dentro da RPC.
+ *
+ * A RPC devolve um `code` por causa de recusa (antes eram cinco motivos
+ * distintos virando um `null` mudo, que a API traduzia sempre como "saldo
+ * insuficiente" — inclusive quando o problema era outro). Aqui cada código
+ * vira a frase que diz o que fazer a seguir.
+ */
 export async function createPayoutRequest(
   affiliateId: string,
   amountCents: number,
@@ -302,8 +316,58 @@ export async function createPayoutRequest(
     console.error("[affiliates-repository] createPayoutRequest:", error)
     return { ok: false, error: "Não foi possível solicitar o saque.", status: 500 }
   }
-  if (!data) {
-    return { ok: false, error: "Saldo disponível insuficiente para este valor de saque.", status: 400 }
+  if (!data?.ok) {
+    switch (data?.code) {
+      case "below_minimum":
+        return {
+          ok: false,
+          error: `O saque mínimo é de ${formatCentsBRL(data.min_cents ?? 0)}.`,
+          status: 400,
+        }
+      case "insufficient_balance":
+        return {
+          ok: false,
+          error: `Você tem ${formatCentsBRL(data.available_cents ?? 0)} disponíveis para saque agora.`,
+          status: 400,
+        }
+      case "too_many_pending":
+        return {
+          ok: false,
+          error: "Você já tem 3 saques em análise. Aguarde um deles ser processado.",
+          status: 400,
+        }
+      default:
+        return { ok: false, error: "Não foi possível solicitar o saque.", status: 400 }
+    }
+  }
+  return { ok: true }
+}
+
+/**
+ * Cancelamento pelo próprio afiliado. O `affiliateId` vai para a RPC junto
+ * do id do saque: quem cancela só alcança os próprios saques, e só enquanto
+ * estão em análise.
+ */
+export async function cancelPayoutRequest(
+  affiliateId: string,
+  payoutId: string
+): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.rpc("cancel_affiliate_payout", {
+    p_affiliate_id: affiliateId,
+    p_payout_id: payoutId,
+  })
+
+  if (error) {
+    console.error("[affiliates-repository] cancelPayoutRequest:", error)
+    return { ok: false, error: "Não foi possível cancelar o saque.", status: 500 }
+  }
+  if (!data?.ok) {
+    return {
+      ok: false,
+      error: "Este saque não pode mais ser cancelado — ele já foi processado.",
+      status: 409,
+    }
   }
   return { ok: true }
 }
@@ -557,13 +621,23 @@ export async function listAllPayoutRequests(
   return { payouts: (data ?? []) as PayoutRequestRow[], total: count ?? 0 }
 }
 
+/**
+ * Descobre o dono de um saque para notificá-lo. `affiliate_payout_requests`
+ * só guarda `affiliate_id`, e a notificação é endereçada por `user_id`.
+ */
+async function getPayoutOwnerUserId(affiliateId: string): Promise<string | null> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db.from("affiliates").select("user_id").eq("id", affiliateId).maybeSingle()
+  return data?.user_id ?? null
+}
+
 /** Marcação manual — o PIX de fato é feito fora do sistema pelo admin. */
 export async function markPayoutPaid(payoutId: string, reviewerId: string): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
   const { data: existing } = await db
     .from("affiliate_payout_requests")
-    .select("id, status")
+    .select("id, status, affiliate_id, amount_cents")
     .eq("id", payoutId)
     .maybeSingle()
   if (!existing) return { ok: false, error: "Saque não encontrado.", status: 404 }
@@ -580,6 +654,19 @@ export async function markPayoutPaid(payoutId: string, reviewerId: string): Prom
     console.error("[affiliates-repository] markPayoutPaid:", error)
     return { ok: false, error: "Não foi possível marcar o saque como pago.", status: 500 }
   }
+
+  // Depois do update: avisar sobre um pagamento que não aconteceu é pior que
+  // não avisar. `notifyAffiliatePayoutStatus` é best-effort e nunca lança.
+  const userId = await getPayoutOwnerUserId(existing.affiliate_id)
+  if (userId) {
+    await notifyAffiliatePayoutStatus({
+      userId,
+      payoutId,
+      status: "paid",
+      amountCents: existing.amount_cents,
+    })
+  }
+
   return { ok: true }
 }
 
@@ -597,7 +684,7 @@ export async function rejectPayoutRequest(
 
   const { data: existing } = await db
     .from("affiliate_payout_requests")
-    .select("id, status")
+    .select("id, status, affiliate_id, amount_cents")
     .eq("id", payoutId)
     .maybeSingle()
   if (!existing) return { ok: false, error: "Saque não encontrado.", status: 404 }
@@ -619,6 +706,18 @@ export async function rejectPayoutRequest(
     console.error("[affiliates-repository] rejectPayoutRequest:", error)
     return { ok: false, error: "Não foi possível rejeitar o saque.", status: 500 }
   }
+
+  const userId = await getPayoutOwnerUserId(existing.affiliate_id)
+  if (userId) {
+    await notifyAffiliatePayoutStatus({
+      userId,
+      payoutId,
+      status: "rejected",
+      amountCents: existing.amount_cents,
+      reason,
+    })
+  }
+
   return { ok: true }
 }
 

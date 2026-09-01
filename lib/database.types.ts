@@ -25,6 +25,7 @@ export type NotificationType =
   | "support_user_reply"
   | "support_status"
   | "store_restock"
+  | "affiliate_payout"
 
 export type NotificationEntityType =
   | "forum_post"
@@ -35,6 +36,7 @@ export type NotificationEntityType =
   | "order"
   | "support_ticket"
   | "store_product"
+  | "affiliate_payout"
 
 export type Database = {
   public: {
@@ -2161,7 +2163,21 @@ export type Database = {
       }
       request_affiliate_payout: {
         Args: { p_affiliate_id: string; p_amount_cents: number; p_pix_key: string; p_pix_key_type: string }
-        Returns: string | null
+        Returns: {
+          ok: boolean
+          code?: "not_found" | "below_minimum" | "insufficient_balance" | "too_many_pending"
+          min_cents?: number
+          available_cents?: number
+          payout_id?: string
+        }
+      }
+      cancel_affiliate_payout: {
+        Args: { p_affiliate_id: string; p_payout_id: string }
+        Returns: { ok: boolean; code?: "not_cancellable" }
+      }
+      affiliate_min_payout_cents: {
+        Args: Record<string, never>
+        Returns: number
       }
     }
   }

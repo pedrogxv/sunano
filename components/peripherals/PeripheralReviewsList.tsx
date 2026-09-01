@@ -1,65 +1,57 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
-import { format } from "date-fns"
-import { ptBR } from "date-fns/locale"
-import { ChevronDown, ChevronUp } from "lucide-react"
-import { toast } from "sonner"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
-import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
-import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
-import { StreakBadge } from "@/components/profile/StreakBadge"
+import {
+  PeripheralReviewCard,
+  type PeripheralReviewRow,
+  type ReviewVotePatch,
+} from "@/components/peripherals/PeripheralReviewCard"
 import { Button } from "@/components/ui/button"
-import { StarRating } from "@/components/ui/star-rating"
 import { cn } from "@/lib/utils"
-import type { AccountTier } from "@/lib/account-tier"
 
 interface PeripheralReviewsListProps {
   peripheralId: string
+  /** Slug canônico do periférico, pro link "Ver todos os reviews". */
+  peripheralSlug: string
 }
 
-type ReviewVote = "like" | "dislike" | null
-
-type PeripheralReviewRow = {
-  id: string
-  rating: number
-  body: string | null
-  created_at: string
-  is_edited: boolean
-  user_id: string
-  author_display_name: string
-  author_avatar_url: string | null
-  author_account_tier: AccountTier
-  author_vip_expires_at: string | null
-  author_display_slug: string | null
-  author_streak: number
-  score: number
-  my_vote: ReviewVote
-}
-
-const PAGE_SIZE = 4
+/** Reviews buscadas por vez — o carrossel mostra uma, mas pré-carrega o lote. */
+const BATCH_SIZE = 10
 
 /** Duração do destaque visual ao chegar numa review via link "Meus Reviews" do perfil. */
 const HIGHLIGHT_MS = 2600
 
+/** Distância mínima (px) de arrasto horizontal pra contar como troca de card. */
+const SWIPE_THRESHOLD = 48
+
 /**
- * Lista de reviews da página do periférico, priorizando reviewers com mais
- * Aura (ordenação já vem pronta da API). Sem fallback estático: sem review,
- * mostra o estado vazio; a média/veredito fica no `PeripheralVoteBox` acima.
+ * Reviews do periférico em formato flashcard: um card por vez, em ordem
+ * aleatória, com navegação pra frente/trás (setas, teclado ou swipe). A ordem
+ * é sorteada por visita e mantida estável pela `seed` enviada à API, senão os
+ * lotes seguintes repetiriam ou pulariam reviews já vistas.
+ *
+ * A lista completa (ordenada por Aura do autor) fica na página dedicada,
+ * linkada logo abaixo do carrossel.
  */
-export function PeripheralReviewsList({ peripheralId }: PeripheralReviewsListProps) {
+export function PeripheralReviewsList({ peripheralId, peripheralSlug }: PeripheralReviewsListProps) {
+  // Sorteada uma vez por montagem — no cliente, pra não virar parte do HTML
+  // cacheado da página (revalidate=120) e todo mundo cair na mesma ordem.
+  const seed = useMemo(() => Math.random().toString(36).slice(2, 12), [])
+
   const [reviews, setReviews] = useState<PeripheralReviewRow[]>([])
   const [totalCount, setTotalCount] = useState<number | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [page, setPage] = useState(1)
+  const [index, setIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
 
   // Review apontada pela URL (`#review-<id>`), vinda de "Meus Reviews" no
-  // perfil — a ordenação por Aura torna inviável adivinhar em qual página da
-  // lista paginada ela cairia, então busca ela sozinha e mostra em destaque
-  // acima da lista normal se não estiver entre as já carregadas.
+  // perfil — a ordem aleatória torna inviável adivinhar em qual lote ela
+  // cairia, então busca ela sozinha e mostra em destaque acima do carrossel.
   const [highlightId, setHighlightId] = useState<string | null>(null)
   const [highlightReview, setHighlightReview] = useState<PeripheralReviewRow | null>(null)
   const [highlighted, setHighlighted] = useState(false)
@@ -74,7 +66,9 @@ export function PeripheralReviewsList({ peripheralId }: PeripheralReviewsListPro
   useEffect(() => {
     let active = true
     setLoading(true)
-    fetch(`/api/peripherals/${peripheralId}/reviews?page=1&limit=${PAGE_SIZE}`, { cache: "no-store" })
+    fetch(`/api/peripherals/${peripheralId}/reviews?page=1&limit=${BATCH_SIZE}&order=random&seed=${seed}`, {
+      cache: "no-store",
+    })
       .then((res) => res.json())
       .then((data: { reviews?: PeripheralReviewRow[]; totalCount?: number; hasMore?: boolean }) => {
         if (!active) return
@@ -82,6 +76,7 @@ export function PeripheralReviewsList({ peripheralId }: PeripheralReviewsListPro
         setTotalCount(data.totalCount ?? 0)
         setHasMore(data.hasMore ?? false)
         setPage(1)
+        setIndex(0)
       })
       .catch(() => {})
       .finally(() => {
@@ -90,7 +85,7 @@ export function PeripheralReviewsList({ peripheralId }: PeripheralReviewsListPro
     return () => {
       active = false
     }
-  }, [peripheralId])
+  }, [peripheralId, seed])
 
   useEffect(() => {
     if (!highlightId) return
@@ -107,10 +102,7 @@ export function PeripheralReviewsList({ peripheralId }: PeripheralReviewsListPro
   }, [peripheralId, highlightId])
 
   useEffect(() => {
-    if (!highlightId || loading) return
-    // Já está entre as reviews normais carregadas — não duplica o card em
-    // destaque, só rola até o já renderizado na lista.
-    if (reviews.some((r) => r.id === highlightId) && !highlightReview) return
+    if (!highlightId || loading || !highlightReview) return
 
     const timer = window.setTimeout(() => {
       highlightRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
@@ -118,24 +110,59 @@ export function PeripheralReviewsList({ peripheralId }: PeripheralReviewsListPro
       window.setTimeout(() => setHighlighted(false), HIGHLIGHT_MS)
     }, 150)
     return () => window.clearTimeout(timer)
-  }, [highlightId, highlightReview, loading, reviews])
+  }, [highlightId, highlightReview, loading])
 
-  async function loadMore() {
+  const loadMore = useCallback(async () => {
     const nextPage = page + 1
     setLoadingMore(true)
     try {
-      const res = await fetch(`/api/peripherals/${peripheralId}/reviews?page=${nextPage}&limit=${PAGE_SIZE}`, {
-        cache: "no-store",
-      })
+      const res = await fetch(
+        `/api/peripherals/${peripheralId}/reviews?page=${nextPage}&limit=${BATCH_SIZE}&order=random&seed=${seed}`,
+        { cache: "no-store" }
+      )
       const data = (await res.json()) as { reviews?: PeripheralReviewRow[]; hasMore?: boolean }
       setReviews((prev) => [...prev, ...(data.reviews ?? [])])
       setHasMore(data.hasMore ?? false)
       setPage(nextPage)
     } catch {
-      // Silencioso — o botão continua disponível pra tentar de novo.
+      // Silencioso — a seta continua disponível pra tentar de novo.
     } finally {
       setLoadingMore(false)
     }
+  }, [page, peripheralId, seed])
+
+  // Buscar o próximo lote assim que o usuário chega perto do fim do atual, pra
+  // que avançar nunca esbarre num card vazio.
+  useEffect(() => {
+    if (hasMore && !loadingMore && reviews.length > 0 && index >= reviews.length - 2) {
+      void loadMore()
+    }
+  }, [hasMore, index, loadMore, loadingMore, reviews.length])
+
+  const goPrev = useCallback(() => setIndex((i) => Math.max(0, i - 1)), [])
+  const goNext = useCallback(
+    () => setIndex((i) => Math.min(i + 1, reviews.length - 1)),
+    [reviews.length]
+  )
+
+  const touchStartX = useRef<number | null>(null)
+
+  function onTouchStart(event: React.TouchEvent) {
+    touchStartX.current = event.touches[0]?.clientX ?? null
+  }
+
+  function onTouchEnd(event: React.TouchEvent) {
+    const start = touchStartX.current
+    touchStartX.current = null
+    if (start === null) return
+    const delta = (event.changedTouches[0]?.clientX ?? start) - start
+    if (delta <= -SWIPE_THRESHOLD) goNext()
+    else if (delta >= SWIPE_THRESHOLD) goPrev()
+  }
+
+  function patchReview(reviewId: string, patch: ReviewVotePatch) {
+    setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, ...patch } : r)))
+    setHighlightReview((prev) => (prev && prev.id === reviewId ? { ...prev, ...patch } : prev))
   }
 
   if (loading) return null
@@ -148,211 +175,101 @@ export function PeripheralReviewsList({ peripheralId }: PeripheralReviewsListPro
     )
   }
 
-  // Se a review em destaque ainda não está entre as carregadas, ela ganha um
-  // card próprio no topo (fora da paginação normal) — some sozinha do estado
-  // "solto" assim que aparecer na lista de verdade (ex.: depois de "Carregar
-  // mais Reviews").
-  const showDetachedHighlight = Boolean(highlightReview) && !reviews.some((r) => r.id === highlightId)
-
-  function patchReview(reviewId: string, patch: { score: number; my_vote: ReviewVote }) {
-    setReviews((prev) => prev.map((r) => (r.id === reviewId ? { ...r, ...patch } : r)))
-    setHighlightReview((prev) => (prev && prev.id === reviewId ? { ...prev, ...patch } : prev))
-  }
+  const current = reviews[index]
+  const canPrev = index > 0
+  const canNext = index < reviews.length - 1 || hasMore
+  // O card em destaque vindo do perfil fica fora do carrossel: a ordem
+  // aleatória mudaria de posição a cada visita e ele precisa estar sempre
+  // visível ao chegar pelo link.
+  const showDetachedHighlight = Boolean(highlightReview)
 
   return (
     <div className="space-y-4">
       {showDetachedHighlight && highlightReview && (
         <>
-          <ReviewRowItem
+          <PeripheralReviewCard
             peripheralId={peripheralId}
             review={highlightReview}
             rowRef={highlightRef}
             highlighted={highlighted}
+            variant="card"
             onVoteChange={patchReview}
           />
           <div className="border-b border-border" />
         </>
       )}
 
-      {reviews.map((review) => (
-        <ReviewRowItem
-          key={review.id}
-          peripheralId={peripheralId}
-          review={review}
-          rowRef={review.id === highlightId ? highlightRef : undefined}
-          highlighted={review.id === highlightId && highlighted}
-          onVoteChange={patchReview}
-        />
-      ))}
+      {current && (
+        <div
+          className="space-y-3"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowRight") {
+              event.preventDefault()
+              goNext()
+            } else if (event.key === "ArrowLeft") {
+              event.preventDefault()
+              goPrev()
+            }
+          }}
+          role="group"
+          aria-roledescription="carrossel"
+          aria-label="Reviews da comunidade"
+          tabIndex={0}
+        >
+          <PeripheralReviewCard
+            key={current.id}
+            peripheralId={peripheralId}
+            review={current}
+            variant="card"
+            onVoteChange={patchReview}
+          />
 
-      {hasMore && (
-        <div className="flex justify-center pt-1">
-          <Button variant="outline" size="sm" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? "Carregando..." : "Carregar mais Reviews"}
-          </Button>
+          <div className="flex items-center justify-between gap-2">
+            <CarouselArrow direction="prev" onClick={goPrev} disabled={!canPrev} />
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {index + 1} de {totalCount ?? reviews.length}
+            </span>
+            <CarouselArrow direction="next" onClick={goNext} disabled={!canNext || loadingMore} />
+          </div>
         </div>
       )}
-    </div>
-  )
-}
 
-function ReviewRowItem({
-  peripheralId,
-  review,
-  rowRef,
-  highlighted = false,
-  onVoteChange,
-}: {
-  peripheralId: string
-  review: PeripheralReviewRow
-  rowRef?: React.Ref<HTMLDivElement>
-  highlighted?: boolean
-  onVoteChange: (reviewId: string, patch: { score: number; my_vote: ReviewVote }) => void
-}) {
-  return (
-    <div
-      id={`review-${review.id}`}
-      ref={rowRef}
-      className={cn(
-        "flex gap-3 rounded-xl border-b border-border p-2 pb-4 transition-colors duration-700 ease-out last:border-0 last:pb-0",
-        highlighted && "bg-primary/10 ring-1 ring-primary/30"
-      )}
-    >
-      <ReviewVoteControl
-        peripheralId={peripheralId}
-        reviewId={review.id}
-        score={review.score}
-        myVote={review.my_vote}
-        onVoteChange={onVoteChange}
-      />
-
-      <AuthorAvatarLink
-        author={{ userId: review.user_id, displayName: review.author_display_name, displaySlug: review.author_display_slug }}
-        avatarUrl={review.author_avatar_url}
-        size={8}
-      />
-      <div className="min-w-0 flex-1 space-y-1">
-        <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-          <AuthorNameLink
-            author={{ userId: review.user_id, displayName: review.author_display_name, displaySlug: review.author_display_slug }}
-          />
-          <AuthorTierBadge tier={review.author_account_tier} vipExpiresAt={review.author_vip_expires_at} />
-          <AuthorSpecialTagBadge slug={review.author_display_slug} />
-          <StreakBadge days={review.author_streak} size="sm" />
-          <span>·</span>
-          <span>{format(new Date(review.created_at), "dd MMM yyyy", { locale: ptBR })}</span>
-          {review.is_edited && <span className="italic opacity-70">(editado)</span>}
-        </p>
-        <StarRating value={review.rating} size="sm" />
-        {review.body && <p className="text-sm text-foreground break-words whitespace-pre-wrap">{review.body}</p>}
+      <div className="flex justify-center">
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/perifericos/${peripheralSlug}/reviews`}>
+            Ver todos os reviews{totalCount ? ` (${totalCount})` : ""}
+          </Link>
+        </Button>
       </div>
     </div>
   )
 }
 
-/**
- * Upvote/downvote estilo Reddit: chevron pra cima, contador no meio, chevron
- * pra baixo. Clicar de novo no mesmo botão remove o voto; clicar no oposto
- * troca — o servidor (`toggle_peripheral_review_vote`) decide o resultado
- * final, aqui só aplicamos otimista e revertemos se a chamada falhar.
- */
-function ReviewVoteControl({
-  peripheralId,
-  reviewId,
-  score,
-  myVote,
-  onVoteChange,
+function CarouselArrow({
+  direction,
+  onClick,
+  disabled,
 }: {
-  peripheralId: string
-  reviewId: string
-  score: number
-  myVote: ReviewVote
-  onVoteChange: (reviewId: string, patch: { score: number; my_vote: ReviewVote }) => void
+  direction: "prev" | "next"
+  onClick: () => void
+  disabled: boolean
 }) {
-  const router = useRouter()
-  const [pending, setPending] = useState(false)
-
-  async function vote(kind: "like" | "dislike") {
-    if (pending) return
-
-    const nextVote: ReviewVote = myVote === kind ? null : kind
-    const prevScore = score
-    const prevVote = myVote
-
-    const voteWeight = (v: ReviewVote) => (v === "like" ? 1 : v === "dislike" ? -1 : 0)
-    const delta = voteWeight(nextVote) - voteWeight(prevVote)
-
-    onVoteChange(reviewId, { score: prevScore + delta, my_vote: nextVote })
-    setPending(true)
-
-    try {
-      const res = await fetch(`/api/peripherals/${peripheralId}/reviews/${reviewId}/vote`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind }),
-      })
-
-      if (res.status === 401) {
-        onVoteChange(reviewId, { score: prevScore, my_vote: prevVote })
-        router.push("/login")
-        return
-      }
-
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null
-        onVoteChange(reviewId, { score: prevScore, my_vote: prevVote })
-        toast.error("Não foi possível votar", { description: data?.error })
-        return
-      }
-
-      const data = (await res.json()) as { reaction?: ReviewVote; score?: number }
-      onVoteChange(reviewId, { score: data.score ?? prevScore + delta, my_vote: data.reaction ?? nextVote })
-    } catch {
-      onVoteChange(reviewId, { score: prevScore, my_vote: prevVote })
-      toast.error("Erro de conexão. Tente novamente.")
-    } finally {
-      setPending(false)
-    }
-  }
-
+  const Icon = direction === "prev" ? ChevronLeft : ChevronRight
   return (
-    <div className="flex shrink-0 flex-col items-center gap-0.5 pt-0.5">
-      <button
-        type="button"
-        onClick={() => vote("like")}
-        disabled={pending}
-        aria-label="Votar positivo"
-        aria-pressed={myVote === "like"}
-        className={cn(
-          "flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:bg-emerald-500/10 hover:text-emerald-400 disabled:pointer-events-none",
-          myVote === "like" && "bg-emerald-500/15 text-emerald-400"
-        )}
-      >
-        <ChevronUp className="size-4" />
-      </button>
-      <span
-        className={cn(
-          "min-w-4 text-center text-xs font-semibold tabular-nums",
-          myVote === "like" && "text-emerald-400",
-          myVote === "dislike" && "text-red-400",
-          !myVote && "text-muted-foreground"
-        )}
-      >
-        {score}
-      </span>
-      <button
-        type="button"
-        onClick={() => vote("dislike")}
-        disabled={pending}
-        aria-label="Votar negativo"
-        aria-pressed={myVote === "dislike"}
-        className={cn(
-          "flex size-6 items-center justify-center rounded-md text-muted-foreground transition hover:bg-red-500/10 hover:text-red-400 disabled:pointer-events-none",
-          myVote === "dislike" && "bg-red-500/15 text-red-400"
-        )}
-      >
-        <ChevronDown className="size-4" />
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={direction === "prev" ? "Review anterior" : "Próxima review"}
+      className={cn(
+        "flex size-8 items-center justify-center rounded-full border border-border/60 text-muted-foreground transition",
+        "hover:bg-secondary hover:text-foreground",
+        "disabled:pointer-events-none disabled:opacity-40"
+      )}
+    >
+      <Icon className="size-4" />
+    </button>
   )
 }

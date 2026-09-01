@@ -33,6 +33,7 @@ import { RestockAlertButton } from "@/components/store/RestockAlertButton"
 import { FormattedText } from "@/components/ui/formatted-text"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { ProductBreadcrumb } from "@/components/store/ProductBreadcrumb"
+import { AffiliateShareButton } from "@/components/affiliates/AffiliateShareButton"
 
 function LinkedPeripheralCard({ peripheral }: { peripheral: LinkedPeripheralRef }) {
   return (
@@ -688,6 +689,8 @@ export function ProductDetailContent({
                 <Zap className="size-5" />
                 {product.sale_type === "pre_order" ? "Reservar Agora" : "Comprar Agora"}
               </Button>
+              {/* Só aparece para afiliado aprovado — para o resto, nada. */}
+              <AffiliateShareButton className="w-full justify-center" />
             </div>
           )}
 

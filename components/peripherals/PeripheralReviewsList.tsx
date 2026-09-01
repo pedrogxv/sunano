@@ -242,13 +242,15 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
           aria-label="Reviews da comunidade"
           tabIndex={0}
         >
-          <PeripheralReviewCard
-            key={current.id}
-            peripheralId={peripheralId}
-            review={current}
-            variant="card"
-            onVoteChange={patchReview}
-          />
+          {current.id !== highlightReview?.id && (
+            <PeripheralReviewCard
+              key={current.id}
+              peripheralId={peripheralId}
+              review={current}
+              variant="card"
+              onVoteChange={patchReview}
+            />
+          )}
 
           <div className="flex items-center justify-between gap-2">
             <CarouselArrow direction="prev" onClick={goPrev} disabled={!canPrev} />

@@ -977,13 +977,19 @@ export function PeripheralDetailView({
                     )}
                   </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-col items-end gap-2">
+                    <div className="flex items-center gap-2">
+                      {rankBadge && (
+                        <RankingCrownBadge position={rankBadge.position} href={rankingHref} />
+                      )}
+                      <PeripheralLikeToggle peripheralId={data.id} />
+                    </div>
                     {linkedStore && !(linkedStore.stock === 0 || linkedStore.is_sold_out) && (
                       <Link
                         href={`/loja/${linkedStore.slug}`}
-                        className="flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 px-3 py-1.5 text-xs font-semibold text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)] transition hover:from-emerald-500/25 hover:to-emerald-500/10"
+                        className="flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 px-4 py-2.5 text-sm font-semibold text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)] transition hover:from-emerald-500/25 hover:to-emerald-500/10"
                       >
-                        <ShoppingBag className="size-3.5 text-emerald-300" />
+                        <ShoppingBag className="size-4 text-emerald-300" />
                         Comprar —{" "}
                         {linkedStore.price_cents_min != null &&
                         linkedStore.price_cents_max != null &&
@@ -992,10 +998,6 @@ export function PeripheralDetailView({
                           : formatBRL(linkedStore.price_cents_min ?? linkedStore.price_cents)}
                       </Link>
                     )}
-                    {rankBadge && (
-                      <RankingCrownBadge position={rankBadge.position} href={rankingHref} />
-                    )}
-                    <PeripheralLikeToggle peripheralId={data.id} />
                   </div>
                 </div>
 

@@ -647,19 +647,29 @@ export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]
 }
 
 type RawLinkedProductRow = Omit<LinkedProduct, "price_cents_min" | "price_cents_max"> & {
-  variants: { price_cents_override: number | null }[] | null
+  promo_price_cents: number | null
+  variants: { price_cents_override: number | null; promo_price_cents: number | null }[] | null
 }
 
 type RawLinkedProductJoinRow = {
   store_products: RawLinkedProductRow | RawLinkedProductRow[] | null
 }
 
-function mapLinkedProductRow({ variants, ...rest }: RawLinkedProductRow): LinkedProduct {
-  const variantPrices = (variants ?? []).map((v) => v.price_cents_override ?? rest.price_cents)
+/** Menor preço "efetivo" entre base e promo — a promo só vale se for de fato mais barata. */
+function effectivePriceCents(priceCents: number, promoPriceCents: number | null): number {
+  return promoPriceCents != null && promoPriceCents < priceCents ? promoPriceCents : priceCents
+}
+
+function mapLinkedProductRow({ variants, promo_price_cents, ...rest }: RawLinkedProductRow): LinkedProduct {
+  const basePrice = effectivePriceCents(rest.price_cents, promo_price_cents)
+  const variantPrices = (variants ?? []).map((v) =>
+    effectivePriceCents(v.price_cents_override ?? rest.price_cents, v.promo_price_cents)
+  )
+  const allPrices = variantPrices.length > 0 ? variantPrices : [basePrice]
   return {
     ...rest,
-    price_cents_min: variantPrices.length > 0 ? Math.min(...variantPrices) : rest.price_cents,
-    price_cents_max: variantPrices.length > 0 ? Math.max(...variantPrices) : rest.price_cents,
+    price_cents_min: Math.min(...allPrices),
+    price_cents_max: Math.max(...allPrices),
   }
 }
 
@@ -669,7 +679,7 @@ export async function listProductsByPeripheral(peripheralId: string): Promise<Li
   const { data, error } = await db
     .from("store_product_peripherals")
     .select(
-      "store_products!inner(id, slug, name, type, price_cents, images, stock, is_active, is_sold_out, variants:store_product_variants(price_cents_override))"
+      "store_products!inner(id, slug, name, type, price_cents, promo_price_cents, images, stock, is_active, is_sold_out, variants:store_product_variants(price_cents_override, promo_price_cents))"
     )
     .eq("peripheral_id", peripheralId)
     .eq("store_products.is_active", true)

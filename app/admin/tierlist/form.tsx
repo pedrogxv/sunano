@@ -48,13 +48,22 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useLocale } from "@/components/providers/locale-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
-import { mapTier } from "@/lib/tier-utils"
+import { mapTier, tierLabel, tiersForCategory } from "@/lib/tier-utils"
 import { parseWeightToGrams } from "@/lib/peripheral-weight"
 import { RATING_LEVEL_COLORS } from "@/lib/tierlist-theme"
 import { useT } from "@/lib/use-t"
 import { removeBackground, fileToDataUrl } from "@/lib/client/remove-background"
 import { SWITCH_PRICE_TIERS } from "@/lib/switch-price-tier"
+import {
+  buildPsuSpecs,
+  psuFormValuesFrom,
+  PSU_80_PLUS_LEVELS,
+  PSU_CYBENETICS_LEVELS,
+  type PsuFormField,
+} from "@/lib/psu-specs"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
+import type { PeripheralExpertAuthor } from "@/lib/peripheral-expert"
+import { parseExpertAuthor } from "@/lib/peripheral-expert"
 import { getTagOptionsForCategory, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -74,7 +83,7 @@ const peripheralSchema = z.object({
     .string()
     .uuid("Selecione a marca"),
   category: z.enum(
-    ["keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp"],
+    ["keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp", "psu"],
     { message: "Selecione uma das categorias disponíveis" }
   ),
   tier: z.union([z.enum(["GOAT", "SS", "S", "A", "B", "C", "L"]), z.literal("__none__")]),
@@ -161,6 +170,34 @@ const peripheralSchema = z.object({
   reviewApproved: z.boolean().optional(),
   golpe: z.boolean().optional(),
   golpeMotivo: z.string().optional(),
+  // Fontes (categoria "psu") — ver lib/psu-specs.ts.
+  psuWarranty: z.string().optional(),
+  psuWattage: z.string().optional(),
+  psuCybenetics: z.string().optional(),
+  psuCybeneticsLevel: z.string().optional(),
+  psu80Plus: z.string().optional(),
+  psu80PlusLevel: z.string().optional(),
+  psuTeclab: z.string().optional(),
+  psuLoad100Ripple12v: z.string().optional(),
+  psuLoad100Ripple5v: z.string().optional(),
+  psuLoad100Ripple33v: z.string().optional(),
+  psuLoad100Efficiency: z.string().optional(),
+  psuLoad100MaxTemp: z.string().optional(),
+  psuLoad110Ripple12v: z.string().optional(),
+  psuLoad110Ripple5v: z.string().optional(),
+  psuLoad110Ripple33v: z.string().optional(),
+  psuLoad110Efficiency: z.string().optional(),
+  psuLoad110MaxTemp: z.string().optional(),
+  psuOverloadProtection: z.string().optional(),
+  psuOverloadMaxLoad: z.string().optional(),
+  psuOverloadRippleStable: z.string().optional(),
+  psuOverloadRipple12v: z.string().optional(),
+  psuOverloadEfficiency: z.string().optional(),
+  psuOverloadMaxTemp: z.string().optional(),
+  psuFanModel: z.string().optional(),
+  psuCircuitType: z.string().optional(),
+  psuMainCapacitor: z.string().optional(),
+  psuSecondaryCapacitor: z.string().optional(),
 }).superRefine((data, ctx) => {
   // Switches usam faixa de preço (priceTier) no lugar de valor exato, então o
   // preço numérico fica em 0. Nas demais categorias, o preço tem que ser > 0.
@@ -188,6 +225,7 @@ const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
   { key: "switches", label: "Switches", emoji: "⌨️" },
   { key: "pcb", label: "PCB", emoji: "🟩" },
   { key: "dac_amp", label: "DAC/AMP", emoji: "🎚️" },
+  { key: "psu", label: "Fontes", emoji: "⚡" },
 ]
 
 // Modos de exibição da Tierlist pública, por categoria de dispositivo. Um periférico só
@@ -246,6 +284,13 @@ const TIERLIST_MODE_OPTIONS: Record<Category, { key: TierlistMode; label: string
   feet: DEFAULT_TIERLIST_MODE_OPTIONS,
   chairs: DEFAULT_TIERLIST_MODE_OPTIONS,
   dac_amp: DEFAULT_TIERLIST_MODE_OPTIONS,
+  // Em Fontes, "Custo Benefício" é a aba de faixa de preço (mesma regra de
+  // mouse/teclado, com GOLPE), e "Nacional" fica no modo recommended.
+  psu: [
+    { key: "overall", label: "Geral" },
+    { key: "recommended", label: "Nacional" },
+    { key: "value", label: "Custo Benefício" },
+  ],
 }
 
 const TIER_OPTIONS: { key: Tier; color: string; textColor: string; bg: string }[] = [
@@ -346,7 +391,12 @@ function findBuyLinkUrl(buyLinks: unknown, needles: string[]): string {
 // de mapeamento do onSubmit — sem isso, preview e dado salvo podiam divergir com o tempo.
 function buildSpecsPayload(
   data: PeripheralFormData,
-  opts: { selectedTierlistCategories: TierlistMode[]; gallery: string[]; shapeImage?: string | null }
+  opts: {
+    selectedTierlistCategories: TierlistMode[]
+    gallery: string[]
+    shapeImage?: string | null
+    expertAuthor?: PeripheralExpertAuthor | null
+  }
 ) {
   const splitLines = (value?: string) =>
     value ? value.split("\n").map((l) => l.trim()).filter(Boolean) : []
@@ -408,6 +458,8 @@ function buildSpecsPayload(
       batteryLife: data.batteryLife || undefined, dimensions: data.dimensions || undefined,
       shapeImage: opts.shapeImage || undefined,
       ratings: Object.keys(cleanedRatings).length > 0 ? cleanedRatings : undefined,
+      expertAuthor: opts.expertAuthor ?? undefined,
+      psu: data.category === "psu" ? buildPsuSpecs(data) : undefined,
     },
   }
 }
@@ -441,6 +493,17 @@ const COATING_OPTIONS = [
   "Fibra de carbono",
   "Fibra de vidro",
 ]
+
+// O relatório de bancada de uma fonte repete as mesmas leituras em cada cenário de
+// carga — a lista abaixo é combinada com o prefixo do cenário ("psuLoad100",
+// "psuLoad110") pra chegar no campo do formulário (ver lib/psu-specs.ts).
+const PSU_LOAD_FIELDS = [
+  { suffix: "Ripple12v", label: "Ripple Médio (12v)", placeholder: "12.4 mV" },
+  { suffix: "Ripple5v", label: "Linha 5v", placeholder: "8.1 mV" },
+  { suffix: "Ripple33v", label: "Linha 3.3v", placeholder: "6.7 mV" },
+  { suffix: "Efficiency", label: "Eficiência Energética", placeholder: "89%" },
+  { suffix: "MaxTemp", label: "Temperatura Máxima", placeholder: "48°C" },
+] as const
 
 const RATING_FIELDS: { key: keyof PeripheralFormData; label: string; ptLabel: string }[] = [
   { key: "ratingOverall", label: "Overall", ptLabel: "Geral" },
@@ -691,6 +754,127 @@ function LinkedProductPicker({
   )
 }
 
+/**
+ * Seletor do especialista que assina os "Comentários" do periférico. Busca em
+ * `/api/users/search` (a mesma rota da menção do fórum) e guarda um retrato do
+ * perfil — ver lib/peripheral-expert.ts pro porquê de não ser um id só.
+ */
+function ExpertAuthorPicker({
+  value,
+  onChange,
+}: {
+  value: PeripheralExpertAuthor | null
+  onChange: (author: PeripheralExpertAuthor | null) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [results, setResults] = useState<PeripheralExpertAuthor[]>([])
+
+  // A busca é por nome, então só faz sentido consultar depois que o admin digitou
+  // algo — e com um respiro entre teclas, já que a rota é limitada por taxa.
+  useEffect(() => {
+    if (!open) return
+    const term = query.trim()
+    // Abaixo de 2 letras a lista nem é renderizada (ver o JSX), então não há
+    // motivo de mexer no estado aqui — e mexer causaria um render a mais por tecla.
+    if (term.length < 2) return
+    let cancelled = false
+    const timer = setTimeout(() => {
+      setLoading(true)
+      fetch(`/api/users/search?q=${encodeURIComponent(term)}&limit=10`, { cache: "no-store" })
+        .then((res) => res.json().catch(() => null))
+        .then((json: { profiles?: { id: string; display_name: string; display_slug: string | null; avatar_url: string | null }[] } | null) => {
+          if (cancelled) return
+          setResults(
+            (json?.profiles ?? []).map((profile) => ({
+              userId: profile.id,
+              displayName: profile.display_name,
+              displaySlug: profile.display_slug,
+              avatarUrl: profile.avatar_url,
+            }))
+          )
+        })
+        .finally(() => { if (!cancelled) setLoading(false) })
+    }, 300)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [open, query])
+
+  return (
+    <div className="space-y-2">
+      {value ? (
+        <div className="flex items-center gap-3 rounded-lg border border-white/10 p-2.5" style={{ backgroundColor: "#1c1c1f" }}>
+          <div className="size-9 shrink-0 overflow-hidden rounded-full bg-muted/40">
+            {value.avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={value.avatarUrl} alt={value.displayName} className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">{value.displayName.slice(0, 2).toUpperCase()}</div>
+            )}
+          </div>
+          <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{value.displayName}</p>
+          <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)} className="text-muted-foreground hover:text-foreground">
+            <X className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" onClick={() => setOpen(true)} className="w-full justify-start gap-2 text-muted-foreground">
+          <Search className="size-4" />
+          {"Escolher quem assina os comentários"}
+        </Button>
+      )}
+
+      {open && (
+        <div className="space-y-2 rounded-lg border border-white/10 p-3" style={{ backgroundColor: "#1c1c1f" }}>
+          <div className="flex items-center gap-2">
+            <Input
+              autoFocus
+              placeholder={"Digite o nome do perfil"}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
+            />
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setOpen(false); setQuery("") }}>
+              {"Fechar"}
+            </Button>
+          </div>
+          <div className="max-h-56 overflow-auto rounded-md border border-border/60 bg-background/40">
+            {query.trim().length < 2 ? (
+              <p className="p-3 text-xs text-muted-foreground">{"Digite ao menos 2 letras."}</p>
+            ) : loading ? (
+              <p className="p-3 text-xs text-muted-foreground">{"Buscando..."}</p>
+            ) : results.length === 0 ? (
+              <p className="p-3 text-xs text-muted-foreground">{"Nenhum perfil encontrado"}</p>
+            ) : (
+              <ul className="divide-y divide-border/60">
+                {results.map((profile) => (
+                  <li key={profile.userId}>
+                    <button
+                      type="button"
+                      onClick={() => { onChange(profile); setOpen(false); setQuery("") }}
+                      className="flex w-full items-center gap-3 p-2 text-left transition hover:bg-muted/30"
+                    >
+                      <div className="size-8 shrink-0 overflow-hidden rounded-full bg-muted/40">
+                        {profile.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={profile.avatarUrl} alt={profile.displayName} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">{profile.displayName.slice(0, 2).toUpperCase()}</div>
+                        )}
+                      </div>
+                      <p className="min-w-0 flex-1 truncate text-sm text-foreground">{profile.displayName}</p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 interface LinkedSwitch {
   id: string
   name: string
@@ -862,6 +1046,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [originalUsdPrice, setOriginalUsdPrice] = useState<number | null>(null)
   const [linkedStore, setLinkedStore] = useState<LinkedProduct | null>(null)
   const [linkedSwitch, setLinkedSwitch] = useState<LinkedSwitch | null>(null)
+  const [expertAuthor, setExpertAuthor] = useState<PeripheralExpertAuthor | null>(null)
   const [rankedPeripherals, setRankedPeripherals] = useState<{ id: string; name: string; tier: string; ranking: number; score: number | null }[]>([])
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([])
   const [loadingBrands, setLoadingBrands] = useState(true)
@@ -870,7 +1055,17 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   // é ranqueado no board de drag-and-drop da Tierlist — o form não tem campo para editá-los,
   // então precisam ser preservados à parte para o preview ao vivo continuar mostrando o
   // seletor de modo (o mesmo que aparece na página pública do periférico).
-  const [existingModeTiers, setExistingModeTiers] = useState<Record<string, unknown>>({})
+  /**
+   * O que o board da Tierlist (app/admin/tierlist/page.tsx) grava em `specs` e o
+   * formulário não conhece: o tier de cada aba (`adminTier_*`), a faixa de preço
+   * manual (`adminPriceGroup`) e a ordem dentro de cada linha (`adminTierOrder*`,
+   * `adminPriceBandOrder`). Todas essas chaves começam com "admin".
+   *
+   * O PATCH substitui a coluna `specs` inteira (não faz merge), então tudo que
+   * não for remontado no save some: sem guardar isto, salvar qualquer campo aqui
+   * apagava a posição do item em todas as abas que não a padrão.
+   */
+  const [boardSpecs, setBoardSpecs] = useState<Record<string, unknown>>({})
   // Foto 2D do mouse (fundo preto, estilo eloshapes) — usada no bloco "Shape" da página
   // pública. Upload único, sem remoção de fundo (o admin já sobe a foto pronta).
   const [shapeImageFile, setShapeImageFile] = useState<File | null>(null)
@@ -913,12 +1108,19 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       padSpeed: "",
       stoppingPower: "",
       thickness: "",
+      ...psuFormValuesFrom(null),
     },
   })
 
   const watchedTier = form.watch("tier")
   const watchedCategory = form.watch("category")
   const watchedKeyboardType = form.watch("keyboardType")
+
+  // Fontes não usam o tier SS e chamam o último tier de BOMBA (ver lib/tier-utils.ts).
+  const visibleTierOptions = useMemo(() => {
+    const allowed = tiersForCategory(watchedCategory)
+    return TIER_OPTIONS.filter((option) => allowed.includes(option.key))
+  }, [watchedCategory])
 
   // Alimenta o preview ao vivo (ver JSX mais abaixo): espelha os mesmos dados que
   // seriam salvos, então campos ainda vazios aparecem no preview exatamente como
@@ -935,10 +1137,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     tags: selectedTag,
     image_url: images[0] ?? null,
     specs: {
-      ...existingModeTiers,
-      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview }),
+      ...boardSpecs,
+      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview, expertAuthor }),
     },
   }
+
+  // Trocar a categoria pode tirar da lista o tier que já estava marcado (Fontes não
+  // têm SS): sem isso o botão some da tela mas o valor continua indo pro banco.
+  useEffect(() => {
+    const current = form.getValues("tier")
+    if (current !== "__none__" && !tiersForCategory(watchedCategory).includes(current)) {
+      form.setValue("tier", "__none__")
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchedCategory])
 
   useEffect(() => {
     const validKeys = (TIERLIST_MODE_OPTIONS[watchedCategory] ?? []).map((option) => option.key)
@@ -1094,6 +1306,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           pros: Array.isArray(data.specs?.details?.pros) ? data.specs.details.pros.join("\n") : data.specs?.details?.pros ?? "",
           cons: Array.isArray(data.specs?.details?.cons) ? data.specs.details.cons.join("\n") : data.specs?.details?.cons ?? "",
           gallery: "",
+          ...psuFormValuesFrom(data.specs?.details?.psu),
           ...Object.fromEntries(
             BUY_LINK_PLATFORMS.map((platform) => [
               platform.field,
@@ -1152,9 +1365,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           refreshRate: data.refresh_rate ?? data.specs?.refreshRate ?? undefined,
         })
         setSelectedTag(data.tags ?? [])
-        setExistingModeTiers(
+        setBoardSpecs(
           Object.fromEntries(
-            Object.entries(data.specs ?? {}).filter(([key]) => key.startsWith("adminTier_")),
+            Object.entries(data.specs ?? {}).filter(([key]) => key.startsWith("admin")),
           ),
         )
         const validTierlistKeys = (TIERLIST_MODE_OPTIONS[data.category as Category] ?? []).map((option) => option.key)
@@ -1167,6 +1380,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         const galleryArr = Array.isArray(data.specs?.details?.gallery) ? data.specs.details.gallery : []
         setImages([data.image_url, ...galleryArr].filter(Boolean))
         setShapeImagePreview(data.specs?.details?.shapeImage ?? null)
+        setExpertAuthor(parseExpertAuthor(data.specs?.details?.expertAuthor))
         setShapeImageFile(null)
 
         const switchId = data.specs?.details?.switchPeripheralId
@@ -1235,7 +1449,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         shapeImageUrl = shapeData.publicUrl
       }
 
-      const specs = buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl })
+      // Mesmo merge do preview: o que é do board entra primeiro, e os campos do
+      // formulário mandam em cima (nenhuma chave de `buildSpecsPayload` começa com "admin").
+      const specs = {
+        ...boardSpecs,
+        ...buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl, expertAuthor }),
+      }
 
       // Switches usam faixa de preço (priceTier); o valor numérico fica em 0.
       let priceToSave = data.category === "switches" ? 0 : data.price
@@ -1769,7 +1988,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               >
                 {t.admin.tierlistForm.underReview}
               </button>
-              {TIER_OPTIONS.map((t) => (
+              {visibleTierOptions.map((t) => (
                 <button
                   key={t.key}
                   type="button"
@@ -1778,7 +1997,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     watchedTier === t.key ? "scale-105 shadow-md" : "opacity-60 hover:opacity-100"
                   }`}
                 >
-                  {t.key}
+                  {tierLabel(t.key, watchedCategory)}
                 </button>
               ))}
             </div>
@@ -1882,6 +2101,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   if (field.key === "ratingBattery") label = "Digitação"
                   if (field.key === "ratingQc") label = "QC"
                   if (field.key === "ratingMaintenance") return null
+                }
+                if (watchedCategory === "psu") {
+                  if (field.key === "ratingPerformance") label = "Ripple"
+                  if (field.key === "ratingBuild") label = "Componentes"
+                  if (field.key === "ratingSoftware") label = "Eficiência Energética"
+                  if (field.key === "ratingBattery") label = "Garantia"
                 }
                 if (watchedCategory === "dac_amp") {
                   if (field.key === "ratingSoftware") label = "Recursos"
@@ -2643,6 +2868,181 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </>
             )}
 
+            {watchedCategory === "psu" && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Garantia"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="3 anos" {...form.register("psuWarranty")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Potência"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="750W" {...form.register("psuWattage")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Selo Cybenetics"}</label>
+                  <Select value={form.watch("psuCybenetics") || ""} onValueChange={(v) => form.setValue("psuCybenetics", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.watch("psuCybenetics") === "yes" && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Nível Cybenetics"}</label>
+                    <Select value={form.watch("psuCybeneticsLevel") || ""} onValueChange={(v) => form.setValue("psuCybeneticsLevel", v)}>
+                      <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                        <SelectValue placeholder={"Selecione o nível"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PSU_CYBENETICS_LEVELS.map((level) => (
+                          <SelectItem key={level} value={level}>{level}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Selo 80% Plus"}</label>
+                  <Select value={form.watch("psu80Plus") || ""} onValueChange={(v) => form.setValue("psu80Plus", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {form.watch("psu80Plus") === "yes" && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Nível 80% Plus"}</label>
+                    <Select value={form.watch("psu80PlusLevel") || ""} onValueChange={(v) => form.setValue("psu80PlusLevel", v)}>
+                      <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                        <SelectValue placeholder={"Selecione o nível"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PSU_80_PLUS_LEVELS.map((level) => (
+                          <SelectItem key={level} value={level}>{level}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Selo Teclab"}</label>
+                  <Select value={form.watch("psuTeclab") || ""} onValueChange={(v) => form.setValue("psuTeclab", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="col-span-full space-y-3 rounded-xl border border-white/10 p-3" style={{ backgroundColor: "#161618" }}>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{"Em 100% de Carga"}</p>
+                    <p className="text-[10px] text-muted-foreground">{"Cenário normal do usuário médio."}</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+                    {PSU_LOAD_FIELDS.map((field) => (
+                      <div key={field.suffix} className="space-y-1.5">
+                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{field.label}</label>
+                        <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={field.placeholder} {...form.register(`psuLoad100${field.suffix}` as PsuFormField)} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="col-span-full space-y-3 rounded-xl border border-white/10 p-3" style={{ backgroundColor: "#161618" }}>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{"Em 10% de Sobrecarga"}</p>
+                    <p className="text-[10px] text-muted-foreground">{"Cenário atípico — 110% da carga nominal."}</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+                    {PSU_LOAD_FIELDS.map((field) => (
+                      <div key={field.suffix} className="space-y-1.5">
+                        <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{field.label}</label>
+                        <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={field.placeholder} {...form.register(`psuLoad110${field.suffix}` as PsuFormField)} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="col-span-full space-y-3 rounded-xl border border-white/10 p-3" style={{ backgroundColor: "#161618" }}>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{"Teste máximo de sobrecarga"}</p>
+                    <p className="text-[10px] text-muted-foreground">{"Até onde a fonte aguenta antes de a proteção agir."}</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Proteção da Fonte Funcionou?"}</label>
+                  <Select value={form.watch("psuOverloadProtection") || ""} onValueChange={(v) => form.setValue("psuOverloadProtection", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Carga Máxima"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="910W" {...form.register("psuOverloadMaxLoad")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Ripple Estável?"}</label>
+                  <Select value={form.watch("psuOverloadRippleStable") || ""} onValueChange={(v) => form.setValue("psuOverloadRippleStable", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Ripple Médio (12v)"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="22.5 mV" {...form.register("psuOverloadRipple12v")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Eficiência Energética"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="85%" {...form.register("psuOverloadEfficiency")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Temperatura Máxima"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="62°C" {...form.register("psuOverloadMaxTemp")} />
+                </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Modelo da Fan"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Hong Hua HA13525H12SF-Z" {...form.register("psuFanModel")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Tipo de Circuito"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="LLC + DC-DC" {...form.register("psuCircuitType")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Capacitor Principal"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Nippon Chemi-Con 400V 470uF" {...form.register("psuMainCapacitor")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Capacitor Secundário"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Nichicon / Rubycon" {...form.register("psuSecondaryCapacitor")} />
+                </div>
+              </>
+            )}
+
             {watchedCategory === "monitors" && (
               <>
                 <div className="space-y-1.5">
@@ -2805,10 +3205,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         {/* SECTION 7: Wiki / Conteúdo */}
         <FormSection id="section-wiki-content" forceOpen={forceOpenIds.has("section-wiki-content")} title={t.admin.tierlistForm.sectionWikiContent} icon={<FileText className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{"Review Completo"}</label>
-              <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="https://youtube.com/..." {...form.register("reviewUrl")} />
-            </div>
+            {/* Fonte não tem review em vídeo nem software próprio — os dois campos
+                saem do formulário e os cards correspondentes somem da página pública. */}
+            {watchedCategory !== "psu" && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{"Review Completo"}</label>
+                <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="https://youtube.com/..." {...form.register("reviewUrl")} />
+              </div>
+            )}
 
             {watchedCategory === "switches" && (
               <div className="space-y-1.5">
@@ -2818,14 +3222,24 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-foreground">{"Software"}</label>
-              <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />
-            </div>
+            {watchedCategory !== "psu" && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-foreground">{"Software"}</label>
+                <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Comentários"}</label>
               <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Opinião geral e recomendação sobre o produto"} rows={3} {...form.register("summary")} />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground">{"Especialista (opcional)"}</label>
+              <ExpertAuthorPicker value={expertAuthor} onChange={setExpertAuthor} />
+              <p className="text-[10px] text-muted-foreground">
+                {"Quem assina os comentários acima. Aparece com avatar e link pro perfil no card \"Comentários de Especialista\". Sem ninguém selecionado, o card mostra só o texto."}
+              </p>
             </div>
 
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">

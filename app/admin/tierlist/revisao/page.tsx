@@ -19,7 +19,7 @@ import { useT } from "@/lib/use-t"
 import { CARD_TIER_STYLES } from "@/lib/tierlist-theme"
 import { mapTier } from "@/lib/tier-utils"
 
-type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type ReviewCategoryKey = "performance" | "store" | "videoReview" | "specsComments"
 
@@ -57,7 +57,7 @@ function toReviewPeripheral(row: ReviewPeripheralApiRow): ReviewPeripheral {
   }
 }
 
-const CATEGORY_ORDER: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs"]
+const CATEGORY_ORDER: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs", "psu"]
 
 const CATEGORY_LABELS: Record<Category, { pt: string; en: string }> = {
   keyboard: { pt: "Teclado", en: "Keyboard" },
@@ -72,6 +72,7 @@ const CATEGORY_LABELS: Record<Category, { pt: string; en: string }> = {
   monitors: { pt: "Monitores", en: "Monitors" },
   switches: { pt: "Switches", en: "Switches" },
   dac_amp: { pt: "DAC/AMP", en: "DAC/AMP" },
+  psu: { pt: "Fontes", en: "PSUs" },
 }
 
 const REVIEW_CATEGORY_KEYS: ReviewCategoryKey[] = ["performance", "store", "videoReview", "specsComments"]

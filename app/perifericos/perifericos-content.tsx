@@ -28,6 +28,7 @@ import {
   Trash2,
   X,
   Youtube,
+  Zap,
 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -57,7 +58,7 @@ import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { cn } from "@/lib/utils"
 import type { PeripheralFilterOptions, RankedPeripheral } from "@/lib/server/repositories/peripherals-repository"
 
-type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
 type CategoryFilter = Category | "outros"
 
 /** Ícone + cor de destaque do card por categoria — reforça o "escaneio visual" da grade. */
@@ -74,6 +75,7 @@ const CATEGORY_CARD_STYLE: Record<Category, { icon: typeof Mouse; text: string; 
   monitors: { icon: Monitor, text: "text-violet-400", glow: "bg-violet-400" },
   switches: { icon: ToggleLeft, text: "text-lime-400", glow: "bg-lime-400" },
   dac_amp: { icon: Cpu, text: "text-teal-400", glow: "bg-teal-400" },
+  psu: { icon: Zap, text: "text-yellow-400", glow: "bg-yellow-400" },
 }
 type SortKey = "recent" | "rank" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -83,7 +85,7 @@ type KeyboardType = "mechanical" | "magnetic" | "optical"
 type PadType = "speed" | "control" | "hybrid"
 type Surface = PadType | "glass" | "cloth"
 type PanelType = "ips" | "tn" | "va" | "oled" | "other"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones"
 
 type Peripheral = {
   id: string
@@ -127,10 +129,10 @@ interface PerifericosContentProps {
   showAdminActions?: boolean
 }
 
-const CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs"]
+const CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "headset", "monitors", "iem", "dac_amp", "glasspad", "switches", "pcb", "feet", "chairs", "psu"]
 
 const HERO_MAIN_CATEGORIES: Category[] = ["mouse", "keyboard", "mousepad", "glasspad", "monitors"]
-const HERO_OTHER_CATEGORIES: Category[] = ["iem", "dac_amp", "headset", "switches", "pcb", "feet", "chairs"]
+const HERO_OTHER_CATEGORIES: Category[] = ["iem", "dac_amp", "headset", "switches", "pcb", "feet", "chairs", "psu"]
 
 function categoryMatches(itemCategory: Category, target: CategoryFilter): boolean {
   return target === "outros" ? HERO_OTHER_CATEGORIES.includes(itemCategory) : itemCategory === target
@@ -196,6 +198,16 @@ const TAG_LABELS: Record<Tag, string> = {
   qhd: "QHD",
   "4k": "4K",
   headphone: "Headphone",
+  padrao_atx: "Padrão ATX",
+  full_modular: "Full Modular",
+  semi_modular: "Semi Modular",
+  white_noise: "White Noise",
+  bom_ripple: "Bom Ripple",
+  ripple_ruim: "Ripple Ruim",
+  fonte_instavel: "Fonte Instável",
+  "80_plus": "80% Plus",
+  selo_cybenetics: "Selo Cybenetics",
+  capacitor_japones: "Capacitor Japonês",
 }
 
 function formatTagLabel(tag: Tag, category?: string) {

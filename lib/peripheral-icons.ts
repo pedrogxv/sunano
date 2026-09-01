@@ -1,5 +1,6 @@
 import {
   Mouse,
+  Zap,
   Keyboard,
   Headphones,
   Monitor,
@@ -75,6 +76,11 @@ const PERIPHERAL_KEYWORDS: Record<string, typeof Mouse> = {
   switches: Keyboard,
   switch: Keyboard,
   
+  // PSU / Fontes variants
+  psu: Zap,
+  fonte: Zap,
+  fontes: Zap,
+
   // DAC/AMP variants
   dac: Volume2,
   amp: Volume2,

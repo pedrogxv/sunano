@@ -47,7 +47,7 @@ export type Database = {
           id: string
           name: string
           brand_id: string
-          category: "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+          category: "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
           tier: "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
           price: number
           image_url: string | null

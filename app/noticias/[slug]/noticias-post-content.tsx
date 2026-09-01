@@ -57,6 +57,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   monitors: "Monitores",
   switches: "Switches",
   dac_amp: "DAC/Amp",
+  psu: "Fontes",
 }
 
 function getAuthorName(post: NewsPost) {

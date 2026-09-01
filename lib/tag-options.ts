@@ -13,11 +13,11 @@
  * que um item é aberto ou salvo.
  */
 
-export type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+export type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
 
-export const ALL_CATEGORIES: Category[] = ["keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp"]
+export const ALL_CATEGORIES: Category[] = ["keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp", "psu"]
 
-export type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "wired" | "wireless"
+export type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "wired" | "wireless" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones"
 
 export type TagOption = { key: Tag; en: string; pt: string; color: string }
 
@@ -135,6 +135,25 @@ export const HEADSET_TAGS_OPTIONS: TagOption[] = [
   { key: "wireless", en: "Wireless", pt: "Sem fio", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400" },
 ]
 
+// Lista de tags exclusiva da categoria Fontes — substitui completamente a lista genérica
+// acima quando a categoria selecionada no formulário for "psu". Fonte é o único periférico
+// em que uma característica ruim (ripple ruim, instabilidade) é informação de segurança, não
+// só de performance: por isso as tags negativas ficam aqui ao lado das positivas.
+export const PSU_TAGS_OPTIONS: TagOption[] = [
+  { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400" },
+  { key: "value", en: "Value", pt: "Custo Benefício", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400" },
+  { key: "padrao_atx", en: "ATX standard", pt: "Padrão ATX", color: "border-slate-400/50 bg-slate-500/10 text-slate-300 data-[active=true]:bg-slate-500/30 data-[active=true]:border-slate-400" },
+  { key: "full_modular", en: "Full modular", pt: "Full Modular", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
+  { key: "semi_modular", en: "Semi modular", pt: "Semi Modular", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400" },
+  { key: "white_noise", en: "White noise", pt: "White Noise", color: "border-zinc-400/50 bg-zinc-500/10 text-zinc-300 data-[active=true]:bg-zinc-500/30 data-[active=true]:border-zinc-400" },
+  { key: "bom_ripple", en: "Good ripple", pt: "Bom Ripple", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400" },
+  { key: "ripple_ruim", en: "Bad ripple", pt: "Ripple Ruim", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400" },
+  { key: "fonte_instavel", en: "Unstable PSU", pt: "Fonte Instável", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400" },
+  { key: "80_plus", en: "80 Plus", pt: "80% Plus", color: "border-yellow-400/50 bg-yellow-500/10 text-yellow-300 data-[active=true]:bg-yellow-500/30 data-[active=true]:border-yellow-400" },
+  { key: "selo_cybenetics", en: "Cybenetics", pt: "Selo Cybenetics", color: "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 data-[active=true]:bg-cyan-500/30 data-[active=true]:border-cyan-400" },
+  { key: "capacitor_japones", en: "Japanese capacitor", pt: "Capacitor Japonês", color: "border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-300 data-[active=true]:bg-fuchsia-500/30 data-[active=true]:border-fuchsia-400" },
+]
+
 // Ponto único de extensão: para dar a uma categoria sua própria lista de tags (em vez de herdar
 // a lista genérica acima), basta declarar um novo array de TagOption (como MOUSEPAD_TAGS_OPTIONS)
 // e adicionar a entrada correspondente aqui — nenhum outro trecho do formulário precisa mudar.
@@ -143,6 +162,7 @@ export const CATEGORY_TAGS_OVERRIDE: Partial<Record<Category, TagOption[]>> = {
   glasspad: GLASSPAD_TAGS_OPTIONS,
   monitors: MONITORS_TAGS_OPTIONS,
   headset: HEADSET_TAGS_OPTIONS,
+  psu: PSU_TAGS_OPTIONS,
 }
 
 export function getTagOptionsForCategory(category: Category): TagOption[] {
@@ -198,6 +218,7 @@ export const CATEGORY_PLURAL_LABELS: Record<Category, string> = {
   monitors: "Monitores",
   switches: "Switches",
   dac_amp: "DAC/AMP",
+  psu: "Fontes",
 }
 
 /** `true` quando a string é uma categoria conhecida — filtra `?category=` inválido. */

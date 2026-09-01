@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { FilterBar } from "./FilterBar"
 import { TierlistGrid } from "./TierlistGrid"
 
-type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
 type MouseShape = "symmetrical" | "ergonomic"
@@ -62,7 +62,7 @@ function getPriceBand(price: number): Exclude<PriceBand, "all"> | null {
 }
 
 const CATEGORY_VALUES: Category[] = [
-  "all", "keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp",
+  "all", "keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp", "psu",
 ]
 
 export function TierlistContent({ initialData, categoryLabels }: TierlistContentProps) {

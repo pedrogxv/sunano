@@ -3,14 +3,14 @@
 import type { ComponentType, ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube } from "lucide-react"
+import { Activity, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
 import { FaAmazon } from "react-icons/fa"
 import { SiShopee } from "react-icons/si"
 
 import { Badge } from "@/components/ui/badge"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
-import { mapTier, NEW_TIERS } from "@/lib/tier-utils"
+import { mapTier, NEW_TIERS, tierLabel } from "@/lib/tier-utils"
 import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
@@ -21,7 +21,16 @@ import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
 import { formatBRL, formatCurrencyBRL } from "@/lib/format"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
-import type { Tag } from "@/lib/tag-options"
+import { CATEGORY_PLURAL_LABELS, type Tag } from "@/lib/tag-options"
+import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
+import { parseExpertAuthor } from "@/lib/peripheral-expert"
+import {
+  formatPsuBoolean,
+  hasPsuReadings,
+  PSU_CERT_FALLBACK_STYLE,
+  PSU_CERT_LEVEL_STYLE,
+  type PsuSpecs,
+} from "@/lib/psu-specs"
 
 export interface PeripheralDetailViewData {
   id: string
@@ -150,6 +159,11 @@ const RANKING_MODES_BY_CATEGORY: Record<string, { key: RankingMode; label: strin
     { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
     { key: "recommended", label: "Nacionais", color: "bg-purple-400" },
   ],
+  psu: [
+    { key: "overall", label: "Geral", color: "bg-red-400" },
+    { key: "recommended", label: "Nacional", color: "bg-purple-400" },
+    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
+  ],
 }
 
 // Modos que não compartilham a coluna `tier` — cada um lê seu próprio valor em
@@ -186,6 +200,26 @@ function getRankingModeTier(
   if (!specKey) return tier
   const value = specs?.[specKey]
   return typeof value === "string" && (NEW_TIERS as readonly string[]).includes(value) ? value : null
+}
+
+/** Nome da categoria como o site fala dela — `formatLabel("psu")` daria "Psu". */
+function categoryLabel(category: string) {
+  if (category === "psu") return CATEGORY_PLURAL_LABELS.psu
+  return formatLabel(category)
+}
+
+/** Etiqueta de um selo (80 Plus / Cybenetics / Teclab) na cor do nível. */
+function CertBadge({ label, level }: { label: string; level?: string }) {
+  return (
+    <span
+      className={cn(
+        "rounded-md border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide",
+        (level && PSU_CERT_LEVEL_STYLE[level]) || PSU_CERT_FALLBACK_STYLE,
+      )}
+    >
+      {level ? `${label} ${level}` : label}
+    </span>
+  )
 }
 
 function formatLabel(value: string) {
@@ -252,6 +286,16 @@ const TAG_LABELS: Record<Tag, string> = {
   headphone: "Headphone",
   wired: "Com fio",
   wireless: "Sem fio",
+  padrao_atx: "Padrão ATX",
+  full_modular: "Full Modular",
+  semi_modular: "Semi Modular",
+  white_noise: "White Noise",
+  bom_ripple: "Bom Ripple",
+  ripple_ruim: "Ripple Ruim",
+  fonte_instavel: "Fonte Instável",
+  "80_plus": "80% Plus",
+  selo_cybenetics: "Selo Cybenetics",
+  capacitor_japones: "Capacitor Japonês",
 }
 
 function formatTagLabel(tag: string, category?: string) {
@@ -495,6 +539,50 @@ export function PeripheralDetailView({
   const generalComments = details.summary
 
   const isSwitch = data.category === "switches"
+
+  // Fonte: a ficha é um relatório de bancada (ver lib/psu-specs.ts). Cada cenário
+  // de carga vira um card próprio, e um cenário que nunca foi medido não aparece.
+  const isPsu = data.category === "psu"
+  const psu = (details.psu ?? {}) as PsuSpecs
+  const psuCertBadges = isPsu
+    ? [
+        psu.plus80 === "yes" ? { label: "80 Plus", level: psu.plus80Level } : null,
+        psu.cybenetics === "yes" ? { label: "Cybenetics", level: psu.cybeneticsLevel } : null,
+        psu.teclab === "yes" ? { label: "Teclab", level: undefined } : null,
+      ].filter((badge): badge is { label: string; level: string | undefined } => badge !== null)
+    : []
+  const psuLoadCards = isPsu
+    ? [
+        { key: "load100", title: "Em 100% de Carga", hint: "Cenário normal do usuário médio.", readings: psu.load100 },
+        { key: "load110", title: "Em 10% de Sobrecarga", hint: "Cenário atípico — 110% da carga nominal.", readings: psu.load110 },
+      ].filter((card) => hasPsuReadings(card.readings))
+    : []
+  const psuOverloadRows = isPsu && hasPsuReadings(psu.overload)
+    ? [
+        { label: "Proteção da fonte funcionou?", value: formatPsuBoolean(psu.overload?.protectionWorked) },
+        { label: "Carga máxima", value: psu.overload?.maxLoad },
+        { label: "Ripple estável?", value: formatPsuBoolean(psu.overload?.rippleStable) },
+        { label: "Ripple médio (12v)", value: psu.overload?.ripple12v },
+        { label: "Eficiência energética", value: psu.overload?.efficiency },
+        { label: "Temperatura máxima", value: psu.overload?.maxTemp },
+      ]
+    : []
+  const psuComponentRows = isPsu
+    ? [
+        { label: "Modelo da fan", value: psu.fanModel },
+        { label: "Tipo de circuito", value: psu.circuitType },
+        { label: "Capacitor principal", value: psu.mainCapacitor },
+        { label: "Capacitor secundário", value: psu.secondaryCapacitor },
+      ].filter((row) => row.value)
+    : []
+
+  // Em Fontes o card de review só aparece se houver post de blog vinculado: o campo
+  // de link de review sai do formulário dessa categoria, então o card ficaria só com
+  // a mensagem de "nenhum review publicado".
+  const showReviewCard = !isPsu || !!reviewUrl || relatedPosts.length > 0
+
+  // Card de comentário assinado — sem especialista escolhido, mostra só o texto.
+  const expertAuthor = parseExpertAuthor(details.expertAuthor)
   const soundUrl = typeof details.soundUrl === "string" ? details.soundUrl.trim() : ""
   const soundYoutubeId = getYoutubeEmbedId(soundUrl)
 
@@ -584,6 +672,13 @@ export function PeripheralDetailView({
         return [...specsBase,
           { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
           { label: "Trimode", value: formatTrimode(specs.trimode), group: "specs" },
+        ]
+      case "psu":
+        // Garantia primeiro: numa fonte é o dado que mais pesa na decisão de compra.
+        // Os selos ficam de fora da tabela — viram etiquetas coloridas logo abaixo.
+        return [...specsBase,
+          { label: "Garantia", value: psu.warranty, group: "specs" },
+          { label: "Potência", value: psu.wattage, group: "specs" },
         ]
       case "switches":
         return [...specsBase,
@@ -709,10 +804,10 @@ export function PeripheralDetailView({
                               style ? "opacity-70" : "text-muted-foreground",
                             )}
                           >
-                            {formatLabel(classification.category)}
+                            {categoryLabel(classification.category)}
                           </p>
                           <p className={cn("text-lg font-bold leading-tight", !style && "text-foreground")}>
-                            {classification.tier ? mapTier(classification.tier) : "Sob Revisão"}
+                            {classification.tier ? tierLabel(mapTier(classification.tier), classification.category) : "Sob Revisão"}
                           </p>
                         </div>
                       )
@@ -722,7 +817,7 @@ export function PeripheralDetailView({
                         <Link
                           key={classification.id}
                           href={`/perifericos/${buildPeripheralSlug(classification.name, classification.id)}`}
-                          aria-label={`Ver classificação em ${formatLabel(classification.category)}`}
+                          aria-label={`Ver classificação em ${categoryLabel(classification.category)}`}
                         >
                           {tile}
                         </Link>
@@ -734,13 +829,13 @@ export function PeripheralDetailView({
                 <div className={cn("rounded-2xl bg-gradient-to-br px-4 py-3 text-center", tierStyle.accent, tierStyle.textColor)}>
                   <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">Classificação</p>
                   <p className="text-3xl font-bold tracking-tight leading-none">
-                    {activeTier ? mapTier(activeTier) : "Sob Revisão"}
+                    {activeTier ? tierLabel(mapTier(activeTier), data.category) : "Sob Revisão"}
                   </p>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-border bg-muted/40 px-4 py-3 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Classificação</p>
-                  <p className="text-sm font-semibold text-foreground">{data.tier ? mapTier(data.tier) : "Sob Revisão"}</p>
+                  <p className="text-sm font-semibold text-foreground">{data.tier ? tierLabel(mapTier(data.tier), data.category) : "Sob Revisão"}</p>
                 </div>
               )}
 
@@ -755,27 +850,31 @@ export function PeripheralDetailView({
                   <RatingRow label="Geral" rating={ratings.overall} />
                   <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                     {data.category !== "pcb" && (
-                      <RatingRow label={data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />
+                      <RatingRow label={isPsu ? "Componentes" : data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />
                     )}
-                    <RatingRow label={data.category === "mousepad" ? "Base" : "Software"} rating={ratings.software} />
+                    <RatingRow label={isPsu ? "Eficiência Energética" : data.category === "mousepad" ? "Base" : "Software"} rating={ratings.software} />
                     {data.category !== "pcb" && (
-                      <RatingRow label={data.category === "keyboard" ? "Digitação" : data.category === "mousepad" ? "Costura" : "Bateria"} rating={ratings.battery} />
+                      <RatingRow label={isPsu ? "Garantia" : data.category === "keyboard" ? "Digitação" : data.category === "mousepad" ? "Costura" : "Bateria"} rating={ratings.battery} />
                     )}
-                    <RatingRow label="Performance" rating={ratings.performance} />
+                    <RatingRow label={isPsu ? "Ripple" : "Performance"} rating={ratings.performance} />
                     <RatingRow label="QC" rating={ratings.qc} />
                     <RatingRow label="Custo-beneficio" rating={ratings.value} />
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="border-border/60 bg-secondary/50">
-                <CardHeader>
-                  <InfoCardTitle icon={Package} accent="sky">Software do Periférico</InfoCardTitle>
-                </CardHeader>
-                <CardContent className="text-sm text-muted-foreground break-words whitespace-pre-wrap">
-                  {softwareInfo ? linkifyText(softwareInfo) : "Informacao de compatibilidade não cadastrada."}
-                </CardContent>
-              </Card>
+              {/* Fonte não tem software próprio nem review em vídeo — os dois cards
+                  saem da página (e os campos correspondentes, do formulário de admin). */}
+              {!isPsu && (
+                <Card className="border-border/60 bg-secondary/50">
+                  <CardHeader>
+                    <InfoCardTitle icon={Package} accent="sky">Software do Periférico</InfoCardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground break-words whitespace-pre-wrap">
+                    {softwareInfo ? linkifyText(softwareInfo) : "Informacao de compatibilidade não cadastrada."}
+                  </CardContent>
+                </Card>
+              )}
 
               <PeripheralVoteBox peripheralId={data.id} />
 
@@ -868,12 +967,12 @@ export function PeripheralDetailView({
                   <div className="flex flex-wrap items-center gap-2">
                     {data.category && (
                       <Badge variant="secondary" className="bg-muted/50 text-xs text-muted-foreground">
-                        {formatLabel(data.category)}
+                        {categoryLabel(data.category)}
                       </Badge>
                     )}
                     {data.tier && (
                       <Badge className="bg-primary/15 text-xs text-primary">
-                        {data.tier}
+                        {tierLabel(mapTier(data.tier), data.category)}
                       </Badge>
                     )}
                   </div>
@@ -970,8 +1069,72 @@ export function PeripheralDetailView({
                         </span>
                       </div>
                     ))}
+                    {psuCertBadges.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 pt-2">
+                        {psuCertBadges.map((badge) => (
+                          <CertBadge key={badge.label} label={badge.label} level={badge.level} />
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
+
+                {psuLoadCards.map((card) => (
+                  <Card key={card.key} size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
+                    <CardHeader>
+                      <InfoCardTitle icon={Activity} accent="purple">{card.title}</InfoCardTitle>
+                      <CardDescription className="text-xs">{card.hint}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-1.5 text-sm text-muted-foreground">
+                      {[
+                        { label: "Ripple médio (12v)", value: card.readings?.ripple12v },
+                        { label: "Linha 5v", value: card.readings?.ripple5v },
+                        { label: "Linha 3.3v", value: card.readings?.ripple33v },
+                        { label: "Eficiência energética", value: card.readings?.efficiency },
+                        { label: "Temperatura máxima", value: card.readings?.maxTemp },
+                      ].map((row) => (
+                        <div key={row.label} className="flex items-start justify-between gap-3">
+                          <span>{row.label}</span>
+                          <span className="text-right font-semibold break-words text-foreground">{formatSpecValue(row.value)}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {psuOverloadRows.length > 0 && (
+                  <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
+                    <CardHeader>
+                      <InfoCardTitle icon={ShieldAlert} accent="rose">Teste máximo de sobrecarga</InfoCardTitle>
+                      <CardDescription className="text-xs">Até onde a fonte aguenta antes de a proteção agir.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-1.5 text-sm text-muted-foreground">
+                      {psuOverloadRows.map((row) => (
+                        <div key={row.label} className="flex items-start justify-between gap-3">
+                          <span>{row.label}</span>
+                          <span className="text-right font-semibold break-words text-foreground">{formatSpecValue(row.value)}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {psuComponentRows.length > 0 && (
+                  <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
+                    <CardHeader>
+                      <InfoCardTitle icon={Zap} accent="amber">Componentes</InfoCardTitle>
+                      <CardDescription className="text-xs">O que tem dentro da fonte.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-1.5 text-sm text-muted-foreground">
+                      {psuComponentRows.map((row) => (
+                        <div key={row.label} className="flex items-start justify-between gap-3">
+                          <span>{row.label}</span>
+                          <span className="text-right font-semibold break-words text-foreground">{formatSpecValue(row.value)}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
 
                 {performanceRows.length > 0 && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
@@ -1102,6 +1265,7 @@ export function PeripheralDetailView({
                   </Card>
                 )}
 
+{showReviewCard && (
                 <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                 <CardHeader>
                   <InfoCardTitle icon={Youtube} accent="rose">Review no Youtube</InfoCardTitle>
@@ -1175,6 +1339,7 @@ export function PeripheralDetailView({
                   )}
                 </CardContent>
                 </Card>
+                )}
               </div>
 
               <Card size="sm" className="border-border/60 bg-secondary/50">
@@ -1220,7 +1385,23 @@ export function PeripheralDetailView({
 
               <Card size="sm" className="border-border/60 bg-secondary/50">
                 <CardHeader>
-                  <InfoCardTitle icon={MessageSquare} accent="fuchsia">Comentários do Sunano</InfoCardTitle>
+                  <InfoCardTitle icon={MessageSquare} accent="fuchsia">Comentários de Especialista</InfoCardTitle>
+                  {expertAuthor && (
+                    <CardDescription className="flex items-center gap-2">
+                      <AuthorAvatarLink
+                        author={{ userId: expertAuthor.userId, displayName: expertAuthor.displayName, displaySlug: expertAuthor.displaySlug }}
+                        avatarUrl={expertAuthor.avatarUrl}
+                        size={7}
+                      />
+                      <span className="text-xs">
+                        por{" "}
+                        <AuthorNameLink
+                          author={{ userId: expertAuthor.userId, displayName: expertAuthor.displayName, displaySlug: expertAuthor.displaySlug }}
+                          className="text-xs"
+                        />
+                      </span>
+                    </CardDescription>
+                  )}
                 </CardHeader>
                 <CardContent className="text-base text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
                   {generalComments || "Sem comentarios adicionais."}

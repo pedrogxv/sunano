@@ -48,6 +48,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   monitors: "Monitor",
   switches: "Switches",
   dac_amp: "DAC/AMP",
+  psu: "Fonte",
 }
 
 function formatTimeAgo(dateStr: string) {

@@ -14,7 +14,7 @@ import { CARD_SURFACE } from "@/lib/ui-styles"
 type MouseShape = "symmetrical" | "ergonomic"
 type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
 type PriceBand = "all" | "budget" | "mid" | "premium" | "golpe"
-type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
 
 const KEYBOARD_LAYOUTS: KeyboardLayout[] = ["60%", "75%", "tkl", "full-size"]
 function formatLabel(value: string) {
@@ -79,6 +79,7 @@ export function FilterBar({
     { key: "switches", label: t.categories.labels.switches },
     { key: "pcb",      label: t.categories.labels.pcb },
     { key: "dac_amp",  label: t.categories.labels.dac_amp },
+    { key: "psu",      label: t.categories.labels.psu },
   ]
 
   return (

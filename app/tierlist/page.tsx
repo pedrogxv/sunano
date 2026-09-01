@@ -39,7 +39,7 @@ export default async function TierlistPage() {
       name: p.name,
       brand: p.brand,
       image_url: p.image_url,
-      category: p.category as "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp",
+      category: p.category as "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu",
       tier: p.tier ? mapTier(p.tier) : null,
       price: p.price,
       tags: (p.tags || []) as ("competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80")[],
@@ -90,6 +90,7 @@ export default async function TierlistPage() {
     monitors: "Monitores",
     switches: "Switches",
     dac_amp: "DAC/AMP",
+    psu: "Fontes",
   }
 
   return (

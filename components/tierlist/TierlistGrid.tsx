@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
 import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, resolvePriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
 import { CARD_SURFACE } from "@/lib/ui-styles"
+import { tierLabel, tiersForCategory } from "@/lib/tier-utils"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
@@ -165,7 +166,7 @@ interface ModeConfig {
 
 // Categorias que ainda oferecem a aba "recommended" (com rótulo próprio) — nas demais
 // categorias essa opção foi removida do formulário e não deve aparecer como aba pública.
-const RECOMMENDED_TAB_CATEGORIES = ["mousepad", "glasspad", "iem", "headset"]
+const RECOMMENDED_TAB_CATEGORIES = ["mousepad", "glasspad", "iem", "headset", "psu"]
 
 function getDefaultRatingMode(category: string): RatingMode {
   if (category === "keyboard") return "magnetic"
@@ -180,6 +181,8 @@ function getRatingModeLabel(mode: RatingMode, category: string): string {
     if (mode === "value") return "Nacional"
     if (mode === "recommended") return "Custo Benefício"
   }
+
+  if (category === "psu" && mode === "recommended") return "Nacional"
 
   if (category === "iem" && mode === "recommended") return "Gamer"
   if (category === "headset" && mode === "recommended") return "Nacionais"
@@ -317,8 +320,9 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   // com preço) e o modo realmente rotulado "Custo Benefício" lá é "recommended" (score
   // ponderado, compartilhado com iem/headset, fora de escopo deste modo).
   const isPriceBandMode = ratingMode === "value" && category !== "mousepad" && category !== "glasspad"
+  const allowedTiers = tiersForCategory(category)
 
-  const tierRows: TierRow[] = [
+  const tierRows: TierRow[] = ([
     {
       key: "GOAT",
       label: "GOAT",
@@ -368,7 +372,11 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
       gradient: TIER_THEMES.L.accent,
       textColor: TIER_THEMES.L.textColor,
     },
-  ]
+  ] as TierRow[])
+    // Fontes usam uma escala própria: sem SS, e o último tier se chama BOMBA
+    // (ver lib/tier-utils.ts) — o valor gravado continua sendo "L".
+    .filter((tier) => allowedTiers.includes(tier.key))
+    .map((tier) => ({ ...tier, label: tierLabel(tier.key, category) }))
 
   const ratingModes: { key: RatingMode; label: string; color: string }[] = category === "keyboard"
     ? [
@@ -387,6 +395,12 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     ? [
         { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
         { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
+        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+      ]
+    : category === "psu"
+    ? [
+        { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
+        { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
         { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
       ]
     : [

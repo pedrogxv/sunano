@@ -35,6 +35,7 @@ import {
   PRICE_BAND_THEMES,
 } from "@/lib/tierlist-theme"
 import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, PRICE_GROUP_SPEC_KEY, resolvePriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
+import { tierLabel, tiersForCategory } from "@/lib/tier-utils"
 import { TierItemTooltipContent, type Ratings, type RatingKey } from "@/components/tierlist/TierItemTooltipContent"
 import { FilterBar } from "@/components/tierlist/FilterBar"
 import { TierlistMetaCard } from "@/components/admin/TierlistMetaCard"
@@ -42,7 +43,7 @@ import { CARD_SURFACE, CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 
 type RatingMode = "oled" | "performance" | "value" | "recommended" | "soundTyping" | "mechanical" | "magnetic" | "pcb" | "ips_va" | "competitive"
 
-type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp"
+type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
 type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone"
@@ -90,9 +91,10 @@ const CATEGORY_META = [
   { key: "switches" as Category, en: "Switches", pt: "Switches" },
   { key: "pcb" as Category, en: "PCB", pt: "PCB" },
   { key: "dac_amp" as Category, en: "DAC/AMP", pt: "DAC/AMP" },
+  { key: "psu" as Category, en: "PSUs", pt: "Fontes" },
 ]
 
-const TIER_ROWS: { key: Tier; label: string; accent: string; textColor: string }[] = [
+const ALL_TIER_ROWS: { key: Tier; label: string; accent: string; textColor: string }[] = [
   { key: "GOAT", label: "GOAT", accent: TIER_THEMES.GOAT.accent, textColor: TIER_THEMES.GOAT.textColor },
   { key: "SS", label: "SS", accent: TIER_THEMES.SS.accent, textColor: TIER_THEMES.SS.textColor },
   { key: "S", label: "S", accent: TIER_THEMES.S.accent, textColor: TIER_THEMES.S.textColor },
@@ -101,6 +103,14 @@ const TIER_ROWS: { key: Tier; label: string; accent: string; textColor: string }
   { key: "C", label: "C", accent: TIER_THEMES.C.accent, textColor: TIER_THEMES.C.textColor },
   { key: "L", label: "L", accent: TIER_THEMES.L.accent, textColor: TIER_THEMES.L.textColor },
 ]
+
+/** Fontes não usam SS e chamam o último tier de BOMBA — ver lib/tier-utils.ts. */
+function getTierRows(category: Category) {
+  const allowed = tiersForCategory(category)
+  return ALL_TIER_ROWS
+    .filter((row) => allowed.includes(row.key))
+    .map((row) => ({ ...row, label: tierLabel(row.key, category) }))
+}
 
 const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
   { key: "oled", en: "OLED", pt: "OLED" },
@@ -117,7 +127,7 @@ const RATING_MODES: { key: RatingMode; en: string; pt: string }[] = [
 
 // Categorias que ainda oferecem a aba "recommended" (com rótulo próprio) — nas demais
 // categorias essa opção foi removida do formulário e não deve aparecer como aba no board.
-const RECOMMENDED_TAB_CATEGORIES = ["mousepad", "glasspad", "iem", "headset"]
+const RECOMMENDED_TAB_CATEGORIES = ["mousepad", "glasspad", "iem", "headset", "psu"]
 
 // Ordem e cor das abas por categoria — espelha exatamente `ratingModes` da Tierlist pública
 // (components/tierlist/TierlistGrid.tsx) para que admin e público mostrem as mesmas abas na
@@ -137,6 +147,11 @@ const MODES_BY_CATEGORY: Partial<Record<Category, { key: RatingMode; color: stri
   mouse: [
     { key: "performance", color: "bg-red-400" },
     { key: "magnetic", color: "bg-blue-400" },
+    { key: "value", color: "bg-emerald-400" },
+  ],
+  psu: [
+    { key: "performance", color: "bg-red-400" },
+    { key: "recommended", color: "bg-purple-400" },
     { key: "value", color: "bg-emerald-400" },
   ],
 }
@@ -181,6 +196,8 @@ function getRatingModeLabel(mode: RatingMode, category: string, locale: string):
     if (mode === "value") return "Nacional"
     if (mode === "recommended") return "Custo Benefício"
   }
+
+  if (category === "psu" && mode === "recommended") return "Nacional"
 
   if (category === "iem" && mode === "recommended") return "Gamer"
   if (category === "headset" && mode === "recommended") return "Nacionais"
@@ -1723,9 +1740,11 @@ export default function AdminPeripheralsPage() {
   const modeConfig = MODE_CONFIGS[ratingMode]
   const modeDescription = t.admin.tierlistPage.modeDescriptions[ratingMode]
 
+  const tierRows = useMemo(() => getTierRows(selectedCategory), [selectedCategory])
+
   const itemsByTier = useMemo(
     () =>
-      TIER_ROWS.map((tier) => {
+      tierRows.map((tier) => {
         let tierItems = filtered.filter((item) => getModeTier(item, tierKey) === tier.key)
         if (modeConfig.filterItem) tierItems = tierItems.filter(modeConfig.filterItem)
         return {
@@ -1735,7 +1754,7 @@ export default function AdminPeripheralsPage() {
           ),
         }
       }),
-    [filtered, modeConfig, orderKey, allowLegacyFallback, tierKey]
+    [filtered, modeConfig, orderKey, allowLegacyFallback, tierKey, tierRows]
   )
 
   // Faixa (o grupo em si) é manual (specs.adminPriceGroup) — soltar um item noutra faixa só

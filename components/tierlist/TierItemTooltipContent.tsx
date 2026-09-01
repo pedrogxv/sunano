@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { CARD_TAG_STYLES, CARD_TIER_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { useLocale } from "@/components/providers/locale-context"
 import type { Tag } from "@/lib/tag-options"
+import { tierLabel as tierDisplayLabel } from "@/lib/tier-utils"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 
@@ -85,6 +86,16 @@ const TAG_LABELS: Record<Tag, { en: string; pt: string }> = {
   headphone: { en: "Headphone", pt: "Headphone" },
   wired: { en: "Wired", pt: "Com fio" },
   wireless: { en: "Wireless", pt: "Sem fio" },
+  padrao_atx: { en: "ATX standard", pt: "Padrão ATX" },
+  full_modular: { en: "Full modular", pt: "Full Modular" },
+  semi_modular: { en: "Semi modular", pt: "Semi Modular" },
+  white_noise: { en: "White noise", pt: "White Noise" },
+  bom_ripple: { en: "Good ripple", pt: "Bom Ripple" },
+  ripple_ruim: { en: "Bad ripple", pt: "Ripple Ruim" },
+  fonte_instavel: { en: "Unstable PSU", pt: "Fonte Instável" },
+  "80_plus": { en: "80 Plus", pt: "80% Plus" },
+  selo_cybenetics: { en: "Cybenetics", pt: "Selo Cybenetics" },
+  capacitor_japones: { en: "Japanese capacitor", pt: "Capacitor Japonês" },
 }
 
 export interface TierItemTooltipContentProps {
@@ -162,7 +173,7 @@ export function TierItemTooltipContent({
   const en = locale === "en-US"
   const tierStyle = tier ? CARD_TIER_STYLES[tier] : CARD_TIER_STYLES.L
   const tierTheme = tier ? TIER_THEMES[tier] : TIER_THEMES.L
-  const tierLabel = tier ?? (en ? "Under Review" : "Sob Revisão")
+  const tierLabel = tier ? tierDisplayLabel(tier, categoryLabel) : (en ? "Under Review" : "Sob Revisão")
   const isGolpe = Boolean(golpeMotivo)
 
   const labels = en ? RATING_LABELS_EN : RATING_LABELS_PT
@@ -170,7 +181,9 @@ export function TierItemTooltipContent({
     ? (en ? "Typing" : "Digitação")
     : categoryLabel === "mousepad"
       ? (en ? "Stitching" : "Costura")
-      : labels.battery
+      : categoryLabel === "psu"
+        ? (en ? "Warranty" : "Garantia")
+        : labels.battery
   const ratingEntries = ratings
     ? RATING_ORDER.filter((key, index) => RATING_ORDER.indexOf(key) === index)
         .filter((key) => typeof ratings[key] === "number")
@@ -179,6 +192,13 @@ export function TierItemTooltipContent({
           if (categoryLabel === "mousepad") {
             if (key === "software") label = "Base"
             if (key === "build") label = en ? "Surface" : "Superfície"
+          }
+          // Fonte: as mesmas notas com o nome que a categoria usa (ver o formulário
+          // de admin e a página do periférico).
+          if (categoryLabel === "psu") {
+            if (key === "performance") label = "Ripple"
+            if (key === "build") label = en ? "Components" : "Componentes"
+            if (key === "software") label = en ? "Energy efficiency" : "Eficiência Energética"
           }
           return { key, label, value: ratings[key] as number }
         })

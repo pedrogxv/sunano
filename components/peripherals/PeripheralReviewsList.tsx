@@ -145,19 +145,39 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
     [reviews.length]
   )
 
-  const touchStartX = useRef<number | null>(null)
+  // Pointer Events cobrem touch, mouse e caneta com o mesmo handler — assim o
+  // arraste com mouse no desktop funciona igual ao swipe no celular.
+  const dragStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
+  const suppressClickRef = useRef(false)
 
-  function onTouchStart(event: React.TouchEvent) {
-    touchStartX.current = event.touches[0]?.clientX ?? null
+  function onPointerDown(event: React.PointerEvent) {
+    if (event.pointerType === "mouse" && event.button !== 0) return
+    dragStartRef.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId }
+    suppressClickRef.current = false
   }
 
-  function onTouchEnd(event: React.TouchEvent) {
-    const start = touchStartX.current
-    touchStartX.current = null
-    if (start === null) return
-    const delta = (event.changedTouches[0]?.clientX ?? start) - start
-    if (delta <= -SWIPE_THRESHOLD) goNext()
-    else if (delta >= SWIPE_THRESHOLD) goPrev()
+  function onPointerUp(event: React.PointerEvent) {
+    const start = dragStartRef.current
+    dragStartRef.current = null
+    if (!start || start.pointerId !== event.pointerId) return
+
+    const deltaX = event.clientX - start.x
+    const deltaY = event.clientY - start.y
+    // Gesto mais vertical que horizontal é rolagem da página, não swipe.
+    if (Math.abs(deltaX) < SWIPE_THRESHOLD || Math.abs(deltaX) <= Math.abs(deltaY)) return
+
+    // Evita que o clique disparado logo após o arraste ative um link/botão
+    // dentro do card (avatar, autor, voto) sem essa ser a intenção.
+    suppressClickRef.current = true
+    if (deltaX < 0) goNext()
+    else goPrev()
+  }
+
+  function onClickCapture(event: React.MouseEvent) {
+    if (!suppressClickRef.current) return
+    event.preventDefault()
+    event.stopPropagation()
+    suppressClickRef.current = false
   }
 
   function patchReview(reviewId: string, patch: ReviewVotePatch) {
@@ -201,9 +221,13 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
 
       {current && (
         <div
-          className="space-y-3"
-          onTouchStart={onTouchStart}
-          onTouchEnd={onTouchEnd}
+          className="touch-pan-y space-y-3 active:cursor-grabbing sm:cursor-grab"
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          onPointerCancel={() => {
+            dragStartRef.current = null
+          }}
+          onClickCapture={onClickCapture}
           onKeyDown={(event) => {
             if (event.key === "ArrowRight") {
               event.preventDefault()

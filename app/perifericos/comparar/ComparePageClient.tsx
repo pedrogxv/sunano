@@ -8,6 +8,7 @@ import { ArrowLeft, Check, ExternalLink, Plus, Search, Trophy, X } from "lucide-
 import { cn } from "@/lib/utils"
 import { formatCurrencyBRL } from "@/lib/format"
 import { CARD_SURFACE } from "@/lib/ui-styles"
+import { mapTier, tierLabel } from "@/lib/tier-utils"
 import BoxLoader from "@/components/ui/box-loader"
 import { ShareMenu } from "@/components/forum/ShareMenu"
 
@@ -63,7 +64,7 @@ const CATEGORY_LABEL: Record<string, string> = {
   mouse: "Mouse", keyboard: "Teclado", mousepad: "Mousepad",
   glasspad: "Glasspad", iem: "IEM", headset: "Headset",
   monitors: "Monitor", chairs: "Cadeira", feet: "Feet",
-  switches: "Switches", dac_amp: "DAC/AMP",
+  switches: "Switches", dac_amp: "DAC/AMP", psu: "Fonte",
 }
 
 const TAG_LABEL: Record<string, string> = {
@@ -73,6 +74,10 @@ const TAG_LABEL: Record<string, string> = {
   cheap: "Barato", expensive: "Caro",
   white_label: "White Label", ips: "IPS", va: "VA", tn: "TN", oled: "OLED",
   miniled: "MINILED", fhd: "FHD", qhd: "QHD", "4k": "4K",
+  padrao_atx: "Padrão ATX", full_modular: "Full Modular", semi_modular: "Semi Modular",
+  white_noise: "White Noise", bom_ripple: "Bom Ripple", ripple_ruim: "Ripple Ruim",
+  fonte_instavel: "Fonte Instável", "80_plus": "80% Plus",
+  selo_cybenetics: "Selo Cybenetics", capacitor_japones: "Capacitor Japonês",
 }
 
 const MAX_ITEMS = 4
@@ -91,13 +96,15 @@ function formatCurrency(value: number) {
   }
 }
 
-function TierBadge({ tier }: { tier: string }) {
+/** `tier` é o valor gravado (GOAT..L) e manda na cor; `label` é o que aparece —
+ *  em Fontes o "L" se chama BOMBA (ver lib/tier-utils.ts). */
+function TierBadge({ tier, label }: { tier: string; label?: string }) {
   return (
     <span className={cn(
       "inline-flex items-center justify-center rounded px-2 py-0.5 text-xs font-bold tracking-wider",
       TIER_CLASS[tier] ?? "bg-muted/60 text-foreground"
     )}>
-      {tier}
+      {label ?? tier}
     </span>
   )
 }
@@ -109,7 +116,7 @@ type RowDef = {
   label: string
   getValue: (item: PeripheralRow) => string | null
   getBest?: (items: PeripheralRow[]) => string | null
-  renderValue?: (value: string) => React.ReactNode
+  renderValue?: (value: string, item?: PeripheralRow) => React.ReactNode
 }
 
 const ROWS: RowDef[] = [
@@ -134,7 +141,7 @@ const ROWS: RowDef[] = [
       }
       return bestId
     },
-    renderValue: (value) => <TierBadge tier={value} />,
+    renderValue: (value, item) => <TierBadge tier={value} label={item ? tierLabel(mapTier(value), item.category) : value} />,
   },
   {
     key: "connectivity",
@@ -808,7 +815,7 @@ export function ComparePageClient() {
                             )}
                             {value !== null ? (
                               <>
-                                {row.renderValue ? row.renderValue(value) : (
+                                {row.renderValue ? row.renderValue(value, item) : (
                                   <span className={cn(
                                     "text-center text-sm font-semibold leading-snug",
                                     isBest ? "text-primary" : "text-foreground"
@@ -866,7 +873,7 @@ export function ComparePageClient() {
                         <div className="flex size-4 items-center justify-center rounded-full bg-muted-foreground/15">
                           <Check className="size-2.5 text-muted-foreground/70" strokeWidth={3} />
                         </div>
-                        {row.renderValue && value ? row.renderValue(value) : (
+                        {row.renderValue && value ? row.renderValue(value, items[0]) : (
                           <span className="text-sm font-medium text-foreground/80">{value}</span>
                         )}
                       </div>

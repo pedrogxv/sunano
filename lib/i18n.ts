@@ -55,6 +55,7 @@ export type CategoryKey =
   | "monitors"
   | "switches"
   | "dac_amp"
+  | "psu"
 
 type Translations = {
   topbar: {
@@ -914,6 +915,7 @@ export const translations: Record<LocaleCode, Translations> = {
         monitors: "Monitores",
         switches: "Switches",
         dac_amp: "DAC/AMP",
+        psu: "Fontes",
       },
       descriptions: {
         mouse: "Navegue e compare os melhores mouses gamer para encontrar o ideal para o seu estilo de jogo. Formato, tamanho e peso impactam diretamente no conforto e precisão, enquanto métricas como sensor, DPI e polling rate determinam a acurácia em cada movimento.",
@@ -928,6 +930,7 @@ export const translations: Record<LocaleCode, Translations> = {
         chairs: "Cadeiras gamer e ergonômicas para longas sessões. Suporte lombar, ajuste de altura e material determinam o conforto e a saúde postural durante o jogo.",
         monitors: "Monitores para gaming com foco em taxa de atualização, tempo de resposta e tipo de painel. Encontre o monitor ideal para vantagem competitiva ou experiência visual premium em cada jogo.",
         switches: "Switches mecânicos, magnéticos e ópticos para teclados personalizados. Peso de atuação, sensação tátil e durabilidade influenciam na performance e preferência pessoal de cada jogador.",
+        psu: "Fontes de alimentação testadas em bancada: ripple, eficiência e temperatura sob carga normal, sobrecarga e teste máximo. Selos 80 Plus e Cybenetics, qualidade dos capacitores e garantia definem se a fonte protege ou coloca em risco o resto do setup.",
       },
       others: "Outros",
       othersDescription: "Confira periféricos de outras categorias, como IEMs, DAC/AMP, glasspads, switches, feet e cadeiras.",
@@ -2046,6 +2049,7 @@ export const translations: Record<LocaleCode, Translations> = {
         monitors: "Monitors",
         switches: "Switches",
         dac_amp: "DAC/AMP",
+        psu: "Fontes",
       },
       descriptions: {
         mouse: "Browse and compare the best gaming mice to find the ideal match for your play style. Shape, size, and weight directly impact comfort and precision, while performance metrics such as sensor, DPI and polling rate determine accuracy.",
@@ -2060,6 +2064,7 @@ export const translations: Record<LocaleCode, Translations> = {
         chairs: "Gaming and ergonomic chairs for long sessions. Lumbar support, height adjustment and material determine comfort and postural health during gaming.",
         monitors: "Gaming monitors focused on refresh rate, response time and panel type. Find the ideal monitor for competitive advantage or premium visual experience in every game.",
         switches: "Mechanical, magnetic and optical switches for custom keyboards. Actuation force, tactile feel and durability influence performance and each player's personal preference.",
+        psu: "Bench-tested power supplies: ripple, efficiency and temperature under normal load, overload and a maximum stress test. 80 Plus and Cybenetics certifications, capacitor quality and warranty decide whether the PSU protects or endangers the rest of your setup.",
       },
       others: "Others",
       othersDescription: "Check out peripherals from other categories, such as IEMs, DAC/AMP, glasspads, switches, feet and chairs.",

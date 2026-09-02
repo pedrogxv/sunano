@@ -210,6 +210,21 @@ h3,
   animation: skeleton-shimmer 1.6s ease-in-out infinite;
 }
 
+/* Preenchimento do "pill" ativo no BannerCarousel — a barrinha some do zero e
+   enche em linha reta até o próximo slide, em vez de já nascer cheia. A
+   duração é injetada via `--carousel-interval` (mesmo valor do setInterval do
+   componente), e o `key={currentIndex}` no elemento reinicia a animação do
+   zero sempre que o slide muda, seja por autoplay ou clique manual. */
+@keyframes carousel-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.animate-carousel-progress {
+  transform-origin: left;
+  animation: carousel-progress var(--carousel-interval, 10s) linear forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
   .stagger-children > * {
@@ -218,6 +233,9 @@ h3,
     transform: none;
   }
   .animate-shimmer {
+    animation: none;
+  }
+  .animate-carousel-progress {
     animation: none;
   }
 }

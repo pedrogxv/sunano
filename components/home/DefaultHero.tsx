@@ -11,7 +11,9 @@ import { cn } from "@/lib/utils"
  * ele aparece de dois jeitos — sozinho, como **fallback** enquanto não houver
  * nenhum banner ativo cadastrado em `/admin/banners`; ou como primeiro slide
  * do carrossel (`bare`), quando há banners — nesse caso a borda/fundo já vêm
- * do carrossel por fora, então o hero não duplica.
+ * do carrossel por fora, então o hero não duplica. O carrossel também
+ * sobrepõe os números da comunidade em cima de todo slide, então o bloco de
+ * estatísticas abaixo só aparece fora dele (`!bare`), pra não duplicar.
  */
 export default function DefaultHero({
   counts,
@@ -44,12 +46,7 @@ export default function DefaultHero({
 
       <div className="relative grid gap-6 px-6 py-10 md:grid-cols-[1.1fr_auto] md:items-center md:px-12 md:py-14">
         <div className="space-y-5">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background/70 py-1 pl-1.5 pr-3 text-xs font-semibold text-muted-foreground">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/images/mascot/sunano-icon.png" alt="" className="size-5 rounded-full" />
-            <span>Curadoria do Sunano, tierlist sempre fresca</span>
-          </div>
-
+          
           <h1 className="text-4xl font-black tracking-tight text-foreground md:text-5xl lg:text-6xl">
             Periféricos sem{" "}
             <span className="relative inline-block">
@@ -93,33 +90,35 @@ export default function DefaultHero({
             </Link>
           </div>
 
-          {/* Stats */}
-          <div className="flex flex-wrap gap-x-8 gap-y-3 border-t border-border pt-6">
-            <div>
-              <div className="text-2xl font-bold text-foreground">
-                <AnimatedCounter value={counts.peripherals} />
+          {/* Stats — só fora do carrossel; lá dentro o overlay já cobre isso */}
+          {!bare && (
+            <div className="flex flex-wrap gap-x-8 gap-y-3 border-t border-border pt-6">
+              <div>
+                <div className="text-2xl font-bold text-foreground">
+                  <AnimatedCounter value={counts.peripherals} />
+                </div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Periféricos
+                </div>
               </div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Periféricos
+              <div>
+                <div className="text-2xl font-bold text-foreground">
+                  <AnimatedCounter value={counts.reviews} />
+                </div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Reviews
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-foreground">
+                  <AnimatedCounter value={counts.forumPosts} />
+                </div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  Tópicos
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-2xl font-bold text-foreground">
-                <AnimatedCounter value={counts.reviews} />
-              </div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Reviews
-              </div>
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-foreground">
-                <AnimatedCounter value={counts.forumPosts} />
-              </div>
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Tópicos
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* Mascot */}

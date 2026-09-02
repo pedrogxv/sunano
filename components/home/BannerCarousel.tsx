@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react"
 
+import { AnimatedCounter } from "@/components/animated-counter"
 import { isInternalBannerLink } from "@/lib/banner-link"
 import { cn } from "@/lib/utils"
 
@@ -81,7 +82,13 @@ function SlideFrame({
       inert={!isCurrent}
       className={cn(
         "col-start-1 row-start-1 transition-opacity duration-700 ease-out motion-reduce:transition-none",
-        isCurrent ? "opacity-100" : "pointer-events-none opacity-0"
+        // Só o slide atual fica em fluxo normal — é ele quem define a altura
+        // da célula do grid. Os demais viram `absolute` (tirados do fluxo):
+        // sem isso, um banner com proporção diferente (ex.: quase quadrado
+        // entre banners bem largos) empurrava a altura do carrossel inteiro
+        // pela sua própria altura mesmo escondido, sobrando vão vazio abaixo
+        // de qualquer slide mais baixo que ele.
+        isCurrent ? "opacity-100" : "pointer-events-none absolute inset-0 opacity-0"
       )}
     >
       {children}
@@ -145,6 +152,32 @@ function BannerSlide({
   )
 }
 
+/** Pílula com os números da comunidade, sobreposta a qualquer slide (imagem ou hero). */
+function StatsOverlay({
+  counts,
+}: {
+  counts: { peripherals: number; reviews: number; forumPosts: number }
+}) {
+  const items = [
+    { value: counts.peripherals, label: "Periféricos" },
+    { value: counts.reviews, label: "Reviews" },
+    { value: counts.forumPosts, label: "Tópicos" },
+  ]
+
+  return (
+    <div className="pointer-events-auto flex items-center gap-3 rounded-full bg-black/40 px-3.5 py-1.5 text-white backdrop-blur-sm sm:gap-4">
+      {items.map(({ value, label }) => (
+        <div key={label} className="flex items-baseline gap-1.5">
+          <span className="text-sm font-bold">
+            <AnimatedCounter value={value} />
+          </span>
+          <span className="text-[9px] uppercase tracking-widest text-white/70">{label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 /** Seta de navegação lateral. */
 function ArrowButton({
   side,
@@ -174,10 +207,13 @@ function ArrowButton({
 
 export default function BannerCarousel({
   banners,
+  counts,
   intervalMs = DEFAULT_INTERVAL_MS,
   className,
 }: {
   banners: CarouselBanner[]
+  /** Números da comunidade exibidos em todos os slides (imagem ou hero). */
+  counts?: { peripherals: number; reviews: number; forumPosts: number }
   intervalMs?: number
   className?: string
 }) {
@@ -315,6 +351,12 @@ export default function BannerCarousel({
         )}
       </div>
 
+      {counts && (
+        <div className="pointer-events-none absolute left-3 top-3 z-10">
+          <StatsOverlay counts={counts} />
+        </div>
+      )}
+
       {hasControls && (
         <>
           <ArrowButton side="left" label="Banner anterior" onClick={() => goTo(currentIndex - 1)} />
@@ -335,11 +377,26 @@ export default function BannerCarousel({
                     aria-label={`Ir para o banner ${index + 1}`}
                     aria-current={isCurrent}
                     className={cn(
-                      "h-2 rounded-full transition-all duration-300 motion-reduce:transition-none",
+                      "relative h-2 overflow-hidden rounded-full transition-[width,background-color] duration-300 motion-reduce:transition-none",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40",
-                      isCurrent ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white/80"
+                      isCurrent ? "w-6 bg-white/25" : "w-2 bg-white/50 hover:bg-white/80"
                     )}
-                  />
+                  >
+                    {/* No dot ativo, a barra some do zero e enche até trocar de
+                        slide — parada (sem animação) enquanto o autoplay está
+                        pausado, já que aí não há contagem correndo pra mostrar.
+                        `key` reinicia a animação do zero a cada slide novo. */}
+                    {isCurrent && shouldAutoRotate && (
+                      <span
+                        key={currentIndex}
+                        style={{ "--carousel-interval": `${intervalMs}ms` } as React.CSSProperties}
+                        className="animate-carousel-progress absolute inset-0 rounded-full bg-white"
+                      />
+                    )}
+                    {isCurrent && !shouldAutoRotate && (
+                      <span className="absolute inset-0 rounded-full bg-white" />
+                    )}
+                  </button>
                 )
               })}
             </div>

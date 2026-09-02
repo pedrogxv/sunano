@@ -13,7 +13,6 @@ import {
 import BannerCarousel from "@/components/home/BannerCarousel"
 import DefaultHero from "@/components/home/DefaultHero"
 import { EventsShowcase } from "@/components/home/EventsShowcase"
-import HeroHighlightsBar from "@/components/home/HeroHighlightsBar"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getHomeData } from "@/lib/server/repositories/home-repository"
@@ -103,26 +102,25 @@ export default async function HomePage() {
       {/* Com banners no ar (/admin/banners) o topo vira um carrossel — o hero
           padrão é só mais um slide dele (kind "hero" no banco), então entra
           na mesma ordem/ativação que os demais. Sem nenhum banner no ar
-          (inclusive o hero desativado), cai no hero padrão sozinho, fixo. A
-          faixa abaixo preserva os CTAs e os números em todos os slides. */}
+          (inclusive o hero desativado), cai no hero padrão sozinho, fixo. O
+          carrossel sobrepõe os números da comunidade em todo slide (imagem
+          ou hero), então nenhum banner fica sem essa informação. */}
       {banners.length > 0 ? (
-        <div className="space-y-4">
-          <BannerCarousel
-            banners={banners.map((banner) =>
-              banner.kind === "hero"
-                ? { id: banner.id, kind: "custom" as const, content: <DefaultHero counts={counts} bare /> }
-                : {
-                    id: banner.id,
-                    kind: "image" as const,
-                    imageUrl: banner.image_url!,
-                    imageUrlMobile: banner.image_url_mobile,
-                    linkUrl: banner.link_url,
-                    altText: banner.alt_text,
-                  }
-            )}
-          />
-          <HeroHighlightsBar counts={counts} />
-        </div>
+        <BannerCarousel
+          counts={counts}
+          banners={banners.map((banner) =>
+            banner.kind === "hero"
+              ? { id: banner.id, kind: "custom" as const, content: <DefaultHero counts={counts} bare /> }
+              : {
+                  id: banner.id,
+                  kind: "image" as const,
+                  imageUrl: banner.image_url!,
+                  imageUrlMobile: banner.image_url_mobile,
+                  linkUrl: banner.link_url,
+                  altText: banner.alt_text,
+                }
+          )}
+        />
       ) : (
         <DefaultHero counts={counts} />
       )}

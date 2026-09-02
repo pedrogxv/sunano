@@ -120,8 +120,11 @@ export function StoreCategoryNav({
 
   return (
     <div className="relative" onMouseLeave={() => hoverGroup(null)}>
-      {/* Desktop: layout space-between em 3 blocos — Home | Categorias | Busca+Suporte. */}
-      <nav className="hidden grid-cols-[1fr_auto_1fr] items-center border-b border-[#262626] bg-card px-4 md:grid lg:px-8">
+      {/* Desktop: layout space-between em 3 blocos — Home | Categorias | Busca+Suporte.
+          gap-x garante que Avaliações nunca encoste na busca (as colunas 1fr não são
+          simétricas porque a coluna da busca é bem mais larga que a do Home, mas o
+          bloco de categorias já fica visualmente centralizado no espaço do meio). */}
+      <nav className="hidden grid-cols-[1fr_auto_1fr] items-center gap-x-8 border-b border-[#262626] bg-card px-4 md:grid lg:px-8">
         <Link
           href="/loja"
           className={cn(

@@ -9,7 +9,7 @@ import {
 } from "@/lib/server/repositories/peripherals-repository"
 import { PerifericosContent } from "./perifericos-content"
 import { mapTier } from "@/lib/tier-utils"
-import { CATEGORY_PLURAL_LABELS, isCategory, type Category } from "@/lib/tag-options"
+import { CATEGORY_PLURAL_LABELS, hasScoreRanking, isCategory, type Category } from "@/lib/tag-options"
 
 export const revalidate = 60
 
@@ -71,7 +71,8 @@ export default async function PerifericosPage({ searchParams }: PerifericosPageP
     // categorias, nunca filtrada pela categoria selecionada — senão as
     // outras categorias aparecem zeradas.
     getPeripheralFilterOptions(),
-    getTopRankedPeripherals(category, 3),
+    // Ranking por pontuação só existe em teclado/mouse — ver SCORE_CATEGORIES.
+    hasScoreRanking(category) ? getTopRankedPeripherals(category, 3) : Promise.resolve([]),
     listPeripheralIdsWithYoutubeReview(),
   ])
   const filterOptions = { ...categoryFilterOptions, categoryCounts: allCategoryOptions.categoryCounts }

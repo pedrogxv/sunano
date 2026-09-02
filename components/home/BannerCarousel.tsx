@@ -23,13 +23,21 @@ import { cn } from "@/lib/utils"
  * URL externa abre em nova aba.
  */
 
-export type CarouselBanner = {
-  id: string
-  imageUrl: string
-  imageUrlMobile: string | null
-  linkUrl: string | null
-  altText: string | null
-}
+export type CarouselBanner =
+  | {
+      id: string
+      kind: "image"
+      imageUrl: string
+      imageUrlMobile: string | null
+      linkUrl: string | null
+      altText: string | null
+    }
+  | {
+      id: string
+      /** Slide com conteúdo arbitrário (hoje só o hero fixo "Periféricos sem mistério") — sem imagem/link próprios, o carrossel só cuida da moldura. */
+      kind: "custom"
+      content: React.ReactNode
+    }
 
 const DEFAULT_INTERVAL_MS = 10_000
 
@@ -52,6 +60,35 @@ function usePrefersReducedMotion() {
   )
 }
 
+/** Moldura comum a todo slide: recorte no grid, `inert` fora de tela, fade de opacidade. */
+function SlideFrame({
+  children,
+  isCurrent,
+  index,
+  total,
+}: {
+  children: React.ReactNode
+  isCurrent: boolean
+  index: number
+  total: number
+}) {
+  return (
+    <div
+      role="group"
+      aria-roledescription="slide"
+      aria-label={`Banner ${index + 1} de ${total}`}
+      aria-hidden={!isCurrent}
+      inert={!isCurrent}
+      className={cn(
+        "col-start-1 row-start-1 transition-opacity duration-700 ease-out motion-reduce:transition-none",
+        isCurrent ? "opacity-100" : "pointer-events-none opacity-0"
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
 /** Imagem do slide + a camada clicável que a envolve (ou não, se não houver link). */
 function BannerSlide({
   banner,
@@ -59,7 +96,7 @@ function BannerSlide({
   index,
   total,
 }: {
-  banner: CarouselBanner
+  banner: Extract<CarouselBanner, { kind: "image" }>
   isCurrent: boolean
   index: number
   total: number
@@ -102,19 +139,9 @@ function BannerSlide({
   )
 
   return (
-    <div
-      role="group"
-      aria-roledescription="slide"
-      aria-label={`Banner ${index + 1} de ${total}`}
-      aria-hidden={!isCurrent}
-      inert={!isCurrent}
-      className={cn(
-        "col-start-1 row-start-1 transition-opacity duration-700 ease-out motion-reduce:transition-none",
-        isCurrent ? "opacity-100" : "pointer-events-none opacity-0"
-      )}
-    >
+    <SlideFrame index={index} total={total} isCurrent={isCurrent}>
       {content}
-    </div>
+    </SlideFrame>
   )
 }
 
@@ -271,15 +298,21 @@ export default function BannerCarousel({
           acompanha a imagem atual (sem cortar), e o crossfade acontece via
           opacidade em vez de position: absolute. */}
       <div className="relative grid w-full">
-        {banners.map((banner, index) => (
-          <BannerSlide
-            key={banner.id}
-            banner={banner}
-            index={index}
-            total={total}
-            isCurrent={index === currentIndex}
-          />
-        ))}
+        {banners.map((banner, index) =>
+          banner.kind === "custom" ? (
+            <SlideFrame key={banner.id} index={index} total={total} isCurrent={index === currentIndex}>
+              {banner.content}
+            </SlideFrame>
+          ) : (
+            <BannerSlide
+              key={banner.id}
+              banner={banner}
+              index={index}
+              total={total}
+              isCurrent={index === currentIndex}
+            />
+          )
+        )}
       </div>
 
       {hasControls && (

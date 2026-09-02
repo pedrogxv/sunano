@@ -25,7 +25,9 @@ const STORAGE_BUCKET = "peripherals"
 
 export type HomeBanner = {
   id: string
-  image_url: string
+  /** "image" = banner normal. "hero" = o bloco fixo "Periféricos sem mistério" (singleton, sem imagem própria). */
+  kind: "image" | "hero"
+  image_url: string | null
   image_url_mobile: string | null
   link_url: string | null
   alt_text: string | null
@@ -53,7 +55,7 @@ function isActiveLimitViolation(error: { message?: string | null } | null) {
 }
 
 const COLUMNS =
-  "id, image_url, image_url_mobile, link_url, alt_text, sort_order, is_active, starts_at, ends_at, created_at, updated_at"
+  "id, kind, image_url, image_url_mobile, link_url, alt_text, sort_order, is_active, starts_at, ends_at, created_at, updated_at"
 
 export type BannerWriteInput = {
   imageUrl: string
@@ -180,10 +182,20 @@ export async function updateBanner(
 
   const db = createSupabaseAdminClient()
 
+  const touchesContent =
+    patch.imageUrl !== undefined ||
+    patch.imageUrlMobile !== undefined ||
+    patch.linkUrl !== undefined ||
+    patch.altText !== undefined
+
   // Antes de trocar a arte, guarda a antiga para remover do storage depois.
-  const previous = patch.imageUrl !== undefined || patch.imageUrlMobile !== undefined
-    ? await findBannerById(id)
-    : null
+  const previous = touchesContent ? await findBannerById(id) : null
+
+  if (touchesContent && previous?.kind === "hero") {
+    throw new Error(
+      "O banner padrão da Home não tem conteúdo editável — só pode ser ativado, desativado ou reordenado."
+    )
+  }
 
   const { data, error } = await db
     .from("home_banners")
@@ -232,6 +244,10 @@ export async function deleteBanner(id: string): Promise<void> {
   const db = createSupabaseAdminClient()
 
   const banner = await findBannerById(id)
+
+  if (banner?.kind === "hero") {
+    throw new Error("O banner padrão da Home não pode ser removido — desative-o em vez disso.")
+  }
 
   const { error } = await db.from("home_banners").delete().eq("id", id)
   if (error) {

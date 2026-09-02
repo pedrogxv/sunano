@@ -17,7 +17,7 @@ export type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | 
 
 export const ALL_CATEGORIES: Category[] = ["keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp", "psu"]
 
-export type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "wired" | "wireless" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones"
+export type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "wired" | "wireless" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones" | "v_shaped" | "u_shaped" | "neutro" | "neutro_quente" | "quente" | "escuro" | "basshead" | "vocal_forward" | "harman" | "ief_neutral" | "jm_1" | "sub_bass_focus" | "mid_bass_focus" | "punchy" | "smooth" | "arejado" | "sibilante" | "detalhado" | "palco_amplo" | "boa_separacao" | "metal" | "resina" | "plastico" | "shell_pequeno" | "shell_grande" | "deep_fit" | "boa_isolacao" | "driver_flex" | "planar"
 
 export type TagOption = { key: Tag; en: string; pt: string; color: string }
 
@@ -62,7 +62,10 @@ export const GENERIC_TAGS_OPTIONS: (TagOption & { categories?: Category[] })[] =
   { key: "macio", en: "Soft", pt: "Macio", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
   { key: "afetado_umidade", en: "Moisture affected", pt: "Afetado por umidade", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400", categories: NON_KEYBOARD_MOUSE_CATEGORIES },
   { key: "ultrapassado", en: "Outdated", pt: "Ultrapassado", color: "border-gray-400/50 bg-gray-500/10 text-gray-300 data-[active=true]:bg-gray-500/30 data-[active=true]:border-gray-400", categories: ["keyboard", "pcb"] },
-  { key: "headphone", en: "Headphone", pt: "Headphone", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400", categories: ["iem"] },
+  // "headphone" saiu daqui: IEM agora tem lista própria em IEM_TAGS_OPTIONS (abaixo), então
+  // esta entrada nunca mais era lida. A key continua no union `Tag` e nos mapas de label/cor —
+  // itens antigos com essa tag salva ficam órfãos e se autolimpam ao serem reabertos/salvos no
+  // admin (ver `sanitizeTagsForCategory`).
 ]
 
 // Lista de tags exclusiva da categoria Mousepad — substitui completamente a lista genérica
@@ -154,6 +157,45 @@ export const PSU_TAGS_OPTIONS: TagOption[] = [
   { key: "capacitor_japones", en: "Japanese capacitor", pt: "Capacitor Japonês", color: "border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-300 data-[active=true]:bg-fuchsia-500/30 data-[active=true]:border-fuchsia-400" },
 ]
 
+// Lista de tags exclusiva da categoria IEM — substitui completamente a lista genérica acima
+// quando a categoria selecionada no formulário for "iem". Diferente das outras categorias, o
+// vocabulário aqui é o de audiófilo: assinatura sonora (V-Shaped, Neutro, Basshead...), curva
+// alvo de referência (Harman, IEF Neutral, JM-1), característica técnica (Palco Amplo,
+// Sibilante...) e construção/encaixe (Resina, Shell Pequeno, Deep Fit...).
+export const IEM_TAGS_OPTIONS: TagOption[] = [
+  { key: "competitive", en: "Competitive", pt: "Competitivo", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
+  { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400" },
+  { key: "v_shaped", en: "V-Shaped", pt: "V-Shaped", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400" },
+  { key: "u_shaped", en: "U-Shaped", pt: "U-Shaped", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400" },
+  { key: "neutro", en: "Neutral", pt: "Neutro", color: "border-slate-400/50 bg-slate-500/10 text-slate-300 data-[active=true]:bg-slate-500/30 data-[active=true]:border-slate-400" },
+  { key: "neutro_quente", en: "Warm neutral", pt: "Neutro Quente", color: "border-stone-400/50 bg-stone-500/10 text-stone-300 data-[active=true]:bg-stone-500/30 data-[active=true]:border-stone-400" },
+  { key: "quente", en: "Warm", pt: "Quente", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400" },
+  { key: "escuro", en: "Dark", pt: "Escuro", color: "border-zinc-400/50 bg-zinc-500/10 text-zinc-300 data-[active=true]:bg-zinc-500/30 data-[active=true]:border-zinc-400" },
+  { key: "basshead", en: "Basshead", pt: "Basshead", color: "border-purple-400/50 bg-purple-500/10 text-purple-300 data-[active=true]:bg-purple-500/30 data-[active=true]:border-purple-400" },
+  { key: "vocal_forward", en: "Vocal Forward", pt: "Vocal Forward", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400" },
+  { key: "harman", en: "Harman", pt: "Harman", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400" },
+  { key: "ief_neutral", en: "IEF Neutral", pt: "IEF Neutral", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400" },
+  { key: "jm_1", en: "JM-1", pt: "JM-1", color: "border-sky-400/50 bg-sky-500/10 text-sky-300 data-[active=true]:bg-sky-500/30 data-[active=true]:border-sky-400" },
+  { key: "sub_bass_focus", en: "Sub-bass Focus", pt: "Sub-bass Focus", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
+  { key: "mid_bass_focus", en: "Mid-bass Focus", pt: "Mid-bass Focus", color: "border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-300 data-[active=true]:bg-fuchsia-500/30 data-[active=true]:border-fuchsia-400" },
+  { key: "punchy", en: "Punchy", pt: "Punchy", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400" },
+  { key: "smooth", en: "Smooth", pt: "Smooth", color: "border-teal-400/50 bg-teal-500/10 text-teal-300 data-[active=true]:bg-teal-500/30 data-[active=true]:border-teal-400" },
+  { key: "arejado", en: "Airy", pt: "Arejado", color: "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 data-[active=true]:bg-cyan-500/30 data-[active=true]:border-cyan-400" },
+  { key: "sibilante", en: "Sibilant", pt: "Sibilante", color: "border-yellow-400/50 bg-yellow-500/10 text-yellow-300 data-[active=true]:bg-yellow-500/30 data-[active=true]:border-yellow-400" },
+  { key: "detalhado", en: "Detailed", pt: "Detalhado", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400" },
+  { key: "palco_amplo", en: "Wide Soundstage", pt: "Palco Amplo", color: "border-lime-400/50 bg-lime-500/10 text-lime-300 data-[active=true]:bg-lime-500/30 data-[active=true]:border-lime-400" },
+  { key: "boa_separacao", en: "Good Separation", pt: "Boa Separação", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400" },
+  { key: "metal", en: "Metal", pt: "Metal", color: "border-neutral-400/50 bg-neutral-500/10 text-neutral-300 data-[active=true]:bg-neutral-500/30 data-[active=true]:border-neutral-400" },
+  { key: "resina", en: "Resin", pt: "Resina", color: "border-sky-400/50 bg-sky-500/10 text-sky-300 data-[active=true]:bg-sky-500/30 data-[active=true]:border-sky-400" },
+  { key: "plastico", en: "Plastic", pt: "Plástico", color: "border-gray-400/50 bg-gray-500/10 text-gray-300 data-[active=true]:bg-gray-500/30 data-[active=true]:border-gray-400" },
+  { key: "shell_pequeno", en: "Small Shell", pt: "Shell Pequeno", color: "border-teal-400/50 bg-teal-500/10 text-teal-300 data-[active=true]:bg-teal-500/30 data-[active=true]:border-teal-400" },
+  { key: "shell_grande", en: "Large Shell", pt: "Shell Grande", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400" },
+  { key: "deep_fit", en: "Deep Fit", pt: "Deep Fit", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400" },
+  { key: "boa_isolacao", en: "Good Isolation", pt: "Boa Isolação", color: "border-emerald-400/50 bg-emerald-500/10 text-emerald-300 data-[active=true]:bg-emerald-500/30 data-[active=true]:border-emerald-400" },
+  { key: "driver_flex", en: "Driver Flex", pt: "Driver Flex", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400" },
+  { key: "planar", en: "Planar", pt: "Planar", color: "border-purple-400/50 bg-purple-500/10 text-purple-300 data-[active=true]:bg-purple-500/30 data-[active=true]:border-purple-400" },
+]
+
 // Ponto único de extensão: para dar a uma categoria sua própria lista de tags (em vez de herdar
 // a lista genérica acima), basta declarar um novo array de TagOption (como MOUSEPAD_TAGS_OPTIONS)
 // e adicionar a entrada correspondente aqui — nenhum outro trecho do formulário precisa mudar.
@@ -162,6 +204,7 @@ export const CATEGORY_TAGS_OVERRIDE: Partial<Record<Category, TagOption[]>> = {
   glasspad: GLASSPAD_TAGS_OPTIONS,
   monitors: MONITORS_TAGS_OPTIONS,
   headset: HEADSET_TAGS_OPTIONS,
+  iem: IEM_TAGS_OPTIONS,
   psu: PSU_TAGS_OPTIONS,
 }
 
@@ -219,6 +262,19 @@ export const CATEGORY_PLURAL_LABELS: Record<Category, string> = {
   switches: "Switches",
   dac_amp: "DAC/AMP",
   psu: "Fontes",
+}
+
+/**
+ * Categorias que usam a "Pontuação" numérica (`specs.details.score`) — é ela, e só ela,
+ * que monta o ranking por nota (página /ranking e a faixa de "top 3" da listagem de
+ * periféricos). Nas demais categorias a avaliação vive nas Notas de 0 a 6, então o campo
+ * sai do formulário de admin e a faixa de ranking some da listagem.
+ */
+export const SCORE_CATEGORIES: Category[] = ["keyboard", "mouse"]
+
+/** `true` quando a categoria participa do ranking por pontuação — ver `SCORE_CATEGORIES`. */
+export function hasScoreRanking(category: string | null | undefined): boolean {
+  return !!category && (SCORE_CATEGORIES as string[]).includes(category)
 }
 
 /** `true` quando a string é uma categoria conhecida — filtra `?category=` inválido. */

@@ -3,7 +3,7 @@
 import type { ComponentType, ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Activity, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
+import { Activity, AudioLines, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
 import { FaAmazon } from "react-icons/fa"
 import { SiShopee } from "react-icons/si"
 
@@ -151,8 +151,8 @@ const RANKING_MODES_BY_CATEGORY: Record<string, { key: RankingMode; label: strin
   ],
   iem: [
     { key: "overall", label: "Geral", color: "bg-red-400" },
-    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
     { key: "recommended", label: "Gamer", color: "bg-purple-400" },
+    { key: "value", label: "Custo Benefício", color: "bg-emerald-400" },
   ],
   headset: [
     { key: "overall", label: "Geral", color: "bg-red-400" },
@@ -296,6 +296,35 @@ const TAG_LABELS: Record<Tag, string> = {
   "80_plus": "80% Plus",
   selo_cybenetics: "Selo Cybenetics",
   capacitor_japones: "Capacitor Japonês",
+  v_shaped: "V-Shaped",
+  u_shaped: "U-Shaped",
+  neutro: "Neutro",
+  neutro_quente: "Neutro Quente",
+  quente: "Quente",
+  escuro: "Escuro",
+  basshead: "Basshead",
+  vocal_forward: "Vocal Forward",
+  harman: "Harman",
+  ief_neutral: "IEF Neutral",
+  jm_1: "JM-1",
+  sub_bass_focus: "Sub-bass Focus",
+  mid_bass_focus: "Mid-bass Focus",
+  punchy: "Punchy",
+  smooth: "Smooth",
+  arejado: "Arejado",
+  sibilante: "Sibilante",
+  detalhado: "Detalhado",
+  palco_amplo: "Palco Amplo",
+  boa_separacao: "Boa Separação",
+  metal: "Metal",
+  resina: "Resina",
+  plastico: "Plástico",
+  shell_pequeno: "Shell Pequeno",
+  shell_grande: "Shell Grande",
+  deep_fit: "Deep Fit",
+  boa_isolacao: "Boa Isolação",
+  driver_flex: "Driver Flex",
+  planar: "Planar",
 }
 
 function formatTagLabel(tag: string, category?: string) {
@@ -540,6 +569,10 @@ export function PeripheralDetailView({
 
   const isSwitch = data.category === "switches"
 
+  // IEM: notas, ficha técnica e curva de tuning próprias — ver o formulário de admin.
+  const isIem = data.category === "iem"
+  const tuningCurveImage = typeof details.tuningCurveImage === "string" ? details.tuningCurveImage.trim() : ""
+
   // Fonte: a ficha é um relatório de bancada (ver lib/psu-specs.ts). Cada cenário
   // de carga vira um card próprio, e um cenário que nunca foi medido não aparece.
   const isPsu = data.category === "psu"
@@ -576,10 +609,9 @@ export function PeripheralDetailView({
       ].filter((row) => row.value)
     : []
 
-  // Em Fontes o card de review só aparece se houver post de blog vinculado: o campo
-  // de link de review sai do formulário dessa categoria, então o card ficaria só com
-  // a mensagem de "nenhum review publicado".
-  const showReviewCard = !isPsu || !!reviewUrl || relatedPosts.length > 0
+  // O review em vídeo é opcional em toda categoria: sem link de vídeo e sem post de
+  // blog vinculado, o card inteiro sai da página em vez de exibir um vazio.
+  const showReviewCard = !!reviewUrl || relatedPosts.length > 0
 
   // Card de comentário assinado — sem especialista escolhido, mostra só o texto.
   const expertAuthor = parseExpertAuthor(details.expertAuthor)
@@ -597,7 +629,8 @@ export function PeripheralDetailView({
   const formatKeyboardType = (v?: string) =>
     v === "mechanical" ? "Mecânico" : v === "optical" ? "Óptico" : v === "magnetic" ? "Magnético" : v
 
-  const formatTrimode = (v?: string) =>
+  // Campos guardados como "yes"/"no" (Trimode, Microfone...).
+  const formatYesNo = (v?: string) =>
     v === "yes" ? "Sim" : v === "no" ? "Não" : v
 
   // Switches usam faixa de preço (priceTier) em vez de valor exato.
@@ -620,7 +653,7 @@ export function PeripheralDetailView({
           { label: "Sensor", value: specs.driver ?? details.sensor, group: "specs" },
           { label: "Polling Rate", value: details.pollingRate ?? specs.pollingRate, group: "specs" },
           { label: "Coating", value: details.coating ?? specs.coating, group: "specs" },
-          { label: "Trimode", value: formatTrimode(specs.trimode), group: "specs" },
+          { label: "Trimode", value: formatYesNo(specs.trimode), group: "specs" },
           { label: "Bateria", value: details.battery ?? specs.battery, group: "specs" },
           { label: "Autonomia", value: details.batteryLife ?? specs.batteryLife, group: "specs" },
         ]
@@ -663,15 +696,27 @@ export function PeripheralDetailView({
           { label: "Taxa de atualizacao", value: refreshRateValue ? `${refreshRateValue}Hz` : undefined, group: "performance" },
         ]
       case "headset":
-      case "iem":
         return [...specsBase,
           { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
           { label: "Compatibilidade", value: details.compatibility, group: "specs" },
         ]
+      case "iem":
+        return [...specsBase,
+          { label: "Drivers", value: details.drivers, group: "specs" },
+          { label: "Impedância", value: details.impedance, group: "specs" },
+          { label: "Sensibilidade", value: details.sensitivity, group: "specs" },
+          { label: "Conector", value: details.connector, group: "specs" },
+          { label: "Plug", value: details.plug, group: "specs" },
+          { label: "Material", value: details.material, group: "specs" },
+          // Texto cru: em IEM o peso é escrito "8 g por lado", e a coluna weight_g
+          // (numérica) perderia o "por lado" na exibição.
+          { label: "Peso", value: details.weight ?? specs.weight, group: "specs" },
+          { label: "Microfone", value: formatYesNo(details.microphone), group: "specs" },
+        ]
       case "dac_amp":
         return [...specsBase,
           { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
-          { label: "Trimode", value: formatTrimode(specs.trimode), group: "specs" },
+          { label: "Trimode", value: formatYesNo(specs.trimode), group: "specs" },
         ]
       case "psu":
         // Garantia primeiro: numa fonte é o dado que mais pesa na decisão de compra.
@@ -734,8 +779,10 @@ export function PeripheralDetailView({
     return { shapeBoxWidth: Math.round(rawWidth * scale), shapeBoxHeight: Math.round(rawHeight * scale) }
   })()
 
+  const showTuningCurve = isIem && !!tuningCurveImage
+
   const specCardCount =
-    1 + (performanceRows.length > 0 ? 1 : 0) + (showShape ? 1 : 0) + (isSwitch ? 1 : 0)
+    1 + (performanceRows.length > 0 ? 1 : 0) + (showShape ? 1 : 0) + (isSwitch ? 1 : 0) + (showTuningCurve ? 1 : 0)
 
   const classificationsList = classifications.length > 0
     ? classifications
@@ -848,6 +895,18 @@ export function PeripheralDetailView({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <RatingRow label="Geral" rating={ratings.overall} />
+                  {isIem ? (
+                    // IEM tem sua própria lista de notas, na ordem definida pro formulário
+                    // de admin (ver RATING_FIELD_ORDER_BY_CATEGORY em app/admin/tierlist/form.tsx).
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                      <RatingRow label="Tuning" rating={ratings.performance} />
+                      <RatingRow label="Cabo" rating={ratings.software} />
+                      <RatingRow label="Ponteiras" rating={ratings.battery} />
+                      <RatingRow label="Construção" rating={ratings.build} />
+                      <RatingRow label="Custo-Benefício" rating={ratings.value} />
+                      <RatingRow label="Controle de Qualidade" rating={ratings.qc} />
+                    </div>
+                  ) : (
                   <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                     {data.category !== "pcb" && (
                       <RatingRow label={isPsu ? "Componentes" : data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />
@@ -860,6 +919,7 @@ export function PeripheralDetailView({
                     <RatingRow label="QC" rating={ratings.qc} />
                     <RatingRow label="Custo-beneficio" rating={ratings.value} />
                   </div>
+                  )}
                 </CardContent>
               </Card>
 
@@ -1214,6 +1274,26 @@ export function PeripheralDetailView({
                   </Card>
                 )}
 
+                {showTuningCurve && (
+                  <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
+                    <CardHeader>
+                      <InfoCardTitle icon={AudioLines} accent="violet">Curva de Tuning</InfoCardTitle>
+                      <CardDescription className="text-xs">Resposta de frequência medida do fone.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-border bg-black">
+                        <Image
+                          src={tuningCurveImage}
+                          alt={`Curva de tuning de ${data.name}`}
+                          fill
+                          sizes="(max-width: 768px) 100vw, 360px"
+                          className="object-contain p-2"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {isSwitch && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
@@ -1333,11 +1413,6 @@ export function PeripheralDetailView({
                         </Link>
                       ))}
                     </div>
-                  )}
-                  {!reviewUrl && (!relatedPosts || relatedPosts.length === 0) && (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhum review publicado para este periferico.
-                    </p>
                   )}
                 </CardContent>
                 </Card>

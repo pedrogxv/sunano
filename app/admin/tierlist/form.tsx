@@ -64,7 +64,7 @@ import {
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
 import type { PeripheralExpertAuthor } from "@/lib/peripheral-expert"
 import { parseExpertAuthor } from "@/lib/peripheral-expert"
-import { getTagOptionsForCategory, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
+import { getTagOptionsForCategory, hasScoreRanking, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
@@ -162,6 +162,14 @@ const peripheralSchema = z.object({
   stoppingPower: z.string().optional(),
   thickness: z.string().optional(),
   surfaceMaterial: z.string().optional(),
+  // IEM (fones in-ear) — ficha técnica própria, ver a seção de specs por categoria.
+  drivers: z.string().optional(),
+  impedance: z.string().optional(),
+  sensitivity: z.string().optional(),
+  connector: z.string().optional(),
+  plug: z.string().optional(),
+  material: z.string().optional(),
+  microphone: z.string().optional(),
   hasBattery: z.boolean().optional(),
   softwareInfo: z.string().optional(),
   switchPeripheralId: z.string().optional(),
@@ -272,8 +280,8 @@ const TIERLIST_MODE_OPTIONS: Record<Category, { key: TierlistMode; label: string
   ],
   iem: [
     { key: "overall", label: "Geral" },
-    { key: "value", label: "Custo Benefício" },
     { key: "recommended", label: "Gamer" },
+    { key: "value", label: "Custo Benefício" },
   ],
   headset: [
     { key: "overall", label: "Geral" },
@@ -395,6 +403,7 @@ function buildSpecsPayload(
     selectedTierlistCategories: TierlistMode[]
     gallery: string[]
     shapeImage?: string | null
+    tuningCurveImage?: string | null
     expertAuthor?: PeripheralExpertAuthor | null
   }
 ) {
@@ -434,7 +443,7 @@ function buildSpecsPayload(
     reviewCategory: data.reviewCategory ?? null,
     reviewApproved: data.reviewApproved ?? false,
     details: {
-      rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: data.score ?? undefined,
+      rankLabel: data.rankLabel || undefined, ranking: data.ranking || undefined, score: hasScoreRanking(data.category) ? data.score ?? undefined : undefined,
       reviewUrl: data.reviewUrl || undefined,
       soundUrl: data.soundUrl || undefined,
       guideUrl: data.guideUrl || undefined, wikiUrl: data.wikiUrl || undefined,
@@ -445,6 +454,11 @@ function buildSpecsPayload(
       softwareInfo: data.softwareInfo || undefined,
       switchPeripheralId: data.switchPeripheralId || undefined,
       priceTier: data.priceTier || undefined,
+      drivers: data.drivers || undefined, impedance: data.impedance || undefined,
+      sensitivity: data.sensitivity || undefined, connector: data.connector || undefined,
+      plug: data.plug || undefined, material: data.material || undefined,
+      microphone: data.microphone || undefined,
+      tuningCurveImage: opts.tuningCurveImage || undefined,
       weight: data.weight || undefined, latency: data.latency || undefined,
       deadzone: data.deadzone || undefined, rtMin: data.rtMin || undefined,
       features: data.features || undefined,
@@ -515,6 +529,23 @@ const RATING_FIELDS: { key: keyof PeripheralFormData; label: string; ptLabel: st
   { key: "ratingQc", label: "QC", ptLabel: "Controle de Qualidade" },
   { key: "ratingMaintenance", label: "Maintenance", ptLabel: "Manutenção" },
 ]
+
+/**
+ * Ordem em que as notas aparecem no formulário. Só IEM sai da ordem padrão: a lista
+ * de notas dessa categoria foi definida numa sequência própria (Geral, Tuning, Cabo,
+ * Ponteiras, Construção, Custo-Benefício, QC) e a página pública segue a mesma ordem.
+ */
+const RATING_FIELD_ORDER_BY_CATEGORY: Partial<Record<Category, (keyof PeripheralFormData)[]>> = {
+  iem: ["ratingOverall", "ratingPerformance", "ratingSoftware", "ratingBattery", "ratingBuild", "ratingValue", "ratingQc"],
+}
+
+function ratingFieldsForCategory(category: Category) {
+  const order = RATING_FIELD_ORDER_BY_CATEGORY[category]
+  if (!order) return RATING_FIELDS
+  return order
+    .map((key) => RATING_FIELDS.find((field) => field.key === key))
+    .filter((field): field is (typeof RATING_FIELDS)[number] => !!field)
+}
 
 // Mapeia cada flag de revisão para a seção do formulário que deve abrir e
 // receber o scroll quando se chega aqui via /admin/tierlist/{id}?focus=<flag>
@@ -1070,6 +1101,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   // pública. Upload único, sem remoção de fundo (o admin já sobe a foto pronta).
   const [shapeImageFile, setShapeImageFile] = useState<File | null>(null)
   const [shapeImagePreview, setShapeImagePreview] = useState<string | null>(null)
+  const [tuningCurveFile, setTuningCurveFile] = useState<File | null>(null)
+  const [tuningCurvePreview, setTuningCurvePreview] = useState<string | null>(null)
 
   const form = useForm<PeripheralFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1085,6 +1118,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       golpe: false,
       golpeMotivo: "",
       rankLabel: "", ranking: undefined, score: undefined, reviewUrl: "", soundUrl: "", guideUrl: "", wikiUrl: "",
+      drivers: "", impedance: "", sensitivity: "", connector: "", plug: "", material: "", microphone: "",
       summary: "", highlights: "", pros: "", cons: "", gallery: "",
       softwareInfo: "", switchPeripheralId: "", priceTier: "",
       buyLinkAliexpress: "", buyLinkMercadoLivre: "", buyLinkAmazon: "", buyLinkShopee: "",
@@ -1138,7 +1172,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     image_url: images[0] ?? null,
     specs: {
       ...boardSpecs,
-      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview, expertAuthor }),
+      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview, tuningCurveImage: tuningCurvePreview, expertAuthor }),
     },
   }
 
@@ -1302,6 +1336,13 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           softwareInfo: data.specs?.details?.softwareInfo ?? "",
           switchPeripheralId: data.specs?.details?.switchPeripheralId ?? "",
           priceTier: data.specs?.details?.priceTier ?? "",
+          drivers: data.specs?.details?.drivers ?? "",
+          impedance: data.specs?.details?.impedance ?? "",
+          sensitivity: data.specs?.details?.sensitivity ?? "",
+          connector: data.specs?.details?.connector ?? "",
+          plug: data.specs?.details?.plug ?? "",
+          material: data.specs?.details?.material ?? "",
+          microphone: data.specs?.details?.microphone ?? "",
           highlights: Array.isArray(data.specs?.details?.highlights) ? data.specs.details.highlights.join("\n") : data.specs?.details?.highlights ?? "",
           pros: Array.isArray(data.specs?.details?.pros) ? data.specs.details.pros.join("\n") : data.specs?.details?.pros ?? "",
           cons: Array.isArray(data.specs?.details?.cons) ? data.specs.details.cons.join("\n") : data.specs?.details?.cons ?? "",
@@ -1380,8 +1421,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         const galleryArr = Array.isArray(data.specs?.details?.gallery) ? data.specs.details.gallery : []
         setImages([data.image_url, ...galleryArr].filter(Boolean))
         setShapeImagePreview(data.specs?.details?.shapeImage ?? null)
+        setTuningCurvePreview(data.specs?.details?.tuningCurveImage ?? null)
         setExpertAuthor(parseExpertAuthor(data.specs?.details?.expertAuthor))
         setShapeImageFile(null)
+        setTuningCurveFile(null)
 
         const switchId = data.specs?.details?.switchPeripheralId
         if (switchId) {
@@ -1449,11 +1492,27 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         shapeImageUrl = shapeData.publicUrl
       }
 
+      let tuningCurveUrl = tuningCurvePreview
+      if (tuningCurveFile) {
+        setUploading(true)
+        const curveForm = new FormData()
+        curveForm.set("file", tuningCurveFile)
+        const curveRes = await fetch("/api/admin/peripherals/upload-image", {
+          method: "POST",
+          body: curveForm,
+        })
+        const curveData = (await curveRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
+        if (!curveRes.ok || !curveData?.publicUrl) {
+          throw new Error(curveData?.error ?? "Falha ao enviar a curva de tuning")
+        }
+        tuningCurveUrl = curveData.publicUrl
+      }
+
       // Mesmo merge do preview: o que é do board entra primeiro, e os campos do
       // formulário mandam em cima (nenhuma chave de `buildSpecsPayload` começa com "admin").
       const specs = {
         ...boardSpecs,
-        ...buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl, expertAuthor }),
+        ...buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl, tuningCurveImage: tuningCurveUrl, expertAuthor }),
       }
 
       // Switches usam faixa de preço (priceTier); o valor numérico fica em 0.
@@ -1609,6 +1668,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const removeShapeImage = () => {
     setShapeImageFile(null)
     setShapeImagePreview(null)
+  }
+
+  const handleTuningCurveSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    const preview = await fileToDataUrl(file)
+    setTuningCurveFile(file)
+    setTuningCurvePreview(preview)
+  }
+
+  const removeTuningCurve = () => {
+    setTuningCurveFile(null)
+    setTuningCurvePreview(null)
   }
 
   const toggleTag = (tag: Tag) =>
@@ -2055,7 +2128,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               "Avalie cada aspecto de 1 (pior) a 6 (melhor). Clique × para limpar."
             </p>
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-              {RATING_FIELDS.map((field) => {
+              {ratingFieldsForCategory(watchedCategory).map((field) => {
                 let label = field.ptLabel
                 if (field.key === "ratingBattery" && watchedCategory === "keyboard") {
                   label = "Digitação"
@@ -2070,10 +2143,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   if (field.key === "ratingBuild") label = "Superfície"
                   if (field.key === "ratingBattery") label = "Costura"
                 }
-                if (watchedCategory === "iem" || watchedCategory === "headset") {
+                // IEM tem vocabulário próprio: o que se avalia num fone in-ear é o tuning,
+                // o cabo e as ponteiras que vêm na caixa — não software nem bateria.
+                if (watchedCategory === "iem") {
+                  if (field.key === "ratingPerformance") label = "Tuning"
+                  if (field.key === "ratingSoftware") label = "Cabo"
+                  if (field.key === "ratingBattery") label = "Ponteiras"
+                }
+                if (watchedCategory === "headset") {
                   if (field.key === "ratingSoftware") label = "Equalização"
-                  if (field.key === "ratingBattery" && watchedCategory === "iem") return null
-                  if (field.key === "ratingBattery" && watchedCategory === "headset" && !form.watch("hasBattery")) return null
+                  if (field.key === "ratingBattery" && !form.watch("hasBattery")) return null
                 }
                 if (watchedCategory === "feet") {
                   if (field.key === "ratingBuild") label = "Material"
@@ -2130,10 +2209,15 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         {/* SECTION 6: Specs por categoria */}
         <FormSection id="section-technical-specs" forceOpen={forceOpenIds.has("section-technical-specs")} title={t.admin.tierlistForm.sectionTechnicalSpecs} icon={<FileText className="size-4" />} defaultOpen>
           <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Pontuação"}</label>
-              <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" type="number" min={0} step={0.25} placeholder="788.5" {...form.register("score", { valueAsNumber: true })} />
-            </div>
+            {/* Pontuação alimenta o ranking numérico (/ranking e a seção "top" da
+                listagem), que hoje só existe pra teclado e mouse — nas demais
+                categorias o campo ficava sempre vazio e só ocupava espaço. */}
+            {hasScoreRanking(watchedCategory) && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Pontuação"}</label>
+                <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" type="number" min={0} step={0.25} placeholder="788.5" {...form.register("score", { valueAsNumber: true })} />
+              </div>
+            )}
 
             {watchedCategory === "mouse" && (
               <>
@@ -3096,7 +3180,77 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </>
             )}
 
-            {(watchedCategory === "iem" || watchedCategory === "headset") && (
+            {/* IEM: ficha de fone in-ear (driver, impedância, conector...) — nada a ver com
+                a de headset, que continua sendo conectividade/trimode/compatibilidade. */}
+            {watchedCategory === "iem" && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Drivers"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="1DD, 1DD + 2BA, Planar" {...form.register("drivers")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Impedância"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="32 Ω" {...form.register("impedance")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Sensibilidade"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="108 dB" {...form.register("sensitivity")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conector"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="2-Pin 0.78 mm / MMCX" {...form.register("connector")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Plug"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="3.5 mm / 4.4 mm" {...form.register("plug")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Material"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Resina / Alumínio / Plástico / Metal" {...form.register("material")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Peso"}</label>
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="8 g por lado" {...form.register("weight")} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Microfone"}</label>
+                  <Select value={form.watch("microphone") || ""} onValueChange={(v) => form.setValue("microphone", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">{"Sim"}</SelectItem>
+                      <SelectItem value="no">{"Não"}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Curva de Tuning"}</label>
+                  <p className="text-[10px] text-muted-foreground/60">{"Gráfico de resposta de frequência do fone. Aparece num card próprio na página do IEM."}</p>
+                  {tuningCurvePreview ? (
+                    <div className="relative group w-48 h-28 rounded-lg overflow-hidden border border-border bg-black">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={tuningCurvePreview} alt="Curva de tuning" className="w-full h-full object-contain p-2" />
+                      <button
+                        type="button"
+                        onClick={removeTuningCurve}
+                        className="absolute top-0.5 right-0.5 size-5 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/15 bg-[#141416] p-3 transition hover:border-primary/40 hover:bg-primary/[0.06]">
+                      <input accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleTuningCurveSelect} type="file" />
+                      <Upload className="size-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">{"Enviar curva"}</span>
+                    </label>
+                  )}
+                </div>
+              </>
+            )}
+
+            {watchedCategory === "headset" && (
               <>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Conectividade"}</label>
@@ -3126,20 +3280,18 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Compatibilidade"}</label>
                   <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Windows, macOS, PS5" {...form.register("compatibility")} />
                 </div>
-                {watchedCategory === "headset" && (
-                  <div className="flex items-center gap-2 col-span-full">
-                    <input
-                      type="checkbox"
-                      id="hasBattery"
-                      checked={!!form.watch("hasBattery")}
-                      onChange={(e) => form.setValue("hasBattery", e.target.checked)}
-                      className="h-4 w-4 rounded border-border accent-primary"
-                    />
-                    <label htmlFor="hasBattery" className="text-sm text-muted-foreground cursor-pointer">
-                      {"Tem bateria"}
-                    </label>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 col-span-full">
+                  <input
+                    type="checkbox"
+                    id="hasBattery"
+                    checked={!!form.watch("hasBattery")}
+                    onChange={(e) => form.setValue("hasBattery", e.target.checked)}
+                    className="h-4 w-4 rounded border-border accent-primary"
+                  />
+                  <label htmlFor="hasBattery" className="text-sm text-muted-foreground cursor-pointer">
+                    {"Tem bateria"}
+                  </label>
+                </div>
               </>
             )}
 

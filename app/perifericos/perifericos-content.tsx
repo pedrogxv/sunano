@@ -51,6 +51,7 @@ import { usePageHeader } from "@/components/providers/page-header-context"
 import { AnimatedCounter } from "@/components/animated-counter"
 import { LikeButton } from "@/components/peripherals/LikeButton"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
+import { hasScoreRanking } from "@/lib/tag-options"
 import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { formatCurrencyBRL } from "@/lib/format"
@@ -85,7 +86,7 @@ type KeyboardType = "mechanical" | "magnetic" | "optical"
 type PadType = "speed" | "control" | "hybrid"
 type Surface = PadType | "glass" | "cloth"
 type PanelType = "ips" | "tn" | "va" | "oled" | "other"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones" | "v_shaped" | "u_shaped" | "neutro" | "neutro_quente" | "quente" | "escuro" | "basshead" | "vocal_forward" | "harman" | "ief_neutral" | "jm_1" | "sub_bass_focus" | "mid_bass_focus" | "punchy" | "smooth" | "arejado" | "sibilante" | "detalhado" | "palco_amplo" | "boa_separacao" | "metal" | "resina" | "plastico" | "shell_pequeno" | "shell_grande" | "deep_fit" | "boa_isolacao" | "driver_flex" | "planar"
 
 type Peripheral = {
   id: string
@@ -208,6 +209,35 @@ const TAG_LABELS: Record<Tag, string> = {
   "80_plus": "80% Plus",
   selo_cybenetics: "Selo Cybenetics",
   capacitor_japones: "Capacitor Japonês",
+  v_shaped: "V-Shaped",
+  u_shaped: "U-Shaped",
+  neutro: "Neutro",
+  neutro_quente: "Neutro Quente",
+  quente: "Quente",
+  escuro: "Escuro",
+  basshead: "Basshead",
+  vocal_forward: "Vocal Forward",
+  harman: "Harman",
+  ief_neutral: "IEF Neutral",
+  jm_1: "JM-1",
+  sub_bass_focus: "Sub-bass Focus",
+  mid_bass_focus: "Mid-bass Focus",
+  punchy: "Punchy",
+  smooth: "Smooth",
+  arejado: "Arejado",
+  sibilante: "Sibilante",
+  detalhado: "Detalhado",
+  palco_amplo: "Palco Amplo",
+  boa_separacao: "Boa Separação",
+  metal: "Metal",
+  resina: "Resina",
+  plastico: "Plástico",
+  shell_pequeno: "Shell Pequeno",
+  shell_grande: "Shell Grande",
+  deep_fit: "Deep Fit",
+  boa_isolacao: "Boa Isolação",
+  driver_flex: "Driver Flex",
+  planar: "Planar",
 }
 
 function formatTagLabel(tag: Tag, category?: string) {
@@ -367,7 +397,9 @@ export function PerifericosContent({
 
   const showConnectivityFilter = useMemo(() => {
     if (!effectiveCategory) return false
-    return ["mouse", "keyboard", "headset", "iem", "dac_amp"].includes(effectiveCategory)
+    // IEM ficou de fora: a ficha técnica dessa categoria não tem mais conectividade
+    // (ver a seção de specs por categoria no formulário de admin).
+    return ["mouse", "keyboard", "headset", "dac_amp"].includes(effectiveCategory)
   }, [effectiveCategory])
 
   const showMouseShapeFilter = effectiveCategory === "mouse"
@@ -438,7 +470,7 @@ export function PerifericosContent({
   // depende de `items` (que agora é só a página atual).
   const [topRanked, setTopRanked] = useState<RankedPeripheral[]>(initialTopRanked)
   useEffect(() => {
-    if (!effectiveCategory || effectiveCategory === "outros") {
+    if (!effectiveCategory || effectiveCategory === "outros" || !hasScoreRanking(effectiveCategory)) {
       setTopRanked([])
       return
     }

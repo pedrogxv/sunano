@@ -28,6 +28,7 @@ import {
   Pencil,
   Plus,
   Smartphone,
+  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react"
@@ -52,7 +53,8 @@ import { cn } from "@/lib/utils"
 
 type Banner = {
   id: string
-  image_url: string
+  kind: "image" | "hero"
+  image_url: string | null
   image_url_mobile: string | null
   link_url: string | null
   alt_text: string | null
@@ -174,6 +176,7 @@ function SortableBannerRow({
     id: banner.id,
   })
   const status = resolveStatus(banner)
+  const isHero = banner.kind === "hero"
 
   return (
     <div
@@ -199,21 +202,36 @@ function SortableBannerRow({
         {position}
       </span>
 
-      <div className="h-14 w-40 shrink-0 overflow-hidden rounded-lg bg-muted">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={banner.image_url} alt={banner.alt_text ?? ""} className="size-full object-cover" />
-      </div>
+      {isHero ? (
+        <div className="flex h-14 w-40 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-muted/40 text-muted-foreground">
+          <Sparkles className="size-5" />
+        </div>
+      ) : (
+        <div className="h-14 w-40 shrink-0 overflow-hidden rounded-lg bg-muted">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={banner.image_url!} alt={banner.alt_text ?? ""} className="size-full object-cover" />
+        </div>
+      )}
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 text-sm text-foreground">
-          <Link2 className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate font-medium">
-            {banner.link_url ?? <span className="text-muted-foreground">Sem link</span>}
-          </span>
-        </div>
+        {isHero ? (
+          <div className="flex items-center gap-1.5 text-sm text-foreground">
+            <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate font-medium">Destaque padrão — “Periféricos sem mistério”</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-sm text-foreground">
+            <Link2 className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="truncate font-medium">
+              {banner.link_url ?? <span className="text-muted-foreground">Sem link</span>}
+            </span>
+          </div>
+        )}
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="truncate">{banner.alt_text || "Sem texto alternativo"}</span>
-          {banner.image_url_mobile && (
+          <span className="truncate">
+            {isHero ? "Bloco fixo do site — sem conteúdo editável aqui" : banner.alt_text || "Sem texto alternativo"}
+          </span>
+          {!isHero && banner.image_url_mobile && (
             <span
               title="Tem arte específica para mobile"
               className="flex shrink-0 items-center gap-0.5 text-[10px]"
@@ -245,26 +263,30 @@ function SortableBannerRow({
         >
           {banner.is_active ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
         </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="size-8 text-muted-foreground hover:text-foreground"
-          aria-label="Editar banner"
-          disabled={isBusy}
-          onClick={() => onEdit(banner)}
-        >
-          <Pencil className="size-3.5" />
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="size-8 text-red-500/60 hover:text-red-400"
-          aria-label="Remover banner"
-          disabled={isBusy}
-          onClick={() => onDelete(banner)}
-        >
-          <Trash2 className="size-3.5" />
-        </Button>
+        {!isHero && (
+          <>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-8 text-muted-foreground hover:text-foreground"
+              aria-label="Editar banner"
+              disabled={isBusy}
+              onClick={() => onEdit(banner)}
+            >
+              <Pencil className="size-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="size-8 text-red-500/60 hover:text-red-400"
+              aria-label="Remover banner"
+              disabled={isBusy}
+              onClick={() => onDelete(banner)}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          </>
+        )}
       </div>
     </div>
   )
@@ -333,7 +355,7 @@ export default function AdminBannersPage() {
   function openEdit(banner: Banner) {
     setEditing(banner)
     setForm({
-      imageUrl: banner.image_url,
+      imageUrl: banner.image_url ?? "",
       imageUrlMobile: banner.image_url_mobile ?? "",
       linkUrl: banner.link_url ?? "",
       altText: banner.alt_text ?? "",

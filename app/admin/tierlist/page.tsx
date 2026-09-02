@@ -154,6 +154,11 @@ const MODES_BY_CATEGORY: Partial<Record<Category, { key: RatingMode; color: stri
     { key: "recommended", color: "bg-purple-400" },
     { key: "value", color: "bg-emerald-400" },
   ],
+  iem: [
+    { key: "performance", color: "bg-red-400" },
+    { key: "recommended", color: "bg-purple-400" },
+    { key: "value", color: "bg-emerald-400" },
+  ],
 }
 
 const RATING_MODE_COLORS: Record<RatingMode, string> = {

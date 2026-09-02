@@ -1,14 +1,15 @@
 import Link from "next/link"
-import { Package, ShoppingBag } from "lucide-react"
+import { Package } from "lucide-react"
 
 import { AnimatedCounter } from "@/components/animated-counter"
 
 /**
  * Faixa compacta exibida logo abaixo do carrossel de banners.
  *
- * Existe para que trocar o hero por banners não custe os dois CTAs principais
- * (Tierlist / Loja) nem os números de prova social que o bloco antigo trazia —
- * quando há banner ativo, o `DefaultHero` sai de cena e levaria tudo junto.
+ * Existe para que trocar o hero por banners não custe o CTA da Tierlist nem
+ * os números de prova social que o bloco antigo trazia — quando há banner
+ * ativo, o `DefaultHero` sai de cena e levaria tudo junto. Sem CTA da Loja:
+ * o item "Loja" já vem destacado como banner na sidebar.
  */
 export default function HeroHighlightsBar({
   counts,
@@ -47,13 +48,6 @@ export default function HeroHighlightsBar({
         >
           <Package className="size-4" />
           Explorar Tierlist
-        </Link>
-        <Link
-          href="/loja"
-          className="inline-flex items-center gap-2 rounded-full border-2 border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-600 transition-all hover:-translate-y-0.5 hover:border-emerald-500/50 hover:bg-emerald-500/15 dark:text-emerald-300"
-        >
-          <ShoppingBag className="size-4" />
-          Ver Loja
         </Link>
       </div>
     </div>

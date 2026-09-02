@@ -14,7 +14,7 @@ import {
  * O tamanho *recomendado* de um banner é 500KB (ver painel `/admin/banners`);
  * o teto técnico é maior para não travar um upload legítimo levemente acima.
  */
-const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const ALLOWED_MIME_TYPES = ["image/webp", "image/png", "image/jpeg"]
 
 export const dynamic = "force-dynamic"

@@ -100,19 +100,26 @@ export default async function HomePage() {
   return (
     <div className="mx-auto max-w-6xl space-y-12 px-2 py-6 sm:px-4 md:px-6 lg:px-8 md:py-10">
       {/* ============ HERO ============ */}
-      {/* Com banners no ar (/admin/banners) o topo vira um carrossel; sem
-          nenhum, cai no hero padrão. A faixa abaixo preserva os CTAs e os
-          números que o hero trazia — trocar a arte não deve custar conversão. */}
+      {/* Com banners no ar (/admin/banners) o topo vira um carrossel — o hero
+          padrão é só mais um slide dele (kind "hero" no banco), então entra
+          na mesma ordem/ativação que os demais. Sem nenhum banner no ar
+          (inclusive o hero desativado), cai no hero padrão sozinho, fixo. A
+          faixa abaixo preserva os CTAs e os números em todos os slides. */}
       {banners.length > 0 ? (
         <div className="space-y-4">
           <BannerCarousel
-            banners={banners.map((banner) => ({
-              id: banner.id,
-              imageUrl: banner.image_url,
-              imageUrlMobile: banner.image_url_mobile,
-              linkUrl: banner.link_url,
-              altText: banner.alt_text,
-            }))}
+            banners={banners.map((banner) =>
+              banner.kind === "hero"
+                ? { id: banner.id, kind: "custom" as const, content: <DefaultHero counts={counts} bare /> }
+                : {
+                    id: banner.id,
+                    kind: "image" as const,
+                    imageUrl: banner.image_url!,
+                    imageUrlMobile: banner.image_url_mobile,
+                    linkUrl: banner.link_url,
+                    altText: banner.alt_text,
+                  }
+            )}
           />
           <HeroHighlightsBar counts={counts} />
         </div>

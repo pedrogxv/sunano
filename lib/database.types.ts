@@ -1727,7 +1727,8 @@ export type Database = {
         Relationships: []
         Row: {
           id: string
-          image_url: string
+          kind: string
+          image_url: string | null
           image_url_mobile: string | null
           link_url: string | null
           alt_text: string | null
@@ -1740,7 +1741,8 @@ export type Database = {
         }
         Insert: {
           id?: string
-          image_url: string
+          kind?: string
+          image_url?: string | null
           image_url_mobile?: string | null
           link_url?: string | null
           alt_text?: string | null
@@ -1753,7 +1755,8 @@ export type Database = {
         }
         Update: {
           id?: string
-          image_url?: string
+          kind?: string
+          image_url?: string | null
           image_url_mobile?: string | null
           link_url?: string | null
           alt_text?: string | null

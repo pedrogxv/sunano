@@ -2,21 +2,31 @@ import Link from "next/link"
 import { Package, ShoppingBag } from "lucide-react"
 
 import { AnimatedCounter } from "@/components/animated-counter"
+import { cn } from "@/lib/utils"
 
 /**
  * Hero padrão da Home — o bloco "Periféricos sem mistério".
  *
- * Extraído de `app/page.tsx` quando o topo virou um carrossel de banners:
- * hoje ele é o **fallback**, exibido enquanto não houver nenhum banner ativo
- * cadastrado em `/admin/banners`.
+ * Extraído de `app/page.tsx` quando o topo virou um carrossel de banners: hoje
+ * ele aparece de dois jeitos — sozinho, como **fallback** enquanto não houver
+ * nenhum banner ativo cadastrado em `/admin/banners`; ou como primeiro slide
+ * do carrossel (`bare`), quando há banners — nesse caso a borda/fundo já vêm
+ * do carrossel por fora, então o hero não duplica.
  */
 export default function DefaultHero({
   counts,
+  bare = false,
 }: {
   counts: { peripherals: number; reviews: number; forumPosts: number }
+  bare?: boolean
 }) {
   return (
-    <section className="relative overflow-hidden rounded-3xl border border-border bg-card">
+    <section
+      className={cn(
+        "relative overflow-hidden",
+        !bare && "rounded-3xl border border-border bg-card"
+      )}
+    >
       {/* Dot-grid texture, same language as the auth pages */}
       <div
         className="pointer-events-none absolute inset-0 text-foreground/[0.05] dark:text-foreground/[0.1]"

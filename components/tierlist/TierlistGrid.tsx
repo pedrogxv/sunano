@@ -397,7 +397,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
         { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
         { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
       ]
-    : category === "psu"
+    : category === "psu" || category === "iem"
     ? [
         { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
         { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },

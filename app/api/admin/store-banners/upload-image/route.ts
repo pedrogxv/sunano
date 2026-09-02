@@ -10,7 +10,7 @@ import {
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
 
-const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const ALLOWED_MIME_TYPES = ["image/webp", "image/png", "image/jpeg"]
 const STORAGE_BUCKET = "store-banners"
 

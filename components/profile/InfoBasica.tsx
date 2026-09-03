@@ -19,6 +19,10 @@ interface InfoBasicaProps {
   activityRank?: number | null
   /** Dias de ofensiva atual — some da badge quando zerada (ver `StreakBadge`). */
   streak?: number
+  /** Ofensiva sustentada hoje por uma "Proteção de Ofensiva" (escudo). */
+  streakFrozen?: boolean
+  /** Último dia coberto pelo escudo (YYYY-MM-DD), para o tooltip da badge. */
+  streakFrozenUntil?: string | null
   bio?: string | null
   /** Habilita o ícone de trocar nome (Central de Aura) quando é o próprio dono. */
   isOwner?: boolean
@@ -49,6 +53,8 @@ export function InfoBasica({
   auraRank,
   activityRank,
   streak = 0,
+  streakFrozen = false,
+  streakFrozenUntil = null,
   bio,
   isOwner = false,
 }: InfoBasicaProps) {
@@ -104,7 +110,14 @@ export function InfoBasica({
           </span>
         )}
 
-        <StreakBadge days={streak} size="sm" showInactive className="px-2 py-0.5 text-[11px]" />
+        <StreakBadge
+          days={streak}
+          size="sm"
+          showInactive
+          frozen={streakFrozen}
+          frozenUntil={streakFrozenUntil}
+          className="px-2 py-0.5 text-[11px]"
+        />
       </div>
 
       {joinedLabel && (

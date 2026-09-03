@@ -94,6 +94,12 @@ export const AURA_SPEND_ENTRIES: AuraFaqEntry[] = [
     answer: "Custo fixo listado no card, com cooldown de 3 dias entre trocas. VIP paga 10% a menos.",
   },
   {
+    id: "streak-shield",
+    question: "Comprar Proteção de Ofensiva",
+    answer:
+      "Você compra e a proteção fica guardada — sem prazo — até o dia em que precisar. Se perder 1 dia de missões, sua ofensiva não zera: ao fechar as 3 tarefas de novo, ela continua de onde estava e a proteção é consumida. A versão padrão (59 Aura) exige que você volte já no dia seguinte ao dia perdido; a de margem estendida (199 Aura) te dá até 3 dias para voltar. Cobre 1 dia perdido por vez — se você faltar 2 dias corridos, ou demorar além da margem, a proteção não salva. Só dá para ter uma guardada por vez.",
+  },
+  {
     id: "dislike",
     question: "Receber um dislike",
     answer: "-1 de Aura, sem multiplicador. Seu saldo nunca fica negativo.",

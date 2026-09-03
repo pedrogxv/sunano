@@ -14,7 +14,7 @@ import { isDisplayNameAvailable } from "@/lib/server/repositories/users-reposito
  * lê as tabelas resultantes.
  */
 
-export type AuraItemKind = "avatar_frame" | "vip_month" | "display_name_change"
+export type AuraItemKind = "avatar_frame" | "vip_month" | "display_name_change" | "streak_shield"
 
 export type AuraItem = {
   id: string
@@ -333,6 +333,106 @@ export async function changeDisplayNameWithAura(
     displayName: profile?.display_name ?? trimmed,
     displaySlug: profile?.display_slug ?? "",
   }
+}
+
+// ── Proteção de Ofensiva (escudo de streak) com Aura ──
+
+/** Slugs das duas variantes do escudo — a fonte de verdade do preço é o banco. */
+export const STREAK_SHIELD_SLUGS = {
+  "1d": "protecao-ofensiva-1d",
+  "3d": "protecao-ofensiva-3d",
+} as const
+
+export type StreakShieldVariant = keyof typeof STREAK_SHIELD_SLUGS
+
+export type StreakShieldStatus = {
+  /**
+   * Há um escudo guardado (comprado, ainda não consumido). Sem prazo — só
+   * some quando `complete_daily_mission` o gasta cobrindo um buraco.
+   */
+  armed: boolean
+  /** Margem de atraso do escudo guardado (1 ou 3), ou null se não há. */
+  graceDays: number | null
+}
+
+/** Escudo guardado do usuário, se houver — `consumed_at is null`. */
+export async function getStreakShieldStatus(userId: string): Promise<StreakShieldStatus> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_streak_shields")
+    .select("grace_days, consumed_at")
+    .eq("user_id", userId)
+    .maybeSingle()
+
+  if (!data || data.consumed_at !== null) return { armed: false, graceDays: null }
+
+  return { armed: true, graceDays: data.grace_days }
+}
+
+export type PurchaseStreakShieldErrorCode =
+  | "item_unavailable"
+  | "shield_already_armed"
+  | "insufficient_balance"
+  | "unknown"
+
+export type PurchaseStreakShieldResult =
+  | { ok: true; graceDays: number }
+  | { ok: false; error: string; code: PurchaseStreakShieldErrorCode; status: number }
+
+/**
+ * Compra uma variante do escudo. `variant` (não um id/preço vindo do
+ * client) resolve para o slug do catálogo — o id e o custo são sempre lidos
+ * do banco. A RPC `purchase_streak_shield` garante a atomicidade: item
+ * ativo + 1 guardado por vez (`shield_already_armed`) + débito + gravação.
+ * A compra só ARMA o escudo; a proteção é resolvida depois, quando
+ * `complete_daily_mission` detecta um buraco.
+ */
+export async function purchaseStreakShield(
+  userId: string,
+  variant: StreakShieldVariant
+): Promise<PurchaseStreakShieldResult> {
+  const db = createSupabaseAdminClient()
+
+  const slug = STREAK_SHIELD_SLUGS[variant]
+  const { data: item } = await db
+    .from("aura_items")
+    .select("id, active, kind")
+    .eq("slug", slug)
+    .maybeSingle()
+
+  if (!item || !item.active || item.kind !== "streak_shield") {
+    return { ok: false, error: "Item indisponível no momento.", code: "item_unavailable", status: 404 }
+  }
+
+  const { data, error } = await db.rpc("purchase_streak_shield", {
+    p_user_id: userId,
+    p_item_id: item.id,
+  })
+
+  if (error) {
+    if (error.message?.includes("shield_already_armed")) {
+      return {
+        ok: false,
+        error: "Você já tem uma Proteção de Ofensiva guardada.",
+        code: "shield_already_armed",
+        status: 409,
+      }
+    }
+    if (error.message?.includes("insufficient_aura_balance")) {
+      return { ok: false, error: "Saldo de Aura insuficiente.", code: "insufficient_balance", status: 400 }
+    }
+    if (error.message?.includes("item_unavailable")) {
+      return { ok: false, error: "Item indisponível no momento.", code: "item_unavailable", status: 404 }
+    }
+    console.error("[aura-store-repository] purchaseStreakShield:", error)
+    return { ok: false, error: "Erro ao comprar a proteção.", code: "unknown", status: 400 }
+  }
+
+  if (data === null || data === undefined) {
+    return { ok: false, error: "Item indisponível no momento.", code: "item_unavailable", status: 404 }
+  }
+
+  return { ok: true, graceDays: data as unknown as number }
 }
 
 // ── Admin CRUD ──

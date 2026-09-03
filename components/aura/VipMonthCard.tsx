@@ -9,6 +9,7 @@ import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { formatVipPrice } from "@/lib/vip-plan"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
+import { PurchaseConfirmDialog } from "@/components/aura/PurchaseConfirmDialog"
 
 interface VipMonthCardProps {
   item: AuraItem
@@ -27,11 +28,11 @@ function formatExpiresAt(iso: string): string {
 export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLogin, onPurchased, onShowBenefits }: VipMonthCardProps) {
   const [loading, setLoading] = useState(false)
   const [subscribing, setSubscribing] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const canAfford = balance >= item.auraCost
   const subscriptionEnabled = isVipSubscriptionEnabled()
 
   async function handlePurchase() {
-    if (!requireLogin()) return
     setLoading(true)
     try {
       const res = await fetch("/api/aura/vip/purchase", { method: "POST" })
@@ -40,6 +41,7 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
         throw new Error(data.error ?? "Erro ao comprar VIP")
       }
       toast.success("VIP ativado!", { description: "Válido por 1 mês." })
+      setConfirmOpen(false)
       onPurchased(data.expiresAt ?? null)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao comprar VIP"
@@ -116,7 +118,10 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
             <div className="space-y-1.5">
               <button
                 type="button"
-                onClick={handlePurchase}
+                onClick={() => {
+                  if (!requireLogin()) return
+                  setConfirmOpen(true)
+                }}
                 disabled={loading || subscribing || !canAfford}
                 title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
                 className={cn(
@@ -147,6 +152,17 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
           )}
         </div>
       </div>
+
+      <PurchaseConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        itemName={item.name}
+        cost={item.auraCost}
+        balance={balance}
+        confirmLabel="Ativar VIP"
+        loading={loading}
+        onConfirm={handlePurchase}
+      />
     </div>
   )
 }

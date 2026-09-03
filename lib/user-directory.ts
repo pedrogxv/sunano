@@ -36,6 +36,22 @@ export function coerceDirectorySort(value: unknown): DirectorySort {
   return DIRECTORY_SORTS.includes(value as DirectorySort) ? (value as DirectorySort) : "aura"
 }
 
+/**
+ * Janela de tempo do ranking. `all` = placar histórico (saldo/atividade
+ * acumulados); as demais recortam pelo que a pessoa ganhou/produziu no período.
+ * Só as abas "Mais Aura" e "Mais Ativos" aceitam período — as outras
+ * (visitas, seguidores, ofensiva) não têm histórico temporal e ignoram o filtro.
+ */
+export const DIRECTORY_PERIODS = ["all", "today", "week", "month"] as const
+export type DirectoryPeriod = (typeof DIRECTORY_PERIODS)[number]
+
+/** Abas que reagem ao filtro de período. */
+export const PERIOD_AWARE_SORTS: DirectorySort[] = ["aura", "active"]
+
+export function coerceDirectoryPeriod(value: unknown): DirectoryPeriod {
+  return DIRECTORY_PERIODS.includes(value as DirectoryPeriod) ? (value as DirectoryPeriod) : "all"
+}
+
 /** Número que o card do diretório destaca — acompanha a aba selecionada. */
 export type DirectoryMetric = "aura" | "views" | "followers" | "activity" | "streak"
 

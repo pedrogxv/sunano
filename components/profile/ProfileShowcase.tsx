@@ -126,6 +126,8 @@ export function ProfileShowcase({
           auraRank={profile.aura_rank}
           activityRank={profile.activity_rank}
           streak={profile.streak.current}
+          streakFrozen={profile.streak.frozen}
+          streakFrozenUntil={profile.streak.frozenUntil}
           bio={profile.bio}
           isOwner={isOwner}
         />

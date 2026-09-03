@@ -4,6 +4,7 @@ import { useRef, useState } from "react"
 import Image from "next/image"
 import { ImagePlus, Video, X } from "lucide-react"
 
+import { GifPicker } from "@/components/comments/GifPicker"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -72,6 +73,13 @@ export function PostMediaField({
     onImagesChange(imageUrls.filter((_, i) => i !== index))
   }
 
+  /** GIF do seletor (KLIPY): entra no mesmo array e conta pro mesmo limite de 5 imagens. */
+  function addGif(url: string) {
+    if (imageUrls.length >= MAX_IMAGES) return
+    setError(null)
+    onImagesChange([...imageUrls, url])
+  }
+
   function switchTab(next: MediaTab) {
     setTab(next)
     setError(null)
@@ -116,7 +124,7 @@ export function PostMediaField({
             <div className="flex flex-wrap gap-2">
               {imageUrls.map((url, index) => (
                 <div key={url} className="relative size-24 overflow-hidden rounded-lg border border-border">
-                  <Image src={url} alt="" fill unoptimized className="object-cover" />
+                  <Image src={url} alt="" fill sizes="96px" unoptimized className="object-cover" />
                   <button
                     type="button"
                     onClick={() => removeImage(index)}
@@ -131,7 +139,7 @@ export function PostMediaField({
           )}
 
           {canAddMore && (
-            <>
+            <div className="flex flex-wrap items-center gap-2">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -159,7 +167,12 @@ export function PostMediaField({
                     ? `Adicionar imagem (${imageUrls.length}/${MAX_IMAGES})`
                     : "Adicionar imagem"}
               </Button>
-            </>
+              <GifPicker
+                onSelect={addGif}
+                disabled={disabled || uploading}
+                triggerClassName="inline-flex h-8 items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-60"
+              />
+            </div>
           )}
         </div>
       ) : (

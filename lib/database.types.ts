@@ -188,7 +188,7 @@ export type Database = {
           slug: string
           name: string
           description: string | null
-          kind: "avatar_frame" | "vip_month" | "display_name_change"
+          kind: "avatar_frame" | "vip_month" | "display_name_change" | "streak_shield"
           image_url: string | null
           frame_asset_url: string
           aura_cost: number
@@ -279,6 +279,24 @@ export type Database = {
           updated_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["user_streaks"]["Insert"]>
+      }
+      user_streak_shields: {
+        Relationships: []
+        Row: {
+          user_id: string
+          grace_days: number
+          source_item_slug: string
+          armed_at: string
+          consumed_at: string | null
+        }
+        Insert: {
+          user_id: string
+          grace_days: number
+          source_item_slug: string
+          armed_at?: string
+          consumed_at?: string | null
+        }
+        Update: Partial<Database["public"]["Tables"]["user_streak_shields"]["Insert"]>
       }
       user_medals: {
         Relationships: []
@@ -730,6 +748,7 @@ export type Database = {
             | "youtube_subscription_confirmed"
             | "vip_purchased"
             | "display_name_changed"
+            | "streak_shield_purchased"
             | "account_banned_adjustment"
           source_post_id: string | null
           source_comment_id: string | null
@@ -2046,6 +2065,26 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: boolean
       }
+      purchase_streak_shield: {
+        Args: { p_user_id: string; p_item_id: string }
+        Returns: number
+      }
+      streak_shield_covers_gap: {
+        Args: {
+          p_last_completed_date: string | null
+          p_shield_armed: boolean | null
+          p_grace_days: number | null
+        }
+        Returns: boolean
+      }
+      streak_is_alive: {
+        Args: {
+          p_last_completed_date: string | null
+          p_shield_armed: boolean | null
+          p_grace_days: number | null
+        }
+        Returns: boolean
+      }
       is_vip_active: {
         Args: { p_account_tier: string; p_vip_expires_at: string | null }
         Returns: boolean
@@ -2061,6 +2100,10 @@ export type Database = {
       get_aura_ranking_by_period: {
         Args: { p_since: string; p_limit?: number }
         Returns: { user_id: string; gained: number }[]
+      }
+      get_activity_ranking_by_period: {
+        Args: { p_since: string; p_limit?: number }
+        Returns: { user_id: string; activity: number }[]
       }
       expire_vip_accounts: {
         Args: Record<string, never>

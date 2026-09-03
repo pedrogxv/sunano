@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
-import { isOwnedCommentImageUrl, MAX_COMMENT_IMAGES, MAX_COMMENT_MENTIONS } from "@/lib/server/comment-media"
+import { isAllowedCommentImageUrl, MAX_COMMENT_IMAGES, MAX_COMMENT_MENTIONS } from "@/lib/server/comment-media"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import { addBlogComment, listBlogComments } from "@/lib/server/repositories/blog-repository"
 import { getUserProfile, getUserProfiles } from "@/lib/server/repositories/users-repository"
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sl
     }
 
     const imageUrls = parsed.data.imageUrls ?? []
-    if (imageUrls.some((url) => !isOwnedCommentImageUrl(url, user.id))) {
+    if (imageUrls.some((url) => !isAllowedCommentImageUrl(url, user.id))) {
       return NextResponse.json({ error: "Imagem inválida." }, { status: 400 })
     }
 

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
+import { PurchaseConfirmDialog } from "@/components/aura/PurchaseConfirmDialog"
 
 interface AuraItemCardProps {
   item: AuraItem
@@ -20,10 +21,10 @@ interface AuraItemCardProps {
 
 export function AuraItemCard({ item, balance, owned, equipped, requireLogin, onRedeemed, onEquipChange }: AuraItemCardProps) {
   const [loading, setLoading] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const canAfford = balance >= item.auraCost
 
   async function handleRedeem() {
-    if (!requireLogin()) return
     setLoading(true)
     try {
       const res = await fetch(`/api/aura/items/${item.id}/redeem`, { method: "POST" })
@@ -32,6 +33,7 @@ export function AuraItemCard({ item, balance, owned, equipped, requireLogin, onR
         throw new Error(data.error ?? "Erro ao resgatar item")
       }
       toast.success("Item resgatado!", { description: item.name })
+      setConfirmOpen(false)
       onRedeemed()
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao resgatar item"
@@ -121,7 +123,10 @@ export function AuraItemCard({ item, balance, owned, equipped, requireLogin, onR
           ) : (
             <button
               type="button"
-              onClick={handleRedeem}
+              onClick={() => {
+                if (!requireLogin()) return
+                setConfirmOpen(true)
+              }}
               disabled={loading || !canAfford}
               title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
               className={cn(
@@ -137,6 +142,17 @@ export function AuraItemCard({ item, balance, owned, equipped, requireLogin, onR
           )}
         </div>
       </div>
+
+      <PurchaseConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        itemName={item.name}
+        cost={item.auraCost}
+        balance={balance}
+        confirmLabel="Resgatar"
+        loading={loading}
+        onConfirm={handleRedeem}
+      />
     </div>
   )
 }

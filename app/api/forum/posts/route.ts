@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
+import { isAllowedForumImageUrl } from "@/lib/server/forum-media"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import {
   createForumPost,
@@ -111,6 +112,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const mediaImageUrls = parsed.data.media_image_urls ?? []
+    if (mediaImageUrls.some((url) => !isAllowedForumImageUrl(url, user.id))) {
+      return NextResponse.json({ error: "Imagem inválida." }, { status: 400 })
+    }
+
     const profile = await getUserProfile(user.id)
     const authorName = profile?.display_name || user.email?.split("@")[0] || "Usuário"
 
@@ -120,7 +126,7 @@ export async function POST(request: NextRequest) {
       title: parsed.data.title,
       body: parsed.data.body,
       categoryId: parsed.data.category_id,
-      mediaImageUrls: parsed.data.media_image_urls ?? [],
+      mediaImageUrls,
       mediaVideoUrl: parsed.data.media_video_url ?? null,
     })
 

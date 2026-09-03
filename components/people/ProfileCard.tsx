@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import {
   profileAccentHue,
   type DirectoryMetric,
+  type DirectoryPeriod,
   type PublicProfileSummary,
 } from "@/lib/user-directory"
 
@@ -66,6 +67,24 @@ function metricValue(profile: PublicProfileSummary, metric: DirectoryMetric): nu
 }
 
 /**
+ * Quando um período está ativo, o número em destaque deixa de ser o acumulado e
+ * passa a ser "o que rendeu na janela" — então o rótulo muda junto ("aura" →
+ * "aura ganha", "atividade" → "ações"), senão o card mentiria sobre o que conta.
+ * Só aura/atividade têm recorte temporal; as demais métricas ignoram `period`.
+ */
+function metricLabelFor(
+  metric: DirectoryMetric,
+  value: number,
+  period: DirectoryPeriod
+): string {
+  if (period !== "all") {
+    if (metric === "aura") return "aura ganha"
+    if (metric === "activity") return value === 1 ? "ação" : "ações"
+  }
+  return METRIC_META[metric].label(value)
+}
+
+/**
  * O número sob o nick: só a métrica da aba em destaque. Sem métrica
  * secundária — é a única informação do card, então ganha ícone e número
  * grandes em vez de disputar espaço com uma segunda linha apagada.
@@ -74,15 +93,19 @@ function metricValue(profile: PublicProfileSummary, metric: DirectoryMetric): nu
 export function ProfileMetrics({
   profile,
   metric,
+  period = "all",
   compact = false,
 }: {
   profile: PublicProfileSummary
   metric: DirectoryMetric
+  /** Janela ativa — muda o rótulo de aura/atividade para "o que rendeu no período". */
+  period?: DirectoryPeriod
   compact?: boolean
 }) {
   const meta = METRIC_META[metric]
   const Icon = meta.icon
   const value = metricValue(profile, metric)
+  const label = metricLabelFor(metric, value, period)
   // Ofensiva não tem uma cor fixa: esquenta de âmbar pra vermelho conforme os
   // dias sobem (mesmo eixo do multiplicador de Aura), então a tonalidade é
   // calculada por card em vez de vir de METRIC_META.
@@ -108,7 +131,7 @@ export function ProfileMetrics({
       >
         {formatCount(value)}
       </span>
-      {meta.label(value)}
+      {label}
     </p>
   )
 }
@@ -121,6 +144,7 @@ export function ProfileMetrics({
 export function ProfileCard({
   profile,
   metric,
+  period = "all",
   rank,
   isFollowing = false,
   isSelf = false,
@@ -129,6 +153,8 @@ export function ProfileCard({
   profile: PublicProfileSummary
   /** Qual número aparece sob o nick — acompanha a aba selecionada. */
   metric: DirectoryMetric
+  /** Janela ativa do ranking (só afeta o rótulo de aura/atividade). */
+  period?: DirectoryPeriod
   /** Posição na lista ranqueada. Ausente em listas sem ordem de mérito. */
   rank?: number
   isFollowing?: boolean
@@ -248,7 +274,7 @@ export function ProfileCard({
               {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
             </p>
 
-            <ProfileMetrics profile={profile} metric={metric} />
+            <ProfileMetrics profile={profile} metric={metric} period={period} />
           </div>
         </Link>
 

@@ -5,6 +5,7 @@ import Image from "next/image"
 import { ImagePlus, X } from "lucide-react"
 
 import { compressImageFile } from "@/lib/client/compress-image"
+import { GifPicker } from "./GifPicker"
 
 const MAX_IMAGES = 2
 
@@ -74,6 +75,13 @@ export function CommentImagesField({
     onImagesChange(imageUrls.filter((_, i) => i !== index))
   }
 
+  /** GIF do seletor (KLIPY): entra no mesmo array e conta pro mesmo limite das imagens. */
+  function addGif(url: string) {
+    if (imageUrls.length >= MAX_IMAGES) return
+    setError(null)
+    onImagesChange([...imageUrls, url])
+  }
+
   const canAddMore = imageUrls.length < MAX_IMAGES
 
   return (
@@ -84,7 +92,7 @@ export function CommentImagesField({
         <div className="flex flex-wrap gap-2">
           {imageUrls.map((url, index) => (
             <div key={url} className="relative size-16 overflow-hidden rounded-lg border border-border">
-              <Image src={url} alt="" fill unoptimized className="object-cover" />
+              <Image src={url} alt="" fill sizes="64px" unoptimized className="object-cover" />
               <button
                 type="button"
                 onClick={() => removeImage(index)}
@@ -99,7 +107,7 @@ export function CommentImagesField({
       )}
 
       {canAddMore && (
-        <>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           <input
             ref={fileInputRef}
             type="file"
@@ -125,7 +133,8 @@ export function CommentImagesField({
                 ? `Adicionar imagem (${imageUrls.length}/${MAX_IMAGES})`
                 : "Adicionar imagem"}
           </button>
-        </>
+          <GifPicker onSelect={addGif} disabled={disabled || uploading} />
+        </div>
       )}
     </div>
   )

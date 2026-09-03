@@ -3,6 +3,7 @@ import * as z from "zod"
 
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { isAllowedForumImageUrlForModeration } from "@/lib/server/forum-media"
 import {
   deleteForumPostBySlug,
   getForumPostBySlug,
@@ -63,6 +64,10 @@ export async function PATCH(
       { error: parsed.error.issues[0]?.message ?? "Dados inválidos." },
       { status: 400 }
     )
+  }
+
+  if (parsed.data.media_image_urls?.some((url) => !isAllowedForumImageUrlForModeration(url))) {
+    return NextResponse.json({ error: "Imagem inválida." }, { status: 400 })
   }
 
   const result = await updateForumPost(slug, parsed.data)

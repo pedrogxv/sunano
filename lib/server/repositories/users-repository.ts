@@ -13,7 +13,10 @@ import {
   type ProfileMediaAdjustments,
 } from "@/lib/profile-media-adjust"
 import type { MiniProfile } from "@/lib/mini-profile"
-import type { PublicProfileSummary } from "@/lib/user-directory"
+import type {
+  DirectoryPeriod,
+  PublicProfileSummary,
+} from "@/lib/user-directory"
 import { getUserStreaksByUser } from "@/lib/server/repositories/achievements-repository"
 
 export type { PublicProfileSummary } from "@/lib/user-directory"
@@ -36,7 +39,9 @@ export type AdminProfileSummary = {
 }
 
 /** Perfil público de um usuário do fórum. */
-export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+export async function getUserProfile(
+  userId: string
+): Promise<UserProfile | null> {
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("user_profiles")
@@ -46,10 +51,15 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
   return (data ?? null) as UserProfile | null
 }
 
-export type UserVipStatus = { account_tier: string | null; vip_expires_at: string | null }
+export type UserVipStatus = {
+  account_tier: string | null
+  vip_expires_at: string | null
+}
 
 /** Tier + validade do VIP — usado por GET /api/auth/me para alimentar a tag do dropdown do topbar. */
-export async function getUserVipStatus(userId: string): Promise<UserVipStatus | null> {
+export async function getUserVipStatus(
+  userId: string
+): Promise<UserVipStatus | null> {
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("user_profiles")
@@ -123,7 +133,9 @@ function toProfileSummary(
  * Uma query só para o lote inteiro: pedir o contador perfil a perfil faria
  * a grade de `/pessoas` disparar uma consulta por card.
  */
-async function countFollowersByUser(userIds: string[]): Promise<Record<string, number>> {
+async function countFollowersByUser(
+  userIds: string[]
+): Promise<Record<string, number>> {
   const counts: Record<string, number> = {}
   if (userIds.length === 0) return counts
 
@@ -171,7 +183,10 @@ export async function getMediaAdjustmentsByUser(
     }
     return map
   }
-  for (const row of (data ?? []) as Array<{ id: string; media_adjustments: unknown }>) {
+  for (const row of (data ?? []) as Array<{
+    id: string
+    media_adjustments: unknown
+  }>) {
     map[row.id] = coerceMediaAdjustments(row.media_adjustments)
   }
   return map
@@ -182,7 +197,9 @@ export async function getMediaAdjustmentsByUser(
  * credita (`user_aura_wallet`, ver 20260806_forum_aura.sql) — quem nunca
  * recebeu aura não tem linha, e fica de fora do mapa (lido como 0).
  */
-async function getAuraByUser(userIds: string[]): Promise<Record<string, number>> {
+async function getAuraByUser(
+  userIds: string[]
+): Promise<Record<string, number>> {
   const balances: Record<string, number> = {}
   if (userIds.length === 0) return balances
 
@@ -196,7 +213,10 @@ async function getAuraByUser(userIds: string[]): Promise<Record<string, number>>
     console.error("[users-repository] getAuraByUser:", error)
     return balances
   }
-  for (const row of (data ?? []) as Array<{ user_id: string; balance: number }>) {
+  for (const row of (data ?? []) as Array<{
+    user_id: string
+    balance: number
+  }>) {
     balances[row.user_id] = row.balance
   }
   return balances
@@ -215,7 +235,9 @@ async function getAuraByUser(userIds: string[]): Promise<Record<string, number>>
  * Seguindo, Streak), então essas 3 queries eram refeitas a cada troca de aba
  * mesmo já existindo o agregado cacheado.
  */
-async function countActivityByUser(userIds: string[]): Promise<Record<string, number>> {
+async function countActivityByUser(
+  userIds: string[]
+): Promise<Record<string, number>> {
   const counts: Record<string, number> = {}
   if (userIds.length === 0) return counts
 
@@ -276,24 +298,47 @@ const getActivityCounts = unstable_cache(
  * as listagens/rankings/busca usam este filtro.
  */
 function excludeFromPublicListings<
-  Q extends { neq(column: string, value: string): Q; is(column: string, value: null): Q },
+  Q extends {
+    neq(column: string, value: string): Q
+    is(column: string, value: null): Q
+  },
 >(query: Q): Q {
-  return query.neq("display_slug", SITE_OWNER_SLUG).is("account_banned_at", null)
+  return query
+    .neq("display_slug", SITE_OWNER_SLUG)
+    .is("account_banned_at", null)
 }
 
 /**
- * Anexa seguidores e saldo de Aura a um lote de linhas do diretório. Os dois
- * contadores vêm em paralelo e num lote só cada — o card mostra ambos, e pedir
- * perfil a perfil faria a grade disparar uma consulta por card.
+ * Contadores que um card do diretório pode carregar. Cada aba renderiza só UM
+ * número em destaque (ver `ProfileCard`), então `withCounters` busca só o que
+ * a aba pede em vez das 5 queries `in`(N ids) sempre — as demais ficam 0 no
+ * objeto. `adjustments` é exceção: o enquadramento de avatar/banner aparece em
+ * TODO card, então entra por padrão.
  */
-async function withCounters(rows: DirectoryRow[]): Promise<PublicProfileSummary[]> {
+export type CounterKind = "followers" | "aura" | "activity" | "streaks"
+
+const ALL_COUNTERS: CounterKind[] = ["followers", "aura", "activity", "streaks"]
+
+/**
+ * Anexa aos perfis só os contadores pedidos (`want`), em paralelo e num lote
+ * cada — pedir perfil a perfil faria a grade disparar uma consulta por card.
+ * Sem `want`, busca todos (retrocompatível). O enquadramento de imagem
+ * (`media_adjustments`) vem sempre: é usado em qualquer card.
+ */
+async function withCounters(
+  rows: DirectoryRow[],
+  want: CounterKind[] = ALL_COUNTERS
+): Promise<PublicProfileSummary[]> {
   const ids = rows.map((r) => r.id)
+  const need = new Set(want)
+  const empty: Record<string, number> = {}
+
   const [followers, aura, adjustments, activity, streaks] = await Promise.all([
-    countFollowersByUser(ids),
-    getAuraByUser(ids),
+    need.has("followers") ? countFollowersByUser(ids) : Promise.resolve(empty),
+    need.has("aura") ? getAuraByUser(ids) : Promise.resolve(empty),
     getMediaAdjustmentsByUser(ids),
-    countActivityByUser(ids),
-    getUserStreaksByUser(ids),
+    need.has("activity") ? countActivityByUser(ids) : Promise.resolve(empty),
+    need.has("streaks") ? getUserStreaksByUser(ids) : Promise.resolve(empty),
   ])
   return rows.map((row) =>
     toProfileSummary(
@@ -334,21 +379,40 @@ export async function searchUserProfiles(
   return withCounters((data ?? []) as DirectoryRow[])
 }
 
-/** Perfis com mais visitas. O dono do site fica de fora (ver `excludeFromPublicListings`). */
-export async function getMostVisitedProfiles(limit = 12): Promise<PublicProfileSummary[]> {
-  const db = createSupabaseAdminClient()
-  const { data, error } = await excludeFromPublicListings(
-    db.from("user_profiles").select(DIRECTORY_COLUMNS)
-  )
-    .order("profile_views", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit)
+/**
+ * Perfis com mais visitas. O dono do site fica de fora (ver
+ * `excludeFromPublicListings`).
+ *
+ * `unstable_cache` (5 min): ranking público idêntico para todo visitante — a
+ * ordem sai de `profile_views`, que muda devagar. Antes recarregava o `select`
+ * + os contadores a cada clique na aba (`/pessoas` é `force-dynamic`). O card
+ * desta aba só mostra o número de visitas, que já vem na própria linha, então
+ * `withCounters` roda sem nenhum contador extra.
+ */
+const getCachedMostVisitedProfiles = unstable_cache(
+  async (limit: number): Promise<PublicProfileSummary[]> => {
+    const db = createSupabaseAdminClient()
+    const { data, error } = await excludeFromPublicListings(
+      db.from("user_profiles").select(DIRECTORY_COLUMNS)
+    )
+      .order("profile_views", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit)
 
-  if (error) {
-    console.error("[users-repository] getMostVisitedProfiles:", error)
-    return []
-  }
-  return withCounters((data ?? []) as DirectoryRow[])
+    if (error) {
+      console.error("[users-repository] getMostVisitedProfiles:", error)
+      return []
+    }
+    return withCounters((data ?? []) as DirectoryRow[], [])
+  },
+  ["users-repository:mostVisitedProfiles"],
+  { revalidate: 300 }
+)
+
+export function getMostVisitedProfiles(
+  limit = 12
+): Promise<PublicProfileSummary[]> {
+  return getCachedMostVisitedProfiles(limit)
 }
 
 /**
@@ -368,7 +432,9 @@ export async function getMostVisitedProfiles(limit = 12): Promise<PublicProfileS
  * preencher a vaga. Buscamos um item a mais que `limit` na carteira só para
  * cobrir o caso dele estar entre os top N; o `slice` abaixo recorta de volta.
  */
-async function fetchTopAuraProfiles(limit: number): Promise<PublicProfileSummary[]> {
+async function fetchTopAuraProfiles(
+  limit: number
+): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
 
   const { data: wallets, error: walletsError } = await db
@@ -383,10 +449,9 @@ async function fetchTopAuraProfiles(limit: number): Promise<PublicProfileSummary
   }
 
   const balances = new Map(
-    ((wallets ?? []) as Array<{ user_id: string; balance: number }>).map((r) => [
-      r.user_id,
-      r.balance,
-    ])
+    ((wallets ?? []) as Array<{ user_id: string; balance: number }>).map(
+      (r) => [r.user_id, r.balance]
+    )
   )
   const rankedIds = [...balances.keys()]
 
@@ -409,7 +474,9 @@ async function fetchTopAuraProfiles(limit: number): Promise<PublicProfileSummary
   const remaining = limit - ranked.length
   let fillers: DirectoryRow[] = []
   if (remaining > 0) {
-    let query = excludeFromPublicListings(db.from("user_profiles").select(DIRECTORY_COLUMNS))
+    let query = excludeFromPublicListings(
+      db.from("user_profiles").select(DIRECTORY_COLUMNS)
+    )
       .order("profile_views", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(remaining)
@@ -425,8 +492,9 @@ async function fetchTopAuraProfiles(limit: number): Promise<PublicProfileSummary
   }
 
   // `withCounters` preserva a ordem que chega — ranqueados por aura, depois o
-  // preenchimento — e é ele quem carimba o saldo em cada card.
-  return withCounters([...ranked, ...fillers])
+  // preenchimento — e é ele quem carimba o saldo em cada card. O card da aba
+  // Aura só mostra a aura, então só esse contador é buscado.
+  return withCounters([...ranked, ...fillers], ["aura"])
 }
 
 /**
@@ -445,7 +513,9 @@ const getCachedTopAuraProfiles = unstable_cache(
   { revalidate: 300, tags: ["users:top-aura"] }
 )
 
-export function getTopAuraProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+export function getTopAuraProfiles(
+  limit = 12
+): Promise<PublicProfileSummary[]> {
   return getCachedTopAuraProfiles(limit)
 }
 
@@ -462,72 +532,104 @@ export function getTopAuraProfiles(limit = 12): Promise<PublicProfileSummary[]> 
  * no card sempre bate com o motivo de ele estar no ranking.
  *
  * O dono do site fica de fora (mesmo critério de `getTopAuraProfiles`).
+ *
+ * `unstable_cache` (5 min): ranking público idêntico para todo visitante;
+ * antes refazia o `user_streaks` + `select` + contadores a cada clique na aba.
+ * A janela de 5 min alinha com o resto do diretório — a ofensiva só muda uma
+ * vez por dia por usuário, então 5 min de defasagem é imperceptível.
  */
-export async function getTopStreakProfiles(limit = 12): Promise<PublicProfileSummary[]> {
-  const db = createSupabaseAdminClient()
+const getCachedTopStreakProfiles = unstable_cache(
+  async (limit: number): Promise<PublicProfileSummary[]> => {
+    const db = createSupabaseAdminClient()
 
-  const { data: streakRows, error: streaksError } = await db
-    .from("user_streaks")
-    .select("user_id, current_streak, last_completed_date")
-    .gt("current_streak", 0)
-    .order("current_streak", { ascending: false })
-    .limit(limit * 3 + 10)
+    const { data: streakRows, error: streaksError } = await db
+      .from("user_streaks")
+      .select("user_id, current_streak, last_completed_date")
+      .gt("current_streak", 0)
+      .order("current_streak", { ascending: false })
+      .limit(limit * 3 + 10)
 
-  if (streaksError) {
-    console.error("[users-repository] getTopStreakProfiles:", streaksError)
-  }
+    if (streaksError) {
+      console.error("[users-repository] getTopStreakProfiles:", streaksError)
+    }
 
-  const today = new Date().toISOString().slice(0, 10)
-  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    const today = new Date().toISOString().slice(0, 10)
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10)
 
-  const active = ((streakRows ?? []) as Array<{
-    user_id: string
-    current_streak: number
-    last_completed_date: string | null
-  }>)
-    .filter((r) => r.last_completed_date === today || r.last_completed_date === yesterday)
-    .slice(0, limit)
-
-  const rankedIds = active.map((r) => r.user_id)
-
-  const { data: rankedRows, error: rankedError } = rankedIds.length
-    ? await excludeFromPublicListings(
-        db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
+    const active = (
+      (streakRows ?? []) as Array<{
+        user_id: string
+        current_streak: number
+        last_completed_date: string | null
+      }>
+    )
+      .filter(
+        (r) =>
+          r.last_completed_date === today || r.last_completed_date === yesterday
       )
-    : { data: [], error: null }
+      .slice(0, limit)
 
-  if (rankedError) {
-    console.error("[users-repository] getTopStreakProfiles ranked:", rankedError)
-  }
+    const rankedIds = active.map((r) => r.user_id)
 
-  const streakByUser = new Map(active.map((r) => [r.user_id, r.current_streak]))
-  const ranked = ((rankedRows ?? []) as DirectoryRow[]).sort(
-    (a, b) => (streakByUser.get(b.id) ?? 0) - (streakByUser.get(a.id) ?? 0)
-  )
+    const { data: rankedRows, error: rankedError } = rankedIds.length
+      ? await excludeFromPublicListings(
+          db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
+        )
+      : { data: [], error: null }
 
-  const remaining = limit - ranked.length
-  let fillers: DirectoryRow[] = []
-  if (remaining > 0) {
-    let query = excludeFromPublicListings(db.from("user_profiles").select(DIRECTORY_COLUMNS))
-      .order("profile_views", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(remaining)
-    if (ranked.length > 0) {
-      query = query.not("id", "in", `(${ranked.map((r) => r.id).join(",")})`)
+    if (rankedError) {
+      console.error(
+        "[users-repository] getTopStreakProfiles ranked:",
+        rankedError
+      )
     }
 
-    const { data, error } = await query
-    if (error) {
-      console.error("[users-repository] getTopStreakProfiles fillers:", error)
-    }
-    fillers = (data ?? []) as DirectoryRow[]
-  }
+    const streakByUser = new Map(
+      active.map((r) => [r.user_id, r.current_streak])
+    )
+    const ranked = ((rankedRows ?? []) as DirectoryRow[]).sort(
+      (a, b) => (streakByUser.get(b.id) ?? 0) - (streakByUser.get(a.id) ?? 0)
+    )
 
-  return withCounters([...ranked, ...fillers])
+    const remaining = limit - ranked.length
+    let fillers: DirectoryRow[] = []
+    if (remaining > 0) {
+      let query = excludeFromPublicListings(
+        db.from("user_profiles").select(DIRECTORY_COLUMNS)
+      )
+        .order("profile_views", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(remaining)
+      if (ranked.length > 0) {
+        query = query.not("id", "in", `(${ranked.map((r) => r.id).join(",")})`)
+      }
+
+      const { data, error } = await query
+      if (error) {
+        console.error("[users-repository] getTopStreakProfiles fillers:", error)
+      }
+      fillers = (data ?? []) as DirectoryRow[]
+    }
+
+    // O card desta aba só mostra a ofensiva.
+    return withCounters([...ranked, ...fillers], ["streaks"])
+  },
+  ["users-repository:topStreakProfiles"],
+  { revalidate: 300 }
+)
+
+export function getTopStreakProfiles(
+  limit = 12
+): Promise<PublicProfileSummary[]> {
+  return getCachedTopStreakProfiles(limit)
 }
 
 /** Perfis criados mais recentemente. */
-export async function getNewestProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+export async function getNewestProfiles(
+  limit = 12
+): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
   const { data, error } = await excludeFromPublicListings(
     db.from("user_profiles").select(DIRECTORY_COLUMNS)
@@ -560,7 +662,9 @@ export async function getFollowingProfiles(
     return []
   }
 
-  const ids = (follows ?? []).map((r) => (r as { following_id: string }).following_id)
+  const ids = (follows ?? []).map(
+    (r) => (r as { following_id: string }).following_id
+  )
   if (ids.length === 0) return []
 
   const { data, error: profilesError } = await excludeFromPublicListings(
@@ -575,9 +679,7 @@ export async function getFollowingProfiles(
   // O `in` volta em ordem arbitrária — restaura a ordem de quando seguiu.
   const rank = new Map(ids.map((id, index) => [id, index]))
   const profiles = await withCounters((data ?? []) as DirectoryRow[])
-  return profiles.sort(
-    (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
-  )
+  return profiles.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
 }
 
 /** Perfis que seguem `userId`, do mais recente para o mais antigo. */
@@ -598,7 +700,9 @@ export async function getFollowerProfiles(
     return []
   }
 
-  const ids = (follows ?? []).map((r) => (r as { follower_id: string }).follower_id)
+  const ids = (follows ?? []).map(
+    (r) => (r as { follower_id: string }).follower_id
+  )
   if (ids.length === 0) return []
 
   const { data, error: profilesError } = await excludeFromPublicListings(
@@ -613,9 +717,7 @@ export async function getFollowerProfiles(
   // O `in` volta em ordem arbitrária — restaura a ordem de quando passou a seguir.
   const rank = new Map(ids.map((id, index) => [id, index]))
   const profiles = await withCounters((data ?? []) as DirectoryRow[])
-  return profiles.sort(
-    (a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)
-  )
+  return profiles.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
 }
 
 /**
@@ -630,7 +732,9 @@ export async function getFollowerProfiles(
 const getFollowCounts = unstable_cache(
   async (): Promise<Record<string, number>> => {
     const db = createSupabaseAdminClient()
-    const { data: followRows, error } = await db.from("user_follows").select("following_id")
+    const { data: followRows, error } = await db
+      .from("user_follows")
+      .select("following_id")
 
     if (error) {
       console.error("[users-repository] getFollowCounts:", error)
@@ -659,46 +763,57 @@ const getFollowCounts = unstable_cache(
  * seguidores é feita por id, então buscamos um a mais que `limit` para cobrir
  * o caso dele estar entre os top N — mesmo padrão de `getTopAuraProfiles`.
  */
-export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfileSummary[]> {
-  const db = createSupabaseAdminClient()
-  const counts = await getFollowCounts()
+const getCachedMostFollowedProfiles = unstable_cache(
+  async (limit: number): Promise<PublicProfileSummary[]> => {
+    const db = createSupabaseAdminClient()
+    const counts = await getFollowCounts()
 
-  const topIds = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit + 1)
-    .map(([id]) => id)
+    const topIds = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit + 1)
+      .map(([id]) => id)
 
-  if (topIds.length === 0) return []
+    if (topIds.length === 0) return []
 
-  const { data, error: profilesError } = await excludeFromPublicListings(
-    db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", topIds)
-  )
-
-  if (profilesError) {
-    console.error("[users-repository] getMostFollowedProfiles:", profilesError)
-    return []
-  }
-
-  // Os seguidores já foram contados aqui; só aura e atividade faltam buscar.
-  const rows = (data ?? []) as DirectoryRow[]
-  const [aura, activity] = await Promise.all([
-    getAuraByUser(rows.map((r) => r.id)),
-    countActivityByUser(rows.map((r) => r.id)),
-  ])
-
-  // O `in` volta em ordem arbitrária — reordena pelo ranking de seguidores.
-  return rows
-    .map((row) =>
-      toProfileSummary(
-        row,
-        counts[row.id] ?? 0,
-        aura[row.id] ?? 0,
-        DEFAULT_ADJUSTMENTS,
-        activity[row.id] ?? 0
-      )
+    const { data, error: profilesError } = await excludeFromPublicListings(
+      db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", topIds)
     )
-    .sort((a, b) => b.followers - a.followers)
-    .slice(0, limit)
+
+    if (profilesError) {
+      console.error(
+        "[users-repository] getMostFollowedProfiles:",
+        profilesError
+      )
+      return []
+    }
+
+    // Os seguidores já foram contados; o card desta aba só mostra esse número,
+    // então só falta o enquadramento de imagem.
+    const rows = (data ?? []) as DirectoryRow[]
+    const adjustments = await getMediaAdjustmentsByUser(rows.map((r) => r.id))
+
+    // O `in` volta em ordem arbitrária — reordena pelo ranking de seguidores.
+    return rows
+      .map((row) =>
+        toProfileSummary(
+          row,
+          counts[row.id] ?? 0,
+          0,
+          adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+          0
+        )
+      )
+      .sort((a, b) => b.followers - a.followers)
+      .slice(0, limit)
+  },
+  ["users-repository:mostFollowedProfiles"],
+  { revalidate: 300 }
+)
+
+export function getMostFollowedProfiles(
+  limit = 12
+): Promise<PublicProfileSummary[]> {
+  return getCachedMostFollowedProfiles(limit)
 }
 
 /**
@@ -710,46 +825,220 @@ export async function getMostFollowedProfiles(limit = 12): Promise<PublicProfile
  * O dono do site fica de fora (ver `excludeFromPublicListings`); buscamos um a mais
  * que `limit` para cobrir o caso dele estar entre os top N.
  */
-export async function getMostActiveProfiles(limit = 12): Promise<PublicProfileSummary[]> {
+const getCachedMostActiveProfiles = unstable_cache(
+  async (limit: number): Promise<PublicProfileSummary[]> => {
+    const db = createSupabaseAdminClient()
+    const counts = await getActivityCounts()
+
+    const topIds = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit + 1)
+      .map(([id]) => id)
+
+    if (topIds.length === 0) return []
+
+    const { data, error: profilesError } = await excludeFromPublicListings(
+      db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", topIds)
+    )
+
+    if (profilesError) {
+      console.error("[users-repository] getMostActiveProfiles:", profilesError)
+      return []
+    }
+
+    // A atividade já foi contada; o card desta aba só mostra esse número, então
+    // só falta o enquadramento de imagem.
+    const rows = (data ?? []) as DirectoryRow[]
+    const adjustments = await getMediaAdjustmentsByUser(rows.map((r) => r.id))
+
+    // O `in` volta em ordem arbitrária — reordena pela contagem de atividade.
+    return rows
+      .map((row) =>
+        toProfileSummary(
+          row,
+          0,
+          0,
+          adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+          counts[row.id] ?? 0
+        )
+      )
+      .sort((a, b) => b.activity - a.activity)
+      .slice(0, limit)
+  },
+  ["users-repository:mostActiveProfiles"],
+  { revalidate: 300 }
+)
+
+export function getMostActiveProfiles(
+  limit = 12
+): Promise<PublicProfileSummary[]> {
+  return getCachedMostActiveProfiles(limit)
+}
+
+// ── Rankings por período (filtro "Hoje / Semana / Mês" das abas Aura e Ativos) ──
+
+/**
+ * Hidrata um ranking já ordenado (lista de `{ id, value }`) em cards do
+ * diretório, sobrescrevendo a métrica da aba com o `value` da janela e
+ * completando o resto da página com membros zerados — mesma folga de
+ * `fetchTopAuraProfiles`/`getTopStreakProfiles`, para o `slice` do dono do
+ * site / contas sem perfil não encolher a grade.
+ *
+ * `metric` diz qual campo do `PublicProfileSummary` recebe o valor da janela:
+ * `"aura"` (aura ganha no período) ou `"activity"` (posts + comentários no
+ * período). Os demais contadores do card seguem sendo os atuais — só o número
+ * em destaque muda para o recorte temporal.
+ */
+async function hydratePeriodRanking(
+  ranked: Array<{ id: string; value: number }>,
+  metric: "aura" | "activity",
+  limit: number
+): Promise<PublicProfileSummary[]> {
   const db = createSupabaseAdminClient()
-  const counts = await getActivityCounts()
+  const valueById = new Map(ranked.map((r) => [r.id, r.value]))
+  const rankedIds = ranked.map((r) => r.id)
 
-  const topIds = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit + 1)
-    .map(([id]) => id)
+  const { data: rankedRows, error } = rankedIds.length
+    ? await excludeFromPublicListings(
+        db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", rankedIds)
+      )
+    : { data: [], error: null }
 
-  if (topIds.length === 0) return []
-
-  const { data, error: profilesError } = await excludeFromPublicListings(
-    db.from("user_profiles").select(DIRECTORY_COLUMNS).in("id", topIds)
-  )
-
-  if (profilesError) {
-    console.error("[users-repository] getMostActiveProfiles:", profilesError)
-    return []
+  if (error) {
+    console.error("[users-repository] hydratePeriodRanking:", error)
   }
 
-  const rows = (data ?? []) as DirectoryRow[]
-  const [followers, aura, adjustments] = await Promise.all([
-    countFollowersByUser(rows.map((r) => r.id)),
-    getAuraByUser(rows.map((r) => r.id)),
-    getMediaAdjustmentsByUser(rows.map((r) => r.id)),
-  ])
-
-  // O `in` volta em ordem arbitrária — reordena pela contagem de atividade.
-  return rows
-    .map((row) =>
-      toProfileSummary(
-        row,
-        followers[row.id] ?? 0,
-        aura[row.id] ?? 0,
-        adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
-        counts[row.id] ?? 0
-      )
-    )
-    .sort((a, b) => b.activity - a.activity)
+  const topRows = ((rankedRows ?? []) as DirectoryRow[])
+    .sort((a, b) => (valueById.get(b.id) ?? 0) - (valueById.get(a.id) ?? 0))
     .slice(0, limit)
+
+  const remaining = limit - topRows.length
+  let fillers: DirectoryRow[] = []
+  if (remaining > 0) {
+    let query = excludeFromPublicListings(
+      db.from("user_profiles").select(DIRECTORY_COLUMNS)
+    )
+      .order("profile_views", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(remaining)
+    if (topRows.length > 0) {
+      query = query.not("id", "in", `(${topRows.map((r) => r.id).join(",")})`)
+    }
+    const { data, error: fillerError } = await query
+    if (fillerError) {
+      console.error(
+        "[users-repository] hydratePeriodRanking fillers:",
+        fillerError
+      )
+    }
+    fillers = (data ?? []) as DirectoryRow[]
+  }
+
+  // A métrica em destaque é sobrescrita logo abaixo pelo valor da janela, então
+  // `withCounters` não precisa buscá-la — só o enquadramento de imagem (sempre).
+  const summaries = await withCounters([...topRows, ...fillers], [])
+  return summaries.map((profile) => ({
+    ...profile,
+    [metric]: valueById.get(profile.id) ?? 0,
+  }))
+}
+
+/**
+ * Início da janela pedida. Duplica `periodSince` de `lib/user-directory` de
+ * propósito: aqui o valor é calculado DENTRO da função cacheada, a partir do
+ * `period` (string estável) e não de um timestamp — senão a chave do
+ * `unstable_cache` mudaria a cada request e o cache nunca acertaria (mesmo
+ * motivo de `getCachedAuraRankingWeek` em aura-repository.ts computar o `since`
+ * lá dentro). `today` = meia-noite UTC, mesmo corte de missões/streak.
+ */
+function sinceForPeriod(period: Exclude<DirectoryPeriod, "all">): string {
+  if (period === "today") {
+    const midnight = new Date()
+    midnight.setUTCHours(0, 0, 0, 0)
+    return midnight.toISOString()
+  }
+  const days = period === "week" ? 7 : 30
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+}
+
+/**
+ * Top de "Mais Aura" pela Aura *ganha* na janela (`get_aura_ranking_by_period`,
+ * soma dos créditos positivos do `aura_ledger` desde o início do período) — em
+ * vez do saldo histórico de `getTopAuraProfiles`. `unstable_cache` 5 min por
+ * (período, limite): é um ranking público, idêntico para todo mundo, e o
+ * agregado no ledger não é O(1).
+ */
+const getCachedTopAuraProfilesByPeriod = unstable_cache(
+  async (
+    period: Exclude<DirectoryPeriod, "all">,
+    limit: number
+  ): Promise<PublicProfileSummary[]> => {
+    const db = createSupabaseAdminClient()
+    const { data, error } = await db.rpc("get_aura_ranking_by_period", {
+      p_since: sinceForPeriod(period),
+      p_limit: limit + 1,
+    })
+    if (error) {
+      // RPC ausente (migration ainda não aplicada) ou falha pontual: cai para a
+      // grade só com o preenchimento — a aba abre igual, só sem o recorte.
+      console.error("[users-repository] getTopAuraProfilesByPeriod:", error)
+    }
+    const rows = (
+      (data ?? []) as Array<{ user_id: string; gained: number }>
+    ).map((r) => ({
+      id: r.user_id,
+      value: r.gained,
+    }))
+    return hydratePeriodRanking(rows, "aura", limit)
+  },
+  ["users-repository:topAuraProfilesByPeriod"],
+  { revalidate: 300, tags: ["users:top-aura"] }
+)
+
+export function getTopAuraProfilesByPeriod(
+  period: Exclude<DirectoryPeriod, "all">,
+  limit = 12
+): Promise<PublicProfileSummary[]> {
+  return getCachedTopAuraProfilesByPeriod(period, limit)
+}
+
+/**
+ * Top de "Mais Ativos" por posts + comentários *criados* na janela
+ * (`get_activity_ranking_by_period`) — em vez da soma histórica de
+ * `getMostActiveProfiles`. Mesmo cache de 5 min por (período, limite).
+ */
+const getCachedMostActiveProfilesByPeriod = unstable_cache(
+  async (
+    period: Exclude<DirectoryPeriod, "all">,
+    limit: number
+  ): Promise<PublicProfileSummary[]> => {
+    const db = createSupabaseAdminClient()
+    const { data, error } = await db.rpc("get_activity_ranking_by_period", {
+      p_since: sinceForPeriod(period),
+      p_limit: limit + 1,
+    })
+    if (error) {
+      // RPC ausente (migration ainda não aplicada) ou falha pontual: cai para a
+      // grade só com o preenchimento — a aba abre igual, só sem o recorte.
+      console.error("[users-repository] getMostActiveProfilesByPeriod:", error)
+    }
+    const rows = (
+      (data ?? []) as Array<{ user_id: string; activity: number }>
+    ).map((r) => ({
+      id: r.user_id,
+      value: r.activity,
+    }))
+    return hydratePeriodRanking(rows, "activity", limit)
+  },
+  ["users-repository:mostActiveProfilesByPeriod"],
+  { revalidate: 300 }
+)
+
+export function getMostActiveProfilesByPeriod(
+  period: Exclude<DirectoryPeriod, "all">,
+  limit = 12
+): Promise<PublicProfileSummary[]> {
+  return getCachedMostActiveProfilesByPeriod(period, limit)
 }
 
 /**
@@ -767,7 +1056,9 @@ const FORUM_MODERATOR_IDS = [
 ]
 
 /** Perfis dos moderadores da comunidade, na ordem fixa acima. */
-export async function getForumModeratorProfiles(): Promise<PublicProfileSummary[]> {
+export async function getForumModeratorProfiles(): Promise<
+  PublicProfileSummary[]
+> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("user_profiles")
@@ -797,21 +1088,23 @@ const ACTIVITY_RANK_TOP_CUTOFF = 100
  * O dono do site não participa deste ranking público, mesmo critério de
  * `getUserAuraRank`.
  */
-export const getUserActivityRank = cache(async (userId: string): Promise<number | null> => {
-  const ownerId = await findUserIdByDisplaySlug(SITE_OWNER_SLUG)
-  if (userId === ownerId) return null
+export const getUserActivityRank = cache(
+  async (userId: string): Promise<number | null> => {
+    const ownerId = await findUserIdByDisplaySlug(SITE_OWNER_SLUG)
+    if (userId === ownerId) return null
 
-  const counts = await getActivityCounts()
-  const activity = counts[userId] ?? 0
-  if (activity <= 0) return null
+    const counts = await getActivityCounts()
+    const activity = counts[userId] ?? 0
+    if (activity <= 0) return null
 
-  let rank = 1
-  for (const [id, count] of Object.entries(counts)) {
-    if (id === ownerId || id === userId) continue
-    if (count > activity) rank += 1
+    let rank = 1
+    for (const [id, count] of Object.entries(counts)) {
+      if (id === ownerId || id === userId) continue
+      if (count > activity) rank += 1
+    }
+    return rank <= ACTIVITY_RANK_TOP_CUTOFF ? rank : null
   }
-  return rank <= ACTIVITY_RANK_TOP_CUTOFF ? rank : null
-})
+)
 
 /**
  * Registra uma visita ao perfil público. Via RPC (`increment_profile_views`)
@@ -819,7 +1112,9 @@ export const getUserActivityRank = cache(async (userId: string): Promise<number 
  */
 export async function incrementProfileViews(userId: string): Promise<void> {
   const db = createSupabaseAdminClient()
-  const { error } = await db.rpc("increment_profile_views", { p_user_id: userId })
+  const { error } = await db.rpc("increment_profile_views", {
+    p_user_id: userId,
+  })
   if (error) console.error("[users-repository] incrementProfileViews:", error)
 }
 
@@ -839,7 +1134,10 @@ export async function countFollowers(userId: string): Promise<number> {
 }
 
 /** `true` quando `followerId` já segue `followingId`. */
-export async function isFollowing(followerId: string, followingId: string): Promise<boolean> {
+export async function isFollowing(
+  followerId: string,
+  followingId: string
+): Promise<boolean> {
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("user_follows")
@@ -854,7 +1152,10 @@ export async function isFollowing(followerId: string, followingId: string): Prom
  * Passa a seguir um perfil. Idempotente: a PK composta transforma o segundo
  * "seguir" num conflito, que é ignorado em vez de virar erro na UI.
  */
-export async function followUser(followerId: string, followingId: string): Promise<void> {
+export async function followUser(
+  followerId: string,
+  followingId: string
+): Promise<void> {
   if (followerId === followingId) return
   const db = createSupabaseAdminClient()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -866,7 +1167,10 @@ export async function followUser(followerId: string, followingId: string): Promi
 }
 
 /** Deixa de seguir. Idempotente. */
-export async function unfollowUser(followerId: string, followingId: string): Promise<void> {
+export async function unfollowUser(
+  followerId: string,
+  followingId: string
+): Promise<void> {
   const db = createSupabaseAdminClient()
   await db
     .from("user_follows")
@@ -911,7 +1215,11 @@ export async function isDisplayNameAvailable(
   if (!slug) return false
 
   const db = createSupabaseAdminClient()
-  let query = db.from("user_profiles").select("id").eq("display_slug", slug).limit(1)
+  let query = db
+    .from("user_profiles")
+    .select("id")
+    .eq("display_slug", slug)
+    .limit(1)
   if (exceptUserId) query = query.neq("id", exceptUserId)
 
   const { data, error } = await query
@@ -939,7 +1247,8 @@ export async function resolveAvailableDisplayName(
   const root = slugifyDisplayName(cleaned).length >= 2 ? cleaned : fallback
 
   const usable = async (candidate: string) =>
-    !validateDisplayName(candidate) && (await isDisplayNameAvailable(candidate, userId))
+    !validateDisplayName(candidate) &&
+    (await isDisplayNameAvailable(candidate, userId))
 
   if (await usable(root)) return root
 
@@ -955,18 +1264,20 @@ export async function resolveAvailableDisplayName(
 // `React.cache`: chamada por `resolveUserId` em `/perfil/[handle]` (2x:
 // generateMetadata + página) e de novo dentro de `getUserActivityRank`
 // (via `getSiteOwnerId`) na mesma requisição — dedupe por (slug).
-export const findUserIdByDisplaySlug = cache(async (slug: string): Promise<string | null> => {
-  const normalized = slugifyDisplayName(slug)
-  if (!normalized) return null
+export const findUserIdByDisplaySlug = cache(
+  async (slug: string): Promise<string | null> => {
+    const normalized = slugifyDisplayName(slug)
+    if (!normalized) return null
 
-  const db = createSupabaseAdminClient()
-  const { data } = await db
-    .from("user_profiles")
-    .select("id")
-    .eq("display_slug", normalized)
-    .maybeSingle()
-  return (data as { id: string } | null)?.id ?? null
-})
+    const db = createSupabaseAdminClient()
+    const { data } = await db
+      .from("user_profiles")
+      .select("id")
+      .eq("display_slug", normalized)
+      .maybeSingle()
+    return (data as { id: string } | null)?.id ?? null
+  }
+)
 
 /**
  * Dados do cartão de preview rápido ("Mini Perfil"), resolvidos por slug.
@@ -975,7 +1286,9 @@ export const findUserIdByDisplaySlug = cache(async (slug: string): Promise<strin
  * demanda no hover: ele não precisa de setup, medalhas nem favoritos, e
  * puxar tudo isso a cada passada de mouse sairia caro.
  */
-export async function getMiniProfileBySlug(slug: string): Promise<MiniProfile | null> {
+export async function getMiniProfileBySlug(
+  slug: string
+): Promise<MiniProfile | null> {
   const normalized = slugifyDisplayName(slug)
   if (!normalized) return null
 
@@ -1165,27 +1478,38 @@ export async function updateUserProfileSettings(
     : null
 
   const payload: Record<string, unknown> = { id: userId }
-  if (changes.displayName !== undefined) payload.display_name = changes.displayName
+  if (changes.displayName !== undefined)
+    payload.display_name = changes.displayName
   if (changes.avatarUrl !== undefined) payload.avatar_url = changes.avatarUrl
   if (changes.theme !== undefined) payload.theme = changes.theme
   if (changes.locale !== undefined) payload.locale = changes.locale
   if (changes.bannerUrl !== undefined) payload.banner_url = changes.bannerUrl
-  if (changes.miniBannerUrl !== undefined) payload.mini_banner_url = changes.miniBannerUrl
+  if (changes.miniBannerUrl !== undefined)
+    payload.mini_banner_url = changes.miniBannerUrl
   if (changes.bio !== undefined) payload.bio = changes.bio
-  if (changes.youtubeHandle !== undefined) payload.youtube_handle = changes.youtubeHandle
-  if (changes.tiktokHandle !== undefined) payload.tiktok_handle = changes.tiktokHandle
-  if (changes.mediaAdjustments !== undefined) payload.media_adjustments = changes.mediaAdjustments
+  if (changes.youtubeHandle !== undefined)
+    payload.youtube_handle = changes.youtubeHandle
+  if (changes.tiktokHandle !== undefined)
+    payload.tiktok_handle = changes.tiktokHandle
+  if (changes.mediaAdjustments !== undefined)
+    payload.media_adjustments = changes.mediaAdjustments
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
+  const { error } = await (db.from("user_profiles") as any).upsert(payload, {
+    onConflict: "id",
+  })
 
   // Enquadramento só é gravável depois da migration 20260817. Enquanto ela não
   // roda, salvar o resto do perfil não pode falhar por causa dele: repete sem a
   // coluna e deixa o aviso no log.
   if (error?.code === "42703" && changes.mediaAdjustments !== undefined) {
-    console.warn("[users-repository] media_adjustments ausente — aplique 20260817_profile_media_adjustments.sql")
+    console.warn(
+      "[users-repository] media_adjustments ausente — aplique 20260817_profile_media_adjustments.sql"
+    )
     delete payload.media_adjustments
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const retry = await (db.from("user_profiles") as any).upsert(payload, { onConflict: "id" })
+    const retry = await (db.from("user_profiles") as any).upsert(payload, {
+      onConflict: "id",
+    })
     if (retry.error) throw retry.error
     await cleanupReplacedProfileMedia(previousMedia, changes)
     return
@@ -1211,14 +1535,19 @@ type ProfileMediaUrls = {
  */
 async function cleanupReplacedProfileMedia(
   previous: ProfileMediaUrls | null,
-  changes: { avatarUrl?: string | null; bannerUrl?: string | null; miniBannerUrl?: string | null }
+  changes: {
+    avatarUrl?: string | null
+    bannerUrl?: string | null
+    miniBannerUrl?: string | null
+  }
 ): Promise<void> {
   if (!previous) return
 
   const replaced: Array<string | null> = []
   if (changes.avatarUrl !== undefined) replaced.push(previous.avatar_url)
   if (changes.bannerUrl !== undefined) replaced.push(previous.banner_url)
-  if (changes.miniBannerUrl !== undefined) replaced.push(previous.mini_banner_url)
+  if (changes.miniBannerUrl !== undefined)
+    replaced.push(previous.mini_banner_url)
 
   await removeReplacedStorageObjects(replaced, [
     changes.avatarUrl ?? previous.avatar_url,
@@ -1241,7 +1570,9 @@ export async function hasRecordedLgpdConsent(userId: string): Promise<boolean> {
     .select("lgpd_consent_at")
     .eq("id", userId)
     .maybeSingle()
-  return Boolean((data as { lgpd_consent_at: string | null } | null)?.lgpd_consent_at)
+  return Boolean(
+    (data as { lgpd_consent_at: string | null } | null)?.lgpd_consent_at
+  )
 }
 
 /**
@@ -1277,7 +1608,9 @@ export async function recordLgpdConsent(params: {
  * Registra o aceite do termo de integridade das mini reviews (item 1.2) —
  * idempotente (só grava se ainda não tinha aceitado) e nunca reexibido depois.
  */
-export async function acceptReviewsIntegrityTerm(userId: string): Promise<string> {
+export async function acceptReviewsIntegrityTerm(
+  userId: string
+): Promise<string> {
   const db = createSupabaseAdminClient()
   const acceptedAt = new Date().toISOString()
   await db
@@ -1291,7 +1624,10 @@ export async function acceptReviewsIntegrityTerm(userId: string): Promise<string
     .select("reviews_integrity_accepted_at")
     .eq("id", userId)
     .maybeSingle()
-  return (data as { reviews_integrity_accepted_at: string | null } | null)?.reviews_integrity_accepted_at ?? acceptedAt
+  return (
+    (data as { reviews_integrity_accepted_at: string | null } | null)
+      ?.reviews_integrity_accepted_at ?? acceptedAt
+  )
 }
 
 /**
@@ -1335,7 +1671,11 @@ export async function deleteUserAccountData(
  */
 export async function deleteUserAsAdmin(
   targetId: string,
-  options: { actorId: string; targetEmail?: string | null; ipAddress?: string | null }
+  options: {
+    actorId: string
+    targetEmail?: string | null
+    ipAddress?: string | null
+  }
 ): Promise<void> {
   const db = createSupabaseAdminClient()
 
@@ -1471,11 +1811,24 @@ export type UserDataExport = {
   /** Perfis que seguem este usuário. */
   followers: Array<{ user_id: string; created_at: string }>
   /** Setup exibido no perfil (mouse, teclado, headset, monitor, mousepad). */
-  setup_items: Array<{ slot: string; peripheral_id: string; updated_at: string }>
+  setup_items: Array<{
+    slot: string
+    peripheral_id: string
+    updated_at: string
+  }>
   /** Periféricos curtidos/favoritados. */
-  favorite_peripherals: Array<{ peripheral_id: string; position: number; created_at: string }>
+  favorite_peripherals: Array<{
+    peripheral_id: string
+    position: number
+    created_at: string
+  }>
   /** Medalhas conquistadas. */
-  medals: Array<{ medal_id: string; awarded_at: string; pinned: boolean; pinned_order: number | null }>
+  medals: Array<{
+    medal_id: string
+    awarded_at: string
+    pinned: boolean
+    pinned_order: number | null
+  }>
 }
 
 /**

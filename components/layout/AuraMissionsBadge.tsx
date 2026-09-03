@@ -42,7 +42,13 @@ const MISSION_HREFS: Record<DailyMissionKey, string> = {
   gave_aura: "/forum",
 }
 
-const EMPTY_STREAK: UserStreak = { current: 0, longest: 0 }
+const EMPTY_STREAK: UserStreak = {
+  current: 0,
+  longest: 0,
+  shield: null,
+  frozen: false,
+  frozenUntil: null,
+}
 
 /**
  * Fallback lento: cobre missões cumpridas fora do evento de aura (criar

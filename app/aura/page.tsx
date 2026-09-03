@@ -11,6 +11,7 @@ import { EMPTY_DAILY_MISSIONS } from "@/lib/achievements"
 import {
   getDisplayNameCooldown,
   getEquippedAvatarFrameId,
+  getStreakShieldStatus,
   getUserAuraItemIds,
   getVipStatus,
   listActiveAuraItems,
@@ -42,11 +43,14 @@ export default async function AuraCenterPage() {
     vipStatus,
     nameCooldown,
     profileSettings,
+    streakShield,
   ] = await Promise.all([
     userId ? getUserAuraBalance(userId) : Promise.resolve(0),
     userId ? getUserAuraTotalEarned(userId) : Promise.resolve(0),
     userId ? getUserAuraRank(userId) : Promise.resolve(null),
-    userId ? getUserStreak(userId) : Promise.resolve({ current: 0, longest: 0 }),
+    userId
+      ? getUserStreak(userId)
+      : Promise.resolve({ current: 0, longest: 0, shield: null, frozen: false, frozenUntil: null }),
     userId
       ? getUserAuraUsage(userId)
       : Promise.resolve({
@@ -70,6 +74,9 @@ export default async function AuraCenterPage() {
       ? getDisplayNameCooldown(userId)
       : Promise.resolve({ onCooldown: false, changedAt: null, endsAt: null }),
     userId ? getUserProfileSettings(userId) : Promise.resolve(null),
+    userId
+      ? getStreakShieldStatus(userId)
+      : Promise.resolve({ armed: false, graceDays: null }),
   ])
 
   return (
@@ -89,6 +96,7 @@ export default async function AuraCenterPage() {
         vipStatus={vipStatus}
         nameCooldown={nameCooldown}
         displayName={profileSettings?.display_name ?? ""}
+        streakShield={streakShield}
       />
     </Suspense>
   )

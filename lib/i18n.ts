@@ -1610,6 +1610,17 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.3.7 · Vox Imaginum",
+          date: "4 de setembro",
+          title: "GIFs no fórum",
+          description: "Agora dá pra responder com GIF. Tem um botão \"GIF\" nos comentários e nos posts do fórum: você busca, escolhe e ele entra junto do texto, do mesmo jeito que já dava pra anexar imagem.",
+          items: [
+            "Botão \"GIF\" ao criar, responder e editar comentário (no fórum, no blog e nos periféricos), e também ao criar post no fórum",
+            "Busca por palavra com prévia dos resultados; o GIF escolhido conta como uma das imagens do comentário (até 2) ou do post (até 5)",
+            "Nas primeiras semanas a busca de GIF pode ficar indisponível por alguns minutos em horários de pico — isso vai deixando de acontecer com o tempo. Quando acontece, é só tentar de novo mais tarde; o resto do comentário/post funciona normalmente",
+          ],
+        },
+        {
           version: "v0.3.6",
           date: "2 de setembro",
           title: "Categoria Fontes na Tierlist, saques de afiliado reformulados e endereço de entrega no checkout",
@@ -2764,6 +2775,17 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.3.7 · Vox Imaginum",
+          date: "September 4",
+          title: "GIFs in the forum",
+          description: "You can now reply with a GIF. There's a \"GIF\" button in forum comments and posts: search, pick, and it drops in alongside your text, just like attaching an image already did.",
+          items: [
+            "\"GIF\" button when creating, replying to, and editing a comment (in the forum, the blog, and on peripherals), and also when creating a forum post",
+            "Keyword search with a preview of the results; the chosen GIF counts as one of the comment's images (up to 2) or the post's (up to 5)",
+            "For the first few weeks, GIF search may be unavailable for a few minutes during peak hours — this fades over time. When it happens, just try again later; the rest of the comment/post works normally",
+          ],
+        },
         {
           version: "v0.3.6",
           date: "September 2",

@@ -9,7 +9,10 @@ const csp = [
 	"style-src 'self' 'unsafe-inline'",
 	"img-src 'self' data: blob: https:",
 	"font-src 'self' data:",
-	`connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com${isDev ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
+	// api.klipy.com: o seletor de GIF chama o KLIPY direto do browser (exigência
+	// deles — sem proxy). static*.klipy.com serve as miniaturas via <img> (já
+	// coberto por img-src https:), mas o share trigger é um POST → connect-src.
+	`connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://api.klipy.com${isDev ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
 	"frame-src https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com",
 	"object-src 'none'",
 	"base-uri 'self'",
@@ -56,6 +59,11 @@ const nextConfig = {
 			},
 			// Capas de fallback do blog/notícias.
 			{ protocol: "https", hostname: "images.unsplash.com" },
+			// GIFs do seletor (KLIPY) anexados a comentários/posts — servidos de
+			// static*.klipy.com (ver lib/klipy.ts e docs.klipy.com/network-requirements).
+			{ protocol: "https", hostname: "static.klipy.com" },
+			{ protocol: "https", hostname: "static1.klipy.com" },
+			{ protocol: "https", hostname: "static2.klipy.com" },
 			// Thumbnails do YouTube (feed de vídeos).
 			{ protocol: "https", hostname: "i.ytimg.com" },
 			{ protocol: "https", hostname: "img.youtube.com" },

@@ -4,7 +4,7 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, type CSSProperties } from "react"
 import { toast } from "sonner"
-import { Bird, Check, Flame, MessageSquare, Sparkles, SquarePen, Trophy } from "lucide-react"
+import { Bird, Check, Flame, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
 
 import { AuraFaqSection } from "@/components/aura/AuraFaqSection"
 import { AuraRankingModal } from "@/components/aura/AuraRankingModal"
@@ -23,8 +23,17 @@ import {
 import type {
   AuraItem,
   DisplayNameCooldown,
+  StreakShieldStatus,
+  StreakShieldVariant,
   VipStatus,
 } from "@/lib/server/repositories/aura-store-repository"
+import { StreakShieldCard } from "@/components/aura/StreakShieldCard"
+
+/** slug do catálogo → variante do card (evita importar o const do módulo server-only). */
+const SHIELD_SLUG_TO_VARIANT: Record<string, StreakShieldVariant> = {
+  "protecao-ofensiva-1d": "1d",
+  "protecao-ofensiva-3d": "3d",
+}
 import { AuraNextSlotCountdown } from "@/components/aura/AuraNextSlotCountdown"
 import { AuraItemCard } from "@/components/aura/AuraItemCard"
 import { VipMonthCard } from "@/components/aura/VipMonthCard"
@@ -56,6 +65,7 @@ interface AuraCenterContentProps {
   vipStatus: VipStatus
   nameCooldown: DisplayNameCooldown
   displayName: string
+  streakShield: StreakShieldStatus
 }
 
 /**
@@ -105,6 +115,7 @@ export function AuraCenterContent({
   vipStatus,
   nameCooldown,
   displayName,
+  streakShield,
 }: AuraCenterContentProps) {
   // `initial*` só muda entre navegações de página inteira (novo render do
   // Server Component), nunca em re-render do client — então o valor inicial
@@ -120,6 +131,7 @@ export function AuraCenterContent({
   const [currentName, setCurrentName] = useState(displayName)
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
   const [rankingOpen, setRankingOpen] = useState(false)
+  const [shield, setShield] = useState(streakShield)
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -144,6 +156,18 @@ export function AuraCenterContent({
 
   const heatTier = streakHeatTier(streak.current)
   const heatStyle = STREAK_HEAT_STYLES[heatTier]
+
+  // As duas variantes do escudo viram UM card só (toggle 1d/3d); o resto da
+  // loja renderiza normal. Enquanto há escudo guardado o card mostra o
+  // estado "guardado" em vez do botão de compra.
+  const shieldVariants: Partial<Record<StreakShieldVariant, AuraItem>> = {}
+  for (const it of items) {
+    if (it.kind !== "streak_shield") continue
+    const v = SHIELD_SLUG_TO_VARIANT[it.slug]
+    if (v) shieldVariants[v] = it
+  }
+  const hasShieldItem = Object.keys(shieldVariants).length > 0
+  const nonShieldItems = items.filter((it) => it.kind !== "streak_shield")
 
   // Requer login apenas na hora de agir (resgatar, equipar, completar
   // missão etc.) — a central em si (saldo, loja, tarefas) fica visível sem
@@ -201,28 +225,50 @@ export function AuraCenterContent({
             (dias consecutivos de missões completas), então moram juntos em
             vez de espalhados em dois cards separados. */}
         <div id="multiplicador" className={cn("flex flex-col gap-2 rounded-2xl border p-5 scroll-mt-20", CARD_SURFACE)}>
-          <div className={cn("flex items-center gap-2", heatStyle.text)}>
-            <Bird className={cn("size-4", heatStyle.glow)} strokeWidth={1.5} />
+          <div className={cn("flex items-center gap-2", streak.frozen ? "text-sky-400" : heatStyle.text)}>
+            {streak.frozen ? (
+              <Snowflake className="size-4 drop-shadow-[0_0_5px_rgba(56,189,248,0.7)]" strokeWidth={1.5} />
+            ) : (
+              <Bird className={cn("size-4", heatStyle.glow)} strokeWidth={1.5} />
+            )}
             <span className="text-xs font-semibold uppercase tracking-wider">Ofensiva</span>
           </div>
           <div className="flex items-baseline gap-2">
             <p className="font-display text-3xl font-bold text-foreground tabular-nums">
               {streak.current} dia{streak.current === 1 ? "" : "s"}
             </p>
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
-                streak.current > 0 ? cn("bg-current/10", heatStyle.text) : "bg-muted text-muted-foreground"
-              )}
-              title="Multiplicador de Aura pela ofensiva atual"
-            >
-              +{formatStreakMultiplier(streak.current)} mult.
-            </span>
+            {streak.frozen ? (
+              <span
+                className="flex items-center gap-1 rounded-full bg-sky-400/10 px-2 py-0.5 text-xs font-bold text-sky-300"
+                title={
+                  streak.frozenUntil
+                    ? `Complete as missões até ${new Date(`${streak.frozenUntil}T00:00:00`).toLocaleDateString("pt-BR")} para não perder a ofensiva`
+                    : "Ofensiva protegida por um escudo"
+                }
+              >
+                <Snowflake className="size-3" />
+                Congelada
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  "rounded-full px-2 py-0.5 text-xs font-bold tabular-nums",
+                  streak.current > 0 ? cn("bg-current/10", heatStyle.text) : "bg-muted text-muted-foreground"
+                )}
+                title="Multiplicador de Aura pela ofensiva atual"
+              >
+                +{formatStreakMultiplier(streak.current)} mult.
+              </span>
+            )}
           </div>
           <p className="text-xs text-muted-foreground">
-            {streak.current > 0
-              ? <>Recorde: {streak.longest} dia{streak.longest === 1 ? "" : "s"} — bônus em todo ganho de Aura</>
-              : "Complete as 3 tarefas abaixo hoje para começar"}
+            {streak.frozen
+              ? streak.frozenUntil
+                ? `Escudo ativado — complete as 3 tarefas até ${new Date(`${streak.frozenUntil}T00:00:00`).toLocaleDateString("pt-BR")} para retomar a ofensiva.`
+                : "Escudo ativado — complete as 3 tarefas para retomar a ofensiva."
+              : streak.current > 0
+                ? <>Recorde: {streak.longest} dia{streak.longest === 1 ? "" : "s"} — bônus em todo ganho de Aura</>
+                : "Complete as 3 tarefas abaixo hoje para começar"}
           </p>
         </div>
 
@@ -334,7 +380,21 @@ export function AuraCenterContent({
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {items.map((item) => {
+            {hasShieldItem && (
+              <StreakShieldCard
+                key="streak-shield"
+                variants={shieldVariants}
+                balance={currentBalance}
+                shieldArmed={shield.armed}
+                shieldGraceDays={shield.graceDays}
+                requireLogin={requireLogin}
+                onPurchased={(_variant, graceDays, cost) => {
+                  setShield({ armed: true, graceDays })
+                  setCurrentBalance((prev) => prev - cost)
+                }}
+              />
+            )}
+            {nonShieldItems.map((item) => {
               if (item.kind === "vip_month") {
                 return (
                   <VipMonthCard

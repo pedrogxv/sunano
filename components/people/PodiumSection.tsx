@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils"
 import {
   profileAccentHue,
   type DirectoryMetric,
+  type DirectoryPeriod,
   type PublicProfileSummary,
 } from "@/lib/user-directory"
 
@@ -50,6 +51,7 @@ const SPARKLES = [
 export function PodiumSection({
   profiles,
   metric,
+  period = "all",
   following,
   currentUserId,
   showFollowButton = false,
@@ -57,6 +59,8 @@ export function PodiumSection({
   /** Exatamente os 3 primeiros colocados, em ordem (1º, 2º, 3º). */
   profiles: PublicProfileSummary[]
   metric: DirectoryMetric
+  /** Janela ativa do ranking (só afeta o rótulo de aura/atividade). */
+  period?: DirectoryPeriod
   following: Set<string>
   currentUserId: string | null
   /** Só a aba "Mais visitados" mostra o botão Seguir nos cards do pódio. */
@@ -70,6 +74,7 @@ export function PodiumSection({
           profile={profile}
           place={(index + 1) as Place}
           metric={metric}
+          period={period}
           isFollowing={following.has(profile.id)}
           isSelf={profile.id === currentUserId}
           showFollowButton={showFollowButton}
@@ -83,6 +88,7 @@ function PodiumCard({
   profile,
   place,
   metric,
+  period,
   isFollowing,
   isSelf,
   showFollowButton,
@@ -90,6 +96,7 @@ function PodiumCard({
   profile: PublicProfileSummary
   place: Place
   metric: DirectoryMetric
+  period: DirectoryPeriod
   isFollowing: boolean
   isSelf: boolean
   showFollowButton: boolean
@@ -203,7 +210,7 @@ function PodiumCard({
               {specialTag && <Sparkles className="size-3 shrink-0 text-cyan-400" />}
             </p>
 
-            <ProfileMetrics profile={profile} metric={metric} compact />
+            <ProfileMetrics profile={profile} metric={metric} period={period} compact />
           </Link>
 
           {showFollowButton && (

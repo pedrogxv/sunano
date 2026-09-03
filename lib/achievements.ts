@@ -184,10 +184,43 @@ export function countCompletedMissions(missions: DailyMissionsState): number {
   return DAILY_MISSION_KEYS.filter(({ key }) => missions[key]).length
 }
 
+export type StreakShield = {
+  /**
+   * Escudo guardado (comprado, `consumed_at is null`). Sem prazo — não
+   * expira sozinho; some quando `complete_daily_mission` o gasta cobrindo
+   * um buraco.
+   */
+  armed: boolean
+  /**
+   * Margem de atraso (1 ou 3): perdeu 1 dia de missões, tem até `graceDays`
+   * dias para voltar e resgatar a ofensiva.
+   */
+  graceDays: number
+}
+
 export type UserStreak = {
-  /** 0 quando a ofensiva expirou (último dia completo não foi hoje nem ontem). */
+  /**
+   * Dias consecutivos. 0 quando a ofensiva expirou (último dia completo não
+   * foi hoje nem ontem E não há escudo cobrindo o buraco).
+   */
   current: number
   longest: number
+  /**
+   * Escudo ("Proteção de Ofensiva") guardado, se houver — ver
+   * `user_streak_shields` / 20261005000000_aura_streak_shield_inventory.sql.
+   */
+  shield: StreakShield | null
+  /**
+   * `true` quando a ofensiva só continua de pé porque o escudo guardado
+   * está cobrindo um dia perdido (missões de hoje/ontem não fechadas). É o
+   * gatilho do visual "congelado" no `StreakBadge`.
+   */
+  frozen: boolean
+  /**
+   * Quando `frozen`, o último dia (YYYY-MM-DD, UTC) para completar as 3
+   * missões e resgatar a ofensiva congelada. `null` fora desse estado.
+   */
+  frozenUntil: string | null
 }
 
 /** Mesmo formato de `formatCount` (EstatisticasContador.tsx), reexportado aqui para o grid de conquistas não importar um Client Component. */

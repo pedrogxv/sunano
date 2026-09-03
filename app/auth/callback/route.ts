@@ -66,6 +66,16 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code) {
+    if (type === "signup") {
+      // O template de e-mail padrão do Supabase usa {{ .ConfirmationURL }},
+      // que aponta pro /auth/v1/verify do próprio GoTrue — ele consome o
+      // token e SÓ ENTÃO redireciona pra cá, sem repassar `code` nem
+      // `token_hash` (não há PKCE nem sessão implícita nesse fluxo, já que a
+      // conta nasce via admin.createUser). Ou seja: se chegamos aqui com
+      // `type=signup` e sem erro na query, o GoTrue já confirmou o e-mail —
+      // só falta mandar a pessoa logar.
+      return NextResponse.redirect(`${origin}/login?confirmed=1`)
+    }
     return NextResponse.redirect(`${origin}/login?error=missing_code`)
   }
 

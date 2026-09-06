@@ -4,6 +4,7 @@ import { cache } from "react"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 import { getPeripheralRankById, type PeripheralRank } from "@/lib/server/repositories/peripherals-repository"
+import { computeEffectivePrice } from "@/lib/store-pricing"
 
 /**
  * Repositório da Loja — única porta de acesso à tabela `store_products`
@@ -1067,6 +1068,8 @@ export type CheckoutVariant = {
   product_id: string
   label: string
   price_cents_override: number | null
+  /** Promoção da cor. O checkout precisa dela para cobrar o mesmo que a vitrine mostra. */
+  promo_price_cents: number | null
   /** `null` = sem controle de estoque (nunca esgota). */
   stock: number | null
   is_active: boolean
@@ -1079,7 +1082,7 @@ export async function getVariantsForCheckout(variantIds: string[]): Promise<Chec
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("store_product_variants")
-    .select("id, product_id, label, price_cents_override, stock, is_active, is_sold_out")
+    .select("id, product_id, label, price_cents_override, promo_price_cents, stock, is_active, is_sold_out")
     .in("id", variantIds)
 
   if (error) {
@@ -1647,4 +1650,141 @@ export async function replaceProductPeripherals(productId: string, peripheralIds
     console.error("[store-repository] replaceProductPeripherals insert:", insertError)
     throw new Error("Erro ao atualizar periféricos vinculados.")
   }
+}
+
+// ---------------------------------------------------------------------------
+// Revalidação de carrinho
+// ---------------------------------------------------------------------------
+
+export type CartLineInput = {
+  productId: string
+  variantId: string | null
+  optionIds: string[]
+}
+
+/** Motivo pelo qual uma linha do carrinho não pode mais ser comprada como está. */
+export type CartLineIssue =
+  | "not_found"
+  | "inactive"
+  | "sold_out"
+  | "variant_not_found"
+  | "variant_unavailable"
+  | "option_unavailable"
+  | "combination_unavailable"
+  | "insufficient_stock"
+  | "price_changed"
+
+export type ValidatedCartLine = {
+  productId: string
+  variantId: string | null
+  optionIds: string[]
+  /** Nome atual — o do carrinho pode estar desatualizado. */
+  name: string | null
+  /** Preço atual da combinação, já com promoção aplicada. `null` se indisponível. */
+  priceCents: number | null
+  /** Estoque atual da combinação; `null` = sem controle de estoque. */
+  stock: number | null
+  /** `true` quando a linha ainda pode ser comprada (talvez com menos unidades). */
+  available: boolean
+  issues: CartLineIssue[]
+}
+
+/**
+ * Estado atual das linhas de um carrinho, para a tela avisar sobre divergências
+ * ANTES do submit do checkout. Reusa exatamente as mesmas consultas e a mesma
+ * função de preço que o checkout usa para cobrar — é isso que garante que o
+ * aviso corresponda ao que vai acontecer de fato na compra.
+ *
+ * Não substitui a validação do checkout (que continua sendo a autoridade e
+ * roda de novo, com reserva atômica de estoque): entre esta chamada e o
+ * submit ainda cabe uma corrida. O objetivo aqui é reduzir a frequência com
+ * que o cliente descobre o problema tarde demais, não eliminá-la.
+ */
+export async function validateCartLines(
+  lines: CartLineInput[]
+): Promise<{ lines: ValidatedCartLine[]; cartNeedsShipping: boolean }> {
+  const db = createSupabaseAdminClient()
+
+  const productIds = [...new Set(lines.map((l) => l.productId))]
+  const variantIds = [
+    ...new Set(lines.map((l) => l.variantId).filter((id): id is string => id != null)),
+  ]
+  const optionIds = [...new Set(lines.flatMap((l) => l.optionIds))]
+
+  const [{ data: products }, variants, options, combinations] = await Promise.all([
+    db
+      .from("store_products")
+      .select(
+        "id, name, price_cents, promo_price_cents, stock, is_active, is_sold_out, requires_shipping"
+      )
+      .in("id", productIds),
+    getVariantsForCheckout(variantIds),
+    getVariantOptionsForCheckout(optionIds),
+    getSoldOutCombinations(variantIds, optionIds),
+  ])
+
+  const soldOutKeys = new Set(combinations.map((c) => `${c.variant_id}:${c.option_id}`))
+
+  const validated: ValidatedCartLine[] = lines.map((line) => {
+    const issues: CartLineIssue[] = []
+    const base: Omit<ValidatedCartLine, "available" | "issues"> = {
+      productId: line.productId,
+      variantId: line.variantId,
+      optionIds: line.optionIds,
+      name: null,
+      priceCents: null,
+      stock: null,
+    }
+
+    const product = (products ?? []).find((p) => p.id === line.productId)
+    if (!product) return { ...base, available: false, issues: ["not_found"] }
+
+    base.name = product.name
+    if (!product.is_active) issues.push("inactive")
+    if (product.is_sold_out) issues.push("sold_out")
+
+    const variant = line.variantId ? variants.find((v) => v.id === line.variantId) : null
+    if (line.variantId && (!variant || variant.product_id !== product.id)) {
+      return { ...base, available: false, issues: [...issues, "variant_not_found"] }
+    }
+    if (variant && (!variant.is_active || variant.is_sold_out)) issues.push("variant_unavailable")
+
+    const selectedOptions = line.optionIds
+      .map((id) => options.find((o) => o.id === id))
+      .filter((o): o is (typeof options)[number] => o != null)
+
+    if (selectedOptions.length !== line.optionIds.length) {
+      return { ...base, available: false, issues: [...issues, "option_unavailable"] }
+    }
+    if (selectedOptions.some((o) => o.group.product_id !== product.id)) {
+      return { ...base, available: false, issues: [...issues, "option_unavailable"] }
+    }
+    if (selectedOptions.some((o) => o.is_sold_out)) issues.push("option_unavailable")
+
+    if (variant && selectedOptions.some((o) => soldOutKeys.has(`${variant.id}:${o.id}`))) {
+      issues.push("combination_unavailable")
+    }
+
+    // Mesma ordenação por `group.position` que o checkout aplica antes de
+    // precificar — a ordem decide qual override vence.
+    const orderedOptions = [...selectedOptions].sort(
+      (a, b) => a.group.position - b.group.position
+    )
+    const { effectiveCents } = computeEffectivePrice(product, variant ?? null, orderedOptions)
+
+    base.priceCents = effectiveCents
+    base.stock = variant ? variant.stock : product.stock
+    if (base.stock !== null && base.stock <= 0) issues.push("insufficient_stock")
+
+    return { ...base, available: issues.length === 0, issues }
+  })
+
+  // Mesma pergunta que `/checkout/payer-info?productIds=` respondia: há algo
+  // para despachar neste carrinho? Vem junto porque a tela precisa das duas
+  // respostas no mesmo momento, e eram duas chamadas na abertura do checkout.
+  const found = products ?? []
+  const cartNeedsShipping =
+    found.length > 0 ? found.some((p) => p.requires_shipping !== false) : true
+
+  return { lines: validated, cartNeedsShipping }
 }

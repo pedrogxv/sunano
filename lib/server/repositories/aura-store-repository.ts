@@ -532,8 +532,218 @@ export async function updateAuraItem(id: string, input: AuraItemUpdateInput): Pr
   return toAuraItemAdmin(data)
 }
 
-/** Itens já resgatados não são afetados — `user_aura_items` referencia por FK com `on delete cascade`, então deletar o item some com a posse de quem já tinha. Mantido simples: sem soft-delete, mesmo padrão de `deleteEvent`. */
+/** Itens já resgatados não são afetados — `user_aura_items` referencia por FK com `on delete cascade`, então deletar o item some com a posse de quem já tinha. Mantido simples: sem soft-delete, mesmo padrão de `deleteEvent`. `aura_purchases.item_id` é `on delete set null` — o histórico de receita do item sobrevive via snapshot de nome/slug. */
 export async function deleteAuraItem(id: string): Promise<void> {
   const db = createSupabaseAdminClient()
   await db.from("aura_items").delete().eq("id", id)
+}
+
+// ── Histórico de compras (admin) ──
+
+export type AuraPurchaseItemSummary = {
+  /** Quantidade de compras concluídas do item. */
+  count: number
+  /** Soma de `amount_paid` (Aura efetivamente gasta) no item. */
+  auraTotal: number
+}
+
+/**
+ * Resumo por item para os badges da tabela do admin: uma query agrupada,
+ * não N. Chave = `item_id`; compras cujo item foi deletado (`item_id` null)
+ * não entram em nenhuma linha da tabela, então são ignoradas aqui.
+ */
+export async function getAuraPurchaseSummaryByItem(): Promise<Record<string, AuraPurchaseItemSummary>> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("aura_purchases")
+    .select("item_id, amount_paid")
+    .not("item_id", "is", null)
+
+  if (error) {
+    console.error("[aura-store-repository] getAuraPurchaseSummaryByItem:", error)
+    return {}
+  }
+
+  const map: Record<string, AuraPurchaseItemSummary> = {}
+  for (const row of (data ?? []) as Array<{ item_id: string; amount_paid: number }>) {
+    const entry = map[row.item_id] ?? { count: 0, auraTotal: 0 }
+    entry.count += 1
+    entry.auraTotal += row.amount_paid
+    map[row.item_id] = entry
+  }
+  return map
+}
+
+export type AuraPurchaseRow = {
+  id: string
+  createdAt: string
+  itemId: string | null
+  itemName: string
+  itemSlug: string
+  itemKind: AuraItemKind
+  listPrice: number
+  amountPaid: number
+  vipDiscountApplied: boolean
+  balanceBefore: number | null
+  balanceAfter: number | null
+  buyer: {
+    id: string
+    displayName: string
+    displaySlug: string | null
+    avatarUrl: string | null
+  }
+}
+
+export type AuraPurchaseTotals = {
+  /** Aura arrecadada (soma de `amount_paid`) no recorte filtrado. */
+  grossAura: number
+  /** Número de compras no recorte. */
+  purchases: number
+  /** Compradores distintos no recorte. */
+  uniqueBuyers: number
+}
+
+export type ListAuraPurchasesParams = {
+  itemId?: string | null
+  userId?: string | null
+  kind?: AuraItemKind | null
+  /** Cursor keyset: `<createdAtISO>|<id>` da última linha da página anterior. */
+  cursor?: string | null
+  limit?: number
+}
+
+export type ListAuraPurchasesResult = {
+  rows: AuraPurchaseRow[]
+  nextCursor: string | null
+  totals: AuraPurchaseTotals
+}
+
+const PURCHASE_SELECT =
+  "id, created_at, item_id, item_name, item_slug, item_kind, list_price, amount_paid, vip_discount_applied, balance_before, balance_after, user_id"
+
+/**
+ * Histórico paginado por keyset (`created_at desc, id desc`) — sem `offset`,
+ * escala com a tabela crescendo. Filtros opcionais por item, comprador e
+ * tipo. Os totais são calculados sobre o MESMO recorte (não só a página).
+ * PII do comprador (nome/avatar) resolvida num único `.in()` em lote, mesmo
+ * padrão de `listStoreAuditLog`.
+ */
+export async function listAuraPurchases(
+  params: ListAuraPurchasesParams
+): Promise<ListAuraPurchasesResult> {
+  const db = createSupabaseAdminClient()
+  const limit = Math.min(Math.max(params.limit ?? 30, 1), 50)
+
+  function applyFilters<T>(q: T): T {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let query = q as any
+    if (params.itemId) query = query.eq("item_id", params.itemId)
+    if (params.userId) query = query.eq("user_id", params.userId)
+    if (params.kind) query = query.eq("item_kind", params.kind)
+    return query as T
+  }
+
+  // ── Página ──
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pageQuery: any = applyFilters(db.from("aura_purchases").select(PURCHASE_SELECT))
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1)
+
+  if (params.cursor) {
+    const sep = params.cursor.lastIndexOf("|")
+    if (sep > 0) {
+      const cAt = params.cursor.slice(0, sep)
+      const cId = params.cursor.slice(sep + 1)
+      // (created_at, id) < (cursor) em ordem decrescente.
+      pageQuery = pageQuery.or(
+        `created_at.lt.${cAt},and(created_at.eq.${cAt},id.lt.${cId})`
+      )
+    }
+  }
+
+  const { data: pageData, error: pageError } = await pageQuery
+  if (pageError) {
+    console.error("[aura-store-repository] listAuraPurchases page:", pageError)
+    return { rows: [], nextCursor: null, totals: { grossAura: 0, purchases: 0, uniqueBuyers: 0 } }
+  }
+
+  type Raw = {
+    id: string
+    created_at: string
+    item_id: string | null
+    item_name: string
+    item_slug: string
+    item_kind: string
+    list_price: number
+    amount_paid: number
+    vip_discount_applied: boolean
+    balance_before: number | null
+    balance_after: number | null
+    user_id: string
+  }
+
+  const raw = (pageData ?? []) as Raw[]
+  const hasMore = raw.length > limit
+  const pageRows = hasMore ? raw.slice(0, limit) : raw
+  const last = pageRows[pageRows.length - 1]
+  // Normaliza o timestamp para a forma "…Z" (sem "+00:00") — o "+" no filtro
+  // `.or()` do PostgREST seria interpretado como espaço.
+  const nextCursor =
+    hasMore && last ? `${new Date(last.created_at).toISOString()}|${last.id}` : null
+
+  // ── Nomes dos compradores (lote) ──
+  const buyerIds = [...new Set(pageRows.map((r) => r.user_id))]
+  const buyerById = new Map<string, { display_name: string | null; display_slug: string | null; avatar_url: string | null }>()
+  if (buyerIds.length > 0) {
+    const { data: profiles } = await db
+      .from("user_profiles")
+      .select("id, display_name, display_slug, avatar_url")
+      .in("id", buyerIds)
+    for (const p of (profiles ?? []) as Array<{ id: string; display_name: string | null; display_slug: string | null; avatar_url: string | null }>) {
+      buyerById.set(p.id, { display_name: p.display_name, display_slug: p.display_slug, avatar_url: p.avatar_url })
+    }
+  }
+
+  const rows: AuraPurchaseRow[] = pageRows.map((r) => {
+    const b = buyerById.get(r.user_id)
+    return {
+      id: r.id,
+      createdAt: r.created_at,
+      itemId: r.item_id,
+      itemName: r.item_name,
+      itemSlug: r.item_slug,
+      itemKind: r.item_kind as AuraItemKind,
+      listPrice: r.list_price,
+      amountPaid: r.amount_paid,
+      vipDiscountApplied: r.vip_discount_applied,
+      balanceBefore: r.balance_before,
+      balanceAfter: r.balance_after,
+      buyer: {
+        id: r.user_id,
+        displayName: b?.display_name?.trim() || `Membro ${r.user_id.slice(0, 6)}`,
+        displaySlug: b?.display_slug ?? null,
+        avatarUrl: b?.avatar_url ?? null,
+      },
+    }
+  })
+
+  // ── Totais do recorte (não só da página) ──
+  const { data: totalsData, error: totalsError } = await applyFilters(
+    db.from("aura_purchases").select("amount_paid, user_id")
+  )
+  let totals: AuraPurchaseTotals = { grossAura: 0, purchases: 0, uniqueBuyers: 0 }
+  if (totalsError) {
+    console.error("[aura-store-repository] listAuraPurchases totals:", totalsError)
+  } else {
+    const seen = new Set<string>()
+    let gross = 0
+    for (const t of (totalsData ?? []) as Array<{ amount_paid: number; user_id: string }>) {
+      gross += t.amount_paid
+      seen.add(t.user_id)
+    }
+    totals = { grossAura: gross, purchases: (totalsData ?? []).length, uniqueBuyers: seen.size }
+  }
+
+  return { rows, nextCursor, totals }
 }

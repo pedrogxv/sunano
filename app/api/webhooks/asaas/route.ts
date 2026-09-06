@@ -83,9 +83,9 @@ function safeTokenMatch(provided: string, expected: string): boolean {
 }
 
 export async function POST(request: NextRequest) {
-  // Diferente da MisticPay, o Asaas assina o webhook com um token fixo
-  // configurado no painel (header `asaas-access-token`) — validamos antes
-  // de processar qualquer coisa.
+  // O Asaas assina o webhook com um token fixo configurado no painel
+  // (header `asaas-access-token`) — validamos antes de processar qualquer
+  // coisa.
   const expectedToken = process.env.ASAAS_WEBHOOK_TOKEN
   if (!expectedToken) {
     console.error("ASAAS_WEBHOOK_TOKEN não configurado — recusando webhook.")
@@ -286,9 +286,8 @@ export async function POST(request: NextRequest) {
   const db = createSupabaseAdminClient()
 
   try {
-    // Mesma defesa em profundidade usada na MisticPay: reconsultamos o
-    // pagamento na origem antes de confiar no evento, mesmo já tendo
-    // validado o token do webhook.
+    // Defesa em profundidade: reconsultamos o pagamento na origem antes de
+    // confiar no evento, mesmo já tendo validado o token do webhook.
     const verified = await getPayment(paymentId)
 
     if (verified.status !== "RECEIVED" && verified.status !== "CONFIRMED") {
@@ -308,8 +307,15 @@ export async function POST(request: NextRequest) {
       .from("store_orders")
       .select("id, status")
       .eq("asaas_payment_id", paymentId)
-    const wasExpired = new Set(
-      (priorOrders ?? []).filter((o) => o.status === "expired").map((o) => o.id)
+    // `cancelled` entra junto com `expired`: os dois devolveram o estoque ao
+    // inventário antes deste pagamento chegar. O cancelamento marca o pedido
+    // localmente mesmo quando o DELETE da cobrança na Asaas falha (ver
+    // `cancelOrder`), então o QR pode continuar pagável — e sem esta linha o
+    // pedido voltaria a `paid` com as unidades já de volta na prateleira.
+    const stockWasReturned = new Set(
+      (priorOrders ?? [])
+        .filter((o) => o.status === "expired" || o.status === "cancelled")
+        .map((o) => o.id)
     )
 
     const { data: updatedOrders } = await db
@@ -324,7 +330,7 @@ export async function POST(request: NextRequest) {
       .select("id, affiliate_id, metadata")
 
     for (const order of updatedOrders ?? []) {
-      if (!wasExpired.has(order.id)) continue
+      if (!stockWasReturned.has(order.id)) continue
       try {
         await reReserveStockForLatePayment(order.id)
       } catch (err) {

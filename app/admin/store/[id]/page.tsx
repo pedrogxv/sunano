@@ -24,8 +24,10 @@ interface StoreProduct {
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   sale_type: "pre_order" | "ready_stock" | "normal"
+  preorder_limit?: number | null
   is_active: boolean
   is_sold_out: boolean
+  requires_shipping?: boolean
   features?: string[]
   video_url?: string | null
 }

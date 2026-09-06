@@ -19,6 +19,9 @@
  * 20260930000000_aura_fixed_rewards.sql: multiplicador só em ganho por
  * atividade; recompensa de valor fixo paga o número cheio.
  * - Gastos (loja/VIP/nome): `redeem_aura_item`, `purchase_vip_with_aura`, `change_display_name_with_aura` (20260921*.sql, 20260922000007_redeem_aura_item_vip_discount.sql)
+ * - Desconto VIP de 10% em todo gasto de Aura: 20261012000000_vip_aura_discount_everywhere.sql
+ *   (escudo e medalha de evento) + 20260922000007 (moldura e troca de nome).
+ *   Único item sem desconto: `purchase_vip_with_aura`, que recusa VIP ativo.
  */
 
 export type AuraFaqEntry = {
@@ -97,7 +100,13 @@ export const AURA_SPEND_ENTRIES: AuraFaqEntry[] = [
     id: "streak-shield",
     question: "Comprar Proteção de Ofensiva",
     answer:
-      "Você compra e a proteção fica guardada — sem prazo — até o dia em que precisar. Se perder 1 dia de missões, sua ofensiva não zera: ao fechar as 3 tarefas de novo, ela continua de onde estava e a proteção é consumida. A versão padrão (59 Aura) exige que você volte já no dia seguinte ao dia perdido; a de margem estendida (199 Aura) te dá até 3 dias para voltar. Cobre 1 dia perdido por vez — se você faltar 2 dias corridos, ou demorar além da margem, a proteção não salva. Só dá para ter uma guardada por vez.",
+      "Você compra e a proteção fica guardada — sem prazo — até o dia em que precisar. Se perder 1 dia de missões, sua ofensiva não zera: ao fechar as 3 tarefas de novo, ela continua de onde estava e a proteção é consumida. A versão padrão (59 Aura) exige que você volte já no dia seguinte ao dia perdido; a de margem estendida (199 Aura) te dá até 3 dias para voltar. VIP paga 10% a menos nas duas. Cobre 1 dia perdido por vez — se você faltar 2 dias corridos, ou demorar além da margem, a proteção não salva. Só dá para ter uma guardada por vez.",
+  },
+  {
+    id: "event-medal",
+    question: "Resgatar uma medalha de evento paga em Aura",
+    answer:
+      "Alguns eventos em /conquistas dão a medalha em troca de Aura, pelo custo que aparece no card. VIP paga 10% a menos aqui também.",
   },
   {
     id: "dislike",

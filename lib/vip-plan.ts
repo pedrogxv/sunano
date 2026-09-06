@@ -11,7 +11,7 @@ export const VIP_SUBSCRIPTION_BENEFITS = [
   "Selo VIP em destaque no perfil, comentários e posts",
   "Mídia animada (GIF/vídeo) exclusiva no banner e avatar",
   "Até 8 medalhas e 8 favoritos em destaque no perfil",
-  "10% de desconto em toda a Central de Aura",
+  "10% de desconto em tudo que custa Aura (molduras, troca de nome, Proteção de Ofensiva e medalhas de evento)",
   "Limite diário de reações dobrado (100/dia)",
   "Bônus passivo de Aura: +0,4% sempre, ou +0,25% adicional com ofensiva ativa",
   "Crie sua própria tierlist pessoal de periféricos (Beta)",

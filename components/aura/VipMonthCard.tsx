@@ -157,7 +157,12 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         itemName={item.name}
-        cost={item.auraCost}
+        listPrice={item.auraCost}
+        // Sem desconto aqui de propósito: `purchase_vip_with_aura` recusa
+        // quem já é VIP ativo (`vip_already_active`), então nunca há um VIP
+        // comprando este item — exibir "−10%" prometeria um preço que a RPC
+        // não chegaria a cobrar. Ver a migration do desconto.
+        isVip={false}
         balance={balance}
         confirmLabel="Ativar VIP"
         loading={loading}

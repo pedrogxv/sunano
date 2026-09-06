@@ -4,6 +4,7 @@ import type { Metadata } from "next"
 import { ProfileShowcase } from "@/components/profile/ProfileShowcase"
 import { profilePath } from "@/lib/profile-name"
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
+import { hasTierlistHeart } from "@/lib/server/repositories/user-tierlist-repository"
 import {
   findUserIdByDisplaySlug,
   incrementProfileViews,
@@ -86,8 +87,26 @@ export default async function PerfilPublicoPage({
   if (!isOwner) void incrementProfileViews(profile.id)
 
   const viewerId = authData.user?.id
-  const following =
-    viewerId && !isOwner ? await isFollowing(viewerId, profile.id) : false
+  const [following, hearted] =
+    viewerId && !isOwner
+      ? await Promise.all([
+          isFollowing(viewerId, profile.id),
+          // Estado por visitante fica fora de `getProfileShowcase` (cacheado
+          // por dono) — mesma razão do `isFollowing` acima.
+          hasTierlistHeart(profile.id, viewerId).catch((err) => {
+            console.error("[perfil] hasTierlistHeart:", err)
+            return false
+          }),
+        ])
+      : [false, false]
 
-  return <ProfileShowcase profile={profile} isOwner={isOwner} isFollowing={following} />
+  return (
+    <ProfileShowcase
+      profile={profile}
+      isOwner={isOwner}
+      isFollowing={following}
+      viewerHearted={hearted}
+      viewerLoggedIn={Boolean(viewerId)}
+    />
+  )
 }

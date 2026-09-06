@@ -8,12 +8,16 @@ import { cn } from "@/lib/utils"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
 import type { StreakShieldVariant } from "@/lib/server/repositories/aura-store-repository"
+import { auraPriceForVip } from "@/lib/aura-pricing"
+import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { PurchaseConfirmDialog } from "@/components/aura/PurchaseConfirmDialog"
 
 interface StreakShieldCardProps {
   /** As duas variantes do catálogo (kind='streak_shield'), 1d e 3d. */
   variants: Partial<Record<StreakShieldVariant, AuraItem>>
   balance: number
+  /** VIP ativo agora — 10% off, mesma regra do resto da Central de Aura. */
+  isVip: boolean
   /** Já tem um escudo guardado: enquanto true, o card NÃO mostra opção de comprar. */
   shieldArmed: boolean
   /** Margem de atraso do escudo guardado (1 ou 3). */
@@ -32,6 +36,7 @@ const LAST_PICK_KEY = "aura:streak-shield:last-variant"
 export function StreakShieldCard({
   variants,
   balance,
+  isVip,
   shieldArmed,
   shieldGraceDays,
   requireLogin,
@@ -57,7 +62,10 @@ export function StreakShieldCard({
   }, [])
 
   const item = variants[selected]
-  const canAfford = item ? balance >= item.auraCost : false
+  // Preço com desconto também no afford: um VIP com saldo entre o preço
+  // cheio e o com desconto conseguia comprar mas via "Saldo insuficiente".
+  const price = item ? auraPriceForVip(item.auraCost, isVip) : null
+  const canAfford = price ? balance >= price.finalPrice : false
 
   function pick(v: StreakShieldVariant) {
     setSelected(v)
@@ -88,7 +96,7 @@ export function StreakShieldCard({
             : "Se perder um dia de missões, volte no dia seguinte para resgatar a ofensiva.",
       })
       setConfirmOpen(false)
-      onPurchased(selected, data.graceDays, item.auraCost)
+      onPurchased(selected, data.graceDays, price?.finalPrice ?? item.auraCost)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao comprar a proteção"
       toast.error("Erro ao proteger", { description: message })
@@ -164,9 +172,12 @@ export function StreakShieldCard({
                 </div>
               )}
 
-              <p className="font-display text-lg font-bold text-sky-300">
-                🧊 {(item?.auraCost ?? 0).toLocaleString("pt-BR")}
-              </p>
+              <AuraPriceTag
+                listPrice={item?.auraCost ?? 0}
+                isVip={isVip}
+                icon="🧊"
+                priceClassName="text-sky-300"
+              />
 
               <button
                 type="button"
@@ -196,7 +207,8 @@ export function StreakShieldCard({
           open={confirmOpen}
           onOpenChange={setConfirmOpen}
           itemName={`Proteção de Ofensiva (${VARIANT_META[selected].label})`}
-          cost={item.auraCost}
+          listPrice={item.auraCost}
+          isVip={isVip}
           balance={balance}
           confirmLabel="Guardar proteção"
           loading={loading}

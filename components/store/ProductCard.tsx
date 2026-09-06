@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
 import { markImageSettled } from "@/lib/image-settled"
-import { computeCardPriceCents } from "@/lib/store-pricing"
+import { computeCardPriceCents, computeEffectivePrice } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { Skeleton } from "@/components/ui/skeleton"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
@@ -54,15 +54,14 @@ export function ProductCard(props: ProductCardProps) {
     : Boolean(props.is_sold_out) || (props.stock !== null && props.stock === 0)
   const image = activeVariant?.image_url ?? props.images?.[0] ?? null
 
-  const basePriceCents = activeVariant?.price_cents_override ?? props.price_cents
-  const promoPriceCents = activeVariant
-    ? (activeVariant.promo_price_cents ?? (activeVariant.price_cents_override == null ? props.promo_price_cents : null))
-    : props.promo_price_cents
-  const hasDiscount = promoPriceCents != null && promoPriceCents < basePriceCents
-  const effectivePriceCents = hasDiscount ? (promoPriceCents as number) : basePriceCents
-  const discountPercent = hasDiscount
-    ? Math.round((1 - (promoPriceCents as number) / basePriceCents) * 100)
-    : null
+  // Mesma função usada pela página de produto e pelo checkout — o preço que
+  // o card anuncia é, por construção, o preço que será cobrado.
+  const {
+    baseCents: basePriceCents,
+    effectiveCents: effectivePriceCents,
+    hasDiscount,
+    discountPercent,
+  } = computeEffectivePrice(props, activeVariant)
 
   const { icon: CategoryIcon, tint } = getCategoryIcon(props.category)
   const saleType = props.sale_type ?? "normal"

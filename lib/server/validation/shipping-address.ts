@@ -113,15 +113,21 @@ export function parseOptionalShippingAddress(
 }
 
 /**
- * Interruptor para quando o endereço virar obrigatório: basta
- * `SHIPPING_ADDRESS_REQUIRED=true` na Vercel — nenhum deploy de código. O
- * gate fica na aplicação (não em NOT NULL no banco) porque o histórico de
- * pedidos antigos não tem endereço e não pode ser invalidado
- * retroativamente.
+ * Produtos que exigem endereço de entrega.
  *
- * Só se aplica a pedidos que de fato têm item físico (ver
- * `requires_shipping` em store_products).
+ * A pergunta "este carrinho precisa de endereço?" é sempre respondida pela
+ * coluna `requires_shipping` de `store_products` — nunca por env nem por
+ * suposição de que "tudo na loja é físico". Um serviço (mentoria, setup
+ * remoto) marca a coluna como false e o checkout deixa de pedir CEP; um
+ * serviço que precisa do endereço mesmo assim (visita técnica) marca true.
+ *
+ * O endereço NUNCA bloqueia o checkout: a compra fecha sem ele e o cliente
+ * completa depois de pagar, em "Meus Pedidos" (status
+ * `awaiting_shipping_info`). O que muda com `requires_shipping` é se o
+ * pedido entra ou não na fila de "falta endereço".
  */
-export function isShippingAddressRequired(): boolean {
-  return process.env.SHIPPING_ADDRESS_REQUIRED === "true"
+export function orderNeedsShippingAddress(
+  lines: { product: { requires_shipping?: boolean | null } }[]
+): boolean {
+  return lines.some((line) => line.product.requires_shipping !== false)
 }

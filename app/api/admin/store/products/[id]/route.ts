@@ -35,8 +35,11 @@ const updateProductSchema = z.object({
   condition: z.enum(["new", "used", "opened"]).optional(),
   condition_notes: z.string().trim().max(1000).nullable().optional(),
   sale_type: z.enum(["pre_order", "ready_stock", "normal"]).optional(),
+  preorder_limit: z.number().int().min(0).nullable().optional(),
   is_active: z.boolean().optional(),
   is_sold_out: z.boolean().optional(),
+  /** false = serviço/digital: nunca pede endereço de entrega. */
+  requires_shipping: z.boolean().optional(),
   is_featured: z.boolean().optional(),
   pin_best_seller: z.boolean().optional(),
   features: z.array(z.string().trim().min(1).max(200)).max(30).optional(),

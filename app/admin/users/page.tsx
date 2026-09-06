@@ -22,6 +22,7 @@ import {
   Pencil,
   Store,
   Headset,
+  Eye,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -249,6 +250,10 @@ function UserCard({
   const [banDialogOpen, setBanDialogOpen] = useState(false)
   const [banReason, setBanReason] = useState("")
   const [unbanDialogOpen, setUnbanDialogOpen] = useState(false)
+  const [impDialogOpen, setImpDialogOpen] = useState(false)
+  const [impReason, setImpReason] = useState("")
+  const [impTicket, setImpTicket] = useState("")
+  const [impStarting, setImpStarting] = useState(false)
   // A trava usa o cargo PERSISTIDO (não o que está sendo editado no select),
   // senão escolher "WEB Master" travaria a própria linha antes de salvar.
   const isPersistedWebMaster = user.originalRole === "webmaster"
@@ -267,6 +272,14 @@ function UserCard({
   // Banir tem as mesmas travas do excluir — exclusivo do WEB Master, nunca a
   // própria conta nem outro WEB Master.
   const canBanThisUser = isCurrentUserWebMaster && !isCurrentUser && !isPersistedWebMaster
+  // "Logar como" — só o WEB Master, só contas de usuário COMUM (nunca outro
+  // cargo), nunca a própria conta, nunca conta banida. Espelha a trava do
+  // endpoint (app/api/admin/users/[id]/impersonate/route.ts).
+  const canImpersonateThisUser =
+    isCurrentUserWebMaster &&
+    !isCurrentUser &&
+    isPersistedRegular &&
+    !Boolean(user.account_banned_at)
   const isBanned = Boolean(user.account_banned_at)
   const isBanning = banningId === user.id
   const initials = (user.display_name ?? user.email ?? "?").slice(0, 2).toUpperCase()
@@ -313,6 +326,33 @@ function UserCard({
     await onDelete(user)
     setDeleteDialogOpen(false)
     setDeleteConfirmText("")
+  }
+
+  async function handleImpersonateConfirm() {
+    if (impReason.trim().length < 10 || impStarting) return
+    try {
+      setImpStarting(true)
+      const res = await fetch(`/api/admin/users/${user.id}/impersonate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reason: impReason.trim(),
+          ticket: impTicket.trim() || undefined,
+        }),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { ok?: boolean; error?: string; redirectTo?: string }
+        | null
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error ?? "Falha ao iniciar o acesso.")
+      }
+      // A sessão agora é do usuário-alvo; recarrega já no site público.
+      window.location.href = data.redirectTo ?? "/"
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha ao iniciar o acesso."
+      toast.error("Não foi possível acessar a conta", { description: message })
+      setImpStarting(false)
+    }
   }
 
   return (
@@ -396,6 +436,91 @@ function UserCard({
               <KeyRound className="size-3.5" />
               <span className="hidden sm:inline">{t.admin.users.password}</span>
             </Button>
+          )}
+          {canImpersonateThisUser && (
+            <Dialog
+              open={impDialogOpen}
+              onOpenChange={(open) => {
+                setImpDialogOpen(open)
+                if (!open) { setImpReason(""); setImpTicket("") }
+              }}
+            >
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setImpDialogOpen(true)}
+                className="gap-1.5 border-amber-500/30 text-xs text-amber-500 hover:border-amber-500/50 hover:bg-amber-500/10 hover:text-amber-400"
+              >
+                <Eye className="size-3.5" />
+                <span className="hidden sm:inline">Logar como</span>
+              </Button>
+              <DialogContent className="border border-border bg-card">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2 text-amber-500">
+                    <Eye className="size-4.5" />
+                    Acessar a conta de {user.display_name || user.email}
+                  </DialogTitle>
+                  <DialogDescription className="space-y-2">
+                    <span className="block">
+                      Você entrará no site <strong>como este usuário</strong>, em modo{" "}
+                      <strong>somente leitura</strong> — nenhuma ação em nome dele é permitida.
+                      A sessão expira em 30 minutos e fica registrada na auditoria (quem, quando,
+                      motivo).
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      Base legal: legítimo interesse / execução de contrato para suporte técnico
+                      (LGPD Art. 7º, V e IX). Use apenas para diagnosticar um problema concreto.
+                    </span>
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Motivo do acesso <span className="text-red-400">*</span>
+                    </label>
+                    <Input
+                      value={impReason}
+                      onChange={(e) => setImpReason(e.target.value)}
+                      placeholder="Ex.: investigar erro ao finalizar pedido relatado pelo usuário"
+                      autoComplete="off"
+                      className="border-border bg-background"
+                    />
+                    {impReason.trim().length > 0 && impReason.trim().length < 10 && (
+                      <p className="text-[11px] text-red-400">Mínimo de 10 caracteres.</p>
+                    )}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">
+                      Chamado / ticket (opcional)
+                    </label>
+                    <Input
+                      value={impTicket}
+                      onChange={(e) => setImpTicket(e.target.value)}
+                      placeholder="Ex.: #1234"
+                      autoComplete="off"
+                      className="border-border bg-background"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setImpDialogOpen(false)}
+                    disabled={impStarting}
+                  >
+                    {t.admin.users.cancel}
+                  </Button>
+                  <Button
+                    onClick={handleImpersonateConfirm}
+                    disabled={impReason.trim().length < 10 || impStarting}
+                    className="bg-amber-500 text-black hover:bg-amber-400 disabled:opacity-40"
+                  >
+                    <Eye className="mr-1.5 size-3.5" />
+                    {impStarting ? "Iniciando…" : "Acessar conta"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           )}
           {canBanThisUser && (
             isBanned ? (
@@ -796,6 +921,15 @@ export default function AdminUsersPage() {
   })
 
   useEffect(() => { loadUsers() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Volta de uma sessão "logado como" que expirou (o proxy redireciona pra cá).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("impersonation") === "expired") {
+      toast.info("A sessão de acesso expirou e foi encerrada.")
+      window.history.replaceState({}, "", "/admin/users")
+    }
+  }, [])
 
   async function loadUsers() {
     try {

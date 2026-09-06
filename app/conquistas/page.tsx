@@ -5,6 +5,7 @@ import { getClaimedMedalIds, listActiveEventsForDisplay } from "@/lib/server/rep
 import { getUserAchievements } from "@/lib/server/repositories/achievements-repository"
 import { countForumActivity } from "@/lib/server/repositories/profile-showcase-repository"
 import { countFollowers } from "@/lib/server/repositories/users-repository"
+import { getVipStatus } from "@/lib/server/repositories/aura-store-repository"
 import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
@@ -26,6 +27,7 @@ export default async function ConquistasPage() {
     forumActivity,
     followers,
     youtubeConfirmed,
+    vipStatus,
   ] = await Promise.all([
     listActiveEventsForDisplay(),
     userId ? getClaimedMedalIds(userId) : Promise.resolve([]),
@@ -37,6 +39,7 @@ export default async function ConquistasPage() {
     userId && isYoutubeSubscriptionEnabled()
       ? hasConfirmedYoutubeSubscription(userId)
       : Promise.resolve(false),
+    userId ? getVipStatus(userId) : Promise.resolve({ active: false, expiresAt: null }),
   ])
 
   return (
@@ -46,6 +49,7 @@ export default async function ConquistasPage() {
         initialClaimedMedalIds={claimedMedalIds}
         initialAuraBalance={auraBalance}
         isLoggedIn={Boolean(userId)}
+        isVip={vipStatus.active}
         achievements={achievements}
         achievementCounts={{
           posts: forumActivity.posts,

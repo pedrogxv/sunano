@@ -12,6 +12,7 @@ import { PostVisibilityButton } from "@/components/forum/PostVisibilityButton"
 import { PostDeleteButton } from "@/components/forum/PostDeleteButton"
 import { ImageLightbox } from "@/components/forum/ImageLightbox"
 import { ReportMenu } from "@/components/forum/ReportMenu"
+import { TopCommentPreview } from "@/components/forum/TopCommentPreview"
 import { ShareMenu } from "@/components/forum/ShareMenu"
 import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
 import { CommentBody } from "@/components/comments/CommentBody"
@@ -24,7 +25,7 @@ import { TIER_CAPABILITIES, isVipActive, type AccountTier } from "@/lib/account-
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
-import type { ForumCategoryInfo } from "@/lib/server/repositories/forum-repository"
+import type { ForumCategoryInfo, ForumTopComment } from "@/lib/server/repositories/forum-repository"
 
 export type PostCardData = {
   id: string
@@ -50,6 +51,8 @@ export type PostCardData = {
   aura_count: number
   /** Quantos usuários salvaram este post. */
   saved_count: number
+  /** Comentário com mais aura do post — preview na listagem. Ausente/nulo esconde o bloco. */
+  top_comment?: ForumTopComment | null
 }
 
 /** Selo de VIP ao lado do nome do autor — mesmo rótulo do tier usado no perfil. */
@@ -455,6 +458,12 @@ export function PostCard({
               <ReportMenu postSlug={post.slug} targetType="post" />
             )}
           </div>
+
+          {/* Só na listagem (`compact`): na página do post os comentários já
+              aparecem inteiros logo abaixo, o preview seria repetição. */}
+          {compact && post.top_comment && (
+            <TopCommentPreview comment={post.top_comment} postSlug={post.slug} />
+          )}
         </div>
       </div>
     </div>

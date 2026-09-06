@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, Edit, Plus, Sparkles, Trash2 } from "lucide-react"
+import { AlertCircle, Edit, Plus, Receipt, ShoppingCart, Sparkles, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -18,10 +18,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import type { AuraItemAdmin } from "@/lib/server/repositories/aura-store-repository"
+import type {
+  AuraItemAdmin,
+  AuraPurchaseItemSummary,
+} from "@/lib/server/repositories/aura-store-repository"
+
+function compactAura(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}k`
+  return n.toLocaleString("pt-BR")
+}
 
 export default function AdminAuraItemsPage() {
   const [items, setItems] = useState<AuraItemAdmin[]>([])
+  const [summary, setSummary] = useState<Record<string, AuraPurchaseItemSummary>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
@@ -31,10 +40,20 @@ export default function AdminAuraItemsPage() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/admin/aura-itens")
-      const data = (await res.json()) as { items?: AuraItemAdmin[]; error?: string }
-      if (!res.ok) throw new Error(data.error ?? "Erro ao carregar")
+      // Catálogo e resumo de compras em paralelo — o resumo é best-effort,
+      // uma falha nele não impede a listagem dos itens.
+      const [itemsRes, summaryRes] = await Promise.all([
+        fetch("/api/admin/aura-itens"),
+        fetch("/api/admin/aura-itens/purchases/summary"),
+      ])
+      const data = (await itemsRes.json()) as { items?: AuraItemAdmin[]; error?: string }
+      if (!itemsRes.ok) throw new Error(data.error ?? "Erro ao carregar")
       setItems(data.items ?? [])
+
+      if (summaryRes.ok) {
+        const s = (await summaryRes.json()) as { summary?: Record<string, AuraPurchaseItemSummary> }
+        setSummary(s.summary ?? {})
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao carregar"
       setError(message)
@@ -69,7 +88,13 @@ export default function AdminAuraItemsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Link href="/admin/aura-itens/compras">
+          <Button variant="outline" className="gap-2">
+            <Receipt className="size-4" />
+            Histórico de compras
+          </Button>
+        </Link>
         <Link href="/admin/aura-itens/new">
           <Button className="gap-2">
             <Plus className="size-4" />
@@ -107,6 +132,7 @@ export default function AdminAuraItemsPage() {
               <tr className="border-b border-border">
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Item</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Custo</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Compras</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Ordem</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
                 <th className="px-4 py-3" />
@@ -132,6 +158,25 @@ export default function AdminAuraItemsPage() {
                     <span className="text-xs text-muted-foreground">
                       🔥 {item.auraCost.toLocaleString("pt-BR")} Aura
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {(() => {
+                      const s = summary[item.id]
+                      if (!s || s.count === 0) {
+                        return <span className="text-xs text-muted-foreground/50">—</span>
+                      }
+                      return (
+                        <Link
+                          href={`/admin/aura-itens/compras?itemId=${item.id}`}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300 transition-colors hover:bg-violet-500/20"
+                        >
+                          <ShoppingCart className="size-3" />
+                          {s.count.toLocaleString("pt-BR")}
+                          <span className="text-violet-400/60">·</span>
+                          <span className="text-violet-200/80">{compactAura(s.auraTotal)} Aura</span>
+                        </Link>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs text-muted-foreground">{item.sortOrder}</span>

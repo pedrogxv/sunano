@@ -1,21 +1,21 @@
 import { randomUUID } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
-import { createPixTransaction } from "@/lib/server/integrations/misticpay"
 import {
   findOrCreateCustomer,
   createPixPayment,
   getPixQrCode,
   createCheckout,
+  type AsaasCheckoutItem,
 } from "@/lib/server/integrations/asaas"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { getRequestUser } from "@/lib/server/auth/current-user"
+import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import {
   payerInfoSchema,
   payerAddressSchema,
 } from "@/lib/server/validation/guest-checkout"
 import {
-  isShippingAddressRequired,
+  orderNeedsShippingAddress,
   parseOptionalShippingAddress,
 } from "@/lib/server/validation/shipping-address"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
@@ -27,13 +27,16 @@ import {
   getSoldOutCombinations,
   DAILY_PURCHASE_LIMIT_NO_STOCK,
 } from "@/lib/server/repositories/store-repository"
-import { PIX_EXPIRATION_MINUTES } from "@/lib/server/repositories/orders-repository"
+import {
+  PIX_EXPIRATION_MINUTES,
+  PREORDER_PIX_EXPIRATION_MINUTES,
+} from "@/lib/server/repositories/orders-repository"
 import { getStoreSettings } from "@/lib/server/repositories/store-settings-repository"
 import { getAffiliateByCode } from "@/lib/server/repositories/affiliates-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { isWebMaster } from "@/lib/admin-permissions"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
-import { computeCardPriceCents } from "@/lib/store-pricing"
+import { computeCardPriceCents, computeEffectivePrice } from "@/lib/store-pricing"
 import { SITE_URL } from "@/lib/site-url"
 import type { Database } from "@/lib/database.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -98,7 +101,6 @@ const checkoutBodySchema = z.object({
   shippingCity: z.unknown().optional(),
   shippingState: z.unknown().optional(),
   /** Marca explícita de "não quero informar agora" — só aceita enquanto o endereço for opcional. */
-  skipShippingAddress: z.boolean().optional(),
 })
 
 /**
@@ -142,8 +144,21 @@ async function resolveAffiliateAttribution(
  */
 async function revertDecrements(
   db: SupabaseClient<Database>,
-  lines: DecrementedLine[]
+  lines: DecrementedLine[],
+  reservationGroup?: string
 ) {
+  // Apaga o diário ANTES de devolver o estoque: se o processo morrer no meio
+  // desta função, a alternativa (diário apagado e estoque não devolvido)
+  // seria invisível, enquanto esta ordem deixa o cron devolver de novo — e a
+  // RPC de release só age sobre linhas que ainda existem, então no pior caso
+  // o estoque volta uma vez só.
+  if (reservationGroup) {
+    await db
+      .from("store_stock_reservations")
+      .delete()
+      .eq("reservation_group", reservationGroup)
+  }
+
   await Promise.all(
     lines.map(async (line) => {
       try {
@@ -169,11 +184,111 @@ async function revertDecrements(
   )
 }
 
+/**
+ * Baixa as reservas deste request do diário: o pedido já existe, então é ele
+ * que passa a segurar o estoque, e o cron não deve mais devolver nada.
+ *
+ * Falha aqui é grave o suficiente para logar, mas não para derrubar a compra
+ * — o pedido está criado e pagável. O efeito de uma linha esquecida no diário
+ * é o cron devolver ao estoque uma unidade que um pedido real está segurando,
+ * então isso precisa ser visível no log.
+ */
+async function confirmReservations(
+  db: SupabaseClient<Database>,
+  reservationGroup: string
+) {
+  const { error } = await db
+    .from("store_stock_reservations")
+    .delete()
+    .eq("reservation_group", reservationGroup)
+  if (error) {
+    console.error(
+      "[checkout] falha ao baixar reserva do diário (pedido já criado):",
+      reservationGroup,
+      error
+    )
+  }
+}
+
+/**
+ * Converte os itens do pedido (preços PIX) nos itens exibidos na página de
+ * checkout hospedada da Asaas, já no preço de cartão.
+ *
+ * Detalhar item a item, em vez de mandar uma linha só "Pedido — N itens",
+ * é o que faz o cliente reconhecer a compra na página de pagamento e na
+ * fatura do cartão — reduz abandono e contestação, e deixa o painel da Asaas
+ * conciliável com o pedido.
+ *
+ * O ajuste de centavos existe porque o acréscimo do cartão é calculado sobre
+ * o TOTAL (`computeCardPriceCents(totalCents, …)`), não item a item:
+ * converter cada unidade isoladamente e somar dá diferença de alguns centavos
+ * por arredondamento. Como a Asaas cobra a soma dos itens, a sobra vai toda
+ * para o item mais caro (onde some percentualmente melhor) — assim a soma
+ * fecha exatamente com `cardTotalCents`, que é o valor gravado no pedido e
+ * mostrado na tela.
+ */
+function buildAsaasCheckoutItems(
+  orderItems: {
+    name: string
+    price_cents: number
+    quantity: number
+    variant_label: string | null
+    variant_options: { group: string; label: string }[]
+  }[],
+  cardTotalCents: number,
+  cardSurchargePercent: number
+): AsaasCheckoutItem[] {
+  const items = orderItems.map((item) => {
+    const details = [
+      item.variant_label,
+      ...item.variant_options.map((o) => `${o.group}: ${o.label}`),
+    ].filter(Boolean)
+    return {
+      // A Asaas limita o nome do item; corta sem truncar no meio do acento.
+      name: item.name.slice(0, 100),
+      quantity: item.quantity,
+      unitPriceCents: computeCardPriceCents(item.price_cents, cardSurchargePercent),
+      description: details.length > 0 ? details.join(" · ").slice(0, 255) : null,
+    }
+  })
+
+  const sum = items.reduce((acc, i) => acc + i.quantity * i.unitPriceCents, 0)
+  const diffCents = cardTotalCents - sum
+  if (diffCents !== 0 && items.length > 0) {
+    // Prefere uma linha de quantidade 1, onde o ajuste cabe direto no
+    // unitário; senão, o item mais caro, em que a sobra some percentualmente
+    // melhor.
+    const target =
+      items.find((i) => i.quantity === 1) ??
+      items.reduce((a, b) => (b.unitPriceCents > a.unitPriceCents ? b : a))
+    if (diffCents % target.quantity === 0) {
+      target.unitPriceCents += diffCents / target.quantity
+    } else {
+      // Não divide certo no item escolhido: quebra a linha em uma unidade
+      // separada que carrega o ajuste, mantendo a soma exata.
+      target.quantity -= 1
+      items.push({
+        name: target.name,
+        quantity: 1,
+        unitPriceCents: target.unitPriceCents + diffCents,
+        description: target.description,
+      })
+    }
+  }
+
+  return items
+}
+
 export async function POST(request: NextRequest) {
   // Declarado fora do try para o catch externo conseguir reverter reservas
   // de estoque já aplicadas mesmo se uma exceção (ex. chamada ao gateway)
   // interromper o fluxo antes do insert do pedido.
   const decrementedLines: DecrementedLine[] = []
+  // Identifica as reservas deste request no diário `store_stock_reservations`.
+  // O diário é a rede de segurança para o caso em que a Function morre entre
+  // o decremento e o insert do pedido: aí não há pedido para nenhum cron
+  // achar, e sem ele o estoque ficaria descontado para sempre.
+  const reservationGroup = randomUUID()
   const db = createSupabaseAdminClient()
 
   // Segunda checagem da mesma flag que o proxy já aplica (proxy.ts) — fechado
@@ -200,18 +315,20 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Toda requisição de compra é limitada por IP para impedir spam de
-    // transações PIX na MisticPay (cada uma gera QR code e custa uma
-    // tentativa na conta), antes mesmo de checar autenticação.
+    // Primeiro portão, ANTES de autenticar: só contém flood anônimo contra a
+    // rota. O teto é folgado de propósito — o identificador é hash de IP+UA,
+    // e CG-NAT/redes corporativas fazem compradores sem relação nenhuma
+    // dividirem a mesma cota. Quem limita de verdade é o portão por usuário,
+    // logo abaixo.
     const clientId = getClientIdentifier(request)
-    const rateLimit = await checkRateLimit({
-      action: "store_checkout_create",
+    const ipRateLimit = await checkRateLimit({
+      action: "store_checkout_create_ip",
       identifier: clientId,
-      maxAttempts: 10,
+      maxAttempts: 40,
       windowSeconds: 600,
       onError: "closed",
     })
-    if (!rateLimit.allowed) {
+    if (!ipRateLimit.allowed) {
       return NextResponse.json(
         {
           error:
@@ -228,6 +345,41 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
+    // Portão real: a cota é da CONTA, não do IP. Limitar só por IP+UA deixava
+    // uma mesma conta renovar o limite a cada troca de rede (4G, VPN, proxy),
+    // justamente na rota mais cara do fluxo — cada tentativa gera cobrança e
+    // QR code na Asaas. Mesmo padrão de `PUT /orders/[id]/shipping-address`:
+    // compõe usuário + cliente, então trocar de IP não zera a contagem.
+    const userRateLimit = await checkRateLimit({
+      action: "store_checkout_create",
+      identifier: `${user.id}:${clientId}`,
+      maxAttempts: 10,
+      windowSeconds: 600,
+      onError: "closed",
+    })
+    if (!userRateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error:
+            "Muitas tentativas de compra. Aguarde alguns minutos e tente novamente.",
+        },
+        { status: 429 }
+      )
+    }
+
+    // Segunda trava do modo somente-leitura da impersonation (a primeira é o
+    // proxy). Comprar em nome de outra pessoa é o exato oposto do escopo de
+    // uma sessão de suporte.
+    if (isImpersonating(request)) {
+      return NextResponse.json(
+        {
+          error: "impersonation_read_only",
+          message: "Sessão de acesso é somente leitura — não é possível finalizar uma compra.",
+        },
+        { status: 403 }
+      )
+    }
+
     const affiliateAttribution = await resolveAffiliateAttribution(
       request,
       user.id
@@ -251,7 +403,7 @@ export async function POST(request: NextRequest) {
     if (paymentMethod === "credit_card") {
       const cardRateLimit = await checkRateLimit({
         action: "store_checkout_card_attempt",
-        identifier: clientId,
+        identifier: `${user.id}:${clientId}`,
         maxAttempts: 3,
         windowSeconds: 600,
         onError: "closed",
@@ -335,7 +487,7 @@ export async function POST(request: NextRequest) {
       db
         .from("store_products")
         .select(
-          "id, name, price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping"
+          "id, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type"
         )
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
@@ -487,6 +639,16 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Pedido com item de pré-venda ganha um prazo de pagamento maior: não há
+    // estoque preso esperando, e reserva de lançamento é a compra que mais
+    // se beneficia de tempo para decidir.
+    const hasPreOrderLine = validatedLines.some(
+      (line) => line.product.sale_type === "pre_order"
+    )
+    const expirationMinutes = hasPreOrderLine
+      ? PREORDER_PIX_EXPIRATION_MINUTES
+      : PIX_EXPIRATION_MINUTES
+
     // Limite de 15un/produto/usuário a cada 24h — só para produtos SEM
     // controle de estoque (stock null), onde não há outro teto natural
     // fechando a compra (produto com estoque real já é limitado pelo
@@ -496,6 +658,10 @@ export async function POST(request: NextRequest) {
     // duas variantes sem estoque do mesmo produto competem pelo mesmo teto.
     const unlimitedStockQuantityByProduct = new Map<string, number>()
     for (const line of validatedLines) {
+      // Pré-venda tem teto próprio (`preorder_limit`), conferido na reserva —
+      // o limite diário aqui é para produto sem NENHUM teto, e aplicá-lo à
+      // pré-venda limitaria uma reserva de lançamento a 15 unidades/dia.
+      if (line.product.sale_type === "pre_order") continue
       const effectiveStock = line.variant
         ? line.variant.stock
         : line.product.stock
@@ -552,6 +718,21 @@ export async function POST(request: NextRequest) {
     const decrementResults = await Promise.all(
       validatedLines.map(async (line) => {
         const { product, variant, quantity } = line
+
+        // Pré-venda não tem estoque físico para descontar — o lote ainda vai
+        // chegar. O teto é `preorder_limit`, e a RPC confere e registra a
+        // reserva no mesmo comando (é isso que impede dois checkouts
+        // simultâneos de estourarem o lote). Ela já grava no diário, então
+        // esta linha não entra em `decrementedLines`.
+        if (product.sale_type === "pre_order") {
+          const { data: reserved } = await db.rpc("reserve_preorder", {
+            p_product_id: product.id,
+            p_quantity: quantity,
+            p_reservation_group: reservationGroup,
+          })
+          return { line, ok: Boolean(reserved), isPreOrder: true }
+        }
+
         if (variant) {
           const { data: decremented } = await db.rpc(
             "decrement_variant_stock",
@@ -560,18 +741,20 @@ export async function POST(request: NextRequest) {
               p_quantity: quantity,
             }
           )
-          return { line, ok: Boolean(decremented) }
+          return { line, ok: Boolean(decremented), isPreOrder: false }
         }
         const { data: decremented } = await db.rpc("decrement_store_stock", {
           p_product_id: product.id,
           p_quantity: quantity,
         })
-        return { line, ok: Boolean(decremented) }
+        return { line, ok: Boolean(decremented), isPreOrder: false }
       })
     )
 
-    for (const { line, ok } of decrementResults) {
-      if (!ok) continue
+    for (const { line, ok, isPreOrder } of decrementResults) {
+      // Pré-venda não mexeu no estoque, então não há o que reverter — e a
+      // própria RPC já registrou a reserva no diário.
+      if (!ok || isPreOrder) continue
       decrementedLines.push({
         productId: line.product.id,
         variantId: line.variant?.id ?? null,
@@ -581,30 +764,60 @@ export async function POST(request: NextRequest) {
 
     const failed = decrementResults.find((r) => !r.ok)
     if (failed) {
-      await revertDecrements(db, decrementedLines)
+      await revertDecrements(db, decrementedLines, reservationGroup)
       const { product, variant } = failed.line
       const label = variant
         ? `${product.name} — ${variant.label}`
         : product.name
       return NextResponse.json(
-        { error: `Estoque insuficiente para "${label}".` },
+        {
+          error:
+            product.sale_type === "pre_order"
+              ? `As reservas de pré-venda de "${label}" esgotaram.`
+              : `Estoque insuficiente para "${label}".`,
+        },
         { status: 409 }
       )
+    }
+
+    // Estoque reservado com sucesso: registra no diário ANTES de qualquer
+    // chamada ao gateway. A partir daqui, mesmo que o processo morra, o cron
+    // sabe que estas unidades foram descontadas sem pedido e as devolve.
+    // Falha ao gravar o diário não derruba a compra — ela só nos deixa sem a
+    // rede de segurança para este request, que é exatamente o comportamento
+    // que existia antes de o diário existir.
+    if (decrementedLines.length > 0) {
+      const { error: journalError } = await db
+        .from("store_stock_reservations")
+        .insert(
+          decrementedLines.map((line) => ({
+            reservation_group: reservationGroup,
+            product_id: line.productId,
+            variant_id: line.variantId,
+            quantity: line.quantity,
+          }))
+        )
+      if (journalError) {
+        console.error(
+          "[checkout] falha ao registrar reserva de estoque no diário:",
+          journalError
+        )
+      }
     }
 
     let totalCents = 0
     const orderItems = []
     for (const line of validatedLines) {
       const { product, variant, options, quantity } = line
-      // Overrides se acumulam nesta ordem, o último presente vence: preço
-      // base → cor → cada opção de grupo selecionada, na ordem de
-      // `group.position` — mesma regra usada em ProductDetailContent.
-      let effectivePriceCents =
-        variant?.price_cents_override ?? product.price_cents
-      for (const option of options) {
-        if (option.price_cents_override != null)
-          effectivePriceCents = option.price_cents_override
-      }
+      // Mesma função que a vitrine e a página de produto usam para decidir o
+      // preço exibido (`lib/store-pricing.ts`) — inclusive a promoção. Antes
+      // isto era uma segunda implementação que esquecia `promo_price_cents`,
+      // e a loja cobrava o preço cheio de um produto anunciado com desconto.
+      const { effectiveCents: effectivePriceCents } = computeEffectivePrice(
+        product,
+        variant,
+        options
+      )
 
       totalCents += effectivePriceCents * quantity
       orderItems.push({
@@ -612,6 +825,11 @@ export async function POST(request: NextRequest) {
         name: product.name,
         price_cents: effectivePriceCents,
         quantity,
+        // Snapshot do tipo de venda: depois da compra o produto vira
+        // "normal" (o admin troca quando o lote chega), e sem isto não há
+        // como o pedido saber que foi uma reserva de pré-venda — que é
+        // justamente o que explica a espera para quem comprou.
+        sale_type: product.sale_type,
         variant_id: variant?.id ?? null,
         variant_label: variant?.label ?? null,
         variant_options: options.map((o) => ({
@@ -623,7 +841,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (totalCents <= 0) {
-      await revertDecrements(db, decrementedLines)
+      await revertDecrements(db, decrementedLines, reservationGroup)
       return NextResponse.json(
         { error: "Valor do pedido inválido." },
         { status: 400 }
@@ -653,7 +871,7 @@ export async function POST(request: NextRequest) {
     if (!payerName || !payerDocument || payerInfoSubmitted) {
       const payer = payerInfoSchema.safeParse(parsedBody.data)
       if (!payer.success) {
-        await revertDecrements(db, decrementedLines)
+        await revertDecrements(db, decrementedLines, reservationGroup)
         return NextResponse.json(
           {
             error:
@@ -671,7 +889,7 @@ export async function POST(request: NextRequest) {
         .update({ full_name: payerName, cpf: payerDocument })
         .eq("id", user.id)
       if (profileUpdateError) {
-        await revertDecrements(db, decrementedLines)
+        await revertDecrements(db, decrementedLines, reservationGroup)
         const { body: errBody, status } = dbErrorResponse(
           profileUpdateError,
           "Não foi possível salvar seus dados. Tente novamente."
@@ -682,7 +900,7 @@ export async function POST(request: NextRequest) {
 
     // Ambos os gateways exigem nome e CPF do pagador para emitir o PIX.
     if (!payerName || !payerDocument) {
-      await revertDecrements(db, decrementedLines)
+      await revertDecrements(db, decrementedLines, reservationGroup)
       return NextResponse.json(
         { error: "Informe seu nome e CPF para finalizar a compra." },
         { status: 400 }
@@ -741,7 +959,7 @@ export async function POST(request: NextRequest) {
       } else {
         const address = payerAddressSchema.safeParse(parsedBody.data)
         if (!address.success) {
-          await revertDecrements(db, decrementedLines)
+          await revertDecrements(db, decrementedLines, reservationGroup)
           return NextResponse.json(
             {
               error:
@@ -776,7 +994,7 @@ export async function POST(request: NextRequest) {
           })
           .eq("id", user.id)
         if (addressUpdateError) {
-          await revertDecrements(db, decrementedLines)
+          await revertDecrements(db, decrementedLines, reservationGroup)
           const { body: errBody, status } = dbErrorResponse(
             addressUpdateError,
             "Não foi possível salvar seu endereço. Tente novamente."
@@ -789,32 +1007,23 @@ export async function POST(request: NextRequest) {
     // -----------------------------------------------------------------
     // Endereço de ENTREGA
     // -----------------------------------------------------------------
-    // Só faz sentido pedir se o carrinho tem algo para despachar. Hoje toda a
-    // loja é física (`requires_shipping` default true), mas a decisão vem da
-    // coluna, não de uma suposição — um item digital futuro não deve travar o
+    // Só faz sentido pedir se o carrinho tem algo para despachar — a decisão
+    // vem da coluna `requires_shipping` de cada produto, nunca de uma
+    // suposição de que "tudo na loja é físico": um serviço não deve travar o
     // checkout pedindo CEP.
-    const needsShipping = validatedLines.some(
-      (line) => line.product.requires_shipping !== false
-    )
+    const needsShipping = orderNeedsShippingAddress(validatedLines)
 
     const shippingParse = parseOptionalShippingAddress(parsedBody.data)
     if (!shippingParse.ok) {
-      await revertDecrements(db, decrementedLines)
+      await revertDecrements(db, decrementedLines, reservationGroup)
       return NextResponse.json({ error: shippingParse.error }, { status: 400 })
     }
     let shippingAddress = shippingParse.address
 
-    // Opcional por ora; vira obrigatório só ligando SHIPPING_ADDRESS_REQUIRED
-    // (env), sem migration nem deploy de código. `skipShippingAddress` é uma
-    // escolha do cliente enquanto é opcional — não pode servir de bypass
-    // depois que passar a ser exigido.
-    if (needsShipping && !shippingAddress && isShippingAddressRequired()) {
-      await revertDecrements(db, decrementedLines)
-      return NextResponse.json(
-        { error: "Informe o endereço de entrega para finalizar a compra." },
-        { status: 400 }
-      )
-    }
+    // O endereço NUNCA bloqueia a compra: quem não informar aqui fecha o
+    // pedido do mesmo jeito e completa depois de pagar, em "Meus Pedidos"
+    // (`awaiting_shipping_info`). Pedir CEP antes do pagamento é o que mais
+    // derruba conversão no checkout, e o dado só é necessário para despachar.
 
     // Endereço informado num carrinho que não precisa de envio é descartado —
     // não guardamos PII que o pedido não usa (minimização, LGPD Art. 6, III).
@@ -834,24 +1043,31 @@ export async function POST(request: NextRequest) {
           shipping_city: shippingAddress.shippingCity,
           shipping_state: shippingAddress.shippingState,
           shipping_address_filled_at: new Date().toISOString(),
+          requires_shipping_address: needsShipping,
         }
-      : {}
+      : { requires_shipping_address: needsShipping }
 
-    // Guarda o endereço no perfil para pré-preencher a próxima compra. Falha
-    // aqui não derruba o checkout: o dado que importa para despachar é o
-    // snapshot no pedido, gravado logo abaixo no mesmo insert.
+    // Guarda o endereço no perfil para pré-preencher a próxima compra, nas
+    // colunas `shipping_*` — NUNCA nas de cobrança. Entrega e cobrança
+    // dividiam as mesmas colunas, então comprar para presentear sobrescrevia
+    // o endereço de cobrança do titular com o do presenteado, e ele voltava
+    // para a Asaas como endereço do dono do cartão na compra seguinte.
+    //
+    // Falha aqui não derruba o checkout: o dado que importa para despachar é
+    // o snapshot no pedido, gravado logo abaixo no mesmo insert.
     if (shippingAddress) {
       const { error: shippingProfileError } = await db
         .from("user_profiles")
         .update({
-          phone: shippingAddress.shippingPhone,
-          postal_code: shippingAddress.shippingPostalCode,
-          street: shippingAddress.shippingStreet,
-          number: shippingAddress.shippingNumber,
-          complement: shippingAddress.shippingComplement ?? null,
-          neighborhood: shippingAddress.shippingNeighborhood,
-          city: shippingAddress.shippingCity,
-          state: shippingAddress.shippingState,
+          shipping_recipient: shippingAddress.shippingRecipient,
+          shipping_phone: shippingAddress.shippingPhone,
+          shipping_postal_code: shippingAddress.shippingPostalCode,
+          shipping_street: shippingAddress.shippingStreet,
+          shipping_number: shippingAddress.shippingNumber,
+          shipping_complement: shippingAddress.shippingComplement ?? null,
+          shipping_neighborhood: shippingAddress.shippingNeighborhood,
+          shipping_city: shippingAddress.shippingCity,
+          shipping_state: shippingAddress.shippingState,
         })
         .eq("id", user.id)
       if (shippingProfileError) {
@@ -872,10 +1088,9 @@ export async function POST(request: NextRequest) {
     let checkoutUrl: string | null = null
 
     if (paymentMethod === "credit_card") {
-      // Cartão é SEMPRE via Asaas Checkout hospedado, independente de
-      // PAYMENT_GATEWAY — a MisticPay não tem API de cartão. O cliente
-      // digita os dados na página da própria Asaas; nosso backend nunca
-      // recebe número de cartão, validade ou CVV (ver createCheckout).
+      // Cartão é via Asaas Checkout hospedado. O cliente digita os dados na
+      // página da própria Asaas; nosso backend nunca recebe número de
+      // cartão, validade ou CVV (ver createCheckout).
       const settings = await getStoreSettings()
       // Mesmo helper usado na vitrine/checkout do cliente — o valor cobrado
       // aqui tem que bater com o que a tela mostrou, centavo a centavo.
@@ -917,13 +1132,17 @@ export async function POST(request: NextRequest) {
         checkout = await createCheckout({
           customerId: customer.id,
           totalCents: cardTotalCents,
-          description,
+          items: buildAsaasCheckoutItems(
+            orderItems,
+            cardTotalCents,
+            settings.cardSurchargePercent
+          ),
           externalReference: orderId,
           maxInstallments: settings.cardMaxInstallments,
           successUrl: `${SITE_URL}/checkout/card?orderId=${orderId}`,
           cancelUrl: `${SITE_URL}/checkout`,
           expiredUrl: `${SITE_URL}/checkout`,
-          minutesToExpire: PIX_EXPIRATION_MINUTES,
+          minutesToExpire: expirationMinutes,
         })
       } catch (checkoutError) {
         // Falha ao criar o checkout na Asaas (ex.: cartão de teste inválido
@@ -931,7 +1150,7 @@ export async function POST(request: NextRequest) {
         // imediatamente aqui, sem esperar cair no catch externo genérico,
         // pra devolver uma mensagem específica de cartão recusado/indisponível.
         console.error("[checkout] createCheckout falhou:", checkoutError)
-        await revertDecrements(db, decrementedLines)
+        await revertDecrements(db, decrementedLines, reservationGroup)
         return NextResponse.json(
           {
             error:
@@ -969,13 +1188,15 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (insertError || !order) {
-        await revertDecrements(db, decrementedLines)
+        await revertDecrements(db, decrementedLines, reservationGroup)
         const { body, status } = dbErrorResponse(
           insertError,
           "Não foi possível registrar o pedido."
         )
         return NextResponse.json(body, { status })
       }
+
+      await confirmReservations(db, reservationGroup)
 
       await notifyOrderStatusChange({
         userId: user.id,
@@ -986,78 +1207,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ orderId: order.id, checkoutUrl })
     }
 
-    // MisticPay é o gateway padrão hoje — Asaas fica atrás de
-    // PAYMENT_GATEWAY=asaas até a migração ser concluída.
-    const gateway =
-      process.env.PAYMENT_GATEWAY === "asaas" ? "asaas" : "misticpay"
+    // externalReference próprio (não o id do pedido) para não vazar UUID
+    // interno do banco na integração externa, e para poder criar o pedido
+    // depois de já ter o id da cobrança.
+    const externalReference = randomUUID()
 
-    if (gateway === "asaas") {
-      // externalReference próprio (não o id do pedido) para não vazar UUID
-      // interno do banco na integração externa, e para poder criar o pedido
-      // depois de já ter o id da cobrança.
-      const externalReference = randomUUID()
+    const customer = await findOrCreateCustomer({
+      name: payerName,
+      cpfCnpj: payerDocument,
+      email: customerEmail,
+    })
 
-      const customer = await findOrCreateCustomer({
-        name: payerName,
-        cpfCnpj: payerDocument,
-        email: customerEmail,
-      })
+    // Cacheia o customer no perfil de usuários logados para não recriar
+    // (nem depender da busca por CPF) na próxima compra.
+    if (customer.id !== cachedAsaasCustomerId) {
+      await db
+        .from("user_profiles")
+        .update({ asaas_customer_id: customer.id })
+        .eq("id", user.id)
+    }
 
-      // Cacheia o customer no perfil de usuários logados para não recriar
-      // (nem depender da busca por CPF) na próxima compra.
-      if (customer.id !== cachedAsaasCustomerId) {
-        await db
-          .from("user_profiles")
-          .update({ asaas_customer_id: customer.id })
-          .eq("id", user.id)
-      }
+    const payment = await createPixPayment({
+      customerId: customer.id,
+      amountCents: totalCents,
+      description,
+      externalReference,
+    })
 
-      const payment = await createPixPayment({
-        customerId: customer.id,
-        amountCents: totalCents,
-        description,
-        externalReference,
-      })
+    const qrCode = await getPixQrCode(payment.id)
 
-      const qrCode = await getPixQrCode(payment.id)
-
-      qrCodeBase64 = qrCode.encodedImage
-      copyPaste = qrCode.payload
-      orderInsert = {
-        asaas_payment_id: payment.id,
-        asaas_customer_id: customer.id,
-        pix_copy_paste: copyPaste,
-        pix_qr_code_base64: qrCodeBase64,
-        pix_expires_at: qrCode.expirationDate,
-      }
-    } else {
-      // transactionId próprio (não o id do pedido) para não vazar UUID interno
-      // do banco na integração externa, e para poder recriar o pedido antes
-      // de saber o id gerado pelo insert.
-      const transactionId = randomUUID()
-
-      const pix = await createPixTransaction({
-        amountCents: totalCents,
-        transactionId,
-        description,
-        payerName,
-        payerDocument,
-      })
-
-      qrCodeBase64 = pix.qrCodeBase64
-      copyPaste = pix.copyPaste
-      orderInsert = {
-        misticpay_transaction_id: pix.transactionId,
-        pix_copy_paste: copyPaste,
-        pix_qr_code_base64: qrCodeBase64,
-        // A API da MisticPay não retorna prazo de expiração do PIX (diferente
-        // da Asaas, que devolve `expirationDate` real) — aplicamos a mesma
-        // janela fixa usada pelo cron de expiração (`PIX_EXPIRATION_MINUTES`)
-        // como fonte de verdade única em `pix_expires_at` para os dois gateways.
-        pix_expires_at: new Date(
-          Date.now() + PIX_EXPIRATION_MINUTES * 60_000
-        ).toISOString(),
-      }
+    qrCodeBase64 = qrCode.encodedImage
+    copyPaste = qrCode.payload
+    orderInsert = {
+      asaas_payment_id: payment.id,
+      asaas_customer_id: customer.id,
+      pix_copy_paste: copyPaste,
+      pix_qr_code_base64: qrCodeBase64,
+      // Prazo que a LOJA impõe (o `expirationDate` da Asaas é de longa
+      // validade e não reflete a política da loja). É esta coluna que a tela
+      // do PIX mostra na contagem e que o cron de expiração aplica, então ela
+      // precisa carregar a janela estendida da pré-venda.
+      pix_expires_at: new Date(
+        Date.now() + expirationMinutes * 60_000
+      ).toISOString(),
     }
 
     const { data: order, error: insertError } = await db
@@ -1079,13 +1271,15 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertError || !order) {
-      await revertDecrements(db, decrementedLines)
+      await revertDecrements(db, decrementedLines, reservationGroup)
       const { body, status } = dbErrorResponse(
         insertError,
         "Não foi possível registrar o pedido."
       )
       return NextResponse.json(body, { status })
     }
+
+    await confirmReservations(db, reservationGroup)
 
     await notifyOrderStatusChange({
       userId: user.id,
@@ -1101,7 +1295,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("Checkout error:", err)
     if (decrementedLines.length > 0) {
-      await revertDecrements(db, decrementedLines)
+      await revertDecrements(db, decrementedLines, reservationGroup)
     }
     const { body, status } = dbErrorResponse(
       err,

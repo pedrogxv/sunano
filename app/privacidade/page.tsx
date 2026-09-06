@@ -81,7 +81,7 @@ export default function PrivacidadePage() {
           <ul>
             <li>Histórico de compras: produtos, valores, status do pagamento.</li>
             <li>
-              Identificadores da MisticPay (<code>transactionId</code>, código E2E do PIX).
+              Identificadores da Asaas (ID da cobrança, ID do cliente, link de comprovante do PIX).
             </li>
             <li>E-mail e nome associados ao pagamento.</li>
           </ul>
@@ -140,6 +140,15 @@ export default function PrivacidadePage() {
                   <td className="px-4 py-3">Funcionamento da comunidade</td>
                   <td className="px-4 py-3">Consentimento (Art. 7, I)</td>
                 </tr>
+                <tr>
+                  <td className="px-4 py-3">Acesso à sua conta pela equipe</td>
+                  <td className="px-4 py-3">
+                    Suporte técnico e diagnóstico de problemas relatados, em modo somente leitura
+                  </td>
+                  <td className="px-4 py-3">
+                    Legítimo interesse e execução de contrato (Art. 7, IX e V)
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -162,14 +171,14 @@ export default function PrivacidadePage() {
             .
           </p>
 
-          <h3>MisticPay (pagamentos)</h3>
+          <h3>Asaas (pagamentos)</h3>
           <p>
-            Processa pagamentos via Pix. Recebe seu nome, CPF e e-mail para geração da cobrança e
-            emissão de recibo. O Sunano nunca armazena dados sensíveis de pagamento além dos
-            identificadores da transação — eles são processados exclusivamente pela MisticPay.
-            Política:{" "}
-            <a href="https://misticpay.com/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-              misticpay.com
+            Processa pagamentos via Pix e cartão de crédito. Recebe seu nome, CPF e e-mail para
+            geração da cobrança e emissão de recibo; no pagamento com cartão, os dados do cartão são
+            digitados e processados exclusivamente no ambiente da Asaas — o Sunano nunca recebe
+            número, validade ou CVV. Política:{" "}
+            <a href="https://www.asaas.com/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              asaas.com
             </a>
             .
           </p>
@@ -329,6 +338,28 @@ export default function PrivacidadePage() {
             <li>Limitação de taxa (rate limiting) para proteger contra ataques de força bruta.</li>
             <li>Log de auditoria de operações sensíveis sobre dados pessoais.</li>
             <li>Tokens de sessão HTTPOnly para prevenir roubo via XSS.</li>
+          </ul>
+
+          <h3>8.1 Acesso à sua conta pela equipe de suporte</h3>
+          <p>
+            Para diagnosticar problemas que você relatar, um administrador autorizado pode,
+            excepcionalmente, acessar o site <strong>como se fosse você</strong> (recurso interno de
+            &ldquo;logar como&rdquo;). Esse acesso é estritamente controlado:
+          </p>
+          <ul>
+            <li>
+              <strong>Somente leitura</strong> — nenhuma ação é feita em seu nome (não publica,
+              não compra, não altera seu perfil, senha, e-mail ou 2FA).
+            </li>
+            <li>
+              <strong>Restrito e temporário</strong> — apenas o responsável máximo pelo site pode
+              iniciar, a sessão expira automaticamente em 30 minutos e não acessa dados de pagamento.
+            </li>
+            <li>
+              <strong>Registrado</strong> — cada acesso grava no log de auditoria quem acessou,
+              quando, por quanto tempo e o motivo. Você pode solicitar esse registro a qualquer
+              momento pelo canal da Seção 12 (direito de acesso, LGPD Art. 18).
+            </li>
           </ul>
         </section>
 

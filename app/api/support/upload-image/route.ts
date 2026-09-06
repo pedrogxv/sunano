@@ -84,11 +84,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: uploadError.message }, { status: 400 })
     }
 
-    const { data: publicData } = supabase.storage
+    // Bucket `support` é privado (20260906120000_support_bucket_private.sql) —
+    // devolve uma signed URL só para o preview imediato no formulário; a
+    // exibição depois de enviada a mensagem é sempre re-assinada na leitura
+    // (support-repository.ts, via signSupportImageUrls).
+    const { data: signedData, error: signError } = await supabase.storage
       .from("support")
-      .getPublicUrl(fileName)
+      .createSignedUrl(fileName, 600)
 
-    return NextResponse.json({ ok: true, publicUrl: publicData.publicUrl })
+    if (signError || !signedData) {
+      return NextResponse.json({ error: "Erro ao gerar link da imagem." }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true, publicUrl: signedData.signedUrl })
   } catch {
     return NextResponse.json(
       { error: "Erro ao enviar imagem." },

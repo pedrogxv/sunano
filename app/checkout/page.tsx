@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
   CreditCard,
@@ -44,6 +44,14 @@ import {
 
 type PaymentMethod = "pix" | "credit_card"
 
+/** Formata só quando há valor — os campos do perfil são todos opcionais. */
+function formatOptionalPhone(value: string | null | undefined): string {
+  return value ? formatPhoneInput(value) : ""
+}
+function formatOptionalCep(value: string | null | undefined): string {
+  return value ? formatCepInput(value) : ""
+}
+
 const EMPTY_PAYER_FORM: PayerForm = {
   name: "",
   document: "",
@@ -71,7 +79,45 @@ interface PayerInfoResponse {
   state?: string | null
   hasCompletePayerInfo?: boolean
   hasCompleteAddressInfo?: boolean
-  shippingAddressRequired?: boolean
+  /** Último endereço de ENTREGA (distinto do de cobrança acima). */
+  shipping?: {
+    recipient?: string | null
+    phone?: string | null
+    postalCode?: string | null
+    street?: string | null
+    number?: string | null
+    complement?: string | null
+    neighborhood?: string | null
+    city?: string | null
+    state?: string | null
+  } | null
+}
+
+interface ValidatedCartLine {
+  productId: string
+  variantId: string | null
+  name: string | null
+  priceCents: number | null
+  stock: number | null
+  available: boolean
+  issues: string[]
+}
+
+interface CartValidationResponse {
+  lines: ValidatedCartLine[]
+  cartNeedsShipping?: boolean
+}
+
+/** Mensagem para o cliente a partir do motivo devolvido pelo servidor. */
+const CART_ISSUE_LABEL: Record<string, string> = {
+  not_found: "não está mais disponível na loja",
+  inactive: "não está mais disponível na loja",
+  sold_out: "está esgotado",
+  variant_not_found: "teve a variante removida",
+  variant_unavailable: "está com essa cor indisponível",
+  option_unavailable: "está com essa opção indisponível",
+  combination_unavailable: "está com essa combinação indisponível",
+  insufficient_stock: "está sem estoque",
 }
 
 export default function CheckoutPage() {
@@ -83,15 +129,22 @@ export default function CheckoutPage() {
   const [shippingForm, setShippingForm] = useState<ShippingForm>(EMPTY_SHIPPING_FORM)
   const [editingShipping, setEditingShipping] = useState(false)
   // "Informar depois": o pedido nasce sem endereço e a pessoa completa em
-  // "Meus Pedidos". Só existe enquanto o endereço é opcional no servidor.
+  // "Meus Pedidos", depois de pagar. É sempre uma escolha válida — o
+  // endereço não bloqueia a compra em nenhum cenário.
   const [shippingSkipped, setShippingSkipped] = useState(false)
-  const [shippingRequired, setShippingRequired] = useState(false)
+  // Há item físico no carrinho? Vem do servidor (`requires_shipping` de cada
+  // produto); um carrinho só de serviços não mostra o card de entrega.
+  const [cartNeedsShipping, setCartNeedsShipping] = useState(true)
   const [payerEmail, setPayerEmail] = useState<string | null>(null)
   const [editingPayer, setEditingPayer] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix")
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
+  // Divergências entre o carrinho (localStorage) e o banco, detectadas na
+  // abertura da tela — mostradas ANTES do submit, não como erro depois dele.
+  const [cartIssues, setCartIssues] = useState<ValidatedCartLine[]>([])
+  const [staleLines, setStaleLines] = useState<ValidatedCartLine[]>([])
   const { cardSurchargePercent } = useStoreSettings()
 
   // Para usuário logado: só sabemos se falta nome/CPF (ou endereço, no caso
@@ -100,6 +153,14 @@ export default function CheckoutPage() {
   const [payerInfoChecked, setPayerInfoChecked] = useState(false)
   const [needsPayerInfo, setNeedsPayerInfo] = useState(false)
   const [needsAddressInfo, setNeedsAddressInfo] = useState(false)
+
+  // String estável dos ids do carrinho: `items` muda de identidade a cada
+  // incremento de quantidade, e depender do array refaria a consulta de
+  // perfil (que também pré-preenche os formulários) a cada clique no "+".
+  const cartProductIds = useMemo(
+    () => Array.from(new Set(items.map((i) => i.productId))).sort().join(","),
+    [items]
+  )
 
   useEffect(() => {
     if (authLoading) return
@@ -114,21 +175,28 @@ export default function CheckoutPage() {
         if (cancelled) return
         setNeedsPayerInfo(!data.hasCompletePayerInfo)
         setNeedsAddressInfo(!data.hasCompleteAddressInfo)
-        setShippingRequired(Boolean(data.shippingAddressRequired))
         setPayerEmail(data.email ?? null)
-        // Pré-preenche a entrega com o último endereço salvo no perfil — é o
-        // mesmo conjunto de campos, e na esmagadora maioria das compras
-        // entrega e cobrança são o mesmo lugar. A pessoa pode editar.
+        // Pré-preenche a entrega com a ÚLTIMA ENTREGA, não com a cobrança:
+        // são endereços diferentes desde que ganharam colunas próprias no
+        // perfil. Na primeira compra ainda não há entrega salva, e aí a
+        // cobrança é o melhor palpite disponível (quase sempre o mesmo lugar).
+        const lastShipping = data.shipping
+        const hasSavedShipping = Boolean(lastShipping?.postalCode)
         setShippingForm({
-          recipient: data.fullName ?? "",
-          phone: data.phone ? formatPhoneInput(data.phone) : "",
-          postalCode: data.postalCode ? formatCepInput(data.postalCode) : "",
-          street: data.street ?? "",
-          number: data.number ?? "",
-          complement: data.complement ?? "",
-          neighborhood: data.neighborhood ?? "",
-          city: data.city ?? "",
-          state: data.state ?? "",
+          recipient: (hasSavedShipping ? lastShipping?.recipient : data.fullName) ?? "",
+          phone: formatOptionalPhone(
+            hasSavedShipping ? lastShipping?.phone : data.phone
+          ),
+          postalCode: formatOptionalCep(
+            hasSavedShipping ? lastShipping?.postalCode : data.postalCode
+          ),
+          street: (hasSavedShipping ? lastShipping?.street : data.street) ?? "",
+          number: (hasSavedShipping ? lastShipping?.number : data.number) ?? "",
+          complement: (hasSavedShipping ? lastShipping?.complement : data.complement) ?? "",
+          neighborhood:
+            (hasSavedShipping ? lastShipping?.neighborhood : data.neighborhood) ?? "",
+          city: (hasSavedShipping ? lastShipping?.city : data.city) ?? "",
+          state: (hasSavedShipping ? lastShipping?.state : data.state) ?? "",
         })
         setPayerForm({
           name: data.fullName ?? "",
@@ -155,6 +223,63 @@ export default function CheckoutPage() {
     }
   }, [user, authLoading])
 
+  // Revalida o carrinho contra o banco. Efeito separado do de perfil de
+  // propósito: este depende do carrinho, e o de perfil reescreve os
+  // formulários com o endereço salvo — juntos, mexer no carrinho apagaria o
+  // que a pessoa já tinha digitado no card de entrega.
+  //
+  // Não depende de login (o carrinho existe antes) e responde as duas coisas
+  // que a tela precisa saber sobre o carrinho: se há divergência de preço/
+  // estoque desde que os itens foram adicionados, e se há algo para despachar.
+  useEffect(() => {
+    if (items.length === 0) return
+    let cancelled = false
+    fetch("/api/store/cart/validate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: items.map((i) => ({
+          productId: i.productId,
+          variantId: i.variantId,
+          variantOptionIds: i.variantOptions.map((o) => o.optionId),
+        })),
+      }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: CartValidationResponse | null) => {
+        if (cancelled || !data) return
+        setCartNeedsShipping(data.cartNeedsShipping !== false)
+        setCartIssues(
+          data.lines.filter((line) => !line.available || line.issues.length > 0)
+        )
+        setStaleLines(
+          data.lines.filter((line) => {
+            const local = items.find(
+              (i) =>
+                i.productId === line.productId &&
+                (i.variantId ?? null) === (line.variantId ?? null)
+            )
+            return (
+              local != null &&
+              line.priceCents != null &&
+              line.priceCents !== local.priceCents
+            )
+          })
+        )
+      })
+      .catch(() => {
+        // Sem resposta, mantém o card de entrega visível e não acusa
+        // divergência: o checkout revalida tudo de novo no submit, então
+        // errar para o lado de não avisar não deixa passar cobrança errada.
+      })
+    return () => {
+      cancelled = true
+    }
+    // `cartProductIds` (e não `items`) porque `items` muda de identidade a
+    // cada clique no "+", e a revalidação não muda de resposta por isso.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartProductIds])
+
   const requireAddress = paymentMethod === "credit_card"
   // Cartão exige endereço; se o perfil não tem, o card já abre em edição.
   const payerIncomplete = needsPayerInfo || (requireAddress && needsAddressInfo)
@@ -165,22 +290,11 @@ export default function CheckoutPage() {
     if (payerIncomplete) setEditingPayer(true)
   }, [payerIncomplete])
 
-  // Endereço obrigatório e ainda incompleto: abre a edição sozinho em vez de
-  // deixar a pessoa clicar em "Gerar PIX" e tomar um erro.
-  useEffect(() => {
-    if (payerInfoChecked && shippingRequired && !isShippingFormComplete(shippingForm)) {
-      setEditingShipping(true)
-    }
-    // Só na primeira checagem — reabrir a cada tecla digitada travaria a edição.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payerInfoChecked, shippingRequired])
-
-  // O servidor decide de verdade se o pedido precisa de envio (coluna
-  // `requires_shipping` dos produtos) — aqui só mostramos o card, já que
-  // hoje todo item da loja é físico. Endereço enviado num pedido que não
-  // precisa de envio é descartado no backend, não gravado.
+  // O servidor descarta endereço enviado num pedido que não precisa de
+  // envio, então o card some quando o carrinho é só de serviços. Quando
+  // aparece, preencher continua sendo opcional: o pedido fecha sem endereço
+  // e ele é cobrado depois do pagamento, em "Meus Pedidos".
   const shippingComplete = isShippingFormComplete(shippingForm)
-  const shippingPending = shippingRequired && !shippingComplete
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
   const cardTotal = computeCardPriceCents(total, cardSurchargePercent)
@@ -225,12 +339,6 @@ export default function CheckoutPage() {
       return
     }
 
-    if (shippingPending) {
-      setError("Informe o endereço de entrega para finalizar a compra.")
-      setEditingShipping(true)
-      return
-    }
-
     setLoading(true)
 
     try {
@@ -263,7 +371,6 @@ export default function CheckoutPage() {
           // servidor recusa um endereço pela metade (e faz bem — pedido com
           // rua e sem número parece pronto para despachar e não é).
           ...(shippingComplete && !shippingSkipped ? shippingFormToPayload(shippingForm) : {}),
-          ...(shippingSkipped ? { skipShippingAddress: true } : {}),
         }),
       })
 
@@ -475,16 +582,89 @@ export default function CheckoutPage() {
         </button>
       </div>
 
+      {/* Divergências desde que o item foi posto no carrinho. Aparecem aqui,
+          antes do resumo e do botão, porque um erro no carrinho é recuperável
+          (a pessoa remove o item e segue) e o mesmo erro depois do clique em
+          comprar é abandono. */}
+      {staleLines.length > 0 && (
+        <div className="mb-4 space-y-1.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
+          <p className="text-sm font-bold text-amber-400">O preço de alguns itens mudou</p>
+          {staleLines.map((line) => {
+            const local = items.find(
+              (i) => i.productId === line.productId && (i.variantId ?? null) === (line.variantId ?? null)
+            )
+            if (!local || line.priceCents == null) return null
+            return (
+              <p key={`${line.productId}:${line.variantId ?? "base"}`} className="text-xs text-amber-400/90">
+                <span className="font-semibold">{line.name ?? local.name}</span>:{" "}
+                <span className="line-through">{formatBRL(local.priceCents)}</span> →{" "}
+                {formatBRL(line.priceCents)}
+              </p>
+            )
+          })}
+          <p className="pt-0.5 text-[11px] text-amber-400/70">
+            O valor cobrado é sempre o preço atual, mostrado no total abaixo.
+          </p>
+        </div>
+      )}
+
+      {cartIssues.length > 0 && (
+        <div className="mb-4 space-y-1.5 rounded-xl border border-red-500/25 bg-red-500/[0.06] px-4 py-3">
+          <p className="text-sm font-bold text-red-400">
+            {cartIssues.length === 1 ? "Um item precisa da sua atenção" : "Alguns itens precisam da sua atenção"}
+          </p>
+          {cartIssues.map((line) => {
+            const local = items.find(
+              (i) => i.productId === line.productId && (i.variantId ?? null) === (line.variantId ?? null)
+            )
+            const reason = CART_ISSUE_LABEL[line.issues[0] ?? ""] ?? "não pode ser comprado agora"
+            return (
+              <div
+                key={`${line.productId}:${line.variantId ?? "base"}`}
+                className="flex items-center justify-between gap-3 text-xs text-red-400/90"
+              >
+                <span>
+                  <span className="font-semibold">{line.name ?? local?.name ?? "Item"}</span> {reason}.
+                </span>
+                {local && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      remove(local.productId, local.variantId, local.variantOptions.map((o) => o.optionId))
+                    }
+                    className="shrink-0 font-semibold underline underline-offset-2 hover:text-red-300"
+                  >
+                    Remover
+                  </button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* Order summary */}
+      {/* Subtotal é a soma dos preços que a pessoa viu na vitrine (`total`),
+          nunca o preço do cartão: abrir o resumo com um número MAIOR do que o
+          anunciado lê-se como "o preço subiu", justamente no ponto de maior
+          atrito do funil. No cartão, o acréscimo aparece como linha própria —
+          além de ser o certo a fazer, cobrar diferenciado exige discriminar
+          o valor. */}
       <div className={cn("mb-6 space-y-1.5 rounded-xl border px-4 py-3", CARD_SURFACE)}>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>Subtotal ({itemCount} {itemCount === 1 ? "item" : "itens"})</span>
-          <span>{formatBRL(cardTotal)}</span>
+          <span>{formatBRL(total)}</span>
         </div>
+        {paymentMethod === "credit_card" && (
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Acréscimo do cartão</span>
+            <span>+{formatBRL(computePixDiscountCents(total, cardSurchargePercent))}</span>
+          </div>
+        )}
         {paymentMethod === "pix" && (
           <div className="flex items-center justify-between text-xs text-emerald-400">
-            <span>Desconto no PIX ({cardSurchargePercent}%)</span>
-            <span>-{formatBRL(computePixDiscountCents(total, cardSurchargePercent))}</span>
+            <span>Economia à vista no PIX</span>
+            <span>{formatBRL(computePixDiscountCents(total, cardSurchargePercent))}</span>
           </div>
         )}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -566,11 +746,10 @@ export default function CheckoutPage() {
           />
         )}
 
-        {!authLoading && user && payerInfoChecked && (
+        {!authLoading && user && payerInfoChecked && cartNeedsShipping && (
           <CheckoutShippingCard
             form={shippingForm}
             onChange={setShippingForm}
-            required={shippingRequired}
             editing={editingShipping}
             onEditingChange={setEditingShipping}
             skipped={shippingSkipped}

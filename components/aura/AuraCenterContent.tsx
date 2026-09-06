@@ -8,6 +8,7 @@ import { Bird, Check, Flame, MessageSquare, Snowflake, Sparkles, SquarePen, Trop
 
 import { AuraFaqSection } from "@/components/aura/AuraFaqSection"
 import { AuraRankingModal } from "@/components/aura/AuraRankingModal"
+import { AuraVipDiscountBanner } from "@/components/aura/AuraVipDiscountBanner"
 
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
@@ -168,6 +169,13 @@ export function AuraCenterContent({
   }
   const hasShieldItem = Object.keys(shieldVariants).length > 0
   const nonShieldItems = items.filter((it) => it.kind !== "streak_shield")
+
+  // Preços que o desconto VIP de fato alcança — alimentam o "quanto você
+  // economiza" da faixa. `vip_month` fica de fora: a RPC recusa VIP ativo
+  // comprando VIP, então esse item nunca sai com desconto pra ninguém.
+  const discountableListPrices = items
+    .filter((it) => it.kind !== "vip_month")
+    .map((it) => it.auraCost)
 
   // Requer login apenas na hora de agir (resgatar, equipar, completar
   // missão etc.) — a central em si (saldo, loja, tarefas) fica visível sem
@@ -379,12 +387,24 @@ export function AuraCenterContent({
             Nenhum item disponível no momento. Volte em breve!
           </p>
         ) : (
+          // Fragment com space-y próprio: o `space-y-3` do wrapper só separa
+          // filhos diretos, e agora banner e grade estão dentro do fragment.
+          <div className="space-y-4">
+          {/* Faixa do desconto VIP: confirma para o VIP que a grade abaixo já
+              está com o preço dele, e mostra ao comum o que ele deixa na mesa.
+              Fica acima da grade porque explica os números dela. */}
+          <AuraVipDiscountBanner
+            isVip={vip.active}
+            listPrices={discountableListPrices}
+            onShowBenefits={() => setVipUpsellOpen(true)}
+          />
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {hasShieldItem && (
               <StreakShieldCard
                 key="streak-shield"
                 variants={shieldVariants}
                 balance={currentBalance}
+                isVip={vip.active}
                 shieldArmed={shield.armed}
                 shieldGraceDays={shield.graceDays}
                 requireLogin={requireLogin}
@@ -419,15 +439,16 @@ export function AuraCenterContent({
                     key={item.id}
                     item={item}
                     balance={currentBalance}
+                    isVip={vip.active}
                     cooldown={nameCooldownState}
                     currentName={currentName}
                     requireLogin={requireLogin}
-                    onChanged={(newName) => {
+                    onChanged={(newName, _newSlug, cost) => {
                       const now = new Date()
                       const endsAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
                       setCurrentName(newName)
                       setNameCooldownState({ onCooldown: true, changedAt: now.toISOString(), endsAt: endsAt.toISOString() })
-                      setCurrentBalance((prev) => prev - item.auraCost)
+                      setCurrentBalance((prev) => prev - cost)
                     }}
                   />
                 )
@@ -438,17 +459,19 @@ export function AuraCenterContent({
                   key={item.id}
                   item={item}
                   balance={currentBalance}
+                  isVip={vip.active}
                   owned={ownedItemIds.has(item.id)}
                   equipped={equippedItemId === item.id}
                   requireLogin={requireLogin}
-                  onRedeemed={() => {
+                  onRedeemed={(cost) => {
                     setOwnedItemIds((prev) => new Set(prev).add(item.id))
-                    setCurrentBalance((prev) => prev - item.auraCost)
+                    setCurrentBalance((prev) => prev - cost)
                   }}
                   onEquipChange={(next) => setEquippedItemId(next)}
                 />
               )
             })}
+          </div>
           </div>
         )}
       </div>

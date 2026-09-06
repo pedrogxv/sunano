@@ -20,7 +20,6 @@ interface OrderItem {
 }
 
 interface OrderReceipt {
-  misticpayE2e: string | null
   asaasPaymentId: string | null
   asaasReceiptUrl: string | null
 }
@@ -31,14 +30,24 @@ interface OrderStatus {
   totalCents: number
   copyPaste: string | null
   qrCodeBase64: string | null
-  items: OrderItem[]
+  items: OrderItem[] | null
   createdAt: string
   pixExpiresAt: string | null
   paymentMethod: string | null
   receipt: OrderReceipt | null
 }
 
-const POLL_INTERVAL_MS = 4000
+/**
+ * Intervalo de polling em função de há quanto tempo a cobrança foi criada.
+ * Quase todo PIX é pago nos primeiros minutos, então o intervalo curto só se
+ * justifica nessa janela — depois dela, insistir a cada 4 s numa aba
+ * esquecida gerava centenas de requisições por pedido abandonado.
+ */
+function pollIntervalMs(elapsedMs: number): number {
+  if (elapsedMs < 2 * 60_000) return 4_000
+  if (elapsedMs < 10 * 60_000) return 10_000
+  return 30_000
+}
 
 function PixCheckoutContent() {
   const searchParams = useSearchParams()
@@ -55,19 +64,33 @@ function PixCheckoutContent() {
   // já basta pra tratar a tela como expirada — o servidor confirma depois.
   const [locallyExpired, setLocallyExpired] = useState(false)
 
-  const fetchOrder = useCallback(async () => {
+  const fetchOrder = useCallback(async (slim = false) => {
     if (!orderId) return
     try {
-      const url = token
-        ? `/api/store/orders/${orderId}?token=${encodeURIComponent(token)}`
-        : `/api/store/orders/${orderId}`
-      const res = await fetch(url)
+      const params = new URLSearchParams()
+      if (token) params.set("token", token)
+      // `slim` omite QR, copia-e-cola e itens — ~8 KB por resposta que a tela
+      // já tem desde a primeira carga e que não mudam.
+      if (slim) params.set("slim", "1")
+      const query = params.toString()
+      const res = await fetch(`/api/store/orders/${orderId}${query ? `?${query}` : ""}`)
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(data.error ?? "Pedido não encontrado.")
       }
       const data = (await res.json()) as OrderStatus
-      setOrder(data)
+      // Numa resposta slim os campos omitidos vêm null: preserva o que já
+      // está em tela em vez de apagar o QR que o cliente está lendo.
+      setOrder((prev) =>
+        prev
+          ? {
+              ...data,
+              copyPaste: data.copyPaste ?? prev.copyPaste,
+              qrCodeBase64: data.qrCodeBase64 ?? prev.qrCodeBase64,
+              items: data.items ?? prev.items,
+            }
+          : data
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao consultar o pedido.")
     }
@@ -78,12 +101,40 @@ function PixCheckoutContent() {
       setError("Pedido não informado.")
       return
     }
+    // Primeira carga completa: é ela que traz QR, copia-e-cola e itens.
     fetchOrder()
     // Sem prazo não há mais o que confirmar: parar o polling evita bater na
-    // API a cada 4s pra sempre numa aba esquecida aberta.
+    // API pra sempre numa aba esquecida aberta.
     if (locallyExpired) return
-    const interval = setInterval(fetchOrder, POLL_INTERVAL_MS)
-    return () => clearInterval(interval)
+
+    const startedAt = Date.now()
+    let timeout: ReturnType<typeof setTimeout> | undefined
+
+    function schedule() {
+      timeout = setTimeout(async () => {
+        // Aba em segundo plano não tem ninguém olhando para o QR: o pagamento
+        // continua sendo confirmado pelo webhook, e a tela reconsulta assim
+        // que voltar ao primeiro plano (listener abaixo). É o que elimina a
+        // maior parte do custo das abas esquecidas.
+        if (document.visibilityState === "visible") {
+          await fetchOrder(true)
+        }
+        schedule()
+      }, pollIntervalMs(Date.now() - startedAt))
+    }
+    schedule()
+
+    // Voltou para a aba: confirma o estado na hora, sem esperar o próximo
+    // tick (que pode estar a 30 s de distância).
+    function onVisible() {
+      if (document.visibilityState === "visible") fetchOrder(true)
+    }
+    document.addEventListener("visibilitychange", onVisible)
+
+    return () => {
+      if (timeout) clearTimeout(timeout)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
   }, [orderId, fetchOrder, locallyExpired])
 
   useEffect(() => {
@@ -122,7 +173,11 @@ function PixCheckoutContent() {
   }
 
   if (order.status === "paid") {
-    const itemCount = order.items.reduce((sum, i) => sum + (i.quantity ?? 1), 0)
+    // `items` só vem null numa resposta slim, e o merge em `fetchOrder`
+    // preserva o valor da primeira carga — o fallback existe para o caso
+    // extremo de a tela abrir já paga sem ter feito a carga completa.
+    const orderItems = order.items ?? []
+    const itemCount = orderItems.reduce((sum, i) => sum + (i.quantity ?? 1), 0)
     const paidAtLabel = new Date(order.createdAt).toLocaleString("pt-BR", {
       day: "2-digit",
       month: "short",
@@ -160,7 +215,7 @@ function PixCheckoutContent() {
               {itemCount} {itemCount === 1 ? "item" : "itens"} comprados
             </p>
             <ul className="space-y-1.5">
-              {order.items.map((item, idx) => (
+              {orderItems.map((item, idx) => (
                 <li key={item.id ?? idx} className="flex items-center justify-between gap-3 text-sm">
                   <span className="min-w-0 truncate text-foreground">
                     {item.quantity ?? 1}× {item.name ?? "Item"}
@@ -186,14 +241,11 @@ function PixCheckoutContent() {
             <span className="text-lg font-black text-emerald-400">{formatBRL(order.totalCents)}</span>
           </div>
 
-          {(order.receipt?.misticpayE2e || order.receipt?.asaasPaymentId) && (
+          {order.receipt?.asaasPaymentId && (
             <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
               <Receipt className="mt-0.5 size-3.5 shrink-0" />
               <div className="min-w-0 space-y-0.5">
                 <p className="font-medium text-foreground">Comprovante PIX</p>
-                {order.receipt?.misticpayE2e && (
-                  <p className="break-all font-mono">E2E: {order.receipt.misticpayE2e}</p>
-                )}
                 {order.receipt?.asaasPaymentId && (
                   <p className="break-all font-mono">Cobrança: {order.receipt.asaasPaymentId}</p>
                 )}

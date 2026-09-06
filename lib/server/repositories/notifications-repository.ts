@@ -241,14 +241,24 @@ export async function notifyOrderStatusChange(params: {
   const shortId = params.orderId.slice(0, 8).toUpperCase()
   const statusLabel = ORDER_STATUS_LABEL[params.status] ?? params.status
 
+  // Um pedido expirado é a intenção de compra mais qualificada da loja — a
+  // pessoa escolheu tudo e só não pagou. Dizer só "Expirado" encerra o
+  // assunto; o convite de volta é o que transforma isso em venda (a página
+  // de pedidos tem o botão "Comprar de novo", que repõe o carrinho).
+  const isExpired = params.status === "expired"
+
   const { error } = await db.from("notifications").insert({
     user_id: params.userId,
     type: "order_status",
     entity_type: "order",
     entity_id: params.orderId,
-    link: "/conta/pedidos",
-    title: `Pedido #${shortId} atualizado`,
-    body: statusLabel,
+    link: isExpired ? "/conta/pedidos?status=expired" : "/conta/pedidos",
+    title: isExpired
+      ? `Seu pedido #${shortId} expirou`
+      : `Pedido #${shortId} atualizado`,
+    body: isExpired
+      ? "O prazo do pagamento acabou e os itens voltaram ao estoque. Você pode refazer a compra em um clique."
+      : statusLabel,
   })
 
   if (error) {

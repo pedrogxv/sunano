@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { getRequestUser } from "@/lib/server/auth/current-user"
+import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import { cancelOrder } from "@/lib/server/repositories/orders-repository"
 import { dbErrorResponse } from "@/lib/db-errors"
 
@@ -16,6 +16,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const user = await getRequestUser(request)
   if (!user) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 })
+  }
+
+  // Segunda trava do modo somente-leitura da impersonation (ver proxy.ts):
+  // cancelar devolve estoque e mata a cobrança — escrita, nunca suporte.
+  if (isImpersonating(request)) {
+    return NextResponse.json(
+      {
+        error: "impersonation_read_only",
+        message: "Sessão de acesso é somente leitura — não é possível cancelar um pedido.",
+      },
+      { status: 403 }
+    )
   }
 
   const db = createSupabaseAdminClient()

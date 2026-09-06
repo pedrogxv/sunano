@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { markImageSettled } from "@/lib/image-settled"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
-import { computeCardPriceCents } from "@/lib/store-pricing"
+import { computeCardPriceCents, computeEffectivePrice } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
@@ -122,30 +122,20 @@ export function ProductDetailContent({
     setQty(1)
   }
 
-  // Overrides se acumulam nesta ordem, o último presente vence: preço base →
-  // cor selecionada → cada grupo de variantes selecionado (na ordem em que
-  // os grupos foram cadastrados). Promoção só se aplica quando nenhum desses
-  // overrides foi usado — mesma regra que já existia pra cor, estendida.
-  let baseEffectivePriceCents = activeVariant?.price_cents_override ?? product.price_cents
   const selectedOptions = variantGroups
     .map((g) => g.options.find((o) => o.id === selectedOptionByGroup[g.id]) ?? null)
     .filter((o): o is NonNullable<typeof o> => o !== null)
-  let groupOverrideApplied = false
-  for (const option of selectedOptions) {
-    if (option.price_cents_override != null) {
-      baseEffectivePriceCents = option.price_cents_override
-      groupOverrideApplied = true
-    }
-  }
 
-  const activePromoPriceCents = groupOverrideApplied
-    ? null
-    : activeVariant?.promo_price_cents ?? (activeVariant?.price_cents_override == null ? product.promo_price_cents : null)
-  const hasDiscount = activePromoPriceCents != null && activePromoPriceCents < baseEffectivePriceCents
-  const effectivePriceCents = hasDiscount ? (activePromoPriceCents as number) : baseEffectivePriceCents
-  const discountPercent = hasDiscount
-    ? Math.round((1 - (activePromoPriceCents as number) / baseEffectivePriceCents) * 100)
-    : null
+  // A regra de precedência (base → cor → opções de grupo, promo só quando
+  // nenhum override de grupo venceu) vive em `lib/store-pricing.ts`, e é a
+  // MESMA que o checkout usa para cobrar — foi a divergência entre as duas
+  // implementações que fazia a loja cobrar preço cheio de item em promoção.
+  const {
+    baseCents: baseEffectivePriceCents,
+    effectiveCents: effectivePriceCents,
+    hasDiscount,
+    discountPercent,
+  } = computeEffectivePrice(product, activeVariant, selectedOptions)
   const effectiveStock = activeVariant ? activeVariant.stock : product.stock
 
   const hasUnselectableGroup = variantGroups.some((g) => !selectedOptionByGroup[g.id])

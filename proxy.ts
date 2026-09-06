@@ -3,6 +3,10 @@ import { NextResponse } from "next/server"
 
 import { hasAdminPermission, isWebMaster, type AdminPermissionKey, type AdminProfile } from "@/lib/admin-permissions"
 import { isMfaStepUpRequired, sanitizeNextPath, TRUSTED_DEVICE_COOKIE_NAME, TWO_FACTOR_PATH } from "@/lib/auth-mfa"
+import {
+  IMPERSONATION_ACTIVE_COOKIE,
+  IMPERSONATION_ORIGIN_COOKIE,
+} from "@/lib/impersonation-shared"
 import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { hashVisitor, recordVisit } from "@/lib/server/repositories/visits-repository"
 import { updateSession } from "@/lib/server/supabase/middleware-client"
@@ -308,6 +312,76 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     const redirectResponse = NextResponse.redirect(loginUrl)
     copyCookies(response, redirectResponse)
     return redirectResponse
+  }
+
+  // ── Sessão "logado como" (impersonation) — modo SOMENTE LEITURA ──
+  // Enquanto o WEB MASTER navega como um usuário comum, os cookies sb-* são do
+  // alvo (o proxy nem sabe que é impersonation pela sessão). O sinal é o
+  // cookie `imp-origin`, assinado e emitido só pelo endpoint de start.
+  //
+  // Regras (LGPD Art. 6º, III — minimização; ver lib/server/impersonation.ts):
+  //   • Nenhuma escrita: todo método != GET/HEAD sob /api é recusado, exceto
+  //     o próprio /api/admin/impersonate/stop (precisa encerrar a sessão).
+  //   • O painel /admin fica fora dos limites: durante a sessão o admin só
+  //     observa o site público como o usuário. Exceção: /admin/impersonate/*
+  //     e a página de usuários (para onde o "Encerrar" leva de volta).
+  //   • Expirado (cookie some sozinho no TTL, mas defesa em profundidade):
+  //     força o /stop.
+  const impOriginCookie = request.cookies.get(IMPERSONATION_ORIGIN_COOKIE)?.value
+  if (impOriginCookie) {
+    const activeRaw = request.cookies.get(IMPERSONATION_ACTIVE_COOKIE)?.value
+    let expiresAt = 0
+    try {
+      expiresAt = Number(JSON.parse(activeRaw ?? "{}").expiresAt) || 0
+    } catch {
+      expiresAt = 0
+    }
+    const expired = expiresAt > 0 && Date.now() > expiresAt
+    const isStopRoute = pathname === "/api/admin/impersonate/stop"
+
+    if (expired && !isStopRoute) {
+      // Deixa a navegação seguir só para acionar o stop no client; o restante
+      // é barrado abaixo até lá.
+      const stopUrl = request.nextUrl.clone()
+      stopUrl.pathname = "/admin/users"
+      stopUrl.search = "?impersonation=expired"
+      const redirectResponse = NextResponse.redirect(stopUrl)
+      copyCookies(response, redirectResponse)
+      return redirectResponse
+    }
+
+    if (!isStopRoute) {
+      const method = request.method.toUpperCase()
+      const isWrite = method !== "GET" && method !== "HEAD" && method !== "OPTIONS"
+
+      if (pathname.startsWith("/api") && isWrite) {
+        const apiResponse = NextResponse.json(
+          { error: "impersonation_read_only", message: "Sessão de acesso é somente leitura." },
+          { status: 403 }
+        )
+        copyCookies(response, apiResponse)
+        return apiResponse
+      }
+
+      const adminAllowed =
+        pathname.startsWith("/admin/impersonate") ||
+        pathname === "/admin/users" ||
+        pathname.startsWith("/api/admin/impersonate")
+
+      if (isAdminRoute && !adminAllowed) {
+        if (pathname.startsWith("/api")) {
+          const apiResponse = NextResponse.json({ error: "impersonation_read_only" }, { status: 403 })
+          copyCookies(response, apiResponse)
+          return apiResponse
+        }
+        const usersUrl = request.nextUrl.clone()
+        usersUrl.pathname = "/admin/users"
+        usersUrl.search = ""
+        const redirectResponse = NextResponse.redirect(usersUrl)
+        copyCookies(response, redirectResponse)
+        return redirectResponse
+      }
+    }
   }
 
   // Loja em manutenção, mas há sessão: só o WEB MASTER passa. Qualquer outro

@@ -98,6 +98,12 @@ export type Database = {
           avatar_url: string | null
           full_name: string | null
           cpf: string | null
+          /**
+           * Endereço de COBRANÇA — é o que vai para o customer da Asaas no
+           * cartão. O endereço de ENTREGA vive nas colunas `shipping_*`
+           * abaixo; dividir as mesmas colunas fazia uma compra para
+           * presentear sobrescrever o endereço do titular.
+           */
           phone: string | null
           postal_code: string | null
           street: string | null
@@ -106,6 +112,16 @@ export type Database = {
           neighborhood: string | null
           city: string | null
           state: string | null
+          /** Última ENTREGA usada, só para pré-preencher o checkout. */
+          shipping_recipient: string | null
+          shipping_phone: string | null
+          shipping_postal_code: string | null
+          shipping_street: string | null
+          shipping_number: string | null
+          shipping_complement: string | null
+          shipping_neighborhood: string | null
+          shipping_city: string | null
+          shipping_state: string | null
           theme: string | null
           locale: string | null
           lgpd_consent_at: string | null
@@ -211,6 +227,31 @@ export type Database = {
           acquired_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["user_aura_items"]["Insert"]>
+      }
+      aura_purchases: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          /** FK `on delete set null` — pode ficar null se o item da loja for deletado. */
+          item_id: string | null
+          /** Snapshot: sobrevive à renomeação/exclusão do item. */
+          item_slug: string
+          item_name: string
+          item_kind: string
+          /** Custo de tabela no momento da compra. */
+          list_price: number
+          /** O que saiu da carteira (list_price, ou -10% p/ VIP). */
+          amount_paid: number
+          vip_discount_applied: boolean
+          /** Saldo antes/depois do débito. NULL só em linhas retroativas (backfill). */
+          balance_before: number | null
+          balance_after: number | null
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["aura_purchases"]["Row"], "id" | "created_at" | "vip_discount_applied" | "balance_before" | "balance_after"> &
+          Partial<Pick<Database["public"]["Tables"]["aura_purchases"]["Row"], "id" | "created_at" | "vip_discount_applied" | "balance_before" | "balance_after">>
+        Update: Partial<Database["public"]["Tables"]["aura_purchases"]["Insert"]>
       }
       achievements: {
         Relationships: []
@@ -841,6 +882,8 @@ export type Database = {
           condition: "new" | "used" | "opened"
           condition_notes: string | null
           sale_type: "pre_order" | "ready_stock" | "normal"
+          /** Teto de unidades em pré-venda (null = sem teto). Só vale com sale_type = pre_order. */
+          preorder_limit: number | null
           /** false = produto que não é enviado (digital/serviço) — o checkout não pede endereço de entrega. */
           requires_shipping: boolean
           is_active: boolean
@@ -869,6 +912,7 @@ export type Database = {
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
           sale_type?: "pre_order" | "ready_stock" | "normal"
+          preorder_limit?: number | null
           requires_shipping?: boolean
           is_active?: boolean
           is_sold_out?: boolean
@@ -896,6 +940,7 @@ export type Database = {
           condition?: "new" | "used" | "opened"
           condition_notes?: string | null
           sale_type?: "pre_order" | "ready_stock" | "normal"
+          preorder_limit?: number | null
           requires_shipping?: boolean
           is_active?: boolean
           is_sold_out?: boolean
@@ -1110,6 +1155,33 @@ export type Database = {
           created_at?: string
         }
       }
+      store_stock_reservations: {
+        Row: {
+          id: string
+          reservation_group: string
+          product_id: string
+          variant_id: string | null
+          quantity: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          reservation_group: string
+          product_id: string
+          variant_id?: string | null
+          quantity: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          reservation_group?: string
+          product_id?: string
+          variant_id?: string | null
+          quantity?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       store_restock_alerts: {
         Relationships: []
         Row: {
@@ -1291,8 +1363,6 @@ export type Database = {
           id: string
           stripe_session_id: string | null
           stripe_payment_intent_id: string | null
-          misticpay_transaction_id: string | null
-          misticpay_e2e: string | null
           asaas_payment_id: string | null
           asaas_customer_id: string | null
           asaas_receipt_url: string | null
@@ -1340,6 +1410,7 @@ export type Database = {
           shipping_state: string | null
           /** Não-nulo = endereço de entrega já informado (no checkout ou depois do pagamento). */
           shipping_address_filled_at: string | null
+          requires_shipping_address: boolean
           created_at: string
           updated_at: string
         }
@@ -1347,8 +1418,6 @@ export type Database = {
           id?: string
           stripe_session_id?: string | null
           stripe_payment_intent_id?: string | null
-          misticpay_transaction_id?: string | null
-          misticpay_e2e?: string | null
           asaas_payment_id?: string | null
           asaas_customer_id?: string | null
           asaas_receipt_url?: string | null
@@ -1388,6 +1457,7 @@ export type Database = {
           shipping_city?: string | null
           shipping_state?: string | null
           shipping_address_filled_at?: string | null
+          requires_shipping_address?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1395,8 +1465,6 @@ export type Database = {
           id?: string
           stripe_session_id?: string | null
           stripe_payment_intent_id?: string | null
-          misticpay_transaction_id?: string | null
-          misticpay_e2e?: string | null
           asaas_payment_id?: string | null
           asaas_customer_id?: string | null
           asaas_receipt_url?: string | null
@@ -1436,6 +1504,7 @@ export type Database = {
           shipping_city?: string | null
           shipping_state?: string | null
           shipping_address_filled_at?: string | null
+          requires_shipping_address?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1483,6 +1552,38 @@ export type Database = {
           updated_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["user_tierlist_items"]["Insert"]>
+      }
+      user_tierlist_meta: {
+        Relationships: []
+        Row: {
+          user_id: string
+          note: string | null
+          hearts_count: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          note?: string | null
+          hearts_count?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_tierlist_meta"]["Insert"]>
+      }
+      user_tierlist_hearts: {
+        Relationships: []
+        Row: {
+          owner_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          owner_id: string
+          user_id: string
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_tierlist_hearts"]["Insert"]>
       }
       vip_subscriptions: {
         Relationships: []
@@ -2033,6 +2134,22 @@ export type Database = {
         Args: { p_product_id: string; p_quantity: number }
         Returns: boolean
       }
+      release_orphaned_stock_reservations: {
+        Args: { p_older_than_minutes?: number }
+        Returns: number
+      }
+      reserve_preorder: {
+        Args: {
+          p_product_id: string
+          p_quantity: number
+          p_reservation_group: string
+        }
+        Returns: boolean
+      }
+      preorder_reserved_quantity: {
+        Args: { p_product_id: string }
+        Returns: number
+      }
       increment_variant_stock: {
         Args: { p_variant_id: string; p_quantity: number }
         Returns: boolean
@@ -2104,6 +2221,24 @@ export type Database = {
       get_activity_ranking_by_period: {
         Args: { p_since: string; p_limit?: number }
         Returns: { user_id: string; activity: number }[]
+      }
+      /** Contagem de comentários + "melhor comentário" (mais aura) de cada post, em 1 query — ver 20261010000000_forum_post_top_comment_preview.sql. */
+      get_forum_posts_comment_summary: {
+        Args: { p_post_ids: string[]; p_min_aura?: number }
+        Returns: {
+          post_id: string
+          comment_count: number
+          top_comment_id: string | null
+          top_comment_preview: string | null
+          top_comment_aura: number | null
+          top_comment_user_id: string | null
+          top_comment_author: string | null
+          top_comment_at: string | null
+          /** Primeira imagem/GIF do comentário destaque — `image_urls[1]`. */
+          top_comment_image: string | null
+          /** Total de imagens do comentário destaque (0-2). */
+          top_comment_images: number | null
+        }[]
       }
       expire_vip_accounts: {
         Args: Record<string, never>

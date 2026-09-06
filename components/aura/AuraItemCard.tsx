@@ -7,22 +7,30 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
+import { auraPriceForVip } from "@/lib/aura-pricing"
+import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { PurchaseConfirmDialog } from "@/components/aura/PurchaseConfirmDialog"
 
 interface AuraItemCardProps {
   item: AuraItem
   balance: number
+  /** VIP ativo agora — desconta 10% do preço exibido (a RPC desconta o real). */
+  isVip: boolean
   owned: boolean
   equipped: boolean
   requireLogin: () => boolean
-  onRedeemed: () => void
+  onRedeemed: (cost: number) => void
   onEquipChange: (nextEquippedId: string | null) => void
 }
 
-export function AuraItemCard({ item, balance, owned, equipped, requireLogin, onRedeemed, onEquipChange }: AuraItemCardProps) {
+export function AuraItemCard({ item, balance, isVip, owned, equipped, requireLogin, onRedeemed, onEquipChange }: AuraItemCardProps) {
   const [loading, setLoading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const canAfford = balance >= item.auraCost
+  // Afford tem que olhar o preço COM desconto: antes um VIP com saldo entre o
+  // preço com e sem desconto via "Saldo insuficiente" num item que ele
+  // conseguia comprar.
+  const price = auraPriceForVip(item.auraCost, isVip)
+  const canAfford = balance >= price.finalPrice
 
   async function handleRedeem() {
     setLoading(true)
@@ -34,7 +42,7 @@ export function AuraItemCard({ item, balance, owned, equipped, requireLogin, onR
       }
       toast.success("Item resgatado!", { description: item.name })
       setConfirmOpen(false)
-      onRedeemed()
+      onRedeemed(price.finalPrice)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao resgatar item"
       toast.error("Erro ao resgatar", { description: message })
@@ -99,7 +107,7 @@ export function AuraItemCard({ item, balance, owned, equipped, requireLogin, onR
         )}
 
         <div className="mt-auto space-y-2">
-          <p className="font-display text-lg font-bold text-orange-400">🔥 {item.auraCost.toLocaleString("pt-BR")}</p>
+          <AuraPriceTag listPrice={item.auraCost} isVip={isVip} />
 
           {owned ? (
             <button
@@ -147,7 +155,8 @@ export function AuraItemCard({ item, balance, owned, equipped, requireLogin, onR
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         itemName={item.name}
-        cost={item.auraCost}
+        listPrice={item.auraCost}
+        isVip={isVip}
         balance={balance}
         confirmLabel="Resgatar"
         loading={loading}

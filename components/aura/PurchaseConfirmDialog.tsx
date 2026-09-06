@@ -1,6 +1,8 @@
 "use client"
 
-import { Loader2 } from "lucide-react"
+import { Crown, Loader2 } from "lucide-react"
+
+import { auraPriceForVip } from "@/lib/aura-pricing"
 
 import {
   AlertDialog,
@@ -18,8 +20,10 @@ interface PurchaseConfirmDialogProps {
   onOpenChange: (open: boolean) => void
   /** Nome do item, aparece em destaque na pergunta. */
   itemName: string
-  /** Custo em Aura do item. */
-  cost: number
+  /** Preço de tabela em Aura — sempre o valor cheio, sem desconto. */
+  listPrice: number
+  /** VIP ativo agora: cobra e exibe o preço com 10% de desconto. */
+  isVip: boolean
   /** Saldo atual do usuário — usado para mostrar o saldo restante. */
   balance: number
   /** Texto do botão de confirmação. */
@@ -35,13 +39,15 @@ export function PurchaseConfirmDialog({
   open,
   onOpenChange,
   itemName,
-  cost,
+  listPrice,
+  isVip,
   balance,
   confirmLabel = "Confirmar compra",
   loading = false,
   onConfirm,
 }: PurchaseConfirmDialogProps) {
-  const remaining = balance - cost
+  const price = auraPriceForVip(listPrice, isVip)
+  const remaining = balance - price.finalPrice
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -51,17 +57,43 @@ export function PurchaseConfirmDialog({
           <AlertDialogDescription>
             Você vai gastar{" "}
             <span className="font-semibold text-foreground">
-              {AURA_ICON} {cost.toLocaleString("pt-BR")}
+              {AURA_ICON} {price.finalPrice.toLocaleString("pt-BR")}
             </span>{" "}
             de Aura em <span className="font-semibold text-foreground">{itemName}</span>.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs font-medium">
-          <span className="text-muted-foreground">Saldo após a compra</span>
-          <span className="font-display font-bold tabular-nums text-foreground">
-            {AURA_ICON} {remaining.toLocaleString("pt-BR")}
-          </span>
+        <div className="space-y-px overflow-hidden rounded-lg border border-border bg-muted/40 text-xs font-medium">
+          {/* Só VIP vê o detalhamento — para conta comum "preço − 0" seria
+              uma linha inútil insinuando um desconto que ele não tem. */}
+          {price.discounted && (
+            <>
+              <div className="flex items-center justify-between px-3 py-2">
+                <span className="text-muted-foreground">Preço do item</span>
+                <span className="font-display font-bold tabular-nums text-muted-foreground line-through">
+                  {AURA_ICON} {price.listPrice.toLocaleString("pt-BR")}
+                </span>
+              </div>
+              <div
+                className="flex items-center justify-between px-3 py-2"
+                style={{ color: "var(--vip-accent)" }}
+              >
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <Crown className="size-3.5" strokeWidth={2} />
+                  Desconto VIP ({price.discountPercent}%)
+                </span>
+                <span className="font-display font-bold tabular-nums">
+                  −{AURA_ICON} {price.savings.toLocaleString("pt-BR")}
+                </span>
+              </div>
+            </>
+          )}
+          <div className="flex items-center justify-between border-t border-border/60 px-3 py-2">
+            <span className="text-muted-foreground">Saldo após a compra</span>
+            <span className="font-display font-bold tabular-nums text-foreground">
+              {AURA_ICON} {remaining.toLocaleString("pt-BR")}
+            </span>
+          </div>
         </div>
 
         <AlertDialogFooter>

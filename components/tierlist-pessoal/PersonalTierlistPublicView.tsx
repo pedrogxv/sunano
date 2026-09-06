@@ -1,67 +1,100 @@
-import Image from "next/image"
-import Link from "next/link"
-
 import { cn } from "@/lib/utils"
-import type { TierlistItem, TierlistTier } from "@/lib/server/repositories/user-tierlist-repository"
+import { CARD_SURFACE } from "@/lib/ui-styles"
+import { PERSONAL_TIERS, PERSONAL_TIER_THEMES, groupByTier } from "@/lib/personal-tierlist-theme"
+import { PersonalTierlistCard } from "./PersonalTierlistCard"
+import type { TierlistItem } from "@/lib/personal-tierlist"
 
-const TIERS: TierlistTier[] = ["S", "A", "B", "C", "D"]
-
-const TIER_STYLES: Record<TierlistTier, { label: string; bg: string; text: string }> = {
-  S: { label: "S", bg: "bg-[var(--vip-accent)]", text: "text-white" },
-  A: { label: "A", bg: "bg-emerald-500", text: "text-white" },
-  B: { label: "B", bg: "bg-sky-500", text: "text-white" },
-  C: { label: "C", bg: "bg-amber-500", text: "text-white" },
-  D: { label: "D", bg: "bg-muted-foreground/70", text: "text-white" },
-}
-
-/** Grade de tiers read-only — reaproveitada tanto na página dedicada quanto no card resumido do perfil. */
-export function PersonalTierlistPublicView({ items }: { items: TierlistItem[] }) {
+/**
+ * Board read-only da tierlist pessoal, no mesmo idioma visual da tierlist
+ * oficial (`components/tierlist/TierlistGrid.tsx`): coluna de tier com
+ * gradiente + legenda, moldura única com glow radial, e cards que sobem e
+ * abrem tooltip no hover (ver `PersonalTierlistCard`).
+ *
+ * `variant="preview"` é a versão espremida usada dentro do card do perfil:
+ * mesma linguagem e mesmo hover, células menores e sem os nomes, para caber
+ * num bloco curto sem virar uma segunda página.
+ */
+export function PersonalTierlistPublicView({
+  items,
+  variant = "full",
+  maxPerTier,
+}: {
+  items: TierlistItem[]
+  variant?: "full" | "preview"
+  /** Corta cada linha em N itens e mostra "+N" no fim — só usado no preview. */
+  maxPerTier?: number
+}) {
   if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">Ainda não há itens nesta tierlist.</p>
+    return (
+      <div className={cn("rounded-xl border p-8 text-center", CARD_SURFACE)}>
+        <p className="text-sm text-muted-foreground">Ainda não há itens nesta tierlist.</p>
+      </div>
+    )
   }
 
-  const byTier = new Map<TierlistTier, TierlistItem[]>()
-  for (const tier of TIERS) byTier.set(tier, [])
-  for (const item of items) byTier.get(item.tier)?.push(item)
+  const isPreview = variant === "preview"
+  const byTier = groupByTier(items)
+  const visibleTiers = PERSONAL_TIERS.filter((tier) => (byTier.get(tier)?.length ?? 0) > 0)
 
   return (
-    <div className="flex flex-col gap-2 overflow-x-auto">
-      {TIERS.map((tier) => {
-        const rowItems = byTier.get(tier) ?? []
-        if (rowItems.length === 0) return null
-        const style = TIER_STYLES[tier]
-        return (
-          <div key={tier} className="flex min-w-fit gap-2 rounded-lg border border-border/60 bg-secondary/30 p-2">
-            <div
-              className={cn(
-                "flex size-14 shrink-0 items-center justify-center rounded-md text-xl font-bold",
-                style.bg,
-                style.text
-              )}
-            >
-              {style.label}
-            </div>
-            <div className="flex flex-1 flex-wrap gap-2">
-              {rowItems.map((item) => (
-                <Link
-                  key={item.peripheralId}
-                  href={`/perifericos/${item.peripheralId}`}
-                  title={item.peripheral.name}
-                  className="group relative size-14 shrink-0 overflow-hidden rounded-md border border-border/60 bg-[var(--card-image-bg)] transition-transform hover:-translate-y-0.5"
-                >
-                  {item.peripheral.imageUrl ? (
-                    <Image src={item.peripheral.imageUrl} alt={item.peripheral.name} fill sizes="56px" className="object-contain p-1" />
-                  ) : (
-                    <div className="flex size-full items-center justify-center text-[10px] text-muted-foreground">
-                      {item.peripheral.name.slice(0, 2)}
+    // `overflow-visible`: o hover cresce o card pra fora da linha — com overflow
+    // escondido ele era cortado pela moldura, como acontecia antes.
+    <div className={cn("relative overflow-visible rounded-xl border shadow-lg", CARD_SURFACE)}>
+      {/* Mesmo glow radial da tierlist oficial — dá profundidade sem competir com os cards. */}
+      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_top,_rgba(124,58,237,0.07),_transparent_60%)]" />
+
+      <div className="divide-y divide-border">
+        {visibleTiers.map((tier, index) => {
+          const rowItems = byTier.get(tier) ?? []
+          const shown = maxPerTier ? rowItems.slice(0, maxPerTier) : rowItems
+          const overflow = rowItems.length - shown.length
+          const theme = PERSONAL_TIER_THEMES[tier]
+
+          return (
+            <div key={tier} className="flex items-stretch">
+              {/* Coluna do tier: gradiente vertical + legenda, como no board oficial.
+                  Os cantos arredondam nas pontas para acompanhar a moldura. */}
+              <div
+                className={cn(
+                  "flex shrink-0 flex-col items-center justify-center bg-gradient-to-b",
+                  theme.accent,
+                  isPreview ? "w-12 px-1" : "w-16 px-2 sm:w-20",
+                  index === 0 && "rounded-tl-xl",
+                  index === visibleTiers.length - 1 && "rounded-bl-xl"
+                )}
+              >
+                <span className={cn("font-black leading-none", theme.textColor, isPreview ? "text-lg" : "text-2xl")}>
+                  {tier}
+                </span>
+                {!isPreview && (
+                  <span className={cn("mt-1 text-[10px] font-medium opacity-75", theme.textColor)}>
+                    {theme.subtitle}
+                  </span>
+                )}
+              </div>
+
+              <div className={cn("min-w-0 flex-1 bg-muted/20", isPreview ? "p-1.5" : "p-2")}>
+                <div className={cn("flex flex-wrap", isPreview ? "gap-1.5" : "gap-2")}>
+                  {shown.map((item) => (
+                    <PersonalTierlistCard
+                      key={item.peripheralId}
+                      item={item}
+                      tier={tier}
+                      variant={variant}
+                    />
+                  ))}
+
+                  {overflow > 0 && (
+                    <div className="flex size-11 shrink-0 items-center justify-center rounded-lg border border-dashed border-border/60 text-[11px] font-semibold text-muted-foreground">
+                      +{overflow}
                     </div>
                   )}
-                </Link>
-              ))}
+                </div>
+              </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }

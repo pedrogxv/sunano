@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getRequestUser } from "@/lib/server/auth/current-user"
+import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { setOrderShippingAddress } from "@/lib/server/repositories/orders-repository"
 import { shippingAddressSchema } from "@/lib/server/validation/shipping-address"
@@ -24,6 +24,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const user = await getRequestUser(request)
   if (!user) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 })
+  }
+
+  // Segunda trava do modo somente-leitura da impersonation (ver proxy.ts):
+  // mudar para onde o pacote de outra pessoa vai é escrita sensível.
+  if (isImpersonating(request)) {
+    return NextResponse.json(
+      {
+        error: "impersonation_read_only",
+        message: "Sessão de acesso é somente leitura — não é possível alterar o endereço de entrega.",
+      },
+      { status: 403 }
+    )
   }
 
   // Limite por usuário (não por IP): impede enumerar ids de pedido chutando
@@ -67,7 +79,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
 
-  // Guarda como último endereço usado, para pré-preencher a próxima compra.
+  // Guarda como última ENTREGA usada, para pré-preencher a próxima compra —
+  // nas colunas `shipping_*`, NUNCA nas de cobrança. Entrega e cobrança
+  // dividiam as mesmas colunas, então comprar para presentear sobrescrevia o
+  // endereço de cobrança do titular com o do presenteado, e ele voltava para
+  // a Asaas como endereço do dono do cartão na compra seguinte. O checkout já
+  // faz essa separação (ver app/api/store/checkout/route.ts); esta rota é o
+  // outro caminho que chega no mesmo perfil e precisa da mesma regra.
+  //
   // Falha aqui não invalida o endereço já gravado no pedido (que é o dado
   // que importa para despachar), então não derruba a resposta.
   try {
@@ -75,14 +94,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     await createSupabaseAdminClient()
       .from("user_profiles")
       .update({
-        phone: parsed.data.shippingPhone,
-        postal_code: parsed.data.shippingPostalCode,
-        street: parsed.data.shippingStreet,
-        number: parsed.data.shippingNumber,
-        complement: parsed.data.shippingComplement ?? null,
-        neighborhood: parsed.data.shippingNeighborhood,
-        city: parsed.data.shippingCity,
-        state: parsed.data.shippingState,
+        shipping_recipient: parsed.data.shippingRecipient,
+        shipping_phone: parsed.data.shippingPhone,
+        shipping_postal_code: parsed.data.shippingPostalCode,
+        shipping_street: parsed.data.shippingStreet,
+        shipping_number: parsed.data.shippingNumber,
+        shipping_complement: parsed.data.shippingComplement ?? null,
+        shipping_neighborhood: parsed.data.shippingNeighborhood,
+        shipping_city: parsed.data.shippingCity,
+        shipping_state: parsed.data.shippingState,
       })
       .eq("id", user.id)
   } catch (err) {

@@ -11,6 +11,8 @@ export type UserOrderItem = {
   variant_label?: string | null
   variant_options?: { group: string; label: string }[] | null
   image?: string | null
+  /** Snapshot de `sale_type` na hora da compra (pedidos antigos não têm). */
+  sale_type?: "pre_order" | "ready_stock" | "normal" | null
 }
 
 export type UserOrder = {
@@ -20,7 +22,6 @@ export type UserOrder = {
   items: UserOrderItem[]
   created_at: string
   payment_method: string | null
-  misticpay_e2e: string | null
   asaas_payment_id: string | null
   asaas_receipt_url: string | null
   pix_copy_paste: string | null
@@ -43,12 +44,32 @@ export type UserOrder = {
     state: string
     filled_at: string
   } | null
+  /**
+   * false = pedido de serviço/item digital: não há o que despachar, e a
+   * ausência de endereço não é pendência nenhuma.
+   */
+  requires_shipping_address: boolean
+}
+
+/**
+ * Pedido pago, de item físico, ainda sem endereço — está parado esperando o
+ * cliente. É a única condição que gera aviso; um pedido `pending` sem
+ * endereço ainda nem foi pago, e um serviço nunca precisa de um.
+ */
+export function isMissingShippingAddress(order: UserOrder): boolean {
+  return (
+    order.requires_shipping_address &&
+    !order.shipping_address &&
+    (order.status === "paid" || order.status === "awaiting_shipping_info")
+  )
 }
 
 export type UserOrderFilters = {
   status?: UserOrder["status"]
   dateFrom?: string
   dateTo?: string
+  /** Só pedidos pagos de item físico que ainda estão sem endereço. */
+  missingShipping?: boolean
 }
 
 export type UseUserOrdersOptions = {
@@ -94,6 +115,7 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
   const status = options?.filters?.status
   const dateFrom = options?.filters?.dateFrom
   const dateTo = options?.filters?.dateTo
+  const missingShipping = options?.filters?.missingShipping
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams()
@@ -102,8 +124,9 @@ export function useUserOrders(options?: UseUserOrdersOptions): UseUserOrdersResu
     if (status) params.set("status", status)
     if (dateFrom) params.set("dateFrom", dateFrom)
     if (dateTo) params.set("dateTo", dateTo)
+    if (missingShipping) params.set("missingShipping", "1")
     return params.toString()
-  }, [page, pageSize, status, dateFrom, dateTo])
+  }, [page, pageSize, status, dateFrom, dateTo, missingShipping])
 
   useEffect(() => {
     if (!user) return

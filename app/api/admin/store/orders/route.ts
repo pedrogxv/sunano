@@ -31,11 +31,12 @@ export async function GET(request: NextRequest) {
   const userId = url.searchParams.get("userId") ?? undefined
   const dateFrom = url.searchParams.get("dateFrom") ?? undefined
   const dateTo = url.searchParams.get("dateTo") ?? undefined
+  const missingShipping = url.searchParams.get("missingShipping") === "1"
   const page = Number(url.searchParams.get("page") ?? "1") || 1
   const pageSize = Number(url.searchParams.get("pageSize") ?? "20") || 20
 
   const [{ orders, total }, counts] = await Promise.all([
-    listOrdersForAdmin({ status, productId, userQuery, userId, dateFrom, dateTo, page, pageSize }),
+    listOrdersForAdmin({ status, productId, userQuery, userId, dateFrom, dateTo, missingShipping, page, pageSize }),
     countOrdersByStatus(),
   ])
   return NextResponse.json({ ok: true, orders, total, page, pageSize, counts })

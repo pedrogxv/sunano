@@ -6,15 +6,22 @@ import { toast } from "sonner"
 import {
   CalendarIcon,
   ChevronsUpDown,
+  Copy,
+  MapPin,
   Package,
+  PackageCheck,
   QrCode,
+  Search,
   ShoppingBag,
+  ShoppingCart,
+  Sparkles,
   Truck,
   X,
   XCircle,
 } from "lucide-react"
 import type { DateRange } from "react-day-picker"
 
+import { useCart } from "@/components/providers/cart-context"
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
@@ -46,11 +53,18 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
-import { useUserOrders, pendingPaymentHref, type UserOrder } from "@/lib/hooks/use-user-orders"
+import {
+  useUserOrders,
+  isMissingShippingAddress,
+  pendingPaymentHref,
+  type UserOrder,
+} from "@/lib/hooks/use-user-orders"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { cn } from "@/lib/utils"
+import { Input } from "@/components/ui/input"
 import { OrderShippingAddressDialog } from "@/components/store/OrderShippingAddressDialog"
+import { OrderTimeline } from "@/components/store/OrderTimeline"
 import { formatShippingAddressLine } from "@/components/store/ShippingAddressFields"
 
 const STATUS_LABEL: Record<UserOrder["status"], string> = {
@@ -290,9 +304,20 @@ function CancelOrderButton({
  */
 const SHIPPING_EDITABLE: UserOrder["status"][] = ["pending", "paid", "awaiting_shipping_info"]
 
-/** Pago e sem endereço = o pedido está parado esperando o cliente. */
-function needsShippingAddress(order: UserOrder): boolean {
-  return !order.shipping_address && (order.status === "paid" || order.status === "awaiting_shipping_info")
+/**
+ * Cor de destaque do card por status. O pedido é o objeto mais concreto que
+ * a pessoa tem na conta — a borda colorida deixa o estado legível antes de
+ * ler qualquer texto, e é o mesmo vocabulário de cor dos badges.
+ */
+const STATUS_ACCENT: Record<UserOrder["status"], string> = {
+  pending: "from-amber-500/60",
+  paid: "from-emerald-500/60",
+  awaiting_shipping_info: "from-blue-500/60",
+  shipped: "from-violet-500/60",
+  delivered: "from-teal-500/60",
+  cancelled: "from-muted-foreground/40",
+  refunded: "from-sky-500/60",
+  expired: "from-orange-500/60",
 }
 
 function OrderCard({
@@ -308,57 +333,200 @@ function OrderCard({
 }) {
   const itemCount = order.items.reduce((sum, i) => sum + (i.quantity ?? 1), 0)
   const summary = order.items.map((i) => i.name).filter(Boolean).join(", ")
+  const missingAddress = isMissingShippingAddress(order)
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-start gap-3">
-        <OrderThumbs order={order} />
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-foreground">
-            <span className="font-mono text-xs text-muted-foreground">#{orderNumber(order.id)}</span>{" "}
-            {summary || "Pedido"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {itemCount} {itemCount === 1 ? "item" : "itens"} · {formatDate(order.created_at)}
-          </p>
-          <button
-            type="button"
-            onClick={() => onViewDetails(order)}
-            className="mt-1 text-xs font-medium text-emerald-400 hover:underline"
-          >
-            Ver mais
-          </button>
+    <div
+      className={cn(
+        "group relative overflow-hidden rounded-xl border bg-muted/20 transition-colors",
+        missingAddress ? "border-amber-500/40" : "border-border hover:border-border/80"
+      )}
+    >
+      {/* Faixa de status: leitura de estado antes de qualquer texto. */}
+      <span
+        aria-hidden
+        className={cn(
+          "absolute inset-y-0 left-0 w-1 bg-gradient-to-b to-transparent",
+          STATUS_ACCENT[order.status]
+        )}
+      />
+
+      <button
+        type="button"
+        onClick={() => onViewDetails(order)}
+        className="flex w-full flex-col gap-3 p-4 pl-5 text-left sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div className="flex min-w-0 items-start gap-3">
+          <OrderThumbs order={order} />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">
+              <span className="font-mono text-xs text-muted-foreground">#{orderNumber(order.id)}</span>{" "}
+              {summary || "Pedido"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {itemCount} {itemCount === 1 ? "item" : "itens"} · {formatDate(order.created_at)}
+            </p>
+            {order.tracking_code && (
+              <p className="mt-0.5 truncate text-[11px] text-violet-300">
+                <Truck className="mr-1 inline size-3" />
+                {order.carrier ? `${order.carrier} · ` : ""}
+                <span className="font-mono">{order.tracking_code}</span>
+              </p>
+            )}
+          </div>
         </div>
+
+        <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1.5">
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold",
+              STATUS_STYLE[order.status]
+            )}
+          >
+            {STATUS_LABEL[order.status]}
+          </span>
+          <span className="text-sm font-bold text-foreground">{formatBRL(order.total_cents)}</span>
+        </div>
+      </button>
+
+      {/* Trilho de progresso — some nos estados sem jornada (cancelado etc.). */}
+      <div className="px-4 pb-3 pl-5">
+        <OrderTimeline order={order} />
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 sm:flex-col sm:items-end sm:gap-1.5">
-        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_STYLE[order.status])}>
-          {STATUS_LABEL[order.status]}
-        </span>
-        <span className="text-sm font-bold text-foreground">{formatBRL(order.total_cents)}</span>
-        {order.status === "pending" && (
-          <>
-            <Link
-              href={pendingPaymentHref(order)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
-            >
-              <QrCode className="size-3.5" />
-              {order.payment_method === "credit_card" ? "Continuar pagamento" : "Pagar com PIX"}
-            </Link>
-            <CancelOrderButton order={order} onCancelled={onCancelled} />
-          </>
-        )}
-        {needsShippingAddress(order) && (
-          <button
+      {/* Aviso de endereço faltando: dentro do card do pedido em questão, não
+          num alerta genérico no topo — o cliente precisa saber QUAL pedido
+          está parado, não que "algum" está. */}
+      {missingAddress && (
+        <div className="flex flex-col gap-2 border-t border-amber-500/25 bg-amber-500/10 px-4 py-2.5 pl-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-start gap-1.5 text-[11px] text-amber-300">
+            <MapPin className="mt-px size-3.5 shrink-0" />
+            <span>
+              Pagamento confirmado, mas falta o endereço de entrega — este pedido não é
+              despachado enquanto isso.
+            </span>
+          </p>
+          <Button
             type="button"
+            size="sm"
             onClick={() => onEditShipping(order)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-500/40 bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-300 transition-colors hover:bg-blue-500/20"
+            className="h-7 shrink-0 gap-1.5 bg-amber-500 text-xs font-semibold text-black hover:bg-amber-400"
           >
             <Truck className="size-3.5" />
             Informar endereço
-          </button>
-        )}
-      </div>
+          </Button>
+        </div>
+      )}
+
+      {/* Ações de pagamento pendente */}
+      {order.status === "pending" && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-2.5 pl-5">
+          <Link
+            href={pendingPaymentHref(order)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
+          >
+            <QrCode className="size-3.5" />
+            {order.payment_method === "credit_card" ? "Continuar pagamento" : "Pagar com PIX"}
+          </Link>
+          <CancelOrderButton order={order} onCancelled={onCancelled} />
+        </div>
+      )}
+
+      {/* Recompra de pedido que não foi pago. Um PIX vencido é a intenção de
+          compra mais qualificada que existe — a pessoa escolheu tudo e só não
+          pagou — e até aqui não havia caminho de volta. */}
+      {(order.status === "expired" || order.status === "cancelled") && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-2.5 pl-5">
+          <ReorderButton order={order} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Recompõe o carrinho com os itens deste pedido e leva ao checkout.
+ *
+ * Não recria o pedido: preço e disponibilidade podem ter mudado, e o
+ * checkout (com a revalidação de carrinho) é quem sabe disso. O que se
+ * recupera aqui é o trabalho de escolher, que é o que trava a recompra.
+ */
+function ReorderButton({ order }: { order: UserOrder }) {
+  const { add, setOpen } = useCart()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleReorder() {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/store/orders/${order.id}/reorder`)
+      const data = (await res.json()) as {
+        items?: {
+          productId: string
+          variantId: string | null
+          quantity: number
+          slug: string
+          name: string
+          priceCents: number
+          image: string | null
+          stock: number | null
+          available: boolean
+        }[]
+        error?: string
+      }
+      if (!res.ok || !data.items) {
+        throw new Error(data.error ?? "Não foi possível recuperar os itens.")
+      }
+
+      const available = data.items.filter((i) => i.available)
+      if (available.length === 0) {
+        setError("Os itens deste pedido não estão mais disponíveis.")
+        return
+      }
+
+      for (const item of available) {
+        // `add` soma uma unidade por chamada — repete para chegar à
+        // quantidade original, respeitando o teto de estoque do carrinho.
+        for (let n = 0; n < item.quantity; n++) {
+          add({
+            productId: item.productId,
+            variantId: item.variantId,
+            variantLabel: null,
+            variantColor: null,
+            variantIcon: null,
+            variantOptions: [],
+            slug: item.slug,
+            name: item.name,
+            priceCents: item.priceCents,
+            image: item.image,
+            stock: item.stock,
+            type: "store",
+            condition: "new",
+            sale_type: "normal",
+          })
+        }
+      }
+      setOpen(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Não foi possível recuperar os itens.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={handleReorder}
+        disabled={loading}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20 disabled:opacity-60"
+      >
+        <ShoppingCart className="size-3.5" />
+        {loading ? "Recuperando..." : "Comprar de novo"}
+      </button>
+      {error && <span className="text-[11px] text-red-400">{error}</span>}
     </div>
   )
 }
@@ -375,7 +543,7 @@ function OrderDetailsDialog({
   onEditShipping: (order: UserOrder) => void
 }) {
   const receipt =
-    order?.status === "paid" ? order.misticpay_e2e ?? order.asaas_payment_id ?? null : null
+    order?.status === "paid" ? order.asaas_payment_id ?? null : null
   const receiptUrl = order?.status === "paid" ? order.asaas_receipt_url : null
   const showPix =
     order?.status === "pending" &&
@@ -393,11 +561,14 @@ function OrderDetailsDialog({
               <DialogDescription>{formatDateTime(order.created_at)}</DialogDescription>
             </DialogHeader>
 
-            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_STYLE[order.status])}>
-                {STATUS_LABEL[order.status]}
-              </span>
-              <span className="text-sm font-bold text-foreground">{formatBRL(order.total_cents)}</span>
+            <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
+              <div className="flex items-center justify-between">
+                <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_STYLE[order.status])}>
+                  {STATUS_LABEL[order.status]}
+                </span>
+                <span className="text-sm font-bold text-foreground">{formatBRL(order.total_cents)}</span>
+              </div>
+              <OrderTimeline order={order} />
             </div>
 
             <div className="space-y-2">
@@ -447,7 +618,11 @@ function OrderDetailsDialog({
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Endereço de entrega
               </p>
-              {order.shipping_address ? (
+              {!order.requires_shipping_address ? (
+                <p className="text-xs text-muted-foreground">
+                  Este pedido não precisa de endereço — nada será enviado pelos Correios.
+                </p>
+              ) : order.shipping_address ? (
                 <>
                   <p className="text-sm text-foreground">{order.shipping_address.recipient}</p>
                   <p className="text-xs text-muted-foreground">
@@ -459,7 +634,7 @@ function OrderDetailsDialog({
                   Ainda não informado — o pedido não é despachado até você preencher.
                 </p>
               )}
-              {SHIPPING_EDITABLE.includes(order.status) && (
+              {order.requires_shipping_address && SHIPPING_EDITABLE.includes(order.status) && (
                 <button
                   type="button"
                   onClick={() => onEditShipping(order)}
@@ -469,15 +644,46 @@ function OrderDetailsDialog({
                   {order.shipping_address ? "Alterar endereço" : "Informar endereço"}
                 </button>
               )}
+              {/* Depois do despacho a etiqueta já saiu: o servidor recusa a
+                  alteração, então em vez de um botão que só devolve erro,
+                  apontamos para onde a mudança ainda é possível. */}
+              {order.requires_shipping_address &&
+                !SHIPPING_EDITABLE.includes(order.status) &&
+                (order.status === "shipped" || order.status === "delivered") && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Pedido já despachado — o endereço não pode mais ser alterado por aqui.{" "}
+                    <Link href="/suporte" className="font-medium text-emerald-400 hover:underline">
+                      Fale com o suporte
+                    </Link>
+                    .
+                  </p>
+                )}
             </div>
 
             {order.tracking_code && (
               <div className="space-y-1 border-t border-border/60 pt-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rastreio</p>
-                <p className="text-sm text-foreground">
-                  {order.carrier ? `${order.carrier} · ` : ""}
-                  <span className="font-mono">{order.tracking_code}</span>
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="min-w-0 flex-1 truncate text-sm text-foreground">
+                    {order.carrier ? `${order.carrier} · ` : ""}
+                    <span className="font-mono">{order.tracking_code}</span>
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 shrink-0 gap-1.5 text-xs"
+                    onClick={() => {
+                      navigator.clipboard
+                        .writeText(order.tracking_code ?? "")
+                        .then(() => toast.success("Código de rastreio copiado."))
+                        .catch(() => toast.error("Não foi possível copiar."))
+                    }}
+                  >
+                    <Copy className="size-3" />
+                    Copiar
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -563,6 +769,10 @@ export default function PedidosPage() {
   const [statusFilter, setStatusFilter] = useState<UserOrder["status"] | "all">("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  // Fila "falta endereço" — resolvida no banco (não filtrando a página já
+  // carregada), senão o contador e a paginação passam a mentir.
+  const [missingOnly, setMissingOnly] = useState(false)
+  const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
 
   const { orders, total, hasMore, loading: ordersLoading, refetch } = useUserOrders({
@@ -572,14 +782,29 @@ export default function PedidosPage() {
       status: statusFilter === "all" ? undefined : statusFilter,
       dateFrom: dateFrom ? fromDateInputValue(dateFrom).toISOString() : undefined,
       dateTo: dateTo ? new Date(`${dateTo}T23:59:59.999`).toISOString() : undefined,
+      missingShipping: missingOnly || undefined,
     },
   })
   const [selectedOrder, setSelectedOrder] = useState<UserOrder | null>(null)
   // Pedido cujo endereço de entrega está sendo informado/corrigido.
   const [shippingOrder, setShippingOrder] = useState<UserOrder | null>(null)
 
+  // Busca por número do pedido ou nome de produto. Deliberadamente local, só
+  // sobre a página atual: o servidor não indexa `items` por nome e uma busca
+  // que varre jsonb em toda a tabela sairia cara para um filtro de conforto.
+  const term = search.trim().toLowerCase()
+  const visibleOrders = term
+    ? orders.filter(
+        (order) =>
+          orderNumber(order.id).toLowerCase().includes(term) ||
+          order.items.some((item) => (item.name ?? "").toLowerCase().includes(term))
+      )
+    : orders
+
+  const missingCount = orders.filter(isMissingShippingAddress).length
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-  const hasActiveFilters = statusFilter !== "all" || dateFrom !== "" || dateTo !== ""
+  const hasActiveFilters =
+    statusFilter !== "all" || dateFrom !== "" || dateTo !== "" || missingOnly || term !== ""
 
   // Qualquer mudança de filtro volta pra primeira página — aplicado no
   // próprio handler (não em efeito) pra não disparar uma renderização extra.
@@ -598,6 +823,13 @@ export default function PedidosPage() {
     setStatusFilter("all")
     setDateFrom("")
     setDateTo("")
+    setMissingOnly(false)
+    setSearch("")
+    setPage(1)
+  }
+
+  function toggleMissingOnly() {
+    setMissingOnly((v) => !v)
     setPage(1)
   }
 
@@ -614,9 +846,70 @@ export default function PedidosPage() {
       <AccountPageHeader profile={profile} />
 
       <div className="mx-auto max-w-4xl px-2 py-8 sm:px-4 md:px-6">
-        <div className="mb-6 space-y-1">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">Meus Pedidos</h2>
-          <p className="text-xs text-muted-foreground">Histórico de compras na Loja.</p>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">Meus Pedidos</h2>
+            <p className="text-xs text-muted-foreground">
+              {total > 0
+                ? `${total} pedido${total === 1 ? "" : "s"} na Loja.`
+                : "Histórico de compras na Loja."}
+            </p>
+          </div>
+          <Link
+            href="/loja"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
+          >
+            <Sparkles className="size-3.5" />
+            Ver a loja
+          </Link>
+        </div>
+
+        {/* Chamada única para as pendências de endereço da página: o card de
+            cada pedido continua trazendo o aviso específico, mas quem tem
+            vários pedidos precisa ver de uma vez que há algo parado. */}
+        {missingCount > 0 && !missingOnly && (
+          <button
+            type="button"
+            onClick={toggleMissingOnly}
+            className="mb-4 flex w-full items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-left transition-colors hover:bg-amber-500/15"
+          >
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-amber-400">
+              <MapPin className="size-4" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-amber-300">
+                {missingCount === 1
+                  ? "1 pedido pago está esperando seu endereço"
+                  : `${missingCount} pedidos pagos estão esperando seu endereço`}
+              </span>
+              <span className="block text-[11px] text-muted-foreground">
+                Nada é despachado enquanto o endereço não for informado. Toque para ver só esses.
+              </span>
+            </span>
+            <PackageCheck className="size-4 shrink-0 text-amber-400" />
+          </button>
+        )}
+
+        <div className="mb-3">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar por número do pedido ou produto…"
+              className="h-9 pl-9 text-sm"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Limpar busca"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -635,6 +928,25 @@ export default function PedidosPage() {
 
           <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={applyDateRange} />
 
+          <Button
+            type="button"
+            size="sm"
+            variant={missingOnly ? "default" : "outline"}
+            onClick={toggleMissingOnly}
+            className={cn(
+              "gap-1.5 text-xs",
+              missingOnly && "bg-amber-500 text-black hover:bg-amber-400"
+            )}
+          >
+            <MapPin className="size-3.5" />
+            Falta endereço
+            {missingCount > 0 && !missingOnly && (
+              <span className="rounded-full bg-amber-500/20 px-1.5 text-[10px] font-bold text-amber-400">
+                {missingCount}
+              </span>
+            )}
+          </Button>
+
           {hasActiveFilters && (
             <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
               <X className="size-3.5" />
@@ -649,12 +961,16 @@ export default function PedidosPage() {
               <OrderCardSkeleton key={i} />
             ))}
           </div>
-        ) : orders.length === 0 ? (
+        ) : visibleOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
             <ShoppingBag className="size-8 text-muted-foreground" />
             {hasActiveFilters ? (
               <>
-                <p className="text-sm text-muted-foreground">Nenhum pedido encontrado com esses filtros.</p>
+                <p className="text-sm text-muted-foreground">
+                  {missingOnly && orders.length === 0
+                    ? "Nenhum pedido esperando endereço — está tudo em dia."
+                    : "Nenhum pedido encontrado com esses filtros."}
+                </p>
                 <Button variant="ghost" size="sm" className="gap-1.5 text-emerald-400" onClick={clearFilters}>
                   <X className="size-3.5" />
                   Limpar filtros
@@ -672,7 +988,7 @@ export default function PedidosPage() {
         ) : (
           <>
             <div className="space-y-3">
-              {orders.map((order) => (
+              {visibleOrders.map((order) => (
                 <OrderCard
                   key={order.id}
                   order={order}

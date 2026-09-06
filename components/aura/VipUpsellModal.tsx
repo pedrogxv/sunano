@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Crown, Check, ChevronDown, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { ArrowRight, Crown, Check, ChevronDown, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -344,9 +345,24 @@ export function VipUpsellModal({ open, onOpenChange, auraCost, onPurchaseWithAur
               )}
             </button>
           ) : (
-            <p className="rounded-lg border border-dashed px-4 py-2.5 text-center text-xs text-muted-foreground">
-              Assinatura paga temporariamente indisponível.
-            </p>
+            // Assinatura paga desligada: sem uma saída aqui o modal vira beco
+            // sem saída para quem abriu por um CTA de "Seja VIP". Ativar com
+            // Aura continua valendo (não envolve cobrança), então mandamos
+            // para a Central — onde a `VipMonthCard` faz o resgate.
+            <div className="space-y-2 rounded-lg border border-dashed px-4 py-3 text-center">
+              <p className="text-xs text-muted-foreground">
+                A assinatura paga está temporariamente indisponível — dá para ativar o VIP resgatando Aura.
+              </p>
+              <Link
+                href="/aura"
+                onClick={() => onOpenChange(false)}
+                className="inline-flex items-center gap-1.5 text-xs font-bold transition-opacity hover:opacity-80"
+                style={{ color: "var(--vip-accent)" }}
+              >
+                Ativar com Aura
+                <ArrowRight className="size-3.5" />
+              </Link>
+            </div>
           )}
 
           {onPurchaseWithAura && auraCost != null && (

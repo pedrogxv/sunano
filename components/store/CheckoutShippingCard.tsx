@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, MapPin, Pencil, Truck, X } from "lucide-react"
+import { Check, MapPin, PackageCheck, Pencil, Truck, X } from "lucide-react"
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -20,14 +20,19 @@ import {
  * endereços diferentes, e misturar os dois num card só faria o cliente
  * corrigir um achando que está corrigindo o outro.
  *
- * Enquanto o preenchimento é opcional (`required` false), o card oferece
- * "Informar depois" — o pedido é criado sem endereço e a pessoa completa em
- * "Meus Pedidos" após o pagamento.
+ * O preenchimento é SEMPRE opcional: pedir CEP antes de pagar é o que mais
+ * derruba conversão, e o dado só é necessário na hora de despachar. Quem
+ * escolher "Informar depois" fecha o pedido normalmente e completa em "Meus
+ * Pedidos" — o card deixa isso explícito em vez de dar a entender que a
+ * compra está incompleta.
+ *
+ * O card só é montado quando o carrinho tem item físico (`requires_shipping`
+ * dos produtos, decidido no servidor) — um carrinho só de serviços não vê
+ * nada disso.
  */
 export function CheckoutShippingCard({
   form,
   onChange,
-  required,
   editing,
   onEditingChange,
   skipped,
@@ -35,8 +40,6 @@ export function CheckoutShippingCard({
 }: {
   form: ShippingForm
   onChange: (next: ShippingForm) => void
-  /** SHIPPING_ADDRESS_REQUIRED no servidor — some o botão "Informar depois". */
-  required: boolean
   editing: boolean
   onEditingChange: (editing: boolean) => void
   skipped: boolean
@@ -75,7 +78,7 @@ export function CheckoutShippingCard({
           <Truck className="size-4 text-emerald-400" />
           <h2 className="text-sm font-bold text-foreground">
             Endereço de entrega
-            {!required && <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(opcional)</span>}
+            <span className="ml-1.5 text-[10px] font-normal text-muted-foreground">(pode ficar para depois)</span>
           </h2>
         </div>
         {!editing && (
@@ -114,11 +117,18 @@ export function CheckoutShippingCard({
               </p>
             </>
           ) : (
-            <p className="text-xs text-muted-foreground">
-              {required
-                ? "Informe para onde devemos enviar o pedido."
-                : "Você pode informar agora ou depois do pagamento, em “Meus Pedidos”. Enquanto não informar, o pedido não é despachado."}
-            </p>
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2">
+              <PackageCheck className="mt-0.5 size-3.5 shrink-0 text-amber-400" />
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium text-amber-300">
+                  Este pedido tem item físico e precisa de endereço para ser enviado.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Não trava a compra: informe agora ou logo depois de pagar, em “Meus Pedidos”.
+                  Só não despachamos enquanto o endereço estiver faltando.
+                </p>
+              </div>
+            </div>
           )}
         </div>
       ) : (
@@ -142,11 +152,9 @@ export function CheckoutShippingCard({
                 Cancelar
               </Button>
             )}
-            {!required && (
-              <Button type="button" size="sm" variant="ghost" onClick={skip} className="text-xs text-muted-foreground">
-                Informar depois
-              </Button>
-            )}
+            <Button type="button" size="sm" variant="ghost" onClick={skip} className="text-xs text-muted-foreground">
+              Informar depois de pagar
+            </Button>
           </div>
         </div>
       )}

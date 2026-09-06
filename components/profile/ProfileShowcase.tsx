@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Eye, Settings } from "lucide-react"
+import { Eye, Settings, Trophy } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { cn } from "@/lib/utils"
@@ -15,6 +15,7 @@ import { SetupGrid } from "./SetupGrid"
 import { SocialLinks } from "./SocialLinks"
 import { PersonalTierlistSummaryCard } from "@/components/tierlist-pessoal/PersonalTierlistSummaryCard"
 import { profilePath } from "@/lib/profile-name"
+import { isVipActive } from "@/lib/account-tier"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
@@ -30,6 +31,10 @@ interface ProfileShowcaseProps {
   isOwner?: boolean
   /** Estado inicial do botão "Seguir" para quem está visitando. */
   isFollowing?: boolean
+  /** O visitante já deu coração na tierlist deste perfil? */
+  viewerHearted?: boolean
+  /** Visitante logado — deslogado vê a contagem de corações, mas não o botão. */
+  viewerLoggedIn?: boolean
 }
 
 /**
@@ -47,15 +52,29 @@ export function ProfileShowcase({
   profile,
   isOwner = false,
   isFollowing = false,
+  viewerHearted = false,
+  viewerLoggedIn = false,
 }: ProfileShowcaseProps) {
+  const tierlistHref = `${profilePath(profile.display_slug ?? profile.id)}/tierlist`
+  const ownerIsVip = isVipActive(profile.account_tier, profile.vip_expires_at)
+
   const actionButton = isOwner ? (
-    <Link
-      href="/perfil"
-      className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-    >
-      <Settings className="size-3.5" />
-      Editar perfil
-    </Link>
+    <div className="flex shrink-0 items-center gap-2">
+      <Link
+        href="/perfil"
+        className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      >
+        <Settings className="size-3.5" />
+        Editar perfil
+      </Link>
+      <Link
+        href={tierlistHref}
+        className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      >
+        <Trophy className="size-3.5" />
+        Minha tierlist
+      </Link>
+    </div>
   ) : (
     <FollowButton
       userId={profile.id}
@@ -176,8 +195,17 @@ export function ProfileShowcase({
         />
 
         <PersonalTierlistSummaryCard
+          items={profile.tierlist_items}
           itemCount={profile.tierlist_item_count}
-          tierlistHref={`${profilePath(profile.display_slug ?? profile.id)}/tierlist`}
+          tierlistHref={tierlistHref}
+          ownerName={profile.display_name}
+          ownerId={profile.id}
+          isOwner={isOwner}
+          ownerIsVip={ownerIsVip}
+          note={profile.tierlist_meta.note}
+          heartsCount={profile.tierlist_meta.heartsCount}
+          viewerHearted={viewerHearted}
+          canHeart={viewerLoggedIn && !isOwner}
         />
 
         <MeusReviewsGrid

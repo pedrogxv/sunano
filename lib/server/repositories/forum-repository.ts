@@ -23,6 +23,28 @@ export type ForumCategoryInfo = {
   parent: { id: string; slug: string; name: string } | null
 }
 
+/**
+ * "Melhor comentário" de um post, exibido como preview no card da listagem.
+ * Só o mínimo pra renderizar o balão — o texto já vem truncado do banco
+ * (`body_preview`, coluna gerada `left(body, 200)`), nunca o comentário
+ * inteiro.
+ */
+export type ForumTopComment = {
+  id: string
+  /** Trecho de até 200 caracteres — não é o corpo completo do comentário. String vazia num comentário só de imagem/GIF. */
+  preview: string
+  aura_count: number
+  created_at: string
+  author_display_name: string
+  author_avatar_url: string | null
+  author_display_slug: string | null
+  user_id: string | null
+  /** Primeira imagem/GIF do comentário (GIF do KLIPY também vive em `image_urls`). `null` quando é só texto. */
+  image_url: string | null
+  /** Total de imagens do comentário (0-2) — só a primeira vem na URL acima. */
+  image_count: number
+}
+
 export type ForumListPost = {
   id: string
   slug: string
@@ -44,6 +66,8 @@ export type ForumListPost = {
   aura_count: number
   /** Quantos usuários salvaram este post — ver forum_saved_posts (20260921000013_forum_saved_posts.sql). */
   saved_count: number
+  /** Comentário com mais aura do post (raiz e com aura >= 1). `null` quando nenhum comentário qualifica. */
+  top_comment: ForumTopComment | null
   author_display_name: string
   author_avatar_url: string | null
   author_account_tier: AccountTier
@@ -149,24 +173,56 @@ export async function enrichForumPostRows(rows: ForumPostRow[]): Promise<ForumLi
   const db = createSupabaseAdminClient()
   const postIds = rows.map((p) => p.id)
 
-  const commentCounts: Record<string, number> = {}
-  const { data: comments } = await db
-    .from("forum_comments")
-    .select("post_id")
-    .in("post_id", postIds)
-    .eq("is_hidden", false)
-  for (const c of comments ?? []) {
-    commentCounts[c.post_id] = (commentCounts[c.post_id] ?? 0) + 1
+  // Contagem de comentários + comentário destaque numa RPC só (no máximo 1
+  // linha por post, `body_preview` em vez do corpo inteiro) — antes esta etapa
+  // trazia uma linha por comentário de todos os posts da página só pra contar
+  // em JS. Ver 20261010000000_forum_post_top_comment_preview.sql.
+  const [{ data: summaryRows, error: summaryError }, { data: savedRows }] = await Promise.all([
+    db.rpc("get_forum_posts_comment_summary", { p_post_ids: postIds }),
+    db.from("forum_saved_posts").select("post_id").in("post_id", postIds),
+  ])
+
+  if (summaryError) {
+    // Preview é enfeite: se a RPC falhar (ex: migration ainda não aplicada), a
+    // listagem continua renderizando sem contagem/destaque em vez de quebrar.
+    console.error("[forum-repository] get_forum_posts_comment_summary:", summaryError)
   }
 
+  const summaryMap = new Map((summaryRows ?? []).map((row) => [row.post_id, row]))
+
   const savedCounts: Record<string, number> = {}
-  const { data: savedRows } = await db.from("forum_saved_posts").select("post_id").in("post_id", postIds)
   for (const s of savedRows ?? []) {
     savedCounts[s.post_id] = (savedCounts[s.post_id] ?? 0) + 1
   }
 
-  const profileMap = await buildProfileMap(rows.map((p) => p.user_id))
+  // Um `buildProfileMap` só para autores de post E autores dos comentários
+  // destaque — juntar os ids evita uma segunda ida a `user_profiles`.
+  const profileMap = await buildProfileMap([
+    ...rows.map((p) => p.user_id),
+    ...(summaryRows ?? []).map((row) => row.top_comment_user_id),
+  ])
   const categoryMap = await buildCategoryMap()
+
+  function resolveTopComment(postId: string): ForumTopComment | null {
+    const summary = summaryMap.get(postId)
+    // Comentário que é só imagem/GIF tem `body_preview` vazio e ainda assim é
+    // um destaque válido — basta ter id e algum conteúdo (texto OU mídia).
+    if (!summary?.top_comment_id) return null
+    if (!summary.top_comment_preview && !summary.top_comment_image) return null
+    const profile = summary.top_comment_user_id ? profileMap[summary.top_comment_user_id] : undefined
+    return {
+      id: summary.top_comment_id,
+      preview: summary.top_comment_preview ?? "",
+      aura_count: summary.top_comment_aura ?? 0,
+      created_at: summary.top_comment_at ?? "",
+      author_display_name: profile?.display_name ?? summary.top_comment_author ?? "Usuário",
+      author_avatar_url: profile?.avatar_url ?? null,
+      author_display_slug: profile?.display_slug ?? null,
+      user_id: summary.top_comment_user_id,
+      image_url: summary.top_comment_image ?? null,
+      image_count: summary.top_comment_images ?? 0,
+    }
+  }
 
   return rows.map((p) => ({
     id: p.id,
@@ -182,9 +238,10 @@ export async function enrichForumPostRows(rows: ForumPostRow[]): Promise<ForumLi
     is_locked: p.is_locked,
     is_pinned: p.is_pinned,
     is_hidden: p.is_hidden,
-    comment_count: commentCounts[p.id] ?? 0,
+    comment_count: summaryMap.get(p.id)?.comment_count ?? 0,
     aura_count: p.aura_count ?? 0,
     saved_count: savedCounts[p.id] ?? 0,
+    top_comment: resolveTopComment(p.id),
     author_display_name: p.user_id ? profileMap[p.user_id]?.display_name ?? p.author_name : p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
     author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
@@ -705,6 +762,9 @@ export const getForumPostBySlug = cache(async (
     comment_count: totalCommentCount ?? 0,
     aura_count: post.aura_count ?? 0,
     saved_count: savedCount ?? 0,
+    // Na página do post os comentários vêm logo abaixo em texto completo — o
+    // preview de destaque só faz sentido na listagem.
+    top_comment: null,
     author_display_name: post.user_id
       ? profileMap[post.user_id]?.display_name ?? post.author_name
       : post.author_name,

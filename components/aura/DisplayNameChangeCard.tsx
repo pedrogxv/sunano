@@ -7,15 +7,19 @@ import { cn } from "@/lib/utils"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
 import type { DisplayNameCooldown } from "@/lib/server/repositories/aura-store-repository"
+import { auraPriceForVip } from "@/lib/aura-pricing"
+import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { ChangeDisplayNameModal } from "@/components/profile/ChangeDisplayNameModal"
 
 interface DisplayNameChangeCardProps {
   item: AuraItem
   balance: number
+  /** VIP ativo agora — 10% off no custo da troca. */
+  isVip: boolean
   cooldown: DisplayNameCooldown
   currentName: string
   requireLogin: () => boolean
-  onChanged: (newName: string, newSlug: string) => void
+  onChanged: (newName: string, newSlug: string, cost: number) => void
 }
 
 function formatCooldownEnds(iso: string): string {
@@ -25,13 +29,15 @@ function formatCooldownEnds(iso: string): string {
 export function DisplayNameChangeCard({
   item,
   balance,
+  isVip,
   cooldown,
   currentName,
   requireLogin,
   onChanged,
 }: DisplayNameChangeCardProps) {
   const [modalOpen, setModalOpen] = useState(false)
-  const canAfford = balance >= item.auraCost
+  const price = auraPriceForVip(item.auraCost, isVip)
+  const canAfford = balance >= price.finalPrice
 
   return (
     <div className={cn("flex flex-col overflow-hidden rounded-2xl border transition-all duration-200 hover:-translate-y-1", CARD_SURFACE_INTERACTIVE)}>
@@ -48,7 +54,7 @@ export function DisplayNameChangeCard({
         )}
 
         <div className="mt-auto space-y-2">
-          <p className="font-display text-lg font-bold text-orange-400">🔥 {item.auraCost.toLocaleString("pt-BR")}</p>
+          <AuraPriceTag listPrice={item.auraCost} isVip={isVip} />
 
           {cooldown.onCooldown ? (
             <div className="flex w-full flex-col items-center gap-0.5 rounded-lg border border-border px-3 py-2 text-xs font-bold text-muted-foreground">
@@ -86,7 +92,7 @@ export function DisplayNameChangeCard({
         onOpenChange={setModalOpen}
         currentName={currentName}
         onChanged={(newName, newSlug) => {
-          onChanged(newName, newSlug)
+          onChanged(newName, newSlug, price.finalPrice)
           setModalOpen(false)
         }}
       />

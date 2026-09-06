@@ -31,11 +31,15 @@ export async function GET(request: NextRequest) {
   const status = VALID_STATUSES.includes(statusParam as OrderStatus) ? (statusParam as OrderStatus) : undefined
   const dateFrom = url.searchParams.get("dateFrom") || undefined
   const dateTo = url.searchParams.get("dateTo") || undefined
+  // Filtro "falta endereço" de "Meus Pedidos" — resolvido no banco, não
+  // filtrando a página já paginada (senão a contagem e a paginação mentem).
+  const missingShipping = url.searchParams.get("missingShipping") === "1"
 
   const { orders, total, hasMore } = await listOrdersByUser(user.id, page, pageSize, {
     status,
     dateFrom,
     dateTo,
+    missingShipping,
   })
   return NextResponse.json({ orders, total, hasMore })
 }

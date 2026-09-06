@@ -135,7 +135,7 @@ export default function TermosPage() {
           <h2>6. Compras na Loja</h2>
           <ul>
             <li>Os preços são exibidos em Reais (BRL) e incluem impostos quando aplicável.</li>
-            <li>Pagamentos são processados com segurança via Pix pela MisticPay.</li>
+            <li>Pagamentos são processados com segurança via Pix e cartão de crédito pela Asaas.</li>
             <li>
               Pedidos confirmados geram obrigação de pagamento. Cancelamentos, trocas e reembolsos
               seguem a{" "}

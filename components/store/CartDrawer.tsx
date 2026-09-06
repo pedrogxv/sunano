@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react"
+import { LogIn, Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/RemoveCartItemDialog"
 import { useCart } from "@/components/providers/cart-context"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { formatBRL } from "@/lib/format"
 import { computeCardPriceCents } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
@@ -36,6 +37,7 @@ export function CartButton() {
 export function CartDrawer() {
   const { items, count, remove, increment, decrement, clear, isOpen, setOpen } = useCart()
   const { cardSurchargePercent } = useStoreSettings()
+  const { user, loading: authLoading } = useAuthUser()
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
 
   function requestRemoval(item: (typeof items)[number], fromDecrement: boolean) {
@@ -251,6 +253,17 @@ export function CartDrawer() {
             {hasPreOrderItem && (
               <p className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-[10px] font-semibold text-amber-400">
                 Seu carrinho tem item(ns) em pré-venda — o envio desses produtos só ocorre quando o estoque chegar.
+              </p>
+            )}
+
+            {/* Sinaliza o login AQUI, e não só no fim do checkout: a compra
+                exige conta, e descobrir isso depois de preencher tudo é o
+                ponto de maior atrito do funil. O botão continua levando ao
+                checkout — quem não tem conta encontra o login já sabendo. */}
+            {!authLoading && !user && (
+              <p className="flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-2 text-[10px] text-muted-foreground">
+                <LogIn className="size-3 shrink-0" />
+                Você vai precisar entrar na sua conta para finalizar.
               </p>
             )}
 

@@ -4,7 +4,7 @@ import * as z from "zod"
 /**
  * Validação de CPF com dígitos verificadores (não só formato/tamanho) —
  * o dado vem direto do cliente e precisa ser confiável o bastante para
- * mandar pra API da MisticPay.
+ * mandar pra API da Asaas.
  */
 export function isValidCPF(raw: string): boolean {
   const cpf = raw.replace(/\D/g, "")

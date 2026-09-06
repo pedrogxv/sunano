@@ -14,6 +14,7 @@ import { SavedPostsProvider } from "@/components/providers/saved-posts-context"
 import { AuthHashErrorListener } from "@/components/auth/AuthHashErrorListener"
 import { LayoutShell } from "@/components/layout/LayoutShell"
 import { CookieBanner } from "@/components/lgpd/CookieBanner"
+import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner"
 import { OrganizationJsonLd } from "@/components/seo/OrganizationJsonLd"
 import { SITE_URL } from "@/lib/site-url"
 import { OG_IMAGE_HEIGHT, OG_IMAGE_WIDTH, SITE_NAME, ogImageUrl } from "@/lib/seo"
@@ -124,6 +125,7 @@ export default function RootLayout({
                         <LayoutShell>{children}</LayoutShell>
                         <Toaster />
                         <AuthHashErrorListener />
+                        <ImpersonationBanner />
                         <CookieBanner />
                       </TooltipProvider>
                     </PageHeaderProvider>

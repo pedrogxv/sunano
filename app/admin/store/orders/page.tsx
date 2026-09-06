@@ -12,6 +12,7 @@ import {
   Eye,
   Loader2,
   Mail,
+  MapPinOff,
   Package,
   PackageCheck,
   RotateCcw,
@@ -101,10 +102,7 @@ type AdminOrder = {
   refunded_cents: number
   refund_reason: string | null
   refunded_at: string | null
-  gateway: "asaas" | "misticpay" | null
   asaas_payment_id: string | null
-  misticpay_transaction_id: string | null
-  misticpay_e2e: string | null
   user_id: string | null
   user_display_name: string | null
   oversold: OrderOversoldFlag | null
@@ -121,6 +119,17 @@ type AdminOrder = {
     state: string
     filled_at: string
   } | null
+  /** false = pedido de serviço/digital: não há o que despachar, e a falta de endereço não é pendência. */
+  requires_shipping_address: boolean
+}
+
+/** Pedido que precisa de endereço, ainda não tem, e já foi pago. */
+function isMissingShippingAddress(order: AdminOrder): boolean {
+  return (
+    order.requires_shipping_address &&
+    !order.shipping_address &&
+    (order.status === "paid" || order.status === "awaiting_shipping_info")
+  )
 }
 
 /**
@@ -167,6 +176,21 @@ const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
   paid: "awaiting_shipping_info",
   awaiting_shipping_info: "shipped",
   shipped: "delivered",
+}
+
+/**
+ * Pedido de serviço/digital não passa por "enviado": não há endereço nem
+ * pacote, e o back-end recusa esse degrau (ver ORDER_DIGITAL_FULFILLMENT_FLOW
+ * em orders-repository). O admin conclui direto depois do pagamento.
+ */
+const NEXT_STATUS_DIGITAL: Partial<Record<OrderStatus, OrderStatus>> = {
+  paid: "delivered",
+}
+
+function nextStatusFor(order: AdminOrder): OrderStatus | undefined {
+  return order.requires_shipping_address
+    ? NEXT_STATUS[order.status]
+    : NEXT_STATUS_DIGITAL[order.status]
 }
 
 const REFUNDABLE_STATUSES: OrderStatus[] = ["paid", "awaiting_shipping_info", "shipped", "delivered"]
@@ -553,6 +577,10 @@ export default function AdminOrdersPage() {
   const [customerFilter, setCustomerFilter] = useState<OrderCustomer | null>(null)
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  // Fila operacional: pagos, de item físico, ainda sem endereço. Resolvido no
+  // banco (não filtrando a página já carregada), senão o total e a paginação
+  // mentem.
+  const [missingShippingOnly, setMissingShippingOnly] = useState(false)
   const [page, setPage] = useState(1)
 
   const [manageOrder, setManageOrder] = useState<AdminOrder | null>(null)
@@ -568,6 +596,7 @@ export default function AdminOrdersPage() {
       if (customerFilter?.userId) params.set("userId", customerFilter.userId)
       if (dateFrom) params.set("dateFrom", new Date(dateFrom).toISOString())
       if (dateTo) params.set("dateTo", new Date(`${dateTo}T23:59:59.999`).toISOString())
+      if (missingShippingOnly) params.set("missingShipping", "1")
       params.set("page", String(page))
       params.set("pageSize", String(PAGE_SIZE))
 
@@ -589,7 +618,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, page])
+  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, page])
 
   useEffect(() => {
     const timeout = setTimeout(load, userQuery ? 350 : 0)
@@ -599,11 +628,11 @@ export default function AdminOrdersPage() {
   // Qualquer mudança de filtro volta pra primeira página.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo])
+  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const hasActiveFilters =
-    statusFilter !== "all" || productFilter !== null || userQuery.trim() !== "" || customerFilter !== null || dateFrom !== "" || dateTo !== ""
+    statusFilter !== "all" || productFilter !== null || userQuery.trim() !== "" || customerFilter !== null || dateFrom !== "" || dateTo !== "" || missingShippingOnly
 
   function clearFilters() {
     setStatusFilter("all")
@@ -612,6 +641,7 @@ export default function AdminOrdersPage() {
     setCustomerFilter(null)
     setDateFrom("")
     setDateTo("")
+    setMissingShippingOnly(false)
   }
 
   function applyOrderPatch(id: string, patch: Partial<AdminOrder>) {
@@ -692,6 +722,20 @@ export default function AdminOrdersPage() {
               setDateTo(to)
             }}
           />
+          <Button
+            type="button"
+            variant={missingShippingOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setMissingShippingOnly((v) => !v)}
+            className={cn(
+              "gap-1.5",
+              missingShippingOnly && "bg-amber-500 text-black hover:bg-amber-400"
+            )}
+            title="Pedidos pagos de item físico que ainda estão sem endereço"
+          >
+            <MapPinOff className="size-3.5" />
+            Sem endereço
+          </Button>
           {hasActiveFilters && (
             <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
               <X className="size-3.5" />
@@ -771,6 +815,15 @@ export default function AdminOrdersPage() {
                         >
                           <AlertCircle className="size-2.5" strokeWidth={2.5} />
                           SEM ESTOQUE
+                        </span>
+                      )}
+                      {isMissingShippingAddress(order) && (
+                        <span
+                          title="Pedido pago de item físico sem endereço — o cliente ainda precisa informar em “Meus Pedidos”"
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-400"
+                        >
+                          <MapPinOff className="size-2.5" strokeWidth={2.5} />
+                          SEM ENDEREÇO
                         </span>
                       )}
                     </div>
@@ -890,7 +943,7 @@ function OrderManageDialog({
     return <Dialog open={false} onOpenChange={onOpenChange} />
   }
 
-  const next = NEXT_STATUS[order.status]
+  const next = nextStatusFor(order)
   const remainingCents = order.total_cents - order.refunded_cents
   const canRefund = REFUNDABLE_STATUSES.includes(order.status) && remainingCents > 0
 
@@ -1052,7 +1105,11 @@ function OrderManageDialog({
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Endereço de entrega
             </p>
-            {order.shipping_address ? (
+            {!order.requires_shipping_address ? (
+              <p className="text-xs text-muted-foreground">
+                Pedido de serviço/item digital — não precisa de endereço de entrega.
+              </p>
+            ) : order.shipping_address ? (
               <>
                 <p className="text-sm text-foreground">{order.shipping_address.recipient}</p>
                 <p className="text-xs text-muted-foreground">
@@ -1112,9 +1169,8 @@ function OrderManageDialog({
           <div className="space-y-1 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
             <p className="font-semibold uppercase tracking-wider text-muted-foreground">Pagamento</p>
             <p className="text-foreground">
-              {order.gateway === "asaas" ? "Asaas" : order.gateway === "misticpay" ? "MisticPay" : "—"} · PIX
+              {order.asaas_payment_id ? "Asaas" : "—"} · PIX
             </p>
-            {order.misticpay_e2e && <p className="break-all text-muted-foreground">E2E: {order.misticpay_e2e}</p>}
             {order.asaas_payment_id && (
               <p className="break-all text-muted-foreground">ID Asaas: {order.asaas_payment_id}</p>
             )}
@@ -1167,14 +1223,17 @@ function OrderManageDialog({
                   </div>
                 </div>
               )}
-              {next === "shipped" && !order.shipping_address && (
+              {next === "shipped" && order.requires_shipping_address && !order.shipping_address && (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
                   Sem endereço de entrega informado — não há para onde despachar.
                 </p>
               )}
               <Button
                 onClick={handleAdvance}
-                disabled={advancing || (next === "shipped" && !order.shipping_address)}
+                disabled={
+                  advancing ||
+                  (next === "shipped" && order.requires_shipping_address && !order.shipping_address)
+                }
                 className="w-full gap-2"
               >
                 <PackageCheck className="size-4" />
@@ -1202,7 +1261,7 @@ function OrderManageDialog({
               ) : (
                 <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3">
                   <p className="text-xs text-muted-foreground">
-                    O pedido será cancelado{order.gateway === "asaas" ? " e a cobrança removida no Asaas" : ""}
+                    O pedido será cancelado{order.asaas_payment_id ? " e a cobrança removida no Asaas" : ""}
                     , e o estoque reservado será devolvido.
                   </p>
                   <div className="space-y-1">
@@ -1242,21 +1301,20 @@ function OrderManageDialog({
           {canRefund && (
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Extorno {order.gateway !== "asaas" && "(indisponível)"}
+                Extorno {!order.asaas_payment_id && "(indisponível)"}
               </p>
 
-              {order.gateway !== "asaas" && (
+              {!order.asaas_payment_id && (
                 <Alert className="border-amber-500/30 bg-amber-500/10 py-2">
                   <AlertCircle className="size-3.5 text-amber-400" />
                   <AlertDescription className="text-xs text-amber-300">
-                    Este pedido foi pago via {order.gateway === "misticpay" ? "MisticPay" : "outro meio"}, que não
-                    oferece extorno automático por API. Extorne manualmente no painel do gateway e depois marque o
-                    pedido como reembolsado.
+                    Este pedido não tem cobrança Asaas associada (pago por um gateway anterior). Extorne
+                    manualmente no painel do gateway e depois marque o pedido como reembolsado.
                   </AlertDescription>
                 </Alert>
               )}
 
-              {order.gateway === "asaas" && (
+              {order.asaas_payment_id && (
                 <Alert className="border-sky-500/30 bg-sky-500/10 py-2">
                   <AlertCircle className="size-3.5 text-sky-400" />
                   <AlertDescription className="text-xs text-sky-300">
@@ -1275,7 +1333,7 @@ function OrderManageDialog({
                     setRefundValue((remainingCents / 100).toFixed(2))
                     setRefundOpen(true)
                   }}
-                  disabled={order.gateway !== "asaas"}
+                  disabled={!order.asaas_payment_id}
                 >
                   <RotateCcw className="size-4" />
                   Extornar pedido
@@ -1332,12 +1390,12 @@ function OrderManageDialog({
               <CheckCircle2 className="size-3.5 text-sky-400" />
               <AlertDescription className="text-xs text-sky-300">
                 Pedido totalmente reembolsado{order.refunded_at ? ` em ${formatDateTime(order.refunded_at)}` : ""}.
-                {order.gateway === "asaas" && " Confirme no painel do Asaas se o valor já foi efetivamente devolvido ao cliente."}
+                {order.asaas_payment_id && " Confirme no painel do Asaas se o valor já foi efetivamente devolvido ao cliente."}
               </AlertDescription>
             </Alert>
           )}
 
-          {order.gateway === "asaas" && order.asaas_payment_id && (
+          {order.asaas_payment_id && (
             <a
               href={`https://www.asaas.com/payment/show?id=${encodeURIComponent(order.asaas_payment_id)}`}
               target="_blank"

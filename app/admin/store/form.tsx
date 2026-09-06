@@ -111,8 +111,11 @@ interface StoreProduct {
   condition: "new" | "used" | "opened"
   condition_notes: string | null
   sale_type: "pre_order" | "ready_stock" | "normal"
+  /** Teto de reservas de pré-venda; null = sem teto. */
+  preorder_limit?: number | null
   is_active: boolean
   is_sold_out: boolean
+  requires_shipping?: boolean
   features?: string[]
   video_url?: string | null
 }
@@ -380,8 +383,13 @@ export function StoreProductForm({
     condition: product?.condition ?? "new",
     condition_notes: product?.condition_notes ?? "",
     sale_type: product?.sale_type ?? "normal",
+    preorder_limit:
+      product?.preorder_limit != null ? String(product.preorder_limit) : "",
     is_active: product?.is_active !== false,
     is_sold_out: product?.is_sold_out ?? false,
+    // Produto existente sem a coluna preenchida é físico (a loja só vendia
+    // físico até a coluna existir) — daí `!== false`, não `?? true` puro.
+    requires_shipping: product?.requires_shipping !== false,
     video_url: product?.video_url ?? "",
   })
 
@@ -1039,8 +1047,14 @@ export function StoreProductForm({
         condition: formData.condition,
         condition_notes: formData.condition_notes.trim() || null,
         sale_type: formData.sale_type,
+        // Só faz sentido em pré-venda; vazio = sem teto.
+        preorder_limit:
+          formData.sale_type === "pre_order" && formData.preorder_limit.trim() !== ""
+            ? Number(formData.preorder_limit)
+            : null,
         is_active: formData.is_active,
         is_sold_out: formData.is_sold_out,
+        requires_shipping: formData.requires_shipping,
         video_url: videoUrl || null,
       }
 
@@ -1402,11 +1416,28 @@ export function StoreProductForm({
             </SelectContent>
           </Select>
           {formData.sale_type === "pre_order" && (
-            <p className="text-[10px] text-amber-400">
-              Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; ou
-              &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar — o anúncio, reviews
-              e vendas já feitas continuam os mesmos.
-            </p>
+            <>
+              <p className="text-[10px] text-amber-400">
+                Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; ou
+                &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar — o anúncio, reviews
+                e vendas já feitas continuam os mesmos.
+              </p>
+              <div className="space-y-1.5 pt-1">
+                <Label className="text-xs">Limite de reservas</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={formData.preorder_limit}
+                  onChange={(e) => set("preorder_limit", e.target.value)}
+                  placeholder="Sem limite"
+                  className="h-9 border-border bg-muted/20 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  Quantas unidades do lote você aceita reservar. Em pré-venda o estoque não é
+                  descontado — é este número que fecha as reservas. Deixe vazio para não limitar.
+                </p>
+              </div>
+            </>
           )}
         </div>
       ) : (
@@ -1621,6 +1652,28 @@ export function StoreProductForm({
             </Select>
           </div>
         </div>
+
+      {/* Entrega */}
+      <div className="space-y-2 border-t border-border/60 pt-4">
+        <Label>Entrega</Label>
+        <Select
+          value={formData.requires_shipping ? "physical" : "service"}
+          onValueChange={(v) => set("requires_shipping", v === "physical")}
+        >
+          <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm md:max-w-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="physical">📦 Precisa de endereço de entrega</SelectItem>
+            <SelectItem value="service">💻 Não precisa (serviço/digital)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-[10px] text-muted-foreground/70">
+          {formData.requires_shipping
+            ? "Produto físico: o comprador vê o aviso de endereço no checkout e o pedido entra na fila de “falta endereço” até informar. O endereço nunca trava a compra — pode ser informado depois de pagar."
+            : "Serviço ou item digital: o checkout não pede endereço e o pedido nunca aparece como “falta endereço”. Marque como físico se ainda assim precisar do endereço (visita técnica, envio de brinde)."}
+        </p>
+      </div>
 
       {/* Cor */}
       <div className="space-y-2 border-t border-border/60 pt-4">

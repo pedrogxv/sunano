@@ -7,6 +7,7 @@ import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
+import { computeEffectivePrice } from "@/lib/store-pricing"
 
 /** Extrai o dono do pedido a partir de `metadata->>user_id` (null em pedidos de convidado). */
 export function orderOwnerId(metadata: Record<string, unknown> | null | undefined): string | null {
@@ -33,12 +34,24 @@ export type OrderStatus =
   | "expired"
 
 /**
- * Janela de expiração do PIX quando `pix_expires_at` não vem do gateway
- * (hoje sempre o caso da MisticPay — a API dela não retorna prazo). Usada
- * tanto no checkout, para preencher `pix_expires_at` no branch MisticPay,
- * quanto aqui, como fallback ao decidir o que expirar.
+ * Janela de expiração do PIX. A Asaas devolve um `expirationDate` de longa
+ * validade no QR code, então este valor é o prazo real que a loja impõe:
+ * usado no checkout de cartão (`minutesToExpire`) e aqui como fallback ao
+ * decidir o que expirar. Ver `getPixQrCode` em `integrations/asaas.ts`.
  */
 export const PIX_EXPIRATION_MINUTES = Number(process.env.PIX_EXPIRATION_MINUTES) || 60
+
+/**
+ * Prazo do PIX de um pedido que contém pré-venda.
+ *
+ * Reserva de lançamento é justamente a compra que a pessoa quer pensar antes
+ * de confirmar — e a que a loja mais quer segurar. Com o prazo padrão de 60
+ * min, um pedido de pré-venda expirava como se fosse pronta-entrega, com o
+ * agravante de que não há estoque preso enquanto ele aguarda: o custo de
+ * esperar mais é bem menor aqui.
+ */
+export const PREORDER_PIX_EXPIRATION_MINUTES =
+  Number(process.env.PREORDER_PIX_EXPIRATION_MINUTES) || 24 * 60
 
 /** Sequência válida do fluxo pós-venda — só avança, nunca pula etapa. */
 export const ORDER_FULFILLMENT_FLOW: OrderStatus[] = [
@@ -47,6 +60,49 @@ export const ORDER_FULFILLMENT_FLOW: OrderStatus[] = [
   "shipped",
   "delivered",
 ]
+
+/**
+ * Fluxo de um pedido SEM entrega (serviço/digital, `requires_shipping` false).
+ *
+ * Não passa por `shipped`: não há pacote, etiqueta nem endereço — e a trava
+ * de endereço em `advanceOrderStatus` tornaria esse degrau intransponível.
+ * O admin marca como concluído direto quando o serviço foi prestado.
+ */
+export const ORDER_DIGITAL_FULFILLMENT_FLOW: OrderStatus[] = ["paid", "delivered"]
+
+/**
+ * Linha de `store_orders.items` no que importa para mexer em estoque.
+ *
+ * `sale_type` é o snapshot gravado pelo checkout (ver
+ * `app/api/store/checkout/route.ts`): depois da compra o admin troca o
+ * produto para "normal" quando o lote chega, então perguntar ao produto
+ * HOJE se aquela linha foi pré-venda dá a resposta errada.
+ */
+export type OrderStockLine = {
+  id: string
+  quantity: number
+  variant_id?: string | null
+  sale_type?: string | null
+}
+
+/**
+ * Pré-venda não movimenta estoque físico — nem na reserva, nem na devolução.
+ *
+ * O checkout desvia a pré-venda para `reserve_preorder`, que só confere o
+ * teto (`preorder_limit`) e NÃO decrementa `stock` (ver a migration
+ * 20261009000200_preorder_stock_semantics.sql). Devolver essa linha ao
+ * inventário em um cancelamento/expiração criaria unidades que nunca foram
+ * descontadas; re-reservá-la em um pagamento atrasado descontaria unidades
+ * que nunca foram reservadas — e ainda marcaria o pedido como oversold sem
+ * motivo.
+ *
+ * Vale para os dois sentidos, por isso o nome genérico: todo caminho que
+ * chama `increment_*_stock` ou `decrement_*_stock` a partir dos itens de um
+ * pedido precisa filtrar por aqui primeiro.
+ */
+export function lineMovesPhysicalStock(line: { sale_type?: string | null }): boolean {
+  return line.sale_type !== "pre_order"
+}
 
 /**
  * Endereço de ENTREGA gravado no pedido. Snapshot: o que vale é para onde
@@ -79,10 +135,16 @@ type RawShippingColumns = {
   shipping_city: string | null
   shipping_state: string | null
   shipping_address_filled_at: string | null
+  /**
+   * Snapshot de `store_products.requires_shipping` no momento da compra:
+   * false = pedido de serviço/digital, nunca vai precisar de endereço e não
+   * deve aparecer em nenhum aviso de "falta endereço".
+   */
+  requires_shipping_address: boolean | null
 }
 
 const SHIPPING_COLUMNS =
-  "shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state, shipping_address_filled_at"
+  "shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state, shipping_address_filled_at, requires_shipping_address"
 
 /**
  * Colapsa as colunas cruas num objeto único — ou `null` se o endereço ainda
@@ -123,7 +185,6 @@ export type UserOrderSummary = {
   items: Record<string, unknown>[]
   created_at: string
   payment_method: string | null
-  misticpay_e2e: string | null
   asaas_payment_id: string | null
   asaas_receipt_url: string | null
   pix_copy_paste: string | null
@@ -131,10 +192,12 @@ export type UserOrderSummary = {
   tracking_code: string | null
   carrier: string | null
   shipping_address: OrderShippingAddress | null
+  /** false = pedido de serviço/digital: não pede endereço em lugar nenhum. */
+  requires_shipping_address: boolean
 }
 
 const ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, payment_method, misticpay_e2e, asaas_payment_id, asaas_receipt_url, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, " +
+  "id, status, total_cents, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, " +
   SHIPPING_COLUMNS
 
 /**
@@ -150,7 +213,13 @@ export async function listOrdersByUser(
   userId: string,
   page = 1,
   pageSize = 20,
-  filters?: { status?: OrderStatus; dateFrom?: string; dateTo?: string }
+  filters?: {
+    status?: OrderStatus
+    dateFrom?: string
+    dateTo?: string
+    /** Só os pedidos pagos de item físico que ainda estão sem endereço. */
+    missingShipping?: boolean
+  }
 ): Promise<{ orders: UserOrderSummary[]; total: number; hasMore: boolean }> {
   const db = createSupabaseAdminClient()
   const currentPage = clampPage(page)
@@ -163,6 +232,14 @@ export async function listOrdersByUser(
   if (filters?.status) query = query.eq("status", filters.status)
   if (filters?.dateFrom) query = query.gte("created_at", filters.dateFrom)
   if (filters?.dateTo) query = query.lte("created_at", filters.dateTo)
+  // Casa com o índice parcial `store_orders_missing_shipping_idx` — mesmas
+  // três condições, na mesma ordem.
+  if (filters?.missingShipping) {
+    query = query
+      .is("shipping_address_filled_at", null)
+      .eq("requires_shipping_address", true)
+      .in("status", ["paid", "awaiting_shipping_info"])
+  }
 
   const { data, count, error } = await query
     .order("created_at", { ascending: false })
@@ -186,7 +263,13 @@ export async function listOrdersByUser(
  */
 function toUserOrderSummary(row: unknown): UserOrderSummary {
   const raw = row as UserOrderSummary & RawShippingColumns
-  return { ...raw, shipping_address: mapShippingAddress(raw) }
+  return {
+    ...raw,
+    shipping_address: mapShippingAddress(raw),
+    // Pedidos anteriores à coluna são físicos por definição (a loja só
+    // vendia produto físico até então) — daí o `!== false`, não `=== true`.
+    requires_shipping_address: raw.requires_shipping_address !== false,
+  }
 }
 
 /** Pedido pendente mais recente do usuário — usado no popover do miniperfil. */
@@ -240,11 +323,7 @@ export type AdminOrderRow = {
   refunded_cents: number
   refund_reason: string | null
   refunded_at: string | null
-  /** Qual gateway processou o pagamento — determina se o extorno pode ser feito por aqui. */
-  gateway: "asaas" | "misticpay" | null
   asaas_payment_id: string | null
-  misticpay_transaction_id: string | null
-  misticpay_e2e: string | null
   /** Presente quando o pedido foi feito por um usuário logado (metadata.user_id). */
   user_id: string | null
   user_display_name: string | null
@@ -252,10 +331,12 @@ export type AdminOrderRow = {
   oversold: OrderOversoldFlag | null
   /** Para onde despachar. Null = o cliente ainda não informou (fluxo awaiting_shipping_info). */
   shipping_address: OrderShippingAddress | null
+  /** false = pedido de serviço/digital: não entra na fila de "falta endereço". */
+  requires_shipping_address: boolean
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, updated_at, payment_method, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, misticpay_transaction_id, misticpay_e2e, " +
+  "id, status, total_cents, items, created_at, updated_at, payment_method, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -277,8 +358,6 @@ type AdminOrderRawRow = {
   refund_reason: string | null
   refunded_at: string | null
   asaas_payment_id: string | null
-  misticpay_transaction_id: string | null
-  misticpay_e2e: string | null
 } & RawShippingColumns
 
 export type AdminOrderListResult = {
@@ -300,6 +379,8 @@ export async function listOrdersForAdmin(filters?: {
   userId?: string
   dateFrom?: string
   dateTo?: string
+  /** Fila operacional: pagos, de item físico, ainda sem endereço informado. */
+  missingShipping?: boolean
   page?: number
   pageSize?: number
 }): Promise<AdminOrderListResult> {
@@ -320,6 +401,14 @@ export async function listOrdersForAdmin(filters?: {
   if (filters?.productId) query = query.contains("items", JSON.stringify([{ id: filters.productId }]))
   if (filters?.dateFrom) query = query.gte("created_at", filters.dateFrom)
   if (filters?.dateTo) query = query.lte("created_at", filters.dateTo)
+  // Casa com o índice parcial `store_orders_missing_shipping_idx` — mesmas
+  // três condições, na mesma ordem.
+  if (filters?.missingShipping) {
+    query = query
+      .is("shipping_address_filled_at", null)
+      .eq("requires_shipping_address", true)
+      .in("status", ["paid", "awaiting_shipping_info"])
+  }
 
   const page = Math.max(1, filters?.page ?? 1)
   const pageSize = Math.min(100, Math.max(1, filters?.pageSize ?? 20))
@@ -361,14 +450,12 @@ export async function listOrdersForAdmin(filters?: {
       refunded_cents: row.refunded_cents,
       refund_reason: row.refund_reason,
       refunded_at: row.refunded_at,
-      gateway: row.asaas_payment_id ? "asaas" : row.misticpay_transaction_id ? "misticpay" : null,
       asaas_payment_id: row.asaas_payment_id,
-      misticpay_transaction_id: row.misticpay_transaction_id,
-      misticpay_e2e: row.misticpay_e2e,
       user_id: userId,
       user_display_name: userId ? profiles[userId]?.display_name ?? null : null,
       oversold: (row.metadata?.oversold as OrderOversoldFlag | undefined) ?? null,
       shipping_address: mapShippingAddress(row),
+      requires_shipping_address: row.requires_shipping_address !== false,
     }
   })
 
@@ -514,6 +601,17 @@ export async function advanceOrderStatus(
     return { ok: false, error: "Pedido não encontrado.", status: 404 }
   }
 
+  // Pedido de serviço/digital não tem para onde despachar: o checkout
+  // descarta qualquer endereço enviado e a rota de endereço o recusa, então
+  // ele NUNCA terá `shipping_*` preenchido. Como `shipped` exige endereço
+  // (trava logo abaixo) e o fluxo físico obriga a passar por lá para chegar a
+  // `delivered`, esse pedido ficaria preso para sempre em
+  // `awaiting_shipping_info` — um estado que, ainda por cima, diz aguardar
+  // dados de entrega que ele não deve pedir. Por isso ele tem fluxo próprio:
+  // do pagamento direto para concluído.
+  const requiresShipping = existing.requires_shipping_address !== false
+  const flow = requiresShipping ? ORDER_FULFILLMENT_FLOW : ORDER_DIGITAL_FULFILLMENT_FLOW
+
   // Marcar como enviado sem saber para onde é um erro operacional que só
   // aparece depois, quando o pacote não chega. O admin já não vê o botão
   // nesse caso; aqui é a trava que vale (a UI pode mudar, esta não).
@@ -526,14 +624,20 @@ export async function advanceOrderStatus(
   }
 
   const currentStatus = existing.status as OrderStatus
-  const currentIndex = ORDER_FULFILLMENT_FLOW.indexOf(currentStatus)
-  const nextIndex = ORDER_FULFILLMENT_FLOW.indexOf(nextStatus)
+  const currentIndex = flow.indexOf(currentStatus)
+  const nextIndex = flow.indexOf(nextStatus)
 
   if (currentIndex === -1) {
     return { ok: false, error: "Este pedido não está no fluxo de pós-venda.", status: 400 }
   }
   if (nextIndex !== currentIndex + 1) {
-    return { ok: false, error: "Só é possível avançar uma etapa por vez, na ordem do fluxo.", status: 400 }
+    return {
+      ok: false,
+      error: requiresShipping
+        ? "Só é possível avançar uma etapa por vez, na ordem do fluxo."
+        : "Este pedido não tem entrega — só é possível marcá-lo como concluído.",
+      status: 400,
+    }
   }
 
   const update: Partial<{
@@ -578,9 +682,9 @@ export async function advanceOrderStatus(
 
 /**
  * Extorna um pedido pago via Asaas — integral (sem `valueCents`) ou parcial.
- * Só pedidos com `asaas_payment_id` são suportados: a MisticPay não expõe
- * estorno na API pública hoje, então esses pedidos precisam ser extornados
- * manualmente no painel da MisticPay e só têm o status marcado aqui.
+ * Exige `asaas_payment_id`; pedidos legados sem ele (pagos por gateways
+ * anteriores) precisam ser extornados manualmente e só têm o status
+ * marcado aqui.
  *
  * A cobrança na Asaas é a fonte da verdade — chamamos `refundPayment` antes
  * de tocar no banco, e só gravamos o acumulado se o gateway confirmar.
@@ -607,7 +711,7 @@ export async function refundOrder(
   if (!existing.asaas_payment_id) {
     return {
       ok: false,
-      error: "Este pedido não foi pago via Asaas — extorne manualmente no gateway usado e atualize o status.",
+      error: "Este pedido não tem cobrança Asaas associada — extorne manualmente e atualize o status.",
       status: 400,
     }
   }
@@ -686,9 +790,8 @@ export async function refundOrder(
  * lá também (`DELETE /payments/{id}` — só vale para cobrança ainda não
  * paga; pedido já pago é extorno, não cancelamento, ver `refundOrder`).
  *
- * MisticPay não expõe remoção de cobrança na API pública, então para esses
- * pedidos cancelamos só localmente — o PIX gerado simplesmente nunca será
- * pago e a cobrança expira sozinha do lado da MisticPay.
+ * Pedidos legados sem `asaas_payment_id` são cancelados só localmente — o
+ * PIX gerado simplesmente nunca será pago e expira sozinho no gateway.
  *
  * O UPDATE condicional (`WHERE status = 'pending'`) roda antes da chamada à
  * Asaas e da devolução de estoque, mesmo padrão de `expireStalePendingOrders`:
@@ -725,7 +828,8 @@ export async function cancelOrder(
     }
   }
 
-  const cart = (existing.items as Array<{ id: string; quantity: number; variant_id?: string | null }>) ?? []
+  // Pré-venda fica de fora: não teve estoque descontado para devolver.
+  const cart = ((existing.items as OrderStockLine[]) ?? []).filter(lineMovesPhysicalStock)
   await Promise.all(
     cart.map((item) =>
       item.variant_id
@@ -756,6 +860,8 @@ export async function cancelOrder(
 export type ExpireStalePendingOrdersResult = {
   expired_count: number
   stock_restored_count: number
+  /** Reservas de estoque sem pedido correspondente devolvidas ao inventário. */
+  orphaned_reservations_released: number
   errors: string[]
 }
 
@@ -785,7 +891,12 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
 
   if (error) {
     console.error("[orders-repository] expireStalePendingOrders — update:", error)
-    return { expired_count: 0, stock_restored_count: 0, errors: [error.message] }
+    return {
+      expired_count: 0,
+      stock_restored_count: 0,
+      orphaned_reservations_released: 0,
+      errors: [error.message],
+    }
   }
 
   const orders = (expiredOrders ?? []) as {
@@ -804,7 +915,8 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
   // cada RPC é independente (produto/variante diferentes), então não há
   // motivo pra serializar pedido por pedido, item por item.
   const restoreTasks = orders.flatMap((order) => {
-    const cart = order.items as Array<{ id: string; quantity: number; variant_id?: string | null }>
+    // Pré-venda não teve estoque descontado — devolver aqui inventaria unidades.
+    const cart = (order.items as unknown as OrderStockLine[]).filter(lineMovesPhysicalStock)
     return cart.map((item) => ({ orderId: order.id, item }))
   })
 
@@ -829,7 +941,34 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
     }
   }
 
-  return { expired_count: orders.length, stock_restored_count: stockRestoredCount, errors }
+  // Reservas órfãs: estoque decrementado pelo checkout cuja Function morreu
+  // antes de criar o pedido. Não há pedido para o loop acima achar, então
+  // sem esta chamada essas unidades ficariam descontadas para sempre. A
+  // janela (15 min) é folgada em relação ao `maxDuration = 20s` da rota de
+  // checkout — nunca devolve estoque de um request ainda em andamento.
+  let orphanedReleased = 0
+  const { data: released, error: releaseError } = await db.rpc(
+    "release_orphaned_stock_reservations",
+    { p_older_than_minutes: 15 }
+  )
+  if (releaseError) {
+    console.error("[orders-repository] release_orphaned_stock_reservations:", releaseError)
+    errors.push(releaseError.message)
+  } else {
+    orphanedReleased = Number(released ?? 0)
+    if (orphanedReleased > 0) {
+      console.warn(
+        `[orders-repository] ${orphanedReleased} reserva(s) órfã(s) de estoque devolvida(s) — checkout interrompido antes de criar o pedido.`
+      )
+    }
+  }
+
+  return {
+    expired_count: orders.length,
+    stock_restored_count: stockRestoredCount,
+    orphaned_reservations_released: orphanedReleased,
+    errors,
+  }
 }
 
 export type ExpireOrderByPaymentResult = {
@@ -882,11 +1021,8 @@ export async function expireOrderByPaymentId(
     await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
   }
 
-  const cart = (order.items ?? []) as Array<{
-    id: string
-    quantity: number
-    variant_id?: string | null
-  }>
+  // Pré-venda não teve estoque descontado — devolver aqui inventaria unidades.
+  const cart = ((order.items ?? []) as unknown as OrderStockLine[]).filter(lineMovesPhysicalStock)
 
   const results = await Promise.all(
     cart.map(async (item) => {
@@ -949,11 +1085,10 @@ export async function reReserveStockForLatePayment(orderId: string): Promise<{
     .eq("id", orderId)
     .single()
 
-  const cart = (order?.items ?? []) as Array<{
-    id: string
-    quantity: number
-    variant_id?: string | null
-  }>
+  // Pré-venda nunca reservou estoque físico: re-reservar aqui descontaria
+  // unidades que a compra não segurava, e uma falha marcaria o pedido como
+  // oversold sem que nada tenha sido vendido duas vezes.
+  const cart = ((order?.items ?? []) as unknown as OrderStockLine[]).filter(lineMovesPhysicalStock)
 
   const results = await Promise.all(
     cart.map(async (item) => {
@@ -1111,7 +1246,7 @@ export async function setOrderShippingAddress(
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, metadata")
+    .select("id, status, metadata, requires_shipping_address")
     .eq("id", orderId)
     .eq("metadata->>user_id", userId)
     .maybeSingle()
@@ -1120,6 +1255,16 @@ export async function setOrderShippingAddress(
   // confirmaria a existência de um pedido de outra pessoa.
   if (!existing) {
     return { ok: false, error: "Pedido não encontrado.", status: 404 }
+  }
+
+  // Pedido só de serviço/digital não tem para onde despachar — aceitar um
+  // endereço aqui só guardaria PII que nada consome (LGPD Art. 6, III).
+  if (existing.requires_shipping_address === false) {
+    return {
+      ok: false,
+      error: "Este pedido não precisa de endereço de entrega.",
+      status: 400,
+    }
   }
 
   const currentStatus = existing.status as OrderStatus
@@ -1168,4 +1313,93 @@ export async function setOrderShippingAddress(
   }
 
   return { ok: true }
+}
+
+/** Linha de carrinho reconstruída a partir de um pedido anterior. */
+export type ReorderItem = {
+  productId: string
+  variantId: string | null
+  variantOptionIds: string[]
+  quantity: number
+  /** Nome/slug/preço ATUAIS — o snapshot do pedido pode estar velho. */
+  slug: string
+  name: string
+  priceCents: number
+  image: string | null
+  stock: number | null
+  available: boolean
+}
+
+/**
+ * Reconstrói o carrinho de um pedido para recompra.
+ *
+ * O snapshot em `store_orders.items` guarda o que foi comprado, mas não serve
+ * como carrinho sozinho: falta o `slug` (a rota do produto) e o preço pode ter
+ * mudado. Por isso cada linha é re-resolvida contra o catálogo — o que
+ * desapareceu volta marcado como indisponível, em vez de sumir em silêncio.
+ */
+export async function getOrderItemsForReorder(
+  orderId: string,
+  userId: string
+): Promise<
+  | { ok: true; items: ReorderItem[] }
+  | { ok: false; error: string; status: number }
+> {
+  const db = createSupabaseAdminClient()
+
+  const { data: order } = await db
+    .from("store_orders")
+    .select("id, items, metadata")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (!order || orderOwnerId(order.metadata as Record<string, unknown> | null) !== userId) {
+    // Mesma resposta para "não existe" e "não é seu": não confirma a
+    // existência de um pedido de outra pessoa.
+    return { ok: false, error: "Pedido não encontrado.", status: 404 }
+  }
+
+  const items = (order.items ?? []) as Array<{
+    id?: string
+    quantity?: number
+    variant_id?: string | null
+    variant_options?: { group: string; label: string }[] | null
+  }>
+
+  const productIds = [
+    ...new Set(items.map((i) => i.id).filter((id): id is string => typeof id === "string")),
+  ]
+  if (productIds.length === 0) return { ok: true, items: [] }
+
+  const { data: products } = await db
+    .from("store_products")
+    .select("id, slug, name, price_cents, promo_price_cents, stock, images, is_active, is_sold_out")
+    .in("id", productIds)
+
+  const reorderItems: ReorderItem[] = []
+  for (const item of items) {
+    if (!item.id) continue
+    const product = (products ?? []).find((p) => p.id === item.id)
+    if (!product) continue
+
+    const { effectiveCents } = computeEffectivePrice(product, null)
+    reorderItems.push({
+      productId: product.id,
+      variantId: item.variant_id ?? null,
+      // As opções de variante são gravadas por rótulo no snapshot (é o que a
+      // tela do pedido mostra), não por id — então a recompra reabre a linha
+      // sem elas e a pessoa escolhe de novo na página do produto, que é onde
+      // a combinação válida é conhecida.
+      variantOptionIds: [],
+      quantity: item.quantity ?? 1,
+      slug: product.slug,
+      name: product.name,
+      priceCents: effectiveCents,
+      image: product.images?.[0] ?? null,
+      stock: product.stock,
+      available: product.is_active && !product.is_sold_out,
+    })
+  }
+
+  return { ok: true, items: reorderItems }
 }

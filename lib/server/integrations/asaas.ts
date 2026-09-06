@@ -5,13 +5,50 @@ import { PIX_EXPIRATION_MINUTES } from "@/lib/server/repositories/orders-reposit
 /**
  * Cliente Asaas — SERVIDOR APENAS.
  *
- * Usa `ASAAS_API_KEY`, que jamais pode chegar ao navegador. Ao contrário da
- * MisticPay, o Asaas exige um "customer" cadastrado antes de criar a
- * cobrança e o QR code PIX é obtido numa chamada separada. Docs:
+ * Usa `ASAAS_API_KEY`, que jamais pode chegar ao navegador. O Asaas exige
+ * um "customer" cadastrado antes de criar a cobrança, e o QR code PIX é
+ * obtido numa chamada separada (fluxo de 3 requisições). Docs:
  * https://docs.asaas.com/
  */
-const BASE_URL =
-  process.env.ASAAS_ENV === "production" ? "https://api.asaas.com/v3" : "https://api-sandbox.asaas.com/v3"
+
+/**
+ * Ambiente do gateway. `ASAAS_ENV` é OBRIGATÓRIA e só aceita dois valores.
+ *
+ * Antes isto era `ASAAS_ENV === "production" ? prod : sandbox`, ou seja: env
+ * ausente, com typo ou herdada de outro ambiente caía silenciosamente em
+ * SANDBOX. Num deploy de produção esse default significa pagamento de mentira
+ * liberando pedido de verdade — o pior modo de falha possível para uma loja,
+ * e invisível, porque o checkout responde 200 e o webhook confirma.
+ *
+ * Agora a escolha é sempre explícita:
+ *   • valor inválido/ausente  → erro (não há default "seguro" que sirva);
+ *   • `sandbox` em produção   → erro (é o cenário perigoso acima);
+ *   • `sandbox` fora de prod  → ok, é o modo de desenvolvimento normal.
+ *
+ * A validação roda no primeiro uso, não no import: assim `next build` e
+ * qualquer rota que não cobre não quebram por causa de uma env de pagamento.
+ */
+function resolveBaseUrl(): string {
+  const env = process.env.ASAAS_ENV?.trim().toLowerCase()
+
+  if (env !== "production" && env !== "sandbox") {
+    throw new Error(
+      `ASAAS_ENV precisa ser "production" ou "sandbox" (recebido: ${
+        process.env.ASAAS_ENV ? `"${process.env.ASAAS_ENV}"` : "ausente"
+      }). Sem valor explícito o gateway cairia em sandbox e processaria pagamentos falsos como reais.`
+    )
+  }
+
+  if (env === "sandbox" && process.env.VERCEL_ENV === "production") {
+    throw new Error(
+      "ASAAS_ENV=sandbox em deploy de produção — pagamentos de teste liberariam pedidos reais. Configure ASAAS_ENV=production."
+    )
+  }
+
+  return env === "production"
+    ? "https://api.asaas.com/v3"
+    : "https://api-sandbox.asaas.com/v3"
+}
 
 function getApiKey() {
   const key = process.env.ASAAS_API_KEY
@@ -20,7 +57,7 @@ function getApiKey() {
 }
 
 async function asaasFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const res = await fetch(`${resolveBaseUrl()}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -178,18 +215,30 @@ export async function getPixQrCode(paymentId: string): Promise<PixQrCode> {
 
   return {
     ...result,
-    // Asaas devolve só o base64 cru; a MisticPay já devolve um data URI
-    // completo, então normalizamos aqui para os dois terem o mesmo contrato
-    // (consumido direto por <img src>).
+    // Asaas devolve só o base64 cru — normalizamos para um data URI completo,
+    // consumido direto por <img src>.
     encodedImage: `data:image/png;base64,${result.encodedImage}`,
     expirationDate: expiration.toISOString(),
   }
 }
 
+export interface AsaasCheckoutItem {
+  name: string
+  quantity: number
+  /** Valor UNITÁRIO em centavos, já no preço de cartão. */
+  unitPriceCents: number
+  description?: string | null
+}
+
 export interface CreateCheckoutParams {
   customerId: string
   totalCents: number // já com o acréscimo do cartão aplicado (ver store-settings-repository)
-  description: string
+  /**
+   * Itens exibidos na página hospedada da Asaas. A soma de
+   * `quantity * unitPriceCents` TEM que fechar com `totalCents` — é a soma
+   * dos itens que a Asaas cobra, `totalCents` serve de conferência aqui.
+   */
+  items: AsaasCheckoutItem[]
   externalReference: string
   maxInstallments: number // de store_settings.card_max_installments, 1-6
   successUrl: string
@@ -220,6 +269,20 @@ export interface AsaasCheckout {
  * criação, o webhook de confirmação (`CHECKOUT_PAID`) é que decide de fato.
  */
 export async function createCheckout(params: CreateCheckoutParams): Promise<AsaasCheckout> {
+  // A Asaas cobra a SOMA dos itens, não `totalCents`. Se as duas contas
+  // divergirem (arredondamento por item, item esquecido), o cliente pagaria
+  // um valor diferente do que a nossa tela mostrou e do que o pedido gravou —
+  // falha alto aqui em vez de cobrar errado.
+  const itemsTotalCents = params.items.reduce(
+    (sum, item) => sum + item.quantity * item.unitPriceCents,
+    0
+  )
+  if (itemsTotalCents !== params.totalCents) {
+    throw new Error(
+      `Asaas checkout: soma dos itens (${itemsTotalCents}) difere do total (${params.totalCents}).`
+    )
+  }
+
   const useInstallments = params.maxInstallments > 1
   // DETACHED (cobrança única) é obrigatório sempre que PIX está entre os
   // billingTypes, e INSTALLMENT só é aceito em conjunto com DETACHED (não
@@ -235,7 +298,12 @@ export async function createCheckout(params: CreateCheckoutParams): Promise<Asaa
       minutesToExpire: params.minutesToExpire,
       externalReference: params.externalReference,
       customer: params.customerId,
-      items: [{ name: params.description, quantity: 1, value: params.totalCents / 100 }],
+      items: params.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        value: item.unitPriceCents / 100,
+        ...(item.description && { description: item.description }),
+      })),
       callback: {
         successUrl: params.successUrl,
         cancelUrl: params.cancelUrl,
@@ -353,10 +421,10 @@ export interface AsaasPaymentStatus {
 
 /**
  * Consulta o status real de uma cobrança direto no Asaas. O webhook já é
- * autenticado via header `asaas-access-token` (ao contrário da MisticPay,
- * que não assina nada), mas reconsultamos aqui mesmo assim antes de liberar
- * o pedido — mesma defesa em profundidade: um token de webhook vazado não
- * basta para forjar um pagamento se o handler sempre confirma na origem.
+ * autenticado via header `asaas-access-token`, mas reconsultamos aqui mesmo
+ * assim antes de liberar o pedido — defesa em profundidade: um token de
+ * webhook vazado não basta para forjar um pagamento se o handler sempre
+ * confirma na origem.
  */
 export async function getPayment(paymentId: string): Promise<AsaasPaymentStatus> {
   return asaasFetch<AsaasPaymentStatus>(`/payments/${encodeURIComponent(paymentId)}`)

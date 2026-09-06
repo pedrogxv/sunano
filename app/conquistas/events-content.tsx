@@ -9,6 +9,7 @@ import { EventCard } from "@/components/events/EventCard"
 import { AchievementsGrid } from "@/components/profile/AchievementsGrid"
 import { YoutubeSubscribeButton } from "@/components/auth/YoutubeSubscribeButton"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
+import { auraPriceForVip } from "@/lib/aura-pricing"
 import type { EventDisplay } from "@/lib/events"
 import type { AchievementTrack, ShowcaseAchievement } from "@/lib/achievements"
 
@@ -17,6 +18,8 @@ interface EventsContentProps {
   initialClaimedMedalIds: string[]
   initialAuraBalance: number
   isLoggedIn: boolean
+  /** VIP ativo agora — medalhas de `aura_redeem` saem 10% mais baratas. */
+  isVip: boolean
   /** Conquistas gerais (posts/comentários/seguidores) já desbloqueadas — vazio quando deslogado. */
   achievements: ShowcaseAchievement[]
   achievementCounts: Record<AchievementTrack, number>
@@ -37,6 +40,7 @@ export function EventsContent({
   initialClaimedMedalIds,
   initialAuraBalance,
   isLoggedIn,
+  isVip,
   achievements,
   achievementCounts,
   youtubeEnabled,
@@ -103,7 +107,10 @@ export function EventsContent({
       setEvents((prev) => prev.map((e) => (e.id === event.id ? data.event! : e)))
       setClaimedMedalIds((prev) => new Set(prev).add(event.medalId))
       if (event.criteriaType === "aura_redeem" && event.auraCost) {
-        setAuraBalance((prev) => prev - event.auraCost!)
+        // Decremento otimista tem que usar o preço com desconto — quem cobrou
+        // foi `claim_event_medal`, que já aplicou o 10% do VIP.
+        const paid = auraPriceForVip(event.auraCost, isVip).finalPrice
+        setAuraBalance((prev) => prev - paid)
         notifyAuraChanged()
       }
       toast.success("Medalha resgatada!", { description: event.name })
@@ -173,6 +180,7 @@ export function EventsContent({
                     claimed={claimedMedalIds.has(event.medalId)}
                     isLoggedIn={isLoggedIn}
                     auraBalance={auraBalance}
+                    isVip={isVip}
                     pending={pendingId === event.id}
                     onClaim={() => handleClaim(event)}
                   />
@@ -197,6 +205,7 @@ export function EventsContent({
                     claimed={claimedMedalIds.has(event.medalId)}
                     isLoggedIn={isLoggedIn}
                     auraBalance={auraBalance}
+                    isVip={isVip}
                     pending={false}
                     onClaim={() => handleClaim(event)}
                   />

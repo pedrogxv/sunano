@@ -2,7 +2,7 @@ import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { creditCommissionForOrder } from "@/lib/server/repositories/affiliates-repository"
-import { orderOwnerId } from "@/lib/server/repositories/orders-repository"
+import { lineMovesPhysicalStock, orderOwnerId } from "@/lib/server/repositories/orders-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { getPaymentsByCheckoutSession } from "@/lib/server/integrations/asaas"
 
@@ -18,7 +18,13 @@ interface AsaasCheckoutWebhookPayload {
   checkout?: { id: string; customer?: string }
 }
 
-type OrderItemLine = { id?: string; variant_id?: string | null; quantity?: number }
+type OrderItemLine = {
+  id?: string
+  variant_id?: string | null
+  quantity?: number
+  /** Snapshot do tipo de venda gravado pelo checkout; pré-venda não move estoque físico. */
+  sale_type?: string | null
+}
 
 function safeTokenMatch(provided: string, expected: string): boolean {
   const a = Buffer.from(provided)
@@ -122,6 +128,35 @@ export async function POST(request: NextRequest) {
       // ativamente que o checkout não vai mais ser pago — reverter a
       // reserva de estoque na hora é mais correto que esperar
       // expireStalePendingOrders rodar.
+      //
+      // Defesa em profundidade antes de mexer no inventário: este ramo
+      // DEVOLVE estoque, então um evento reentregue (ou atrasado, chegando
+      // depois de o cliente ter pago) recolocaria na prateleira uma unidade
+      // que um pedido pago está segurando. `GET /v3/checkouts/{id}` não
+      // existe na API v3, mas o payment gerado pelo checkout é consultável —
+      // é a mesma chamada que o ramo CHECKOUT_PAID já usa.
+      //
+      // Só abortamos com evidência POSITIVA de pagamento: falha de rede ou
+      // ausência de customer no payload não podem travar a devolução do
+      // estoque, senão uma indisponibilidade da Asaas prenderia inventário.
+      const customerId = payload.checkout?.customer
+      if (customerId) {
+        try {
+          const payments = await getPaymentsByCheckoutSession(checkoutId, customerId)
+          const paid = payments.find(
+            (p) => p.status === "RECEIVED" || p.status === "CONFIRMED" || p.status === "RECEIVED_IN_CASH"
+          )
+          if (paid) {
+            console.warn(
+              `[webhooks/asaas-checkout] ${payload.event} ignorado: checkout ${checkoutId} tem pagamento ${paid.id} (${paid.status}).`
+            )
+            return NextResponse.json({ received: true, ignored: "already paid" })
+          }
+        } catch (err) {
+          console.error("[webhooks/asaas-checkout] verificação de pagamento antes de expirar:", err)
+        }
+      }
+
       const nextStatus = payload.event === "CHECKOUT_EXPIRED" ? "expired" : "cancelled"
       const { data: updatedOrders } = await db
         .from("store_orders")
@@ -138,7 +173,10 @@ export async function POST(request: NextRequest) {
       }
 
       for (const order of updatedOrders ?? []) {
-        const items = (order.items ?? []) as OrderItemLine[]
+        // Pré-venda não teve estoque descontado no checkout (o teto é
+        // `preorder_limit`, conferido por `reserve_preorder`) — devolver
+        // aqui criaria unidades que nunca existiram.
+        const items = ((order.items ?? []) as OrderItemLine[]).filter(lineMovesPhysicalStock)
         await Promise.all(
           items.map(async (item) => {
             if (!item.id || !item.quantity) return

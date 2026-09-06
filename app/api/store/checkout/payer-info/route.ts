@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser } from "@/lib/server/auth/current-user"
-import { isShippingAddressRequired } from "@/lib/server/validation/shipping-address"
 
 /**
  * Diz ao checkout, ANTES de tentar gerar o PIX/cartão, se falta nome/CPF (ou,
@@ -13,7 +12,13 @@ import { isShippingAddressRequired } from "@/lib/server/validation/shipping-addr
  * Devolve também os valores já salvos: o checkout exibe um card com os dados
  * que vão para a cobrança e deixa o usuário revisar/editar antes de pagar
  * (CPF errado no perfil derrubava o pagamento sem explicação visível).
+ *
+ * Responde só sobre o PERFIL. O que é do CARRINHO — se precisa de frete, se
+ * o preço mudou, se algo esgotou — vive em `/api/store/cart/validate`: eram
+ * duas responsabilidades nesta rota, e o checkout a chamava duas vezes na
+ * abertura por causa disso.
  */
+
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request)
   if (!user) {
@@ -24,7 +29,7 @@ export async function GET(request: NextRequest) {
   const { data: profile } = await db
     .from("user_profiles")
     .select(
-      "full_name, cpf, phone, postal_code, street, number, complement, neighborhood, city, state"
+      "full_name, cpf, phone, postal_code, street, number, complement, neighborhood, city, state, shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
     )
     .eq("id", user.id)
     .single()
@@ -40,11 +45,9 @@ export async function GET(request: NextRequest) {
   )
 
   return NextResponse.json({
-    // O endereço salvo no perfil é o ÚLTIMO usado (cobrança ou entrega) e
-    // serve só para pré-preencher o formulário — o que vale para despachar é
-    // o snapshot gravado no pedido. Por isso os mesmos campos alimentam os
-    // dois cards do checkout.
-    shippingAddressRequired: isShippingAddressRequired(),
+    // COBRANÇA: é o endereço que vai para o customer da Asaas no cartão.
+    // Não é sobrescrito por uma entrega — comprar para presentear não muda
+    // o endereço do titular.
     fullName: profile?.full_name ?? null,
     cpf: profile?.cpf ?? null,
     email: user.email ?? null,
@@ -58,5 +61,18 @@ export async function GET(request: NextRequest) {
     state: profile?.state ?? null,
     hasCompletePayerInfo: Boolean(profile?.full_name && profile?.cpf),
     hasCompleteAddressInfo,
+    // ENTREGA: última usada, só para pré-preencher o card. O que vale para
+    // despachar é sempre o snapshot no pedido.
+    shipping: {
+      recipient: profile?.shipping_recipient ?? null,
+      phone: profile?.shipping_phone ?? null,
+      postalCode: profile?.shipping_postal_code ?? null,
+      street: profile?.shipping_street ?? null,
+      number: profile?.shipping_number ?? null,
+      complement: profile?.shipping_complement ?? null,
+      neighborhood: profile?.shipping_neighborhood ?? null,
+      city: profile?.shipping_city ?? null,
+      state: profile?.shipping_state ?? null,
+    },
   })
 }

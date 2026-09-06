@@ -1,6 +1,6 @@
 import Image from "next/image"
 import Link from "next/link"
-import { Award, CheckCircle2, Flame, Loader2, Lock } from "lucide-react"
+import { Award, CheckCircle2, Crown, Flame, Loader2, Lock } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { MEDAL_RARITY_BAR, MEDAL_RARITY_GLOW, MEDAL_RARITY_STYLES } from "@/lib/profile-showcase"
 import type { EventDisplay } from "@/lib/events"
+import { auraPriceForVip } from "@/lib/aura-pricing"
 import { cn } from "@/lib/utils"
 
 interface EventCardProps {
@@ -26,13 +27,23 @@ interface EventCardProps {
   isLoggedIn: boolean
   /** Saldo de Aura do usuário — só relevante pra eventos `aura_redeem`. */
   auraBalance: number
+  /**
+   * VIP ativo agora — medalha de `aura_redeem` sai 10% mais barata, mesma
+   * regra da Central de Aura. Quem cobra é `claim_event_medal` em SQL.
+   */
+  isVip: boolean
   /** Resgate manual em andamento para este card específico. */
   pending: boolean
   onClaim: () => void
 }
 
 /** Rodapé de ação: o único bloco que muda de fato entre os critérios de evento. */
-function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim }: EventCardProps) {
+function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, onClaim }: EventCardProps) {
+  // Preço já com desconto: o afford e todos os textos abaixo usam ele, senão
+  // um VIP com saldo entre os dois preços veria "faltam X Aura" para uma
+  // medalha que a RPC deixaria ele resgatar.
+  const price = auraPriceForVip(event.auraCost ?? 0, isVip)
+
   if (claimed) {
     return (
       <div className="flex items-center gap-1.5 rounded-lg bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400">
@@ -70,8 +81,8 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim
     )
   }
 
-  if (event.criteriaType === "aura_redeem" && isLoggedIn && auraBalance < (event.auraCost ?? 0)) {
-    const missing = (event.auraCost ?? 0) - auraBalance
+  if (event.criteriaType === "aura_redeem" && isLoggedIn && auraBalance < price.finalPrice) {
+    const missing = price.finalPrice - auraBalance
     return (
       <div className="flex w-full flex-col items-center gap-1.5">
         <Button size="sm" variant="outline" disabled className="w-full gap-1.5 text-xs">
@@ -86,7 +97,9 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim
   }
 
   const label =
-    event.criteriaType === "aura_redeem" && isLoggedIn ? `Gastar ${event.auraCost} Aura para resgatar` : "Resgatar"
+    event.criteriaType === "aura_redeem" && isLoggedIn
+      ? `Gastar ${price.finalPrice} Aura para resgatar`
+      : "Resgatar"
 
   // aura_redeem cobra Aura pra resgatar — pede confirmação explícita antes de
   // debitar, pra ninguém ser cobrado sem saber (o custo já aparece no label
@@ -116,13 +129,22 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim
         </div>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Gastar {event.auraCost} Aura para resgatar?</AlertDialogTitle>
+            <AlertDialogTitle>Gastar {price.finalPrice} Aura para resgatar?</AlertDialogTitle>
             <AlertDialogDescription>
-              Você vai <strong className="text-foreground">perder {event.auraCost} de Aura</strong> do
+              Você vai <strong className="text-foreground">perder {price.finalPrice} de Aura</strong> do
               seu saldo para pegar a medalha &quot;{event.name}&quot;. Seu saldo atual é {auraBalance}{" "}
               Aura. Deseja continuar?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {price.discounted && (
+            <p
+              className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold"
+              style={{ backgroundColor: "oklch(0.75 0.19 320 / 0.12)", color: "var(--vip-accent)" }}
+            >
+              <Crown className="size-3.5" strokeWidth={2} />
+              Seu VIP tirou {price.savings} Aura do preço original de {price.listPrice}.
+            </p>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
@@ -158,7 +180,8 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, pending, onClaim
 }
 
 export function EventCard(props: EventCardProps) {
-  const { event, claimed } = props
+  const { event, claimed, isVip } = props
+  const auraPrice = auraPriceForVip(event.auraCost ?? 0, isVip)
   const percent =
     event.maxParticipants !== null
       ? Math.min(100, Math.round((event.currentCount / event.maxParticipants) * 100))
@@ -206,10 +229,21 @@ export function EventCard(props: EventCardProps) {
             <p className="font-semibold text-foreground">{event.name}</p>
 
             {event.criteriaType === "aura_redeem" && !claimed && event.auraCost ? (
-              <span className="flex items-center gap-1 rounded-full bg-orange-500/10 px-2.5 py-1 text-[11px] font-semibold text-orange-400">
-                <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
-                Gasta {event.auraCost} Aura para resgatar
-              </span>
+              <div className="flex flex-wrap items-center justify-center gap-1">
+                <span className="flex items-center gap-1 rounded-full bg-orange-500/10 px-2.5 py-1 text-[11px] font-semibold text-orange-400">
+                  <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
+                  Gasta{" "}
+                  {auraPrice.discounted && (
+                    <span className="text-muted-foreground/70 line-through">{auraPrice.listPrice}</span>
+                  )}{" "}
+                  {auraPrice.finalPrice} Aura para resgatar
+                </span>
+                {auraPrice.discounted && (
+                  <span className="aura-vip-discount-badge flex items-center gap-0.5 rounded-full px-1.5 py-[3px] text-[9px] font-black uppercase leading-none tracking-wide">
+                    <Crown className="size-2.5" strokeWidth={2.5} />−{auraPrice.discountPercent}%
+                  </span>
+                )}
+              </div>
             ) : null}
 
             <div className="w-full space-y-1">

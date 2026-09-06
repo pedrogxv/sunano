@@ -1,8 +1,8 @@
 /**
  * Helpers puros de formatação/slug — seguros para cliente e servidor.
  *
- * NÃO importa SDKs de gateway nem segredos. O cliente MisticPay (que usa a
- * chave secreta) vive em `lib/server/integrations/misticpay.ts` e é `server-only`.
+ * NÃO importa SDKs de gateway nem segredos. O cliente Asaas (que usa a
+ * chave secreta) vive em `lib/server/integrations/asaas.ts` e é `server-only`.
  */
 
 /**

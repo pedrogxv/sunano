@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getUserProfiles, searchUserProfiles } from "@/lib/server/repositories/users-repository"
 import { orderNumber } from "@/lib/order-number"
 import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
+import { signSupportImageUrls } from "@/lib/server/support-media"
 
 /**
  * Repositório de tickets de suporte (`support_tickets` + `support_messages`).
@@ -162,9 +163,14 @@ export async function getMySupportTicket(
     return null
   }
 
+  const rows = (messages ?? []) as unknown as SupportMessageRow[]
+  const signedMessages = await Promise.all(
+    rows.map(async (row) => ({ ...row, image_urls: await signSupportImageUrls(row.image_urls) }))
+  )
+
   return {
     ticket: { ...(ticket as unknown as SupportTicketDetail), ...labels },
-    messages: (messages ?? []) as unknown as SupportMessageRow[],
+    messages: signedMessages,
   }
 }
 
@@ -462,6 +468,11 @@ export async function getSupportTicketForAdmin(
     return null
   }
 
+  const rows = (messages ?? []) as unknown as SupportMessageRow[]
+  const signedMessages = await Promise.all(
+    rows.map(async (row) => ({ ...row, image_urls: await signSupportImageUrls(row.image_urls) }))
+  )
+
   return {
     ticket: {
       ...(ticket as unknown as SupportTicketDetail & { user_id: string }),
@@ -469,7 +480,7 @@ export async function getSupportTicketForAdmin(
       user_display_name: profiles[ticket.user_id]?.display_name ?? null,
       user_email: authUser?.user?.email ?? null,
     },
-    messages: (messages ?? []) as unknown as SupportMessageRow[],
+    messages: signedMessages,
   }
 }
 

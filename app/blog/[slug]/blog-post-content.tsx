@@ -25,6 +25,8 @@ export type BlogPost = {
   video_url: string | null
   content: string
   created_at: string
+  updated_at?: string | null
+  post_type?: "news" | "review"
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
   peripherals?: { name: string; brand: string }[] | null
 }

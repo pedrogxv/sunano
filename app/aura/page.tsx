@@ -18,6 +18,8 @@ import {
 } from "@/lib/server/repositories/aura-store-repository"
 import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
+import { hasConfirmedDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
+import { getDiscordInviteUrl, isDiscordMembershipEnabled } from "@/lib/discord-membership"
 import { getUserProfileSettings } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { AuraCenterContent } from "@/components/aura/AuraCenterContent"
@@ -40,6 +42,7 @@ export default async function AuraCenterPage() {
     equippedItemId,
     missions,
     youtubeConfirmed,
+    discordConfirmed,
     vipStatus,
     nameCooldown,
     profileSettings,
@@ -69,6 +72,9 @@ export default async function AuraCenterPage() {
     userId && isYoutubeSubscriptionEnabled()
       ? hasConfirmedYoutubeSubscription(userId)
       : Promise.resolve(false),
+    userId && isDiscordMembershipEnabled()
+      ? hasConfirmedDiscordMembership(userId)
+      : Promise.resolve(false),
     userId ? getVipStatus(userId) : Promise.resolve({ active: false, expiresAt: null }),
     userId
       ? getDisplayNameCooldown(userId)
@@ -93,6 +99,9 @@ export default async function AuraCenterPage() {
         initialEquippedItemId={equippedItemId}
         missions={missions}
         youtubeConfirmed={youtubeConfirmed}
+        discordEnabled={isDiscordMembershipEnabled()}
+        discordConfirmed={discordConfirmed}
+        discordInviteUrl={getDiscordInviteUrl()}
         vipStatus={vipStatus}
         nameCooldown={nameCooldown}
         displayName={profileSettings?.display_name ?? ""}

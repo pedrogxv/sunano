@@ -2,6 +2,8 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { ShoppingBag } from "lucide-react"
 import { getStoreProductDetail, getStoreFilterOptions, listStoreProductsPaginated } from "@/lib/server/repositories/store-repository"
+import { getReviewAggregate } from "@/lib/server/repositories/store-reviews-repository"
+import { JsonLd } from "@/components/seo/JsonLd"
 import { ProductDetailContent } from "@/components/store/ProductDetailContent"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
@@ -79,9 +81,12 @@ export default async function ProductPage({ params }: PageProps) {
   const detail = await getStoreProductDetail(slug)
   if (!detail) notFound()
 
-  const [filterOptions, { items: previewPool }] = await Promise.all([
+  const [filterOptions, { items: previewPool }, reviewAggregate] = await Promise.all([
     getStoreFilterOptions("store"),
     listStoreProductsPaginated({ type: "store", page: 1, pageSize: 24 }),
+    // Já existia no repositório e alimentava só a UI — é o que habilita as
+    // estrelas no resultado de busca.
+    getReviewAggregate(detail.product.id),
   ])
 
   const { product } = detail
@@ -109,11 +114,32 @@ export default async function ProductPage({ params }: PageProps) {
       product.condition === "new"
         ? "https://schema.org/NewCondition"
         : "https://schema.org/UsedCondition",
+    /**
+     * `aggregateRating` é o que troca o link de texto por estrelas na SERP —
+     * o maior ganho de CTR disponível numa página de produto. Só entra com
+     * review de verdade: o Google trata agregado com `reviewCount: 0` como
+     * schema inválido e pode derrubar o rich result da página inteira.
+     */
+    ...(reviewAggregate.count > 0
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: reviewAggregate.avgRating.toFixed(1),
+            reviewCount: reviewAggregate.count,
+            bestRating: 5,
+            worstRating: 1,
+          },
+        }
+      : {}),
     offers: {
       "@type": "Offer",
       url,
       priceCurrency: "BRL",
       price: (priceCents / 100).toFixed(2),
+      // `priceValidUntil` fica de fora de propósito: a query do produto não
+      // traz data de alteração, e derivá-la do relógio deixaria o render impuro
+      // (a página é ISR — o mesmo conteúdo geraria HTML diferente a cada
+      // revalidação). O campo é opcional; data inventada é pior que ausente.
       availability: product.is_sold_out
         ? "https://schema.org/OutOfStock"
         : product.sale_type === "pre_order"
@@ -124,6 +150,29 @@ export default async function ProductPage({ params }: PageProps) {
           ? "https://schema.org/NewCondition"
           : "https://schema.org/UsedCondition",
       seller: { "@id": `${SITE_URL}/#organization` },
+      /**
+       * Frete e devolução: sem os dois o Merchant Center marca a oferta como
+       * incompleta e o item perde elegibilidade nos resultados de compra.
+       * A política referenciada é a mesma publicada em /trocas-e-devolucoes.
+       */
+      shippingDetails: {
+        "@type": "OfferShippingDetails",
+        shippingDestination: {
+          "@type": "DefinedRegion",
+          addressCountry: "BR",
+        },
+      },
+      hasMerchantReturnPolicy: {
+        "@type": "MerchantReturnPolicy",
+        applicableCountry: "BR",
+        returnPolicyCategory: "https://schema.org/MerchantReturnFiniteReturnWindow",
+        // 7 dias corridos é o direito de arrependimento do CDC (art. 49),
+        // que é o prazo publicado em /trocas-e-devolucoes.
+        merchantReturnDays: 7,
+        returnMethod: "https://schema.org/ReturnByMail",
+        returnFees: "https://schema.org/FreeReturn",
+        merchantReturnLink: `${SITE_URL}/trocas-e-devolucoes`,
+      },
     },
   }
 
@@ -161,16 +210,8 @@ export default async function ProductPage({ params }: PageProps) {
 
   return (
     <>
-      <script
-        type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productJsonLd) }}
-      />
-      <script
-        type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
-      />
+      <JsonLd data={productJsonLd} />
+      <JsonLd data={breadcrumbJsonLd} />
       <ProductDetailContent {...detail} filterOptions={filterOptions} previewPool={previewPool} />
     </>
   )

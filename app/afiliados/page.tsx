@@ -18,6 +18,7 @@ function formatCents(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
+
 export default async function AfiliadosPage() {
   const supabase = await createSupabaseServerClient()
   const {

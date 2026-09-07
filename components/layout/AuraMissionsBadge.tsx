@@ -20,6 +20,8 @@ import {
 } from "@/lib/achievements"
 import { cn } from "@/lib/utils"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
+import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
+import { DiscordIcon } from "@/components/auth/provider-icons"
 
 type AuraUsage = {
   balance: number
@@ -74,6 +76,11 @@ export function AuraMissionsBadge() {
   const [usage, setUsage] = useState<AuraUsage | null>(null)
   const [youtubeConfirmed, setYoutubeConfirmed] = useState(true)
   const [youtubeLoading, setYoutubeLoading] = useState(false)
+  // Default `true` de propósito, igual ao do YouTube: enquanto o status não
+  // chega (ou se a chamada falhar), o call-to-action fica escondido em vez de
+  // piscar na cara de quem já resgatou.
+  const [discordConfirmed, setDiscordConfirmed] = useState(true)
+  const [discordLoading, setDiscordLoading] = useState(false)
 
   // Missões, ofensiva e saldo vêm juntos de /api/aura/badge — eram duas
   // chamadas separadas por tick, cada uma repetindo o auth.getUser().
@@ -102,10 +109,22 @@ export function AuraMissionsBadge() {
     }
   }, [])
 
+  const loadDiscordStatus = useCallback(async () => {
+    if (!isDiscordMembershipEnabled()) return
+    try {
+      const res = await fetch("/api/discord/membership-status")
+      const data = res.ok ? await res.json() : null
+      setDiscordConfirmed(Boolean(data?.confirmed))
+    } catch {
+      setDiscordConfirmed(true)
+    }
+  }, [])
+
   const loadAll = useCallback(() => {
     void loadBadge()
     void loadYoutubeStatus()
-  }, [loadBadge, loadYoutubeStatus])
+    void loadDiscordStatus()
+  }, [loadBadge, loadYoutubeStatus, loadDiscordStatus])
 
   async function handleYoutubeConfirm() {
     setYoutubeLoading(true)
@@ -121,6 +140,23 @@ export function AuraMissionsBadge() {
     if (error) {
       console.error("[AuraMissionsBadge] signInWithOAuth falhou:", error.message)
       setYoutubeLoading(false)
+    }
+  }
+
+  async function handleDiscordConfirm() {
+    setDiscordLoading(true)
+    const redirectTo = `${window.location.origin}/auth/discord/callback?next=${encodeURIComponent(window.location.pathname)}`
+    const { error } = await supabaseAuth.auth.signInWithOAuth({
+      provider: "discord",
+      options: {
+        redirectTo,
+        scopes: "identify guilds",
+        queryParams: { prompt: "consent" },
+      },
+    })
+    if (error) {
+      console.error("[AuraMissionsBadge] signInWithOAuth (discord) falhou:", error.message)
+      setDiscordLoading(false)
     }
   }
 
@@ -260,6 +296,23 @@ export function AuraMissionsBadge() {
               </span>
               <span>{youtubeLoading ? "Conectando…" : "Inscreva-se no YouTube"}</span>
               <span className="ml-auto text-[11px] font-semibold text-red-500">+50 aura</span>
+            </button>
+          </div>
+        )}
+
+        {isDiscordMembershipEnabled() && !discordConfirmed && (
+          <div className="border-t border-border p-3">
+            <button
+              type="button"
+              onClick={handleDiscordConfirm}
+              disabled={discordLoading}
+              className="flex w-full items-center gap-2.5 rounded-lg border border-[#5865F2]/30 bg-[#5865F2]/5 px-2.5 py-1.5 text-sm text-foreground transition-colors hover:border-[#5865F2]/50 hover:bg-[#5865F2]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-[#5865F2]/50 bg-[#5865F2]/10 text-[#5865F2]">
+                <DiscordIcon className="size-3" fill="currentColor" />
+              </span>
+              <span>{discordLoading ? "Conectando…" : "Conecte seu Discord"}</span>
+              <span className="ml-auto text-[11px] font-semibold text-[#5865F2]">+50 aura</span>
             </button>
           </div>
         )}

@@ -644,6 +644,32 @@ export async function getNewestProfiles(
   return withCounters((data ?? []) as DirectoryRow[])
 }
 
+/**
+ * Slugs dos perfis públicos — usado só pelo `app/sitemap.ts`.
+ *
+ * Respeita `excludeFromPublicListings` (mesmo filtro das listagens: sem o
+ * perfil do dono do site, sem conta banida) e ignora quem ainda não tem
+ * `display_slug`, já que a URL canônica do perfil é derivada dele.
+ */
+export async function listProfileSlugsForSitemap(): Promise<
+  { slug: string; updated_at: string }[]
+> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await excludeFromPublicListings(
+    db.from("user_profiles").select("display_slug, created_at")
+  ).not("display_slug", "is", null)
+
+  if (error) {
+    console.error("[users-repository] listProfileSlugsForSitemap:", error)
+    return []
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[])
+    .filter((row) => typeof row.display_slug === "string" && row.display_slug.length > 0)
+    .map((row) => ({ slug: row.display_slug as string, updated_at: row.created_at as string }))
+}
+
 /** Perfis que `userId` segue, do mais recente para o mais antigo. */
 export async function getFollowingProfiles(
   userId: string,

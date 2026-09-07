@@ -168,6 +168,8 @@ export type ProfileShowcase = {
   tiktok_handle: string | null
   /** Se confirmou inscrição no canal do YouTube (conquista especial "Inscrito", ver `AchievementsGrid`). */
   youtube_subscribed: boolean
+  /** Se confirmou participação no servidor do Discord (conquista especial "No Discord", ver `AchievementsGrid`). */
+  discord_member: boolean
   /** Moldura de avatar equipada (Central de Aura), sobreposta à foto de perfil — `null` quando nenhuma está equipada. */
   equipped_avatar_frame_url: string | null
   /** Quantos itens a tierlist pessoal (VIP, Beta) do usuário já tem — 0 esconde o card resumido no perfil. */

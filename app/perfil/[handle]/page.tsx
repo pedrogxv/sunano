@@ -38,7 +38,15 @@ export async function generateMetadata({
   const { handle } = await params
   const userId = await resolveUserId(handle)
   const profile = userId ? await getProfileShowcase(userId) : null
-  if (!profile) return { title: "Perfil não encontrado" }
+  // `noIndex` explícito: sem ele a metadata herda o `index, follow` do layout
+  // raiz e a página de erro sai com dois `<meta name="robots">` contraditórios.
+  if (!profile)
+    return buildMetadata({
+      title: "Perfil não encontrado",
+      description: "Esse perfil não existe ou não está mais disponível na Sunano.",
+      path: `/perfil/${handle}`,
+      noIndex: true,
+    })
 
   const canonical = profile.display_slug ? profilePath(profile.display_slug) : `/perfil/${handle}`
 

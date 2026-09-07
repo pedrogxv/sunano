@@ -1,3 +1,6 @@
+import type { Metadata } from "next"
+
+import { buildMetadata } from "@/lib/seo"
 import { redirect } from "next/navigation"
 import { ShieldCheck } from "lucide-react"
 
@@ -13,6 +16,17 @@ export const dynamic = "force-dynamic"
 // e-mail/senha já exige o checkbox de consentimento LGPD antes de criar a
 // conta, mas o OAuth cria a conta direto no callback, sem esse ponto de
 // bloqueio. Esta página fecha essa lacuna — ver app/auth/callback/route.ts.
+
+// Área logada: sem conteúdo indexável. `noIndex` porque o robots.txt só
+// impede o rastreio — uma URL linkada de fora ainda entra no índice sem
+// ele, e aparece na SERP como resultado vazio ou tela de login.
+export const metadata: Metadata = buildMetadata({
+  title: "Consentimento",
+  description: "Consentimento de privacidade da sua conta Sunano.",
+  path: "/consentimento",
+  noIndex: true,
+})
+
 export default async function ConsentimentoPage({
   searchParams,
 }: {

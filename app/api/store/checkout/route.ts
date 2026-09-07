@@ -35,6 +35,7 @@ import {
 import { getStoreSettings } from "@/lib/server/repositories/store-settings-repository"
 import { getAffiliateByCode } from "@/lib/server/repositories/affiliates-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
+import { notifyDiscordOrderEventInBackground } from "@/lib/server/repositories/discord-orders-repository"
 import { isWebMaster } from "@/lib/admin-permissions"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { computeCardPriceCents, computeEffectivePrice } from "@/lib/store-pricing"
@@ -240,16 +241,18 @@ function buildAsaasCheckoutItems(
   cardSurchargePercent: number
 ): AsaasCheckoutItem[] {
   const items = orderItems.map((item) => {
+    // Separadores dentro do que a Asaas aceita (ver sanitizeAsaasText): "·"
+    // e ":" seriam removidos lá e a linha viraria um amontoado de palavras.
     const details = [
       item.variant_label,
-      ...item.variant_options.map((o) => `${o.group}: ${o.label}`),
+      ...item.variant_options.map((o) => `${o.group} - ${o.label}`),
     ].filter(Boolean)
     return {
       // A Asaas limita o nome do item; corta sem truncar no meio do acento.
       name: item.name.slice(0, 100),
       quantity: item.quantity,
       unitPriceCents: computeCardPriceCents(item.price_cents, cardSurchargePercent),
-      description: details.length > 0 ? details.join(" · ").slice(0, 255) : null,
+      description: details.length > 0 ? details.join(", ").slice(0, 255) : null,
     }
   })
 
@@ -1210,6 +1213,17 @@ export async function POST(request: NextRequest) {
         status: "pending",
       })
 
+      // Sem `await`: aqui o cliente está esperando o checkout abrir, e uma
+      // ida ao Discord (criar thread + duas mensagens) somaria centenas de ms
+      // a uma resposta que precisa ser rápida. A thread pode nascer alguns
+      // instantes depois — e se este for o único ponto que ela perder, o
+      // evento seguinte (`paid`) a cria do mesmo jeito.
+      notifyDiscordOrderEventInBackground({
+        orderId: order.id,
+        status: "pending",
+        actor: "checkout",
+      })
+
       return NextResponse.json({ orderId: order.id, checkoutUrl })
     }
 
@@ -1292,6 +1306,14 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       orderId: order.id,
       status: "pending",
+    })
+
+    // Sem `await` — mesma razão do ramo de cartão acima: a tela do PIX está
+    // esperando o QR code, e a notificação não pode entrar nesse caminho.
+    notifyDiscordOrderEventInBackground({
+      orderId: order.id,
+      status: "pending",
+      actor: "checkout",
     })
 
     return NextResponse.json({

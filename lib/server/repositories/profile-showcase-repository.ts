@@ -12,6 +12,8 @@ import { getUserActivityRank } from "@/lib/server/repositories/users-repository"
 import { getUserAchievements, getUserStreak } from "@/lib/server/repositories/achievements-repository"
 import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
+import { hasConfirmedDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
+import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
 import {
   getUserTierlistItems,
   getUserTierlistMeta,
@@ -137,6 +139,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviewsTotal,
     reviewedPeripheralIds,
     youtubeSubscribed,
+    discordMember,
     tierlistItems,
     tierlistMeta,
   ] = await Promise.all([
@@ -156,6 +159,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     countUserReviews(userId),
     getReviewedPeripheralIds(userId),
     isYoutubeSubscriptionEnabled() ? hasConfirmedYoutubeSubscription(userId) : Promise.resolve(false),
+    isDiscordMembershipEnabled() ? hasConfirmedDiscordMembership(userId) : Promise.resolve(false),
     // Os itens (e não só a contagem) alimentam o preview do board no perfil —
     // a contagem sai daqui, sem uma segunda query só pra contar. O catch
     // segue o resto deste repositório: uma seção que falha vira seção vazia,
@@ -189,6 +193,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     youtube_handle: row.youtube_handle,
     tiktok_handle: row.tiktok_handle,
     youtube_subscribed: youtubeSubscribed,
+    discord_member: discordMember,
     equipped_avatar_frame_url: equippedFrame?.frame_asset_url ?? null,
     member_since: row.created_at,
     profile_views: row.profile_views ?? 0,

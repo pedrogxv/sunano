@@ -369,6 +369,20 @@ export type Database = {
         }
         Update: Partial<Database["public"]["Tables"]["user_youtube_subscription"]["Insert"]>
       }
+      user_discord_membership: {
+        Relationships: []
+        Row: {
+          user_id: string
+          discord_user_id: string
+          confirmed_at: string
+        }
+        Insert: {
+          user_id: string
+          discord_user_id: string
+          confirmed_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_discord_membership"]["Insert"]>
+      }
       events: {
         Relationships: []
         Row: {
@@ -457,6 +471,8 @@ export type Database = {
           author_id: string | null
           title: string
           slug: string
+          /** "news" alimenta /noticias; "review" alimenta /blog. */
+          post_type: "news" | "review"
           excerpt: string | null
           cover_image_url: string | null
           cover_thumbnail_url: string | null
@@ -1353,6 +1369,47 @@ export type Database = {
           video_url?: string | null
           author_admin_id?: string | null
           published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      /**
+       * Vínculo pedido → thread do Discord que o acompanha (uma thread por
+       * pedido, no canal DISCORD_ORDERS_CHANNEL_ID). Só a service role lê:
+       * a tabela tem RLS ligado e nenhuma policy. Ver
+       * lib/server/repositories/discord-orders-repository.ts.
+       */
+      discord_order_threads: {
+        Relationships: []
+        Row: {
+          order_id: string
+          channel_id: string
+          thread_id: string
+          /** Mensagem "painel" fixada na thread, editada a cada evento. */
+          dashboard_message_id: string | null
+          last_status: string | null
+          /** Status + discriminador do último evento publicado (dedup). */
+          last_event_key: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          order_id: string
+          channel_id: string
+          thread_id: string
+          dashboard_message_id?: string | null
+          last_status?: string | null
+          last_event_key?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          order_id?: string
+          channel_id?: string
+          thread_id?: string
+          dashboard_message_id?: string | null
+          last_status?: string | null
+          last_event_key?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -2288,6 +2345,10 @@ export type Database = {
       confirm_youtube_subscription: {
         Args: { p_user_id: string }
         Returns: boolean
+      }
+      confirm_discord_membership: {
+        Args: { p_user_id: string; p_discord_user_id: string }
+        Returns: "granted" | "already" | "account_in_use"
       }
       toggle_forum_aura: {
         Args: {

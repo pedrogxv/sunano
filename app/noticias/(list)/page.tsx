@@ -12,7 +12,7 @@ import { PersonAvatar } from "@/components/people/PersonAvatar"
 import { RoleBadge } from "@/components/people/RoleBadge"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { profilePath } from "@/lib/profile-name"
-import { NewNewsButton } from "./new-news-button"
+import { NewNewsButton } from "../new-news-button"
 
 // ISR: renderizado no servidor e revalidado em background, sem o fetch
 // client-side que exibia um spinner a cada acesso.

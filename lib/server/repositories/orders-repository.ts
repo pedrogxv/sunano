@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import type { Database } from "@/lib/database.types"
 import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
+import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
@@ -727,6 +728,10 @@ export async function advanceOrderStatus(
     await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: nextStatus })
   }
 
+  // Discord fica FORA do `if (ownerId)`: um pedido de convidado não tem quem
+  // notificar no site, mas a equipe precisa vê-lo no canal igual aos outros.
+  await notifyDiscordOrderEvent({ orderId: id, status: nextStatus, actor: "admin" })
+
   if (adminId) {
     await logAdminAction({
       adminId,
@@ -783,11 +788,16 @@ export async function refundOrder(
     return { ok: false, error: "Valor de extorno inválido para o saldo restante do pedido.", status: 400 }
   }
 
-  const { refundPayment } = await import("@/lib/server/integrations/asaas")
+  const { refundPayment, AsaasError } = await import("@/lib/server/integrations/asaas")
   try {
     await refundPayment(existing.asaas_payment_id, { valueCents: refundCents, description: params.reason })
   } catch (err) {
     console.error("[orders-repository] refundOrder — Asaas:", err)
+    // 4xx da Asaas é regra de negócio (saldo insuficiente na conta, cobrança
+    // já estornada) — repetir não resolve, então mostramos o motivo dela.
+    if (err instanceof AsaasError && err.description) {
+      return { ok: false, error: `Asaas recusou o extorno: ${err.description}`, status: 502 }
+    }
     return { ok: false, error: "Não foi possível extornar no Asaas. Tente novamente.", status: 502 }
   }
 
@@ -820,6 +830,18 @@ export async function refundOrder(
       await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: "refunded" })
     }
   }
+
+  // Estorno parcial também vai pro Discord — é justamente o caso que some
+  // hoje (o pedido continua "pago" e nada avisa que saiu dinheiro). O valor
+  // entra em `eventKey` porque dois estornos parciais no mesmo pedido são
+  // dois eventos distintos, e a dedup por status sozinha esconderia o segundo.
+  await notifyDiscordOrderEvent({
+    orderId: id,
+    status: isFullRefund ? "refunded" : "partial_refund",
+    actor: "admin",
+    eventKey: isFullRefund ? undefined : String(newRefundedCents),
+    note: params.reason ?? null,
+  })
 
   try {
     await syncCommissionForRefund(
@@ -904,6 +926,13 @@ export async function cancelOrder(
     await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: "cancelled" })
   }
 
+  await notifyDiscordOrderEvent({
+    orderId: id,
+    status: "cancelled",
+    actor: adminId ? "admin" : "cliente",
+    note: params.reason ?? null,
+  })
+
   if (adminId) {
     await logAdminAction({
       adminId,
@@ -970,6 +999,12 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
     const ownerId = orderOwnerId(order.metadata)
     if (!ownerId) continue
     await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
+  }
+
+  // Em série, não em paralelo: um lote grande de expirações dispararia
+  // dezenas de requisições simultâneas e bateria no rate limit do Discord.
+  for (const order of orders) {
+    await notifyDiscordOrderEvent({ orderId: order.id, status: "expired", actor: "cron" })
   }
 
   // Achata (pedido, item) numa lista única e restaura o estoque em paralelo —
@@ -1081,6 +1116,8 @@ export async function expireOrderByPaymentId(
   if (ownerId) {
     await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
   }
+
+  await notifyDiscordOrderEvent({ orderId: order.id, status: "expired", actor: "webhook-asaas" })
 
   // Pré-venda não teve estoque descontado — devolver aqui inventaria unidades.
   const cart = ((order.items ?? []) as unknown as OrderStockLine[]).filter(lineMovesPhysicalStock)
@@ -1250,6 +1287,12 @@ export async function syncOrderRefundState(paymentId: string): Promise<Repositor
     if (ownerId) {
       await notifyOrderStatusChange({ userId: ownerId, orderId: existing.id, status: update.status })
     }
+    await notifyDiscordOrderEvent({
+      orderId: existing.id,
+      status: update.status,
+      actor: "webhook-asaas",
+      eventKey: String(refundedCents),
+    })
   }
 
   try {
@@ -1370,6 +1413,14 @@ export async function setOrderShippingAddress(
       userId,
       orderId,
       status: "awaiting_shipping_info",
+    })
+    // O card do Discord recarrega o pedido do banco, então já sai com o
+    // endereço que acabou de ser gravado — é exatamente o que o admin
+    // precisa ver para postar o pacote.
+    await notifyDiscordOrderEvent({
+      orderId,
+      status: "awaiting_shipping_info",
+      actor: "cliente",
     })
   }
 

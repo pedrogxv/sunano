@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { creditCommissionForOrder } from "@/lib/server/repositories/affiliates-repository"
 import { lineMovesPhysicalStock, orderOwnerId } from "@/lib/server/repositories/orders-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
+import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
 import { getPaymentsByCheckoutSession } from "@/lib/server/integrations/asaas"
 
 export const runtime = "nodejs"
@@ -120,6 +121,12 @@ export async function POST(request: NextRequest) {
         await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "paid" })
       }
 
+      // Fora do laço acima: pedido de convidado não tem dono para notificar
+      // no site, mas a venda tem que aparecer no canal do mesmo jeito.
+      for (const order of updatedOrders ?? []) {
+        await notifyDiscordOrderEvent({ orderId: order.id, status: "paid", actor: "webhook-asaas" })
+      }
+
       return NextResponse.json({ received: true })
     }
 
@@ -170,6 +177,7 @@ export async function POST(request: NextRequest) {
         if (ownerId) {
           await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: nextStatus })
         }
+        await notifyDiscordOrderEvent({ orderId: order.id, status: nextStatus, actor: "webhook-asaas" })
       }
 
       for (const order of updatedOrders ?? []) {

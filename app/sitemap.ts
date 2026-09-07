@@ -5,8 +5,10 @@ import { listForumCategoriesPublic } from "@/lib/server/repositories/forum-categ
 import { listAllBlogSlugsForSitemap } from "@/lib/server/repositories/blog-repository"
 import { listAllStoreSlugsForSitemap } from "@/lib/server/repositories/store-repository"
 import { listAllPeripheralSlugsForSitemap } from "@/lib/server/repositories/peripherals-repository"
+import { listProfileSlugsForSitemap } from "@/lib/server/repositories/users-repository"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
+import { profilePath } from "@/lib/profile-name"
 import { ALL_CATEGORIES, CATEGORY_PLURAL_LABELS } from "@/lib/tag-options"
 import { SITE_URL } from "@/lib/site-url"
 
@@ -52,12 +54,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // têm o conteúdo prometido.
   const storeEnabled = !isStoreMaintenanceEnabled()
 
-  const [forumPosts, categories, blogPosts, storeProducts, peripherals] = await Promise.all([
+  const [forumPosts, categories, blogPosts, newsPosts, storeProducts, peripherals, profiles] = await Promise.all([
     listAllForumSlugsForSitemap(),
     listForumCategoriesPublic(),
-    listAllBlogSlugsForSitemap(),
+    // Separados por tipo: `/blog` e `/noticias` são rotas distintas, e
+    // anunciar uma notícia sob `/blog/...` contradizia o canonical dela.
+    listAllBlogSlugsForSitemap("review"),
+    listAllBlogSlugsForSitemap("news"),
     storeEnabled ? listAllStoreSlugsForSitemap() : Promise.resolve([]),
     listAllPeripheralSlugsForSitemap(),
+    listProfileSlugsForSitemap(),
   ])
 
   const staticEntries: MetadataRoute.Sitemap = STATIC_ROUTES.map((r) => ({
@@ -93,6 +99,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }))
 
+  // Notícia envelhece rápido e é o conteúdo mais sensível a atraso de
+  // rastreio — daí a frequência maior que a do blog.
+  const newsEntries: MetadataRoute.Sitemap = newsPosts.map((p) => ({
+    url: `${SITE_URL}/noticias/${p.slug}`,
+    lastModified: new Date(p.updated_at),
+    changeFrequency: "weekly" as const,
+    priority: 0.6,
+  }))
+
   const storeEntries: MetadataRoute.Sitemap = storeProducts.map((p) => ({
     url: `${SITE_URL}/loja/${p.slug}`,
     lastModified: p.updated_at ? new Date(p.updated_at) : undefined,
@@ -102,14 +117,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }))
 
-  // Uma entrada por categoria de periférico. Passaram a ter canonical e
-  // título próprios (ver `generateMetadata` em app/perifericos/page.tsx), então
-  // são páginas legítimas — e o sitemap é o que informa o Google de que existem,
-  // já que o filtro é aplicado no cliente e não há link rastreável para cada uma.
+  // Uma entrada por categoria de periférico, na rota canônica
+  // `/perifericos/categoria/<slug>` — não mais em `?category=`, que o Google
+  // trata como candidato fraco a canonical. O sitemap é o que informa que elas
+  // existem, já que o filtro é aplicado no cliente e não há link rastreável
+  // para cada uma.
   const peripheralCategoryEntries: MetadataRoute.Sitemap = ALL_CATEGORIES.filter(
     (c) => CATEGORY_PLURAL_LABELS[c]
   ).map((c) => ({
-    url: `${SITE_URL}/perifericos?category=${c}`,
+    url: `${SITE_URL}/perifericos/categoria/${c}`,
     changeFrequency: "daily" as const,
     priority: 0.7,
   }))
@@ -124,6 +140,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }))
 
+  // O perfil público é conteúdo indexável e não era anunciado em lugar nenhum:
+  // o diretório `/pessoas` pagina no cliente, então não havia link rastreável
+  // para a maioria deles.
+  const profileEntries: MetadataRoute.Sitemap = profiles.map((p) => ({
+    url: `${SITE_URL}${profilePath(p.slug)}`,
+    lastModified: p.updated_at ? new Date(p.updated_at) : undefined,
+    changeFrequency: "weekly" as const,
+    priority: 0.4,
+  }))
+
   const storeRootEntries: MetadataRoute.Sitemap = storeEnabled
     ? [{ url: `${SITE_URL}/loja`, changeFrequency: "daily" as const, priority: 0.9 }]
     : []
@@ -136,6 +162,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...peripheralEntries,
     ...forumEntries,
     ...blogEntries,
+    ...newsEntries,
     ...storeEntries,
+    ...profileEntries,
   ]
 }

@@ -5,6 +5,7 @@ import { ExternalLink, PlayCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { VideoListJsonLd } from "@/components/seo/JsonLd"
 import { getYouTubeChannelFeed } from "@/lib/server/integrations/youtube"
 import { SOCIAL_LINKS } from "@/lib/social-links"
 
@@ -36,6 +37,17 @@ export async function VideosFeedContent() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-3 py-4 sm:px-4 sm:py-6 md:space-y-8 md:px-6 lg:px-8">
+      {/* Sem `VideoObject` a página concorre como texto e os vídeos não
+          aparecem na aba Vídeos do Google nem ganham miniatura no resultado. */}
+      <VideoListJsonLd
+        videos={videos.map((video) => ({
+          name: video.title,
+          description: video.description || video.title,
+          thumbnailUrl: video.thumbnailUrl,
+          uploadDate: video.publishedAt,
+          url: `https://www.youtube.com/watch?v=${video.id}`,
+        }))}
+      />
       <section className="overflow-hidden rounded-2xl border border-border bg-background p-4 md:p-7">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-5">
           <div className="space-y-2 md:space-y-3">

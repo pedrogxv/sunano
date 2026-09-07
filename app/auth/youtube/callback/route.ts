@@ -61,7 +61,11 @@ export async function GET(request: NextRequest) {
     })
 
     if (!response.ok) {
-      console.error(`[auth/youtube/callback] YouTube API error (${response.status})`)
+      // Corpo junto do status: a razão real vem no JSON de erro do Google
+      // (ex.: `authenticatedUserAccountSuspended` quando a conta que autorizou
+      // não tem canal do YouTube), e sem ela um 403 é indistinguível de outro.
+      const body = await response.text().catch(() => "<sem corpo>")
+      console.error(`[auth/youtube/callback] YouTube API error (${response.status}):`, body)
       return NextResponse.redirect(`${origin}${next}?youtube=error`)
     }
 

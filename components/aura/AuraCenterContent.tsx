@@ -40,7 +40,7 @@ import { AuraItemCard } from "@/components/aura/AuraItemCard"
 import { VipMonthCard } from "@/components/aura/VipMonthCard"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import { DisplayNameChangeCard } from "@/components/aura/DisplayNameChangeCard"
-import { YoutubeSubscriptionCard } from "@/components/aura/YoutubeSubscriptionCard"
+import { CommunityAchievements } from "@/components/aura/CommunityAchievements"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
 type AuraUsage = {
@@ -63,6 +63,10 @@ interface AuraCenterContentProps {
   initialEquippedItemId: string | null
   missions: DailyMissionsState
   youtubeConfirmed: boolean
+  /** Conquista "No Discord" ligada por env (ver lib/discord-membership.ts). */
+  discordEnabled: boolean
+  discordConfirmed: boolean
+  discordInviteUrl: string | null
   vipStatus: VipStatus
   nameCooldown: DisplayNameCooldown
   displayName: string
@@ -113,6 +117,9 @@ export function AuraCenterContent({
   initialEquippedItemId,
   missions,
   youtubeConfirmed,
+  discordEnabled,
+  discordConfirmed,
+  discordInviteUrl,
   vipStatus,
   nameCooldown,
   displayName,
@@ -133,10 +140,12 @@ export function AuraCenterContent({
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
   const [rankingOpen, setRankingOpen] = useState(false)
   const [shield, setShield] = useState(streakShield)
+  const [discordOk, setDiscordOk] = useState(discordConfirmed)
 
   const router = useRouter()
   const searchParams = useSearchParams()
   const youtubeStatus = searchParams.get("youtube")
+  const discordStatus = searchParams.get("discord")
   const { openLogin } = useAuthModal()
 
   // Feedback do redirect de app/auth/youtube/callback/route.ts — mostra o
@@ -154,6 +163,34 @@ export function AuraCenterContent({
     router.replace("/aura", { scroll: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [youtubeStatus])
+
+  // Feedback do redirect de app/auth/discord/callback/route.ts — mesmo padrão
+  // do YouTube acima: mostra o toast uma vez e limpa o query param.
+  useEffect(() => {
+    if (!discordStatus) return
+    if (discordStatus === "confirmed") {
+      toast.success("Discord conectado! +50 de Aura e a conquista No Discord.")
+      setCurrentBalance((prev) => prev + 50)
+      setDiscordOk(true)
+    } else if (discordStatus === "already") {
+      // Membro confirmado, mas a recompensa já tinha sido creditada antes —
+      // não somar de novo no saldo, só refletir o estado da conquista.
+      toast.info("Você já tinha resgatado essa conquista.")
+      setDiscordOk(true)
+    } else if (discordStatus === "not_member") {
+      toast.error("Não encontramos você no nosso servidor do Discord. Entre no servidor e tente de novo.")
+    } else if (discordStatus === "account_in_use") {
+      toast.error("Essa conta do Discord já foi usada por outro usuário.")
+    } else if (discordStatus === "canceled") {
+      toast.error("Você cancelou a autorização do Discord.")
+    } else if (discordStatus === "no_token") {
+      toast.error("O Discord não devolveu a autorização. Tente novamente.")
+    } else {
+      toast.error("Não foi possível confirmar seu Discord. Tente novamente.")
+    }
+    router.replace("/aura", { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discordStatus])
 
   const heatTier = streakHeatTier(streak.current)
   const heatStyle = STREAK_HEAT_STYLES[heatTier]
@@ -374,10 +411,17 @@ export function AuraCenterContent({
         </div>
       </div>
 
-      {/* Conquista especial "Inscrito" — binária, fora da grade de missões/loja */}
-      {isYoutubeSubscriptionEnabled() && (
-        <YoutubeSubscriptionCard confirmed={youtubeConfirmed} requireLogin={requireLogin} />
-      )}
+      {/* Conquistas especiais binárias (YouTube e Discord) — uma lista só, no
+          mesmo formato das tarefas acima. Cada uma continua com o próprio
+          OAuth e a própria cor; o que foi unificado é a apresentação. */}
+      <CommunityAchievements
+        youtubeEnabled={isYoutubeSubscriptionEnabled()}
+        youtubeConfirmed={youtubeConfirmed}
+        discordEnabled={discordEnabled}
+        discordConfirmed={discordOk}
+        discordInviteUrl={discordInviteUrl}
+        requireLogin={requireLogin}
+      />
 
       {/* Loja de itens */}
       <div className="space-y-3">

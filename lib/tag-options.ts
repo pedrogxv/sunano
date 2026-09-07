@@ -241,7 +241,7 @@ export function sanitizeTagsForCategory(category: Category, tags: readonly strin
 
 /**
  * Rótulo no plural de cada categoria, para título e descrição das páginas de
- * categoria (`/perifericos?category=`).
+ * categoria (`/perifericos/categoria/<slug>`).
  *
  * O mapa singular ("Teclado") já existia repetido em quatro telas; nenhuma
  * delas serve para SEO de listagem, onde o termo buscado é o plural

@@ -5,6 +5,7 @@ import { ShoppingBag } from "lucide-react"
 import { listStoreProductsPaginated, getStoreFilterOptions, listBestSellingProducts } from "@/lib/server/repositories/store-repository"
 import { listActiveBannersBySection } from "@/lib/server/repositories/store-banners-repository"
 import { StoreContent } from "@/components/store/StoreContent"
+import { ItemListJsonLd } from "@/components/seo/JsonLd"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { isWebMaster } from "@/lib/admin-permissions"
@@ -104,6 +105,12 @@ export default async function LojaPage() {
 
   return (
     <Suspense>
+      {/* A vitrine é filtrada e paginada no cliente: sem `ItemList` o Google
+          não tem âncora rastreável para os produtos desta página. */}
+      <ItemListJsonLd
+        name="Loja Sunano"
+        items={items.map((item) => ({ name: item.name, url: `/loja/${item.slug}` }))}
+      />
       <StoreContent
         initialItems={items}
         initialTotal={total}

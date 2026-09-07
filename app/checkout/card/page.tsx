@@ -123,7 +123,7 @@ function CardCheckoutContent() {
         <div className="space-y-2">
           <h1 className="text-3xl font-black text-foreground">Pagamento confirmado!</h1>
           <p className="text-muted-foreground max-w-sm">
-            Seu pedido foi recebido com sucesso. Você receberá um e-mail de confirmação em breve.
+            Seu pedido foi recebido com sucesso. Acompanhe o andamento pelo seu perfil.
           </p>
         </div>
 

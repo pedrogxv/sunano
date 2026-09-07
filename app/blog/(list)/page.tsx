@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { buildMetadata } from "@/lib/seo"
 
 import { listPublishedPosts } from "@/lib/server/repositories/blog-repository"
-import { BlogContent, type BlogPost } from "./blog-content"
+import { BlogContent, type BlogPost } from "../blog-content"
 
 // ISR: os posts são renderizados no servidor e revalidados em background,
 // eliminando o fetch client-side (que mostrava um spinner a cada visita).

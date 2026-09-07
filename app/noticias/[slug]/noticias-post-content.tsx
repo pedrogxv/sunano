@@ -21,6 +21,7 @@ export type NewsPost = {
   id: string
   title: string
   slug: string
+  peripheral_id?: string | null
   excerpt: string | null
   cover_image_url: string | null
   cover_thumbnail_url: string | null
@@ -28,6 +29,8 @@ export type NewsPost = {
   content: string
   read_time_minutes: number | null
   created_at: string
+  updated_at?: string | null
+  post_type?: "news" | "review"
   comment_count?: number
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
   author_profile?: { display_slug: string | null } | null

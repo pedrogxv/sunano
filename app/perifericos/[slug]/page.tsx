@@ -9,6 +9,8 @@ import { getPeripheralByIdOrSlug, listAllPeripherals } from "@/lib/server/reposi
 import { listProductsByPeripheral } from "@/lib/server/repositories/store-repository"
 import { listPublishedPostsByPeripheral } from "@/lib/server/repositories/blog-repository"
 import { getPeripheralReviewsWithStats } from "@/lib/server/repositories/peripheral-reviews-repository"
+import { BreadcrumbJsonLd, JsonLd } from "@/components/seo/JsonLd"
+import { CATEGORY_PLURAL_LABELS, isCategory } from "@/lib/tag-options"
 import { BackButton } from "@/components/ui/back-button"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
 
@@ -150,10 +152,22 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
 
   return (
     <div className="mx-auto max-w-[1600px] px-2 py-4 sm:px-4 md:px-6 lg:px-8">
-      <script
-        type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(peripheralJsonLd) }}
+      <JsonLd data={peripheralJsonLd} />
+      {/* A trilha só existia na loja; sem ela o Google mostra a URL crua no
+          lugar de "Periféricos > Categoria > Modelo". */}
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Periféricos", item: "/perifericos" },
+          ...(isCategory(data.category) && CATEGORY_PLURAL_LABELS[data.category]
+            ? [
+                {
+                  name: CATEGORY_PLURAL_LABELS[data.category],
+                  item: `/perifericos/categoria/${data.category}`,
+                },
+              ]
+            : []),
+          { name: fullProductName, item: `/perifericos/${slug}` },
+        ]}
       />
       <div className="mb-3">
         <BackButton />

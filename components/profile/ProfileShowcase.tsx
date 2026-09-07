@@ -18,6 +18,7 @@ import { profilePath } from "@/lib/profile-name"
 import { isVipActive } from "@/lib/account-tier"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
+import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
 
 /**
  * Altura da capa. Fica isolada aqui porque é o número que estamos calibrando
@@ -184,6 +185,7 @@ export function ProfileShowcase({
             aura_earned: profile.aura_total_earned,
           }}
           youtubeSubscribed={isYoutubeSubscriptionEnabled() ? profile.youtube_subscribed : undefined}
+          discordMember={isDiscordMembershipEnabled() ? profile.discord_member : undefined}
         />
 
         <SetupGrid setup={profile.setup} isOwner={isOwner} />

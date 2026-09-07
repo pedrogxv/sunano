@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { EventCard } from "@/components/events/EventCard"
 import { AchievementsGrid } from "@/components/profile/AchievementsGrid"
 import { YoutubeSubscribeButton } from "@/components/auth/YoutubeSubscribeButton"
+import { DiscordMembershipButton } from "@/components/auth/DiscordMembershipButton"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
 import { auraPriceForVip } from "@/lib/aura-pricing"
 import type { EventDisplay } from "@/lib/events"
@@ -25,6 +26,8 @@ interface EventsContentProps {
   achievementCounts: Record<AchievementTrack, number>
   youtubeEnabled: boolean
   youtubeConfirmed: boolean
+  discordEnabled: boolean
+  discordConfirmed: boolean
 }
 
 /**
@@ -45,6 +48,8 @@ export function EventsContent({
   achievementCounts,
   youtubeEnabled,
   youtubeConfirmed: initialYoutubeConfirmed,
+  discordEnabled,
+  discordConfirmed: initialDiscordConfirmed,
 }: EventsContentProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -53,6 +58,7 @@ export function EventsContent({
   const [auraBalance, setAuraBalance] = useState(initialAuraBalance)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [youtubeConfirmed, setYoutubeConfirmed] = useState(initialYoutubeConfirmed)
+  const [discordConfirmed, setDiscordConfirmed] = useState(initialDiscordConfirmed)
 
   // Feedback do redirect de app/auth/youtube/callback/route.ts (usuário pode
   // ter iniciado o fluxo daqui em vez de /aura).
@@ -69,6 +75,33 @@ export function EventsContent({
       toast.error("Não encontramos sua inscrição no canal. Inscreva-se e tente de novo.")
     } else {
       toast.error("Não foi possível confirmar sua inscrição. Tente novamente.")
+    }
+    router.replace("/conquistas", { scroll: false })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
+
+  // Idem para app/auth/discord/callback/route.ts — o fluxo pode ter começado
+  // aqui em vez de /aura.
+  useEffect(() => {
+    if (!discordEnabled) return
+    const discordStatus = searchParams.get("discord")
+    if (!discordStatus) return
+    if (discordStatus === "confirmed") {
+      toast.success("Discord conectado! +50 de Aura e a conquista No Discord.")
+      setDiscordConfirmed(true)
+      setAuraBalance((prev) => prev + 50)
+      notifyAuraChanged()
+    } else if (discordStatus === "already") {
+      toast.info("Você já tinha resgatado essa conquista.")
+      setDiscordConfirmed(true)
+    } else if (discordStatus === "not_member") {
+      toast.error("Não encontramos você no nosso servidor do Discord. Entre no servidor e tente de novo.")
+    } else if (discordStatus === "account_in_use") {
+      toast.error("Essa conta do Discord já foi usada por outro usuário.")
+    } else if (discordStatus === "canceled") {
+      toast.error("Você cancelou a autorização do Discord.")
+    } else {
+      toast.error("Não foi possível confirmar seu Discord. Tente novamente.")
     }
     router.replace("/conquistas", { scroll: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,6 +178,7 @@ export function EventsContent({
             counts={achievementCounts}
             showTitle={false}
             youtubeSubscribed={youtubeEnabled ? youtubeConfirmed : undefined}
+            discordMember={discordEnabled ? discordConfirmed : undefined}
           />
           {youtubeEnabled && !youtubeConfirmed && (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-600/30 bg-red-600/5 px-4 py-3">
@@ -152,6 +186,14 @@ export function EventsContent({
                 Ganhe uma conquista especial por ser inscrito no nosso canal — só rola uma vez! <span className="font-bold text-red-500">+50 de Aura</span>
               </p>
               <YoutubeSubscribeButton />
+            </div>
+          )}
+          {discordEnabled && !discordConfirmed && (
+            <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#5865F2]/30 bg-[#5865F2]/5 px-4 py-3">
+              <p className="flex-1 text-sm text-foreground">
+                Conecte seu Discord e confirme que está no nosso servidor — só rola uma vez! <span className="font-bold text-[#5865F2]">+50 de Aura</span>
+              </p>
+              <DiscordMembershipButton />
             </div>
           )}
         </section>

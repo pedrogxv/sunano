@@ -9,6 +9,8 @@ import { getVipStatus } from "@/lib/server/repositories/aura-store-repository"
 import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
+import { hasConfirmedDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
+import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
 import { EventsContent } from "./events-content"
 
 export const dynamic = "force-dynamic"
@@ -27,6 +29,7 @@ export default async function ConquistasPage() {
     forumActivity,
     followers,
     youtubeConfirmed,
+    discordConfirmed,
     vipStatus,
   ] = await Promise.all([
     listActiveEventsForDisplay(),
@@ -38,6 +41,9 @@ export default async function ConquistasPage() {
     userId ? countFollowers(userId) : Promise.resolve(0),
     userId && isYoutubeSubscriptionEnabled()
       ? hasConfirmedYoutubeSubscription(userId)
+      : Promise.resolve(false),
+    userId && isDiscordMembershipEnabled()
+      ? hasConfirmedDiscordMembership(userId)
       : Promise.resolve(false),
     userId ? getVipStatus(userId) : Promise.resolve({ active: false, expiresAt: null }),
   ])
@@ -59,6 +65,8 @@ export default async function ConquistasPage() {
         }}
         youtubeEnabled={isYoutubeSubscriptionEnabled()}
         youtubeConfirmed={youtubeConfirmed}
+        discordEnabled={isDiscordMembershipEnabled()}
+        discordConfirmed={discordConfirmed}
       />
     </Suspense>
   )

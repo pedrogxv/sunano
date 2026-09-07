@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/repositories/orders-repository"
 import { creditCommissionForOrder } from "@/lib/server/repositories/affiliates-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
+import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
 
 export const runtime = "nodejs"
 export const maxDuration = 20
@@ -226,6 +227,13 @@ export async function POST(request: NextRequest) {
         console.error(
           `[webhooks/asaas] pedido ${order.id} restaurado sem estoque para: ${oversoldItems.join(", ")}`
         )
+
+        await notifyDiscordOrderEvent({
+          orderId: order.id,
+          status: "oversold",
+          actor: "webhook-asaas",
+          note: `Sem estoque para: ${oversoldItems.join(", ")}`,
+        })
         await db
           .from("store_orders")
           .update({ status: "expired", updated_at: new Date().toISOString() })
@@ -272,6 +280,17 @@ export async function POST(request: NextRequest) {
         console.error(
           `[webhooks/asaas] CHARGEBACK ${payload.event} no pedido ${order.id} (cobrança ${paymentId}) — requer ação manual`
         )
+
+        // Um chargeback só existia no log até aqui — e log ninguém lê a
+        // tempo. A disputa tem prazo de resposta: perder o prazo é perder o
+        // dinheiro E o produto, então este é o evento mais urgente da loja.
+        await notifyDiscordOrderEvent({
+          orderId: order.id,
+          status: "chargeback",
+          actor: "webhook-asaas",
+          eventKey: payload.event,
+          note: `Evento Asaas: ${payload.event} · cobrança ${paymentId}`,
+        })
       }
 
       return NextResponse.json({ received: true })
@@ -360,6 +379,12 @@ export async function POST(request: NextRequest) {
       const ownerId = orderOwnerId(order.metadata as Record<string, unknown> | null)
       if (!ownerId) continue
       await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "paid" })
+    }
+
+    // Fora do laço acima de propósito: pedido de convidado não tem dono para
+    // notificar no site, mas a venda precisa aparecer no canal do mesmo jeito.
+    for (const order of updatedOrders) {
+      await notifyDiscordOrderEvent({ orderId: order.id, status: "paid", actor: "webhook-asaas" })
     }
 
     return NextResponse.json({ received: true })

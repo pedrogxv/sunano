@@ -79,6 +79,8 @@ export type BlogPostDetail = {
   content: string
   read_time_minutes: number | null
   created_at: string
+  /** Ausente em bancos onde a coluna ainda não existe — ver retry abaixo. */
+  updated_at: string | null
   comment_count: number
   admin_profiles: BlogAuthor
   author_profile: AuthorPublicProfile
@@ -123,7 +125,7 @@ const LIST_COLUMNS =
 const LIST_COLUMNS_NO_CONTENT = LIST_COLUMNS.replace("content, ", "")
 
 const DETAIL_COLUMNS =
-  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
+  "id, title, slug, post_type, peripheral_id, author_id, excerpt, cover_image_url, cover_thumbnail_url, video_url, content, read_time_minutes, created_at, updated_at, admin_profiles(display_name, avatar_url, email, role), peripherals(id, name, brand_id, brands(name), category)"
 
 /**
  * Achata o embed `peripherals(brand_id, brands(name))` do PostgREST em
@@ -235,20 +237,60 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
   return map
 }
 
-/** Slugs + data de todos os posts publicados — usado só pelo `app/sitemap.ts`, sem joins. */
-export async function listAllBlogSlugsForSitemap(): Promise<{ slug: string; updated_at: string }[]> {
+/** Uma entrada de sitemap: slug + data da última alteração real. */
+export interface BlogSitemapEntry {
+  slug: string
+  updated_at: string
+}
+
+/**
+ * Slugs + data dos posts publicados, separados por tipo — usado só pelo
+ * `app/sitemap.ts`, sem joins.
+ *
+ * O filtro por `post_type` não é cosmético. Antes esta função devolvia TODOS
+ * os posts publicados e o sitemap montava `/blog/<slug>` para cada um, então
+ * toda notícia era anunciada em `/blog/...` enquanto o `canonical` da própria
+ * página apontava para `/noticias/...`. Como as duas rotas resolvem o post
+ * pelo mesmo `getPublishedPostBySlug`, a URL errada respondia 200 com o
+ * conteúdo certo — sitemap e canonical em desacordo, que o Google resolve
+ * descartando a URL. Nenhuma notícia era anunciada no endereço correto.
+ *
+ * `updated_at` também era `created_at` disfarçado: post editado nunca
+ * sinalizava mudança ao crawler.
+ */
+export async function listAllBlogSlugsForSitemap(
+  postType?: BlogPostType
+): Promise<BlogSitemapEntry[]> {
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("blog_posts")
-    .select("slug, created_at")
-    .eq("is_published", true)
-    .order("created_at", { ascending: false })
+
+  const runQuery = (columns: string, filterByType: boolean) => {
+    let query = db.from("blog_posts").select(columns).eq("is_published", true)
+    if (filterByType && postType) query = query.eq("post_type", postType)
+    return query.order("created_at", { ascending: false })
+  }
+
+  // Mesma degradação em cascata do resto do repositório: bancos onde a
+  // migração de `post_type`/`updated_at` ainda não rodou continuam servindo
+  // sitemap em vez de devolver lista vazia.
+  let { data, error } = await runQuery("slug, created_at, updated_at", true)
+
+  if (error && isMissingColumn(error.message, "updated_at")) {
+    ({ data, error } = await runQuery("slug, created_at", true))
+  }
+  if (error && isMissingPostType(error.message)) {
+    ({ data, error } = await runQuery("slug, created_at", false))
+  }
 
   if (error) {
     console.error("[blog-repository] listAllBlogSlugsForSitemap:", error)
     return []
   }
-  return (data ?? []).map((p) => ({ slug: p.slug, updated_at: p.created_at }))
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((p) => ({
+    slug: p.slug as string,
+    updated_at: (p.updated_at ?? p.created_at) as string,
+  }))
 }
 
 /**
@@ -341,8 +383,12 @@ export const getPublishedPostBySlug = cache(async (slug: string): Promise<BlogPo
 
   let columns = DETAIL_COLUMNS
   let { data, error } = await runQuery(columns)
+  if (error && isMissingColumn(error.message, "updated_at")) {
+    columns = withoutColumn(columns, "updated_at")
+    ;({ data, error } = await runQuery(columns))
+  }
   if (error && isMissingPostType(error.message)) {
-    columns = DETAIL_COLUMNS_LEGACY
+    columns = withoutColumn(DETAIL_COLUMNS_LEGACY, "updated_at")
     ;({ data, error } = await runQuery(columns))
   }
   if (error) {

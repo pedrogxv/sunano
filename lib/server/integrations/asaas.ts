@@ -67,6 +67,38 @@ function getApiKey() {
   return key
 }
 
+/**
+ * Erro de chamada à Asaas. Guarda o código/descrição estruturados do corpo
+ * (`errors[0]`) porque vários 400 são regras de negócio legítimas — saldo
+ * insuficiente para estorno, cobrança já estornada — e o admin precisa ver o
+ * motivo real, não um "tente novamente" genérico.
+ */
+export class AsaasError extends Error {
+  readonly status: number
+  readonly code: string | null
+  readonly description: string | null
+
+  constructor(path: string, status: number, body: string) {
+    let code: string | null = null
+    let description: string | null = null
+    try {
+      const parsed = JSON.parse(body) as { errors?: Array<{ code?: string; description?: string }> }
+      const first = parsed?.errors?.[0]
+      if (first) {
+        code = first.code ?? null
+        description = first.description ?? null
+      }
+    } catch {
+      // corpo não-JSON: só o texto cru na mensagem, abaixo
+    }
+    super(`Asaas ${path} falhou (${status}): ${body}`)
+    this.name = "AsaasError"
+    this.status = status
+    this.code = code
+    this.description = description
+  }
+}
+
 async function asaasFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${resolveBaseUrl()}${path}`, {
     ...init,
@@ -80,10 +112,44 @@ async function asaasFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => "")
-    throw new Error(`Asaas ${path} falhou (${res.status}): ${text}`)
+    throw new AsaasError(path, res.status, text)
   }
 
   return res.json() as Promise<T>
+}
+
+/**
+ * A Asaas valida `name` (e `description`) dos itens do Checkout com uma
+ * lista curta de caracteres permitidos e responde 400
+ * `parse_error: "O campo 'name' não pode conter caracteres especiais"` para
+ * qualquer coisa fora dela. Na prática passam letras (com acento), dígitos,
+ * espaço e a pontuação básica abaixo — símbolos comuns em nome de produto
+ * (`|`, `/`, `—`, `+`, `&`, `#`, `%`, `*`, `®`, emoji) derrubam a chamada.
+ *
+ * Como o nome do produto é digitado livremente no admin, não dá para confiar
+ * que ele seja aceitável: sanitiza aqui, no único ponto por onde todo
+ * checkout passa, em vez de esperar disciplina no cadastro.
+ *
+ * A troca é textual, não semântica: separadores viram hífen (para "Teclado |
+ * ABNT2" continuar legível como "Teclado - ABNT2"), o resto é removido, e os
+ * espaços resultantes são colapsados. Se sobrar string vazia (nome só de
+ * emoji, por exemplo), cai num rótulo genérico — melhor cobrar com o nome
+ * feio do que não cobrar.
+ */
+export function sanitizeAsaasText(value: string, fallback = "Item"): string {
+  const cleaned = value
+    .normalize("NFC")
+    // Separadores visuais viram hífen simples (que a Asaas aceita).
+    .replace(/[|/\\—–_]+/g, "-")
+    // Só o que a Asaas aceita: letras (incl. acentuadas), dígitos, espaço,
+    // hífen, ponto, vírgula, parênteses e apóstrofo.
+    .replace(/[^\p{L}\p{N} .,()'-]+/gu, " ")
+    .replace(/\s+/g, " ")
+    // Pontuação órfã nas pontas depois da limpeza ("Mouse -" → "Mouse").
+    // Parênteses ficam de fora: "(P-M-G)" tem que manter o fecha-parêntese.
+    .replace(/^[\s.,'-]+|[\s.,'-]+$/g, "")
+
+  return cleaned || fallback
 }
 
 export interface FindOrCreateCustomerParams {
@@ -130,7 +196,7 @@ export async function findOrCreateCustomer(params: FindOrCreateCustomerParams): 
       return asaasFetch<AsaasCustomer>(`/customers/${encodeURIComponent(customer.id)}`, {
         method: "PUT",
         body: JSON.stringify({
-          name: params.name,
+          name: sanitizeAsaasText(params.name, "Cliente"),
           email: params.email ?? undefined,
           phone: params.phone ?? undefined,
           postalCode: params.postalCode ?? undefined,
@@ -149,7 +215,7 @@ export async function findOrCreateCustomer(params: FindOrCreateCustomerParams): 
   return asaasFetch<AsaasCustomer>("/customers", {
     method: "POST",
     body: JSON.stringify({
-      name: params.name,
+      name: sanitizeAsaasText(params.name, "Cliente"),
       cpfCnpj: params.cpfCnpj,
       email: params.email ?? undefined,
       phone: params.phone ?? undefined,
@@ -310,10 +376,10 @@ export async function createCheckout(params: CreateCheckoutParams): Promise<Asaa
       externalReference: params.externalReference,
       customer: params.customerId,
       items: params.items.map((item) => ({
-        name: item.name,
+        name: sanitizeAsaasText(item.name),
         quantity: item.quantity,
         value: item.unitPriceCents / 100,
-        ...(item.description && { description: item.description }),
+        ...(item.description && { description: sanitizeAsaasText(item.description) }),
       })),
       callback: {
         successUrl: params.successUrl,
@@ -364,7 +430,13 @@ export async function createSubscriptionCheckout(
       minutesToExpire: params.minutesToExpire,
       externalReference: params.externalReference,
       customer: params.customerId,
-      items: [{ name: params.description, quantity: 1, value: params.amountCents / 100 }],
+      items: [
+        {
+          name: sanitizeAsaasText(params.description),
+          quantity: 1,
+          value: params.amountCents / 100,
+        },
+      ],
       callback: {
         successUrl: params.successUrl,
         cancelUrl: params.cancelUrl,

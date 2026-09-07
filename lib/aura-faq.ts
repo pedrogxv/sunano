@@ -12,6 +12,7 @@
  * - Curtida recebida: `toggle_forum_aura`/`toggle_forum_post_aura`/`toggle_peripheral_comment_aura` (20260923000002_aura_trust_tiers.sql)
  * - Missões diárias: `complete_daily_mission` (20260930000000_aura_fixed_rewards.sql)
  * - Inscrição YouTube: `confirm_youtube_subscription` (20260921120000_youtube_subscription_achievement.sql)
+ * - Membro do Discord: `confirm_discord_membership` (20261015000000_discord_membership_achievement.sql)
  * - Conquistas por trilha: seeds de `20260808_achievements_streak.sql` e `20260919000000_aura_earned_achievements.sql`,
  *   creditadas por `check_and_award_track_achievements` (20260930000000_aura_fixed_rewards.sql)
  *
@@ -70,6 +71,11 @@ export const AURA_GAIN_ENTRIES: AuraFaqEntry[] = [
     id: "youtube",
     question: "Confirmar inscrição no canal do YouTube",
     answer: "+50 de Aura, uma única vez — conquista especial \"Inscrito\", não passa pelo multiplicador.",
+  },
+  {
+    id: "discord",
+    question: "Conectar o Discord e confirmar que está no servidor",
+    answer: "+50 de Aura, uma única vez — conquista especial \"No Discord\", não passa pelo multiplicador. Vale uma vez por conta do Discord: a mesma conta não pode resgatar em dois perfis.",
   },
   {
     id: "achievements",

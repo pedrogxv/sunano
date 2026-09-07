@@ -11,7 +11,8 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "check:uploads": "tsx scripts/check-upload-hygiene.ts",
-    "cleanup:storage": "tsx scripts/cleanup-orphaned-storage.ts"
+    "cleanup:storage": "tsx scripts/cleanup-orphaned-storage.ts",
+    "test:discord": "tsx scripts/test-discord-orders.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

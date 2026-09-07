@@ -1,3 +1,6 @@
+import type { Metadata } from "next"
+
+import { buildMetadata } from "@/lib/seo"
 import { AuthBackground } from "@/components/auth/AuthBackground"
 import { UserRegisterForm } from "@/components/auth/UserRegisterForm"
 import {
@@ -5,6 +8,17 @@ import {
   AuthMotionCard,
   ContinueWithoutAccountLink,
 } from "@/components/auth/AuthPageMotion"
+
+
+// Tela de sessão: sem conteúdo indexável. `noIndex` porque o robots.txt
+// só impede o rastreio — uma URL linkada de fora ainda entra no índice
+// sem ele, e aparece na SERP como resultado vazio.
+export const metadata: Metadata = buildMetadata({
+  title: "Criar conta",
+  description: "Crie sua conta na Sunano.",
+  path: "/register",
+  noIndex: true,
+})
 
 export default function RegisterPage() {
   return (

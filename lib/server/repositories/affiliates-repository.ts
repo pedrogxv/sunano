@@ -20,9 +20,23 @@ function formatCentsBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
 }
 
+/**
+ * Base de cálculo da comissão. NÃO é `total_cents`: no cartão esse total já
+ * embute o acréscimo de ~10% (`card_surcharge_percent`), que é repasse ao
+ * gateway e não receita da loja — comissionar sobre ele faz a loja pagar 5%
+ * de uma taxa que ela própria não recebe. `pix_price_cents` guarda o preço
+ * limpo, gravado no checkout justamente para esse tipo de conta.
+ *
+ * Pedidos PIX e pedidos antigos (anteriores à coluna) não têm acréscimo
+ * nenhum, e aí `total_cents` já É a base — o fallback cobre os dois casos.
+ */
+function commissionBaseCents(order: { total_cents: number; pix_price_cents?: number | null }): number {
+  return order.pix_price_cents ?? order.total_cents
+}
+
 export type AffiliateStatus = "pending" | "approved" | "rejected" | "suspended"
 export type PixKeyType = "cpf" | "cnpj" | "email" | "phone" | "random"
-export type CommissionEventType = "credit" | "refund_debit" | "adjustment"
+export type CommissionEventType = "credit" | "refund_debit" | "adjustment" | "payout_debit"
 export type PayoutStatus = "requested" | "paid" | "rejected" | "cancelled"
 
 export type AffiliateRow = {
@@ -218,9 +232,15 @@ export async function getAffiliateSummary(affiliateId: string): Promise<Affiliat
   const totalPaidCents = (payouts ?? [])
     .filter((p) => p.status === "paid")
     .reduce((sum, p) => sum + p.amount_cents, 0)
+  // Só saques ainda em análise entram como reservado. Saque `paid` não precisa
+  // (e não pode) ser descontado aqui: desde 20261016000001 ele já saiu de
+  // `balance_cents` via `payout_debit` no ledger — contar nos dois lugares
+  // subtrairia o mesmo valor duas vezes.
   const totalRequestedPendingCents = (payouts ?? [])
     .filter((p) => p.status === "requested")
     .reduce((sum, p) => sum + p.amount_cents, 0)
+  // `type = 'credit'` na query acima já exclui `payout_debit`: "total ganho" é
+  // o quanto as vendas renderam, não é afetado por quanto já foi sacado.
   const totalEarnedCents = (credits ?? []).reduce((sum, c) => sum + c.amount_cents, 0)
 
   return {
@@ -231,10 +251,77 @@ export async function getAffiliateSummary(affiliateId: string): Promise<Affiliat
   }
 }
 
+export type AffiliateSalesStats = {
+  /** Pedidos atribuídos que chegaram a ser pagos — os que geraram comissão. */
+  paidOrders: number
+  /** Atribuídos que ainda não pagaram (PIX aberto): comissão possível, não garantida. */
+  pendingOrders: number
+  /** Comissão que entra se os pendentes forem pagos. */
+  pendingCommissionCents: number
+  /** Data do último pedido pago atribuído — "seu link vendeu pela última vez em…". */
+  lastSaleAt: string | null
+}
+
+/**
+ * Métricas de venda do afiliado, derivadas de `store_orders` (não do ledger):
+ * o ledger só conhece o que já virou comissão, e a pergunta que o painel
+ * precisa responder é "meu link está funcionando?" — que inclui as vendas
+ * ainda não pagas.
+ *
+ * Não há tracking de cliques hoje, então taxa de conversão não é calculável;
+ * o painel mostra o que é real (vendas) em vez de um número inventado.
+ */
+export async function getAffiliateSalesStats(affiliateId: string): Promise<AffiliateSalesStats> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db
+    .from("store_orders")
+    .select("status, total_cents, pix_price_cents, created_at, is_sandbox")
+    .eq("affiliate_id", affiliateId)
+    .order("created_at", { ascending: false })
+    .limit(500)
+
+  if (error) {
+    console.error("[affiliates-repository] getAffiliateSalesStats:", error)
+    return { paidOrders: 0, pendingOrders: 0, pendingCommissionCents: 0, lastSaleAt: null }
+  }
+
+  // Sandbox fica de fora pela mesma razão de `creditCommissionForOrder`: não
+  // foi venda de verdade, não pode inflar o painel de ninguém.
+  const orders = (data ?? []).filter((order) => !order.is_sandbox)
+
+  // Os mesmos estados que `syncOrderRefundState` trata como pós-pagamento.
+  const PAID_STATUSES = ["paid", "awaiting_shipping_info", "shipped", "delivered", "refunded"]
+
+  const paid = orders.filter((order) => PAID_STATUSES.includes(order.status))
+  const pending = orders.filter((order) => order.status === "pending")
+
+  const { data: affiliate } = await db
+    .from("affiliates")
+    .select("commission_bps")
+    .eq("id", affiliateId)
+    .maybeSingle()
+  const bps = affiliate?.commission_bps ?? 0
+
+  const pendingCommissionCents = pending.reduce(
+    (sum, order) => sum + Math.round((commissionBaseCents(order) * bps) / 10000),
+    0
+  )
+
+  return {
+    paidOrders: paid.length,
+    pendingOrders: pending.length,
+    pendingCommissionCents,
+    lastSaleAt: paid[0]?.created_at ?? null,
+  }
+}
+
 export type CommissionEventRow = {
   id: string
   affiliate_id: string
-  order_id: string
+  /** Null em eventos que não nascem de uma venda (saque pago). */
+  order_id: string | null
+  payout_id: string | null
   type: CommissionEventType
   amount_cents: number
   order_total_cents: number
@@ -245,7 +332,7 @@ export type CommissionEventRow = {
 }
 
 const COMMISSION_EVENT_COLUMNS =
-  "id, affiliate_id, order_id, type, amount_cents, order_total_cents, commission_bps, related_event_id, note, created_at"
+  "id, affiliate_id, order_id, payout_id, type, amount_cents, order_total_cents, commission_bps, related_event_id, note, created_at"
 
 export async function listAffiliateCommissionEvents(
   affiliateId: string,
@@ -408,7 +495,7 @@ export async function creditCommissionForOrder(orderId: string): Promise<void> {
 
   const { data: order } = await db
     .from("store_orders")
-    .select("id, affiliate_id, total_cents, is_sandbox")
+    .select("id, affiliate_id, total_cents, pix_price_cents, is_sandbox")
     .eq("id", orderId)
     .maybeSingle()
 
@@ -422,9 +509,12 @@ export async function creditCommissionForOrder(orderId: string): Promise<void> {
     .eq("id", order.affiliate_id)
     .maybeSingle()
 
-  if (!affiliate) return
+  // Afiliado suspenso/rejeitado não recebe comissão de venda nova. A RPC
+  // também recusa (guarda real, atômica); aqui é só para evitar a ida ao banco.
+  if (!affiliate || affiliate.status !== "approved") return
 
-  const commissionCents = Math.round((order.total_cents * affiliate.commission_bps) / 10000)
+  const baseCents = commissionBaseCents(order)
+  const commissionCents = Math.round((baseCents * affiliate.commission_bps) / 10000)
   if (commissionCents <= 0) return
 
   const { error } = await db.rpc("apply_affiliate_commission_event", {
@@ -432,7 +522,7 @@ export async function creditCommissionForOrder(orderId: string): Promise<void> {
     p_order_id: order.id,
     p_delta_cents: commissionCents,
     p_type: "credit",
-    p_order_total_cents: order.total_cents,
+    p_order_total_cents: baseCents,
     p_commission_bps: affiliate.commission_bps,
   })
 
@@ -441,7 +531,12 @@ export async function creditCommissionForOrder(orderId: string): Promise<void> {
   }
 }
 
-type OrderRefundContext = { id: string; affiliate_id: string | null; total_cents: number }
+type OrderRefundContext = {
+  id: string
+  affiliate_id: string | null
+  total_cents: number
+  pix_price_cents?: number | null
+}
 
 /**
  * Chamada por `refundOrder`/`syncOrderRefundState` depois que `refunded_cents`
@@ -476,7 +571,17 @@ export async function syncCommissionForRefund(
   // exemplo): não há comissão a debitar/recreditar.
   if (!affiliate || !creditEvent) return
 
-  const commissionDelta = Math.round((delta * affiliate.commission_bps) / 10000)
+  // O valor estornado vem BRUTO (o cliente recebe de volta o que pagou,
+  // acréscimo de cartão incluído), mas a comissão foi creditada sobre a base
+  // limpa — ver `commissionBaseCents`. Debitar 5% do bruto tiraria mais do que
+  // se creditou, e um estorno total deixaria o afiliado com saldo negativo
+  // sem venda nenhuma por trás. Por isso o delta é reduzido à mesma proporção
+  // base/total antes de virar comissão.
+  const baseCents = commissionBaseCents(order)
+  const proportionalDelta =
+    order.total_cents > 0 ? Math.round((delta * baseCents) / order.total_cents) : delta
+
+  const commissionDelta = Math.round((proportionalDelta * affiliate.commission_bps) / 10000)
   if (commissionDelta === 0) return
 
   const { error } = await db.rpc("apply_affiliate_commission_event", {
@@ -484,13 +589,86 @@ export async function syncCommissionForRefund(
     p_order_id: order.id,
     p_delta_cents: -commissionDelta,
     p_type: "refund_debit",
-    p_order_total_cents: order.total_cents,
+    p_order_total_cents: baseCents,
     p_commission_bps: affiliate.commission_bps,
     p_related_event_id: creditEvent.id,
   })
 
   if (error) {
     console.error("[affiliates-repository] syncCommissionForRefund:", error)
+  }
+}
+
+/**
+ * Débito (e reversão) de comissão por CHARGEBACK.
+ *
+ * Um chargeback não passa por `refunded_cents` — a Asaas retém o valor e
+ * dispara eventos próprios de disputa, e só emite `PAYMENT_REFUNDED` em parte
+ * dos desfechos. Sem este caminho, a loja perdia produto e dinheiro e ainda
+ * pagava a comissão da venda.
+ *
+ * O débito acontece na ABERTURA da disputa (quando o dinheiro já saiu), não na
+ * decisão final: esperar daria ao afiliado uma janela para sacar a comissão de
+ * uma venda que a loja já perdeu. Se a loja vencer, `reversed: true` recredita.
+ *
+ * Idempotência: `note` carrega uma marca por pedido+direção e é conferida
+ * antes de inserir — a Asaas reentrega o mesmo evento de disputa várias vezes,
+ * e `refund_debit` (ao contrário de `credit`) não tem índice único que barre
+ * repetição. Fire-and-forget, igual ao resto do módulo.
+ */
+export async function syncCommissionForChargeback(
+  orderId: string,
+  options: { reversed?: boolean } = {}
+): Promise<void> {
+  const reversed = options.reversed ?? false
+  const marker = reversed ? "chargeback_reversal" : "chargeback"
+
+  const db = createSupabaseAdminClient()
+
+  const { data: order } = await db
+    .from("store_orders")
+    .select("id, affiliate_id, total_cents, pix_price_cents")
+    .eq("id", orderId)
+    .maybeSingle()
+
+  if (!order?.affiliate_id) return
+
+  const [{ data: affiliate }, { data: events }] = await Promise.all([
+    db.from("affiliates").select("id, commission_bps").eq("id", order.affiliate_id).maybeSingle(),
+    db
+      .from("affiliate_commission_events")
+      .select("id, type, note")
+      .eq("order_id", order.id),
+  ])
+
+  const creditEvent = (events ?? []).find((event) => event.type === "credit")
+  // Sem crédito original não há o que debitar (venda de afiliado suspenso, por
+  // exemplo). Nem o que recreditar.
+  if (!affiliate || !creditEvent) return
+
+  const alreadyApplied = (events ?? []).some((event) => event.note === marker)
+  if (alreadyApplied) return
+
+  // Reverter só faz sentido se o débito de abertura chegou a existir.
+  if (reversed && !(events ?? []).some((event) => event.note === "chargeback")) return
+
+  const baseCents = commissionBaseCents(order)
+  const commissionCents = Math.round((baseCents * affiliate.commission_bps) / 10000)
+  if (commissionCents <= 0) return
+
+  const { error } = await db.rpc("apply_affiliate_commission_event", {
+    p_affiliate_id: affiliate.id,
+    p_order_id: order.id,
+    p_delta_cents: reversed ? commissionCents : -commissionCents,
+    p_type: "refund_debit",
+    p_order_total_cents: baseCents,
+    p_commission_bps: affiliate.commission_bps,
+    p_related_event_id: creditEvent.id,
+    p_note: marker,
+  })
+
+  if (error) {
+    console.error("[affiliates-repository] syncCommissionForChargeback:", error)
   }
 }
 
@@ -633,39 +811,44 @@ async function getPayoutOwnerUserId(affiliateId: string): Promise<string | null>
   return data?.user_id ?? null
 }
 
-/** Marcação manual — o PIX de fato é feito fora do sistema pelo admin. */
+/**
+ * Marcação manual — o PIX de fato é feito fora do sistema pelo admin.
+ *
+ * Delega à RPC `mark_affiliate_payout_paid` porque marcar como pago tem DOIS
+ * efeitos que precisam acontecer juntos ou não acontecer: mudar o status e
+ * debitar o saldo. Antes só o status mudava, e o valor pago voltava a contar
+ * como disponível — o mesmo dinheiro podia ser sacado de novo (ver a migration
+ * 20261016000001). A RPC também fecha a corrida entre dois admins decidindo o
+ * mesmo saque, e o índice único em `payout_id` impede duplo débito.
+ */
 export async function markPayoutPaid(payoutId: string, reviewerId: string): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
-  const { data: existing } = await db
-    .from("affiliate_payout_requests")
-    .select("id, status, affiliate_id, amount_cents")
-    .eq("id", payoutId)
-    .maybeSingle()
-  if (!existing) return { ok: false, error: "Saque não encontrado.", status: 404 }
-  if (existing.status !== "requested") {
-    return { ok: false, error: "Este saque já foi decidido.", status: 400 }
-  }
-
-  const { error } = await db
-    .from("affiliate_payout_requests")
-    .update({ status: "paid", reviewed_by: reviewerId, reviewed_at: new Date().toISOString(), paid_at: new Date().toISOString() })
-    .eq("id", payoutId)
+  const { data, error } = await db.rpc("mark_affiliate_payout_paid", {
+    p_payout_id: payoutId,
+    p_reviewer_id: reviewerId,
+  })
 
   if (error) {
     console.error("[affiliates-repository] markPayoutPaid:", error)
     return { ok: false, error: "Não foi possível marcar o saque como pago.", status: 500 }
   }
+  if (!data?.ok) {
+    if (data?.code === "not_found") {
+      return { ok: false, error: "Saque não encontrado.", status: 404 }
+    }
+    return { ok: false, error: "Este saque já foi decidido.", status: 400 }
+  }
 
   // Depois do update: avisar sobre um pagamento que não aconteceu é pior que
   // não avisar. `notifyAffiliatePayoutStatus` é best-effort e nunca lança.
-  const userId = await getPayoutOwnerUserId(existing.affiliate_id)
+  const userId = await getPayoutOwnerUserId(data.affiliate_id as string)
   if (userId) {
     await notifyAffiliatePayoutStatus({
       userId,
       payoutId,
       status: "paid",
-      amountCents: existing.amount_cents,
+      amountCents: data.amount_cents as number,
     })
   }
 

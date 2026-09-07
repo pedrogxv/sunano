@@ -9,7 +9,10 @@ import {
   reReserveStockForLatePayment,
   expireOrderByPaymentId,
 } from "@/lib/server/repositories/orders-repository"
-import { creditCommissionForOrder } from "@/lib/server/repositories/affiliates-repository"
+import {
+  creditCommissionForOrder,
+  syncCommissionForChargeback,
+} from "@/lib/server/repositories/affiliates-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
 
@@ -75,6 +78,17 @@ const CHARGEBACK_EVENTS = new Set([
   "PAYMENT_CHARGEBACK_DISPUTE",
   "PAYMENT_AWAITING_CHARGEBACK_REVERSAL",
 ])
+
+// Abertura da disputa: o dinheiro JÁ saiu da conta da loja aqui (a Asaas
+// retém na hora do pedido de chargeback, a decisão vem depois). É o momento
+// certo de congelar a comissão — se o débito esperasse a decisão final, o
+// afiliado teria uma janela inteira para sacar uma comissão de uma venda que
+// a loja já não tem mais.
+const CHARGEBACK_OPENED_EVENT = "PAYMENT_CHARGEBACK_REQUESTED"
+
+// A loja ganhou a disputa e o valor volta: a comissão debitada na abertura é
+// recreditada. Sem isso, o afiliado pagaria por um chargeback revertido.
+const CHARGEBACK_REVERSED_EVENT = "PAYMENT_AWAITING_CHARGEBACK_REVERSAL"
 
 function safeTokenMatch(provided: string, expected: string): boolean {
   const a = Buffer.from(provided)
@@ -280,6 +294,23 @@ export async function POST(request: NextRequest) {
         console.error(
           `[webhooks/asaas] CHARGEBACK ${payload.event} no pedido ${order.id} (cobrança ${paymentId}) — requer ação manual`
         )
+
+        // Comissão de afiliado: a abertura da disputa já tirou o dinheiro da
+        // loja, então a comissão sai junto; se a loja vencer, volta. Nunca
+        // derruba o 200 devolvido à Asaas — a disputa segue registrada de
+        // qualquer forma.
+        if (
+          payload.event === CHARGEBACK_OPENED_EVENT ||
+          payload.event === CHARGEBACK_REVERSED_EVENT
+        ) {
+          try {
+            await syncCommissionForChargeback(order.id, {
+              reversed: payload.event === CHARGEBACK_REVERSED_EVENT,
+            })
+          } catch (err) {
+            console.error("[webhooks/asaas] syncCommissionForChargeback:", err)
+          }
+        }
 
         // Um chargeback só existia no log até aqui — e log ninguém lê a
         // tempo. A disputa tem prazo de resposta: perder o prazo é perder o

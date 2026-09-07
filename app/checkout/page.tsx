@@ -21,6 +21,7 @@ import { useCart } from "@/components/providers/cart-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
+import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { computeCardPriceCents, computePixDiscountCents } from "@/lib/store-pricing"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -153,6 +154,10 @@ export default function CheckoutPage() {
   const [payerInfoChecked, setPayerInfoChecked] = useState(false)
   const [needsPayerInfo, setNeedsPayerInfo] = useState(false)
   const [needsAddressInfo, setNeedsAddressInfo] = useState(false)
+  // A consulta de perfil não respondeu (rede, 5xx, Loja em manutenção). Vale
+  // só para o texto do card: os dados não puderam ser carregados, não é que
+  // o perfil esteja incompleto.
+  const [payerInfoFailed, setPayerInfoFailed] = useState(false)
 
   // String estável dos ids do carrinho: `items` muda de identidade a cada
   // incremento de quantidade, e depender do array refaria a consulta de
@@ -170,9 +175,18 @@ export default function CheckoutPage() {
     }
     let cancelled = false
     fetch("/api/store/checkout/payer-info")
-      .then((res) => (res.ok ? res.json() : { hasCompletePayerInfo: true, hasCompleteAddressInfo: true }))
+      .then((res) => {
+        // Sem fallback otimista aqui: responder "perfil completo" quando a
+        // consulta falha faz o card de cobrança renderizar VAZIO (sem nome nem
+        // CPF) e ainda assim liberar o botão de pagar — o usuário só descobre
+        // que falta dado depois que o pagamento é recusado. Falhou, a tela
+        // pede os dados; digitá-los de novo é barato, pagar sem eles não é.
+        if (!res.ok) throw new Error(String(res.status))
+        return res.json()
+      })
       .then((data: PayerInfoResponse) => {
         if (cancelled) return
+        setPayerInfoFailed(false)
         setNeedsPayerInfo(!data.hasCompletePayerInfo)
         setNeedsAddressInfo(!data.hasCompleteAddressInfo)
         setPayerEmail(data.email ?? null)
@@ -212,8 +226,13 @@ export default function CheckoutPage() {
         })
       })
       .catch(() => {
-        // Falha na checagem não deve bloquear a compra: a rota de checkout
-        // valida de novo e, se realmente faltar dado, devolve o erro.
+        // Falha na checagem não bloqueia a compra: a rota de checkout valida
+        // de novo. Mas o card abre em modo de edição, porque não há como
+        // exibir dados que não conseguimos ler — e um card vazio "confirmado"
+        // é pior do que um formulário.
+        if (cancelled) return
+        setPayerInfoFailed(true)
+        setNeedsPayerInfo(true)
       })
       .finally(() => {
         if (!cancelled) setPayerInfoChecked(true)
@@ -279,6 +298,14 @@ export default function CheckoutPage() {
     // cada clique no "+", e a revalidação não muda de resposta por isso.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartProductIds])
+
+  // Loja fechada para novos pedidos. A recusa de verdade é do servidor
+  // (proxy.ts + a própria rota de checkout); aqui é só para DIZER isso antes
+  // do clique — deixar o botão "Pagar com cartão" vivo numa loja fechada faz
+  // a pessoa preencher tudo e levar um erro genérico no final. WEB MASTER
+  // passa, igual ao servidor, para conseguir testar a compra com a loja
+  // fechada.
+  const storeClosed = isStoreMaintenanceEnabled() && !(user?.isWebMaster ?? false)
 
   const requireAddress = paymentMethod === "credit_card"
   // Cartão exige endereço; se o perfil não tem, o card já abre em edição.
@@ -743,6 +770,7 @@ export default function CheckoutPage() {
             editing={editingPayer}
             onEditingChange={setEditingPayer}
             incomplete={payerIncomplete}
+            loadFailed={payerInfoFailed}
           />
         )}
 
@@ -757,6 +785,20 @@ export default function CheckoutPage() {
           />
         )}
 
+        {/* Loja fechada: avisa ANTES do botão, e o botão fica desabilitado —
+            em vez de deixar a pessoa preencher tudo, clicar em "Pagar" e só
+            então receber o 503 como se fosse falha dela. O carrinho fica
+            intacto para quando a loja abrir. */}
+        {storeClosed && (
+          <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">
+            <Package className="mt-0.5 size-4 shrink-0" />
+            <p>
+              <span className="font-bold">A Loja está fechada para novos pedidos no momento.</span> Seu
+              carrinho fica salvo — assim que reabrirmos, é só voltar aqui e finalizar a compra.
+            </p>
+          </div>
+        )}
+
         {error && (
           <p className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{error}</p>
         )}
@@ -765,13 +807,17 @@ export default function CheckoutPage() {
           <Button
             type="submit"
             className="w-full gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:hover:translate-y-0"
-            disabled={loading || authLoading || !payerInfoChecked || editingPayer || editingShipping}
+            disabled={
+              loading || authLoading || !payerInfoChecked || editingPayer || editingShipping || storeClosed
+            }
           >
             {loading ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
                 {paymentMethod === "pix" ? "Gerando cobrança PIX..." : "Preparando pagamento..."}
               </>
+            ) : storeClosed ? (
+              "Loja fechada no momento"
             ) : editingPayer ? (
               "Confirme os dados da cobrança"
             ) : editingShipping ? (

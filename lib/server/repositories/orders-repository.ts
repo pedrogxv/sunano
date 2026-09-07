@@ -764,7 +764,7 @@ export async function refundOrder(
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, total_cents, refunded_cents, asaas_payment_id, metadata, affiliate_id")
+    .select("id, status, total_cents, pix_price_cents, refunded_cents, asaas_payment_id, metadata, affiliate_id")
     .eq("id", id)
     .maybeSingle()
 
@@ -845,7 +845,12 @@ export async function refundOrder(
 
   try {
     await syncCommissionForRefund(
-      { id: existing.id, affiliate_id: existing.affiliate_id, total_cents: existing.total_cents },
+      {
+        id: existing.id,
+        affiliate_id: existing.affiliate_id,
+        total_cents: existing.total_cents,
+        pix_price_cents: existing.pix_price_cents,
+      },
       newRefundedCents,
       existing.refunded_cents
     )
@@ -1240,7 +1245,7 @@ export async function syncOrderRefundState(paymentId: string): Promise<Repositor
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, total_cents, refunded_cents, metadata, affiliate_id")
+    .select("id, status, total_cents, pix_price_cents, refunded_cents, metadata, affiliate_id")
     .eq("asaas_payment_id", paymentId)
     .maybeSingle()
 
@@ -1297,7 +1302,12 @@ export async function syncOrderRefundState(paymentId: string): Promise<Repositor
 
   try {
     await syncCommissionForRefund(
-      { id: existing.id, affiliate_id: existing.affiliate_id, total_cents: existing.total_cents },
+      {
+        id: existing.id,
+        affiliate_id: existing.affiliate_id,
+        total_cents: existing.total_cents,
+        pix_price_cents: existing.pix_price_cents,
+      },
       refundedCents,
       existing.refunded_cents
     )

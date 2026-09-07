@@ -21,6 +21,14 @@ function isMaintenanceEnabled() {
 // continuam normais. As páginas /loja mostram "em breve" sozinhas (ver
 // app/loja/page.tsx e app/loja/[slug]/page.tsx); aqui só falta recusar,
 // fechado por padrão, qualquer requisição que crie um pedido novo.
+//
+// Match EXATO, sem prefixo: as sub-rotas de /api/store/checkout são leitura
+// (`/payer-info` só devolve nome/CPF/endereço do próprio perfil, para o card
+// "Dados da cobrança"). Um `startsWith(p + "/")` aqui derrubava essa consulta
+// com 503 em manutenção, e o checkout — que trata falha da consulta como
+// "perfil já está completo" — renderizava o card de cobrança VAZIO, sem nunca
+// pedir nome e CPF. Nenhuma sub-rota cria pedido; se um dia criar, adicione o
+// pathname dela nesta lista explicitamente.
 const STORE_ORDER_WRITE_PATHS = ["/api/store/checkout"]
 
 // O Programa de Afiliados acompanha a manutenção da Loja: sem loja aberta não
@@ -246,7 +254,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const isAdminRoute = pathname.startsWith("/admin")
   const isLoginRoute = pathname === "/admin/login"
   const maintenanceMode = isMaintenanceEnabled()
-  const isStoreOrderWritePath = STORE_ORDER_WRITE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
+  const isStoreOrderWritePath = STORE_ORDER_WRITE_PATHS.includes(pathname)
   const isAffiliatePath = AFFILIATE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
   const storeMaintenanceMode = isStoreMaintenanceEnabled() && (isStoreOrderWritePath || isAffiliatePath)
 

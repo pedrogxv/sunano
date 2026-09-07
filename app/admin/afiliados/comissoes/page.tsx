@@ -12,8 +12,8 @@ import { Badge } from "@/components/ui/badge"
 type CommissionEvent = {
   id: string
   affiliate_id: string
-  order_id: string
-  type: "credit" | "refund_debit" | "adjustment"
+  order_id: string | null
+  type: "credit" | "refund_debit" | "adjustment" | "payout_debit"
   amount_cents: number
   created_at: string
 }
@@ -26,6 +26,7 @@ const TYPE_LABELS: Record<CommissionEvent["type"], string> = {
   credit: "Comissão",
   refund_debit: "Estorno",
   adjustment: "Ajuste",
+  payout_debit: "Saque pago",
 }
 
 export default function AdminAfiliadosComissoesPage() {
@@ -80,7 +81,9 @@ export default function AdminAfiliadosComissoesPage() {
             <div key={event.id} className="flex items-center justify-between rounded-xl border border-border bg-card p-4">
               <div>
                 <Badge variant={event.type === "credit" ? "default" : "secondary"}>{TYPE_LABELS[event.type]}</Badge>
-                <p className="mt-1 text-xs text-muted-foreground">Pedido {event.order_id}</p>
+                {event.order_id && (
+                  <p className="mt-1 text-xs text-muted-foreground">Pedido {event.order_id}</p>
+                )}
                 <p className="text-xs text-muted-foreground">{new Date(event.created_at).toLocaleString("pt-BR")}</p>
               </div>
               <span className={event.amount_cents < 0 ? "text-destructive" : "text-foreground"}>

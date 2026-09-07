@@ -92,6 +92,7 @@ export function CheckoutPayerCard({
   editing,
   onEditingChange,
   incomplete,
+  loadFailed = false,
 }: {
   form: PayerForm
   onChange: (next: PayerForm) => void
@@ -102,6 +103,12 @@ export function CheckoutPayerCard({
   onEditingChange: (editing: boolean) => void
   /** Perfil sem os dados obrigatórios — o card abre já em modo de edição. */
   incomplete: boolean
+  /**
+   * A consulta do perfil falhou (rede/5xx), então não sabemos o que já está
+   * salvo. O card abre em edição igual ao `incomplete`, mas o texto não pode
+   * afirmar que "faltam dados" — pode ser que não falte nada.
+   */
+  loadFailed?: boolean
 }) {
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState<string | null>(null)
@@ -236,7 +243,9 @@ export function CheckoutPayerCard({
         <div className="space-y-4 px-4 py-4">
           {incomplete && (
             <p className="text-xs text-muted-foreground">
-              Faltam alguns dados para gerar a cobrança. Eles ficam salvos no seu perfil.
+              {loadFailed
+                ? "Não conseguimos carregar os dados salvos no seu perfil agora. Confirme-os abaixo para seguir com a cobrança."
+                : "Faltam alguns dados para gerar a cobrança. Eles ficam salvos no seu perfil."}
             </p>
           )}
 

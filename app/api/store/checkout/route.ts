@@ -115,7 +115,11 @@ const checkoutBodySchema = z.object({
 async function resolveAffiliateAttribution(
   request: NextRequest,
   userId: string | null
-): Promise<{ affiliateId: string; affiliateCode: string } | null> {
+): Promise<{
+  affiliateId: string
+  affiliateCode: string
+  affiliateUserId: string
+} | null> {
   const raw = request.cookies.get(AFFILIATE_REF_COOKIE)?.value
   if (!raw) return null
 
@@ -134,7 +138,54 @@ async function resolveAffiliateAttribution(
   if (!affiliate) return null
   if (userId && affiliate.user_id === userId) return null
 
-  return { affiliateId: affiliate.id, affiliateCode: parsed.code }
+  return {
+    affiliateId: affiliate.id,
+    affiliateCode: parsed.code,
+    affiliateUserId: affiliate.user_id,
+  }
+}
+
+/**
+ * Segunda barreira de auto-indicação, aplicada quando o CPF do pagador já foi
+ * resolvido (bem depois da atribuição, que só conhece o `user_id` da sessão).
+ *
+ * A checagem por `user_id` sozinha só pega o caso ingênuo — criar uma segunda
+ * conta e comprar pelo próprio link passava por ela e virava um desconto de 5%
+ * permanente para si mesmo. O CPF é o que a mesma pessoa não consegue trocar:
+ * a Asaas exige um CPF válido do pagador, e o afiliado já cadastrou o dele
+ * quando pediu afiliação com chave PIX do tipo `cpf`.
+ *
+ * Compara também com o CPF do perfil do afiliado, que cobre quem se cadastrou
+ * com chave PIX de outro tipo (e-mail, aleatória).
+ */
+async function isSelfReferral(
+  db: SupabaseClient<Database>,
+  affiliateUserId: string,
+  payerDocument: string | null
+): Promise<boolean> {
+  if (!payerDocument) return false
+  const normalizedPayer = payerDocument.replace(/\D/g, "")
+  if (!normalizedPayer) return false
+
+  const [{ data: affiliateRow }, { data: affiliateProfile }] = await Promise.all([
+    db
+      .from("affiliates")
+      .select("pix_key, pix_key_type")
+      .eq("user_id", affiliateUserId)
+      .maybeSingle(),
+    db.from("user_profiles").select("cpf").eq("id", affiliateUserId).maybeSingle(),
+  ])
+
+  const candidates = [
+    affiliateRow?.pix_key_type === "cpf" || affiliateRow?.pix_key_type === "cnpj"
+      ? affiliateRow.pix_key
+      : null,
+    affiliateProfile?.cpf,
+  ]
+
+  return candidates.some(
+    (candidate) => candidate && candidate.replace(/\D/g, "") === normalizedPayer
+  )
 }
 
 /**
@@ -911,6 +962,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Auto-indicação pelo CPF: só dá para checar aqui, onde o documento do
+    // pagador finalmente existe. A compra segue normalmente — apenas deixa de
+    // ser atribuída, mesma decisão do bloqueio por `user_id`.
+    let affiliateForOrder = affiliateAttribution
+    if (
+      affiliateForOrder &&
+      (await isSelfReferral(db, affiliateForOrder.affiliateUserId, payerDocument))
+    ) {
+      affiliateForOrder = null
+    }
+
     let payerAddress: {
       phone: string
       postalCode: string
@@ -1190,8 +1252,8 @@ export async function POST(request: NextRequest) {
           // um real depois que o deploy vira produção.
           is_sandbox: isSandboxGateway(),
           metadata: { user_id: user.id },
-          affiliate_id: affiliateAttribution?.affiliateId ?? null,
-          affiliate_code: affiliateAttribution?.affiliateCode ?? null,
+          affiliate_id: affiliateForOrder?.affiliateId ?? null,
+          affiliate_code: affiliateForOrder?.affiliateCode ?? null,
         })
         .select("id")
         .single()
@@ -1285,8 +1347,8 @@ export async function POST(request: NextRequest) {
         customer_name: payerName,
         is_sandbox: isSandboxGateway(),
         metadata: { user_id: user.id },
-        affiliate_id: affiliateAttribution?.affiliateId ?? null,
-        affiliate_code: affiliateAttribution?.affiliateCode ?? null,
+        affiliate_id: affiliateForOrder?.affiliateId ?? null,
+        affiliate_code: affiliateForOrder?.affiliateCode ?? null,
       })
       .select("id")
       .single()

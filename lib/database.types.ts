@@ -2089,8 +2089,10 @@ export type Database = {
         Row: {
           id: string
           affiliate_id: string
-          order_id: string
-          type: "credit" | "refund_debit" | "adjustment"
+          // Null em eventos que não vêm de uma venda (`payout_debit`).
+          order_id: string | null
+          payout_id: string | null
+          type: "credit" | "refund_debit" | "adjustment" | "payout_debit"
           amount_cents: number
           order_total_cents: number
           commission_bps: number
@@ -2101,8 +2103,9 @@ export type Database = {
         Insert: {
           id?: string
           affiliate_id: string
-          order_id: string
-          type: "credit" | "refund_debit" | "adjustment"
+          order_id?: string | null
+          payout_id?: string | null
+          type: "credit" | "refund_debit" | "adjustment" | "payout_debit"
           amount_cents: number
           order_total_cents: number
           commission_bps: number
@@ -2113,8 +2116,9 @@ export type Database = {
         Update: {
           id?: string
           affiliate_id?: string
-          order_id?: string
-          type?: "credit" | "refund_debit" | "adjustment"
+          order_id?: string | null
+          payout_id?: string | null
+          type?: "credit" | "refund_debit" | "adjustment" | "payout_debit"
           amount_cents?: number
           order_total_cents?: number
           commission_bps?: number
@@ -2420,6 +2424,15 @@ export type Database = {
           min_cents?: number
           available_cents?: number
           payout_id?: string
+        }
+      }
+      mark_affiliate_payout_paid: {
+        Args: { p_payout_id: string; p_reviewer_id: string }
+        Returns: {
+          ok: boolean
+          code?: "not_found" | "not_pending"
+          amount_cents?: number
+          affiliate_id?: string
         }
       }
       cancel_affiliate_payout: {

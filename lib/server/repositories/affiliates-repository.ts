@@ -408,11 +408,13 @@ export async function creditCommissionForOrder(orderId: string): Promise<void> {
 
   const { data: order } = await db
     .from("store_orders")
-    .select("id, affiliate_id, total_cents")
+    .select("id, affiliate_id, total_cents, is_sandbox")
     .eq("id", orderId)
     .maybeSingle()
 
-  if (!order?.affiliate_id) return
+  // Pedido de sandbox não gera comissão: o afiliado sacaria dinheiro real por
+  // uma venda que nunca aconteceu.
+  if (!order?.affiliate_id || order.is_sandbox) return
 
   const { data: affiliate } = await db
     .from("affiliates")

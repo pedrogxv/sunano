@@ -10,6 +10,7 @@ import {
   Clock,
   ExternalLink,
   Eye,
+  FlaskConical,
   Loader2,
   Mail,
   MapPinOff,
@@ -121,7 +122,22 @@ type AdminOrder = {
   } | null
   /** false = pedido de serviço/digital: não há o que despachar, e a falta de endereço não é pendência. */
   requires_shipping_address: boolean
+  /** true = pedido pago contra a Asaas sandbox (dinheiro de teste). */
+  is_sandbox: boolean
 }
+
+/**
+ * Recorte de ambiente da fila. Espelha `OrderEnvironment` do repositório — a
+ * fila abre em "production" porque pedido de teste não é trabalho a fazer;
+ * "sandbox"/"all" existem para conferir o que foi testado.
+ */
+type OrderEnvironment = "production" | "sandbox" | "all"
+
+const ENVIRONMENT_FILTERS: { value: OrderEnvironment; label: string }[] = [
+  { value: "production", label: "Produção" },
+  { value: "sandbox", label: "Sandbox (teste)" },
+  { value: "all", label: "Todos" },
+]
 
 /** Pedido que precisa de endereço, ainda não tem, e já foi pago. */
 function isMissingShippingAddress(order: AdminOrder): boolean {
@@ -259,9 +275,11 @@ function StatusBadge({ status }: { status: OrderStatus }) {
 function CustomerFilterCombobox({
   value,
   onChange,
+  environment,
 }: {
   value: OrderCustomer | null
   onChange: (customer: OrderCustomer | null) => void
+  environment: OrderEnvironment
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
@@ -278,6 +296,7 @@ function CustomerFilterCombobox({
       try {
         const params = new URLSearchParams()
         if (search.trim()) params.set("q", search.trim())
+        params.set("environment", environment)
         const res = await fetch(`/api/admin/store/orders/customers?${params.toString()}`)
         const data = (await res.json()) as { customers?: OrderCustomer[] }
         setResults(data.customers ?? [])
@@ -291,7 +310,7 @@ function CustomerFilterCombobox({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
     }
-  }, [open, search])
+  }, [open, search, environment])
 
   useEffect(() => {
     if (!open) {
@@ -581,6 +600,10 @@ export default function AdminOrdersPage() {
   // banco (não filtrando a página já carregada), senão o total e a paginação
   // mentem.
   const [missingShippingOnly, setMissingShippingOnly] = useState(false)
+  // Ambiente do gateway. Abre em "production": os pedidos de sandbox são
+  // pagamento de teste e não são trabalho a fazer — mas continuam no banco,
+  // acessíveis trocando este seletor.
+  const [environment, setEnvironment] = useState<OrderEnvironment>("production")
   const [page, setPage] = useState(1)
 
   const [manageOrder, setManageOrder] = useState<AdminOrder | null>(null)
@@ -597,6 +620,7 @@ export default function AdminOrdersPage() {
       if (dateFrom) params.set("dateFrom", new Date(dateFrom).toISOString())
       if (dateTo) params.set("dateTo", new Date(`${dateTo}T23:59:59.999`).toISOString())
       if (missingShippingOnly) params.set("missingShipping", "1")
+      params.set("environment", environment)
       params.set("page", String(page))
       params.set("pageSize", String(PAGE_SIZE))
 
@@ -618,7 +642,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, page])
+  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, page])
 
   useEffect(() => {
     const timeout = setTimeout(load, userQuery ? 350 : 0)
@@ -628,11 +652,17 @@ export default function AdminOrdersPage() {
   // Qualquer mudança de filtro volta pra primeira página.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly])
+  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment])
+
+  // Trocar de ambiente invalida o cliente escolhido: ele pode não ter pedido
+  // nenhum do outro lado, e a fila voltaria vazia sem explicação.
+  useEffect(() => {
+    setCustomerFilter(null)
+  }, [environment])
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const hasActiveFilters =
-    statusFilter !== "all" || productFilter !== null || userQuery.trim() !== "" || customerFilter !== null || dateFrom !== "" || dateTo !== "" || missingShippingOnly
+    statusFilter !== "all" || productFilter !== null || userQuery.trim() !== "" || customerFilter !== null || dateFrom !== "" || dateTo !== "" || missingShippingOnly || environment !== "production"
 
   function clearFilters() {
     setStatusFilter("all")
@@ -642,6 +672,7 @@ export default function AdminOrdersPage() {
     setDateFrom("")
     setDateTo("")
     setMissingShippingOnly(false)
+    setEnvironment("production")
   }
 
   function applyOrderPatch(id: string, patch: Partial<AdminOrder>) {
@@ -665,7 +696,11 @@ export default function AdminOrdersPage() {
               className="pl-9"
             />
           </div>
-          <CustomerFilterCombobox value={customerFilter} onChange={setCustomerFilter} />
+          <CustomerFilterCombobox
+            value={customerFilter}
+            onChange={setCustomerFilter}
+            environment={environment}
+          />
           <ProductFilterCombobox value={productFilter} onChange={setProductFilter} />
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | "all")}>
             <SelectTrigger className="w-full border-border bg-card text-sm sm:w-64">
@@ -722,6 +757,29 @@ export default function AdminOrdersPage() {
               setDateTo(to)
             }}
           />
+          <Select value={environment} onValueChange={(v) => setEnvironment(v as OrderEnvironment)}>
+            <SelectTrigger
+              className={cn(
+                "w-full border-border bg-card text-sm sm:w-52",
+                environment !== "production" && "border-amber-500/50 text-amber-300"
+              )}
+            >
+              <SelectValue>
+                <span className="flex items-center gap-2">
+                  <FlaskConical className="size-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">Ambiente:</span>
+                  <span>{ENVIRONMENT_FILTERS.find((e) => e.value === environment)?.label}</span>
+                </span>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {ENVIRONMENT_FILTERS.map(({ value, label }) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             type="button"
             variant={missingShippingOnly ? "default" : "outline"}
@@ -824,6 +882,15 @@ export default function AdminOrdersPage() {
                         >
                           <MapPinOff className="size-2.5" strokeWidth={2.5} />
                           SEM ENDEREÇO
+                        </span>
+                      )}
+                      {order.is_sandbox && (
+                        <span
+                          title="Pedido feito contra a Asaas sandbox — pagamento de teste, não gerou receita nem comissão"
+                          className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-violet-400"
+                        >
+                          <FlaskConical className="size-2.5" strokeWidth={2.5} />
+                          SANDBOX
                         </span>
                       )}
                     </div>

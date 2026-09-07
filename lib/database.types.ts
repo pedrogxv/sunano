@@ -1411,6 +1411,12 @@ export type Database = {
           /** Não-nulo = endereço de entrega já informado (no checkout ou depois do pagamento). */
           shipping_address_filled_at: string | null
           requires_shipping_address: boolean
+          /**
+           * true = pedido criado com `ASAAS_ENV=sandbox` (pagamento de teste).
+           * Gravado uma vez no checkout; telas do cliente, dashboard/receita e
+           * a fila do admin filtram `is_sandbox = false` por padrão.
+           */
+          is_sandbox: boolean
           created_at: string
           updated_at: string
         }
@@ -1458,6 +1464,7 @@ export type Database = {
           shipping_state?: string | null
           shipping_address_filled_at?: string | null
           requires_shipping_address?: boolean
+          is_sandbox?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -1505,6 +1512,7 @@ export type Database = {
           shipping_state?: string | null
           shipping_address_filled_at?: string | null
           requires_shipping_address?: boolean
+          is_sandbox?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -2107,7 +2115,8 @@ export type Database = {
     Views: Record<string, never>
     Functions: {
       count_orders_by_status: {
-        Args: Record<string, never>
+        /** `p_is_sandbox: null` = os dois ambientes; default da função é `false` (só produção). */
+        Args: { p_is_sandbox?: boolean | null }
         Returns: { status: string; count: number }[]
       }
       get_order_revenue_between: {

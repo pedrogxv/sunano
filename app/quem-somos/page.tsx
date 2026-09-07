@@ -41,14 +41,16 @@ export default function QuemSomosPage() {
 
         <section>
           <h2>Dados cadastrais</h2>
+          {/* Razão social, CNPJ e endereço serão publicados aqui assim que a
+              constituição do MEI for concluída (exigência do Decreto 7.962/2013,
+              art. 2º, I e II). Até lá, nada de placeholder visível ao usuário. */}
           <p>
             Nome fantasia: <strong>Sunano</strong>
-            <br />
-            Razão social: <em>[PLACEHOLDER: razão social do MEI]</em>
-            <br />
-            CNPJ: <em>[PLACEHOLDER: número do CNPJ]</em>
-            <br />
-            Endereço: <em>[PLACEHOLDER: endereço físico/postal para correspondência]</em>
+          </p>
+          <p>
+            Os dados cadastrais completos (razão social, CNPJ e endereço para correspondência) serão
+            publicados nesta página. Enquanto isso, qualquer solicitação relacionada à identificação
+            do vendedor pode ser feita pelos canais de atendimento abaixo.
           </p>
         </section>
 
@@ -59,8 +61,12 @@ export default function QuemSomosPage() {
             <a href="mailto:contato@sunano.gg" className="text-primary hover:underline">
               contato@sunano.gg
             </a>
-            <br />
-            Outro canal: <em>[PLACEHOLDER: telefone/WhatsApp de suporte, se houver]</em>
+          </p>
+          <p>
+            Central de Tickets:{" "}
+            <Link href="/suporte" className="text-primary hover:underline">
+              sunano.gg/suporte
+            </Link>
           </p>
           <p>
             Dúvidas sobre pedidos, trocas e devoluções devem ser encaminhadas por esses canais,
@@ -86,6 +92,12 @@ export default function QuemSomosPage() {
                 Política de Privacidade
               </Link>
             </li>
+            <li>
+              <Link href="/informacoes" className="text-primary hover:underline">
+                Central de Informações
+              </Link>{" "}
+              — todos os documentos oficiais reunidos
+            </li>
           </ul>
         </section>
 
@@ -93,8 +105,9 @@ export default function QuemSomosPage() {
 
       <footer className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
         <p>
-          Esta página contém marcações [PLACEHOLDER] que precisam ser preenchidas com os dados
-          reais do MEI e revisadas antes da publicação definitiva.
+          <Link href="/informacoes" className="text-primary hover:underline">
+            Central de Informações
+          </Link>
         </p>
       </footer>
     </article>

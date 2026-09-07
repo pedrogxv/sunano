@@ -50,6 +50,17 @@ function resolveBaseUrl(): string {
     : "https://api-sandbox.asaas.com/v3"
 }
 
+/**
+ * Ambiente resolvido do gateway, para gravar no pedido (`store_orders.is_sandbox`).
+ *
+ * Mesma validação de `resolveBaseUrl` — de propósito: se a env está inválida
+ * o checkout já ia falhar na primeira chamada ao gateway, e um pedido nunca
+ * pode ser gravado com a marca de ambiente errada.
+ */
+export function isSandboxGateway(): boolean {
+  return resolveBaseUrl().includes("sandbox")
+}
+
 function getApiKey() {
   const key = process.env.ASAAS_API_KEY
   if (!key) throw new Error("ASAAS_API_KEY não configurada.")

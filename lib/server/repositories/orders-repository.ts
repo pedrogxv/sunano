@@ -34,6 +34,38 @@ export type OrderStatus =
   | "expired"
 
 /**
+ * Recorte por ambiente do gateway (`store_orders.is_sandbox`).
+ *
+ * "production" é o padrão em toda leitura: pedido de sandbox é pagamento de
+ * mentira e não pode aparecer para o cliente nem somar em receita. "sandbox"
+ * e "all" existem só para a fila do admin, que precisa conseguir olhar o que
+ * foi testado.
+ */
+export type OrderEnvironment = "production" | "sandbox" | "all"
+
+export const ORDER_ENVIRONMENTS: OrderEnvironment[] = ["production", "sandbox", "all"]
+
+/** Normaliza um valor vindo de query string no recorte de ambiente. */
+export function parseOrderEnvironment(value: string | null | undefined): OrderEnvironment {
+  return ORDER_ENVIRONMENTS.includes(value as OrderEnvironment)
+    ? (value as OrderEnvironment)
+    : "production"
+}
+
+/**
+ * Aplica o recorte de ambiente numa query de `store_orders`. "all" não
+ * adiciona filtro nenhum — de propósito: é o único caso em que ver os dois
+ * ambientes misturados é o pedido explícito de quem consultou.
+ */
+function withEnvironment<T>(query: T, environment: OrderEnvironment): T {
+  if (environment === "all") return query
+  return (query as { eq: (col: string, val: boolean) => T }).eq(
+    "is_sandbox",
+    environment === "sandbox"
+  )
+}
+
+/**
  * Janela de expiração do PIX. A Asaas devolve um `expirationDate` de longa
  * validade no QR code, então este valor é o prazo real que a loja impõe:
  * usado no checkout de cartão (`minutesToExpire`) e aqui como fallback ao
@@ -228,6 +260,8 @@ export async function listOrdersByUser(
     .from("store_orders")
     .select(ORDER_COLUMNS, { count: "exact" })
     .eq("metadata->>user_id", userId)
+    // O cliente nunca vê pedido de sandbox — para ele aquilo nunca existiu.
+    .eq("is_sandbox", false)
 
   if (filters?.status) query = query.eq("status", filters.status)
   if (filters?.dateFrom) query = query.gte("created_at", filters.dateFrom)
@@ -279,6 +313,7 @@ export async function getLatestPendingOrderByUser(userId: string): Promise<UserO
     .from("store_orders")
     .select(ORDER_COLUMNS)
     .eq("metadata->>user_id", userId)
+    .eq("is_sandbox", false)
     .eq("status", "pending")
     .order("created_at", { ascending: false })
     .limit(1)
@@ -333,10 +368,12 @@ export type AdminOrderRow = {
   shipping_address: OrderShippingAddress | null
   /** false = pedido de serviço/digital: não entra na fila de "falta endereço". */
   requires_shipping_address: boolean
+  /** true = pagamento de teste (ASAAS_ENV=sandbox). Marcado na linha da fila. */
+  is_sandbox: boolean
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, updated_at, payment_method, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, " +
+  "id, status, total_cents, items, created_at, updated_at, payment_method, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, is_sandbox, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -358,6 +395,7 @@ type AdminOrderRawRow = {
   refund_reason: string | null
   refunded_at: string | null
   asaas_payment_id: string | null
+  is_sandbox: boolean
 } & RawShippingColumns
 
 export type AdminOrderListResult = {
@@ -370,7 +408,8 @@ export type AdminOrderListResult = {
  * (id presente em `items`), usuário (busca livre em nome/e-mail — cobre
  * tanto convidado quanto logado, já que `customer_name`/`customer_email`
  * são gravados no checkout independente de login), usuário logado específico
- * (`metadata->>user_id`) e período (`created_at`). Pagina no banco.
+ * (`metadata->>user_id`), período (`created_at`) e ambiente do gateway
+ * (`is_sandbox`). Pagina no banco.
  */
 export async function listOrdersForAdmin(filters?: {
   status?: OrderStatus
@@ -381,14 +420,19 @@ export async function listOrdersForAdmin(filters?: {
   dateTo?: string
   /** Fila operacional: pagos, de item físico, ainda sem endereço informado. */
   missingShipping?: boolean
+  /** Recorte de ambiente do gateway. Sem valor = só produção. */
+  environment?: OrderEnvironment
   page?: number
   pageSize?: number
 }): Promise<AdminOrderListResult> {
   const db = createSupabaseAdminClient()
-  let query = db
-    .from("store_orders")
-    .select(ADMIN_ORDER_COLUMNS, { count: "exact" })
-    .order("created_at", { ascending: false })
+  let query = withEnvironment(
+    db
+      .from("store_orders")
+      .select(ADMIN_ORDER_COLUMNS, { count: "exact" })
+      .order("created_at", { ascending: false }),
+    filters?.environment ?? "production"
+  )
 
   if (filters?.status) query = query.eq("status", filters.status)
   if (filters?.userQuery?.trim()) {
@@ -456,6 +500,7 @@ export async function listOrdersForAdmin(filters?: {
       oversold: (row.metadata?.oversold as OrderOversoldFlag | undefined) ?? null,
       shipping_address: mapShippingAddress(row),
       requires_shipping_address: row.requires_shipping_address !== false,
+      is_sandbox: row.is_sandbox === true,
     }
   })
 
@@ -465,14 +510,21 @@ export async function listOrdersForAdmin(filters?: {
 export type OrderStatusCounts = Record<OrderStatus | "all", number>
 
 /**
- * Contagem de pedidos por status, para os blocos de filtro — sempre sobre a
- * base inteira, sem paginação. Usa `count_orders_by_status` (group by no
+ * Contagem de pedidos por status, para os blocos de filtro — sobre a base
+ * inteira do ambiente escolhido, sem paginação. O recorte tem que ser o mesmo
+ * da lista logo abaixo, senão os números dos blocos não batem com ela. Usa `count_orders_by_status` (group by no
  * Postgres) em vez de trazer uma linha por pedido pro Node: escala com o
  * número de status, não com o total de pedidos.
  */
-export async function countOrdersByStatus(): Promise<OrderStatusCounts> {
+export async function countOrdersByStatus(
+  environment: OrderEnvironment = "production"
+): Promise<OrderStatusCounts> {
   const db = createSupabaseAdminClient()
-  const { data, error } = await db.rpc("count_orders_by_status")
+  const { data, error } = await db.rpc("count_orders_by_status", {
+    // `null` = os dois ambientes; a RPC trata assim (ver
+    // 20261013000000_store_orders_sandbox_flag.sql).
+    p_is_sandbox: environment === "all" ? null : environment === "sandbox",
+  })
   const counts: OrderStatusCounts = {
     all: 0,
     pending: 0,
@@ -507,13 +559,22 @@ export type OrderCustomer = {
  * (cobre trocas de nome/e-mail); convidados usam o par nome+e-mail do
  * checkout, já que não têm id estável.
  */
-export async function searchOrderCustomers(query: string, limit = 20): Promise<OrderCustomer[]> {
+export async function searchOrderCustomers(
+  query: string,
+  limit = 20,
+  environment: OrderEnvironment = "production"
+): Promise<OrderCustomer[]> {
   const db = createSupabaseAdminClient()
-  let dbQuery = db
-    .from("store_orders")
-    .select("customer_name, customer_email, metadata")
-    .order("created_at", { ascending: false })
-    .limit(500)
+  // Segue o mesmo recorte da lista: senão o combobox oferece cliente que só
+  // comprou em sandbox e filtrar por ele devolve zero pedidos.
+  let dbQuery = withEnvironment(
+    db
+      .from("store_orders")
+      .select("customer_name, customer_email, metadata")
+      .order("created_at", { ascending: false })
+      .limit(500),
+    environment
+  )
 
   const term = query.trim()
   if (term) {

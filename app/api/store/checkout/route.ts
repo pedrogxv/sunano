@@ -6,6 +6,7 @@ import {
   createPixPayment,
   getPixQrCode,
   createCheckout,
+  isSandboxGateway,
   type AsaasCheckoutItem,
 } from "@/lib/server/integrations/asaas"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -1180,6 +1181,11 @@ export async function POST(request: NextRequest) {
           payment_method: "credit_card",
           customer_email: customerEmail,
           customer_name: payerName,
+          // Marca de ambiente congelada no pedido: o que a Asaas cobrou aqui
+          // foi dinheiro de verdade ou de teste. `ASAAS_ENV` só existe em
+          // runtime — sem gravar, um pedido de sandbox fica indistinguível de
+          // um real depois que o deploy vira produção.
+          is_sandbox: isSandboxGateway(),
           metadata: { user_id: user.id },
           affiliate_id: affiliateAttribution?.affiliateId ?? null,
           affiliate_code: affiliateAttribution?.affiliateCode ?? null,
@@ -1263,6 +1269,7 @@ export async function POST(request: NextRequest) {
         payment_method: "pix",
         customer_email: customerEmail,
         customer_name: payerName,
+        is_sandbox: isSandboxGateway(),
         metadata: { user_id: user.id },
         affiliate_id: affiliateAttribution?.affiliateId ?? null,
         affiliate_code: affiliateAttribution?.affiliateCode ?? null,

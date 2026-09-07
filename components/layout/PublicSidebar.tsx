@@ -10,6 +10,7 @@ import {
   Crown,
   Flame,
   Home,
+  Info,
   Medal,
   MessageCircle,
   Mouse,
@@ -324,38 +325,20 @@ export function PublicSidebar() {
           )}
         </div>
 
-        {/* Links legais — ocultos quando colapsado */}
+        {/* Central de Informações — hub dos documentos legais/institucionais.
+            Um link só; as páginas individuais seguem em suas URLs próprias. */}
         {!isCollapsed && (
           <div className="border-t border-border px-3 py-2">
-            <div className="flex flex-wrap gap-x-3 gap-y-1">
-              <Link
-                href="/privacidade"
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Privacidade
-              </Link>
-              <Link
-                href="/termos"
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Termos
-              </Link>
-              <Link
-                href="/trocas-e-devolucoes"
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Trocas e Devoluções
-              </Link>
-              <Link
-                href="/quem-somos"
-                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Quem Somos
-              </Link>
-              <span className="text-[11px] text-muted-foreground">LGPD</span>
-            </div>
+            <Link
+              href="/informacoes"
+              className="flex items-center gap-2 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <Info className="size-3 shrink-0" />
+              Central de Informações
+            </Link>
           </div>
         )}
+
       </aside>
 
       <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />

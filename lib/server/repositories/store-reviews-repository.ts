@@ -112,6 +112,9 @@ export async function hasVerifiedPurchase(
     .from("store_orders")
     .select("id, items")
     .in("status", ORDER_FULFILLMENT_FLOW)
+    // Compra de sandbox não é compra: não pode virar selo de "compra
+    // verificada" numa avaliação pública.
+    .eq("is_sandbox", false)
     .contains("metadata", { user_id: userId })
 
   if (error || !data) {

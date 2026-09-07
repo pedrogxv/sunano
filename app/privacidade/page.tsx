@@ -10,7 +10,7 @@ export const metadata: Metadata = buildMetadata({
   subtitle: "Dados pessoais e LGPD",
 })
 
-const CURRENT_VERSION = "2026-08"
+const CURRENT_VERSION = "2026-09"
 
 export default function PrivacidadePage() {
   return (
@@ -75,7 +75,16 @@ export default function PrivacidadePage() {
           <ul>
             <li>Posts e comentários no fórum.</li>
             <li>Comentários em reviews do blog.</li>
+            <li>Avaliações, respostas e imagens enviadas voluntariamente.</li>
+            <li>Informações que você opte por adicionar ao perfil (banner, bio e afins).</li>
           </ul>
+          <p>
+            Conteúdos publicados em áreas públicas podem ser vistos por outros usuários e visitantes,
+            e informações disponibilizadas publicamente na internet podem ser copiadas ou registradas
+            por terceiros fora do controle do Sunano. Por isso, recomendamos <strong>não publicar</strong>{" "}
+            CPF, endereço residencial, telefone pessoal, senhas, códigos de autenticação, documentos,
+            dados bancários, informações sensíveis ou dados pessoais de terceiros sem autorização.
+          </p>
 
           <h3>2.4 Dados de pedidos</h3>
           <ul>
@@ -96,6 +105,18 @@ export default function PrivacidadePage() {
               forma agregada (ver Seção 6).
             </li>
           </ul>
+
+          <h3>2.6 Dados pessoais sensíveis</h3>
+          <p>
+            O Sunano <strong>não tem como finalidade coletar dados pessoais sensíveis</strong>, como
+            informações relacionadas à saúde, religião, opinião política, origem racial ou étnica,
+            vida sexual, dados genéticos ou biométricos.
+          </p>
+          <p>
+            Por esse motivo, recomendamos que esse tipo de informação não seja inserido
+            voluntariamente em perfil, comentários, posts, tickets ou outras áreas da plataforma que
+            não tenham sido destinadas especificamente a essa finalidade.
+          </p>
         </section>
 
         <section>
@@ -201,6 +222,26 @@ export default function PrivacidadePage() {
         </section>
 
         <section>
+          <h2>4.1 Transferências Internacionais de Dados</h2>
+          <p>
+            Alguns dos serviços tecnológicos, fornecedores ou parceiros utilizados pelo Sunano
+            possuem infraestrutura localizada fora do Brasil. Consequentemente, determinados dados
+            pessoais poderão ser armazenados, processados ou acessados em outros países — por
+            exemplo, em razão de serviços de banco de dados e autenticação, hospedagem, segurança e
+            outros prestadores necessários à operação.
+          </p>
+          <p>
+            Quando houver transferência internacional de dados pessoais, o Sunano buscará observar os
+            requisitos estabelecidos pela LGPD e pela regulamentação aplicável da Autoridade Nacional
+            de Proteção de Dados.
+          </p>
+          <p>
+            A utilização de serviços internacionais não autoriza o uso dos dados para finalidades
+            incompatíveis com aquelas descritas nesta Política.
+          </p>
+        </section>
+
+        <section>
           <h2>5. Retenção de Dados</h2>
           <ul>
             <li>
@@ -279,7 +320,7 @@ export default function PrivacidadePage() {
           </p>
         </section>
 
-        <section>
+        <section id="seus-direitos">
           <h2>7. Seus Direitos (LGPD Art. 18)</h2>
           <p>Como titular de dados, você tem os seguintes direitos, exercíveis a qualquer momento:</p>
           <ul>
@@ -367,8 +408,10 @@ export default function PrivacidadePage() {
           <h2>9. Incidentes de Segurança</h2>
           <p>
             Em caso de incidente de segurança que possa acarretar risco ou dano relevante aos
-            titulares, comunicaremos à ANPD e aos usuários afetados no prazo de até{" "}
-            <strong>72 horas</strong> após a ciência do ocorrido, conforme Art. 48 da LGPD.
+            titulares, comunicaremos à ANPD e aos usuários afetados no prazo estabelecido pela
+            regulamentação vigente, atualmente de <strong>3 (três) dias úteis</strong> contados da
+            ciência do ocorrido, conforme o Art. 48 da LGPD e a regulamentação da ANPD, ressalvadas
+            as hipóteses específicas previstas na regulamentação aplicável.
           </p>
         </section>
 
@@ -410,7 +453,7 @@ export default function PrivacidadePage() {
 
       <footer className="mt-10 border-t border-border pt-6 text-xs text-muted-foreground">
         <p>
-          Versão {CURRENT_VERSION} · Última atualização: 13 de junho de 2026.{" "}
+          Versão {CURRENT_VERSION} · Última atualização: 6 de setembro de 2026.{" "}
           <Link href="/termos" className="text-primary hover:underline">
             Termos de Uso
           </Link>

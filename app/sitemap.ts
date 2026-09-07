@@ -35,6 +35,7 @@ const STATIC_ROUTES: { path: string; priority: number; changeFrequency: Metadata
   { path: "/changelog", priority: 0.3, changeFrequency: "weekly" },
   // Institucional e legal: baixa prioridade, mas o Google usa essas páginas
   // como sinal de confiança (E-E-A-T), sobretudo para um site que vende.
+  { path: "/informacoes", priority: 0.4, changeFrequency: "monthly" },
   { path: "/quem-somos", priority: 0.4, changeFrequency: "monthly" },
   { path: "/suporte", priority: 0.3, changeFrequency: "monthly" },
   { path: "/termos", priority: 0.2, changeFrequency: "yearly" },

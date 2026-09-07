@@ -35,6 +35,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, access_token, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at"
     )
     .eq("id", id)
+    // Pedido de sandbox não existe para o cliente — nem por link direto
+    // guardado de antes (a tela do PIX ficaria fazendo polling de uma
+    // cobrança de teste).
+    .eq("is_sandbox", false)
     .single()
 
   if (error || !order) {

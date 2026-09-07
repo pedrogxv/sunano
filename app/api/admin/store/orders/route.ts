@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
-import { countOrdersByStatus, listOrdersForAdmin, type OrderStatus } from "@/lib/server/repositories/orders-repository"
+import {
+  countOrdersByStatus,
+  listOrdersForAdmin,
+  parseOrderEnvironment,
+  type OrderStatus,
+} from "@/lib/server/repositories/orders-repository"
 
 const VALID_STATUSES: OrderStatus[] = [
   "pending",
@@ -32,12 +37,15 @@ export async function GET(request: NextRequest) {
   const dateFrom = url.searchParams.get("dateFrom") ?? undefined
   const dateTo = url.searchParams.get("dateTo") ?? undefined
   const missingShipping = url.searchParams.get("missingShipping") === "1"
+  // Sem o parâmetro, a fila mostra só produção — pedido de sandbox só aparece
+  // quando o admin pede explicitamente.
+  const environment = parseOrderEnvironment(url.searchParams.get("environment"))
   const page = Number(url.searchParams.get("page") ?? "1") || 1
   const pageSize = Number(url.searchParams.get("pageSize") ?? "20") || 20
 
   const [{ orders, total }, counts] = await Promise.all([
-    listOrdersForAdmin({ status, productId, userQuery, userId, dateFrom, dateTo, missingShipping, page, pageSize }),
-    countOrdersByStatus(),
+    listOrdersForAdmin({ status, productId, userQuery, userId, dateFrom, dateTo, missingShipping, environment, page, pageSize }),
+    countOrdersByStatus(environment),
   ])
-  return NextResponse.json({ ok: true, orders, total, page, pageSize, counts })
+  return NextResponse.json({ ok: true, orders, total, page, pageSize, counts, environment })
 }

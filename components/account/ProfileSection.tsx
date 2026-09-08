@@ -2,13 +2,14 @@
 
 import Image from "next/image"
 import { useEffect, useState } from "react"
-import type { ChangeEvent } from "react"
 import { Camera, Crown, Pencil, Sparkles, Youtube } from "lucide-react"
 import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
 import { MediaAdjuster } from "./MediaAdjuster"
+import { MediaPickerDialog } from "./MediaPickerDialog"
 import { compressImageFile } from "@/lib/client/compress-image"
+import type { KlipyGif } from "@/lib/klipy"
 import { supabaseStorageClient } from "@/lib/client/supabase-storage"
 import {
   coerceMediaAdjustments,
@@ -30,6 +31,7 @@ import BoxLoader from "@/components/ui/box-loader"
 import { useAccountTier } from "@/lib/hooks/use-account-tier"
 import { slugifyDisplayName } from "@/lib/profile-name"
 import { ChangeDisplayNameModal } from "@/components/profile/ChangeDisplayNameModal"
+import { useAuthUser } from "@/components/providers/auth-context"
 import {
   BIO_MAX_LENGTH,
   normalizeSocialHandle,
@@ -39,6 +41,8 @@ import {
   type ShowcaseMedal,
   type ShowcasePeripheral,
 } from "@/lib/profile-showcase"
+import { MiniProfileBgPicker } from "@/components/account/MiniProfileBgPicker"
+import { MINI_PROFILE_BG_THEMES } from "@/lib/mini-profile-backgrounds"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { profileAccentHue } from "@/lib/user-directory"
 import { cn } from "@/lib/utils"
@@ -95,6 +99,22 @@ const AVATAR_COMPRESS_OPTIONS = {
   skipBelowBytes: 120 * 1024,
 }
 
+/** Texto do seletor por mídia — o modal é um só, o contexto muda. */
+const MEDIA_PICKER_COPY: Record<AdjustableMedia, { title: string; description: string }> = {
+  avatar: {
+    title: "Foto de perfil",
+    description: "Aparece no seu perfil, nos comentários e em todo lugar que mostra sua conta.",
+  },
+  banner: {
+    title: "Banner do perfil",
+    description: "A capa larga do topo do seu perfil público.",
+  },
+  mini_banner: {
+    title: "Fundo do Mini Perfil",
+    description: "A faixa do cartão que abre ao passar o mouse na sua foto.",
+  },
+}
+
 /**
  * Upload em duas etapas: pede uma signed URL ao endpoint (que valida sessão,
  * tier e tamanho declarado), sobe os bytes direto pro Storage do Supabase —
@@ -142,11 +162,40 @@ async function uploadProfileMedia(
 }
 
 /**
+ * Grava um GIF do KLIPY como mídia de perfil. Ao contrário do arquivo local,
+ * nada sobe daqui: manda-se só a URL e o servidor baixa, valida e guarda no
+ * bucket (ver `importProfileMediaFromKlipy`) — mídia de perfil nunca fica
+ * hospedada fora, senão o `image-loader` do Storage não a alcança.
+ */
+async function importKlipyGif(
+  endpoint: string,
+  sourceUrl: string
+): Promise<{ ok: true; publicUrl: string } | { ok: false; error: string }> {
+  const res = await fetch(endpoint, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceUrl }),
+  })
+  const data = (await res.json().catch(() => null)) as
+    | { error?: string; publicUrl?: string }
+    | null
+  if (!res.ok || !data?.publicUrl) {
+    return { ok: false, error: data?.error || "Erro ao salvar o GIF." }
+  }
+  return { ok: true, publicUrl: data.publicUrl }
+}
+
+/**
  * Perfil e vitrine em uma seção só: identidade (banner, avatar, nome, bio) e o
  * que aparece no perfil público (setup, favoritos, medalhas). Os dois grupos
  * batem em endpoints diferentes, mas são salvos pelo mesmo botão.
  */
 export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps) {
+  // Nome e foto também vivem na topbar/mini perfil, que leem do AuthProvider.
+  // Salvar aqui não mexe no cookie de sessão nem dispara evento de auth, então
+  // nenhum dos gatilhos do provider percebe a mudança sozinho — sem este
+  // `refresh()` o avatar e o nome lá em cima ficam velhos até um F5.
+  const { refresh: refreshAuthUser } = useAuthUser()
   const { tier, favoriteLimit, medalLimit, capabilities, animatedMedia, isVip } = useAccountTier(
     profile.account_tier,
     profile.vip_expires_at ?? null
@@ -183,6 +232,10 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   const [favorites, setFavorites] = useState<ShowcasePeripheral[]>([])
   const [allMedals, setAllMedals] = useState<ShowcaseMedal[]>([])
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
+
+  // Qual mídia o seletor está editando — `null` com o modal fechado. Um modal
+  // só para as três: o que muda é o endpoint e o texto.
+  const [picker, setPicker] = useState<AdjustableMedia | null>(null)
 
   const [saving, setSaving] = useState(false)
   // Troca de nome saiu do fluxo de "Salvar alterações": agora é uma compra
@@ -247,9 +300,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     setSetup((prev) => prev.map((item) => (item.slot === slot ? { ...item, peripheral } : item)))
   }
 
-  async function handleAvatarSelect(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
+  async function handleAvatarFile(file: File) {
     try {
       setUploading(true)
       const reader = new FileReader()
@@ -271,9 +322,28 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     }
   }
 
-  async function handleBannerSelect(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
+  async function handleAvatarGif(gif: KlipyGif) {
+    try {
+      setUploading(true)
+      // Preview otimista: mostra o GIF do CDN enquanto o servidor copia pro
+      // bucket. A URL definitiva substitui abaixo.
+      setAvatarPreview(gif.url)
+      const result = await importKlipyGif("/api/profile/upload-avatar", gif.url)
+      if (!result.ok) throw new Error(result.error)
+      setAvatarUrl(result.publicUrl)
+      setAvatarPreview(result.publicUrl)
+      setAdjust("avatar", DEFAULT_ADJUST)
+      toast.success("Avatar enviado")
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : "Erro ao enviar avatar"
+      setAvatarPreview(avatarUrl)
+      toast.error("Erro ao enviar avatar", { description: message })
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleBannerFile(file: File) {
     try {
       setUploadingBanner(true)
       const compressed = await compressImageFile(file, COVER_IMAGE_COMPRESS_OPTIONS)
@@ -291,15 +361,46 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     }
   }
 
-  async function handleMiniBannerSelect(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    if (!file) return
+  async function handleBannerGif(gif: KlipyGif) {
+    try {
+      setUploadingBanner(true)
+      const result = await importKlipyGif("/api/profile/upload-banner", gif.url)
+      if (!result.ok) throw new Error(result.error)
+      setBannerUrl(result.publicUrl)
+      setAdjust("banner", DEFAULT_ADJUST)
+      toast.success("Banner enviado")
+    } catch (err) {
+      const message = err instanceof Error && err.message ? err.message : "Erro ao enviar banner"
+      toast.error("Erro ao enviar banner", { description: message })
+    } finally {
+      setUploadingBanner(false)
+    }
+  }
+
+  async function handleMiniBannerFile(file: File) {
     try {
       setUploadingMiniBanner(true)
       const compressed = await compressImageFile(file, COVER_IMAGE_COMPRESS_OPTIONS)
       // Rota própria: o fundo do Mini Perfil é uma imagem independente da capa
       // grande, e trocar uma não pode sobrescrever a outra no bucket.
       const result = await uploadProfileMedia("/api/profile/upload-mini-banner", compressed)
+      if (!result.ok) throw new Error(result.error)
+      setMiniBannerUrl(result.publicUrl)
+      setAdjust("mini_banner", DEFAULT_ADJUST)
+      toast.success("Fundo do Mini Perfil enviado")
+    } catch (err) {
+      const message =
+        err instanceof Error && err.message ? err.message : "Erro ao enviar o fundo do Mini Perfil"
+      toast.error("Erro ao enviar o fundo do Mini Perfil", { description: message })
+    } finally {
+      setUploadingMiniBanner(false)
+    }
+  }
+
+  async function handleMiniBannerGif(gif: KlipyGif) {
+    try {
+      setUploadingMiniBanner(true)
+      const result = await importKlipyGif("/api/profile/upload-mini-banner", gif.url)
       if (!result.ok) throw new Error(result.error)
       setMiniBannerUrl(result.publicUrl)
       setAdjust("mini_banner", DEFAULT_ADJUST)
@@ -390,6 +491,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
         toast.error("Não foi possível salvar tudo", { description: failure })
         return
       }
+      refreshAuthUser()
       toast.success("Perfil salvo")
     } finally {
       setSaving(false)
@@ -419,11 +521,10 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 tierLabel={capabilities.label}
                 isVip={isVip}
                 specialTag={specialTag}
-                imageAccept={imageAccept}
                 uploadingAvatar={uploading}
-                onAvatarChange={handleAvatarSelect}
+                onEditAvatar={() => setPicker("avatar")}
                 uploadingBanner={uploadingBanner}
-                onBannerChange={handleBannerSelect}
+                onEditBanner={() => setPicker("banner")}
               />
 
               {bannerPreview.src && (
@@ -456,11 +557,10 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 isVip={isVip}
                 specialTag={specialTag}
                 accentHue={accentHue}
-                imageAccept={imageAccept}
                 uploadingAvatar={uploading}
-                onAvatarChange={handleAvatarSelect}
+                onEditAvatar={() => setPicker("avatar")}
                 uploadingMiniBanner={uploadingMiniBanner}
-                onMiniBannerChange={handleMiniBannerSelect}
+                onEditMiniBanner={() => setPicker("mini_banner")}
               />
 
               {miniBannerPreview.src && (
@@ -472,6 +572,22 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                   aspect="mini"
                   disabled={uploadingMiniBanner}
                 />
+              )}
+
+              {/* Tema animado do cartão, comprado na Central de Aura. Equipar
+                  aqui é imediato (POST próprio) e NÃO depende do "Salvar" do
+                  formulário — é posse de item, não campo do perfil.
+
+                  Sai de cena junto com o seletor enquanto não houver fundo
+                  nenhum à venda: rótulo sem nada embaixo é pior que ausência. */}
+              {MINI_PROFILE_BG_THEMES.length > 0 && (
+                <div className="space-y-2 pt-1">
+                  <PreviewLabel
+                    label="Efeito do Mini Perfil"
+                    hint="Temas animados comprados na Central de Aura. Equipe um para o seu cartão ganhar borda com brilho, raios e partículas."
+                  />
+                  <MiniProfileBgPicker />
+                </div>
               )}
             </div>
 
@@ -535,7 +651,10 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                   sunano.com.br/perfil/<span className="text-muted-foreground">{slugPreview}</span>
                 </p>
                 <p className="text-[10px] text-muted-foreground/60">
-                  Trocar nome custa 100 de Aura e tem cooldown de 3 dias.
+                  {/* O valor exato (com o desconto VIP) aparece no modal, que
+                      o busca do servidor — repetir um número aqui só criava
+                      duas fontes de verdade pro mesmo preço. */}
+                  Trocar nome custa Aura e tem cooldown de 3 dias.
                 </p>
               </div>
             </div>
@@ -547,6 +666,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
               onChanged={(newName, newSlug) => {
                 setDisplayName(newName)
                 onProfileChange({ ...profile, display_name: newName, display_slug: newSlug })
+                refreshAuthUser()
               }}
             />
 
@@ -628,6 +748,30 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
         )}
       </section>
 
+      {/* Um seletor para as três mídias: arrastar-e-soltar, explorador de
+          arquivos ou GIF do KLIPY. O que muda por mídia é só o destino. */}
+      <MediaPickerDialog
+        open={picker !== null}
+        onOpenChange={(next) => {
+          if (!next) setPicker(null)
+        }}
+        title={picker ? MEDIA_PICKER_COPY[picker].title : ""}
+        description={picker ? MEDIA_PICKER_COPY[picker].description : undefined}
+        accept={imageAccept}
+        allowGif={animatedMedia}
+        busy={uploading || uploadingBanner || uploadingMiniBanner}
+        onPickFile={(file) => {
+          if (picker === "avatar") handleAvatarFile(file)
+          else if (picker === "banner") handleBannerFile(file)
+          else if (picker === "mini_banner") handleMiniBannerFile(file)
+        }}
+        onPickGif={(gif) => {
+          if (picker === "avatar") handleAvatarGif(gif)
+          else if (picker === "banner") handleBannerGif(gif)
+          else if (picker === "mini_banner") handleMiniBannerGif(gif)
+        }}
+      />
+
       {/* Barra de salvamento — identidade e vitrine vão juntas. */}
       <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-xl border border-border bg-secondary/90 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <p className="text-xs text-muted-foreground">
@@ -680,11 +824,10 @@ function ProfilePagePreview({
   tierLabel,
   isVip,
   specialTag,
-  imageAccept,
   uploadingAvatar,
-  onAvatarChange,
+  onEditAvatar,
   uploadingBanner,
-  onBannerChange,
+  onEditBanner,
 }: {
   banner: ProfileMedia
   bannerAdjust: MediaAdjust
@@ -694,11 +837,10 @@ function ProfilePagePreview({
   tierLabel: string
   isVip: boolean
   specialTag: ReturnType<typeof getSpecialTag>
-  imageAccept: string
   uploadingAvatar: boolean
-  onAvatarChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onEditAvatar: () => void
   uploadingBanner: boolean
-  onBannerChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onEditBanner: () => void
 }) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -707,9 +849,11 @@ function ProfilePagePreview({
           // Mesma proporção da capa real (ver BANNER_HEIGHT em ProfileShowcase),
           // reduzida para caber no editor.
           "relative h-36 w-full overflow-hidden sm:h-48",
-          !banner.src && "bg-gradient-to-br from-primary/20 via-muted/40 to-background"
+          !banner.src && "bg-gradient-to-br from-primary/20 via-muted/40 to-background",
+          // Espelha o `Banner` real: borda VIP só no rodapé da capa, porque o
+          // cartão do perfil já fecha os outros três lados.
+          isVip && "border-b-[3px] border-[var(--vip-accent)]"
         )}
-        style={isVip ? { boxShadow: "inset 0 0 0 3px var(--vip-accent)" } : undefined}
       >
         {banner.src && (
           <Image
@@ -722,31 +866,31 @@ function ProfilePagePreview({
             className="h-full w-full object-cover"
           />
         )}
-        {/* Sem véu escuro, igual ao `Banner` de verdade: não há texto sobre a
-            capa, e o degradê só fazia a base dela virar tarja preta junto com
-            o fundo do card. */}
-        <label
+        {/* Mesmo véu do perfil público: a foto encosta na base da capa e
+            precisa de contraste sob ela (ver `ProfileShowcase`). */}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card via-card/50 to-transparent"
+          aria-hidden
+        />
+        <button
+          type="button"
+          onClick={onEditBanner}
+          disabled={uploadingBanner}
           className={cn(
             "absolute bottom-2 right-2 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
             uploadingBanner ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
           )}
           title="Trocar banner"
         >
-          <input
-            type="file"
-            accept={imageAccept}
-            className="hidden"
-            onChange={onBannerChange}
-            disabled={uploadingBanner}
-          />
           <Camera className="size-3.5 text-primary-foreground" />
-        </label>
+        </button>
       </div>
 
-      {/* Foto quadrada ancorada no canto inferior esquerdo, invadindo a capa
-          pela metade — igual ao header público. */}
+      {/* Foto quadrada centralizada, invadindo a capa pela metade — igual ao
+          header público (`ProfileShowcase`), que a centraliza para o bloco de
+          nome/badges também poder ficar centralizado abaixo dela. */}
       <div className="relative px-4 pb-4">
-        <div className="absolute -top-10 left-4 sm:-top-12">
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 sm:-top-12">
           <div className="relative">
             <div
               className={cn("relative size-20 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-24", !isVip && "border-border")}
@@ -776,26 +920,22 @@ function ProfilePagePreview({
                 VIP
               </span>
             )}
-            <label
+            <button
+              type="button"
+              onClick={onEditAvatar}
+              disabled={uploadingAvatar}
               className={cn(
                 "absolute -bottom-1 -right-1 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
                 uploadingAvatar ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
               )}
               title="Trocar foto de perfil"
             >
-              <input
-                type="file"
-                accept={imageAccept}
-                className="hidden"
-                onChange={onAvatarChange}
-                disabled={uploadingAvatar}
-              />
               <Camera className="size-3.5 text-primary-foreground" />
-            </label>
+            </button>
           </div>
         </div>
 
-        <div className="ml-24 flex flex-wrap items-center gap-2 pt-3 sm:ml-28">
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-12 text-center sm:pt-14">
           <p className="text-base font-bold text-foreground">{name}</p>
           <span
             className={cn(
@@ -860,11 +1000,10 @@ function MiniBannerCardPreview({
   isVip,
   specialTag,
   accentHue,
-  imageAccept,
   uploadingAvatar,
-  onAvatarChange,
+  onEditAvatar,
   uploadingMiniBanner,
-  onMiniBannerChange,
+  onEditMiniBanner,
 }: {
   miniBanner: ProfileMedia
   miniBannerAdjust: MediaAdjust
@@ -874,11 +1013,10 @@ function MiniBannerCardPreview({
   isVip: boolean
   specialTag: ReturnType<typeof getSpecialTag>
   accentHue: number
-  imageAccept: string
   uploadingAvatar: boolean
-  onAvatarChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onEditAvatar: () => void
   uploadingMiniBanner: boolean
-  onMiniBannerChange: (event: ChangeEvent<HTMLInputElement>) => void
+  onEditMiniBanner: () => void
 }) {
   return (
     <div className="flex justify-center rounded-xl border border-border bg-muted/10 p-4">
@@ -905,22 +1043,18 @@ function MiniBannerCardPreview({
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
-          <label
+          <button
+            type="button"
+            onClick={onEditMiniBanner}
+            disabled={uploadingMiniBanner}
             className={cn(
               "absolute bottom-2 right-2 flex size-7 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
               uploadingMiniBanner ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
             )}
             title="Trocar mini banner"
           >
-            <input
-              type="file"
-              accept={imageAccept}
-              className="hidden"
-              onChange={onMiniBannerChange}
-              disabled={uploadingMiniBanner}
-            />
             <Camera className="size-3 text-primary-foreground" />
-          </label>
+          </button>
         </div>
 
         <div className="-mt-11 flex flex-col items-center px-3 pb-3">
@@ -938,22 +1072,18 @@ function MiniBannerCardPreview({
                 {name.slice(0, 1).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <label
+            <button
+              type="button"
+              onClick={onEditAvatar}
+              disabled={uploadingAvatar}
               className={cn(
                 "absolute -bottom-1 -right-1 flex size-7 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
                 uploadingAvatar ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
               )}
               title="Trocar foto de perfil"
             >
-              <input
-                type="file"
-                accept={imageAccept}
-                className="hidden"
-                onChange={onAvatarChange}
-                disabled={uploadingAvatar}
-              />
               <Camera className="size-3 text-primary-foreground" />
-            </label>
+            </button>
           </div>
 
           <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">

@@ -96,24 +96,40 @@ type SupabaseList = (
   options: { limit: number; offset: number; sortBy: { column: string; order: string } }
 ) => Promise<{ data: Array<{ name: string }> | null; error: { message: string } | null }>
 
-/** O `list` do Storage devolve no máximo 100 itens por página. */
+/**
+ * O `list` do Storage devolve no máximo 100 itens por página e NÃO é
+ * recursivo: ele lista um prefixo por vez, e uma "pasta" aparece como entrada
+ * sem `metadata`. Por isso a recursão abaixo é obrigatória, não um luxo.
+ *
+ * A versão anterior fazia `continue` nessas entradas e varria só a raiz do
+ * bucket. Isso passava despercebido porque `peripherals` (o bucket que
+ * motivou o script) é todo plano — mas `images` tem os 113 arquivos dentro de
+ * `store/` e `events/`, então o script reportava "0 candidatos" para 73MB,
+ * justamente o bucket com a maior média por arquivo (~660KB). Falha silenciosa:
+ * dizia "nada a fazer" em vez de dar erro.
+ */
 async function listAllObjects(
   db: { storage: { from: (bucket: string) => { list: SupabaseList } } },
-  bucket: string
+  bucket: string,
+  prefix = ""
 ): Promise<StorageObject[]> {
   const out: StorageObject[] = []
   const pageSize = 100
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await db.storage
       .from(bucket)
-      .list("", { limit: pageSize, offset, sortBy: { column: "name", order: "asc" } })
+      .list(prefix, { limit: pageSize, offset, sortBy: { column: "name", order: "asc" } })
     if (error) throw error
     const page = data ?? []
     for (const obj of page) {
       const meta = (obj as { metadata?: { size?: number; mimetype?: string } }).metadata
-      // Entrada sem metadata é "pasta" (prefixo), não arquivo.
-      if (!meta?.size) continue
-      out.push({ name: obj.name, size: meta.size, mimetype: meta.mimetype ?? "" })
+      const fullPath = prefix ? `${prefix}/${obj.name}` : obj.name
+      // Entrada sem metadata é "pasta" (prefixo): desce nela.
+      if (!meta?.size) {
+        out.push(...(await listAllObjects(db, bucket, fullPath)))
+        continue
+      }
+      out.push({ name: fullPath, size: meta.size, mimetype: meta.mimetype ?? "" })
     }
     if (page.length < pageSize) break
   }

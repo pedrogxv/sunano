@@ -30,5 +30,12 @@ export type MiniProfile = {
   aura: number
   /** Ofensiva atual (dias consecutivos completando as missões diárias) — 0 se não tem ou expirou. */
   streak: number
+  /**
+   * Slug do Fundo de Mini Perfil equipado (item `mini_profile_bg` da Central
+   * de Aura), ou `null`. É o slug e não o id porque a arte do tema mora no
+   * código, indexada por slug (ver `lib/mini-profile-backgrounds.ts`) — o
+   * cartão nunca precisa do id do item.
+   */
+  equipped_mini_profile_bg: string | null
   created_at: string
 }

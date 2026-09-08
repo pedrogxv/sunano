@@ -26,9 +26,9 @@ interface BannerProps {
  * VIP com GIF pula esse caminho (`unoptimized`) e chega como foi enviada, sem
  * perder quadros na reamostragem.
  *
- * VIP também ganha a mesma borda/brilho roxo da foto (`AvatarQuadrado`) — as
- * duas molduras formam um conjunto só, em vez da capa ficar sem nenhum sinal
- * de tier enquanto só a foto o exibe.
+ * VIP também ganha o mesmo brilho roxo da foto (`AvatarQuadrado`), com a
+ * borda no rodapé da capa — as duas marcas formam um conjunto só, em vez da
+ * capa ficar sem nenhum sinal de tier enquanto só a foto o exibe.
  */
 export function Banner({ bannerUrl, tier, vipExpiresAt = null, adjust = DEFAULT_ADJUST, className }: BannerProps) {
   const { src, animated } = resolveProfileMedia(bannerUrl, tier)
@@ -40,7 +40,10 @@ export function Banner({ bannerUrl, tier, vipExpiresAt = null, adjust = DEFAULT_
         // O gradiente fica sempre no fundo: capa ausente — ou que falhe ao
         // carregar — descobre ele em vez de deixar uma faixa vazia.
         "relative h-32 w-full overflow-hidden bg-gradient-to-br from-primary/20 via-muted/40 to-background sm:h-44 md:h-56",
-        isVip && "border-[3px] border-[var(--vip-accent)] shadow-[0_0_22px_-3px_var(--vip-accent-soft)]",
+        // Borda VIP só embaixo: no perfil a capa é o topo de um cartão que já
+        // tem borda própria nos outros três lados (ver `ProfileShowcase`) —
+        // moldura fechada aqui virava linha dupla.
+        isVip && "border-b-[3px] border-[var(--vip-accent)] shadow-[0_0_22px_-3px_var(--vip-accent-soft)]",
         className
       )}
     >

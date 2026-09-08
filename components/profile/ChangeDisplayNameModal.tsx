@@ -1,9 +1,10 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Flame, Loader2 } from "lucide-react"
+import { Crown, Flame, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
+import type { AuraPrice } from "@/lib/aura-pricing"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -17,8 +18,6 @@ import {
 } from "@/components/ui/dialog"
 import { DISPLAY_NAME_MAX_LENGTH, slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 
-const NAME_CHANGE_AURA_COST = 100
-
 interface ChangeDisplayNameModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -31,6 +30,8 @@ type Status = {
   balance: number
   onCooldown: boolean
   cooldownEndsAt: string | null
+  /** Preço já com o desconto do tier — vem do servidor (ver a rota GET). */
+  price: AuraPrice | null
 }
 
 type NameCheck = {
@@ -43,11 +44,13 @@ function formatCooldownEnds(iso: string): string {
 }
 
 /**
- * Modal reutilizável de troca de nome de exibição, pago com Aura (100) e
- * sujeito a cooldown de 3 dias — reaproveitado na Central de Aura, nas
- * configurações (`ProfileSection`) e no ícone de editar do "meu perfil"
- * público (`EditNameButton`). Busca seu próprio saldo/cooldown ao abrir em
- * vez de depender de props vindas de cada lugar que o invoca.
+ * Modal reutilizável de troca de nome de exibição, pago com Aura e sujeito a
+ * cooldown de 3 dias — reaproveitado na Central de Aura, nas configurações
+ * (`ProfileSection`) e no ícone de editar do "meu perfil" público
+ * (`EditNameButton`). Busca saldo, cooldown **e preço** ao abrir em vez de
+ * depender de props vindas de cada lugar que o invoca: só a Central tinha o
+ * item do catálogo e o tier em mãos, então fora dela o modal anunciava o
+ * preço cheio para VIP enquanto a RPC cobrava 10% a menos.
  */
 export function ChangeDisplayNameModal({
   open,
@@ -56,7 +59,13 @@ export function ChangeDisplayNameModal({
   onChanged,
 }: ChangeDisplayNameModalProps) {
   const [name, setName] = useState(currentName)
-  const [status, setStatus] = useState<Status>({ loading: true, balance: 0, onCooldown: false, cooldownEndsAt: null })
+  const [status, setStatus] = useState<Status>({
+    loading: true,
+    balance: 0,
+    onCooldown: false,
+    cooldownEndsAt: null,
+    price: null,
+  })
   const [nameCheck, setNameCheck] = useState<NameCheck>({ state: "idle", message: null })
   const [submitting, setSubmitting] = useState(false)
 
@@ -74,7 +83,11 @@ export function ChangeDisplayNameModal({
       try {
         const res = await fetch("/api/aura/display-name", { cache: "no-store" })
         const data = (await res.json().catch(() => null)) as
-          | { balance?: number; cooldown?: { onCooldown: boolean; endsAt: string | null } }
+          | {
+              balance?: number
+              cooldown?: { onCooldown: boolean; endsAt: string | null }
+              price?: AuraPrice | null
+            }
           | null
         if (cancelled) return
         setStatus({
@@ -82,6 +95,7 @@ export function ChangeDisplayNameModal({
           balance: data?.balance ?? 0,
           onCooldown: data?.cooldown?.onCooldown ?? false,
           cooldownEndsAt: data?.cooldown?.endsAt ?? null,
+          price: data?.price ?? null,
         })
       } catch {
         if (!cancelled) setStatus((prev) => ({ ...prev, loading: false }))
@@ -155,9 +169,14 @@ export function ChangeDisplayNameModal({
     }
   }
 
-  const insufficientBalance = !status.loading && status.balance < NAME_CHANGE_AURA_COST
+  const price = status.price
+  // Item fora do catálogo: a RPC recusaria a troca, então nem oferecemos.
+  const unavailable = !status.loading && price === null
+  const cost = price?.finalPrice ?? 0
+  const insufficientBalance = !status.loading && price !== null && status.balance < cost
   const canConfirm =
     !status.loading &&
+    !unavailable &&
     !status.onCooldown &&
     !insufficientBalance &&
     nameChanged &&
@@ -170,14 +189,37 @@ export function ChangeDisplayNameModal({
         <DialogHeader>
           <DialogTitle>Trocar nome de exibição</DialogTitle>
           <DialogDescription>
-            Custa <span className="font-semibold text-orange-400">🔥 {NAME_CHANGE_AURA_COST} Aura</span> e tem
-            cooldown de 3 dias entre trocas.
+            {status.loading || !price ? (
+              "Cooldown de 3 dias entre trocas."
+            ) : (
+              <>
+                Custa{" "}
+                {price.discounted && (
+                  <span className="text-muted-foreground/70 line-through decoration-[1.5px]">
+                    {price.listPrice.toLocaleString("pt-BR")}
+                  </span>
+                )}{" "}
+                <span className="font-semibold text-orange-400">
+                  🔥 {price.finalPrice.toLocaleString("pt-BR")} Aura
+                </span>
+                {price.discounted && (
+                  <span className="aura-vip-discount-badge ml-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-[2px] align-middle text-[9px] font-black uppercase leading-none tracking-wide">
+                    <Crown className="size-2.5" strokeWidth={2.5} />−{price.discountPercent}%
+                  </span>
+                )}{" "}
+                e tem cooldown de 3 dias entre trocas.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
         {status.loading ? (
           <div className="flex items-center justify-center py-6">
             <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : unavailable ? (
+          <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
+            A troca de nome está indisponível no momento.
           </div>
         ) : status.onCooldown && status.cooldownEndsAt ? (
           <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -207,7 +249,8 @@ export function ChangeDisplayNameModal({
             )}
             {insufficientBalance && (
               <p className="text-[10px] text-red-400">
-                Saldo de Aura insuficiente ({status.balance.toLocaleString("pt-BR")}/{NAME_CHANGE_AURA_COST}).
+                Saldo de Aura insuficiente ({status.balance.toLocaleString("pt-BR")}/
+                {cost.toLocaleString("pt-BR")}).
               </p>
             )}
           </div>
@@ -217,11 +260,11 @@ export function ChangeDisplayNameModal({
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          {!status.onCooldown && (
+          {!status.onCooldown && !unavailable && (
             <Button type="button" onClick={handleConfirm} disabled={!canConfirm}>
               {submitting && <Loader2 className="size-3.5 animate-spin" />}
               <Flame className="size-3.5" />
-              Confirmar ({NAME_CHANGE_AURA_COST} Aura)
+              Confirmar ({cost.toLocaleString("pt-BR")} Aura)
             </Button>
           )}
         </DialogFooter>

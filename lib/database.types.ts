@@ -156,6 +156,8 @@ export type Database = {
           asaas_customer_id: string | null
           /** Item (kind=avatar_frame) equipado — deve estar em `user_aura_items` do mesmo usuário, reforçado na aplicação. */
           equipped_avatar_frame_id: string | null
+          /** Item (kind=mini_profile_bg) equipado como tema animado do cartão de Mini Perfil. Slot independente de `equipped_avatar_frame_id`. */
+          equipped_mini_profile_bg_id: string | null
           /** Timestamp da última troca paga de nome — usado para o cooldown de 3 dias em `change_display_name_with_aura`. */
           display_name_changed_at: string | null
           created_at: string
@@ -204,7 +206,12 @@ export type Database = {
           slug: string
           name: string
           description: string | null
-          kind: "avatar_frame" | "vip_month" | "display_name_change" | "streak_shield"
+          kind:
+            | "avatar_frame"
+            | "vip_month"
+            | "display_name_change"
+            | "streak_shield"
+            | "mini_profile_bg"
           image_url: string | null
           frame_asset_url: string
           aura_cost: number

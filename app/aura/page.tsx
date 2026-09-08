@@ -11,6 +11,7 @@ import { EMPTY_DAILY_MISSIONS } from "@/lib/achievements"
 import {
   getDisplayNameCooldown,
   getEquippedAvatarFrameId,
+  getEquippedMiniProfileBg,
   getStreakShieldStatus,
   getUserAuraItemIds,
   getVipStatus,
@@ -40,6 +41,7 @@ export default async function AuraCenterPage() {
     items,
     ownedItemIds,
     equippedItemId,
+    equippedMiniBg,
     missions,
     youtubeConfirmed,
     discordConfirmed,
@@ -68,6 +70,7 @@ export default async function AuraCenterPage() {
     listActiveAuraItems(),
     userId ? getUserAuraItemIds(userId) : Promise.resolve(new Set<string>()),
     userId ? getEquippedAvatarFrameId(userId) : Promise.resolve(null),
+    userId ? getEquippedMiniProfileBg(userId) : Promise.resolve(null),
     userId ? getDailyMissionsToday(userId) : Promise.resolve(EMPTY_DAILY_MISSIONS),
     userId && isYoutubeSubscriptionEnabled()
       ? hasConfirmedYoutubeSubscription(userId)
@@ -97,6 +100,7 @@ export default async function AuraCenterPage() {
         items={items}
         initialOwnedItemIds={[...ownedItemIds]}
         initialEquippedItemId={equippedItemId}
+        initialEquippedMiniBgId={equippedMiniBg?.itemId ?? null}
         missions={missions}
         youtubeConfirmed={youtubeConfirmed}
         discordEnabled={isDiscordMembershipEnabled()}

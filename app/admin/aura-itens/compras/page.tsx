@@ -8,6 +8,7 @@ import {
   Coins,
   Crown,
   Gem,
+  Layers,
   Loader2,
   Search,
   ShieldCheck,
@@ -70,6 +71,7 @@ const KIND_META: Record<AuraItemKind, { label: string; icon: typeof Sparkles; cl
   vip_month: { label: "VIP", icon: Crown, className: "text-amber-300 bg-amber-500/10 border-amber-500/25" },
   display_name_change: { label: "Troca de nome", icon: UserRound, className: "text-sky-300 bg-sky-500/10 border-sky-500/25" },
   streak_shield: { label: "Escudo", icon: ShieldCheck, className: "text-cyan-300 bg-cyan-500/10 border-cyan-500/25" },
+  mini_profile_bg: { label: "Fundo de perfil", icon: Layers, className: "text-fuchsia-300 bg-fuchsia-500/10 border-fuchsia-500/25" },
 }
 
 type BuyerHit = {

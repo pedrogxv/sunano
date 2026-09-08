@@ -63,7 +63,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at, equipped_avatar_frame_id, aura_items ( frame_asset_url )"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at, equipped_avatar_frame_id, aura_items!user_profiles_equipped_avatar_frame_id_fkey ( frame_asset_url )"
 
 const PERIPHERAL_COLUMNS = PERIPHERAL_SHOWCASE_COLUMNS
 type PeripheralRow = PeripheralShowcaseRow

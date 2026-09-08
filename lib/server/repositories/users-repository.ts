@@ -1319,9 +1319,12 @@ export async function getMiniProfileBySlug(
   if (!normalized) return null
 
   const db = createSupabaseAdminClient()
+  // O fundo equipado entra por join aqui e NÃO em `DIRECTORY_COLUMNS`: o
+  // cartão é a única tela que desenha o tema, e /pessoas não deve pagar mais
+  // um join por linha da listagem por causa dele.
   const { data, error } = await db
     .from("user_profiles")
-    .select(`${DIRECTORY_COLUMNS}, bio`)
+    .select(`${DIRECTORY_COLUMNS}, bio, equipped_mini_profile_bg:aura_items!user_profiles_equipped_mini_profile_bg_id_fkey ( slug )`)
     .eq("display_slug", normalized)
     .maybeSingle()
 
@@ -1330,7 +1333,16 @@ export async function getMiniProfileBySlug(
     return null
   }
 
-  const row = data as DirectoryRow & { bio: string | null }
+  // `as unknown as`: `Relationships` está vazio em `database.types.ts` (o
+  // arquivo é mantido à mão), então o join embutido não é tipado — mesmo
+  // padrão de `getProfileShowcase`.
+  const row = data as unknown as DirectoryRow & {
+    bio: string | null
+    equipped_mini_profile_bg: { slug: string } | { slug: string }[] | null
+  }
+  const equippedBg = Array.isArray(row.equipped_mini_profile_bg)
+    ? row.equipped_mini_profile_bg[0]
+    : row.equipped_mini_profile_bg
   const [followers, aura, adjustments, activity, streaks] = await Promise.all([
     countFollowersByUser([row.id]),
     getAuraByUser([row.id]),
@@ -1346,7 +1358,12 @@ export async function getMiniProfileBySlug(
     activity[row.id] ?? 0
   )
 
-  return { ...summary, bio: row.bio, streak: streaks[row.id] ?? 0 }
+  return {
+    ...summary,
+    bio: row.bio,
+    streak: streaks[row.id] ?? 0,
+    equipped_mini_profile_bg: equippedBg?.slug ?? null,
+  }
 }
 
 /** Resumo do perfil administrativo (usado pela sidebar admin). */

@@ -13,6 +13,7 @@ import { AuraVipDiscountBanner } from "@/components/aura/AuraVipDiscountBanner"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { formatStreakMultiplier, streakHeatTier, STREAK_HEAT_STYLES } from "@/lib/streak-multiplier"
 import {
   DAILY_MISSION_REWARDS,
@@ -41,6 +42,7 @@ import { VipMonthCard } from "@/components/aura/VipMonthCard"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import { DisplayNameChangeCard } from "@/components/aura/DisplayNameChangeCard"
 import { CommunityAchievements } from "@/components/aura/CommunityAchievements"
+import { MiniProfileBgSection } from "@/components/aura/MiniProfileBgSection"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
 type AuraUsage = {
@@ -61,6 +63,8 @@ interface AuraCenterContentProps {
   items: AuraItem[]
   initialOwnedItemIds: string[]
   initialEquippedItemId: string | null
+  /** Fundo de Mini Perfil equipado (slot próprio, independente da moldura). */
+  initialEquippedMiniBgId: string | null
   missions: DailyMissionsState
   youtubeConfirmed: boolean
   /** Conquista "No Discord" ligada por env (ver lib/discord-membership.ts). */
@@ -115,6 +119,7 @@ export function AuraCenterContent({
   items,
   initialOwnedItemIds,
   initialEquippedItemId,
+  initialEquippedMiniBgId,
   missions,
   youtubeConfirmed,
   discordEnabled,
@@ -133,6 +138,7 @@ export function AuraCenterContent({
   // usuário já vê o próprio saldo atualizar ao resgatar algo nesta tela.
   const [ownedItemIds, setOwnedItemIds] = useState(() => new Set(initialOwnedItemIds))
   const [equippedItemId, setEquippedItemId] = useState(initialEquippedItemId)
+  const [equippedMiniBgId, setEquippedMiniBgId] = useState(initialEquippedMiniBgId)
   const [currentBalance, setCurrentBalance] = useState(balance)
   const [vip, setVip] = useState(vipStatus)
   const [nameCooldownState, setNameCooldownState] = useState(nameCooldown)
@@ -142,6 +148,8 @@ export function AuraCenterContent({
   const [shield, setShield] = useState(streakShield)
   const [discordOk, setDiscordOk] = useState(discordConfirmed)
 
+  // Trocar o nome aqui muda o que a topbar mostra, e ela lê do AuthProvider.
+  const { refresh: refreshAuthUser } = useAuthUser()
   const router = useRouter()
   const searchParams = useSearchParams()
   const youtubeStatus = searchParams.get("youtube")
@@ -205,7 +213,12 @@ export function AuraCenterContent({
     if (v) shieldVariants[v] = it
   }
   const hasShieldItem = Object.keys(shieldVariants).length > 0
-  const nonShieldItems = items.filter((it) => it.kind !== "streak_shield")
+  // Fundos de Mini Perfil saem da grade genérica: eles têm seção própria
+  // (cards maiores com o efeito rodando) logo abaixo dela.
+  const miniBgItems = items.filter((it) => it.kind === "mini_profile_bg")
+  const nonShieldItems = items.filter(
+    (it) => it.kind !== "streak_shield" && it.kind !== "mini_profile_bg"
+  )
 
   // Preços que o desconto VIP de fato alcança — alimentam o "quanto você
   // economiza" da faixa. `vip_month` fica de fora: a RPC recusa VIP ativo
@@ -493,6 +506,8 @@ export function AuraCenterContent({
                       setCurrentName(newName)
                       setNameCooldownState({ onCooldown: true, changedAt: now.toISOString(), endsAt: endsAt.toISOString() })
                       setCurrentBalance((prev) => prev - cost)
+                      // O nome também aparece na topbar, que lê do AuthProvider.
+                      refreshAuthUser()
                     }}
                   />
                 )
@@ -519,6 +534,23 @@ export function AuraCenterContent({
           </div>
         )}
       </div>
+
+      {/* Fundos de Mini Perfil — seção própria, fora da grade genérica: o
+          preview de cada um é o efeito rodando, e os cards precisam de mais
+          espaço do que uma célula de moldura. */}
+      <MiniProfileBgSection
+        items={miniBgItems}
+        balance={currentBalance}
+        isVip={vip.active}
+        ownedItemIds={ownedItemIds}
+        equippedItemId={equippedMiniBgId}
+        requireLogin={requireLogin}
+        onRedeemed={(itemId, cost) => {
+          setOwnedItemIds((prev) => new Set(prev).add(itemId))
+          setCurrentBalance((prev) => prev - cost)
+        }}
+        onEquipChange={setEquippedMiniBgId}
+      />
 
       {/* FAQ: todas as fontes de ganho/gasto, boost e trust tier, com números reais do usuário — por último, depois de todo o resto já ter dado o contexto prático */}
       <AuraFaqSection streak={streak.current} isVip={vip.active} />

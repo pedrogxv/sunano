@@ -11,6 +11,12 @@ import { getSpecialTag } from "@/lib/special-tag"
 import { profileAccentHue } from "@/lib/user-directory"
 import { cn } from "@/lib/utils"
 import type { MiniProfile } from "@/lib/mini-profile"
+import { getMiniProfileBgTheme } from "@/lib/mini-profile-backgrounds"
+import {
+  MiniProfileBackground,
+  miniProfileBgBorderClass,
+  miniProfileBgVars,
+} from "@/components/profile/MiniProfileBackground"
 
 const TIER_RING = {
   common: "ring-background",
@@ -31,6 +37,13 @@ function formatCount(value: number): string {
  * enviou nada cai numa cor derivada do id — a mesma do card de `/pessoas`, então
  * o perfil tem sempre a mesma identidade visual nos dois lugares.
  *
+ * Por cima disso pode vir um **Fundo de Mini Perfil** comprado na Central de
+ * Aura (`equipped_mini_profile_bg`): um tema animado — borda com brilho,
+ * raios, partículas — desenhado só com CSS (ver `lib/mini-profile-backgrounds.ts`).
+ * Ele entra ATRÁS do `mini_banner_url` quando as duas coisas existem: a imagem
+ * enviada é a foto do usuário e continua sendo o assunto; o tema é a moldura
+ * viva em volta dela. Sem imagem enviada, o tema toma o cartão inteiro.
+ *
  * Este componente é só apresentação: quem decide quando ele aparece é o
  * `MiniProfileHoverCard`. Ele nunca deve ser usado dentro da página de perfil
  * completa, que já mostra a capa grande.
@@ -40,6 +53,7 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
   const background = resolveProfileMedia(profile.mini_banner_url, profile.account_tier)
   const hue = profileAccentHue(profile.id)
   const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
+  const bgTheme = getMiniProfileBgTheme(profile.equipped_mini_profile_bg)
   const effectiveTier = isVip ? "vip" : "common"
   const specialTag = getSpecialTag(profile.display_slug)
   const initials =
@@ -49,32 +63,65 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
   return (
     <Link
       href={profilePath(profile.display_slug)}
-      className="relative block w-64 overflow-hidden rounded-2xl border border-border shadow-xl"
-      style={{
-        // A cor fica sempre atrás para que uma imagem ausente — ou que falhe ao
-        // carregar — descubra o gradiente em vez de um retângulo vazio.
-        backgroundImage: `linear-gradient(135deg, hsl(${hue} 65% 45% / 0.85), hsl(${(hue + 45) % 360} 60% 30% / 0.55))`,
-      }}
+      className={cn(
+        // SEM `overflow-hidden` aqui: o halo e o traço de luz da borda do tema
+        // vivem em ::before/::after estourando o retângulo do cartão, e um
+        // clip neste nível os cortaria justamente onde eles existem. Quem
+        // recorta o conteúdo é o wrapper interno abaixo.
+        "relative block w-64 rounded-2xl border shadow-xl",
+        // Com tema equipado a borda estática sai de cena: quem desenha o
+        // contorno passa a ser a borda animada do tema.
+        bgTheme ? "border-transparent" : "border-border",
+        miniProfileBgBorderClass(bgTheme)
+      )}
+      style={miniProfileBgVars(bgTheme)}
     >
-      {/* Fundo do Mini Perfil ocupando o cartão inteiro — é ele o assunto aqui,
-          como o "Profile Background" da Steam. O texto vem sobreposto, sem
-          faixa sólida embaixo roubando metade da imagem. */}
-      <ImageWithFallback
-        src={background.src}
-        alt=""
-        fill
-        unoptimized={background.animated}
-        sizes="256px"
-        style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}
-        className="object-cover"
-        fallback={null}
-      />
+      <div
+        className="relative overflow-hidden rounded-2xl"
+        style={{
+          // A cor fica sempre atrás para que uma imagem ausente — ou que falhe
+          // ao carregar — descubra o gradiente em vez de um retângulo vazio.
+          backgroundImage: `linear-gradient(135deg, hsl(${hue} 65% 45% / 0.85), hsl(${(hue + 45) % 360} 60% 30% / 0.55))`,
+        }}
+      >
+      {/* Tema comprado, quando há: fica na camada mais atrás, sob o
+          `mini_banner_url`. */}
+      {bgTheme && <MiniProfileBackground theme={bgTheme} />}
+      {/* Fundo do Mini Perfil — a imagem enviada pelo usuário, o "Profile
+          Background" da Steam. Com um tema equipado ela encolhe para uma faixa
+          no topo em vez de cobrir o cartão: assim as duas coisas convivem — a
+          foto em cima, o efeito animado emoldurando o resto. Sem tema, ela
+          segue ocupando o cartão inteiro, como sempre. */}
+      <div className={cn("absolute inset-x-0 top-0", bgTheme ? "h-[92px]" : "bottom-0")}>
+        <ImageWithFallback
+          src={background.src}
+          alt=""
+          fill
+          unoptimized={background.animated}
+          sizes="256px"
+          style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}
+          className="object-cover"
+          fallback={null}
+        />
+        {bgTheme && background.src && (
+          // Dissolve a base da faixa no tema, para não ficar um corte reto
+          // entre a foto e o efeito.
+          <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/90 to-transparent" />
+        )}
+      </div>
 
       {/* Só o suficiente para o texto ter contraste sobre qualquer imagem:
           escurece de baixo para cima e some antes do topo. */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10" />
+      <div
+        className={cn(
+          "absolute inset-0",
+          bgTheme
+            ? "bg-gradient-to-t from-black/70 via-black/25 to-black/10"
+            : "bg-gradient-to-t from-black/85 via-black/45 to-black/10"
+        )}
+      />
 
-      <div className="relative flex flex-col items-center px-3 pb-3 pt-5">
+      <div className="relative z-[1] flex flex-col items-center px-3 pb-3 pt-5">
         <div
           className={cn(
             "relative size-[72px] overflow-hidden rounded-full bg-muted ring-4 ring-offset-0",
@@ -140,6 +187,7 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
             </span>
           )}
         </div>
+      </div>
       </div>
     </Link>
   )

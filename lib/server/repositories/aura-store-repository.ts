@@ -14,7 +14,12 @@ import { isDisplayNameAvailable } from "@/lib/server/repositories/users-reposito
  * lê as tabelas resultantes.
  */
 
-export type AuraItemKind = "avatar_frame" | "vip_month" | "display_name_change" | "streak_shield"
+export type AuraItemKind =
+  | "avatar_frame"
+  | "vip_month"
+  | "display_name_change"
+  | "streak_shield"
+  | "mini_profile_bg"
 
 export type AuraItem = {
   id: string
@@ -109,6 +114,41 @@ export async function getEquippedAvatarFrameId(userId: string): Promise<string |
   return data?.equipped_avatar_frame_id ?? null
 }
 
+/**
+ * Fundo de Mini Perfil equipado, se houver — devolve o SLUG (a chave da arte
+ * em `lib/mini-profile-backgrounds.ts`), não o id: quem desenha o cartão
+ * precisa do tema, e o id do item não diz nada a ele.
+ */
+export async function getEquippedMiniProfileBg(
+  userId: string
+): Promise<{ itemId: string; slug: string } | null> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_profiles")
+    .select(
+      "equipped_mini_profile_bg_id, aura_items!user_profiles_equipped_mini_profile_bg_id_fkey ( slug )"
+    )
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[aura-store-repository] getEquippedMiniProfileBg:", error)
+    return null
+  }
+
+  // `as unknown as`: o join embutido não é tipado (`Relationships` vazio em
+  // `database.types.ts`), mesmo padrão de `getProfileShowcase`.
+  const row = data as unknown as
+    | { equipped_mini_profile_bg_id: string | null; aura_items: { slug: string } | { slug: string }[] | null }
+    | null
+  if (!row?.equipped_mini_profile_bg_id) return null
+
+  const item = Array.isArray(row.aura_items) ? row.aura_items[0] : row.aura_items
+  if (!item) return null
+
+  return { itemId: row.equipped_mini_profile_bg_id, slug: item.slug }
+}
+
 export type RedeemAuraItemErrorCode = "not_found" | "insufficient_balance" | "unauthenticated" | "unknown"
 
 export type RedeemAuraItemResult =
@@ -168,6 +208,56 @@ export async function equipAvatarFrame(userId: string, itemId: string | null): P
   if (error) {
     console.error("[aura-store-repository] equipAvatarFrame:", error)
     return { ok: false, error: "Erro ao equipar item.", status: 400 }
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Equipa (ou remove, com `itemId: null`) um Fundo de Mini Perfil já possuído.
+ *
+ * Slot independente do de moldura de avatar: equipar um fundo não mexe em
+ * `equipped_avatar_frame_id`. A checagem de posse é a mesma de
+ * `equipAvatarFrame`, mais uma checagem de `kind` — sem ela, um POST com o id
+ * de uma moldura possuída gravaria uma moldura no slot de fundo.
+ */
+export async function equipMiniProfileBg(
+  userId: string,
+  itemId: string | null
+): Promise<EquipAvatarFrameResult> {
+  const db = createSupabaseAdminClient()
+
+  if (itemId) {
+    const { data: item } = await db
+      .from("aura_items")
+      .select("id, kind")
+      .eq("id", itemId)
+      .maybeSingle()
+
+    if (!item || item.kind !== "mini_profile_bg") {
+      return { ok: false, error: "Este item não é um Fundo de Mini Perfil.", status: 400 }
+    }
+
+    const { data: owned } = await db
+      .from("user_aura_items")
+      .select("item_id")
+      .eq("user_id", userId)
+      .eq("item_id", itemId)
+      .maybeSingle()
+
+    if (!owned) {
+      return { ok: false, error: "Você ainda não possui este item.", status: 403 }
+    }
+  }
+
+  const { error } = await db
+    .from("user_profiles")
+    .update({ equipped_mini_profile_bg_id: itemId })
+    .eq("id", userId)
+
+  if (error) {
+    console.error("[aura-store-repository] equipMiniProfileBg:", error)
+    return { ok: false, error: "Erro ao equipar o fundo.", status: 400 }
   }
 
   return { ok: true }
@@ -237,6 +327,32 @@ export type DisplayNameCooldown = {
   onCooldown: boolean
   changedAt: string | null
   endsAt: string | null
+}
+
+/**
+ * Custo de tabela da troca de nome, lido do catálogo (`aura_items`, kind
+ * `display_name_change`) — o mesmo número que a Central de Aura mostra no
+ * card. Nunca hardcode esse valor no client: quem edita o preço é o admin.
+ *
+ * `null` quando o item está inativo/ausente — a troca fica indisponível, que
+ * é exatamente o que a RPC responde nesse caso (`item_unavailable`).
+ */
+export async function getDisplayNameChangeCost(): Promise<number | null> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("aura_items")
+    .select("aura_cost")
+    .eq("kind", "display_name_change")
+    .eq("active", true)
+    .order("sort_order", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) {
+    console.error("[aura-store-repository] getDisplayNameChangeCost:", error)
+    return null
+  }
+  return data?.aura_cost ?? null
 }
 
 /** Estado do cooldown de troca de nome — calculado na leitura a partir do timestamp, mesmo padrão de `isStreakActive`. */

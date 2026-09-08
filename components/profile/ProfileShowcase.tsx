@@ -2,7 +2,6 @@ import Link from "next/link"
 import { Eye, Settings, Trophy } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
-import { cn } from "@/lib/utils"
 import { AvatarQuadrado } from "./AvatarQuadrado"
 import { AchievementsGrid } from "./AchievementsGrid"
 import { Banner } from "./Banner"
@@ -39,13 +38,19 @@ interface ProfileShowcaseProps {
 }
 
 /**
- * Vitrine pública do perfil: capa larga com cantos próprios arredondados
- * (sem card envolvendo tudo), foto quadrada centralizada invadindo a capa
- * pela metade, e nome, badges e data centralizados logo abaixo dela.
+ * Vitrine pública do perfil. A identidade — capa, foto, nome, badges, bio,
+ * links sociais e estatísticas — vive num **cartão único**: a capa é o topo
+ * dele e o resto desce dentro, em vez de a capa flutuar sozinha com o texto
+ * solto no fundo da página. A foto quadrada, centralizada, invade a capa pela
+ * metade e costura as duas metades do cartão.
  *
- * Medalhas e botão de ação (Seguir/Editar) ficam ancorados nos cantos,
- * fora do retângulo da capa, só a partir de `sm` — largura de sobra ali.
- * No celular eles voltam para o fluxo normal, empilhados abaixo do bloco
+ * Abaixo do cartão vêm as seções de conteúdo (conquistas, setup, favoritos,
+ * tierlist, reviews) — separadas de propósito: o cartão diz *quem* é a
+ * pessoa, as seções dizem *o que* ela tem.
+ *
+ * Medalhas e botão de ação (Seguir/Editar) ficam ancorados nos cantos da
+ * faixa logo abaixo da capa, só a partir de `sm` — largura de sobra ali. No
+ * celular eles voltam para o fluxo normal, empilhados abaixo do bloco
  * central: `absolute` nos dois lados brigava com o nome centralizado e
  * estourava a largura da tela em nomes/badges maiores.
  */
@@ -92,87 +97,99 @@ export function ProfileShowcase({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6 md:px-6 md:py-8">
-      <div className="relative">
-        <Banner
-          bannerUrl={profile.banner_url}
-          tier={profile.account_tier}
-          vipExpiresAt={profile.vip_expires_at}
-          adjust={profile.media_adjustments.banner}
-          className={cn("rounded-2xl", BANNER_HEIGHT)}
-        />
+      {/* Capa e identidade num cartão só. Antes eram dois blocos soltos — capa
+          com cantos próprios e, abaixo, texto no fundo da página — e a faixa
+          entre eles ficava visualmente órfã. Agora a capa é o topo do cartão e
+          nome/badges/stats moram dentro dele, como num perfil de rede social. */}
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="relative">
+          <Banner
+            bannerUrl={profile.banner_url}
+            tier={profile.account_tier}
+            vipExpiresAt={profile.vip_expires_at}
+            adjust={profile.media_adjustments.banner}
+            className={BANNER_HEIGHT}
+          />
 
-        {/* Contador de visitas — canto superior direito da capa, sem competir com o botão Seguir/Editar (que fica abaixo dela). */}
-        <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-          <Eye className="size-3.5" />
-          {formatCount(profile.profile_views)}
+          {/* Véu na base da capa: a foto e as medalhas encostam nela, e sem
+              esse degradê uma capa clara apagava a moldura das duas. */}
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-card via-card/50 to-transparent"
+            aria-hidden
+          />
+
+          {/* Contador de visitas — canto superior direito da capa, sem competir com o botão Seguir/Editar (que fica abaixo dela). */}
+          <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+            <Eye className="size-3.5" />
+            {formatCount(profile.profile_views)}
+          </div>
+
+          {/* A foto fica centralizada no eixo horizontal e invade a capa pela
+              metade (fora do fluxo, absolute). Centralizar em vez de ancorar
+              num canto é o que permite o bloco de nome/badges também ficar
+              centralizado abaixo dela, como um cartão de perfil em vez de um
+              header alinhado à esquerda. */}
+          <div className="absolute bottom-0 left-1/2 z-10 -translate-x-1/2 translate-y-1/2">
+            <AvatarQuadrado
+              avatarUrl={profile.avatar_url}
+              name={profile.display_name}
+              tier={profile.account_tier}
+              vipExpiresAt={profile.vip_expires_at}
+              adjust={profile.media_adjustments.avatar}
+              frameUrl={profile.equipped_avatar_frame_url}
+            />
+          </div>
+
+          {/* Medalhas e ação ancoradas nos cantos, agora *dentro* do cartão e
+              na faixa logo abaixo da capa — só a partir de `sm`, onde há
+              largura de sobra nas laterais do bloco central. */}
+          <div className="absolute left-4 top-full mt-3 hidden sm:block">{medals}</div>
+          <div className="absolute right-4 top-full mt-3 hidden sm:block">{actionButton}</div>
         </div>
 
-        {/* A foto fica centralizada no eixo horizontal e invade a capa pela
-            metade (fora do fluxo, absolute). Centralizar em vez de ancorar
-            num canto é o que permite o bloco de nome/badges também ficar
-            centralizado abaixo dela, como um cartão de perfil em vez de um
-            header alinhado à esquerda. */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2">
-          <AvatarQuadrado
-            avatarUrl={profile.avatar_url}
+        {/* Espaço reservado abaixo da capa = metade da foto que invade por cima
+            dela, para o texto centralizado não colidir com a moldura. */}
+        <div className="flex flex-col items-center px-4 pb-6 pt-16 text-center sm:pt-[4.5rem]">
+          <InfoBasica
             name={profile.display_name}
             tier={profile.account_tier}
             vipExpiresAt={profile.vip_expires_at}
-            adjust={profile.media_adjustments.avatar}
-            frameUrl={profile.equipped_avatar_frame_url}
+            memberSince={profile.member_since}
+            displaySlug={profile.display_slug}
+            auraRank={profile.aura_rank}
+            activityRank={profile.activity_rank}
+            streak={profile.streak.current}
+            streakFrozen={profile.streak.frozen}
+            streakFrozenUntil={profile.streak.frozenUntil}
+            bio={profile.bio}
+            isOwner={isOwner}
           />
+          <SocialLinks
+            youtubeHandle={profile.youtube_handle}
+            tiktokHandle={profile.tiktok_handle}
+            className="mt-3 justify-center"
+          />
+
+          {/* Versão de fluxo normal do botão de ação + medalhas, só até `sm`
+              (a versão ancorada nos cantos da capa assume dali pra cima). */}
+          <div className="mt-4 flex w-full flex-col items-center gap-3 sm:hidden">
+            {actionButton}
+            {medalsCentered}
+          </div>
+
+          {/* Stats entram no mesmo cartão, separadas por um filete: são parte
+              da identidade ("quem é essa pessoa aqui dentro"), não uma seção
+              de conteúdo como setup/favoritos. */}
+          <div className="mt-6 w-full border-t border-border/60 pt-5">
+            <EstatisticasGrid
+              userId={profile.id}
+              aura={profile.aura}
+              posts={profile.forum_posts}
+              comentarios={profile.forum_comments}
+              seguidores={profile.followers}
+            />
+          </div>
         </div>
-
-        {/* Ancorado à esquerda, na mesma linha do botão Seguir/Editar — só a
-            partir de `sm`, onde há largura de sobra nas laterais do bloco
-            central para não colidir com ele. */}
-        <div className="absolute left-0 top-full mt-3 hidden sm:block">{medals}</div>
-
-        {/* Ancorado à direita, na mesma altura do nome (metade da foto abaixo
-            da capa) — fora do retângulo da capa, como na referência, em vez
-            de flutuar por cima da imagem. Também só a partir de `sm`. */}
-        <div className="absolute right-0 top-full mt-3 hidden sm:block">{actionButton}</div>
-      </div>
-
-      {/* Espaço reservado abaixo da capa = metade da foto que invade por cima
-          dela, para o texto centralizado não colidir com a moldura. */}
-      <div className="flex flex-col items-center px-4 pb-5 pt-16 text-center sm:pt-[4.5rem]">
-        <InfoBasica
-          name={profile.display_name}
-          tier={profile.account_tier}
-          vipExpiresAt={profile.vip_expires_at}
-          memberSince={profile.member_since}
-          displaySlug={profile.display_slug}
-          auraRank={profile.aura_rank}
-          activityRank={profile.activity_rank}
-          streak={profile.streak.current}
-          streakFrozen={profile.streak.frozen}
-          streakFrozenUntil={profile.streak.frozenUntil}
-          bio={profile.bio}
-          isOwner={isOwner}
-        />
-        <SocialLinks
-          youtubeHandle={profile.youtube_handle}
-          tiktokHandle={profile.tiktok_handle}
-          className="mt-2 justify-center"
-        />
-
-        {/* Versão de fluxo normal do botão de ação + medalhas, só até `sm`
-            (a versão ancorada nos cantos da capa assume dali pra cima). */}
-        <div className="mt-3 flex w-full flex-col items-center gap-3 sm:hidden">
-          {actionButton}
-          {medalsCentered}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-3">
-        <EstatisticasGrid
-          userId={profile.id}
-          aura={profile.aura}
-          posts={profile.forum_posts}
-          comentarios={profile.forum_comments}
-          seguidores={profile.followers}
-        />
       </div>
 
       <div className="mt-3 space-y-8">

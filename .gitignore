@@ -44,3 +44,6 @@ next-env.d.ts
 .claude/
 .vercel
 .env*
+
+# logs de dry-run/aplicacao de scripts/compress-storage-images.ts
+/compress-storage-*.json

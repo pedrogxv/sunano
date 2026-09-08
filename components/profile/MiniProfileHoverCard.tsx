@@ -7,8 +7,31 @@ import { MiniProfileCard } from "./MiniProfileCard"
 import type { MiniProfile } from "@/lib/mini-profile"
 
 /** Cache por slug, compartilhado entre todas as instâncias do cartão.
- *  Passar o cursor de novo sobre o mesmo perfil não repete a requisição. */
-const cache = new Map<string, MiniProfile>()
+ *  Passar o cursor de novo sobre o mesmo perfil não repete a requisição.
+ *
+ *  Com TTL: sem ele a entrada vivia enquanto a aba existisse, então trocar um
+ *  cosmético (fundo do cartão, moldura) só aparecia depois de um reload — o
+ *  próprio dono via o cartão antigo indefinidamente. O TTL acompanha o
+ *  `max-age` da resposta de `/api/users/mini-profile`. */
+const CACHE_TTL_MS = 60_000
+const cache = new Map<string, { profile: MiniProfile; at: number }>()
+
+function readCache(slug: string): MiniProfile | null {
+  const hit = cache.get(slug)
+  if (!hit) return null
+  if (Date.now() - hit.at > CACHE_TTL_MS) {
+    cache.delete(slug)
+    return null
+  }
+  return hit.profile
+}
+
+/** Descarta a entrada de um perfil — chamado após equipar/desequipar um
+ *  cosmético, para o cartão do próprio usuário refletir a troca na hora. */
+export function invalidateMiniProfile(slug?: string | null) {
+  if (slug) cache.delete(slug)
+  else cache.clear()
+}
 
 /**
  * Envolve um avatar/nome com o cartão de Mini Perfil, que abre ao passar o
@@ -34,20 +57,25 @@ export function MiniProfileHoverCard({
   align?: "start" | "center" | "end"
 }) {
   const [profile, setProfile] = useState<MiniProfile | null>(() =>
-    slug ? cache.get(slug) ?? null : null
+    slug ? readCache(slug) : null
   )
   // Evita disparar duas buscas quando o cursor entra e sai rápido.
   const pending = useRef(false)
 
   const load = useCallback(
     async (open: boolean) => {
-      if (!open || !slug || profile || pending.current) return
+      if (!open || !slug || pending.current) return
+      const cached = readCache(slug)
+      if (cached) {
+        setProfile(cached)
+        return
+      }
       pending.current = true
       try {
         const res = await fetch(`/api/users/mini-profile?slug=${encodeURIComponent(slug)}`)
         const data = (await res.json().catch(() => null)) as { profile?: MiniProfile } | null
         if (res.ok && data?.profile) {
-          cache.set(slug, data.profile)
+          cache.set(slug, { profile: data.profile, at: Date.now() })
           setProfile(data.profile)
         }
       } catch {
@@ -57,7 +85,7 @@ export function MiniProfileHoverCard({
         pending.current = false
       }
     },
-    [profile, slug]
+    [slug]
   )
 
   if (!slug) return <>{children}</>

@@ -8,6 +8,7 @@ import {
   IMAGE_PRESETS,
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
+import { isKlipyGifUrl } from "@/lib/klipy"
 import { detectImageType } from "@/lib/server/upload-validation"
 
 /**
@@ -64,6 +65,9 @@ const PRESET_BY_FIELD: Record<ProfileMediaField, (typeof IMAGE_PRESETS)[keyof ty
 }
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+
+/** Teto de espera ao baixar do CDN do KLIPY — a rota não pode ficar pendurada. */
+const KLIPY_FETCH_TIMEOUT_MS = 15_000
 
 const EXTENSION_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -168,6 +172,86 @@ export async function finalizeProfileMediaUpload(
       cacheControl: IMMUTABLE_CACHE_CONTROL,
       upsert: true,
     })
+
+  const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path)
+  return { ok: true, publicUrl: publicData.publicUrl }
+}
+
+/**
+ * Importa uma mídia do CDN do KLIPY (escolhida no seletor de GIF) para o
+ * bucket, como se tivesse sido enviada pelo usuário.
+ *
+ * Existe porque mídia de perfil **não pode** ficar hospedada fora: banner e
+ * avatar passam pelo `image-loader` do Storage e pela recompressão daqui, e
+ * um link do KLIPY salvo cru quebraria os dois (além de virar hotlink
+ * permanente numa URL que eles podem rotacionar). Diferente do fórum, onde a
+ * URL do KLIPY é só mais uma imagem de comentário.
+ *
+ * O servidor é quem baixa: a mesma checagem de host/extensão de
+ * `isKlipyGifUrl` roda aqui antes do fetch (SSRF — a URL vem do cliente), e
+ * os bytes ainda passam por magic bytes, tamanho e tier de GIF, exatamente
+ * como no fluxo de arquivo local.
+ */
+export async function importProfileMediaFromKlipy(
+  field: ProfileMediaField,
+  userId: string,
+  sourceUrl: string
+): Promise<ErrorResult | { ok: true; publicUrl: string }> {
+  const config = FIELD_CONFIG[field]
+
+  if (!isKlipyGifUrl(sourceUrl)) {
+    return { ok: false, error: "Essa URL não é uma mídia válida do seletor de GIF.", status: 400 }
+  }
+
+  // GIF do KLIPY é animado por definição — cobra o tier antes de gastar
+  // banda baixando o arquivo.
+  const tier = await getAccountTier(userId)
+  if (!canUseAnimatedMedia(tier)) {
+    return { ok: false, error: config.gifErrorMessage, status: 403 }
+  }
+
+  let bytes: Uint8Array
+  try {
+    const res = await fetch(sourceUrl, {
+      // Sem cache: o arquivo é gravado no nosso bucket logo em seguida.
+      cache: "no-store",
+      signal: AbortSignal.timeout(KLIPY_FETCH_TIMEOUT_MS),
+    })
+    if (!res.ok) {
+      return { ok: false, error: "Não foi possível baixar o GIF escolhido.", status: 400 }
+    }
+    const buffer = await res.arrayBuffer()
+    if (buffer.byteLength > config.maxSizeBytes) {
+      return { ok: false, error: maxSizeLabel(config.maxSizeBytes), status: 400 }
+    }
+    bytes = new Uint8Array(buffer)
+  } catch {
+    return { ok: false, error: "Não foi possível baixar o GIF escolhido.", status: 400 }
+  }
+
+  const detected = detectImageType(bytes)
+  if (!detected || !ALLOWED_MIME_TYPES.includes(detected.mime)) {
+    return { ok: false, error: "O conteúdo baixado não é uma imagem válida.", status: 400 }
+  }
+
+  const extension = EXTENSION_BY_MIME[detected.mime]
+  const path = `${config.prefix}-${userId}-${Date.now()}.${extension}`
+
+  // Mesma recompressão do upload local — GIF passa intacto (ver
+  // `compressUploadedImage`), que é justamente o ponto de escolher um.
+  const compressed = await compressUploadedImage(bytes, detected.mime, PRESET_BY_FIELD[field])
+
+  const supabase = createSupabaseAdminClient()
+  const { error: uploadError } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, compressed.bytes, {
+      contentType: compressed.mime,
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+      upsert: true,
+    })
+  if (uploadError) {
+    return { ok: false, error: "Não foi possível salvar o GIF. Tente novamente.", status: 500 }
+  }
 
   const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return { ok: true, publicUrl: publicData.publicUrl }

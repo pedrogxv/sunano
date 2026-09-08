@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Pencil } from "lucide-react"
 
 import { profilePath } from "@/lib/profile-name"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { ChangeDisplayNameModal } from "./ChangeDisplayNameModal"
 
 interface EditNameButtonProps {
@@ -19,6 +20,10 @@ interface EditNameButtonProps {
 export function EditNameButton({ currentName }: EditNameButtonProps) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
+  // `router.refresh()` refaz os Server Components, mas o nome na topbar vem do
+  // AuthProvider (client) — que não escuta nada disso. Sem este refresh, o
+  // menu da conta continua com o nome antigo.
+  const { refresh: refreshAuthUser } = useAuthUser()
 
   return (
     <>
@@ -39,6 +44,7 @@ export function EditNameButton({ currentName }: EditNameButtonProps) {
             router.replace(profilePath(newSlug))
           }
           router.refresh()
+          refreshAuthUser()
         }}
       />
     </>

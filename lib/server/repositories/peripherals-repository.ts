@@ -56,7 +56,9 @@ export type PeripheralSummary = Partial<PeripheralColumnFields> & {
 
 const FULL_COLUMNS =
   "id, name, brand_id, brands(name), image_url, category, tier, price, tags, specs, weight_g, connectivity, mouse_shape, keyboard_layout, surface, profile, panel_type, refresh_rate, tier_rank"
-const SHORT_COLUMNS = "id, name, brand_id, brands(name), category, image_url"
+// `tier` entra no conjunto curto porque o autocomplete o exibe como selo — é
+// uma coluna escalar da própria linha, não custa join nem peso perceptível.
+const SHORT_COLUMNS = "id, name, brand_id, brands(name), category, image_url, tier"
 
 type RawPeripheralRow = {
   brand_id: string

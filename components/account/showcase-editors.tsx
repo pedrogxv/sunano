@@ -131,15 +131,12 @@ export function SetupEditor({
                   <PeripheralPicker
                     categories={categories}
                     autoFocus
-                    placeholder={`Buscar ${label.toLowerCase()}...`}
+                    placeholder={`Buscar ${label.toLowerCase()} por nome ou marca...`}
                     onSelect={(peripheral) => {
                       onChange(slot, peripheral)
                       setEditing(null)
                     }}
                   />
-                  <p className="text-[11px] text-muted-foreground/60">
-                    Só periféricos já cadastrados na wiki podem ir para a vitrine.
-                  </p>
                 </div>
               )}
             </div>
@@ -246,7 +243,7 @@ export function FavoritosEditor({
         ) : (
           <PeripheralPicker
             excludeIds={favorites.map((f) => f.id)}
-            placeholder="Buscar periférico para favoritar..."
+            placeholder="Buscar por nome ou marca para favoritar..."
             onSelect={(peripheral) => onChange([...favorites, peripheral])}
           />
         )}

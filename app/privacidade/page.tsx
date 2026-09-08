@@ -274,6 +274,15 @@ export default function PrivacidadePage() {
               aleatório (hash) por até <strong>30 dias</strong>, removido automaticamente ao expirar.
               Pode ser revogado a qualquer momento em Conta &gt; Segurança.
             </li>
+            <li>
+              <strong>Contagem de visitas:</strong> o hash irreversível descrito na seção 6 é
+              mantido por até <strong>400 dias</strong> — o suficiente para os relatórios anuais
+              do painel administrativo — e removido pela rotina de expurgo diária.
+            </li>
+            <li>
+              <strong>Notificações:</strong> as já lidas são removidas após{" "}
+              <strong>90 dias</strong>. As não lidas permanecem até que você as veja.
+            </li>
           </ul>
           <p className="text-xs text-muted-foreground">
             Os prazos de log de auditoria e de eventos de rate limit são aplicados por uma rotina

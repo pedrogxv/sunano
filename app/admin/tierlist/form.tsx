@@ -813,7 +813,10 @@ function ExpertAuthorPicker({
     let cancelled = false
     const timer = setTimeout(() => {
       setLoading(true)
-      fetch(`/api/users/search?q=${encodeURIComponent(term)}&limit=10`, { cache: "no-store" })
+      // `includeOwner=1`: o dono do site fica fora das listagens públicas, mas
+      // é justamente quem mais assina os comentários — a rota só honra o flag
+      // para quem é do admin.
+      fetch(`/api/users/search?q=${encodeURIComponent(term)}&limit=10&includeOwner=1`, { cache: "no-store" })
         .then((res) => res.json().catch(() => null))
         .then((json: { profiles?: { id: string; display_name: string; display_slug: string | null; avatar_url: string | null }[] } | null) => {
           if (cancelled) return
@@ -2112,13 +2115,13 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           forceOpen={forceOpenIds.has("section-ratings")}
           title={t.admin.tierlistForm.sectionRatings}
           icon={
-            <div className="flex items-center gap-1">
-              <span className="w-4 h-1 rounded bg-red-600" />
-              <span className="w-4 h-1 rounded bg-yellow-400" />
-              <span className="w-4 h-1 rounded bg-zinc-400" />
-              <span className="w-4 h-1 rounded bg-green-600" />
-              <span className="w-4 h-1 rounded bg-sky-500" />
-              <span className="w-4 h-1 rounded bg-purple-600" />
+            // As 6 cores de nota em grade 2x3: o slot do ícone tem 36px e não
+            // encolhe o conteúdo, então enfileirar 6 barras `w-4` transbordava
+            // por cima do título.
+            <div className="grid grid-cols-3 gap-[3px]">
+              {RATING_LEVEL_COLORS.slice(1).map((level) => (
+                <span key={level.bar} className={`size-1.5 rounded-[2px] ${level.bar}`} />
+              ))}
             </div>
           }
           defaultOpen={false}
@@ -3384,6 +3387,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Comentários"}</label>
               <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Opinião geral e recomendação sobre o produto"} rows={3} {...form.register("summary")} />
+              <p className="text-[10px] text-muted-foreground">
+                {"Aceita a formatação do fórum: **negrito**, *itálico*, __sublinhado__, ==destaque==, [texto](url), \"- \" para lista e \"## \" para título."}
+              </p>
             </div>
 
             <div className="space-y-1.5">

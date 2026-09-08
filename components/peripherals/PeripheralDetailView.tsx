@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils"
 import { mapTier, NEW_TIERS, tierLabel } from "@/lib/tier-utils"
 import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
+import { FormattedText } from "@/components/ui/formatted-text"
 import { PeripheralGallery } from "@/components/peripherals/PeripheralGallery"
 import { PeripheralLikeToggle } from "@/components/peripherals/PeripheralLikeToggle"
 import { PeripheralReviewsList } from "@/components/peripherals/PeripheralReviewsList"
@@ -1480,8 +1481,16 @@ export function PeripheralDetailView({
                     </CardDescription>
                   )}
                 </CardHeader>
-                <CardContent className="text-base text-muted-foreground break-words whitespace-pre-wrap lg:max-h-80 lg:overflow-auto">
-                  {generalComments || "Sem comentarios adicionais."}
+                <CardContent className="whitespace-pre-wrap break-words text-base text-muted-foreground lg:max-h-80 lg:overflow-auto">
+                  {generalComments ? (
+                    // O admin escreve o comentário com o markdown mínimo do
+                    // projeto (`**negrito**`, `- item`, `##` título); antes o
+                    // texto saía cru, com os asteriscos à mostra. `FormattedText`
+                    // e não `CommentBody` porque aqui não há @menções a resolver.
+                    <FormattedText text={generalComments} />
+                  ) : (
+                    "Sem comentarios adicionais."
+                  )}
                 </CardContent>
               </Card>
 

@@ -356,18 +356,24 @@ async function withCounters(
  * Busca perfis pelo nome de exibição. Termos com menos de 2 caracteres não
  * buscam — evita varrer a tabela a cada tecla antes de o usuário terminar
  * de escrever.
+ *
+ * `includeOwner` traz de volta o dono do site, que `excludeFromPublicListings`
+ * esconde das listagens públicas: seletores internos do admin (quem assina os
+ * "Comentários de Especialista", por exemplo) precisam poder escolhê-lo. Só a
+ * rota decide quando ligar isso, e apenas para quem é do admin — contas
+ * banidas continuam fora nos dois casos.
  */
 export async function searchUserProfiles(
   query: string,
-  limit = 10
+  limit = 10,
+  { includeOwner = false }: { includeOwner?: boolean } = {}
 ): Promise<PublicProfileSummary[]> {
   const trimmed = query.trim()
   if (trimmed.length < 2) return []
 
   const db = createSupabaseAdminClient()
-  const { data, error } = await excludeFromPublicListings(
-    db.from("user_profiles").select(DIRECTORY_COLUMNS)
-  )
+  const base = db.from("user_profiles").select(DIRECTORY_COLUMNS)
+  const { data, error } = await (includeOwner ? base.is("account_banned_at", null) : excludeFromPublicListings(base))
     .ilike("display_name", `%${trimmed}%`)
     .order("profile_views", { ascending: false })
     .limit(limit)

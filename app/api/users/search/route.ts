@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { hasAdminPermission } from "@/lib/admin-permissions"
+import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import {
@@ -15,6 +17,12 @@ export const dynamic = "force-dynamic"
  * não virar um scraping/DoS barato do diretório inteiro. Como
  * `/api/users/directory`, devolve também quais dos resultados o usuário
  * logado já segue.
+ *
+ * `includeOwner=1` desliga o filtro que esconde o dono do site — é o que os
+ * seletores de perfil do admin usam (ver `ExpertAuthorPicker` em
+ * app/admin/tierlist/form.tsx). O parâmetro só é honrado para quem tem
+ * `peripherals_write`; para os demais é ignorado em silêncio, mantendo a
+ * resposta pública idêntica à de antes.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -31,8 +39,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Muitas buscas seguidas. Aguarde um instante." }, { status: 429 })
   }
 
+  const includeOwner = searchParams.get("includeOwner") === "1"
+
   try {
-    const profiles = await searchUserProfiles(query, limit)
+    const canIncludeOwner = includeOwner
+      ? await getAuthorizedProfile().then((auth) => hasAdminPermission(auth.profile, "peripherals_write"))
+      : false
+
+    const profiles = await searchUserProfiles(query, limit, { includeOwner: canIncludeOwner })
 
     const user = await getRequestUser(request)
     const followedIds = user

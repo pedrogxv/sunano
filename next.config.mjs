@@ -31,6 +31,15 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+	experimental: {
+		// `proxy.ts` casa com `/api/*`, e o Next bufferiza em memória o corpo de
+		// toda request que passa por proxy. No padrão (10MB) um upload maior não
+		// falha: o corpo é TRUNCADO, um aviso é logado e a rota segue rodando com
+		// o arquivo cortado — gravaria imagem corrompida no bucket sem erro
+		// nenhum. Este valor precisa ficar acima do maior teto de
+		// `lib/upload-limits.ts` (o par está documentado lá).
+		proxyClientMaxBodySize: "24mb",
+	},
 	// Typecheck roda no GitHub Actions (.github/workflows/typecheck.yml) em
 	// paralelo ao build, não dentro dele — evita pagar os ~25s de `tsc` a
 	// cada deploy na Vercel. Sem isso, é a única rede de segurança contra

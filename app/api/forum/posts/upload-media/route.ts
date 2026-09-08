@@ -8,6 +8,7 @@ import {
   IMAGE_PRESETS,
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
+import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
 /**
  * Upload de imagem para post do fórum. Diferente do upload de capa do blog
@@ -16,7 +17,6 @@ import {
  * arquivo ao prefixo `forum-post-<uid>-*` (20260809_forum_media_storage_rls.sql).
  */
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
     }
 
     const validated = await validateImageUpload(fileEntry, {
-      maxSizeBytes: MAX_FILE_SIZE_BYTES,
+      maxSizeBytes: UPLOAD_LIMITS.userContent,
       allowedMimeTypes: ALLOWED_MIME_TYPES,
     })
     if (!validated.ok) {

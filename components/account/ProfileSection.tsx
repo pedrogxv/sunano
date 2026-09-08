@@ -78,7 +78,8 @@ interface ProfileSectionProps {
 // fotos de câmera gigantes pra deixar o envio rápido — GIF nunca entra aqui
 // (ver `compressImageFile`).
 // O upload de perfil vai direto pro Storage por signed URL (sem passar pela
-// function), então o teto de 4.5MB da Vercel não se aplica e o limite podia
+// function), então nem o teto de corpo da function nem o buffer do proxy se aplicam
+// (ver `lib/upload-limits.ts`) e o limite podia
 // ficar folgado. Só que o arquivo gravado é o que o visitante baixa a cada
 // visita ao perfil — daí a poda mais agressiva. O servidor ainda recomprime
 // em finalizeProfileMediaUpload; GIF do VIP continua intocado nos dois lados.

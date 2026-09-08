@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
 /**
  * Limites de anexo de imagem em ticket de suporte — bucket dedicado `support`
@@ -10,7 +11,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
  * storage/egress escala mais devagar.
  */
 export const MAX_SUPPORT_IMAGES_PER_MESSAGE = 3
-export const MAX_SUPPORT_IMAGE_BYTES = 2 * 1024 * 1024
+export const MAX_SUPPORT_IMAGE_BYTES = UPLOAD_LIMITS.support
 export const ALLOWED_SUPPORT_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 
 /** Quanto tempo uma URL assinada de anexo de suporte fica válida — só o bastante para carregar a página do ticket; renovada a cada leitura. */

@@ -9,12 +9,12 @@ import {
   IMAGE_PRESETS,
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
+import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
 /**
  * O tamanho *recomendado* de um banner é 500KB (ver painel `/admin/banners`);
  * o teto técnico é maior para não travar um upload legítimo levemente acima.
  */
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const ALLOWED_MIME_TYPES = ["image/webp", "image/png", "image/jpeg"]
 
 export const dynamic = "force-dynamic"
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   }
 
   const validated = await validateImageUpload(file, {
-    maxSizeBytes: MAX_FILE_SIZE_BYTES,
+    maxSizeBytes: UPLOAD_LIMITS.image,
     allowedMimeTypes: ALLOWED_MIME_TYPES,
   })
   if (!validated.ok) {

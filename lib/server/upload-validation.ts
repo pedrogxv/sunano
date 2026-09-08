@@ -1,5 +1,7 @@
 import "server-only"
 
+import { uploadTooLargeMessage } from "@/lib/upload-limits"
+
 /**
  * Validação de imagens por magic bytes — o `Content-Type`/nome de um
  * multipart é definido pelo cliente e é trivial de falsificar (ex.: subir
@@ -57,7 +59,7 @@ export async function validateImageUpload(
   | { ok: false; error: string }
 > {
   if (file.size > options.maxSizeBytes) {
-    return { ok: false, error: `Arquivo deve ter no máximo ${Math.floor(options.maxSizeBytes / (1024 * 1024))}MB.` }
+    return { ok: false, error: uploadTooLargeMessage(options.maxSizeBytes) }
   }
 
   if (!options.allowedMimeTypes.includes(file.type)) {
@@ -97,7 +99,7 @@ export async function validateVideoUpload(
   | { ok: false; error: string }
 > {
   if (file.size > options.maxSizeBytes) {
-    return { ok: false, error: `Arquivo deve ter no máximo ${Math.floor(options.maxSizeBytes / (1024 * 1024))}MB.` }
+    return { ok: false, error: uploadTooLargeMessage(options.maxSizeBytes) }
   }
 
   if (!options.allowedMimeTypes.includes(file.type)) {

@@ -8,7 +8,33 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
+import { compressImageFile, type CompressImageOptions } from "@/lib/client/compress-image"
 import type { AuraItemAdmin } from "@/lib/server/repositories/aura-store-repository"
+import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
+
+/**
+ * Comprime antes de subir: o upload passa por rota, e todo corpo que passa por
+ * rota tem teto (ver `lib/upload-limits.ts`). Um PNG grande de moldura nem
+ * chegava a rodar a validação — a plataforma respondia "Request Entity Too
+ * Large" em texto puro e o `res.json()` do front estourava com "Unexpected
+ * token 'R'". Comprimir tira o upload dessa faixa.
+ */
+const IMAGE_COMPRESS_OPTIONS: CompressImageOptions = {
+  maxDimension: 1600,
+  targetBytes: 400 * 1024,
+  skipBelowBytes: 150 * 1024,
+}
+
+/**
+ * A moldura é sobreposta ao avatar: o fundo transparente é o próprio formato
+ * do asset, então ela sai em PNG. JPEG pintaria o fundo de preto e a moldura
+ * chegaria como um quadrado opaco por cima da foto.
+ */
+const FRAME_COMPRESS_OPTIONS: CompressImageOptions = {
+  ...IMAGE_COMPRESS_OPTIONS,
+  preserveTransparency: true,
+}
+
 
 interface AuraItemFormProps {
   item?: AuraItemAdmin
@@ -37,9 +63,16 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
     setFormData((prev) => ({ ...prev, [field]: value }))
   }
 
-  async function uploadFile(file: File): Promise<string> {
+  async function uploadFile(file: File, options: CompressImageOptions): Promise<string> {
+    const prepared = await compressImageFile(file, options)
+    if (prepared.size > UPLOAD_LIMITS.image) {
+      throw new Error(
+        `Arquivo muito grande (máx. ${formatUploadLimit(UPLOAD_LIMITS.image)}).`
+      )
+    }
+
     const fd = new FormData()
-    fd.set("file", file)
+    fd.set("file", prepared)
     const res = await fetch("/api/admin/aura-itens/upload-image", { method: "POST", body: fd })
     const data = (await res.json()) as { ok?: boolean; publicUrl?: string; error?: string }
     if (!res.ok || !data.ok || !data.publicUrl) {
@@ -54,7 +87,7 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
     setUploadingPreview(true)
     setError(null)
     try {
-      setImageUrl(await uploadFile(file))
+      setImageUrl(await uploadFile(file, IMAGE_COMPRESS_OPTIONS))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
       setError(message)
@@ -71,7 +104,7 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
     setUploadingFrame(true)
     setError(null)
     try {
-      setFrameAssetUrl(await uploadFile(file))
+      setFrameAssetUrl(await uploadFile(file, FRAME_COMPRESS_OPTIONS))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao enviar imagem"
       setError(message)

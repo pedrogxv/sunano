@@ -2,6 +2,7 @@ import "server-only"
 
 import { isKlipyGifUrl } from "@/lib/klipy"
 import { isOwnStorageObject } from "@/lib/server/storage-origin"
+import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
 /**
  * Limites de anexo de imagem em comentário — únicos para fórum e blog.
@@ -14,7 +15,7 @@ import { isOwnStorageObject } from "@/lib/server/storage-origin"
  * igual ao restante do projeto (nunca confiar só na config do bucket).
  */
 export const MAX_COMMENT_IMAGES = 2
-export const MAX_COMMENT_IMAGE_BYTES = 1024 * 1024
+export const MAX_COMMENT_IMAGE_BYTES = UPLOAD_LIMITS.comment
 export const ALLOWED_COMMENT_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"]
 
 export const MAX_COMMENT_MENTIONS = 2

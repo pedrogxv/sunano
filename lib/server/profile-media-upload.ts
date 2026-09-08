@@ -10,6 +10,7 @@ import {
 } from "@/lib/server/image-compression"
 import { isKlipyGifUrl } from "@/lib/klipy"
 import { detectImageType } from "@/lib/server/upload-validation"
+import { UPLOAD_LIMITS, uploadTooLargeMessage } from "@/lib/upload-limits"
 
 /**
  * Upload de mídia de perfil (avatar, banner, fundo do Mini Perfil) em duas
@@ -38,17 +39,17 @@ type FieldConfig = {
 const FIELD_CONFIG: Record<ProfileMediaField, FieldConfig> = {
   avatar: {
     prefix: "user-avatar",
-    maxSizeBytes: 16 * 1024 * 1024,
+    maxSizeBytes: UPLOAD_LIMITS.profileMedia,
     gifErrorMessage: "Foto de perfil animada (GIF) é exclusiva para membros VIP.",
   },
   banner: {
     prefix: "user-banner",
-    maxSizeBytes: 16 * 1024 * 1024,
+    maxSizeBytes: UPLOAD_LIMITS.profileMedia,
     gifErrorMessage: "Banner animado (GIF) é exclusivo para membros VIP.",
   },
   "mini-banner": {
     prefix: "user-mini-banner",
-    maxSizeBytes: 16 * 1024 * 1024,
+    maxSizeBytes: UPLOAD_LIMITS.profileMedia,
     gifErrorMessage: "Fundo animado (GIF) no Mini Perfil é exclusivo para membros VIP.",
   },
 }
@@ -77,7 +78,7 @@ const EXTENSION_BY_MIME: Record<string, string> = {
 }
 
 function maxSizeLabel(maxSizeBytes: number) {
-  return `Arquivo deve ter no máximo ${Math.floor(maxSizeBytes / (1024 * 1024))}MB.`
+  return uploadTooLargeMessage(maxSizeBytes)
 }
 
 type ErrorResult = { ok: false; error: string; status: number }

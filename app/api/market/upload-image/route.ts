@@ -9,8 +9,8 @@ import {
   IMAGE_PRESETS,
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
+import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"]
 
 export async function POST(request: NextRequest) {
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   }
 
   const validated = await validateImageUpload(file, {
-    maxSizeBytes: MAX_FILE_SIZE_BYTES,
+    maxSizeBytes: UPLOAD_LIMITS.userContent,
     allowedMimeTypes: ALLOWED_MIME_TYPES,
   })
   if (!validated.ok) {

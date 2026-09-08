@@ -65,6 +65,7 @@ import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailV
 import type { PeripheralExpertAuthor } from "@/lib/peripheral-expert"
 import { parseExpertAuthor } from "@/lib/peripheral-expert"
 import { getTagOptionsForCategory, hasScoreRanking, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
+import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
@@ -325,7 +326,6 @@ const BUY_LINK_PLATFORMS: {
 ]
 
 const MAX_IMAGES = 8
-const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
 // Primeira poda, ainda no navegador: economiza upload e mantém o corpo da
 // requisição longe do teto de ~4.5MB da Vercel. O servidor recomprime de novo
 // para WebP (ver lib/server/image-compression.ts) — este passo é sobre o que
@@ -1715,9 +1715,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         prepared = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
       }
 
-      if (prepared.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+      if (prepared.size > UPLOAD_LIMITS.image) {
         throw new Error(
-          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após remoção de fundo).`
+          `Arquivo muito grande (máx. ${formatUploadLimit(UPLOAD_LIMITS.image)} mesmo após remoção de fundo).`
         )
       }
       const uploadForm = new FormData()
@@ -1888,7 +1888,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
             <p className="text-[10px] text-muted-foreground">
               O fundo é removido automaticamente ao enviar. Arraste pelo ícone no canto para
               reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
-              {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada.
+              {formatUploadLimit(UPLOAD_LIMITS.image)} cada.
             </p>
           </div>
         </FormSection>

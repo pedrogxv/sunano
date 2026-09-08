@@ -35,6 +35,7 @@ import { removeBackground } from "@/lib/client/remove-background"
 import { compressImageFile } from "@/lib/client/compress-image"
 import { EmojiPicker } from "@/components/ui/emoji-picker"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
+import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
 
 interface StoreProductSpec {
   id?: string
@@ -299,7 +300,6 @@ const VARIANT_COLOR_PRESETS: { label: string; color: string }[] = [
 ]
 const MAX_OPTIONS_PER_VARIANT_GROUP = 12
 const MIN_PRICE_CENTS = 600
-const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024
 // Ver nota em app/admin/tierlist/form.tsx: o servidor recomprime depois; aqui
 // o objetivo é só não subir 2MB de foto de câmera à toa.
 const IMAGE_COMPRESS_OPTIONS = {
@@ -863,17 +863,17 @@ export function StoreProductForm({
   async function prepareProductImage(file: File): Promise<File> {
     if (disableBackgroundRemoval) {
       const compressed = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
-      if (compressed.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+      if (compressed.size > UPLOAD_LIMITS.image) {
         throw new Error(
-          `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB).`
+          `Arquivo muito grande (máx. ${formatUploadLimit(UPLOAD_LIMITS.image)}).`
         )
       }
       return compressed
     }
     const prepared = await removeBackground(file)
-    if (prepared.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+    if (prepared.size > UPLOAD_LIMITS.image) {
       throw new Error(
-        `Arquivo muito grande (máx. ${Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB mesmo após remoção de fundo).`
+        `Arquivo muito grande (máx. ${formatUploadLimit(UPLOAD_LIMITS.image)} mesmo após remoção de fundo).`
       )
     }
     return prepared
@@ -1389,7 +1389,7 @@ export function StoreProductForm({
           <p className="text-[10px] text-muted-foreground">
             O fundo é removido automaticamente ao enviar. Arraste pelo ícone no canto para
             reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
-            {Math.floor(MAX_IMAGE_FILE_SIZE_BYTES / (1024 * 1024))}MB cada.
+            {formatUploadLimit(UPLOAD_LIMITS.image)} cada.
           </p>
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <Checkbox

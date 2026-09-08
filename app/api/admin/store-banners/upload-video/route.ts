@@ -5,8 +5,8 @@ import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { IMMUTABLE_CACHE_CONTROL } from "@/lib/server/image-compression"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { validateVideoUpload } from "@/lib/server/upload-validation"
+import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
-const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024
 const ALLOWED_MIME_TYPES = ["video/mp4"]
 const STORAGE_BUCKET = "store-banners"
 
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   }
 
   const validated = await validateVideoUpload(file, {
-    maxSizeBytes: MAX_FILE_SIZE_BYTES,
+    maxSizeBytes: UPLOAD_LIMITS.video,
     allowedMimeTypes: ALLOWED_MIME_TYPES,
   })
   if (!validated.ok) {

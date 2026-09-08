@@ -102,11 +102,14 @@ export type LinkedProduct = {
   price_cents_min: number
   /** Maior preço entre as variantes ativas (ou `price_cents` se não houver variantes). */
   price_cents_max: number
+  /** Preço cheio quando há promoção ativa (`null` se o preço exibido já é o cheio). */
+  price_cents_original: number | null
   images: string[]
   /** `null` = sem controle de estoque (nunca esgota). */
   stock: number | null
   is_active: boolean
   is_sold_out: boolean
+  sale_type: "pre_order" | "ready_stock" | "normal"
 }
 
 const CARD_COLUMNS =
@@ -647,13 +650,25 @@ export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]
   return [...featured, ...recent].slice(0, limit)
 }
 
-type RawLinkedProductRow = Omit<LinkedProduct, "price_cents_min" | "price_cents_max"> & {
+type RawLinkedProductRow = Omit<LinkedProduct, "price_cents_min" | "price_cents_max" | "price_cents_original"> & {
   promo_price_cents: number | null
   variants: { price_cents_override: number | null; promo_price_cents: number | null }[] | null
 }
 
 type RawLinkedProductJoinRow = {
+  position: number | null
   store_products: RawLinkedProductRow | RawLinkedProductRow[] | null
+}
+
+/** Prioridade de exibição: venda normal primeiro, pronta entrega depois, pré-venda por último. */
+const SALE_TYPE_ORDER: Record<LinkedProduct["sale_type"], number> = {
+  normal: 0,
+  ready_stock: 1,
+  pre_order: 2,
+}
+
+function saleTypeRank(saleType: LinkedProduct["sale_type"] | null | undefined): number {
+  return saleType ? (SALE_TYPE_ORDER[saleType] ?? 99) : 99
 }
 
 /** Menor preço "efetivo" entre base e promo — a promo só vale se for de fato mais barata. */
@@ -663,14 +678,23 @@ function effectivePriceCents(priceCents: number, promoPriceCents: number | null)
 
 function mapLinkedProductRow({ variants, promo_price_cents, ...rest }: RawLinkedProductRow): LinkedProduct {
   const basePrice = effectivePriceCents(rest.price_cents, promo_price_cents)
-  const variantPrices = (variants ?? []).map((v) =>
-    effectivePriceCents(v.price_cents_override ?? rest.price_cents, v.promo_price_cents)
-  )
+  const variantPrices = (variants ?? []).map((v) => {
+    // Variante sem preço próprio (ex.: só muda a cor) herda o preço do produto
+    // — inclusive a promo dele. Usar `price_cents` cru aqui fazia a promo do
+    // produto ser ignorada sempre que existisse qualquer variante.
+    if (v.price_cents_override == null) {
+      return effectivePriceCents(rest.price_cents, v.promo_price_cents ?? promo_price_cents)
+    }
+    return effectivePriceCents(v.price_cents_override, v.promo_price_cents)
+  })
   const allPrices = variantPrices.length > 0 ? variantPrices : [basePrice]
+  const minPrice = Math.min(...allPrices)
   return {
     ...rest,
-    price_cents_min: Math.min(...allPrices),
+    price_cents_min: minPrice,
     price_cents_max: Math.max(...allPrices),
+    // Só faz sentido riscar o preço cheio se o exibido for de fato menor.
+    price_cents_original: minPrice < rest.price_cents ? rest.price_cents : null,
   }
 }
 
@@ -680,7 +704,7 @@ export async function listProductsByPeripheral(peripheralId: string): Promise<Li
   const { data, error } = await db
     .from("store_product_peripherals")
     .select(
-      "store_products!inner(id, slug, name, type, price_cents, promo_price_cents, images, stock, is_active, is_sold_out, variants:store_product_variants(price_cents_override, promo_price_cents))"
+      "position, store_products!inner(id, slug, name, type, price_cents, promo_price_cents, images, stock, is_active, is_sold_out, sale_type, variants:store_product_variants(price_cents_override, promo_price_cents))"
     )
     .eq("peripheral_id", peripheralId)
     .eq("store_products.is_active", true)
@@ -692,9 +716,22 @@ export async function listProductsByPeripheral(peripheralId: string): Promise<Li
   }
 
   return ((data ?? []) as unknown as RawLinkedProductJoinRow[])
-    .map((row) => (Array.isArray(row.store_products) ? row.store_products[0] : row.store_products))
-    .filter((product): product is RawLinkedProductRow => product != null)
-    .map(mapLinkedProductRow)
+    .map((row) => ({
+      position: row.position ?? 0,
+      product: Array.isArray(row.store_products) ? row.store_products[0] : row.store_products,
+    }))
+    .filter((row): row is { position: number; product: RawLinkedProductRow } => row.product != null)
+    // Um mesmo periférico pode ter mais de um anúncio (ex.: venda normal e
+    // "pronta entrega"). A venda normal é a principal — vem primeiro, e só
+    // depois as demais. `position` (definida no admin) desempata dentro do
+    // mesmo tipo; sem isso a ordem do Postgres é arbitrária e o destaque da
+    // página trocava de produto sozinho.
+    .sort(
+      (a, b) =>
+        saleTypeRank(a.product.sale_type) - saleTypeRank(b.product.sale_type) ||
+        a.position - b.position
+    )
+    .map((row) => mapLinkedProductRow(row.product))
 }
 
 export type StoreProductDetail = {
@@ -1622,6 +1659,66 @@ export async function listProductPeripheralIds(productId: string): Promise<strin
     return []
   }
   return (data ?? []).map((row) => row.peripheral_id as string)
+}
+
+/**
+ * Substitui os produtos da Loja vinculados a um periférico — o lado espelhado de
+ * `replaceProductPeripherals`, usado pelo form da Tierlist.
+ *
+ * Escreve na MESMA tabela (`store_product_peripherals`) que a página pública lê.
+ * Antes isso gravava na coluna legada `store_products.peripheral_id`, que nenhuma
+ * tela pública consulta — o vínculo feito aqui simplesmente não tinha efeito.
+ */
+export async function replacePeripheralProducts(peripheralId: string, productIds: string[]): Promise<void> {
+  const db = createSupabaseAdminClient()
+
+  const { error: deleteError } = await db
+    .from("store_product_peripherals")
+    .delete()
+    .eq("peripheral_id", peripheralId)
+  if (deleteError) {
+    console.error("[store-repository] replacePeripheralProducts delete:", deleteError)
+    throw new Error("Erro ao atualizar produtos vinculados.")
+  }
+
+  if (productIds.length === 0) return
+
+  const rows = productIds.map((productId, index) => ({
+    product_id: productId,
+    peripheral_id: peripheralId,
+    position: index,
+  }))
+
+  const { error: insertError } = await db.from("store_product_peripherals").insert(rows)
+  if (insertError) {
+    console.error("[store-repository] replacePeripheralProducts insert:", insertError)
+    throw new Error("Erro ao atualizar produtos vinculados.")
+  }
+}
+
+/**
+ * Produtos vinculados a um periférico para o admin (inclui inativos, para o
+ * vínculo não sumir da tela só porque o anúncio está desligado).
+ */
+export async function listAdminProductsByPeripheral(peripheralId: string): Promise<LinkedProduct[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_product_peripherals")
+    .select(
+      "position, store_products!inner(id, slug, name, type, price_cents, promo_price_cents, images, stock, is_active, is_sold_out, sale_type, variants:store_product_variants(price_cents_override, promo_price_cents))"
+    )
+    .eq("peripheral_id", peripheralId)
+    .order("position", { ascending: true })
+
+  if (error) {
+    console.error("[store-repository] listAdminProductsByPeripheral:", error)
+    return []
+  }
+
+  return ((data ?? []) as unknown as RawLinkedProductJoinRow[])
+    .map((row) => (Array.isArray(row.store_products) ? row.store_products[0] : row.store_products))
+    .filter((product): product is RawLinkedProductRow => product != null)
+    .map(mapLinkedProductRow)
 }
 
 /** Substitui os periféricos vinculados a um produto (usado pela API admin ao salvar). */

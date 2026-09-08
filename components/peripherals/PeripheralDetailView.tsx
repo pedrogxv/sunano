@@ -1,6 +1,7 @@
 "use client"
 
 import type { ComponentType, ReactNode } from "react"
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Activity, AudioLines, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
@@ -8,6 +9,7 @@ import { FaAmazon } from "react-icons/fa"
 import { SiShopee } from "react-icons/si"
 
 import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 import { mapTier, NEW_TIERS, tierLabel } from "@/lib/tier-utils"
@@ -63,9 +65,13 @@ export interface PeripheralDetailViewLinkedProduct {
   price_cents: number
   price_cents_min?: number | null
   price_cents_max?: number | null
+  /** Preço cheio (sem promo), para riscar ao lado do valor promocional. */
+  price_cents_original?: number | null
   images?: string[] | null
   stock?: number | null
   is_sold_out?: boolean | null
+  /** Distingue os anúncios do mesmo periférico ("pronta entrega", pré-venda). */
+  sale_type?: "pre_order" | "ready_stock" | "normal" | null
 }
 
 export interface PeripheralDetailViewRelatedPost {
@@ -96,6 +102,9 @@ interface PeripheralDetailViewProps {
   rankBadge?: { position: number; total: number } | null
   relatedPosts?: PeripheralDetailViewRelatedPost[]
   linkedStore?: PeripheralDetailViewLinkedProduct | null
+  /** Todos os anúncios da Loja para este periférico (venda normal primeiro).
+   *  `linkedStore` é o principal — quando omitido, cai para o primeiro daqui. */
+  linkedStores?: PeripheralDetailViewLinkedProduct[]
   linkedSwitch?: PeripheralDetailViewLinkedSwitch | null
   /** Todas as classificações deste produto (por nome+marca), incluindo a
    *  categoria atual. Se omitido, cai de volta para a classificação única de
@@ -522,6 +531,238 @@ function formatSpecValue(value: unknown) {
   return String(value)
 }
 
+/** Preço a exibir de um anúncio: faixa quando há variantes de preços diferentes. */
+function linkedProductPriceLabel(product: PeripheralDetailViewLinkedProduct) {
+  const { price_cents_min, price_cents_max } = product
+  if (price_cents_min != null && price_cents_max != null && price_cents_max > price_cents_min) {
+    return `A partir de ${formatBRL(price_cents_min)}`
+  }
+  return formatBRL(price_cents_min ?? product.price_cents)
+}
+
+function isLinkedProductSoldOut(product: PeripheralDetailViewLinkedProduct) {
+  return product.stock === 0 || product.is_sold_out === true
+}
+
+/** Etiqueta do tipo de venda. A venda normal não recebe etiqueta — é o padrão. */
+function saleTypeLabel(saleType: PeripheralDetailViewLinkedProduct["sale_type"]) {
+  if (saleType === "ready_stock") return "Pronta entrega"
+  if (saleType === "pre_order") return "Pré-venda"
+  return null
+}
+
+/**
+ * Uma linha do bloco "Onde comprar" da Loja. Usada tanto no card da página
+ * quanto no dialog de "ver todas as opções", para as duas listas ficarem
+ * visualmente idênticas.
+ */
+function LinkedStoreRow({ product }: { product: PeripheralDetailViewLinkedProduct }) {
+  const soldOut = isLinkedProductSoldOut(product)
+  const tag = saleTypeLabel(product.sale_type)
+
+  return (
+    <Link
+      href={`/loja/${product.slug}`}
+      className={cn(
+        "flex items-center gap-3 rounded-lg border px-3 py-2.5 text-xs font-medium transition",
+        soldOut
+          ? "border-white/10 bg-white/[0.02] text-muted-foreground hover:bg-white/[0.05]"
+          : "border-emerald-400/40 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)] hover:from-emerald-500/25 hover:to-emerald-500/10"
+      )}
+    >
+      <div
+        className={cn(
+          "relative size-9 shrink-0 overflow-hidden rounded-md border bg-black/20",
+          soldOut ? "border-white/10" : "border-emerald-400/30"
+        )}
+      >
+        {product.images?.[0] ? (
+          <Image alt={product.name} fill sizes="36px" className="object-contain p-0.5" src={product.images[0]} />
+        ) : (
+          <div className={cn("flex h-full w-full items-center justify-center", soldOut ? "text-muted-foreground" : "text-emerald-300")}>
+            <ShoppingBag className="size-4" />
+          </div>
+        )}
+      </div>
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span
+            className={cn(
+              "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+              soldOut ? "bg-white/10 text-muted-foreground" : "bg-emerald-400 text-emerald-950"
+            )}
+          >
+            Sunano
+          </span>
+          <span className={cn("text-[10px] font-semibold uppercase tracking-wider", soldOut ? "text-muted-foreground" : "text-emerald-300/80")}>
+            {tag ?? "Loja oficial"}
+          </span>
+        </span>
+        <span className={cn("mt-0.5 flex flex-wrap items-baseline gap-1.5 text-sm font-semibold", soldOut ? "text-muted-foreground" : "text-white")}>
+          {linkedProductPriceLabel(product)}
+          {!soldOut && product.price_cents_original != null && (
+            <span className="text-xs font-normal text-muted-foreground line-through">
+              {formatBRL(product.price_cents_original)}
+            </span>
+          )}
+          {soldOut && <span className="font-normal text-rose-300">Esgotado</span>}
+        </span>
+      </span>
+      <span className={soldOut ? "text-muted-foreground" : "text-emerald-300"}>→</span>
+    </Link>
+  )
+}
+
+/**
+ * Lista os anúncios da Loja no bloco "Onde comprar". Mostra até
+ * `MAX_VISIBLE_STORE_LINKS` e resume o restante num "ver mais N" que abre o
+ * dialog com a lista completa — um periférico pode ter venda normal, pronta
+ * entrega e pré-venda ao mesmo tempo, e empilhar tudo empurraria os links das
+ * outras lojas para fora da vista.
+ */
+const MAX_VISIBLE_STORE_LINKS = 3
+
+function LinkedStoreList({
+  products,
+  onShowAll,
+}: {
+  products: PeripheralDetailViewLinkedProduct[]
+  onShowAll: () => void
+}) {
+  const visible = products.slice(0, MAX_VISIBLE_STORE_LINKS)
+  const hiddenCount = products.length - visible.length
+
+  return (
+    <>
+      {visible.map((product) => (
+        <LinkedStoreRow key={product.slug} product={product} />
+      ))}
+
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={onShowAll}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-400/25 bg-emerald-500/5 px-3 py-2 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/15"
+        >
+          <Package className="size-3.5" />
+          {`Ver mais ${hiddenCount} ${hiddenCount === 1 ? "opção" : "opções"} na Loja`}
+        </button>
+      )}
+    </>
+  )
+}
+
+/**
+ * Card de compra do topo da página. Mostra a foto do anúncio, o preço efetivo
+ * (com o preço cheio riscado quando há promoção) e, quando o periférico tem
+ * mais de um anúncio, um botão que abre a lista completa — antes isso era um
+ * texto solto "+N outras opções", que informava mas não levava a lugar nenhum.
+ */
+function FeaturedStoreCard({
+  product,
+  otherCount,
+  onShowAll,
+}: {
+  product: PeripheralDetailViewLinkedProduct
+  otherCount: number
+  onShowAll: () => void
+}) {
+  const hasRange =
+    product.price_cents_min != null &&
+    product.price_cents_max != null &&
+    product.price_cents_max > product.price_cents_min
+  const price = product.price_cents_min ?? product.price_cents
+  const original = product.price_cents_original
+  const discount = original != null && original > price ? Math.round(((original - price) / original) * 100) : null
+  const tag = saleTypeLabel(product.sale_type)
+
+  return (
+    <div className="w-full max-w-xs overflow-hidden rounded-xl border border-emerald-400/40 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent shadow-[0_0_0_1px_rgba(52,211,153,0.08)]">
+      <Link href={`/loja/${product.slug}`} className="group flex items-center gap-3 p-3 transition hover:bg-emerald-500/10">
+        <div className="relative size-14 shrink-0 overflow-hidden rounded-lg border border-emerald-400/30 bg-black/30">
+          {product.images?.[0] ? (
+            <Image alt={product.name} fill sizes="56px" className="object-contain p-1" src={product.images[0]} />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-emerald-300">
+              <ShoppingBag className="size-5" />
+            </div>
+          )}
+          {discount != null && (
+            <span className="absolute inset-x-0 bottom-0 bg-emerald-400 py-px text-center text-[9px] font-bold text-emerald-950">
+              -{discount}%
+            </span>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-950">
+              Sunano
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">
+              {tag ?? "Loja oficial"}
+            </span>
+          </span>
+          <span className="mt-1 flex flex-wrap items-baseline gap-1.5">
+            {hasRange && <span className="text-[11px] text-emerald-300/80">a partir de</span>}
+            <span className="text-lg font-bold leading-none text-white">{formatBRL(price)}</span>
+            {original != null && (
+              <span className="text-xs text-muted-foreground line-through">{formatBRL(original)}</span>
+            )}
+          </span>
+          <span className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-emerald-300 transition group-hover:gap-1.5">
+            <ShoppingBag className="size-3" />
+            Comprar na Loja
+            <span aria-hidden>→</span>
+          </span>
+        </div>
+      </Link>
+
+      {otherCount > 0 && (
+        <button
+          type="button"
+          onClick={onShowAll}
+          className="flex w-full items-center justify-center gap-1.5 border-t border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-[11px] font-semibold text-emerald-200 transition hover:bg-emerald-500/15"
+        >
+          <Package className="size-3" />
+          {`Ver ${otherCount === 1 ? "a outra opção" : `as outras ${otherCount} opções`}`}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Lista completa dos anúncios da Loja — aberta pelo card do topo e pelo bloco lateral. */
+function AllStoresDialog({
+  open,
+  onOpenChange,
+  products,
+  peripheralName,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  products: PeripheralDetailViewLinkedProduct[]
+  peripheralName: string
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Comprar na Loja</DialogTitle>
+          <DialogDescription>
+            {`${products.length} ${products.length === 1 ? "opção disponível" : "opções disponíveis"} para ${peripheralName}.`}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] space-y-2 overflow-auto">
+          {products.map((product) => (
+            <LinkedStoreRow key={product.slug} product={product} />
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // Renderiza o "corpo" da página de periférico a partir de dados já resolvidos (sem
 // buscar nada no banco). Usado tanto pela página pública (/perifericos/[slug], que
 // resolve os dados no servidor) quanto pelo preview ao vivo do formulário de admin
@@ -531,10 +772,23 @@ export function PeripheralDetailView({
   rankBadge = null,
   relatedPosts = [],
   linkedStore = null,
+  linkedStores,
   linkedSwitch = null,
   classifications = [],
   rankingHref = "/ranking",
 }: PeripheralDetailViewProps) {
+  // A página pública passa `linkedStores` (já ordenada: venda normal primeiro).
+  // O preview do form de admin só passa `linkedStore` — daí o fallback.
+  const storeProducts = linkedStores ?? (linkedStore ? [linkedStore] : [])
+  // O botão de destaque só faz sentido apontando para algo comprável: se o
+  // anúncio principal estiver esgotado, usa o primeiro disponível (a ordem já
+  // prioriza a venda normal) em vez de sumir com o botão.
+  const featuredStore = storeProducts.find((product) => !isLinkedProductSoldOut(product)) ?? null
+  const otherStoreCount = storeProducts.length - 1
+  // Um só estado para os dois pontos de entrada (card do topo e bloco lateral),
+  // para as duas listas abrirem exatamente o mesmo dialog.
+  const [showAllStores, setShowAllStores] = useState(false)
+
   const specs = (data.specs ?? {}) as Record<string, any>
   const details = (specs.details ?? {}) as Record<string, any>
   // Colunas migradas (weight_g, connectivity, ...) têm prioridade; `specs`
@@ -948,45 +1202,15 @@ export function PeripheralDetailView({
                 </CardContent>
               </Card>
 
-              {(buyLinks.length > 0 || linkedStore) && (
+              {(buyLinks.length > 0 || storeProducts.length > 0) && (
                 <Card size="sm" className="border-border/60 bg-secondary/50">
                   <CardHeader className="space-y-1">
                     <InfoCardTitle icon={ShoppingBag} accent="teal">Onde comprar</InfoCardTitle>
                     <CardDescription className="text-xs">Links oficiais e lojas recomendadas.</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2 lg:max-h-64 lg:overflow-auto">
-                    {linkedStore && (
-                      <Link
-                        href={`/loja/${linkedStore.slug}`}
-                        className="flex items-center gap-3 rounded-lg border border-emerald-400/40 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 px-3 py-2.5 text-xs font-medium text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)] transition hover:from-emerald-500/25 hover:to-emerald-500/10"
-                      >
-                        <div className="relative size-9 shrink-0 overflow-hidden rounded-md border border-emerald-400/30 bg-black/20">
-                          {linkedStore.images?.[0] ? (
-                            <Image alt={linkedStore.name} fill sizes="36px" className="object-contain p-0.5" src={linkedStore.images[0]} />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-emerald-300">
-                              <ShoppingBag className="size-4" />
-                            </div>
-                          )}
-                        </div>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-center gap-1.5">
-                            <span className="rounded bg-emerald-400 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-950">
-                              Sunano
-                            </span>
-                            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">Loja oficial</span>
-                          </span>
-                          <span className="mt-0.5 block text-sm font-semibold text-white">
-                            {linkedStore.price_cents_min != null &&
-                            linkedStore.price_cents_max != null &&
-                            linkedStore.price_cents_max > linkedStore.price_cents_min
-                              ? `A partir de ${formatBRL(linkedStore.price_cents_min)}`
-                              : formatBRL(linkedStore.price_cents_min ?? linkedStore.price_cents)}
-                            {(linkedStore.stock === 0 || linkedStore.is_sold_out) && <span className="ml-2 font-normal text-rose-300">Esgotado</span>}
-                          </span>
-                        </span>
-                        <span className="text-emerald-300">→</span>
-                      </Link>
+                    {storeProducts.length > 0 && (
+                      <LinkedStoreList products={storeProducts} onShowAll={() => setShowAllStores(true)} />
                     )}
                     {buyLinks.map((link: { label: string; url: string }) => {
                       const style = getBuyLinkStyle(link.label)
@@ -1045,19 +1269,12 @@ export function PeripheralDetailView({
                       )}
                       <PeripheralLikeToggle peripheralId={data.id} />
                     </div>
-                    {linkedStore && !(linkedStore.stock === 0 || linkedStore.is_sold_out) && (
-                      <Link
-                        href={`/loja/${linkedStore.slug}`}
-                        className="flex items-center gap-2 rounded-lg border border-emerald-400/40 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 px-4 py-2.5 text-sm font-semibold text-emerald-100 shadow-[0_0_0_1px_rgba(52,211,153,0.08)] transition hover:from-emerald-500/25 hover:to-emerald-500/10"
-                      >
-                        <ShoppingBag className="size-4 text-emerald-300" />
-                        Comprar —{" "}
-                        {linkedStore.price_cents_min != null &&
-                        linkedStore.price_cents_max != null &&
-                        linkedStore.price_cents_max > linkedStore.price_cents_min
-                          ? `a partir de ${formatBRL(linkedStore.price_cents_min)}`
-                          : formatBRL(linkedStore.price_cents_min ?? linkedStore.price_cents)}
-                      </Link>
+                    {featuredStore && (
+                      <FeaturedStoreCard
+                        product={featuredStore}
+                        otherCount={otherStoreCount}
+                        onShowAll={() => setShowAllStores(true)}
+                      />
                     )}
                   </div>
                 </div>
@@ -1497,6 +1714,15 @@ export function PeripheralDetailView({
 
             </div>
     </div>
+
+    {storeProducts.length > 0 && (
+      <AllStoresDialog
+        open={showAllStores}
+        onOpenChange={setShowAllStores}
+        products={storeProducts}
+        peripheralName={data.name}
+      />
+    )}
     </div>
   )
 }

@@ -667,17 +667,38 @@ interface LinkedProduct {
   name: string
   type: "store"
   price_cents: number
+  promo_price_cents?: number | null
   images: string[]
+  sale_type?: "pre_order" | "ready_stock" | "normal" | null
 }
 
+/** Preço que o cliente realmente paga — a promo só vale se for mais barata. */
+function linkedProductPrice(product: LinkedProduct) {
+  const { price_cents, promo_price_cents } = product
+  return promo_price_cents != null && promo_price_cents < price_cents ? promo_price_cents : price_cents
+}
+
+function linkedSaleTypeLabel(saleType: LinkedProduct["sale_type"]) {
+  if (saleType === "ready_stock") return "Pronta entrega"
+  if (saleType === "pre_order") return "Pré-venda"
+  return "Venda normal"
+}
+
+/**
+ * Seleciona os produtos da Loja vinculados a este periférico. É uma lista
+ * ordenada, não um vínculo único: o mesmo periférico costuma ter mais de um
+ * anúncio (venda normal, pronta entrega, pré-venda) e todos devem aparecer na
+ * página. A ordem definida aqui é a exibida, com a venda normal priorizada na
+ * leitura (ver `listProductsByPeripheral`).
+ */
 function LinkedProductPicker({
   value,
   onChange,
   excludeId,
   t,
 }: {
-  value: LinkedProduct | null
-  onChange: (product: LinkedProduct | null) => void
+  value: LinkedProduct[]
+  onChange: (products: LinkedProduct[]) => void
   excludeId: string | null
   t: ReturnType<typeof useT>
 }) {
@@ -699,37 +720,91 @@ function LinkedProductPicker({
     return () => { cancelled = true }
   }, [open])
 
+  const selectedIds = new Set(value.map((p) => p.id))
   const filtered = query.trim()
     ? results.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
     : results
-  const visible = filtered.filter((p) => p.id !== excludeId)
+  const visible = filtered.filter((p) => p.id !== excludeId && !selectedIds.has(p.id))
 
-  const placeholderLabel = t.admin.tierlistForm.pickerSearchStore
+  function move(index: number, direction: -1 | 1) {
+    const target = index + direction
+    if (target < 0 || target >= value.length) return
+    const next = [...value]
+    const [moved] = next.splice(index, 1)
+    next.splice(target, 0, moved)
+    onChange(next)
+  }
 
   return (
     <div className="space-y-2">
-      {value ? (
-        <div className="flex items-center gap-3 rounded-lg border border-white/10 p-2.5" style={{ backgroundColor: "#1c1c1f" }}>
-          <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted/40">
-            {value.images?.[0] ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={value.images[0]} alt={value.name} className="h-full w-full object-contain p-0.5" />
-            ) : (
-              <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">{value.name.slice(0, 2).toUpperCase()}</div>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-foreground">{value.name}</p>
-            <p className="text-xs text-muted-foreground">{formatBRL(value.price_cents)}</p>
-          </div>
-          <Button type="button" size="sm" variant="ghost" onClick={() => onChange(null)} className="text-muted-foreground hover:text-foreground">
-            <X className="size-4" />
-          </Button>
-        </div>
-      ) : (
+      {value.length > 0 && (
+        <ul className="space-y-2">
+          {value.map((product, index) => (
+            <li
+              key={product.id}
+              className="flex items-center gap-3 rounded-lg border border-white/10 p-2.5"
+              style={{ backgroundColor: "#1c1c1f" }}
+            >
+              <div className="size-10 shrink-0 overflow-hidden rounded-md bg-muted/40">
+                {product.images?.[0] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={product.images[0]} alt={product.name} className="h-full w-full object-contain p-0.5" />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">{product.name.slice(0, 2).toUpperCase()}</div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">{product.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatBRL(linkedProductPrice(product))}
+                  <span className="ml-2 text-[11px] uppercase tracking-wide text-muted-foreground/70">
+                    {linkedSaleTypeLabel(product.sale_type)}
+                  </span>
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={index === 0}
+                  onClick={() => move(index, -1)}
+                  className="px-2 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  aria-label="Mover para cima"
+                >
+                  <ChevronUp className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  disabled={index === value.length - 1}
+                  onClick={() => move(index, 1)}
+                  className="px-2 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                  aria-label="Mover para baixo"
+                >
+                  <ChevronDown className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => onChange(value.filter((p) => p.id !== product.id))}
+                  className="text-muted-foreground hover:text-foreground"
+                  aria-label="Remover"
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!open && (
         <Button type="button" variant="outline" onClick={() => setOpen(true)} className="w-full justify-start gap-2 text-muted-foreground">
           <Search className="size-4" />
-          {placeholderLabel}
+          {value.length > 0 ? "Adicionar outro produto" : t.admin.tierlistForm.pickerSearchStore}
         </Button>
       )}
 
@@ -758,7 +833,7 @@ function LinkedProductPicker({
                   <li key={p.id}>
                     <button
                       type="button"
-                      onClick={() => { onChange(p); setOpen(false) }}
+                      onClick={() => { onChange([...value, p]); setQuery(""); setOpen(false) }}
                       className="flex w-full items-center gap-3 p-2 text-left transition hover:bg-muted/30"
                     >
                       <div className="size-9 shrink-0 overflow-hidden rounded-md bg-muted/40">
@@ -771,7 +846,12 @@ function LinkedProductPicker({
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm text-foreground">{p.name}</p>
-                        <p className="text-xs text-muted-foreground">{formatBRL(p.price_cents)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatBRL(linkedProductPrice(p))}
+                          <span className="ml-2 text-[11px] uppercase tracking-wide text-muted-foreground/70">
+                            {linkedSaleTypeLabel(p.sale_type)}
+                          </span>
+                        </p>
                       </div>
                     </button>
                   </li>
@@ -1078,7 +1158,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [error, setError] = useState<string | null>(null)
   const [usdToBrl, setUsdToBrl] = useState<number | null>(null)
   const [originalUsdPrice, setOriginalUsdPrice] = useState<number | null>(null)
-  const [linkedStore, setLinkedStore] = useState<LinkedProduct | null>(null)
+  const [linkedStores, setLinkedStores] = useState<LinkedProduct[]>([])
   const [linkedSwitch, setLinkedSwitch] = useState<LinkedSwitch | null>(null)
   const [expertAuthor, setExpertAuthor] = useState<PeripheralExpertAuthor | null>(null)
   const [rankedPeripherals, setRankedPeripherals] = useState<{ id: string; name: string; tier: string; ranking: number; score: number | null }[]>([])
@@ -1446,9 +1526,11 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
       try {
         const linksRes = await fetch(`/api/admin/peripherals/${peripheralId}/links`, { cache: "no-store" })
-        const linksJson = (await linksRes.json().catch(() => null)) as { store?: LinkedProduct | null } | null
+        const linksJson = (await linksRes.json().catch(() => null)) as
+          | { products?: LinkedProduct[] | null; store?: LinkedProduct | null }
+          | null
         if (linksRes.ok && linksJson) {
-          setLinkedStore(linksJson.store ?? null)
+          setLinkedStores(linksJson.products ?? (linksJson.store ? [linksJson.store] : []))
         }
       } catch { /* ignore — links are optional */ }
     } catch (err) {
@@ -1574,7 +1656,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            storeProductId: linkedStore?.id ?? null,
+            storeProductIds: linkedStores.map((product) => product.id),
           }),
         })
         if (!linkRes.ok) {
@@ -3425,14 +3507,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <FormSection id="section-linked-products" forceOpen={forceOpenIds.has("section-linked-products")} title={t.admin.tierlistForm.sectionLinkedProducts} icon={<Link2 className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              Vincule este periférico a um produto da Loja. O vínculo aparece na página do periférico, e a página do produto na Loja mostra o periférico correspondente.
+              Vincule este periférico aos produtos da Loja. Todos aparecem no bloco &quot;Onde comprar&quot; da página do periférico, na ordem definida aqui — o primeiro é o destaque do botão &quot;Comprar&quot;.
             </p>
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">{t.admin.tierlistForm.linkedStoreProduct}</label>
                 <LinkedProductPicker
-                  value={linkedStore}
-                  onChange={setLinkedStore}
+                  value={linkedStores}
+                  onChange={setLinkedStores}
                   excludeId={null}
                   t={t}
                 />
@@ -3495,7 +3577,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         </p>
         <PeripheralDetailView
           data={previewData}
-          linkedStore={linkedStore}
+          linkedStores={linkedStores.map((product) => {
+            const price = linkedProductPrice(product)
+            return {
+              ...product,
+              price_cents: price,
+              price_cents_original: price < product.price_cents ? product.price_cents : null,
+            }
+          })}
           linkedSwitch={linkedSwitch}
           rankingHref="/admin/ranking"
         />

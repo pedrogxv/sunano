@@ -90,7 +90,11 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     getPeripheralReviewsWithStats(data.id, { limit: 1 }),
   ])
 
-  const linkedStore = linkedProducts.find((p) => p.type === "store") ?? null
+  // Todos os anúncios ativos deste periférico (venda normal primeiro — ver
+  // `listProductsByPeripheral`). `linkedStore` é o principal, usado no botão de
+  // destaque e no JSON-LD; a lista inteira vai para o bloco "Onde comprar".
+  const linkedStores = linkedProducts.filter((p) => p.type === "store")
+  const linkedStore = linkedStores[0] ?? null
   const rankedInCategory = allPeripherals
     .filter((p) => p.category === data.category)
     .map((p) => {
@@ -177,6 +181,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
         rankBadge={rankBadge}
         relatedPosts={relatedPosts}
         linkedStore={linkedStore}
+        linkedStores={linkedStores}
         linkedSwitch={linkedSwitch ? { id: linkedSwitch.id, name: linkedSwitch.name } : null}
         classifications={classifications}
       />

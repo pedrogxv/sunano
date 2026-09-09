@@ -97,7 +97,17 @@ export async function completeDailyMission(userId: string, mission: DailyMission
   })
   if (error) {
     console.error("[achievements-repository] completeDailyMission:", error)
+    return
   }
+
+  // Concluir missão é o único momento em que a ofensiva avança — logo, o
+  // único em que alguém pode CRUZAR o limiar de 3 dias que valida uma
+  // indicação. Import dinâmico para não criar ciclo entre este repositório e
+  // `referral-verification` (que lê `user_streaks`). Best-effort: o módulo
+  // nunca lança, e uma indicação com problema não pode quebrar a missão
+  // diária de quem só queria comentar.
+  const { verifyReferralByStreak } = await import("@/lib/server/referral-verification")
+  await verifyReferralByStreak(userId)
 }
 
 /** Estado das 3 missões diárias de hoje (UTC) para o dono do perfil. */

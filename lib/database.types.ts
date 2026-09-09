@@ -212,15 +212,18 @@ export type Database = {
             | "display_name_change"
             | "streak_shield"
             | "mini_profile_bg"
+            | "peripheral"
           image_url: string | null
-          frame_asset_url: string
+          frame_asset_url: string | null
           aura_cost: number
           active: boolean
           sort_order: number
+          /** Unidades disponíveis — só usado por kind=peripheral. Default 1. */
+          stock: number
           created_at: string
         }
-        Insert: Omit<Database["public"]["Tables"]["aura_items"]["Row"], "id" | "created_at" | "kind" | "active" | "sort_order"> &
-          Partial<Pick<Database["public"]["Tables"]["aura_items"]["Row"], "kind" | "active" | "sort_order">>
+        Insert: Omit<Database["public"]["Tables"]["aura_items"]["Row"], "id" | "created_at" | "kind" | "active" | "sort_order" | "stock"> &
+          Partial<Pick<Database["public"]["Tables"]["aura_items"]["Row"], "kind" | "active" | "sort_order" | "stock">>
         Update: Partial<Database["public"]["Tables"]["aura_items"]["Insert"]>
       }
       user_aura_items: {
@@ -327,6 +330,66 @@ export type Database = {
           updated_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["user_streaks"]["Insert"]>
+      }
+      referral_codes: {
+        Relationships: []
+        Row: {
+          user_id: string
+          code: string
+          customized_at: string | null
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          code: string
+          customized_at?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["referral_codes"]["Insert"]>
+      }
+      referrals: {
+        Relationships: []
+        Row: {
+          referred_user_id: string
+          referrer_user_id: string
+          status: "pending" | "validated" | "rejected" | "expired"
+          validated_via: "discord_member" | "oauth_identity" | "streak_3d" | null
+          signup_ip: string | null
+          signup_ip_prefix: string | null
+          expires_at: string
+          validated_at: string | null
+          rejected_reason: string | null
+          created_at: string
+        }
+        Insert: {
+          referred_user_id: string
+          referrer_user_id: string
+          status?: "pending" | "validated" | "rejected" | "expired"
+          validated_via?: "discord_member" | "oauth_identity" | "streak_3d" | null
+          signup_ip?: string | null
+          signup_ip_prefix?: string | null
+          expires_at: string
+          validated_at?: string | null
+          rejected_reason?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["referrals"]["Insert"]>
+      }
+      referral_verified_identities: {
+        Relationships: []
+        Row: {
+          provider: "google" | "discord"
+          provider_id: string
+          user_id: string
+          verified_at: string
+        }
+        Insert: {
+          provider: "google" | "discord"
+          provider_id: string
+          user_id: string
+          verified_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["referral_verified_identities"]["Insert"]>
       }
       user_streak_shields: {
         Relationships: []
@@ -814,6 +877,10 @@ export type Database = {
             | "display_name_changed"
             | "streak_shield_purchased"
             | "account_banned_adjustment"
+            | "discord_membership_confirmed"
+            | "referral_signup"
+            | "referral_indirect"
+            | "aura_peripheral_redeemed"
           source_post_id: string | null
           source_comment_id: string | null
           source_blog_post_id: string | null
@@ -837,6 +904,27 @@ export type Database = {
         }
         Insert: Omit<Database["public"]["Tables"]["rate_limit_events"]["Row"], "id" | "created_at">
         Update: Partial<Database["public"]["Tables"]["rate_limit_events"]["Insert"]>
+      }
+      offers_cache: {
+        Relationships: []
+        Row: {
+          id: string
+          message_id: number
+          text: string
+          posted_at: string
+          author: string | null
+          author_avatar: { url: string; width: number | null; height: number | null } | null
+          chat_title: string | null
+          url: string | null
+          image: { url: string; width: number | null; height: number | null } | null
+          first_seen_at: string
+          last_seen_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["offers_cache"]["Row"], "first_seen_at" | "last_seen_at"> & {
+          first_seen_at?: string
+          last_seen_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["offers_cache"]["Insert"]>
       }
       offers_votes: {
         Relationships: []
@@ -1457,6 +1545,12 @@ export type Database = {
           pix_price_cents: number | null
           card_surcharge_percent: number | null
           /**
+           * Aura debitada da carteira num resgate de produto físico da Central
+           * (já com desconto VIP). Não-nulo = `payment_method='aura'` e
+           * `total_cents` fica 0. Nulo em qualquer pedido pago em dinheiro.
+           */
+          aura_cost_paid: number | null
+          /**
            * Endereço de ENTREGA — snapshot congelado no pedido (o cliente pode
            * mudar de endereço depois; o pedido registra para onde foi de fato).
            * Distinto do endereço de COBRANÇA em `user_profiles`, que existe só
@@ -1517,6 +1611,7 @@ export type Database = {
           installment_count?: number | null
           pix_price_cents?: number | null
           card_surcharge_percent?: number | null
+          aura_cost_paid?: number | null
           shipping_recipient?: string | null
           shipping_phone?: string | null
           shipping_postal_code?: string | null
@@ -1565,6 +1660,7 @@ export type Database = {
           installment_count?: number | null
           pix_price_cents?: number | null
           card_surcharge_percent?: number | null
+          aura_cost_paid?: number | null
           shipping_recipient?: string | null
           shipping_phone?: string | null
           shipping_postal_code?: string | null
@@ -2255,6 +2351,10 @@ export type Database = {
         Args: { p_user_id: string; p_item_id: string }
         Returns: boolean
       }
+      redeem_aura_peripheral: {
+        Args: { p_user_id: string; p_item_id: string }
+        Returns: string
+      }
       purchase_vip_with_aura: {
         Args: { p_user_id: string }
         Returns: boolean
@@ -2361,6 +2461,41 @@ export type Database = {
         Args: { p_user_id: string; p_discord_user_id: string }
         Returns: "granted" | "already" | "account_in_use"
       }
+      ensure_referral_code: {
+        Args: { p_user_id: string; p_seed?: string | null }
+        Returns: string
+      }
+      set_referral_code: {
+        Args: { p_user_id: string; p_code: string }
+        Returns: "ok" | "taken" | "already_customized" | "not_found"
+      }
+      register_referral: {
+        Args: { p_referred_user_id: string; p_code: string; p_signup_ip?: string | null }
+        Returns:
+          | "ok"
+          | "invalid_code"
+          | "self_referral"
+          | "already_referred"
+          | "referrer_banned"
+      }
+      claim_referral_identity: {
+        Args: { p_user_id: string; p_provider: "google" | "discord"; p_provider_id: string }
+        Returns: "claimed" | "already_mine" | "in_use"
+      }
+      validate_referral: {
+        Args: { p_referred_user_id: string; p_via: "discord_member" | "oauth_identity" | "streak_3d" }
+        Returns:
+          | "validated"
+          | "not_pending"
+          | "expired"
+          | "capped_ip"
+          | "capped_total"
+          | "no_referral"
+      }
+      review_referral: {
+        Args: { p_referred_user_id: string; p_approve: boolean; p_reason?: string | null }
+        Returns: "validated" | "rejected" | "not_pending" | "no_referral"
+      }
       toggle_forum_aura: {
         Args: {
           p_giver_id: string
@@ -2449,6 +2584,10 @@ export type Database = {
       affiliate_min_payout_cents: {
         Args: Record<string, never>
         Returns: number
+      }
+      prune_offers_cache: {
+        Args: { retention_days?: number }
+        Returns: undefined
       }
     }
   }

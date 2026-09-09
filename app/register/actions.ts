@@ -1,6 +1,6 @@
 "use server"
 
-import { headers } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
@@ -19,6 +19,8 @@ import {
   type PurchaseProfileInput,
 } from "@/lib/server/repositories/users-repository"
 import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
+import { registerReferral } from "@/lib/server/repositories/referrals-repository"
+import { REFERRAL_COOKIE } from "@/lib/referral-code"
 import { verifyTurnstileToken } from "@/lib/server/integrations/turnstile"
 
 export type RegisterState = {
@@ -39,7 +41,7 @@ export type RegisterState = {
    * Senha nunca entra aqui: nem por LGPD (minimização, Art. 6, VI) nem por
    * segurança faz sentido ela voltar do servidor pro client.
    */
-  values?: { displayName: string; email: string }
+  values?: { displayName: string; email: string; referralCode?: string }
 }
 
 /** Erro do `auth.signUp`, na forma em que o supabase-js devolve. */
@@ -111,7 +113,8 @@ export async function registerUserAction(
   const confirmPassword = String(formData.get("confirm_password") || "")
   const displayName = clean(formData.get("display_name"))
   const lgpdConsent = formData.get("lgpd_consent") === "on"
-  const values = { displayName, email }
+  const referralCodeInput = clean(formData.get("referral_code")).toUpperCase()
+  const values = { displayName, email, referralCode: referralCodeInput }
 
   if (!lgpdConsent) {
     return { error: "lgpd_consent_required", values }
@@ -298,6 +301,28 @@ export async function registerUserAction(
   // A admin API sempre cria um id novo: este é sempre um cadastro genuíno,
   // então concede a medalha de qualquer evento ativo (ex: "Pioneiro").
   await awardEligibleEventMedals(data.user.id)
+
+  // Cupom de indicação: o campo do formulário tem prioridade sobre o cookie
+  // gravado pelo proxy (quem digitou algo à mão quis dizer aquilo). Não
+  // credita Aura nenhuma aqui — só registra quem indicou quem; o crédito sai
+  // quando esta conta cumprir um dos verificadores.
+  //
+  // Best-effort por decisão: um cupom inválido, expirado ou de si mesmo NÃO
+  // pode fazer o cadastro falhar. A conta já existe neste ponto, e perder o
+  // acesso por causa de um bônus seria uma troca terrível para o usuário.
+  try {
+    const cookieStore = await cookies()
+    const referralCode = referralCodeInput || cookieStore.get(REFERRAL_COOKIE)?.value || ""
+    if (referralCode) {
+      await registerReferral({
+        referredUserId: data.user.id,
+        code: referralCode,
+        signupIp: ipAddress,
+      })
+    }
+  } catch (referralError) {
+    console.error("[register] registro de indicação falhou:", referralError)
+  }
 
   // O Supabase não permite sessão para email não confirmado (verificado por
   // completo: `signInWithPassword` recusa com "Email not confirmed" mesmo com

@@ -13,6 +13,7 @@
  * - Missões diárias: `complete_daily_mission` (20260930000000_aura_fixed_rewards.sql)
  * - Inscrição YouTube: `confirm_youtube_subscription` (20260921120000_youtube_subscription_achievement.sql)
  * - Membro do Discord: `confirm_discord_membership` (20261015000000_discord_membership_achievement.sql)
+ * - Indicação de amigo: `validate_referral` (20261023000000_referral_program.sql) — 50 direto + 20 indireto
  * - Conquistas por trilha: seeds de `20260808_achievements_streak.sql` e `20260919000000_aura_earned_achievements.sql`,
  *   creditadas por `check_and_award_track_achievements` (20260930000000_aura_fixed_rewards.sql)
  *
@@ -78,6 +79,12 @@ export const AURA_GAIN_ENTRIES: AuraFaqEntry[] = [
     answer: "+50 de Aura, uma única vez — conquista especial \"No Discord\", não passa pelo multiplicador. Vale uma vez por conta do Discord: a mesma conta não pode resgatar em dois perfis.",
   },
   {
+    id: "referral",
+    question: "Indicar um amigo que se cadastra no site",
+    answer:
+      "+50 de Aura por amigo, e +20 quando alguém que você indicou também indica outra pessoa. Valores fixos — não passam pelo multiplicador. Só conta depois que o amigo confirma a conta (entrar no Discord, conectar Google/Discord ou fazer 3 dias de ofensiva), e ele tem 30 dias para isso. Veja tudo em /indicar.",
+  },
+  {
     id: "achievements",
     question: "Desbloquear conquistas (posts, comentários, seguidores, Aura farmada)",
     answer:
@@ -113,6 +120,12 @@ export const AURA_SPEND_ENTRIES: AuraFaqEntry[] = [
     question: "Resgatar uma medalha de evento paga em Aura",
     answer:
       "Alguns eventos em /conquistas dão a medalha em troca de Aura, pelo custo que aparece no card. VIP paga 10% a menos aqui também.",
+  },
+  {
+    id: "peripheral",
+    question: "Resgatar um periférico com Aura",
+    answer:
+      "Periféricos são prêmios físicos e de unidade única: o primeiro membro que resgatar leva, e o item aparece como esgotado para todo mundo, com o perfil de quem levou. Só quem é nível verificado (Discord/YouTube confirmado, ou VIP ativo, ou conta com 14+ dias) pode resgatar. Não tem desconto VIP — é produto físico.",
   },
   {
     id: "dislike",
@@ -151,32 +164,53 @@ export const AURA_NOT_COUNTED_ENTRIES: AuraFaqEntry[] = [
   },
 ]
 
-export const TRUST_TIER_ROWS: Array<{
+export type TrustTierRow = {
   tier: "new" | "normal" | "verified"
   label: string
   criteria: string
   dailyLimit: string
   pairLimit: string
-}> = [
-  {
-    tier: "new",
-    label: "Nova",
-    criteria: "Conta com menos de 3 dias",
-    dailyLimit: "15 reações/dia (VIP não aumenta)",
-    pairLimit: "1 por pessoa/dia",
-  },
-  {
-    tier: "normal",
-    label: "Normal",
-    criteria: "Conta com 3+ dias, sem YouTube confirmado nem VIP, e com menos de 14 dias",
-    dailyLimit: "50 reações/dia (100 se VIP)",
-    pairLimit: "3 por pessoa/dia",
-  },
-  {
-    tier: "verified",
-    label: "Verificada",
-    criteria: "YouTube confirmado, ou VIP ativo, ou conta com 14+ dias",
-    dailyLimit: "50 reações/dia (100 se VIP)",
-    pairLimit: "5 por pessoa/dia",
-  },
-]
+}
+
+/**
+ * Linhas da tabela de trust tier do FAQ. O sinal de "conta verificada" é ser
+ * MEMBRO DO DISCORD (conquista sempre ativa); a inscrição no YouTube também
+ * vale — `get_giver_trust_tier` checa as duas — mas só aparece no texto quando
+ * a conquista do YouTube está ligada (`isYoutubeSubscriptionEnabled()`), que
+ * hoje está desativada por env. Passe a flag de quem renderiza (Server
+ * Component) para não acoplar este módulo à env.
+ */
+export function buildTrustTierRows(youtubeEnabled = false): TrustTierRow[] {
+  const socialText = youtubeEnabled
+    ? "Discord verificado (membro do servidor) ou YouTube confirmado"
+    : "Discord verificado (membro do servidor)"
+
+  return [
+    {
+      tier: "new",
+      label: "Nova",
+      criteria: "Conta com menos de 3 dias",
+      dailyLimit: "15 reações/dia (VIP não aumenta)",
+      pairLimit: "1 por pessoa/dia",
+    },
+    {
+      tier: "normal",
+      label: "Normal",
+      criteria: `Conta com 3+ dias, sem ${
+        youtubeEnabled ? "Discord/YouTube verificado" : "Discord verificado"
+      } nem VIP, e com menos de 14 dias`,
+      dailyLimit: "50 reações/dia (100 se VIP)",
+      pairLimit: "3 por pessoa/dia",
+    },
+    {
+      tier: "verified",
+      label: "Verificada",
+      criteria: `${socialText}, ou VIP ativo, ou conta com 14+ dias`,
+      dailyLimit: "50 reações/dia (100 se VIP)",
+      pairLimit: "5 por pessoa/dia",
+    },
+  ]
+}
+
+/** Linhas com o texto padrão (só Discord). Preferir `buildTrustTierRows`. */
+export const TRUST_TIER_ROWS: TrustTierRow[] = buildTrustTierRows(false)

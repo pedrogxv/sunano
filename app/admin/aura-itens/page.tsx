@@ -151,7 +151,24 @@ export default function AdminAuraItemsPage() {
                           <Sparkles className="size-5 text-muted-foreground" />
                         )}
                       </div>
-                      <p className="text-sm font-semibold text-foreground">{item.name}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground">{item.name}</p>
+                        {item.kind === "peripheral" && (
+                          <Badge
+                            variant="secondary"
+                            className="mt-0.5 bg-amber-500/10 text-[9px] text-amber-400"
+                          >
+                            Produto ·{" "}
+                            {(() => {
+                              const claimed = summary[item.id]?.count ?? 0
+                              const left = Math.max(item.stock - claimed, 0)
+                              return left > 0
+                                ? `${left}/${item.stock} unidade${item.stock === 1 ? "" : "s"}`
+                                : "esgotado"
+                            })()}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -223,7 +240,8 @@ export default function AdminAuraItemsPage() {
           <DialogHeader>
             <DialogTitle>Deletar item?</DialogTitle>
             <DialogDescription>
-              Quem já resgatou este item perde a moldura (ela some do perfil equipado, se estiver em uso).
+              Quem já resgatou este item perde a posse (molduras somem do perfil equipado; o
+              histórico de compras é preservado por snapshot).
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

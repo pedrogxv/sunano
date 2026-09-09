@@ -9,7 +9,7 @@ import {
   AURA_GAIN_ENTRIES,
   AURA_NOT_COUNTED_ENTRIES,
   AURA_SPEND_ENTRIES,
-  TRUST_TIER_ROWS,
+  buildTrustTierRows,
   type AuraFaqEntry,
 } from "@/lib/aura-faq"
 import { formatTotalAuraMultiplier } from "@/lib/streak-multiplier"
@@ -27,23 +27,40 @@ const GROUPS: Array<{
 ]
 
 interface AuraFaqSectionProps {
-  streak: number
-  isVip: boolean
+  /**
+   * Ofensiva atual do usuário — quando informada (junto de `isVip`), a seção
+   * "Boost ativo" mostra os números reais dele. Omita nas páginas estáticas
+   * (Central de Informações), onde só a regra genérica faz sentido.
+   */
+  streak?: number
+  isVip?: boolean
+  /** Conquista de inscrição no YouTube ligada — some a linha do YouTube no trust tier quando `false`. */
+  youtubeEnabled?: boolean
+  /** Esconde o cabeçalho "Como funciona a Aura" (a página já tem o próprio título). */
+  hideHeading?: boolean
 }
 
 /**
  * FAQ completo de como o sistema de Aura funciona: fontes de ganho, onde
- * gastar, o que não conta, e o boost de streak+VIP com números reais do
- * usuário atual — accordion em vez de modal para ficar sempre navegável
- * (Ctrl+F funciona, some tudo em mobile sem perder o resto da página).
+ * gastar, o que não conta, e o boost de streak+VIP — accordion em vez de modal
+ * para ficar sempre navegável (Ctrl+F funciona, some tudo em mobile sem perder
+ * o resto da página).
+ *
+ * Fonte única para a Central de Informações (`/informacoes/central-de-aura`,
+ * texto genérico) e para a Central de Aura (`/aura`, com os números do usuário).
  */
-export function AuraFaqSection({ streak, isVip }: AuraFaqSectionProps) {
+export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHeading = false }: AuraFaqSectionProps) {
+  const trustTierRows = buildTrustTierRows(youtubeEnabled)
+  const showPersonalBoost = typeof streak === "number" && typeof isVip === "boolean"
+
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <HelpCircle className="size-4 text-muted-foreground" />
-        <h2 className="font-display text-lg font-bold text-foreground">Como funciona a Aura</h2>
-      </div>
+      {!hideHeading && (
+        <div className="flex items-center gap-2">
+          <HelpCircle className="size-4 text-muted-foreground" />
+          <h2 className="font-display text-lg font-bold text-foreground">Como funciona a Aura</h2>
+        </div>
+      )}
 
       <div className={cn("rounded-2xl border", CARD_SURFACE)}>
         {GROUPS.map((group) => (
@@ -73,22 +90,24 @@ export function AuraFaqSection({ streak, isVip }: AuraFaqSectionProps) {
             <p>
               A Ofensiva soma um bônus percentual a tudo que passa pelo multiplicador (posts, comentários, reviews e
               curtidas recebidas): sobe +0,1% por dia dentro de ciclos de 31 dias, até travar em 6% no dia 92+.
-              {streak > 0 ? (
-                <>
-                  {" "}
-                  Sua Ofensiva de <strong className="text-foreground">{streak} dia{streak === 1 ? "" : "s"}</strong>{" "}
-                  hoje soma{" "}
-                  <strong className="text-foreground">+{formatTotalAuraMultiplier(streak, isVip)}</strong> a cada
-                  ganho{isVip ? " (já incluindo o bônus VIP)" : ""}.
-                </>
-              ) : (
-                " Complete as 3 tarefas de hoje para começar a sua."
-              )}
+              {showPersonalBoost ? (
+                streak > 0 ? (
+                  <>
+                    {" "}
+                    Sua Ofensiva de <strong className="text-foreground">{streak} dia{streak === 1 ? "" : "s"}</strong>{" "}
+                    hoje soma{" "}
+                    <strong className="text-foreground">+{formatTotalAuraMultiplier(streak, isVip)}</strong> a cada
+                    ganho{isVip ? " (já incluindo o bônus VIP)" : ""}.
+                  </>
+                ) : (
+                  " Complete as 3 tarefas de hoje para começar a sua."
+                )
+              ) : null}
             </p>
             <p>
               VIP soma <strong className="text-foreground">+0,4%</strong> passivo sempre, ou{" "}
               <strong className="text-foreground">+0,25% adicional</strong> quando você já tem Ofensiva ativa no dia.
-              {!isVip && " Ative na loja abaixo."}
+              {showPersonalBoost && !isVip && " Ative na loja abaixo."}
             </p>
             <p className="text-xs">
               O boost nunca se aplica às tarefas diárias, ao bônus de +10 por completá-las, nem às conquistas — esses
@@ -120,7 +139,7 @@ export function AuraFaqSection({ streak, isVip }: AuraFaqSectionProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {TRUST_TIER_ROWS.map((row) => (
+                {trustTierRows.map((row) => (
                   <tr key={row.tier}>
                     <td className="py-2 pr-3 font-semibold text-foreground">{row.label}</td>
                     <td className="py-2 pr-3 text-muted-foreground">{row.criteria}</td>

@@ -135,6 +135,38 @@ function captureAffiliateRef(request: NextRequest, response: NextResponse) {
   )
 }
 
+// Cookie de atribuição do Programa de Indicação: mesma ideia do afiliado
+// acima, com duas diferenças que importam.
+//
+// 1. O parâmetro é `?convite=`, não `?ref=`. Os dois programas coexistem (um
+//    paga comissão em dinheiro por venda, o outro Aura por cadastro), e um
+//    link pode carregar os dois — se dividissem o mesmo parâmetro, indicar um
+//    amigo apagaria a atribuição do afiliado, ou vice-versa.
+// 2. O cookie é lido no CADASTRO, não no checkout, e a indicação é gravada
+//    como `pending` até o indicado passar por um verificador.
+//
+// Também last-click-wins, pelo mesmo motivo do afiliado: é o padrão de
+// mercado e o mais simples de auditar.
+const REFERRAL_REF_COOKIE = "sn_inv_ref"
+const REFERRAL_REF_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+
+function captureReferralRef(request: NextRequest, response: NextResponse) {
+  const invite = request.nextUrl.searchParams.get("convite")
+  // Mesmo formato de `referral_codes.code` — validação real (existe? é do
+  // próprio usuário?) fica no cadastro, único lugar que lê este cookie.
+  if (!invite || !AFFILIATE_CODE_PATTERN.test(invite)) return
+
+  response.cookies.set(REFERRAL_REF_COOKIE, invite.toUpperCase(), {
+    maxAge: REFERRAL_REF_MAX_AGE_SECONDS,
+    sameSite: "lax",
+    // httpOnly: o cadastro lê no servidor (server action). Nenhum script de
+    // página precisa deste valor.
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  })
+}
+
 // Nome + valor do cookie que marca "já contabilizado hoje" nesta sessão de
 // navegador. `recordVisit` já é idempotente por dia (upsert com
 // `ignoreDuplicates`), mas sem esse cookie cada pageview do mesmo visitante
@@ -294,6 +326,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     const response = NextResponse.next()
     trackVisit(request, event, response)
     captureAffiliateRef(request, response)
+    captureReferralRef(request, response)
     return response
   }
 
@@ -403,6 +436,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // link de afiliado) — o cookie é copiado adiante em todo `redirectResponse`
   // via `copyCookies`, então gravar aqui é suficiente para os dois casos.
   captureAffiliateRef(request, response)
+  captureReferralRef(request, response)
 
   // ── Aplicação do 2FA (vale para QUALQUER usuário autenticado) ──
   // Sessão em aal1 com fator verificado pendente: a sessão existe mas ainda

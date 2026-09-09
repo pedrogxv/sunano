@@ -40,27 +40,27 @@ export function DisplayNameChangeCard({
   const canAfford = balance >= price.finalPrice
 
   return (
-    <div className={cn("flex flex-col overflow-hidden rounded-2xl border transition-all duration-200 hover:-translate-y-1", CARD_SURFACE_INTERACTIVE)}>
-      <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-[var(--card-image-bg)]">
-        <UserPen className="size-[72px] text-cyan-400/60" strokeWidth={1.15} />
+    <div className={cn("flex flex-col overflow-hidden rounded-xl border transition-all duration-200 hover:-translate-y-1", CARD_SURFACE_INTERACTIVE)}>
+      <div className="relative flex aspect-[3/2] items-center justify-center overflow-hidden bg-[var(--card-image-bg)]">
+        <UserPen className="size-11 text-cyan-400/60" strokeWidth={1.15} />
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
-        <h3 className="line-clamp-2 font-sans text-[13.5px] font-semibold leading-[1.35] tracking-normal text-foreground">
+      <div className="flex flex-1 flex-col gap-1 px-3 pb-2.5 pt-2">
+        <h3 className="line-clamp-1 font-sans text-[12px] font-semibold leading-tight tracking-normal text-foreground">
           {item.name}
         </h3>
         {item.description && (
-          <p className="line-clamp-2 text-[10.5px] font-medium text-muted-foreground">{item.description}</p>
+          <p className="line-clamp-2 text-[9.5px] font-medium leading-snug text-muted-foreground">{item.description}</p>
         )}
 
-        <div className="mt-auto space-y-2">
+        <div className="mt-auto space-y-1.5 pt-1">
           <AuraPriceTag listPrice={item.auraCost} isVip={isVip} />
 
           {cooldown.onCooldown ? (
-            <div className="flex w-full flex-col items-center gap-0.5 rounded-lg border border-border px-3 py-2 text-xs font-bold text-muted-foreground">
+            <div className="flex w-full flex-col items-center gap-0.5 rounded-lg border border-border px-3 py-1.5 text-[10.5px] font-bold text-muted-foreground">
               <span>Em cooldown</span>
               {cooldown.endsAt && (
-                <span className="text-[10px] font-medium text-muted-foreground/70">
+                <span className="text-[9px] font-medium text-muted-foreground/70">
                   disponível em {formatCooldownEnds(cooldown.endsAt)}
                 </span>
               )}
@@ -75,7 +75,7 @@ export function DisplayNameChangeCard({
               disabled={!canAfford}
               title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
               className={cn(
-                "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors",
+                "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[10.5px] font-bold transition-colors",
                 canAfford
                   ? "bg-cyan-400 text-[#00201c] hover:bg-cyan-300"
                   : "cursor-not-allowed bg-muted/40 text-muted-foreground"

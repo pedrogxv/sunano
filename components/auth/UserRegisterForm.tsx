@@ -15,6 +15,7 @@ import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
 import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter"
 import { TurnstileWidget } from "@/components/auth/TurnstileWidget"
+import { ReferralCouponField } from "@/components/referrals/ReferralCouponField"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { isLocalhostHost } from "@/lib/password-policy"
@@ -147,9 +148,19 @@ interface UserRegisterFormProps {
   embedded?: boolean
   next?: string
   onSwitchToLogin?: () => void
+  /**
+   * Cupom de indicação já capturado do cookie `sn_inv_ref` pelo servidor.
+   * O campo também lê da URL no cliente, para o caso de o cookie não existir.
+   */
+  referralCode?: string
 }
 
-export function UserRegisterForm({ embedded = false, next = "/forum", onSwitchToLogin }: UserRegisterFormProps = {}) {
+export function UserRegisterForm({
+  embedded = false,
+  next = "/forum",
+  onSwitchToLogin,
+  referralCode = "",
+}: UserRegisterFormProps = {}) {
   const [state, action] = useActionState(registerUserAction, initialState)
   const [showPurchase, setShowPurchase] = useState(false)
   const [lgpdConsent, setLgpdConsent] = useState(false)
@@ -279,6 +290,8 @@ export function UserRegisterForm({ embedded = false, next = "/forum", onSwitchTo
           required
           minLength={minLength}
         />
+
+        <ReferralCouponField defaultValue={state.values?.referralCode ?? referralCode} />
 
         {/* Consentimento LGPD — obrigatório */}
         <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/10 px-4 py-3">

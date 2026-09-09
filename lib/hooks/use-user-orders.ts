@@ -21,7 +21,10 @@ export type UserOrder = {
   total_cents: number
   items: UserOrderItem[]
   created_at: string
+  /** `'aura'` = resgate de produto físico da Central pago com Aura (ver `aura_cost_paid`). */
   payment_method: string | null
+  /** Não-nulo = pedido pago com Aura; é o custo que saiu da carteira. */
+  aura_cost_paid: number | null
   asaas_payment_id: string | null
   asaas_receipt_url: string | null
   pix_copy_paste: string | null

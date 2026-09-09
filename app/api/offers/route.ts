@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
-import { getTelegramOffers } from "@/lib/server/integrations/telegram-offers"
+import { getTelegramOffers, SCRAPE_LIMIT } from "@/lib/server/integrations/telegram-offers"
 import { getOfferVoteSummary } from "@/lib/server/repositories/offers-repository"
 
 /**
@@ -11,7 +11,7 @@ import { getOfferVoteSummary } from "@/lib/server/repositories/offers-repository
  */
 export async function GET(request: NextRequest) {
   try {
-    const result = await getTelegramOffers(30)
+    const result = await getTelegramOffers(SCRAPE_LIMIT)
     const offers = result.offers ?? []
     const offerIds = offers.map((offer) => offer.id)
 

@@ -34,6 +34,31 @@ export function getLocale(value?: string | null): LocaleCode {
   return isLocaleCode(value) ? value : DEFAULT_LOCALE
 }
 
+/**
+ * Melhor idioma suportado a partir da lista do navegador.
+ *
+ * `navigator.languages` vem em ordem de preferência ("en-GB", "pt-BR", …).
+ * Comparamos pela subtag primária para que qualquer variante de inglês
+ * (en-GB, en-AU) caia em en-US, e qualquer português (pt, pt-PT) em pt-BR —
+ * casar a string inteira erraria em praticamente todo visitante estrangeiro.
+ *
+ * Devolve `null` quando nenhum idioma da lista é suportado: aí quem chama
+ * decide o padrão, em vez de recebermos pt-BR disfarçado de "detectado".
+ */
+export function matchBrowserLocale(languages: readonly string[] | undefined): LocaleCode | null {
+  if (!languages?.length) return null
+
+  for (const language of languages) {
+    const primary = language.toLowerCase().split("-")[0]
+    const match = LANGUAGE_OPTIONS.find(
+      (option) => option.code.toLowerCase().split("-")[0] === primary
+    )
+    if (match) return match.code
+  }
+
+  return null
+}
+
 export function getLanguageEntry(locale: LocaleCode) {
   return LANGUAGE_OPTIONS.find((option) => option.code === locale) ?? LANGUAGE_OPTIONS[0]
 }
@@ -252,6 +277,205 @@ type Translations = {
       error: string
       failed: string
     }
+  }
+  peripheralDetail: {
+    classification: string
+    underReview: string
+    overallRatings: string
+    ratingScale: string
+    ratingGeneral: string
+    ratingBuild: string
+    ratingSurface: string
+    ratingComponents: string
+    ratingSoftware: string
+    ratingBase: string
+    ratingEfficiency: string
+    ratingBattery: string
+    ratingTyping: string
+    ratingStitching: string
+    ratingWarranty: string
+    ratingPerformance: string
+    ratingRipple: string
+    ratingQc: string
+    ratingValue: string
+    ratingTuning: string
+    ratingCable: string
+    ratingTips: string
+    ratingQualityControl: string
+    software: string
+    softwareEmpty: string
+    communityReviews: string
+    whereToBuy: string
+    whereToBuyDesc: string
+    buyInStore: string
+    soldOut: string
+    components: string
+    performance: string
+    performanceDesc: string
+    mainSpecs: string
+    shape: string
+    shapeDesc: string
+    size: string
+    dimensions: string
+    shapePhotoEmpty: string
+    tuningCurve: string
+    tuningCurveDesc: string
+    switchSound: string
+    switchSoundDesc: string
+    switchSoundEmpty: string
+    grip: string
+    gripDesc: string
+    youtubeReview: string
+    viewReview: string
+    expertComments: string
+    overloadTest: string
+    overloadTestDesc: string
+    noStrengths: string
+    noWeaknesses: string
+    noExpertComments: string
+    videoReview: string
+    specsTitle: string
+    specsTitleTechnical: string
+    prosTitle: string
+    consTitle: string
+    gripSmall: string
+    gripMedium: string
+    gripLarge: string
+    /** Rótulos das linhas de especificação, por categoria. */
+    spec: {
+      averagePrice: string
+      averageValue: string
+      latency: string
+      switch: string
+      sensor: string
+      pollingRate: string
+      coating: string
+      trimode: string
+      battery: string
+      batteryLife: string
+      layout: string
+      type: string
+      connectivity: string
+      weight: string
+      deadzone: string
+      rtMin: string
+      features: string
+      surface: string
+      padType: string
+      size: string
+      profile: string
+      panel: string
+      refreshRate: string
+      compatibility: string
+      drivers: string
+      impedance: string
+      sensitivity: string
+      connector: string
+      plug: string
+      material: string
+      microphone: string
+      warranty: string
+      wattage: string
+      actuationForce: string
+      totalTravel: string
+      magneticFlux: string
+      housing: string
+      stemType: string
+    }
+    /** Valores enumerados exibidos nas specs. */
+    value: {
+      wired: string
+      wireless: string
+      mechanical: string
+      optical: string
+      magnetic: string
+      yes: string
+      no: string
+    }
+  }
+  pageHeader: {
+    home: string
+    homeDesc: string
+    news: string
+    newsDesc: string
+    peripherals: string
+    peripheralsDesc: string
+    tierlist: string
+    tierlistDesc: string
+    guides: string
+    guidesDesc: string
+    offers: string
+    offersDesc: string
+    market: string
+    marketDesc: string
+    marketNew: string
+    marketNewDesc: string
+    marketMine: string
+    marketMineDesc: string
+    forum: string
+    forumDesc: string
+    people: string
+    peopleDesc: string
+    achievements: string
+    achievementsDesc: string
+    myProfile: string
+    myProfileDesc: string
+    account: string
+    accountDesc: string
+    videos: string
+    videosDesc: string
+    changelog: string
+    changelogDesc: string
+    review: string
+    peripheral: string
+    profile: string
+    profileDesc: string
+    listing: string
+    fallback: string
+    back: string
+  }
+  changelogBanner: {
+    /** `{version}` = versão da entrada mais recente. */
+    newLabel: string
+    viewHistory: string
+    close: string
+  }
+  psu: {
+    load100: string
+    load100Hint: string
+    load110: string
+    load110Hint: string
+    protectionWorked: string
+    maxLoad: string
+    rippleStable: string
+    ripple12v: string
+    efficiency: string
+    maxTemp: string
+    fanModel: string
+    circuitType: string
+    mainCapacitor: string
+    secondaryCapacitor: string
+    line33v: string
+    line5v: string
+  }
+  storeBadges: {
+    readyStock: string
+    preOrder: string
+    officialStore: string
+    buy: string
+  }
+  verdict: {
+    title: string
+    good: string
+    bad: string
+    tie: string
+    goodTooltip: string
+    badTooltip: string
+    tieTooltip: string
+    noReviews: string
+    /** `{count}` = total de reviews. */
+    reviewCount: string
+    reviewCountOne: string
   }
   admin: {
     sidebar: {
@@ -778,6 +1002,36 @@ type Translations = {
     prev: string
     next: string
     dateFormat: string
+    subtitle: string
+    copyCoupon: string
+    copied: string
+    couponCopied: string
+    copyFailed: string
+    coupon: string
+    coupons: string
+    seeOffer: string
+    pixPrice: string
+    installmentPrice: string
+    searchPlaceholder: string
+    noResults: string
+    clearFilters: string
+    filterAll: string
+    filterCoupons: string
+    filterNew: string
+    sortRecent: string
+    sortPrice: string
+    sortLabel: string
+    statsTitle: string
+    statLive: string
+    statWithCoupon: string
+    statNewToday: string
+    statCheapest: string
+    lastUpdated: string
+    howItWorks: string
+    howItWorksBody: string
+    showingCount: string
+    oldOffer: string
+    oldOfferHint: string
   }
   maintenance: {
     mode: string
@@ -1056,6 +1310,201 @@ export const translations: Record<LocaleCode, Translations> = {
         error: "Erro ao deletar periférico",
         failed: "Erro ao deletar",
       },
+    },
+    peripheralDetail: {
+      classification: "Classificação",
+      underReview: "Sob Revisão",
+      overallRatings: "Notas gerais",
+      ratingScale: "Escala de 0 a 6 (GOAT = 6)",
+      ratingGeneral: "Geral",
+      ratingBuild: "Construção",
+      ratingSurface: "Superfície",
+      ratingComponents: "Componentes",
+      ratingSoftware: "Software",
+      ratingBase: "Base",
+      ratingEfficiency: "Eficiência Energética",
+      ratingBattery: "Bateria",
+      ratingTyping: "Digitação",
+      ratingStitching: "Costura",
+      ratingWarranty: "Garantia",
+      ratingPerformance: "Performance",
+      ratingRipple: "Ripple",
+      ratingQc: "QC",
+      ratingValue: "Custo-beneficio",
+      ratingTuning: "Tuning",
+      ratingCable: "Cabo",
+      ratingTips: "Ponteiras",
+      ratingQualityControl: "Controle de Qualidade",
+      software: "Software do Periférico",
+      softwareEmpty: "Informacao de compatibilidade não cadastrada.",
+      communityReviews: "Reviews da comunidade",
+      whereToBuy: "Onde comprar",
+      whereToBuyDesc: "Links oficiais e lojas recomendadas.",
+      buyInStore: "Comprar na Loja",
+      soldOut: "Esgotado",
+      components: "Componentes",
+      performance: "Performance",
+      performanceDesc: "Métricas de resposta.",
+      mainSpecs: "Principais dados do produto.",
+      shape: "Shape",
+      shapeDesc: "Formato e dimensões do mouse.",
+      size: "Tamanho",
+      dimensions: "Dimensões (CxLxA)",
+      shapePhotoEmpty: "Foto do shape não cadastrada.",
+      tuningCurve: "Curva de Tuning",
+      tuningCurveDesc: "Resposta de frequência medida do fone.",
+      switchSound: "Som do Switch",
+      switchSoundDesc: "Veja e ouça o switch em ação.",
+      switchSoundEmpty: "Nenhum vídeo de som cadastrado.",
+      grip: "Pegada",
+      gripDesc: "Recomendacao por tamanho de mao.",
+      youtubeReview: "Review no Youtube",
+      viewReview: "Ver review",
+      expertComments: "Comentários de Especialista",
+      overloadTest: "Teste máximo de sobrecarga",
+      overloadTestDesc: "Até onde a fonte aguenta antes de a proteção agir.",
+      noStrengths: "Sem pontos fortes cadastrados.",
+      noWeaknesses: "Sem pontos fracos cadastrados.",
+      noExpertComments: "Sem comentarios adicionais.",
+      videoReview: "Review em vídeo",
+      specsTitle: "Especificações",
+      specsTitleTechnical: "Especificações Técnicas",
+      prosTitle: "Pontos positivos",
+      consTitle: "Pontos negativos",
+      gripSmall: "Mão pequena",
+      gripMedium: "Mão média",
+      gripLarge: "Mão grande",
+      spec: {
+        averagePrice: "Preço médio",
+        averageValue: "Valor médio",
+        latency: "Latência",
+        switch: "Switch",
+        sensor: "Sensor",
+        pollingRate: "Polling Rate",
+        coating: "Coating",
+        trimode: "Trimode",
+        battery: "Bateria",
+        batteryLife: "Autonomia",
+        layout: "Layout",
+        type: "Tipo",
+        connectivity: "Conectividade",
+        weight: "Peso",
+        deadzone: "Deadzone",
+        rtMin: "RT Mínimo",
+        features: "Features",
+        surface: "Superfície",
+        padType: "Tipo",
+        size: "Tamanho",
+        profile: "Profile",
+        panel: "Painel",
+        refreshRate: "Taxa de atualização",
+        compatibility: "Compatibilidade",
+        drivers: "Drivers",
+        impedance: "Impedância",
+        sensitivity: "Sensibilidade",
+        connector: "Conector",
+        plug: "Plug",
+        material: "Material",
+        microphone: "Microfone",
+        warranty: "Garantia",
+        wattage: "Potência",
+        actuationForce: "Força de atuação",
+        totalTravel: "Curso total",
+        magneticFlux: "Fluxo magnético",
+        housing: "Carcaça",
+        stemType: "Tipo do Stem",
+      },
+      value: {
+        wired: "Com fio",
+        wireless: "Sem fio",
+        mechanical: "Mecânico",
+        optical: "Óptico",
+        magnetic: "Magnético",
+        yes: "Sim",
+        no: "Não",
+      },
+    },
+    pageHeader: {
+      home: "Home",
+      homeDesc: "Tudo que você precisa saber.",
+      news: "Notícias",
+      newsDesc: "Últimas novidades do mundo dos periféricos.",
+      peripherals: "Periféricos",
+      peripheralsDesc: "Wiki pesquisável com filtros por categoria, marca e preço.",
+      tierlist: "Tierlist",
+      tierlistDesc: "Ranking dos melhores periféricos por categoria.",
+      guides: "Guias",
+      guidesDesc: "Guias completos para diversos assuntos, redigidos por especialistas do Sunano.",
+      offers: "Promoções",
+      offersDesc: "Promoções e descontos selecionados do Telegram.",
+      market: "Mercado",
+      marketDesc: "Anúncios de produtos novos e usados publicados pela comunidade.",
+      marketNew: "Anunciar",
+      marketNewDesc: "Publique um anúncio no Mercado.",
+      marketMine: "Meus anúncios",
+      marketMineDesc: "Gerencie os anúncios que você publicou no Mercado.",
+      forum: "Fórum",
+      forumDesc: "Discussões e perguntas da comunidade.",
+      people: "Pessoas",
+      peopleDesc: "Encontre outros membros, veja os destaques e siga quem você curte.",
+      achievements: "Conquistas",
+      achievementsDesc: "Medalhas e conquistas por tempo limitado.",
+      myProfile: "Meu Perfil",
+      myProfileDesc: "Identidade e vitrine pública.",
+      account: "Conta e segurança",
+      accountDesc: "Acesso, preferências e privacidade.",
+      videos: "Vídeos e redes sociais",
+      videosDesc: "Conteúdo em vídeo do canal e todos os canais oficiais do Sunano.",
+      changelog: "Changelog",
+      changelogDesc: "Histórico de mudanças no site.",
+      review: "Review",
+      peripheral: "Periférico",
+      profile: "Perfil",
+      profileDesc: "Vitrine pública do membro.",
+      listing: "Anúncio",
+      fallback: "Sunano",
+      back: "Voltar",
+    },
+    changelogBanner: {
+      newLabel: "Novidade ({version}):",
+      viewHistory: "Ver histórico de mudanças",
+      close: "Fechar aviso",
+    },
+    psu: {
+      load100: "Em 100% de Carga",
+      load100Hint: "Cenário normal do usuário médio.",
+      load110: "Em 10% de Sobrecarga",
+      load110Hint: "Cenário atípico — 110% da carga nominal.",
+      protectionWorked: "Proteção da fonte funcionou?",
+      maxLoad: "Carga máxima",
+      rippleStable: "Ripple estável?",
+      ripple12v: "Ripple médio (12v)",
+      efficiency: "Eficiência energética",
+      maxTemp: "Temperatura máxima",
+      fanModel: "Modelo da fan",
+      circuitType: "Tipo de circuito",
+      mainCapacitor: "Capacitor principal",
+      secondaryCapacitor: "Capacitor secundário",
+      line33v: "Linha 3.3v",
+      line5v: "Linha 5v",
+    },
+    storeBadges: {
+      readyStock: "Pronta entrega",
+      preOrder: "Pré-venda",
+      officialStore: "Loja oficial",
+      buy: "Comprar",
+    },
+    verdict: {
+      title: "BOM OU BAGRE?",
+      good: "PERIFÉRICO BOM",
+      bad: "PERIFÉRICO DE BAGRE",
+      tie: "EMPATE",
+      goodTooltip: "Periférico bom: a média das avaliações da comunidade é maior que 3 estrelas",
+      badTooltip: "Periférico de BAGRE: a média das avaliações da comunidade é menor que 3 estrelas",
+      tieTooltip: "EMPATE: a média das avaliações é 3 estrelas, ou ainda não há avaliações suficientes",
+      noReviews: "Sem reviews ainda",
+      reviewCount: "{count} reviews",
+      reviewCountOne: "{count} review",
     },
     admin: {
       sidebar: {
@@ -1596,6 +2045,36 @@ export const translations: Record<LocaleCode, Translations> = {
       prev: "Ant.",
       next: "Próx.",
       dateFormat: "dd 'de' MMMM 'de' yyyy 'às' HH:mm",
+      subtitle: "Achados do canal, com cupom pronto pra copiar.",
+      copyCoupon: "Copiar",
+      copied: "Copiado",
+      couponCopied: "Cupom copiado!",
+      copyFailed: "Não foi possível copiar o cupom",
+      coupon: "Cupom",
+      coupons: "Cupons",
+      seeOffer: "Ver oferta",
+      pixPrice: "no Pix",
+      installmentPrice: "parcelado",
+      searchPlaceholder: "Buscar produto ou cupom...",
+      noResults: "Nenhuma oferta encontrada para esse filtro.",
+      clearFilters: "Limpar filtros",
+      filterAll: "Todas",
+      filterCoupons: "Com cupom",
+      filterNew: "Novas",
+      sortRecent: "Mais recentes",
+      sortPrice: "Menor preço",
+      sortLabel: "Ordenar",
+      statsTitle: "Resumo",
+      statLive: "Ofertas no ar",
+      statWithCoupon: "Com cupom",
+      statNewToday: "Novas hoje",
+      statCheapest: "Menor preço",
+      lastUpdated: "Atualizado",
+      howItWorks: "Como funciona",
+      howItWorksBody: "As ofertas são publicadas no nosso canal do Telegram e aparecem aqui automaticamente. Copie o cupom, abra o link e confira o preço final no carrinho.",
+      showingCount: "ofertas",
+      oldOffer: "Oferta antiga",
+      oldOfferHint: "Esta oferta tem mais de 48h — o preço pode ter mudado ou o estoque acabado. Confira na loja antes de comprar.",
     },
     maintenance: {
       mode: "Modo Manutenção",
@@ -1609,6 +2088,22 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
+        {
+          version: "v0.3.8",
+          date: "10 de setembro",
+          title: "Indique amigos por Aura e resgate periféricos na Central de Aura",
+          description: "A Central de Aura ganhou duas formas novas de girar a moeda: você indica um amigo e os dois ganham Aura quando ele entra, e agora dá pra trocar Aura por periférico físico de verdade, entregue no seu endereço.",
+          items: [
+            "Programa de Indicação de Amigos: página \"/indicar\" com seu link de convite, quem já entrou pelo seu código e a mecânica inteira explicada",
+            "Você ganha 50 de Aura por amigo que se cadastra pelo seu convite e mais 20 quando alguém indicado por ele também entra (dois níveis, sem virar pirâmide)",
+            "Anti-fraude: cada convite só conta uma vez por pessoa de verdade — membro do Discord, conta Google/Discord própria ou ofensiva de 3 dias; e-mail descartável não gera Aura",
+            "Amigo suspenso ou rejeitado não credita a indicação, e quem indicou você não recebe se sua conta cair depois",
+            "Resgate de periférico físico: itens marcados como produto na Central de Aura agora pedem endereço de entrega e viram um pedido de verdade, com fila, status e rastreio junto dos pedidos da loja",
+            "O pedido pago com Aura aparece com selo âmbar \"Pago com Aura\" em \"Meus Pedidos\" e no painel, mostrando o custo em Aura no lugar do valor em reais",
+            "Endereço do resgate já vem pré-preenchido com o que você salvou no perfil; desconto de VIP no custo em Aura continua valendo",
+            "Admin: nova tela \"/admin/indicacoes\" com todas as indicações e seu status de validação",
+          ],
+        },
         {
           version: "v0.3.7 · Vox Imaginum",
           date: "4 de setembro",
@@ -2081,7 +2576,7 @@ export const translations: Record<LocaleCode, Translations> = {
         monitors: "Monitors",
         switches: "Switches",
         dac_amp: "DAC/AMP",
-        psu: "Fontes",
+        psu: "Power Supplies",
       },
       descriptions: {
         mouse: "Browse and compare the best gaming mice to find the ideal match for your play style. Shape, size, and weight directly impact comfort and precision, while performance metrics such as sensor, DPI and polling rate determine accuracy.",
@@ -2222,6 +2717,201 @@ export const translations: Record<LocaleCode, Translations> = {
         error: "Failed to delete peripheral",
         failed: "Failed to delete",
       },
+    },
+    peripheralDetail: {
+      classification: "Rating",
+      underReview: "Under Review",
+      overallRatings: "Overall scores",
+      ratingScale: "Scale of 0 to 6 (GOAT = 6)",
+      ratingGeneral: "Overall",
+      ratingBuild: "Build",
+      ratingSurface: "Surface",
+      ratingComponents: "Components",
+      ratingSoftware: "Software",
+      ratingBase: "Base",
+      ratingEfficiency: "Power Efficiency",
+      ratingBattery: "Battery",
+      ratingTyping: "Typing",
+      ratingStitching: "Stitching",
+      ratingWarranty: "Warranty",
+      ratingPerformance: "Performance",
+      ratingRipple: "Ripple",
+      ratingQc: "QC",
+      ratingValue: "Value",
+      ratingTuning: "Tuning",
+      ratingCable: "Cable",
+      ratingTips: "Ear tips",
+      ratingQualityControl: "Quality Control",
+      software: "Peripheral Software",
+      softwareEmpty: "Compatibility information not available.",
+      communityReviews: "Community reviews",
+      whereToBuy: "Where to buy",
+      whereToBuyDesc: "Official links and recommended stores.",
+      buyInStore: "Buy in the Store",
+      soldOut: "Sold out",
+      components: "Components",
+      performance: "Performance",
+      performanceDesc: "Response metrics.",
+      mainSpecs: "Key product specs.",
+      shape: "Shape",
+      shapeDesc: "Mouse shape and dimensions.",
+      size: "Size",
+      dimensions: "Dimensions (LxWxH)",
+      shapePhotoEmpty: "Shape photo not available.",
+      tuningCurve: "Tuning Curve",
+      tuningCurveDesc: "Measured frequency response of the earphone.",
+      switchSound: "Switch Sound",
+      switchSoundDesc: "See and hear the switch in action.",
+      switchSoundEmpty: "No sound video available.",
+      grip: "Grip",
+      gripDesc: "Recommendation by hand size.",
+      youtubeReview: "YouTube Review",
+      viewReview: "View review",
+      expertComments: "Expert Comments",
+      overloadTest: "Maximum overload test",
+      overloadTestDesc: "How far the PSU holds before protection kicks in.",
+      noStrengths: "No strengths listed.",
+      noWeaknesses: "No weaknesses listed.",
+      noExpertComments: "No additional comments.",
+      videoReview: "Video review",
+      specsTitle: "Specifications",
+      specsTitleTechnical: "Technical Specifications",
+      prosTitle: "Pros",
+      consTitle: "Cons",
+      gripSmall: "Small hand",
+      gripMedium: "Medium hand",
+      gripLarge: "Large hand",
+      spec: {
+        averagePrice: "Average price",
+        averageValue: "Average value",
+        latency: "Latency",
+        switch: "Switch",
+        sensor: "Sensor",
+        pollingRate: "Polling Rate",
+        coating: "Coating",
+        trimode: "Tri-mode",
+        battery: "Battery",
+        batteryLife: "Battery life",
+        layout: "Layout",
+        type: "Type",
+        connectivity: "Connectivity",
+        weight: "Weight",
+        deadzone: "Deadzone",
+        rtMin: "Min RT",
+        features: "Features",
+        surface: "Surface",
+        padType: "Type",
+        size: "Size",
+        profile: "Profile",
+        panel: "Panel",
+        refreshRate: "Refresh rate",
+        compatibility: "Compatibility",
+        drivers: "Drivers",
+        impedance: "Impedance",
+        sensitivity: "Sensitivity",
+        connector: "Connector",
+        plug: "Plug",
+        material: "Material",
+        microphone: "Microphone",
+        warranty: "Warranty",
+        wattage: "Wattage",
+        actuationForce: "Actuation force",
+        totalTravel: "Total travel",
+        magneticFlux: "Magnetic flux",
+        housing: "Housing",
+        stemType: "Stem type",
+      },
+      value: {
+        wired: "Wired",
+        wireless: "Wireless",
+        mechanical: "Mechanical",
+        optical: "Optical",
+        magnetic: "Magnetic",
+        yes: "Yes",
+        no: "No",
+      },
+    },
+    pageHeader: {
+      home: "Home",
+      homeDesc: "Everything you need to know.",
+      news: "News",
+      newsDesc: "Latest news from the world of peripherals.",
+      peripherals: "Peripherals",
+      peripheralsDesc: "Searchable wiki with filters by category, brand and price.",
+      tierlist: "Tier list",
+      tierlistDesc: "Ranking of the best peripherals by category.",
+      guides: "Guides",
+      guidesDesc: "In-depth guides on many topics, written by Sunano specialists.",
+      offers: "Deals",
+      offersDesc: "Deals and discounts handpicked from Telegram.",
+      market: "Marketplace",
+      marketDesc: "New and used listings posted by the community.",
+      marketNew: "Post a listing",
+      marketNewDesc: "Publish a listing on the Marketplace.",
+      marketMine: "My listings",
+      marketMineDesc: "Manage the listings you published on the Marketplace.",
+      forum: "Forum",
+      forumDesc: "Community discussions and questions.",
+      people: "People",
+      peopleDesc: "Find other members, see the highlights and follow who you like.",
+      achievements: "Achievements",
+      achievementsDesc: "Limited-time badges and achievements.",
+      myProfile: "My Profile",
+      myProfileDesc: "Identity and public showcase.",
+      account: "Account and security",
+      accountDesc: "Access, preferences and privacy.",
+      videos: "Videos and social media",
+      videosDesc: "Video content from the channel and all official Sunano channels.",
+      changelog: "Changelog",
+      changelogDesc: "History of changes to the site.",
+      review: "Review",
+      peripheral: "Peripheral",
+      profile: "Profile",
+      profileDesc: "Public showcase of the member.",
+      listing: "Listing",
+      fallback: "Sunano",
+      back: "Back",
+    },
+    changelogBanner: {
+      newLabel: "What's new ({version}):",
+      viewHistory: "View changelog",
+      close: "Dismiss notice",
+    },
+    psu: {
+      load100: "At 100% Load",
+      load100Hint: "Normal scenario for the average user.",
+      load110: "At 10% Overload",
+      load110Hint: "Atypical scenario — 110% of rated load.",
+      protectionWorked: "Did the PSU protection trigger?",
+      maxLoad: "Maximum load",
+      rippleStable: "Ripple stable?",
+      ripple12v: "Average ripple (12v)",
+      efficiency: "Power efficiency",
+      maxTemp: "Maximum temperature",
+      fanModel: "Fan model",
+      circuitType: "Circuit type",
+      mainCapacitor: "Main capacitor",
+      secondaryCapacitor: "Secondary capacitor",
+      line33v: "3.3v rail",
+      line5v: "5v rail",
+    },
+    storeBadges: {
+      readyStock: "In stock",
+      preOrder: "Pre-order",
+      officialStore: "Official store",
+      buy: "Buy",
+    },
+    verdict: {
+      title: "GOOD OR GARBAGE?",
+      good: "GOOD PERIPHERAL",
+      bad: "GARBAGE PERIPHERAL",
+      tie: "TIE",
+      goodTooltip: "Good peripheral: the community rating average is above 3 stars",
+      badTooltip: "Garbage peripheral: the community rating average is below 3 stars",
+      tieTooltip: "TIE: the rating average is exactly 3 stars, or there are not enough ratings yet",
+      noReviews: "No reviews yet",
+      reviewCount: "{count} reviews",
+      reviewCountOne: "{count} review",
     },
     admin: {
       sidebar: {
@@ -2762,6 +3452,36 @@ export const translations: Record<LocaleCode, Translations> = {
       prev: "Prev",
       next: "Next",
       dateFormat: "MMMM dd, yyyy 'at' HH:mm",
+      subtitle: "Channel finds, with the coupon ready to copy.",
+      copyCoupon: "Copy",
+      copied: "Copied",
+      couponCopied: "Coupon copied!",
+      copyFailed: "Could not copy the coupon",
+      coupon: "Coupon",
+      coupons: "Coupons",
+      seeOffer: "View deal",
+      pixPrice: "with Pix",
+      installmentPrice: "installments",
+      searchPlaceholder: "Search product or coupon...",
+      noResults: "No offers match this filter.",
+      clearFilters: "Clear filters",
+      filterAll: "All",
+      filterCoupons: "With coupon",
+      filterNew: "New",
+      sortRecent: "Most recent",
+      sortPrice: "Lowest price",
+      sortLabel: "Sort",
+      statsTitle: "Summary",
+      statLive: "Live offers",
+      statWithCoupon: "With coupon",
+      statNewToday: "New today",
+      statCheapest: "Lowest price",
+      lastUpdated: "Updated",
+      howItWorks: "How it works",
+      howItWorksBody: "Offers are posted on our Telegram channel and show up here automatically. Copy the coupon, open the link, and check the final price at checkout.",
+      showingCount: "offers",
+      oldOffer: "Old offer",
+      oldOfferHint: "This offer is more than 48h old — the price may have changed or stock may have run out. Double-check on the store before buying.",
     },
     maintenance: {
       mode: "Maintenance Mode",
@@ -2775,6 +3495,22 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.3.8",
+          date: "September 10",
+          title: "Refer friends for Aura and redeem peripherals in the Aura Center",
+          description: "The Aura Center got two new ways to move the currency around: refer a friend and you both earn Aura when they join, and you can now trade Aura for a real physical peripheral, shipped to your address.",
+          items: [
+            "Friend Referral program: an \"/indicar\" page with your invite link, everyone who has joined with your code, and the full mechanics explained",
+            "You earn 50 Aura for each friend who signs up with your invite, plus 20 more when someone they referred also joins (two levels, without turning into a pyramid)",
+            "Anti-fraud: each invite only counts once per real person — a Discord member, their own Google/Discord account, or a 3-day streak; throwaway emails earn nothing",
+            "A suspended or rejected friend doesn't credit the referral, and whoever referred you gets nothing if your account is removed later",
+            "Physical peripheral redemption: items marked as a product in the Aura Center now ask for a shipping address and become a real order, with a queue, status, and tracking alongside store orders",
+            "An Aura-paid order shows up with an amber \"Paid with Aura\" badge in \"My Orders\" and the admin panel, displaying the Aura cost instead of a BRL amount",
+            "The redemption address is prefilled with what you saved in your profile; the VIP discount on the Aura cost still applies",
+            "Admin: a new \"/admin/indicacoes\" screen listing every referral and its validation status",
+          ],
+        },
         {
           version: "v0.3.7 · Vox Imaginum",
           date: "September 4",

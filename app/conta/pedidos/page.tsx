@@ -103,6 +103,24 @@ const STATUS_FILTERS: Array<{ value: UserOrder["status"] | "all"; label: string 
 
 const PAGE_SIZE = 10
 
+/** `true` = resgate de produto físico da Central pago com Aura, não compra em dinheiro. */
+function isAuraOrder(order: UserOrder): boolean {
+  return order.payment_method === "aura" || order.aura_cost_paid !== null
+}
+
+/** Valor a exibir no lugar do preço em BRL: custo em Aura para pedido de Aura, senão o total normal. */
+function OrderPriceLabel({ order, className }: { order: UserOrder; className?: string }) {
+  if (isAuraOrder(order)) {
+    return (
+      <span className={cn("inline-flex items-center gap-1 text-sm font-bold text-amber-400", className)}>
+        <Sparkles className="size-3.5" />
+        {(order.aura_cost_paid ?? 0).toLocaleString("pt-BR")} Aura
+      </span>
+    )
+  }
+  return <span className={cn("text-sm font-bold text-foreground", className)}>{formatBRL(order.total_cents)}</span>
+}
+
 /** yyyy-mm-dd local (sem componente de hora) — evita off-by-one por fuso ao converter de/para `Date`. */
 function toDateInputValue(date: Date): string {
   const year = date.getFullYear()
@@ -385,7 +403,13 @@ function OrderCard({
           >
             {STATUS_LABEL[order.status]}
           </span>
-          <span className="text-sm font-bold text-foreground">{formatBRL(order.total_cents)}</span>
+          {isAuraOrder(order) && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+              <Sparkles className="size-2.5" />
+              Pago com Aura
+            </span>
+          )}
+          <OrderPriceLabel order={order} />
         </div>
       </button>
 
@@ -542,14 +566,17 @@ function OrderDetailsDialog({
   onCancelled: () => void
   onEditShipping: (order: UserOrder) => void
 }) {
+  const auraOrder = order ? isAuraOrder(order) : false
   const receipt =
-    order?.status === "paid" ? order.asaas_payment_id ?? null : null
-  const receiptUrl = order?.status === "paid" ? order.asaas_receipt_url : null
+    order?.status === "paid" && !auraOrder ? order.asaas_payment_id ?? null : null
+  const receiptUrl = order?.status === "paid" && !auraOrder ? order.asaas_receipt_url : null
   const showPix =
     order?.status === "pending" &&
+    !auraOrder &&
     order.payment_method !== "credit_card" &&
     (order.pix_copy_paste || order.pix_qr_code_base64)
-  const showCardContinue = order?.status === "pending" && order.payment_method === "credit_card"
+  const showCardContinue =
+    order?.status === "pending" && !auraOrder && order.payment_method === "credit_card"
 
   return (
     <Dialog open={order !== null} onOpenChange={onOpenChange}>
@@ -566,8 +593,14 @@ function OrderDetailsDialog({
                 <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_STYLE[order.status])}>
                   {STATUS_LABEL[order.status]}
                 </span>
-                <span className="text-sm font-bold text-foreground">{formatBRL(order.total_cents)}</span>
+                <OrderPriceLabel order={order} />
               </div>
+              {auraOrder && (
+                <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-400/90">
+                  <Sparkles className="size-3" />
+                  Resgate da Central de Aura — pago com Aura, sem cobrança em dinheiro.
+                </p>
+              )}
               <OrderTimeline order={order} />
             </div>
 
@@ -585,7 +618,9 @@ function OrderDetailsDialog({
                           .map((label) => `${label} · `)
                           .join("")}
                         {item.quantity ?? 1}x
-                        {typeof item.price_cents === "number" ? ` · ${formatBRL(item.price_cents)}` : ""}
+                        {!auraOrder && typeof item.price_cents === "number"
+                          ? ` · ${formatBRL(item.price_cents)}`
+                          : ""}
                       </p>
                     </div>
                   </div>

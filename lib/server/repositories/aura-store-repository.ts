@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { parseSlug } from "@/lib/format"
 import { validateDisplayName } from "@/lib/profile-name"
 import { isDisplayNameAvailable } from "@/lib/server/repositories/users-repository"
+import type { ShippingAddressInput } from "@/lib/server/validation/shipping-address"
 
 /**
  * Repositório da loja de itens cosméticos da Central de Aura (molduras de
@@ -20,6 +21,7 @@ export type AuraItemKind =
   | "display_name_change"
   | "streak_shield"
   | "mini_profile_bg"
+  | "peripheral"
 
 export type AuraItem = {
   id: string
@@ -28,14 +30,18 @@ export type AuraItem = {
   description: string | null
   kind: AuraItemKind
   imageUrl: string | null
-  frameAssetUrl: string
+  /** Asset sobreposto ao avatar (só molduras). `null` para kinds sem asset, ex. periférico. */
+  frameAssetUrl: string | null
   auraCost: number
   active: boolean
+  /** Unidades disponíveis — só relevante para `kind='peripheral'`. Outros kinds ignoram. */
+  stock: number
 }
 
 export type AuraItemAdmin = AuraItem & { sortOrder: number }
 
-const ADMIN_SELECT = "id, slug, name, description, kind, image_url, frame_asset_url, aura_cost, active, sort_order"
+const ADMIN_SELECT =
+  "id, slug, name, description, kind, image_url, frame_asset_url, aura_cost, active, sort_order, stock"
 
 function toAuraItemAdmin(row: {
   id: string
@@ -44,10 +50,11 @@ function toAuraItemAdmin(row: {
   description: string | null
   kind: string
   image_url: string | null
-  frame_asset_url: string
+  frame_asset_url: string | null
   aura_cost: number
   active: boolean
   sort_order: number
+  stock: number
 }): AuraItemAdmin {
   return {
     id: row.id,
@@ -60,6 +67,7 @@ function toAuraItemAdmin(row: {
     auraCost: row.aura_cost,
     active: row.active,
     sortOrder: row.sort_order,
+    stock: row.stock,
   }
 }
 
@@ -68,7 +76,7 @@ export async function listActiveAuraItems(): Promise<AuraItem[]> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("aura_items")
-    .select("id, slug, name, description, kind, image_url, frame_asset_url, aura_cost, active")
+    .select("id, slug, name, description, kind, image_url, frame_asset_url, aura_cost, active, stock")
     .eq("active", true)
     .order("sort_order", { ascending: true })
 
@@ -87,6 +95,7 @@ export async function listActiveAuraItems(): Promise<AuraItem[]> {
     frameAssetUrl: row.frame_asset_url,
     auraCost: row.aura_cost,
     active: row.active,
+    stock: row.stock,
   }))
 }
 
@@ -177,6 +186,248 @@ export async function redeemAuraItem(userId: string, itemId: string): Promise<Re
   }
 
   return { ok: true }
+}
+
+// ── Periféricos (unidade única) ──
+
+export type RedeemPeripheralErrorCode =
+  | "not_found"
+  | "already_claimed"
+  | "not_verified"
+  | "insufficient_balance"
+  | "unknown"
+
+export type RedeemPeripheralResult =
+  | { ok: true; orderId: string | null }
+  | { ok: false; error: string; code: RedeemPeripheralErrorCode; status: number }
+
+/**
+ * Resgata um produto (periférico) da loja de Aura. Diferente de
+ * `redeemAuraItem`: a RPC `redeem_aura_peripheral` impõe estoque (esgota
+ * globalmente quando os resgates atingem `aura_items.stock`), 1 por pessoa e
+ * trust tier `verified`. Tem desconto VIP de 10%, igual ao resto da Central
+ * (aplicado dentro da RPC). Retorna um código para o client distinguir
+ * "esgotado" de "sem nível".
+ *
+ * Depois da RPC ter sucesso, cria um "pseudo-pedido" em `store_orders`
+ * (`payment_method='aura'`, `aura_cost_paid` = Aura debitada, `total_cents=0`)
+ * — é ele que entra na fila do admin e em "Meus Pedidos" para ser despachado.
+ * O `shipping` é obrigatório aqui (produto físico, sem checkout depois); a
+ * validação de formato fica na rota. Falha ao criar o pedido é logada mas não
+ * desfaz o resgate: a posse já foi concedida na RPC e o admin consegue
+ * reconstruir o pedido pelo extrato de `aura_purchases`.
+ */
+export async function redeemAuraPeripheral(
+  userId: string,
+  itemId: string,
+  shipping: ShippingAddressInput
+): Promise<RedeemPeripheralResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db.rpc("redeem_aura_peripheral", {
+    p_user_id: userId,
+    p_item_id: itemId,
+  })
+
+  if (error) {
+    if (error.message?.includes("insufficient_aura_balance")) {
+      return { ok: false, error: "Saldo de Aura insuficiente.", code: "insufficient_balance", status: 400 }
+    }
+    console.error("[aura-store-repository] redeemAuraPeripheral:", error)
+    return { ok: false, error: "Erro ao resgatar o periférico.", code: "unknown", status: 400 }
+  }
+
+  switch (data) {
+    case "ok": {
+      const orderId = await createAuraPeripheralOrder(db, userId, itemId, shipping)
+      return { ok: true, orderId }
+    }
+    case "already_claimed":
+      return {
+        ok: false,
+        error: "Sem unidades disponíveis, ou você já resgatou este item.",
+        code: "already_claimed",
+        status: 409,
+      }
+    case "not_verified":
+      return {
+        ok: false,
+        error: "Você precisa ser nível verificado para resgatar periféricos.",
+        code: "not_verified",
+        status: 403,
+      }
+    default:
+      return {
+        ok: false,
+        error: "Periférico não encontrado ou indisponível.",
+        code: "not_found",
+        status: 404,
+      }
+  }
+}
+
+/**
+ * Cria o `store_orders` do resgate — lê o recorte real da compra em
+ * `aura_purchases` (gravado na mesma transação da RPC) para não recalcular o
+ * desconto VIP aqui. Também guarda o endereço no perfil (`shipping_*`), igual
+ * ao checkout, para pré-preencher a próxima entrega. Retorna o id do pedido
+ * ou `null` se o INSERT falhar (resgate já concluído; só logamos).
+ */
+async function createAuraPeripheralOrder(
+  db: ReturnType<typeof createSupabaseAdminClient>,
+  userId: string,
+  itemId: string,
+  shipping: ShippingAddressInput
+): Promise<string | null> {
+  const { data: purchase } = await db
+    .from("aura_purchases")
+    .select("item_name, item_slug, amount_paid, list_price")
+    .eq("user_id", userId)
+    .eq("item_id", itemId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const { data: item } = await db
+    .from("aura_items")
+    .select("name, slug, image_url, aura_cost")
+    .eq("id", itemId)
+    .maybeSingle()
+
+  const name = purchase?.item_name ?? item?.name ?? "Produto"
+  const auraCostPaid = purchase?.amount_paid ?? item?.aura_cost ?? 0
+  const nowIso = new Date().toISOString()
+
+  const { data: order, error } = await db
+    .from("store_orders")
+    .insert({
+      items: [
+        {
+          id: itemId,
+          name,
+          quantity: 1,
+          price_cents: 0,
+          image: item?.image_url ?? null,
+          aura_cost: auraCostPaid,
+        },
+      ],
+      total_cents: 0,
+      aura_cost_paid: auraCostPaid,
+      status: "paid",
+      payment_method: "aura",
+      is_sandbox: false,
+      metadata: { user_id: userId, source: "aura_redeem", aura_item_id: itemId },
+      shipping_recipient: shipping.shippingRecipient,
+      shipping_phone: shipping.shippingPhone,
+      shipping_postal_code: shipping.shippingPostalCode,
+      shipping_street: shipping.shippingStreet,
+      shipping_number: shipping.shippingNumber,
+      shipping_complement: shipping.shippingComplement ?? null,
+      shipping_neighborhood: shipping.shippingNeighborhood,
+      shipping_city: shipping.shippingCity,
+      shipping_state: shipping.shippingState,
+      shipping_address_filled_at: nowIso,
+      requires_shipping_address: true,
+    })
+    .select("id")
+    .single()
+
+  if (error || !order) {
+    console.error("[aura-store-repository] createAuraPeripheralOrder:", error)
+    return null
+  }
+
+  // Pré-preenche a próxima entrega. Falha aqui não importa — o snapshot que
+  // vale para despachar já está no pedido acima.
+  const { error: profileError } = await db
+    .from("user_profiles")
+    .update({
+      shipping_recipient: shipping.shippingRecipient,
+      shipping_phone: shipping.shippingPhone,
+      shipping_postal_code: shipping.shippingPostalCode,
+      shipping_street: shipping.shippingStreet,
+      shipping_number: shipping.shippingNumber,
+      shipping_complement: shipping.shippingComplement ?? null,
+      shipping_neighborhood: shipping.shippingNeighborhood,
+      shipping_city: shipping.shippingCity,
+      shipping_state: shipping.shippingState,
+    })
+    .eq("id", userId)
+  if (profileError) {
+    console.error("[aura-store-repository] createAuraPeripheralOrder profile:", profileError)
+  }
+
+  return order.id
+}
+
+export type PeripheralOwner = {
+  userId: string
+  displayName: string
+  displaySlug: string | null
+  avatarUrl: string | null
+}
+
+/**
+ * Quem já resgatou cada periférico — chave = `item_id`, valor = LISTA de donos
+ * (o item agora tem estoque, então pode ter mais de um). Uma query em
+ * `user_aura_items` (join com `aura_items` para filtrar `kind='peripheral'`)
+ * + um `.in()` em lote em `user_profiles`, mesmo padrão de `listAuraPurchases`.
+ * Periféricos sem nenhum resgate simplesmente não aparecem no Map.
+ */
+export async function getPeripheralOwners(): Promise<Map<string, PeripheralOwner[]>> {
+  const db = createSupabaseAdminClient()
+
+  const { data, error } = await db
+    .from("user_aura_items")
+    .select("item_id, user_id, acquired_at, aura_items!inner ( kind )")
+    .eq("aura_items.kind", "peripheral")
+    .order("acquired_at", { ascending: true })
+
+  if (error) {
+    console.error("[aura-store-repository] getPeripheralOwners:", error)
+    return new Map()
+  }
+
+  type Row = { item_id: string; user_id: string }
+  const rows = (data ?? []) as unknown as Row[]
+  if (rows.length === 0) return new Map()
+
+  const buyerIds = [...new Set(rows.map((r) => r.user_id))]
+  const buyerById = new Map<
+    string,
+    { display_name: string | null; display_slug: string | null; avatar_url: string | null }
+  >()
+  const { data: profiles } = await db
+    .from("user_profiles")
+    .select("id, display_name, display_slug, avatar_url")
+    .in("id", buyerIds)
+  for (const p of (profiles ?? []) as Array<{
+    id: string
+    display_name: string | null
+    display_slug: string | null
+    avatar_url: string | null
+  }>) {
+    buyerById.set(p.id, {
+      display_name: p.display_name,
+      display_slug: p.display_slug,
+      avatar_url: p.avatar_url,
+    })
+  }
+
+  const owners = new Map<string, PeripheralOwner[]>()
+  for (const r of rows) {
+    const b = buyerById.get(r.user_id)
+    const owner: PeripheralOwner = {
+      userId: r.user_id,
+      displayName: b?.display_name?.trim() || `Membro ${r.user_id.slice(0, 6)}`,
+      displaySlug: b?.display_slug ?? null,
+      avatarUrl: b?.avatar_url ?? null,
+    }
+    const list = owners.get(r.item_id)
+    if (list) list.push(owner)
+    else owners.set(r.item_id, [owner])
+  }
+  return owners
 }
 
 export type EquipAvatarFrameResult =
@@ -592,9 +843,14 @@ export type AuraItemInput = {
   name: string
   description: string | null
   imageUrl: string | null
-  frameAssetUrl: string
+  /** `null` para kinds sem asset sobreposto (periférico). Molduras exigem valor — checado na rota. */
+  frameAssetUrl: string | null
   auraCost: number
   sortOrder: number
+  /** Unidades disponíveis (só `kind='peripheral'`). Default 1. */
+  stock?: number
+  /** Só a criação define o kind; a edição não o troca. Default `avatar_frame`. */
+  kind?: AuraItemKind
 }
 
 export async function createAuraItem(input: AuraItemInput): Promise<AuraItemAdmin> {
@@ -611,6 +867,8 @@ export async function createAuraItem(input: AuraItemInput): Promise<AuraItemAdmi
       frame_asset_url: input.frameAssetUrl,
       aura_cost: input.auraCost,
       sort_order: input.sortOrder,
+      ...(input.stock !== undefined ? { stock: input.stock } : {}),
+      ...(input.kind ? { kind: input.kind } : {}),
     })
     .select(ADMIN_SELECT)
     .single()
@@ -624,6 +882,16 @@ export async function createAuraItem(input: AuraItemInput): Promise<AuraItemAdmi
 
 export type AuraItemUpdateInput = Partial<AuraItemInput> & { active?: boolean }
 
+export class AuraItemUpdateError extends Error {
+  constructor(message: string, readonly status = 400) {
+    super(message)
+    this.name = "AuraItemUpdateError"
+  }
+}
+
+/** Kinds entre os quais o admin pode converter um item já existente. */
+const CONVERTIBLE_KINDS: ReadonlySet<AuraItemKind> = new Set(["avatar_frame", "peripheral"])
+
 export async function updateAuraItem(id: string, input: AuraItemUpdateInput): Promise<AuraItemAdmin | null> {
   const db = createSupabaseAdminClient()
 
@@ -634,7 +902,47 @@ export async function updateAuraItem(id: string, input: AuraItemUpdateInput): Pr
   if (input.frameAssetUrl !== undefined) update.frame_asset_url = input.frameAssetUrl
   if (input.auraCost !== undefined) update.aura_cost = input.auraCost
   if (input.sortOrder !== undefined) update.sort_order = input.sortOrder
+  if (input.stock !== undefined) update.stock = input.stock
   if (input.active !== undefined) update.active = input.active
+
+  // Conversão de kind (moldura ⇄ produto): só permitida se o kind atual E o
+  // novo são conversíveis, e se ninguém resgatou/equipou o item ainda — trocar
+  // depois disso deixaria posses órfãs numa mecânica que não as entende.
+  if (input.kind !== undefined) {
+    const { data: current } = await db
+      .from("aura_items")
+      .select("kind")
+      .eq("id", id)
+      .maybeSingle()
+    if (!current) return null
+
+    const from = current.kind as AuraItemKind
+    if (from !== input.kind) {
+      if (!CONVERTIBLE_KINDS.has(from) || !CONVERTIBLE_KINDS.has(input.kind)) {
+        throw new AuraItemUpdateError(
+          "Só é possível converter entre Moldura de avatar e Produto."
+        )
+      }
+
+      const [{ count: owners }, { count: equipped }] = await Promise.all([
+        db.from("user_aura_items").select("*", { count: "exact", head: true }).eq("item_id", id),
+        db
+          .from("user_profiles")
+          .select("*", { count: "exact", head: true })
+          .eq("equipped_avatar_frame_id", id),
+      ])
+      if ((owners ?? 0) > 0 || (equipped ?? 0) > 0) {
+        throw new AuraItemUpdateError(
+          "Não dá para mudar o tipo: alguém já resgatou ou equipou este item."
+        )
+      }
+
+      update.kind = input.kind
+      // Produto não tem asset sobreposto ao avatar; moldura precisa de um
+      // (o admin reenvia no próximo save se converter de volta).
+      if (input.kind === "peripheral") update.frame_asset_url = null
+    }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (db.from("aura_items") as any).update(update).eq("id", id).select(ADMIN_SELECT).maybeSingle()

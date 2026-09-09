@@ -214,6 +214,28 @@ export function getTagOptionsForCategory(category: Category): TagOption[] {
   return GENERIC_TAGS_OPTIONS.filter((tag) => !tag.categories || tag.categories.includes(category))
 }
 
+/**
+ * Rótulo de uma tag no idioma ativo.
+ *
+ * Cada `TagOption` já carregava `en` e `pt` desde sempre, mas os consumidores
+ * liam `.pt` fixo (ou mantinham uma cópia local do mapa, como o
+ * `TAG_LABELS` que existia em PeripheralDetailView). Resultado: no modo
+ * inglês as tags continuavam em português mesmo com a tradução pronta ao
+ * lado. Este helper é a fonte única — não duplicar o mapa de novo.
+ *
+ * `category` existe porque a mesma chave pode ter rótulo diferente por
+ * categoria (as tags de peso do teclado, por exemplo).
+ */
+export function getTagLabel(tag: string, locale: "pt-BR" | "en-US", category?: Category): string | undefined {
+  const pools: TagOption[] = category
+    ? getTagOptionsForCategory(category)
+    : [...GENERIC_TAGS_OPTIONS, ...Object.values(CATEGORY_TAGS_OVERRIDE).flat()]
+
+  const option = pools.find((item) => item.key === tag)
+  if (!option) return undefined
+  return locale === "en-US" ? option.en : option.pt
+}
+
 export function getValidTagKeysForCategory(category: Category): Tag[] {
   return getTagOptionsForCategory(category).map((option) => option.key)
 }

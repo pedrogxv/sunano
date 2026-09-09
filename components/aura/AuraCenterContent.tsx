@@ -4,9 +4,8 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, type CSSProperties } from "react"
 import { toast } from "sonner"
-import { Bird, Check, Flame, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
+import { Bird, Check, ChevronRight, Flame, HelpCircle, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
 
-import { AuraFaqSection } from "@/components/aura/AuraFaqSection"
 import { AuraRankingModal } from "@/components/aura/AuraRankingModal"
 import { AuraVipDiscountBanner } from "@/components/aura/AuraVipDiscountBanner"
 
@@ -42,7 +41,10 @@ import { VipMonthCard } from "@/components/aura/VipMonthCard"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import { DisplayNameChangeCard } from "@/components/aura/DisplayNameChangeCard"
 import { CommunityAchievements } from "@/components/aura/CommunityAchievements"
+import { ReferralAuraCard } from "@/components/referrals/ReferralAuraCard"
 import { MiniProfileBgSection } from "@/components/aura/MiniProfileBgSection"
+import { AuraPeripheralSection } from "@/components/aura/AuraPeripheralSection"
+import type { PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
 type AuraUsage = {
@@ -51,6 +53,16 @@ type AuraUsage = {
   limit: number
   limitReached: boolean
   nextSlotAt: string | null
+  /** Nível de confiança — trava o resgate de periféricos (só `verified`). */
+  trustTier: "new" | "normal" | "verified"
+}
+
+/** Dono de um periférico já resgatado — chave = itemId no array de tuplas. */
+export type PeripheralOwnerEntry = {
+  userId: string
+  displayName: string
+  displaySlug: string | null
+  avatarUrl: string | null
 }
 
 interface AuraCenterContentProps {
@@ -74,7 +86,14 @@ interface AuraCenterContentProps {
   vipStatus: VipStatus
   nameCooldown: DisplayNameCooldown
   displayName: string
+  /** Slug/avatar do próprio usuário — pinta o card recém-resgatado como "esgotado por você" sem F5. */
+  currentUserSlug: string | null
+  currentUserAvatarUrl: string | null
   streakShield: StreakShieldStatus
+  /** `[itemId, donos[]]` — cada produto pode ter mais de um dono (estoque). */
+  peripheralOwners: Array<[string, PeripheralOwnerEntry[]]>
+  /** Último endereço de entrega conhecido do usuário — pré-preenche o resgate de produto físico. */
+  shippingPrefill: PrefillShipping
 }
 
 /**
@@ -128,7 +147,11 @@ export function AuraCenterContent({
   vipStatus,
   nameCooldown,
   displayName,
+  currentUserSlug,
+  currentUserAvatarUrl,
   streakShield,
+  peripheralOwners,
+  shippingPrefill,
 }: AuraCenterContentProps) {
   // `initial*` só muda entre navegações de página inteira (novo render do
   // Server Component), nunca em re-render do client — então o valor inicial
@@ -147,6 +170,9 @@ export function AuraCenterContent({
   const [rankingOpen, setRankingOpen] = useState(false)
   const [shield, setShield] = useState(streakShield)
   const [discordOk, setDiscordOk] = useState(discordConfirmed)
+  const [peripheralOwnerMap, setPeripheralOwnerMap] = useState(
+    () => new Map<string, PeripheralOwnerEntry[]>(peripheralOwners)
+  )
 
   // Trocar o nome aqui muda o que a topbar mostra, e ela lê do AuthProvider.
   const { refresh: refreshAuthUser } = useAuthUser()
@@ -216,8 +242,15 @@ export function AuraCenterContent({
   // Fundos de Mini Perfil saem da grade genérica: eles têm seção própria
   // (cards maiores com o efeito rodando) logo abaixo dela.
   const miniBgItems = items.filter((it) => it.kind === "mini_profile_bg")
+  // Produtos (kind `peripheral`) têm seção própria no fim da página — são o
+  // prêmio mais especial da Central: estoque limitado, trava de nível
+  // verificado, 1 por pessoa. Ficam fora da grade genérica de cosméticos.
+  const peripheralItems = items.filter((it) => it.kind === "peripheral")
   const nonShieldItems = items.filter(
-    (it) => it.kind !== "streak_shield" && it.kind !== "mini_profile_bg"
+    (it) =>
+      it.kind !== "streak_shield" &&
+      it.kind !== "mini_profile_bg" &&
+      it.kind !== "peripheral"
   )
 
   // Preços que o desconto VIP de fato alcança — alimentam o "quanto você
@@ -436,10 +469,21 @@ export function AuraCenterContent({
         requireLogin={requireLogin}
       />
 
-      {/* Loja de itens */}
+      {/* Programa de Indicação: outra forma de ganhar Aura fora do loop de
+          posts/comentários, mesma família das conquistas acima. Só o resumo —
+          a mecânica inteira é explicada em /indicar. */}
+      <ReferralAuraCard />
+
+      {/* Loja de itens — cosméticos genéricos (molduras, VIP, troca de nome).
+          Escudo, Fundos de Mini Perfil e Produtos têm seção própria abaixo. */}
       <div className="space-y-3">
-        <h2 className="font-display text-lg font-bold text-foreground">Loja de itens</h2>
-        {items.length === 0 ? (
+        <div className="space-y-1">
+          <h2 className="font-display text-lg font-bold text-foreground">Itens da loja</h2>
+          <p className="text-xs text-muted-foreground">
+            Cosméticos de perfil e vantagens. Sempre disponíveis, sem limite de unidades.
+          </p>
+        </div>
+        {nonShieldItems.length === 0 && !hasShieldItem ? (
           <p className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
             Nenhum item disponível no momento. Volte em breve!
           </p>
@@ -455,7 +499,7 @@ export function AuraCenterContent({
             listPrices={discountableListPrices}
             onShowBenefits={() => setVipUpsellOpen(true)}
           />
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {hasShieldItem && (
               <StreakShieldCard
                 key="streak-shield"
@@ -552,8 +596,53 @@ export function AuraCenterContent({
         onEquipChange={setEquippedMiniBgId}
       />
 
-      {/* FAQ: todas as fontes de ganho/gasto, boost e trust tier, com números reais do usuário — por último, depois de todo o resto já ter dado o contexto prático */}
-      <AuraFaqSection streak={streak.current} isVip={vip.active} />
+      {/* Produtos — prêmio físico, estoque limitado, só nível verificado */}
+      <AuraPeripheralSection
+        items={peripheralItems}
+        owners={peripheralOwnerMap}
+        balance={currentBalance}
+        isLoggedIn={isLoggedIn}
+        isVip={vip.active}
+        trustTier={usage.trustTier}
+        currentUserSlug={currentUserSlug}
+        currentUserAvatarUrl={currentUserAvatarUrl}
+        currentUserName={currentName}
+        shippingPrefill={shippingPrefill}
+        requireLogin={requireLogin}
+        onRedeemed={(itemId, cost, owner) => {
+          setPeripheralOwnerMap((prev) => {
+            const next = new Map(prev)
+            next.set(itemId, [...(next.get(itemId) ?? []), owner])
+            return next
+          })
+          setCurrentBalance((prev) => prev - cost)
+        }}
+      />
+
+      {/* "Como funciona a Aura" agora mora na Central de Informações
+          (/informacoes/central-de-aura) — texto de referência, sem duplicar.
+          Aqui fica só a chamada, por último, depois do contexto prático. */}
+      <Link
+        href="/informacoes/central-de-aura"
+        className={cn(
+          "group flex items-center gap-4 rounded-2xl border p-5 transition-colors hover:border-orange-500/40",
+          CARD_SURFACE
+        )}
+      >
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400">
+          <HelpCircle className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-base font-bold text-foreground group-hover:text-orange-400">
+            Como funciona a Aura
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Todas as formas de ganhar e gastar Aura, o multiplicador de Ofensiva e VIP, e os
+            limites de reações — na Central de Informações.
+          </p>
+        </div>
+        <ChevronRight className="size-5 shrink-0 text-muted-foreground group-hover:text-orange-400" />
+      </Link>
     </div>
     <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />
     <AuraRankingModal open={rankingOpen} onOpenChange={setRankingOpen} />

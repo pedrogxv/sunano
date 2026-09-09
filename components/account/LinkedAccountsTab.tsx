@@ -28,12 +28,41 @@ export function LinkedAccountsTab() {
     loadIdentities()
   }, [])
 
+  // A rota /auth/callback devolve `?link_error=account_in_use` quando a pessoa
+  // tentou vincular um Google/Discord que já pertence a outro perfil. Mostramos
+  // a mensagem específica aqui e limpamos o parâmetro da URL para não repetir o
+  // toast a cada refresh. Não dizemos QUAL perfil usa a conta — minimização de
+  // dados (LGPD): não confirmamos e-mail/nome de terceiros.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get("link_error") !== "account_in_use") return
+    toast.error("Não foi possível vincular", {
+      description:
+        "Esta conta social já está vinculada a outro perfil do site. Cada conta do Google ou Discord só pode ser usada em um perfil. Se ela é sua, desvincule-a do outro perfil primeiro ou fale com o suporte.",
+      duration: 10000,
+    })
+    params.delete("link_error")
+    const query = params.toString()
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`
+    )
+  }, [])
+
   async function loadIdentities() {
     try {
       setLoading(true)
       const { data, error } = await supabaseAuth.auth.getUserIdentities()
       if (error) throw error
       setIdentities(data.identities ?? [])
+
+      // Vincular uma conta social é um dos verificadores do Programa de
+      // Indicação. A rota lê as identidades da SESSÃO no servidor (não confia
+      // no que mandamos daqui) e valida a indicação pendente, se houver.
+      // Silencioso de propósito: quem não foi indicado — a maioria — não tem
+      // nada a ver com isso, e um erro aqui não afeta a tela de conexões.
+      void fetch("/api/indicacoes/verificar-identidade", { method: "POST" }).catch(() => {})
     } catch {
       setIdentities([])
     } finally {

@@ -218,6 +218,8 @@ export type UserOrderSummary = {
   items: Record<string, unknown>[]
   created_at: string
   payment_method: string | null
+  /** Não-nulo = pedido pago com Aura (resgate de produto físico da Central). */
+  aura_cost_paid: number | null
   asaas_payment_id: string | null
   asaas_receipt_url: string | null
   pix_copy_paste: string | null
@@ -230,7 +232,7 @@ export type UserOrderSummary = {
 }
 
 const ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, " +
+  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, " +
   SHIPPING_COLUMNS
 
 /**
@@ -350,6 +352,8 @@ export type AdminOrderRow = {
   created_at: string
   updated_at: string
   payment_method: string | null
+  /** Não-nulo = pedido pago com Aura (resgate de produto físico da Central). */
+  aura_cost_paid: number | null
   customer_name: string | null
   customer_email: string | null
   tracking_code: string | null
@@ -374,7 +378,7 @@ export type AdminOrderRow = {
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, updated_at, payment_method, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, is_sandbox, " +
+  "id, status, total_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, is_sandbox, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -385,6 +389,7 @@ type AdminOrderRawRow = {
   created_at: string
   updated_at: string
   payment_method: string | null
+  aura_cost_paid: number | null
   customer_name: string | null
   customer_email: string | null
   metadata: Record<string, unknown> | null
@@ -486,6 +491,7 @@ export async function listOrdersForAdmin(filters?: {
       created_at: row.created_at,
       updated_at: row.updated_at,
       payment_method: row.payment_method,
+      aura_cost_paid: row.aura_cost_paid ?? null,
       customer_name: row.customer_name,
       customer_email: row.customer_email,
       tracking_code: row.tracking_code,

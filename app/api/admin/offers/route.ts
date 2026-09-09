@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
-import { getTelegramOffers } from "@/lib/server/integrations/telegram-offers"
+import { getTelegramOffers, SCRAPE_LIMIT } from "@/lib/server/integrations/telegram-offers"
 
 export async function GET() {
   try {
@@ -15,7 +15,7 @@ export async function GET() {
       return NextResponse.json({ error: "Sem permissão para visualizar ofertas." }, { status: 403 })
     }
 
-    const result = await getTelegramOffers(30)
+    const result = await getTelegramOffers(SCRAPE_LIMIT)
     return NextResponse.json({ ok: true, offers: result.offers, warning: result.warning, source: result.source })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar ofertas do Telegram. Tente novamente em alguns segundos." }, { status: 500 })

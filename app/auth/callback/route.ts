@@ -10,6 +10,9 @@ import {
   upsertUserProfileFromAuth,
 } from "@/lib/server/repositories/users-repository"
 import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
+import { registerReferral } from "@/lib/server/repositories/referrals-repository"
+import { verifyReferralFromIdentities } from "@/lib/server/referral-verification"
+import { REFERRAL_COOKIE } from "@/lib/referral-code"
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -17,9 +20,24 @@ export async function GET(request: NextRequest) {
   const tokenHash = searchParams.get("token_hash")
   const type = searchParams.get("type")
   const authError = searchParams.get("error") || searchParams.get("error_code")
+  const authErrorCode = searchParams.get("error_code")
   const next = sanitizeNextPath(searchParams.get("next"))
 
   const supabase = await createSupabaseServerClient()
+
+  // Vincular um login social (linkIdentity a partir de /conta > Conexões) que já
+  // pertence a OUTRO perfil: o GoTrue devolve `error_code=identity_already_exists`.
+  // Sem este ramo cairia no bloco `authError` genérico abaixo e a pessoa seria
+  // deslogada e jogada pro /login com "erro no login" — mensagem que não explica
+  // nada. Aqui devolvemos pra própria tela de Conexões com um marcador para o
+  // toast específico. Não expomos QUAL é o outro perfil (minimização de dados,
+  // LGPD Art. 6º): a mensagem só diz que a conta social já está em uso.
+  if (
+    (authErrorCode === "identity_already_exists" || authError === "identity_already_exists") &&
+    (next === "/conta" || next.startsWith("/conta"))
+  ) {
+    return NextResponse.redirect(`${origin}/conta?link_error=account_in_use#conexoes`)
+  }
 
   // O GoTrue devolve o erro na própria query quando o link de e-mail já não
   // vale (`?error=access_denied&error_code=otp_expired`). Sem tratar isso a
@@ -139,7 +157,48 @@ export async function GET(request: NextRequest) {
     // Primeiro login OAuth = cadastro genuíno: concede a medalha de evento ativo.
     if (isNew) {
       await awardEligibleEventMedals(authData.user.id)
+
+      // Cupom de indicação no cadastro social. Registrado AQUI, e não depois
+      // do bloco de consentimento LGPD lá embaixo, de propósito: quem se
+      // cadastra pelo Google/Discord sem consentimento é desviado para
+      // /consentimento antes de chegar ao fim desta função. Se a indicação
+      // dependesse daquele ponto, toda indicação por login social se perderia
+      // silenciosamente — o cookie continua no navegador, mas ninguém mais
+      // volta aqui com `isNew` verdadeiro.
+      try {
+        const referralCode = request.cookies.get(REFERRAL_COOKIE)?.value
+        if (referralCode) {
+          const ip =
+            request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+            request.headers.get("x-real-ip") ??
+            null
+          await registerReferral({
+            referredUserId: authData.user.id,
+            code: referralCode,
+            signupIp: ip,
+          })
+        }
+      } catch (referralError) {
+        console.error("[auth/callback] registro de indicação falhou:", referralError)
+      }
     }
+
+    // Login social é o momento em que as identidades OAuth ficam disponíveis:
+    // tenta validar a indicação pendente por qualquer uma delas. Cobre também
+    // quem já tinha a conta vinculada antes de ser indicado. Best-effort — o
+    // módulo nunca lança, então não há risco de travar o login por isso.
+    await verifyReferralFromIdentities(
+      authData.user.id,
+      // `identity.id` (o `sub` da conta no Google/Discord), NUNCA
+      // `identity.identity_id`: este último é o uuid do VÍNCULO, gerado novo a
+      // cada vinculação, então seria único por definição e o `unique` global
+      // de `referral_verified_identities` nunca colidiria — o verificador
+      // viraria enfeite e a mesma conta Google validaria infinitas indicações.
+      (authData.user.identities ?? []).map((identity) => ({
+        provider: identity.provider,
+        id: identity.id,
+      }))
+    )
 
     // O destino do OAuth vem da query (`next`) e é controlável pelo cliente —
     // o botão do /admin/login manda "/admin". Quem não tem perfil

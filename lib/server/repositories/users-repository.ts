@@ -1461,6 +1461,50 @@ export type UserProfileSettings = {
   media_adjustments: ProfileMediaAdjustments
 }
 
+/** Último endereço de ENTREGA salvo no perfil (colunas `shipping_*`, não as de cobrança). */
+export type ProfileShippingPrefill = {
+  recipient: string | null
+  phone: string | null
+  postalCode: string | null
+  street: string | null
+  number: string | null
+  complement: string | null
+  neighborhood: string | null
+  city: string | null
+  state: string | null
+} | null
+
+/**
+ * Endereço de entrega guardado no perfil, para pré-preencher formulários de
+ * entrega (checkout e resgate de produto físico da Central de Aura). `null`
+ * quando o usuário nunca informou um endereço de entrega.
+ */
+export async function getProfileShippingPrefill(
+  userId: string
+): Promise<ProfileShippingPrefill> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_profiles")
+    .select(
+      "shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
+    )
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (!data || !data.shipping_postal_code) return null
+  return {
+    recipient: data.shipping_recipient,
+    phone: data.shipping_phone,
+    postalCode: data.shipping_postal_code,
+    street: data.shipping_street,
+    number: data.shipping_number,
+    complement: data.shipping_complement,
+    neighborhood: data.shipping_neighborhood,
+    city: data.shipping_city,
+    state: data.shipping_state,
+  }
+}
+
 /** Lê as preferências/identificação do usuário para a página de perfil. */
 export async function getUserProfileSettings(
   userId: string

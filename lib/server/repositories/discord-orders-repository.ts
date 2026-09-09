@@ -88,7 +88,7 @@ export type NotifyDiscordOrderParams = {
  * justamente para não depender do que cada chamador tinha em mãos.
  */
 const ORDER_COLUMNS =
-  "id, status, total_cents, items, payment_method, customer_name, customer_email, created_at, " +
+  "id, status, total_cents, aura_cost_paid, items, payment_method, customer_name, customer_email, created_at, " +
   "tracking_code, carrier, refunded_cents, refund_reason, asaas_payment_id, asaas_receipt_url, " +
   "affiliate_code, requires_shipping_address, is_sandbox, shipping_recipient, shipping_city, " +
   "shipping_state, shipping_postal_code"
@@ -124,6 +124,7 @@ async function loadOrderCard(orderId: string): Promise<OrderCardData | null> {
     // eventos como chargeback não têm status próprio em `store_orders`.
     status: row.status as OrderEventStatus,
     totalCents: Number(row.total_cents ?? 0),
+    auraCostPaid: row.aura_cost_paid == null ? null : Number(row.aura_cost_paid),
     paymentMethod: (row.payment_method as string | null) ?? null,
     customerName: (row.customer_name as string | null) ?? null,
     customerEmail: (row.customer_email as string | null) ?? null,

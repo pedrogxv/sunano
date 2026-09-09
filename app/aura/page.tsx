@@ -12,6 +12,7 @@ import {
   getDisplayNameCooldown,
   getEquippedAvatarFrameId,
   getEquippedMiniProfileBg,
+  getPeripheralOwners,
   getStreakShieldStatus,
   getUserAuraItemIds,
   getVipStatus,
@@ -21,7 +22,7 @@ import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtu
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { hasConfirmedDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
 import { getDiscordInviteUrl, isDiscordMembershipEnabled } from "@/lib/discord-membership"
-import { getUserProfileSettings } from "@/lib/server/repositories/users-repository"
+import { getProfileShippingPrefill, getUserProfileSettings } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { AuraCenterContent } from "@/components/aura/AuraCenterContent"
 
@@ -49,6 +50,8 @@ export default async function AuraCenterPage() {
     nameCooldown,
     profileSettings,
     streakShield,
+    peripheralOwners,
+    shippingPrefill,
   ] = await Promise.all([
     userId ? getUserAuraBalance(userId) : Promise.resolve(0),
     userId ? getUserAuraTotalEarned(userId) : Promise.resolve(0),
@@ -86,6 +89,8 @@ export default async function AuraCenterPage() {
     userId
       ? getStreakShieldStatus(userId)
       : Promise.resolve({ armed: false, graceDays: null }),
+    getPeripheralOwners(),
+    userId ? getProfileShippingPrefill(userId) : Promise.resolve(null),
   ])
 
   return (
@@ -109,7 +114,11 @@ export default async function AuraCenterPage() {
         vipStatus={vipStatus}
         nameCooldown={nameCooldown}
         displayName={profileSettings?.display_name ?? ""}
+        currentUserSlug={profileSettings?.display_slug ?? null}
+        currentUserAvatarUrl={profileSettings?.avatar_url ?? null}
         streakShield={streakShield}
+        peripheralOwners={[...peripheralOwners.entries()]}
+        shippingPrefill={shippingPrefill}
       />
     </Suspense>
   )

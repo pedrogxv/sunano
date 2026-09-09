@@ -18,6 +18,7 @@ import {
   PackageCheck,
   RotateCcw,
   Search,
+  Sparkles,
   Truck,
   User,
   X,
@@ -94,6 +95,8 @@ type AdminOrder = {
   created_at: string
   updated_at: string
   payment_method: string | null
+  /** Não-nulo = resgate de produto físico da Central pago com Aura (payment_method='aura'). */
+  aura_cost_paid: number | null
   customer_name: string | null
   customer_email: string | null
   tracking_code: string | null
@@ -858,7 +861,14 @@ export default function AdminOrdersPage() {
                     </p>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-sm font-semibold text-emerald-400">{formatBRL(order.total_cents)}</span>
+                    {order.payment_method === "aura" ? (
+                      <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-400">
+                        <Sparkles className="size-3.5" />
+                        {(order.aura_cost_paid ?? 0).toLocaleString("pt-BR")} Aura
+                      </span>
+                    ) : (
+                      <span className="text-sm font-semibold text-emerald-400">{formatBRL(order.total_cents)}</span>
+                    )}
                     {order.refunded_cents > 0 && (
                       <p className="text-[10px] text-sky-400">-{formatBRL(order.refunded_cents)} extornado</p>
                     )}
@@ -866,6 +876,15 @@ export default function AdminOrdersPage() {
                   <td className="px-4 py-3">
                     <div className="flex flex-col items-start gap-1">
                       <StatusBadge status={order.status} />
+                      {order.payment_method === "aura" && (
+                        <span
+                          title="Resgate da Central de Aura — pago com Aura, sem cobrança em dinheiro"
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-400"
+                        >
+                          <Sparkles className="size-2.5" strokeWidth={2.5} />
+                          PAGO COM AURA
+                        </span>
+                      )}
                       {order.oversold && (
                         <span
                           title="Pago após expirar, sem estoque para re-reservar"
@@ -1011,8 +1030,10 @@ function OrderManageDialog({
   }
 
   const next = nextStatusFor(order)
+  const isAuraOrder = order.payment_method === "aura"
   const remainingCents = order.total_cents - order.refunded_cents
-  const canRefund = REFUNDABLE_STATUSES.includes(order.status) && remainingCents > 0
+  // Pedido de Aura não tem cobrança em dinheiro — não há o que estornar pelo gateway.
+  const canRefund = !isAuraOrder && REFUNDABLE_STATUSES.includes(order.status) && remainingCents > 0
 
   async function handleAdvance() {
     if (!order || !next) return
@@ -1214,7 +1235,7 @@ function OrderManageDialog({
                       .map((label) => ` · ${label}`)
                       .join("")}
                   </span>
-                  {typeof item.price_cents === "number" && (
+                  {!isAuraOrder && typeof item.price_cents === "number" && (
                     <span className="text-muted-foreground">{formatBRL(item.price_cents)}</span>
                   )}
                 </div>
@@ -1222,7 +1243,14 @@ function OrderManageDialog({
             </div>
             <div className="flex items-center justify-between border-t border-border/60 pt-2 text-sm font-semibold">
               <span className="text-foreground">Total</span>
-              <span className="text-emerald-400">{formatBRL(order.total_cents)}</span>
+              {isAuraOrder ? (
+                <span className="inline-flex items-center gap-1 text-amber-400">
+                  <Sparkles className="size-3.5" />
+                  {(order.aura_cost_paid ?? 0).toLocaleString("pt-BR")} Aura
+                </span>
+              ) : (
+                <span className="text-emerald-400">{formatBRL(order.total_cents)}</span>
+              )}
             </div>
             {order.refunded_cents > 0 && (
               <div className="flex items-center justify-between text-xs text-sky-400">
@@ -1235,11 +1263,20 @@ function OrderManageDialog({
           {/* Pagamento */}
           <div className="space-y-1 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
             <p className="font-semibold uppercase tracking-wider text-muted-foreground">Pagamento</p>
-            <p className="text-foreground">
-              {order.asaas_payment_id ? "Asaas" : "—"} · PIX
-            </p>
-            {order.asaas_payment_id && (
-              <p className="break-all text-muted-foreground">ID Asaas: {order.asaas_payment_id}</p>
+            {isAuraOrder ? (
+              <p className="flex items-center gap-1.5 text-amber-400">
+                <Sparkles className="size-3.5" />
+                Resgate da Central de Aura · {(order.aura_cost_paid ?? 0).toLocaleString("pt-BR")} Aura
+              </p>
+            ) : (
+              <>
+                <p className="text-foreground">
+                  {order.asaas_payment_id ? "Asaas" : "—"} · PIX
+                </p>
+                {order.asaas_payment_id && (
+                  <p className="break-all text-muted-foreground">ID Asaas: {order.asaas_payment_id}</p>
+                )}
+              </>
             )}
           </div>
 

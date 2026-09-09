@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { StarRating } from "@/components/ui/star-rating"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/use-t"
 
 interface PeripheralVoteBoxProps {
   peripheralId: string
@@ -18,22 +19,10 @@ const verdictCardStyles: Record<Verdict, string> = {
   tie: "border-border bg-card",
 }
 
-const verdictTitle: Record<Verdict, string> = {
-  good: "PERIFÉRICO BOM",
-  bad: "PERIFÉRICO DE BAGRE",
-  tie: "EMPATE",
-}
-
 const verdictTitleColor: Record<Verdict, string> = {
   good: "text-emerald-400",
   bad: "text-red-400",
   tie: "text-muted-foreground",
-}
-
-const verdictTooltip: Record<Verdict, string> = {
-  good: "Periférico bom: a média das avaliações da comunidade é maior que 3 estrelas",
-  bad: "Periférico de BAGRE: a média das avaliações da comunidade é menor que 3 estrelas",
-  tie: "EMPATE: a média das avaliações é 3 estrelas, ou ainda não há avaliações suficientes",
 }
 
 /**
@@ -43,6 +32,17 @@ const verdictTooltip: Record<Verdict, string> = {
  * fluxo de "Meus Reviews" no perfil.
  */
 export function PeripheralVoteBox({ peripheralId }: PeripheralVoteBoxProps) {
+  const t = useT()
+  const verdictTitle: Record<Verdict, string> = {
+    good: t.verdict.good,
+    bad: t.verdict.bad,
+    tie: t.verdict.tie,
+  }
+  const verdictTooltip: Record<Verdict, string> = {
+    good: t.verdict.goodTooltip,
+    bad: t.verdict.badTooltip,
+    tie: t.verdict.tieTooltip,
+  }
   const [average, setAverage] = useState<number | null>(null)
   const [totalCount, setTotalCount] = useState(0)
   const [loaded, setLoaded] = useState(false)
@@ -70,12 +70,14 @@ export function PeripheralVoteBox({ peripheralId }: PeripheralVoteBoxProps) {
 
   return (
     <div className={cn("rounded-2xl border p-5 space-y-4 transition-colors", verdictCardStyles[verdict])}>
-      <h2 className="text-center text-lg font-bold tracking-tight text-foreground">BOM OU BAGRE?</h2>
+      <h2 className="text-center text-lg font-bold tracking-tight text-foreground">{t.verdict.title}</h2>
 
       <div className={cn("flex flex-col items-center gap-1.5 transition-opacity", loaded ? "opacity-100" : "pointer-events-none opacity-0")}>
         <StarRating value={average ?? 0} size="lg" />
         <p className="text-sm font-medium text-muted-foreground">
-          {average !== null ? `${average.toFixed(1)} ★ · ${totalCount} review${totalCount === 1 ? "" : "s"}` : "Sem reviews ainda"}
+          {average !== null
+            ? `${average.toFixed(1)} ★ · ${(totalCount === 1 ? t.verdict.reviewCountOne : t.verdict.reviewCount).replace("{count}", String(totalCount))}`
+            : t.verdict.noReviews}
         </p>
       </div>
 

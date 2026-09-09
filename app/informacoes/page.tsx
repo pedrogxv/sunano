@@ -5,6 +5,7 @@ import {
   FileText,
   PackageOpen,
   ShieldCheck,
+  Sparkles,
   UserCheck,
   LifeBuoy,
 } from "lucide-react"
@@ -66,6 +67,13 @@ const DOCUMENTS: InfoCard[] = [
     description:
       "Acesso, correção, portabilidade e exclusão dos seus dados pessoais, e como exercer cada um deles.",
     meta: "Lei 13.709/2018 · Art. 18",
+  },
+  {
+    href: "/informacoes/central-de-aura",
+    icon: Sparkles,
+    title: "Central de Aura",
+    description:
+      "Como funciona a Aura: todas as formas de ganhar e gastar, o multiplicador de Ofensiva e VIP, e os limites de reações por nível de confiança.",
   },
   {
     href: "/quem-somos",

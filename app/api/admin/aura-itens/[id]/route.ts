@@ -3,6 +3,7 @@ import * as z from "zod"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import {
+  AuraItemUpdateError,
   deleteAuraItem,
   getAuraItemForAdmin,
   updateAuraItem,
@@ -12,10 +13,14 @@ const updateAuraItemSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   description: z.string().trim().max(500).optional().nullable(),
   imageUrl: z.string().url().optional().nullable(),
-  frameAssetUrl: z.string().url().optional(),
+  frameAssetUrl: z.string().url().optional().nullable(),
   auraCost: z.number().int().positive().optional(),
   sortOrder: z.number().int().optional(),
+  stock: z.number().int().min(1).optional(),
   active: z.boolean().optional(),
+  // Só a conversão entre moldura e produto é permitida na edição — os outros
+  // kinds têm RPC e slug próprios.
+  kind: z.enum(["avatar_frame", "peripheral"]).optional(),
 })
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -60,6 +65,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     return NextResponse.json({ item })
   } catch (err) {
+    if (err instanceof AuraItemUpdateError) {
+      return NextResponse.json({ error: err.message }, { status: err.status })
+    }
     const message = err instanceof Error ? err.message : "Erro ao atualizar item de Aura."
     return NextResponse.json({ error: message }, { status: 500 })
   }

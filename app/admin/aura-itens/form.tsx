@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 import { compressImageFile, type CompressImageOptions } from "@/lib/client/compress-image"
-import type { AuraItemAdmin } from "@/lib/server/repositories/aura-store-repository"
+import type { AuraItemAdmin, AuraItemKind } from "@/lib/server/repositories/aura-store-repository"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
 
 /**
@@ -36,6 +36,15 @@ const FRAME_COMPRESS_OPTIONS: CompressImageOptions = {
 }
 
 
+const KIND_LABELS: Record<AuraItemKind, string> = {
+  avatar_frame: "Moldura de avatar",
+  peripheral: "Produto (prêmio físico)",
+  vip_month: "VIP (1 mês)",
+  display_name_change: "Troca de nome",
+  streak_shield: "Proteção de Ofensiva",
+  mini_profile_bg: "Fundo de Mini Perfil",
+}
+
 interface AuraItemFormProps {
   item?: AuraItemAdmin
   onSuccess: (item: AuraItemAdmin) => void
@@ -48,11 +57,21 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
   const [uploadingFrame, setUploadingFrame] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // O kind é escolhido na CRIAÇÃO. Na edição só permitimos a conversão entre
+  // "Moldura de avatar" e "Produto" (avatar_frame ⇄ peripheral) — os outros
+  // kinds (VIP, escudo, troca de nome, fundo) têm RPC e slug próprios que não
+  // podem mudar. `convertible` guarda essa condição.
+  const [kind, setKind] = useState<AuraItemKind>(item?.kind ?? "avatar_frame")
+  const isPeripheral = kind === "peripheral"
+  const kindConvertible =
+    !item || item.kind === "avatar_frame" || item.kind === "peripheral"
+
   const [formData, setFormData] = useState({
     name: item?.name ?? "",
     description: item?.description ?? "",
     auraCost: item?.auraCost?.toString() ?? "",
     sortOrder: item?.sortOrder?.toString() ?? "0",
+    stock: item?.stock?.toString() ?? "1",
     active: item?.active !== false,
   })
 
@@ -135,18 +154,36 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
         throw new Error("Ordem inválida.")
       }
 
-      if (!frameAssetUrl) {
+      let stock = 1
+      if (isPeripheral) {
+        stock = parseInt(formData.stock, 10)
+        if (isNaN(stock) || stock < 1) {
+          throw new Error("Unidades inválidas. Use um inteiro maior ou igual a 1.")
+        }
+      }
+
+      if (isPeripheral) {
+        if (!imageUrl) {
+          throw new Error("Envie a foto do periférico.")
+        }
+      } else if (!frameAssetUrl) {
         throw new Error("Envie a imagem da moldura (o PNG/SVG sobreposto ao avatar).")
       }
+
+      // Na edição, o `kind` só vai no payload se de fato mudou e a conversão é
+      // permitida (avatar_frame ⇄ peripheral). Criação sempre manda o kind.
+      const kindChanged = item != null && kindConvertible && kind !== item.kind
 
       const payload = {
         name: formData.name.trim(),
         description: formData.description.trim() || null,
         imageUrl,
-        frameAssetUrl,
+        frameAssetUrl: isPeripheral ? null : frameAssetUrl,
         auraCost,
         sortOrder,
+        ...(isPeripheral ? { stock } : {}),
         ...(item ? { active: formData.active } : {}),
+        ...(item ? (kindChanged ? { kind } : {}) : { kind }),
       }
 
       const url = item ? `/api/admin/aura-itens/${item.id}` : "/api/admin/aura-itens"
@@ -188,6 +225,63 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
         </Alert>
       )}
 
+      {/* Tipo — select quando é conversível (avatar_frame ⇄ peripheral, seja
+          na criação ou editando um desses dois). Kinds especiais (VIP, escudo,
+          etc.) mostram texto fixo. */}
+      <div className="space-y-2">
+        <Label>Tipo *</Label>
+        {kindConvertible ? (
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as AuraItemKind)}
+            className={cn(
+              "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm",
+              "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            )}
+          >
+            <option value="avatar_frame">Moldura de avatar</option>
+            <option value="peripheral">Produto (prêmio físico)</option>
+          </select>
+        ) : (
+          <p className="flex h-9 items-center text-sm text-muted-foreground">
+            {KIND_LABELS[kind] ?? kind}
+          </p>
+        )}
+        {isPeripheral && (
+          <p className="text-[10px] text-muted-foreground/60">
+            Produto físico: some da loja quando as unidades acabam. Só membros nível verificado
+            podem resgatar, e cada pessoa resgata no máximo 1 unidade. Sem desconto VIP.
+          </p>
+        )}
+        {item && kindConvertible && kind !== item.kind && (
+          <p className="text-[10px] text-amber-400/80">
+            Você está mudando o tipo deste item. A conversão só é segura se ninguém resgatou ou
+            equipou ele ainda.
+          </p>
+        )}
+      </div>
+
+      {/* Unidades — só periférico */}
+      {isPeripheral && (
+        <div className="space-y-2">
+          <Label>Unidades disponíveis *</Label>
+          <Input
+            required
+            type="number"
+            min={1}
+            step={1}
+            value={formData.stock}
+            onChange={(e) => set("stock", e.target.value)}
+            placeholder="Ex: 1"
+            className="max-w-[160px]"
+          />
+          <p className="text-[10px] text-muted-foreground/60">
+            Quantas pessoas podem resgatar este produto no total. O card mostra
+            &ldquo;Esgotado&rdquo; quando chega a zero.
+          </p>
+        </div>
+      )}
+
       {/* Nome + Custo */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
@@ -198,7 +292,7 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
             maxLength={100}
             value={formData.name}
             onChange={(e) => set("name", e.target.value)}
-            placeholder="Ex: Moldura Dourada"
+            placeholder={isPeripheral ? "Ex: Teclado Wooting 60HE" : "Ex: Moldura Dourada"}
           />
         </div>
 
@@ -263,9 +357,9 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
       </div>
 
       {/* Imagens */}
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={cn("grid gap-4", !isPeripheral && "md:grid-cols-2")}>
         <div className="space-y-3">
-          <Label>Preview do card (opcional)</Label>
+          <Label>{isPeripheral ? "Foto do periférico *" : "Preview do card (opcional)"}</Label>
           <div className="flex items-center gap-3">
             {imageUrl ? (
               <div className="group relative size-20 shrink-0 overflow-hidden rounded-xl border border-border bg-muted/30">
@@ -296,11 +390,14 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
               </label>
             )}
             <p className="text-[10px] text-muted-foreground">
-              Se vazio, mostra um ícone padrão no card da loja.
+              {isPeripheral
+                ? "Foto do produto que aparece no card da loja."
+                : "Se vazio, mostra um ícone padrão no card da loja."}
             </p>
           </div>
         </div>
 
+        {!isPeripheral && (
         <div className="space-y-3">
           <Label>Moldura (asset sobreposto ao avatar) *</Label>
           <div className="flex items-center gap-3">
@@ -337,6 +434,7 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
             </p>
           </div>
         </div>
+        )}
       </div>
 
       {/* Actions */}

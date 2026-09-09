@@ -1,5 +1,7 @@
 import type { Metadata } from "next"
+import { cookies } from "next/headers"
 
+import { REFERRAL_COOKIE } from "@/lib/referral-code"
 import { buildMetadata } from "@/lib/seo"
 import { AuthBackground } from "@/components/auth/AuthBackground"
 import { UserRegisterForm } from "@/components/auth/UserRegisterForm"
@@ -20,7 +22,13 @@ export const metadata: Metadata = buildMetadata({
   noIndex: true,
 })
 
-export default function RegisterPage() {
+export default async function RegisterPage() {
+  // O cookie é httpOnly (gravado pelo proxy a partir de `?convite=`), então
+  // só o servidor consegue lê-lo — daí ele descer como prop em vez de o campo
+  // buscar sozinho no cliente.
+  const cookieStore = await cookies()
+  const referralCode = cookieStore.get(REFERRAL_COOKIE)?.value ?? ""
+
   return (
     <div className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
       <AuthBackground />
@@ -38,7 +46,7 @@ export default function RegisterPage() {
 
         <AuthMotionCard>
           <div className="rounded-2xl border border-border bg-card p-8 shadow-xl shadow-black/30">
-            <UserRegisterForm />
+            <UserRegisterForm referralCode={referralCode} />
           </div>
         </AuthMotionCard>
 

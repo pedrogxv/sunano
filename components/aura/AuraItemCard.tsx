@@ -74,7 +74,7 @@ export function AuraItemCard({ item, balance, isVip, owned, equipped, requireLog
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-2xl border transition-all duration-200 hover:-translate-y-1",
+        "flex flex-col overflow-hidden rounded-xl border transition-all duration-200 hover:-translate-y-1",
         CARD_SURFACE_INTERACTIVE,
         equipped && "event-card-glow border-orange-500/50"
       )}
@@ -83,30 +83,30 @@ export function AuraItemCard({ item, balance, isVip, owned, equipped, requireLog
       <div className="relative aspect-square overflow-hidden bg-[var(--card-image-bg)]">
         {item.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-contain p-4" />
+          <img src={item.imageUrl} alt={item.name} className="h-full w-full object-contain p-3" />
         ) : (
           <div className="flex h-full items-center justify-center">
-            <Sparkles className="size-[72px] text-orange-500/50" strokeWidth={1.15} />
+            <Sparkles className="size-14 text-orange-500/50" strokeWidth={1.15} />
           </div>
         )}
 
         {owned && (
-          <span className="absolute left-2.5 top-2.5 z-[1] flex items-center gap-1 rounded-lg bg-emerald-500/90 px-2 py-1 text-[10px] font-bold text-[#04140d]">
+          <span className="absolute left-2 top-2 z-[1] flex items-center gap-1 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[9px] font-bold text-[#04140d]">
             <Check className="size-2.5" strokeWidth={2.5} />
             Possui
           </span>
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
-        <h3 className="line-clamp-2 font-sans text-[13.5px] font-semibold leading-[1.35] tracking-normal text-foreground">
+      <div className="flex flex-1 flex-col gap-1.5 px-3 pb-3 pt-2.5">
+        <h3 className="line-clamp-2 font-sans text-[12.5px] font-semibold leading-[1.3] tracking-normal text-foreground">
           {item.name}
         </h3>
         {item.description && (
-          <p className="line-clamp-2 text-[10.5px] font-medium text-muted-foreground">{item.description}</p>
+          <p className="line-clamp-2 text-[10px] font-medium text-muted-foreground">{item.description}</p>
         )}
 
-        <div className="mt-auto space-y-2">
+        <div className="mt-auto space-y-2 pt-1">
           <AuraPriceTag listPrice={item.auraCost} isVip={isVip} />
 
           {owned ? (
@@ -115,16 +115,16 @@ export function AuraItemCard({ item, balance, isVip, owned, equipped, requireLog
               onClick={handleToggleEquip}
               disabled={loading}
               className={cn(
-                "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors",
+                "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-colors",
                 equipped
                   ? "border border-emerald-400/40 bg-emerald-400/10 text-emerald-300 hover:bg-emerald-400/20"
                   : "border border-border text-foreground hover:border-[#3a3a3a] hover:bg-muted/40"
               )}
             >
               {loading ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 className="size-3 animate-spin" />
               ) : (
-                <Shirt className="size-3.5" />
+                <Shirt className="size-3" />
               )}
               {equipped ? "Equipado" : "Equipar"}
             </button>
@@ -138,13 +138,13 @@ export function AuraItemCard({ item, balance, isVip, owned, equipped, requireLog
               disabled={loading || !canAfford}
               title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
               className={cn(
-                "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors",
+                "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-colors",
                 canAfford
                   ? "bg-orange-500 text-[#1a1200] hover:bg-orange-400"
                   : "cursor-not-allowed bg-muted/40 text-muted-foreground"
               )}
             >
-              {loading && <Loader2 className="size-3.5 animate-spin" />}
+              {loading && <Loader2 className="size-3 animate-spin" />}
               {canAfford ? "Resgatar" : "Saldo insuficiente"}
             </button>
           )}

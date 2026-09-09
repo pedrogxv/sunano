@@ -108,16 +108,16 @@ export function StreakShieldCard({
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-2xl border transition-all duration-200 hover:-translate-y-1",
+        "flex flex-col overflow-hidden rounded-xl border transition-all duration-200 hover:-translate-y-1",
         CARD_SURFACE_INTERACTIVE,
         shieldArmed && "border-sky-400/50"
       )}
     >
       {/* Arte "gelo": floco frio, sem animação — o oposto do foguinho da ofensiva. */}
-      <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-[var(--card-image-bg)]">
+      <div className="relative flex aspect-[3/2] items-center justify-center overflow-hidden bg-[var(--card-image-bg)]">
         <Snowflake
           className={cn(
-            "size-[72px] text-sky-400",
+            "size-11 text-sky-400",
             shieldArmed
               ? "drop-shadow-[0_0_10px_rgba(56,189,248,0.55)]"
               : "opacity-80"
@@ -126,24 +126,24 @@ export function StreakShieldCard({
         />
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
-        <h3 className="line-clamp-2 font-sans text-[13.5px] font-semibold leading-[1.35] tracking-normal text-foreground">
+      <div className="flex flex-1 flex-col gap-1 px-3 pb-2.5 pt-2">
+        <h3 className="line-clamp-1 font-sans text-[12px] font-semibold leading-tight tracking-normal text-foreground">
           Proteção de Ofensiva
         </h3>
-        <p className="line-clamp-3 text-[10.5px] font-medium text-muted-foreground">
+        <p className="line-clamp-2 text-[9.5px] font-medium leading-snug text-muted-foreground">
           Fica guardada até você precisar: se perder um dia de missões, sua ofensiva não zera.
         </p>
 
-        <div className="mt-auto space-y-2">
+        <div className="mt-auto space-y-1.5 pt-1">
           {shieldArmed ? (
             <div
-              className="flex w-full flex-col items-center gap-0.5 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-xs font-bold text-sky-300"
+              className="flex w-full flex-col items-center gap-0.5 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-1.5 text-[10.5px] font-bold text-sky-300"
             >
               <span className="flex items-center gap-1.5">
-                <Snowflake className="size-3.5" />
+                <Snowflake className="size-3" />
                 Proteção guardada
               </span>
-              <span className="text-[10px] font-medium opacity-70">
+              <span className="text-[9px] font-medium opacity-70">
                 {shieldGraceDays && shieldGraceDays > 1
                   ? `resgate em até ${shieldGraceDays} dias`
                   : "resgate no dia seguinte"}
@@ -153,14 +153,14 @@ export function StreakShieldCard({
             <>
               {/* Toggle Padrão / Margem estendida */}
               {available.length > 1 && (
-                <div className="flex overflow-hidden rounded-lg border border-border text-[11px] font-bold">
+                <div className="flex overflow-hidden rounded-lg border border-border text-[10px] font-bold">
                   {available.map((v) => (
                     <button
                       key={v}
                       type="button"
                       onClick={() => pick(v)}
                       className={cn(
-                        "flex-1 px-2 py-1.5 transition-colors",
+                        "flex-1 px-2 py-1 transition-colors",
                         selected === v
                           ? "bg-sky-400/15 text-sky-300"
                           : "text-muted-foreground hover:bg-muted/40"
@@ -188,13 +188,13 @@ export function StreakShieldCard({
                 disabled={loading || !canAfford || !item}
                 title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
                 className={cn(
-                  "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors",
+                  "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[10.5px] font-bold transition-colors",
                   canAfford
                     ? "bg-sky-500 text-[#04121c] hover:bg-sky-400"
                     : "cursor-not-allowed bg-muted/40 text-muted-foreground"
                 )}
               >
-                {loading && <Loader2 className="size-3.5 animate-spin" />}
+                {loading && <Loader2 className="size-3 animate-spin" />}
                 {canAfford ? "Guardar proteção" : "Saldo insuficiente"}
               </button>
             </>

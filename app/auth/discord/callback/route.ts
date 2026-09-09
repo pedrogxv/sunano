@@ -4,6 +4,7 @@ import { sanitizeNextPath } from "@/lib/auth-mfa"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { getDiscordGuildId, isMemberOfGuild } from "@/lib/server/integrations/discord"
 import { confirmDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
+import { tryValidateReferral } from "@/lib/server/referral-verification"
 import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
 
 /**
@@ -91,6 +92,14 @@ export async function GET(request: NextRequest) {
     if (result === "error") {
       return NextResponse.redirect(`${origin}${next}?discord=error`)
     }
+    // Ser membro confirmado do servidor é o verificador mais forte do
+    // Programa de Indicação: `user_discord_membership` já tem
+    // `unique (discord_user_id)`, então a mesma conta do Discord nunca valida
+    // duas indicações. Vale tanto para `granted` quanto para `already` — o
+    // que importa é a pessoa ser membro, não ter ganhado a conquista agora
+    // (quem entrou no servidor antes de ser indicado também merece validar).
+    await tryValidateReferral(sessionData.user.id, "discord_member")
+
     // `granted` e `already` são ambos sucesso do ponto de vista da pessoa: ela
     // é membro e tem a conquista. Só o `granted` credita (e anima o saldo).
     return NextResponse.redirect(`${origin}${next}?discord=${result === "granted" ? "confirmed" : "already"}`)

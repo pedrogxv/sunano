@@ -35,27 +35,16 @@ const AuraMissionsBadge = dynamic(
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
 import { CartButton } from "@/components/store/CartDrawer"
+import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 
 type PageDefaults = { title: string; description?: string }
 
-const PAGE_DEFAULTS: Record<string, PageDefaults> = {
-  "/":                  { title: "Home", description: "Tudo que você precisa saber." },
-  "/noticias":          { title: "Notícias", description: "Últimas novidades do mundo dos periféricos." },
-  "/perifericos":       { title: "Periféricos", description: "Wiki pesquisável com filtros por categoria, marca e preço." },
-  "/tierlist":          { title: "Tierlist", description: "Ranking dos melhores periféricos por categoria." },
-  "/blog":              { title: "Guias", description: "Guias completos para diversos assuntos, redigidos por especialistas do Sunano." },
-  "/offers":            { title: "Promoções", description: "Promoções e descontos selecionados do Telegram." },
-  "/mercado":           { title: "Mercado", description: "Anúncios de produtos novos e usados publicados pela comunidade." },
-  "/mercado/novo":      { title: "Anunciar", description: "Publique um anúncio no Mercado." },
-  "/mercado/meus-anuncios": { title: "Meus anúncios", description: "Gerencie os anúncios que você publicou no Mercado." },
-  "/forum":             { title: "Fórum", description: "Discussões e perguntas da comunidade." },
-  "/pessoas":           { title: "Pessoas", description: "Encontre outros membros, veja os destaques e siga quem você curte." },
-  "/conquistas":        { title: "Conquistas", description: "Medalhas e conquistas por tempo limitado." },
-  "/perfil":            { title: "Meu Perfil", description: "Identidade e vitrine pública." },
-  "/conta":             { title: "Conta e segurança", description: "Acesso, preferências e privacidade." },
-  "/videos":            { title: "Vídeos e redes sociais", description: "Conteúdo em vídeo do canal e todos os canais oficiais do Sunano." },
-  "/changelog":         { title: "Changelog", description: "Histórico de mudanças no site." },
+/**
+ * Títulos das rotas do painel. Ficam como literal em pt-BR de propósito: o
+ * admin não é traduzido (o seletor de idioma nem aparece lá — ver TopBar).
+ */
+const ADMIN_PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin":             { title: "Dashboard", description: "Visão geral do painel administrativo." },
   "/admin/tierlist":    { title: "Admin Tierlist", description: "Arraste e solte para reorganizar. Clique para editar." },
   "/admin/perifericos": { title: "Periféricos", description: "Gerencie a wiki de periféricos." },
@@ -106,8 +95,39 @@ function AlphaBadge() {
   )
 }
 
-function getPageDefaults(pathname: string): PageDefaults {
-  if (PAGE_DEFAULTS[pathname]) return PAGE_DEFAULTS[pathname]
+type Dict = ReturnType<typeof useT>
+
+/**
+ * Rotas públicas: títulos e descrições vêm do dicionário para acompanharem o
+ * idioma escolhido. Antes o mapa era uma constante de módulo em português, e
+ * o cabeçalho continuava "Periférico" mesmo com o site em inglês.
+ */
+function publicPageDefaults(t: Dict): Record<string, PageDefaults> {
+  const h = t.pageHeader
+  return {
+    "/":                      { title: h.home, description: h.homeDesc },
+    "/noticias":              { title: h.news, description: h.newsDesc },
+    "/perifericos":           { title: h.peripherals, description: h.peripheralsDesc },
+    "/tierlist":              { title: h.tierlist, description: h.tierlistDesc },
+    "/blog":                  { title: h.guides, description: h.guidesDesc },
+    "/offers":                { title: h.offers, description: h.offersDesc },
+    "/mercado":               { title: h.market, description: h.marketDesc },
+    "/mercado/novo":          { title: h.marketNew, description: h.marketNewDesc },
+    "/mercado/meus-anuncios": { title: h.marketMine, description: h.marketMineDesc },
+    "/forum":                 { title: h.forum, description: h.forumDesc },
+    "/pessoas":               { title: h.people, description: h.peopleDesc },
+    "/conquistas":            { title: h.achievements, description: h.achievementsDesc },
+    "/perfil":                { title: h.myProfile, description: h.myProfileDesc },
+    "/conta":                 { title: h.account, description: h.accountDesc },
+    "/videos":                { title: h.videos, description: h.videosDesc },
+    "/changelog":             { title: h.changelog, description: h.changelogDesc },
+  }
+}
+
+function getPageDefaults(pathname: string, t: Dict): PageDefaults {
+  const publicDefaults = publicPageDefaults(t)
+  if (publicDefaults[pathname]) return publicDefaults[pathname]
+  if (ADMIN_PAGE_DEFAULTS[pathname]) return ADMIN_PAGE_DEFAULTS[pathname]
   if (pathname.startsWith("/admin/store/new"))   return { title: "Novo produto", description: "Adicione um item à loja." }
   if (pathname.startsWith("/admin/store/"))      return { title: "Editar produto", description: "Atualize as informações do produto." }
   if (pathname.startsWith("/admin/blog/new"))    return { title: "Novo artigo", description: "Crie um review ou artigo relacionado a um periférico." }
@@ -121,12 +141,12 @@ function getPageDefaults(pathname: string): PageDefaults {
   if (pathname.startsWith("/admin/eventos/new")) return { title: "Nova conquista", description: "Crie uma conquista e a medalha concedida por ela." }
   if (pathname.startsWith("/admin/eventos/"))    return { title: "Editar conquista", description: "Atualize os dados da conquista e da medalha." }
   if (pathname.startsWith("/admin/"))            return { title: "Admin" }
-  if (pathname.startsWith("/blog/"))             return { title: "Review" }
-  if (pathname.startsWith("/forum/"))            return { title: "Fórum" }
-  if (pathname.startsWith("/perifericos/"))      return { title: "Periférico" }
-  if (pathname.startsWith("/perfil/"))           return { title: "Perfil", description: "Vitrine pública do membro." }
-  if (pathname.startsWith("/mercado/"))          return { title: "Anúncio" }
-  return { title: "Sunano" }
+  if (pathname.startsWith("/blog/"))             return { title: t.pageHeader.review }
+  if (pathname.startsWith("/forum/"))            return { title: t.pageHeader.forum }
+  if (pathname.startsWith("/perifericos/"))      return { title: t.pageHeader.peripheral }
+  if (pathname.startsWith("/perfil/"))           return { title: t.pageHeader.profile, description: t.pageHeader.profileDesc }
+  if (pathname.startsWith("/mercado/"))          return { title: t.pageHeader.listing }
+  return { title: t.pageHeader.fallback }
 }
 
 export function TopBar() {
@@ -166,7 +186,8 @@ export function TopBar() {
     }
   }
 
-  const defaults = getPageDefaults(pathname ?? "/")
+  const t = useT()
+  const defaults = getPageDefaults(pathname ?? "/", t)
   const override = usePageHeaderState()
   const pageTitle = override.title ?? defaults.title
   const pageDescription = override.description ?? defaults.description

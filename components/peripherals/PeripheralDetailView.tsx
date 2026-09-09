@@ -12,6 +12,9 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/use-t"
+import { useLocale } from "@/components/providers/locale-context"
+import type { LocaleCode } from "@/lib/i18n"
 import { mapTier, NEW_TIERS, tierLabel } from "@/lib/tier-utils"
 import { CARD_TAG_STYLES, RATING_LEVEL_COLORS, TIER_THEMES } from "@/lib/tierlist-theme"
 import { GripArchitectureImage } from "@/components/ui/grip-architecture-image"
@@ -24,7 +27,7 @@ import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
 import { formatBRL, formatCurrencyBRL } from "@/lib/format"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
-import { CATEGORY_PLURAL_LABELS, type Tag } from "@/lib/tag-options"
+import { CATEGORY_PLURAL_LABELS, getTagLabel, type Category, type Tag } from "@/lib/tag-options"
 import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
 import { parseExpertAuthor } from "@/lib/peripheral-expert"
 import {
@@ -247,100 +250,13 @@ function formatCurrency(value: number) {
   }
 }
 
-const TAG_LABELS: Record<Tag, string> = {
-  competitive: "Competitivo",
-  versatile: "Bomba",
-  value: "Custo-beneficio",
-  cheap: "Barato",
-  expensive: "Caro",
-  light: "Leve",
-  heavy: "Pesado",
-  unbalanced: "Peso Desbalanceado",
-  dpi_deviation: "DPI Deviation",
-  wobble_high: "Wooble Alto",
-  wobble_low: "Wooble Baixo",
-  scroll_hard: "Scroll Duro",
-  scroll_soft: "Scroll Mole",
-  trimode: "Trimode",
-  stable: "Estável",
-  unstable: "Instável",
-  "8_80": "8 80",
-  poron: "Poron",
-  borracha: "Borracha",
-  grosso: "Grosso",
-  fino: "Fino",
-  rapido: "Rápido",
-  devagar: "Devagar",
-  hibrido: "Híbrido",
-  aspero: "Áspero",
-  liso: "Liso",
-  mug: "Mug",
-  macio: "Macio",
-  afetado_umidade: "Afetado por Umidade",
-  ultrapassado: "Ultrapassado",
-  raro: "Raro",
-  fibra_carbono: "Fibra de Carbono",
-  control: "Control",
-  speed: "Speed",
-  silicone: "Silicone",
-  ia: "IA",
-  white_label: "White Label",
-  ips: "IPS",
-  va: "VA",
-  tn: "TN",
-  oled: "OLED",
-  miniled: "MINILED",
-  fhd: "FHD",
-  qhd: "QHD",
-  "4k": "4K",
-  headphone: "Headphone",
-  wired: "Com fio",
-  wireless: "Sem fio",
-  padrao_atx: "Padrão ATX",
-  full_modular: "Full Modular",
-  semi_modular: "Semi Modular",
-  white_noise: "White Noise",
-  bom_ripple: "Bom Ripple",
-  ripple_ruim: "Ripple Ruim",
-  fonte_instavel: "Fonte Instável",
-  "80_plus": "80% Plus",
-  selo_cybenetics: "Selo Cybenetics",
-  capacitor_japones: "Capacitor Japonês",
-  v_shaped: "V-Shaped",
-  u_shaped: "U-Shaped",
-  neutro: "Neutro",
-  neutro_quente: "Neutro Quente",
-  quente: "Quente",
-  escuro: "Escuro",
-  basshead: "Basshead",
-  vocal_forward: "Vocal Forward",
-  harman: "Harman",
-  ief_neutral: "IEF Neutral",
-  jm_1: "JM-1",
-  sub_bass_focus: "Sub-bass Focus",
-  mid_bass_focus: "Mid-bass Focus",
-  punchy: "Punchy",
-  smooth: "Smooth",
-  arejado: "Arejado",
-  sibilante: "Sibilante",
-  detalhado: "Detalhado",
-  palco_amplo: "Palco Amplo",
-  boa_separacao: "Boa Separação",
-  metal: "Metal",
-  resina: "Resina",
-  plastico: "Plástico",
-  shell_pequeno: "Shell Pequeno",
-  shell_grande: "Shell Grande",
-  deep_fit: "Deep Fit",
-  boa_isolacao: "Boa Isolação",
-  driver_flex: "Driver Flex",
-  planar: "Planar",
-}
-
-function formatTagLabel(tag: string, category?: string) {
-  if (category === "keyboard" && tag === "light") return "Leve"
-  if (category === "keyboard" && tag === "heavy") return "Pesado"
-  return TAG_LABELS[tag as Tag] ?? formatLabel(tag)
+function formatTagLabel(tag: string, locale: LocaleCode, category?: string) {
+  // `light`/`heavy` são registradas só para `mouse` em tag-options, mas teclado
+  // também as exibe (item legado). Buscar na categoria primeiro e cair para o
+  // pool global preserva o caso especial que existia aqui antes, agora sem
+  // duplicar o rótulo — o pool global acha a tag e devolve no idioma certo.
+  const scoped = getTagLabel(tag, locale, category as Category | undefined)
+  return scoped ?? getTagLabel(tag, locale) ?? formatLabel(tag)
 }
 
 function splitLines(value?: string | null) {
@@ -351,11 +267,12 @@ function splitLines(value?: string | null) {
     .filter(Boolean)
 }
 
-function parseLinkLines(value?: string | null) {
+/** `fallbackLabel` vem do dicionário — esta função é de módulo e não usa `useT`. */
+function parseLinkLines(value: string | null | undefined, fallbackLabel: string) {
   return splitLines(value).map((line) => {
     const [label, url] = line.split("|").map((part) => part.trim())
     return {
-      label: url ? label || "Comprar" : "Comprar",
+      label: url ? label || fallbackLabel : fallbackLabel,
       url: url || label,
     }
   })
@@ -544,10 +461,17 @@ function isLinkedProductSoldOut(product: PeripheralDetailViewLinkedProduct) {
   return product.stock === 0 || product.is_sold_out === true
 }
 
-/** Etiqueta do tipo de venda. A venda normal não recebe etiqueta — é o padrão. */
-function saleTypeLabel(saleType: PeripheralDetailViewLinkedProduct["sale_type"]) {
-  if (saleType === "ready_stock") return "Pronta entrega"
-  if (saleType === "pre_order") return "Pré-venda"
+/**
+ * Etiqueta do tipo de venda. A venda normal não recebe etiqueta — é o padrão.
+ *
+ * Devolve a chave do dicionário, não o texto: a função é de módulo (fora de
+ * componente) e não pode chamar `useT`. Quem renderiza resolve o idioma.
+ */
+function saleTypeLabelKey(
+  saleType: PeripheralDetailViewLinkedProduct["sale_type"]
+): "readyStock" | "preOrder" | null {
+  if (saleType === "ready_stock") return "readyStock"
+  if (saleType === "pre_order") return "preOrder"
   return null
 }
 
@@ -557,8 +481,10 @@ function saleTypeLabel(saleType: PeripheralDetailViewLinkedProduct["sale_type"])
  * visualmente idênticas.
  */
 function LinkedStoreRow({ product }: { product: PeripheralDetailViewLinkedProduct }) {
+  const t = useT()
   const soldOut = isLinkedProductSoldOut(product)
-  const tag = saleTypeLabel(product.sale_type)
+  const tagKey = saleTypeLabelKey(product.sale_type)
+  const tag = tagKey ? t.storeBadges[tagKey] : null
 
   return (
     <Link
@@ -595,7 +521,7 @@ function LinkedStoreRow({ product }: { product: PeripheralDetailViewLinkedProduc
             Sunano
           </span>
           <span className={cn("text-[10px] font-semibold uppercase tracking-wider", soldOut ? "text-muted-foreground" : "text-emerald-300/80")}>
-            {tag ?? "Loja oficial"}
+            {tag ?? t.storeBadges.officialStore}
           </span>
         </span>
         <span className={cn("mt-0.5 flex flex-wrap items-baseline gap-1.5 text-sm font-semibold", soldOut ? "text-muted-foreground" : "text-white")}>
@@ -605,7 +531,7 @@ function LinkedStoreRow({ product }: { product: PeripheralDetailViewLinkedProduc
               {formatBRL(product.price_cents_original)}
             </span>
           )}
-          {soldOut && <span className="font-normal text-rose-300">Esgotado</span>}
+          {soldOut && <span className="font-normal text-rose-300">{t.peripheralDetail.soldOut}</span>}
         </span>
       </span>
       <span className={soldOut ? "text-muted-foreground" : "text-emerald-300"}>→</span>
@@ -667,6 +593,7 @@ function FeaturedStoreCard({
   otherCount: number
   onShowAll: () => void
 }) {
+  const t = useT()
   const hasRange =
     product.price_cents_min != null &&
     product.price_cents_max != null &&
@@ -674,7 +601,8 @@ function FeaturedStoreCard({
   const price = product.price_cents_min ?? product.price_cents
   const original = product.price_cents_original
   const discount = original != null && original > price ? Math.round(((original - price) / original) * 100) : null
-  const tag = saleTypeLabel(product.sale_type)
+  const tagKey = saleTypeLabelKey(product.sale_type)
+  const tag = tagKey ? t.storeBadges[tagKey] : null
 
   return (
     <div className="w-full max-w-xs overflow-hidden rounded-xl border border-emerald-400/40 bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent shadow-[0_0_0_1px_rgba(52,211,153,0.08)]">
@@ -700,7 +628,7 @@ function FeaturedStoreCard({
               Sunano
             </span>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300/80">
-              {tag ?? "Loja oficial"}
+              {tag ?? t.storeBadges.officialStore}
             </span>
           </span>
           <span className="mt-1 flex flex-wrap items-baseline gap-1.5">
@@ -744,11 +672,12 @@ function AllStoresDialog({
   products: PeripheralDetailViewLinkedProduct[]
   peripheralName: string
 }) {
+  const t = useT()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Comprar na Loja</DialogTitle>
+          <DialogTitle>{t.peripheralDetail.buyInStore}</DialogTitle>
           <DialogDescription>
             {`${products.length} ${products.length === 1 ? "opção disponível" : "opções disponíveis"} para ${peripheralName}.`}
           </DialogDescription>
@@ -777,6 +706,8 @@ export function PeripheralDetailView({
   classifications = [],
   rankingHref = "/ranking",
 }: PeripheralDetailViewProps) {
+  const t = useT()
+  const { locale } = useLocale()
   // A página pública passa `linkedStores` (já ordenada: venda normal primeiro).
   // O preview do form de admin só passa `linkedStore` — daí o fallback.
   const storeProducts = linkedStores ?? (linkedStore ? [linkedStore] : [])
@@ -805,7 +736,7 @@ export function PeripheralDetailView({
   const gallery = Array.isArray(details.gallery) ? details.gallery : splitLines(details.gallery)
   const pros = Array.isArray(details.pros) ? details.pros : splitLines(details.pros)
   const cons = Array.isArray(details.cons) ? details.cons : splitLines(details.cons)
-  const buyLinks = Array.isArray(details.buyLinks) ? details.buyLinks : parseLinkLines(details.buyLinks)
+  const buyLinks = Array.isArray(details.buyLinks) ? details.buyLinks : parseLinkLines(details.buyLinks, t.storeBadges.buy)
 
   const ratings = {
     overall: normalizeRating(details?.ratings?.overall ?? details.ratingOverall),
@@ -841,26 +772,26 @@ export function PeripheralDetailView({
     : []
   const psuLoadCards = isPsu
     ? [
-        { key: "load100", title: "Em 100% de Carga", hint: "Cenário normal do usuário médio.", readings: psu.load100 },
-        { key: "load110", title: "Em 10% de Sobrecarga", hint: "Cenário atípico — 110% da carga nominal.", readings: psu.load110 },
+        { key: "load100", title: t.psu.load100, hint: t.psu.load100Hint, readings: psu.load100 },
+        { key: "load110", title: t.psu.load110, hint: t.psu.load110Hint, readings: psu.load110 },
       ].filter((card) => hasPsuReadings(card.readings))
     : []
   const psuOverloadRows = isPsu && hasPsuReadings(psu.overload)
     ? [
-        { label: "Proteção da fonte funcionou?", value: formatPsuBoolean(psu.overload?.protectionWorked) },
-        { label: "Carga máxima", value: psu.overload?.maxLoad },
-        { label: "Ripple estável?", value: formatPsuBoolean(psu.overload?.rippleStable) },
-        { label: "Ripple médio (12v)", value: psu.overload?.ripple12v },
-        { label: "Eficiência energética", value: psu.overload?.efficiency },
-        { label: "Temperatura máxima", value: psu.overload?.maxTemp },
+        { label: t.psu.protectionWorked, value: formatPsuBoolean(psu.overload?.protectionWorked) },
+        { label: t.psu.maxLoad, value: psu.overload?.maxLoad },
+        { label: t.psu.rippleStable, value: formatPsuBoolean(psu.overload?.rippleStable) },
+        { label: t.psu.ripple12v, value: psu.overload?.ripple12v },
+        { label: t.psu.efficiency, value: psu.overload?.efficiency },
+        { label: t.psu.maxTemp, value: psu.overload?.maxTemp },
       ]
     : []
   const psuComponentRows = isPsu
     ? [
-        { label: "Modelo da fan", value: psu.fanModel },
-        { label: "Tipo de circuito", value: psu.circuitType },
-        { label: "Capacitor principal", value: psu.mainCapacitor },
-        { label: "Capacitor secundário", value: psu.secondaryCapacitor },
+        { label: t.psu.fanModel, value: psu.fanModel },
+        { label: t.psu.circuitType, value: psu.circuitType },
+        { label: t.psu.mainCapacitor, value: psu.mainCapacitor },
+        { label: t.psu.secondaryCapacitor, value: psu.secondaryCapacitor },
       ].filter((row) => row.value)
     : []
 
@@ -879,115 +810,115 @@ export function PeripheralDetailView({
   const switchLabel = linkedSwitch?.name
 
   const formatConnectivity = (v?: string) =>
-    v === "wired" ? "Com fio" : v === "wireless" ? "Sem fio" : v
+    v === "wired" ? t.peripheralDetail.value.wired : v === "wireless" ? t.peripheralDetail.value.wireless : v
 
   const formatKeyboardType = (v?: string) =>
-    v === "mechanical" ? "Mecânico" : v === "optical" ? "Óptico" : v === "magnetic" ? "Magnético" : v
+    v === "mechanical" ? t.peripheralDetail.value.mechanical : v === "optical" ? t.peripheralDetail.value.optical : v === "magnetic" ? t.peripheralDetail.value.magnetic : v
 
   // Campos guardados como "yes"/"no" (Trimode, Microfone...).
   const formatYesNo = (v?: string) =>
-    v === "yes" ? "Sim" : v === "no" ? "Não" : v
+    v === "yes" ? t.peripheralDetail.value.yes : v === "no" ? t.peripheralDetail.value.no : v
 
   // Switches usam faixa de preço (priceTier) em vez de valor exato.
   const specsBase = data.category === "switches"
-    ? [{ label: "Valor médio", value: SWITCH_PRICE_TIER_LABEL[String(details.priceTier)] ?? "—", group: "specs" as const }]
-    : [{ label: "Preço médio", value: formatCurrency(data.price), group: "specs" as const }]
+    ? [{ label: t.peripheralDetail.spec.averageValue, value: SWITCH_PRICE_TIER_LABEL[String(details.priceTier)] ?? "—", group: "specs" as const }]
+    : [{ label: t.peripheralDetail.spec.averagePrice, value: formatCurrency(data.price), group: "specs" as const }]
 
   // Linha "Switch": vira link quando há um Switch cadastrado vinculado; senão, texto livre.
   const switchRow = (group: "specs" | "performance") =>
     switchLabel
-      ? { label: "Switch", value: switchLabel, href: switchHref, group }
-      : { label: "Switch", value: details.switchType ?? specs.switchType, group }
+      ? { label: t.peripheralDetail.spec.switch, value: switchLabel, href: switchHref, group }
+      : { label: t.peripheralDetail.spec.switch, value: details.switchType ?? specs.switchType, group }
 
   const specsTable: { label: string; value: unknown; group: "specs" | "performance"; href?: string }[] = (() => {
     switch (data.category) {
       case "mouse":
         return [...specsBase,
-          { label: "Latência", value: details.latency ?? specs.latency, group: "specs" },
+          { label: t.peripheralDetail.spec.latency, value: details.latency ?? specs.latency, group: "specs" },
           switchRow("specs"),
-          { label: "Sensor", value: specs.driver ?? details.sensor, group: "specs" },
-          { label: "Polling Rate", value: details.pollingRate ?? specs.pollingRate, group: "specs" },
-          { label: "Coating", value: details.coating ?? specs.coating, group: "specs" },
-          { label: "Trimode", value: formatYesNo(specs.trimode), group: "specs" },
-          { label: "Bateria", value: details.battery ?? specs.battery, group: "specs" },
-          { label: "Autonomia", value: details.batteryLife ?? specs.batteryLife, group: "specs" },
+          { label: t.peripheralDetail.spec.sensor, value: specs.driver ?? details.sensor, group: "specs" },
+          { label: t.peripheralDetail.spec.pollingRate, value: details.pollingRate ?? specs.pollingRate, group: "specs" },
+          { label: t.peripheralDetail.spec.coating, value: details.coating ?? specs.coating, group: "specs" },
+          { label: t.peripheralDetail.spec.trimode, value: formatYesNo(specs.trimode), group: "specs" },
+          { label: t.peripheralDetail.spec.battery, value: details.battery ?? specs.battery, group: "specs" },
+          { label: t.peripheralDetail.spec.batteryLife, value: details.batteryLife ?? specs.batteryLife, group: "specs" },
         ]
       case "keyboard":
         return [...specsBase,
-          { label: "Layout", value: keyboardLayoutValue, group: "specs" },
-          { label: "Tipo", value: formatKeyboardType(specs.keyboardType), group: "specs" },
-          { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
-          { label: "Peso", value: weightDisplay, group: "specs" },
+          { label: t.peripheralDetail.spec.layout, value: keyboardLayoutValue, group: "specs" },
+          { label: t.peripheralDetail.spec.type, value: formatKeyboardType(specs.keyboardType), group: "specs" },
+          { label: t.peripheralDetail.spec.connectivity, value: formatConnectivity(connectivityValue), group: "specs" },
+          { label: t.peripheralDetail.spec.weight, value: weightDisplay, group: "specs" },
           switchRow("performance"),
-          { label: "Latencia", value: details.latency ?? specs.latency, group: "performance" },
-          { label: "Deadzone", value: details.deadzone, group: "performance" },
-          { label: "RT Minimo", value: details.rtMin, group: "performance" },
-          { label: "Features", value: details.features, group: "performance" },
+          { label: t.peripheralDetail.spec.latency, value: details.latency ?? specs.latency, group: "performance" },
+          { label: t.peripheralDetail.spec.deadzone, value: details.deadzone, group: "performance" },
+          { label: t.peripheralDetail.spec.rtMin, value: details.rtMin, group: "performance" },
+          { label: t.peripheralDetail.spec.features, value: details.features, group: "performance" },
         ]
       case "pcb":
         // PCB avulsa: mesmas specs do teclado, sem a linha de Switch — a PCB é vendida
         // sem switches, quem monta o teclado escolhe e instala depois.
         return [...specsBase,
-          { label: "Layout", value: keyboardLayoutValue, group: "specs" },
-          { label: "Tipo", value: formatKeyboardType(specs.keyboardType), group: "specs" },
-          { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
-          { label: "Peso", value: weightDisplay, group: "specs" },
-          { label: "Latencia", value: details.latency ?? specs.latency, group: "performance" },
-          { label: "Deadzone", value: details.deadzone, group: "performance" },
-          { label: "RT Minimo", value: details.rtMin, group: "performance" },
-          { label: "Features", value: details.features, group: "performance" },
+          { label: t.peripheralDetail.spec.layout, value: keyboardLayoutValue, group: "specs" },
+          { label: t.peripheralDetail.spec.type, value: formatKeyboardType(specs.keyboardType), group: "specs" },
+          { label: t.peripheralDetail.spec.connectivity, value: formatConnectivity(connectivityValue), group: "specs" },
+          { label: t.peripheralDetail.spec.weight, value: weightDisplay, group: "specs" },
+          { label: t.peripheralDetail.spec.latency, value: details.latency ?? specs.latency, group: "performance" },
+          { label: t.peripheralDetail.spec.deadzone, value: details.deadzone, group: "performance" },
+          { label: t.peripheralDetail.spec.rtMin, value: details.rtMin, group: "performance" },
+          { label: t.peripheralDetail.spec.features, value: details.features, group: "performance" },
         ]
       case "mousepad":
       case "glasspad":
         return [...specsBase,
-          { label: "Superficie", value: surfaceValue, group: "specs" },
-          { label: "Tipo", value: specs.padType ?? details.padType, group: "specs" },
-          { label: "Tamanho", value: specs.size ?? details.size, group: "specs" },
-          { label: "Profile", value: profileValue, group: "specs" },
+          { label: t.peripheralDetail.spec.surface, value: surfaceValue, group: "specs" },
+          { label: t.peripheralDetail.spec.type, value: specs.padType ?? details.padType, group: "specs" },
+          { label: t.peripheralDetail.spec.size, value: specs.size ?? details.size, group: "specs" },
+          { label: t.peripheralDetail.spec.profile, value: profileValue, group: "specs" },
         ]
       case "monitors":
         return [...specsBase,
-          { label: "Painel", value: panelTypeValue, group: "specs" },
-          { label: "Taxa de atualizacao", value: refreshRateValue ? `${refreshRateValue}Hz` : undefined, group: "performance" },
+          { label: t.peripheralDetail.spec.panel, value: panelTypeValue, group: "specs" },
+          { label: t.peripheralDetail.spec.refreshRate, value: refreshRateValue ? `${refreshRateValue}Hz` : undefined, group: "performance" },
         ]
       case "headset":
         return [...specsBase,
-          { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
-          { label: "Compatibilidade", value: details.compatibility, group: "specs" },
+          { label: t.peripheralDetail.spec.connectivity, value: formatConnectivity(connectivityValue), group: "specs" },
+          { label: t.peripheralDetail.spec.compatibility, value: details.compatibility, group: "specs" },
         ]
       case "iem":
         return [...specsBase,
-          { label: "Drivers", value: details.drivers, group: "specs" },
-          { label: "Impedância", value: details.impedance, group: "specs" },
-          { label: "Sensibilidade", value: details.sensitivity, group: "specs" },
-          { label: "Conector", value: details.connector, group: "specs" },
-          { label: "Plug", value: details.plug, group: "specs" },
-          { label: "Material", value: details.material, group: "specs" },
+          { label: t.peripheralDetail.spec.drivers, value: details.drivers, group: "specs" },
+          { label: t.peripheralDetail.spec.impedance, value: details.impedance, group: "specs" },
+          { label: t.peripheralDetail.spec.sensitivity, value: details.sensitivity, group: "specs" },
+          { label: t.peripheralDetail.spec.connector, value: details.connector, group: "specs" },
+          { label: t.peripheralDetail.spec.plug, value: details.plug, group: "specs" },
+          { label: t.peripheralDetail.spec.material, value: details.material, group: "specs" },
           // Texto cru: em IEM o peso é escrito "8 g por lado", e a coluna weight_g
           // (numérica) perderia o "por lado" na exibição.
-          { label: "Peso", value: details.weight ?? specs.weight, group: "specs" },
-          { label: "Microfone", value: formatYesNo(details.microphone), group: "specs" },
+          { label: t.peripheralDetail.spec.weight, value: details.weight ?? specs.weight, group: "specs" },
+          { label: t.peripheralDetail.spec.microphone, value: formatYesNo(details.microphone), group: "specs" },
         ]
       case "dac_amp":
         return [...specsBase,
-          { label: "Conectividade", value: formatConnectivity(connectivityValue), group: "specs" },
-          { label: "Trimode", value: formatYesNo(specs.trimode), group: "specs" },
+          { label: t.peripheralDetail.spec.connectivity, value: formatConnectivity(connectivityValue), group: "specs" },
+          { label: t.peripheralDetail.spec.trimode, value: formatYesNo(specs.trimode), group: "specs" },
         ]
       case "psu":
         // Garantia primeiro: numa fonte é o dado que mais pesa na decisão de compra.
         // Os selos ficam de fora da tabela — viram etiquetas coloridas logo abaixo.
         return [...specsBase,
-          { label: "Garantia", value: psu.warranty, group: "specs" },
-          { label: "Potência", value: psu.wattage, group: "specs" },
+          { label: t.peripheralDetail.spec.warranty, value: psu.warranty, group: "specs" },
+          { label: t.peripheralDetail.spec.wattage, value: psu.wattage, group: "specs" },
         ]
       case "switches":
         return [...specsBase,
-          { label: "Tipo", value: formatKeyboardType(specs.keyboardType), group: "specs" },
-          { label: "Força de atuação", value: details.actuationForce, group: "specs" },
-          { label: "Curso total", value: details.totalTravel, group: "specs" },
-          { label: "Fluxo magnético", value: details.magneticFlux, group: "specs" },
-          { label: "Carcaça", value: details.housing, group: "specs" },
-          { label: "Tipo do Stem", value: details.stemType, group: "specs" },
+          { label: t.peripheralDetail.spec.type, value: formatKeyboardType(specs.keyboardType), group: "specs" },
+          { label: t.peripheralDetail.spec.actuationForce, value: details.actuationForce, group: "specs" },
+          { label: t.peripheralDetail.spec.totalTravel, value: details.totalTravel, group: "specs" },
+          { label: t.peripheralDetail.spec.magneticFlux, value: details.magneticFlux, group: "specs" },
+          { label: t.peripheralDetail.spec.housing, value: details.housing, group: "specs" },
+          { label: t.peripheralDetail.spec.stemType, value: details.stemType, group: "specs" },
         ]
       default:
         // feet, chairs — só preço base
@@ -1008,9 +939,9 @@ export function PeripheralDetailView({
 
   const showGrip = isMouse
   const gripInfo = [
-    { label: "Mao pequena", value: details.gripSmall || "Claw/Palm" },
-    { label: "Mao media", value: details.gripMedium || "Claw/Palm" },
-    { label: "Mao grande", value: details.gripLarge || "Claw/Finger" },
+    { label: t.peripheralDetail.gripSmall, value: details.gripSmall || "Claw/Palm" },
+    { label: t.peripheralDetail.gripMedium, value: details.gripMedium || "Claw/Palm" },
+    { label: t.peripheralDetail.gripLarge, value: details.gripLarge || "Claw/Finger" },
   ]
 
   const showShape = isMouse
@@ -1109,7 +1040,7 @@ export function PeripheralDetailView({
                             {categoryLabel(classification.category)}
                           </p>
                           <p className={cn("text-lg font-bold leading-tight", !style && "text-foreground")}>
-                            {classification.tier ? tierLabel(mapTier(classification.tier), classification.category) : "Sob Revisão"}
+                            {classification.tier ? tierLabel(mapTier(classification.tier), classification.category) : t.peripheralDetail.underReview}
                           </p>
                         </div>
                       )
@@ -1129,15 +1060,15 @@ export function PeripheralDetailView({
                 </div>
               ) : tierStyle ? (
                 <div className={cn("rounded-2xl bg-gradient-to-br px-4 py-3 text-center", tierStyle.accent, tierStyle.textColor)}>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">Classificação</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">{t.peripheralDetail.classification}</p>
                   <p className="text-3xl font-bold tracking-tight leading-none">
-                    {activeTier ? tierLabel(mapTier(activeTier), data.category) : "Sob Revisão"}
+                    {activeTier ? tierLabel(mapTier(activeTier), data.category) : t.peripheralDetail.underReview}
                   </p>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-border bg-muted/40 px-4 py-3 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Classificação</p>
-                  <p className="text-sm font-semibold text-foreground">{data.tier ? tierLabel(mapTier(data.tier), data.category) : "Sob Revisão"}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">{t.peripheralDetail.classification}</p>
+                  <p className="text-sm font-semibold text-foreground">{data.tier ? tierLabel(mapTier(data.tier), data.category) : t.peripheralDetail.underReview}</p>
                 </div>
               )}
 
@@ -1145,34 +1076,34 @@ export function PeripheralDetailView({
 
               <Card size="sm" className="border-border/60 bg-secondary/50">
                 <CardHeader className="space-y-1">
-                  <InfoCardTitle icon={Star} accent="indigo">Notas gerais</InfoCardTitle>
-                  <CardDescription className="text-sm">Escala de 0 a 6 (GOAT = 6)</CardDescription>
+                  <InfoCardTitle icon={Star} accent="indigo">{t.peripheralDetail.overallRatings}</InfoCardTitle>
+                  <CardDescription className="text-sm">{t.peripheralDetail.ratingScale}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <RatingRow label="Geral" rating={ratings.overall} />
+                  <RatingRow label={t.peripheralDetail.ratingGeneral} rating={ratings.overall} />
                   {isIem ? (
                     // IEM tem sua própria lista de notas, na ordem definida pro formulário
                     // de admin (ver RATING_FIELD_ORDER_BY_CATEGORY em app/admin/tierlist/form.tsx).
                     <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                      <RatingRow label="Tuning" rating={ratings.performance} />
-                      <RatingRow label="Cabo" rating={ratings.software} />
-                      <RatingRow label="Ponteiras" rating={ratings.battery} />
-                      <RatingRow label="Construção" rating={ratings.build} />
-                      <RatingRow label="Custo-Benefício" rating={ratings.value} />
-                      <RatingRow label="Controle de Qualidade" rating={ratings.qc} />
+                      <RatingRow label={t.peripheralDetail.ratingTuning} rating={ratings.performance} />
+                      <RatingRow label={t.peripheralDetail.ratingCable} rating={ratings.software} />
+                      <RatingRow label={t.peripheralDetail.ratingTips} rating={ratings.battery} />
+                      <RatingRow label={t.peripheralDetail.ratingBuild} rating={ratings.build} />
+                      <RatingRow label={t.peripheralDetail.ratingValue} rating={ratings.value} />
+                      <RatingRow label={t.peripheralDetail.ratingQualityControl} rating={ratings.qc} />
                     </div>
                   ) : (
                   <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                     {data.category !== "pcb" && (
-                      <RatingRow label={isPsu ? "Componentes" : data.category === "mousepad" ? "Superfície" : "Construção"} rating={ratings.build} />
+                      <RatingRow label={isPsu ? t.peripheralDetail.ratingComponents : data.category === "mousepad" ? t.peripheralDetail.ratingSurface : t.peripheralDetail.ratingBuild} rating={ratings.build} />
                     )}
-                    <RatingRow label={isPsu ? "Eficiência Energética" : data.category === "mousepad" ? "Base" : "Software"} rating={ratings.software} />
+                    <RatingRow label={isPsu ? t.peripheralDetail.ratingEfficiency : data.category === "mousepad" ? t.peripheralDetail.ratingBase : t.peripheralDetail.ratingSoftware} rating={ratings.software} />
                     {data.category !== "pcb" && (
-                      <RatingRow label={isPsu ? "Garantia" : data.category === "keyboard" ? "Digitação" : data.category === "mousepad" ? "Costura" : "Bateria"} rating={ratings.battery} />
+                      <RatingRow label={isPsu ? t.peripheralDetail.ratingWarranty : data.category === "keyboard" ? t.peripheralDetail.ratingTyping : data.category === "mousepad" ? t.peripheralDetail.ratingStitching : t.peripheralDetail.ratingBattery} rating={ratings.battery} />
                     )}
-                    <RatingRow label={isPsu ? "Ripple" : "Performance"} rating={ratings.performance} />
-                    <RatingRow label="QC" rating={ratings.qc} />
-                    <RatingRow label="Custo-beneficio" rating={ratings.value} />
+                    <RatingRow label={isPsu ? t.peripheralDetail.ratingRipple : t.peripheralDetail.ratingPerformance} rating={ratings.performance} />
+                    <RatingRow label={t.peripheralDetail.ratingQc} rating={ratings.qc} />
+                    <RatingRow label={t.peripheralDetail.ratingValue} rating={ratings.value} />
                   </div>
                   )}
                 </CardContent>
@@ -1183,10 +1114,10 @@ export function PeripheralDetailView({
               {!isPsu && (
                 <Card className="border-border/60 bg-secondary/50">
                   <CardHeader>
-                    <InfoCardTitle icon={Package} accent="sky">Software do Periférico</InfoCardTitle>
+                    <InfoCardTitle icon={Package} accent="sky">{t.peripheralDetail.software}</InfoCardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground break-words whitespace-pre-wrap">
-                    {softwareInfo ? linkifyText(softwareInfo) : "Informacao de compatibilidade não cadastrada."}
+                    {softwareInfo ? linkifyText(softwareInfo) : t.peripheralDetail.softwareEmpty}
                   </CardContent>
                 </Card>
               )}
@@ -1195,7 +1126,7 @@ export function PeripheralDetailView({
 
               <Card size="sm" className="border-border/60 bg-secondary/50">
                 <CardHeader>
-                  <InfoCardTitle icon={MessageSquareText} accent="cyan">Reviews da comunidade</InfoCardTitle>
+                  <InfoCardTitle icon={MessageSquareText} accent="cyan">{t.peripheralDetail.communityReviews}</InfoCardTitle>
                 </CardHeader>
                 <CardContent>
                   <PeripheralReviewsList peripheralId={data.id} peripheralSlug={buildPeripheralSlug(data.name, data.id)} />
@@ -1205,8 +1136,8 @@ export function PeripheralDetailView({
               {(buyLinks.length > 0 || storeProducts.length > 0) && (
                 <Card size="sm" className="border-border/60 bg-secondary/50">
                   <CardHeader className="space-y-1">
-                    <InfoCardTitle icon={ShoppingBag} accent="teal">Onde comprar</InfoCardTitle>
-                    <CardDescription className="text-xs">Links oficiais e lojas recomendadas.</CardDescription>
+                    <InfoCardTitle icon={ShoppingBag} accent="teal">{t.peripheralDetail.whereToBuy}</InfoCardTitle>
+                    <CardDescription className="text-xs">{t.peripheralDetail.whereToBuyDesc}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2 lg:max-h-64 lg:overflow-auto">
                     {storeProducts.length > 0 && (
@@ -1297,7 +1228,7 @@ export function PeripheralDetailView({
                       if (!style) {
                         return (
                           <Badge key={tag} variant="outline" className="border-border text-xs text-muted-foreground">
-                            {formatTagLabel(tag, data.category)}
+                            {formatTagLabel(tag, locale, data.category)}
                           </Badge>
                         )
                       }
@@ -1312,7 +1243,7 @@ export function PeripheralDetailView({
                           )}
                         >
                           <span className={cn("size-1.5 rounded-full", style.dot)} />
-                          {formatTagLabel(tag, data.category)}
+                          {formatTagLabel(tag, locale, data.category)}
                         </span>
                       )
                     })}
@@ -1330,10 +1261,10 @@ export function PeripheralDetailView({
                 <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                   <CardHeader>
                     <InfoCardTitle icon={ListChecks} accent="sky">
-                      {isSwitch ? "Especificações Técnicas" : "Especificações"}
+                      {isSwitch ? t.peripheralDetail.specsTitleTechnical : t.peripheralDetail.specsTitle}
                     </InfoCardTitle>
                     {!isMouse && (
-                      <CardDescription className="text-xs">Principais dados do produto.</CardDescription>
+                      <CardDescription className="text-xs">{t.peripheralDetail.mainSpecs}</CardDescription>
                     )}
                   </CardHeader>
                   <CardContent className="space-y-1.5 text-sm text-muted-foreground">
@@ -1367,11 +1298,11 @@ export function PeripheralDetailView({
                     </CardHeader>
                     <CardContent className="space-y-1.5 text-sm text-muted-foreground">
                       {[
-                        { label: "Ripple médio (12v)", value: card.readings?.ripple12v },
-                        { label: "Linha 5v", value: card.readings?.ripple5v },
-                        { label: "Linha 3.3v", value: card.readings?.ripple33v },
-                        { label: "Eficiência energética", value: card.readings?.efficiency },
-                        { label: "Temperatura máxima", value: card.readings?.maxTemp },
+                        { label: t.psu.ripple12v, value: card.readings?.ripple12v },
+                        { label: t.psu.line5v, value: card.readings?.ripple5v },
+                        { label: t.psu.line33v, value: card.readings?.ripple33v },
+                        { label: t.psu.efficiency, value: card.readings?.efficiency },
+                        { label: t.psu.maxTemp, value: card.readings?.maxTemp },
                       ].map((row) => (
                         <div key={row.label} className="flex items-start justify-between gap-3">
                           <span>{row.label}</span>
@@ -1385,8 +1316,8 @@ export function PeripheralDetailView({
                 {psuOverloadRows.length > 0 && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <InfoCardTitle icon={ShieldAlert} accent="rose">Teste máximo de sobrecarga</InfoCardTitle>
-                      <CardDescription className="text-xs">Até onde a fonte aguenta antes de a proteção agir.</CardDescription>
+                      <InfoCardTitle icon={ShieldAlert} accent="rose">{t.peripheralDetail.overloadTest}</InfoCardTitle>
+                      <CardDescription className="text-xs">{t.peripheralDetail.overloadTestDesc}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-1.5 text-sm text-muted-foreground">
                       {psuOverloadRows.map((row) => (
@@ -1402,7 +1333,7 @@ export function PeripheralDetailView({
                 {psuComponentRows.length > 0 && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <InfoCardTitle icon={Zap} accent="amber">Componentes</InfoCardTitle>
+                      <InfoCardTitle icon={Zap} accent="amber">{t.peripheralDetail.components}</InfoCardTitle>
                       <CardDescription className="text-xs">O que tem dentro da fonte.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-1.5 text-sm text-muted-foreground">
@@ -1419,8 +1350,8 @@ export function PeripheralDetailView({
                 {performanceRows.length > 0 && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <InfoCardTitle icon={Gauge} accent="purple">Performance</InfoCardTitle>
-                      <CardDescription className="text-xs">Métricas de resposta.</CardDescription>
+                      <InfoCardTitle icon={Gauge} accent="purple">{t.peripheralDetail.performance}</InfoCardTitle>
+                      <CardDescription className="text-xs">{t.peripheralDetail.performanceDesc}</CardDescription>
                       {rankBadge && (
                         <CardAction>
                           <Link
@@ -1453,16 +1384,16 @@ export function PeripheralDetailView({
                 {showShape && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <InfoCardTitle icon={Ruler} accent="violet">Shape</InfoCardTitle>
-                      <CardDescription className="text-xs">Formato e dimensões do mouse.</CardDescription>
+                      <InfoCardTitle icon={Ruler} accent="violet">{t.peripheralDetail.shape}</InfoCardTitle>
+                      <CardDescription className="text-xs">{t.peripheralDetail.shapeDesc}</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 text-sm text-muted-foreground">
                       <div className="flex items-start justify-between gap-3">
-                        <span>Tamanho</span>
+                        <span>{t.peripheralDetail.size}</span>
                         <span className="text-right font-semibold text-foreground">{formatSpecValue(shapeSize)}</span>
                       </div>
                       <div className="flex items-start justify-between gap-3">
-                        <span>Dimensões (CxLxA)</span>
+                        <span>{t.peripheralDetail.dimensions}</span>
                         <span className="text-right font-semibold break-words text-foreground">{formatSpecValue(shapeDimensions)}</span>
                       </div>
                       <div
@@ -1484,7 +1415,7 @@ export function PeripheralDetailView({
                           />
                         ) : (
                           <div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
-                            Foto do shape não cadastrada.
+                            {t.peripheralDetail.shapePhotoEmpty}
                           </div>
                         )}
                       </div>
@@ -1495,8 +1426,8 @@ export function PeripheralDetailView({
                 {showTuningCurve && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <InfoCardTitle icon={AudioLines} accent="violet">Curva de Tuning</InfoCardTitle>
-                      <CardDescription className="text-xs">Resposta de frequência medida do fone.</CardDescription>
+                      <InfoCardTitle icon={AudioLines} accent="violet">{t.peripheralDetail.tuningCurve}</InfoCardTitle>
+                      <CardDescription className="text-xs">{t.peripheralDetail.tuningCurveDesc}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="relative aspect-[4/3] overflow-hidden rounded-xl border border-border bg-black">
@@ -1515,15 +1446,15 @@ export function PeripheralDetailView({
                 {isSwitch && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <InfoCardTitle icon={Volume2} accent="amber">Som do Switch</InfoCardTitle>
-                      <CardDescription className="text-xs">Veja e ouça o switch em ação.</CardDescription>
+                      <InfoCardTitle icon={Volume2} accent="amber">{t.peripheralDetail.switchSound}</InfoCardTitle>
+                      <CardDescription className="text-xs">{t.peripheralDetail.switchSoundDesc}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {soundYoutubeId ? (
                         <div className="aspect-video overflow-hidden rounded-xl border border-border bg-muted/40">
                           <iframe
                             src={`https://www.youtube-nocookie.com/embed/${soundYoutubeId}`}
-                            title="Som do switch"
+                            title={t.peripheralDetail.switchSound}
                             className="h-full w-full"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                             allowFullScreen
@@ -1535,7 +1466,7 @@ export function PeripheralDetailView({
                         </div>
                       ) : (
                         <div className="flex aspect-video items-center justify-center rounded-xl border border-dashed border-border bg-muted/20 p-4 text-center text-xs text-muted-foreground">
-                          Nenhum vídeo de som cadastrado.
+                          {t.peripheralDetail.switchSoundEmpty}
                         </div>
                       )}
                     </CardContent>
@@ -1545,8 +1476,8 @@ export function PeripheralDetailView({
                 {showGrip && (
                   <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                     <CardHeader>
-                      <InfoCardTitle icon={Hand} accent="emerald">Pegada</InfoCardTitle>
-                      <CardDescription className="text-xs">Recomendacao por tamanho de mao.</CardDescription>
+                      <InfoCardTitle icon={Hand} accent="emerald">{t.peripheralDetail.grip}</InfoCardTitle>
+                      <CardDescription className="text-xs">{t.peripheralDetail.gripDesc}</CardDescription>
                     </CardHeader>
                     <CardContent className="divide-y divide-border text-sm text-muted-foreground">
                       {gripInfo.map((row) => (
@@ -1568,7 +1499,7 @@ export function PeripheralDetailView({
 {showReviewCard && (
                 <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
                 <CardHeader>
-                  <InfoCardTitle icon={Youtube} accent="rose">Review no Youtube</InfoCardTitle>
+                  <InfoCardTitle icon={Youtube} accent="rose">{t.peripheralDetail.youtubeReview}</InfoCardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {youtubeId ? (
@@ -1594,7 +1525,7 @@ export function PeripheralDetailView({
                         Vídeo
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-foreground">{"Review em vídeo"}</p>
+                        <p className="text-sm font-medium text-foreground">{t.peripheralDetail.videoReview}</p>
                         <p className="text-xs text-muted-foreground">{"Ver review"}</p>
                       </div>
                       <span className="text-primary">→</span>
@@ -1625,7 +1556,7 @@ export function PeripheralDetailView({
                           </div>
                           <div className="flex-1">
                             <p className="text-sm font-medium text-foreground">{post.title}</p>
-                            <p className="text-xs text-muted-foreground">Ver review</p>
+                            <p className="text-xs text-muted-foreground">{t.peripheralDetail.viewReview}</p>
                           </div>
                           <span className="text-primary">→</span>
                         </Link>
@@ -1645,7 +1576,7 @@ export function PeripheralDetailView({
                           <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-green-500/10">
                             <ThumbsUp className="size-3.5 text-green-500" />
                           </span>
-                          Pontos positivos
+                          {t.peripheralDetail.prosTitle}
                         </p>
                         {pros.length > 0 ? (
                           <ul className="list-disc space-y-2 pl-5 text-base">
@@ -1654,7 +1585,7 @@ export function PeripheralDetailView({
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-base">Sem pontos fortes cadastrados.</p>
+                          <p className="text-base">{t.peripheralDetail.noStrengths}</p>
                         )}
                       </div>
                       <div>
@@ -1662,7 +1593,7 @@ export function PeripheralDetailView({
                           <span className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-red-500/10">
                             <ThumbsDown className="size-3.5 text-red-500" />
                           </span>
-                          Pontos negativos
+                          {t.peripheralDetail.consTitle}
                         </p>
                         {cons.length > 0 ? (
                           <ul className="list-disc space-y-2 pl-5 text-base">
@@ -1671,7 +1602,7 @@ export function PeripheralDetailView({
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-base">Sem pontos fracos cadastrados.</p>
+                          <p className="text-base">{t.peripheralDetail.noWeaknesses}</p>
                         )}
                       </div>
                     </div>
@@ -1680,7 +1611,7 @@ export function PeripheralDetailView({
 
               <Card size="sm" className="border-border/60 bg-secondary/50">
                 <CardHeader>
-                  <InfoCardTitle icon={MessageSquare} accent="fuchsia">Comentários de Especialista</InfoCardTitle>
+                  <InfoCardTitle icon={MessageSquare} accent="fuchsia">{t.peripheralDetail.expertComments}</InfoCardTitle>
                   {expertAuthor && (
                     <CardDescription className="flex items-center gap-2">
                       <AuthorAvatarLink
@@ -1706,7 +1637,7 @@ export function PeripheralDetailView({
                     // e não `CommentBody` porque aqui não há @menções a resolver.
                     <FormattedText text={generalComments} />
                   ) : (
-                    "Sem comentarios adicionais."
+                    t.peripheralDetail.noExpertComments
                   )}
                 </CardContent>
               </Card>

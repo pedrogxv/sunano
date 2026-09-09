@@ -65,19 +65,19 @@ export function ChangelogBanner() {
     >
       <Sparkles className="size-4 shrink-0 text-primary" />
       <p className="line-clamp-1 min-w-0 flex-1 text-foreground">
-        <span className="font-semibold">Novidade ({latest.version}):</span>{" "}
+        <span className="font-semibold">{t.changelogBanner.newLabel.replace("{version}", latest.version)}</span>{" "}
         <span className="text-muted-foreground">{latest.title}</span>
       </p>
       <Link
         href="/changelog"
         className="shrink-0 font-medium text-primary underline underline-offset-2 hover:text-primary/80"
       >
-        Ver histórico de mudanças
+        {t.changelogBanner.viewHistory}
       </Link>
       <button
         type="button"
         onClick={dismiss}
-        aria-label="Fechar aviso"
+        aria-label={t.changelogBanner.close}
         className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
       >
         <X className="size-3.5" />

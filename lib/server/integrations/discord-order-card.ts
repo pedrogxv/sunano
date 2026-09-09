@@ -209,6 +209,8 @@ export type OrderCardData = {
   orderId: string
   status: OrderEventStatus
   totalCents: number
+  /** Não-nulo = pedido pago com Aura (resgate de produto físico da Central). */
+  auraCostPaid?: number | null
   paymentMethod: string | null
   customerName: string | null
   customerEmail: string | null
@@ -266,6 +268,7 @@ const PAYMENT_LABEL: Record<string, string> = {
   card: "Cartão",
   credit_card: "Cartão",
   boleto: "Boleto",
+  aura: "Aura ✨",
 }
 
 function paymentLabel(method: string | null): string {
@@ -273,10 +276,18 @@ function paymentLabel(method: string | null): string {
   return PAYMENT_LABEL[method.toLowerCase()] ?? escapeDiscord(method, 40)
 }
 
+/** Valor do pedido para o Discord: custo em Aura quando for resgate da Central, senão BRL. */
+function orderValueLabel(data: Pick<OrderCardData, "paymentMethod" | "totalCents" | "auraCostPaid">): string {
+  if (data.paymentMethod === "aura") {
+    return `✨ ${(data.auraCostPaid ?? 0).toLocaleString("pt-BR")} Aura`
+  }
+  return formatBRL(data.totalCents)
+}
+
 /** Nome da thread. É a única coisa visível na lista lateral do Discord. */
 export function threadName(data: OrderCardData): string {
   const style = statusStyle(data.status)
-  const total = formatBRL(data.totalCents)
+  const total = orderValueLabel(data)
   const sandbox = data.isSandbox ? "🧪 " : ""
   // Sem escapeDiscord: nome de thread é texto puro, o Discord não formata.
   const customer = (data.customerName ?? "convidado").slice(0, 24)
@@ -311,7 +322,7 @@ export function buildDashboardEmbed(data: OrderCardData): DiscordEmbed {
   })
 
   fields.push(
-    { name: "Total", value: `**${formatBRL(data.totalCents)}**`, inline: true },
+    { name: "Total", value: `**${orderValueLabel(data)}**`, inline: true },
     { name: "Pagamento", value: paymentLabel(data.paymentMethod), inline: true },
     { name: "Entrega", value: data.requiresShipping ? "Física 📦" : "Digital ⚡", inline: true }
   )

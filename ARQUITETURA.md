@@ -229,3 +229,21 @@ Para saber quem é o usuário ou ler o perfil, use `GET /api/auth/me`.
   (Telegram mudar o markup do preview), conserte o parser em
   `telegram-offers.ts`; a alternativa mais robusta a médio prazo, se viável, é
   um bot dedicado do Sunano como admin do canal (Bot API oficial, sem scraping).
+- **As ofertas são persistidas em `offers_cache`** (migration 20261021000000),
+  com retenção de 5 dias e limpeza pela RPC `prune_offers_cache`, chamada logo
+  após o upsert. Isso existe porque o scraping só alcança as ~30 últimas
+  mensagens do canal (≈1 dia, no ritmo de ~30 posts/dia), o que dava a
+  impressão de que ofertas estavam sendo apagadas. Efeito colateral
+  bem-vindo: se o markup do preview mudar, a página continua servindo o
+  histórico guardado em vez de ficar vazia.
+- **Dois caminhos alimentam a tabela, coordenados por `last_seen_at`:** o cron
+  `/api/cron/sync-telegram-offers` (a cada 5 min) e a própria leitura de
+  `/offers`. Os dois consultam `getLastSyncedAt()` antes de agir e **pulam a
+  busca se os dados têm menos de 5 min** (`FRESH_WINDOW_MS`), então nunca
+  duplicam trabalho: com tráfego, o cron sai por `fresh` numa query de índice
+  (~0,1 ms, sem fetch externo); sem tráfego, o cron mantém o histórico e a
+  leitura do usuário responde direto do Postgres, sem tocar o Telegram.
+  O scraping no caminho de leitura permanece como rede de segurança para
+  quando o cron não rodou (deploy novo, `CRON_SECRET` ausente, cron falhando).
+  **Convenção:** `SCRAPE_LIMIT` é quanto se busca do canal por passada;
+  `HISTORY_LIMIT` é quanto se devolve ao cliente — não confundir os dois.

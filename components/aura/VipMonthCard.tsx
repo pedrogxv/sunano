@@ -71,47 +71,47 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
   return (
     <div
       className={cn(
-        "flex flex-col overflow-hidden rounded-2xl border transition-all duration-200 hover:-translate-y-1",
+        "flex flex-col overflow-hidden rounded-xl border transition-all duration-200 hover:-translate-y-1",
         CARD_SURFACE_INTERACTIVE,
         vipActive && "border-[var(--vip-accent-soft)]"
       )}
     >
-      <div className="relative flex aspect-square items-center justify-center overflow-hidden bg-[var(--card-image-bg)]">
-        <Crown className="size-[72px]" style={{ color: "var(--vip-accent-soft)" }} strokeWidth={1.15} />
+      <div className="relative flex aspect-[3/2] items-center justify-center overflow-hidden bg-[var(--card-image-bg)]">
+        <Crown className="size-11" style={{ color: "var(--vip-accent-soft)" }} strokeWidth={1.15} />
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
-        <h3 className="line-clamp-2 font-sans text-[13.5px] font-semibold leading-[1.35] tracking-normal text-foreground">
+      <div className="flex flex-1 flex-col gap-1 px-3 pb-2.5 pt-2">
+        <h3 className="line-clamp-1 font-sans text-[12px] font-semibold leading-tight tracking-normal text-foreground">
           {item.name}
         </h3>
         {item.description && (
-          <p className="line-clamp-2 text-[10.5px] font-medium text-muted-foreground">{item.description}</p>
+          <p className="line-clamp-2 text-[9.5px] font-medium leading-snug text-muted-foreground">{item.description}</p>
         )}
         {onShowBenefits && (
           <button
             type="button"
             onClick={onShowBenefits}
-            className="self-start text-[10.5px] font-semibold underline-offset-2 hover:underline"
+            className="self-start text-[9.5px] font-semibold underline-offset-2 hover:underline"
             style={{ color: "var(--vip-accent)" }}
           >
             Ver todas as vantagens
           </button>
         )}
 
-        <div className="mt-auto space-y-2">
-          <p className="font-display text-lg font-bold text-orange-400">🔥 {item.auraCost.toLocaleString("pt-BR")}</p>
+        <div className="mt-auto space-y-1.5 pt-1">
+          <p className="font-display text-[15px] font-bold text-orange-400">🔥 {item.auraCost.toLocaleString("pt-BR")}</p>
 
           {vipActive ? (
             <div
-              className="flex w-full flex-col items-center gap-0.5 rounded-lg border px-3 py-2 text-xs font-bold"
+              className="flex w-full flex-col items-center gap-0.5 rounded-lg border px-3 py-1.5 text-[10.5px] font-bold"
               style={{ borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
             >
               <span className="flex items-center gap-1.5">
-                <Crown className="size-3.5" />
+                <Crown className="size-3" />
                 Você já é VIP
               </span>
               {vipExpiresAt && (
-                <span className="text-[10px] font-medium opacity-70">até {formatExpiresAt(vipExpiresAt)}</span>
+                <span className="text-[9px] font-medium opacity-70">até {formatExpiresAt(vipExpiresAt)}</span>
               )}
             </div>
           ) : (
@@ -125,14 +125,14 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
                 disabled={loading || subscribing || !canAfford}
                 title={!canAfford ? "Saldo de Aura insuficiente" : undefined}
                 className={cn(
-                  "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-colors",
+                  "flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-[10.5px] font-bold transition-colors",
                   canAfford
                     ? "text-black hover:opacity-90"
                     : "cursor-not-allowed bg-muted/40 text-muted-foreground"
                 )}
                 style={canAfford ? { backgroundColor: "var(--vip-accent)" } : undefined}
               >
-                {loading && <Loader2 className="size-3.5 animate-spin" />}
+                {loading && <Loader2 className="size-3 animate-spin" />}
                 {canAfford ? "Ativar com Aura" : "Saldo insuficiente"}
               </button>
 
@@ -141,10 +141,10 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
                   type="button"
                   onClick={handleSubscribe}
                   disabled={loading || subscribing}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:bg-[var(--vip-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10.5px] font-bold transition-colors hover:bg-[var(--vip-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
                   style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
                 >
-                  {subscribing && <Loader2 className="size-3.5 animate-spin" />}
+                  {subscribing && <Loader2 className="size-3 animate-spin" />}
                   Assinar por {formatVipPrice()}/mês
                 </button>
               )}

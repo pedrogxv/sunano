@@ -10,11 +10,26 @@
 
 import type { Ratings } from "@/components/tierlist/TierItemTooltipContent"
 
-export type TierlistTier = "S" | "A" | "B" | "C" | "D"
+/**
+ * Tier definido pelo próprio usuário — nome e cor livres, entre 2 e 6 por
+ * pessoa (`TIERLIST_MIN_TIERS`/`TIERLIST_MAX_TIERS`). Substituiu o antigo
+ * literal fixo `"S"|"A"|"B"|"C"|"D"`.
+ */
+export type TierlistTierDef = {
+  id: string
+  label: string
+  /** Hex de 6 dígitos, ex. `"#F97316"`. */
+  color: string
+  position: number
+}
+
+export const TIERLIST_MIN_TIERS = 2
+export const TIERLIST_MAX_TIERS = 6
+export const TIERLIST_TIER_LABEL_MAX_LENGTH = 12
 
 export type TierlistItem = {
   peripheralId: string
-  tier: TierlistTier
+  tierId: string
   position: number
   peripheral: {
     id: string

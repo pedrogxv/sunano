@@ -7,10 +7,6 @@
  */
 
 import type { Ratings } from "@/components/tierlist/TierItemTooltipContent"
-import type {
-  TierlistItem as PersonalTierlistItem,
-  TierlistMeta as PersonalTierlistMeta,
-} from "@/lib/personal-tierlist"
 import type { ShowcaseAchievement, UserStreak } from "@/lib/achievements"
 import type { ReviewCategoryKey } from "@/lib/peripheral-review-categories"
 
@@ -172,12 +168,14 @@ export type ProfileShowcase = {
   discord_member: boolean
   /** Moldura de avatar equipada (Central de Aura), sobreposta à foto de perfil — `null` quando nenhuma está equipada. */
   equipped_avatar_frame_url: string | null
-  /** Quantos itens a tierlist pessoal (VIP, Beta) do usuário já tem — 0 esconde o card resumido no perfil. */
+  /**
+   * Quantos periféricos a tierlist pessoal (VIP) tem — só a contagem, para o
+   * perfil decidir se mostra o link "Ver tierlist". Os itens em si ficam de
+   * fora de propósito: carregá-los aqui puxava o join com `peripherals`
+   * inteiro em toda abertura de perfil, e quem precisa deles é
+   * `/perfil/[handle]/tierlist`.
+   */
   tierlist_item_count: number
-  /** Itens da tierlist pessoal, para o preview do board no perfil (vazio quando não há nenhum). */
-  tierlist_items: PersonalTierlistItem[]
-  /** Recado do dono e corações da tierlist — mostrados junto do preview no perfil. */
-  tierlist_meta: PersonalTierlistMeta
 }
 
 /** Limite de caracteres da bio (espelha o CHECK constraint da tabela). */

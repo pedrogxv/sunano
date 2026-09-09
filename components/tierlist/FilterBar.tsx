@@ -1,12 +1,14 @@
 "use client"
 
-import { Search, SlidersHorizontal, X } from "lucide-react"
+import Link from "next/link"
+import { Crown, Search, SlidersHorizontal, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Combobox } from "@/components/ui/combobox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { ShareMenu } from "@/components/forum/ShareMenu"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
@@ -43,6 +45,9 @@ interface FilterBarProps {
   onReset: () => void
   showMouseShapeFilter: boolean
   showKeyboardLayoutFilter: boolean
+  /** Omitidos no admin: lá não faz sentido compartilhar a tierlist. */
+  shareTitle?: string
+  sharePath?: string
 }
 
 export function FilterBar({
@@ -64,6 +69,8 @@ export function FilterBar({
   onReset,
   showMouseShapeFilter,
   showKeyboardLayoutFilter,
+  shareTitle,
+  sharePath,
 }: FilterBarProps) {
   const t = useT()
   const categoryOptions: { key: Category; label: string }[] = [
@@ -86,6 +93,16 @@ export function FilterBar({
     <div className={cn("space-y-3 rounded-xl border p-4", CARD_SURFACE)}>
       <div>
         <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
+          {sharePath && shareTitle && (
+            <Link
+              className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2.5 text-xs font-medium transition-colors md:py-1.5"
+              href="/tierlist/pessoal"
+              style={{ borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+            >
+              <Crown className="size-3.5" />
+              Minha Tierlist
+            </Link>
+          )}
           {categoryOptions.map((category) => {
             const active = selectedCategory === category.key
 
@@ -262,6 +279,10 @@ export function FilterBar({
               <X className="size-4" />
               {t.common.clear}
             </Button>
+          )}
+
+          {sharePath && shareTitle && (
+            <ShareMenu title={shareTitle} path={sharePath} showEmbed={false} />
           )}
         </div>
       </div>

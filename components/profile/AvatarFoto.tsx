@@ -11,6 +11,8 @@ interface AvatarFotoProps {
   avatarUrl: string | null
   name: string
   tier: AccountTier
+  /** Quando expira o VIP (`null` = sem expiração). */
+  vipExpiresAt?: string | null
   /** Enquadramento escolhido pelo dono no editor de perfil. */
   adjust?: MediaAdjust
   className?: string
@@ -25,10 +27,11 @@ export function AvatarFoto({
   avatarUrl,
   name,
   tier,
+  vipExpiresAt = null,
   adjust = DEFAULT_ADJUST,
   className,
 }: AvatarFotoProps) {
-  const { src, animated } = resolveProfileMedia(avatarUrl, tier)
+  const { src, animated, needsFreeze } = resolveProfileMedia(avatarUrl, tier, vipExpiresAt)
   const initials = name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2)
 
   return (
@@ -44,6 +47,7 @@ export function AvatarFoto({
         fill
         priority
         unoptimized={animated}
+        freeze={needsFreeze}
         sizes="128px"
         style={mediaAdjustStyle(adjust)}
         className="object-cover"

@@ -22,6 +22,9 @@ export const metadata: Metadata = buildMetadata({
   subtitle: "Do S ao F, com nota de verdade",
 })
 
+// A aba "Minha Tierlist" vive em `/tierlist/pessoal`, rota separada: ler
+// `searchParams` aqui tornaria esta página dinâmica e mataria o ISR acima —
+// `listAllPeripherals()` (o catálogo inteiro) voltaria a rodar em toda visita.
 export default async function TierlistPage() {
   const [peripheralsList, tierlistMeta] = await Promise.all([
     listAllPeripherals(),
@@ -95,10 +98,10 @@ export default async function TierlistPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-2 py-5 sm:px-3 md:px-6 md:py-6 lg:px-8 space-y-4 md:space-y-5">
+      <TierlistInfo latestUpdate={tierlistMeta} />
       <Suspense fallback={null}>
         <TierlistContent initialData={items as any} categoryLabels={CATEGORY_LABELS} />
       </Suspense>
-      <TierlistInfo latestUpdate={tierlistMeta} />
     </div>
   )
 }

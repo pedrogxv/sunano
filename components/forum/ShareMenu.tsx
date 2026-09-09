@@ -41,22 +41,27 @@ const canNativeShare = typeof navigator !== "undefined" && typeof navigator.shar
  * Web Share API nativa via "Mais opções".
  *
  * Por padrão monta a URL a partir de `slug` (posts do fórum); passe `url`
- * para compartilhar uma página arbitrária (ex: comparativo de periféricos).
+ * para uma URL absoluta já pronta, ou `path` (ex: "/tierlist?categoria=mouse")
+ * para montar `origin + path` só no clique — evita tocar `window` durante o
+ * render (SSR) em páginas como a Tierlist, cujo path muda com os filtros.
  * Passe `showEmbed={false}` para ocultar a opção "Incorporar" (placeholder).
  */
 export function ShareMenu({
   slug,
   title,
   url,
+  path,
   showEmbed = true,
 }: {
   slug?: string
   title: string
   url?: string
+  path?: string
   showEmbed?: boolean
 }) {
   function getUrl() {
     if (url) return url
+    if (path) return `${window.location.origin}${path}`
     return `${window.location.origin}/forum/${slug}`
   }
 

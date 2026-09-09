@@ -5,7 +5,7 @@ import { ArrowRight, Check, Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
-import { PERSONAL_TIERS, PERSONAL_TIER_THEMES } from "@/lib/personal-tierlist-theme"
+import { DEFAULT_TIER_PRESET } from "@/lib/personal-tierlist-theme"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 
 /**
@@ -72,8 +72,8 @@ export function TierlistVipGate({
       {/* Faixa dos tiers no topo: a mesma assinatura visual do board, para o
           aviso parecer parte da feature e não um banner de anúncio. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex h-1">
-        {PERSONAL_TIERS.map((tier) => (
-          <div key={tier} className={cn("flex-1 bg-gradient-to-r", PERSONAL_TIER_THEMES[tier].accent)} />
+        {DEFAULT_TIER_PRESET.map((tier) => (
+          <div key={tier.label} className="flex-1" style={{ backgroundColor: tier.color }} />
         ))}
       </div>
 
@@ -92,14 +92,14 @@ export function TierlistVipGate({
 
           <p className="mt-1 text-xs text-muted-foreground">
             {isExpired
-              ? "Nada foi perdido: sua tierlist segue visível no perfil e para quem receber o link. Para voltar a mexer nela — adicionar, mover ou tirar periféricos — é só reativar o VIP."
-              : "Monte seu próprio ranking dos periféricos que você já usou, do S ao D, e exiba no seu perfil para quem visitar."}
+              ? "Nada foi perdido: sua tierlist segue visível pra quem receber o link. Para voltar a mexer nela — adicionar, mover ou tirar periféricos — é só reativar o VIP."
+              : "Monte seu próprio ranking dos periféricos que você já usou, com os tiers do seu jeito (nome e cor), e compartilhe com quem quiser."}
           </p>
 
           {!isExpired && (
             <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
               {[
-                "Seu ranking do S ao D no perfil",
+                "Seu ranking com tiers personalizados",
                 "Recado curto explicando suas escolhas",
                 "Corações de quem curtir sua lista",
                 "Link próprio para compartilhar",

@@ -12,9 +12,7 @@ import { MedalhasGrid } from "./MedalhasGrid"
 import { MeusReviewsGrid } from "./MeusReviewsGrid"
 import { SetupGrid } from "./SetupGrid"
 import { SocialLinks } from "./SocialLinks"
-import { PersonalTierlistSummaryCard } from "@/components/tierlist-pessoal/PersonalTierlistSummaryCard"
 import { profilePath } from "@/lib/profile-name"
-import { isVipActive } from "@/lib/account-tier"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
@@ -31,10 +29,6 @@ interface ProfileShowcaseProps {
   isOwner?: boolean
   /** Estado inicial do botão "Seguir" para quem está visitando. */
   isFollowing?: boolean
-  /** O visitante já deu coração na tierlist deste perfil? */
-  viewerHearted?: boolean
-  /** Visitante logado — deslogado vê a contagem de corações, mas não o botão. */
-  viewerLoggedIn?: boolean
 }
 
 /**
@@ -58,12 +52,7 @@ export function ProfileShowcase({
   profile,
   isOwner = false,
   isFollowing = false,
-  viewerHearted = false,
-  viewerLoggedIn = false,
 }: ProfileShowcaseProps) {
-  const tierlistHref = `${profilePath(profile.display_slug ?? profile.id)}/tierlist`
-  const ownerIsVip = isVipActive(profile.account_tier, profile.vip_expires_at)
-
   const actionButton = isOwner ? (
     <div className="flex shrink-0 items-center gap-2">
       <Link
@@ -73,8 +62,10 @@ export function ProfileShowcase({
         <Settings className="size-3.5" />
         Editar perfil
       </Link>
+      {/* O editor da tierlist pessoal (VIP) mora na aba "Minha Tierlist" de
+          /tierlist agora — não mais embutido no perfil. */}
       <Link
-        href={tierlistHref}
+        href="/tierlist/pessoal"
         className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
       >
         <Trophy className="size-3.5" />
@@ -82,12 +73,27 @@ export function ProfileShowcase({
       </Link>
     </div>
   ) : (
-    <FollowButton
-      userId={profile.id}
-      initialFollowing={isFollowing}
-      size="md"
-      className="shrink-0"
-    />
+    <div className="flex shrink-0 items-center gap-2">
+      {/* Sem isto a tierlist de outro membro só era alcançável por link
+          recebido: o card resumido saiu do perfil e o botão acima é do dono.
+          Só aparece quando há o que ver — mandar o visitante pra um board
+          vazio é pior do que não oferecer o caminho. */}
+      {profile.tierlist_item_count > 0 && (
+        <Link
+          href={`${profilePath(profile.display_slug ?? profile.id)}/tierlist`}
+          className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        >
+          <Trophy className="size-3.5" />
+          Ver tierlist
+        </Link>
+      )}
+      <FollowButton
+        userId={profile.id}
+        initialFollowing={isFollowing}
+        size="md"
+        className="shrink-0"
+      />
+    </div>
   )
 
   const medals = <MedalhasGrid medals={profile.medals} />
@@ -211,20 +217,6 @@ export function ProfileShowcase({
           favorites={profile.favorites}
           tier={profile.account_tier}
           isOwner={isOwner}
-        />
-
-        <PersonalTierlistSummaryCard
-          items={profile.tierlist_items}
-          itemCount={profile.tierlist_item_count}
-          tierlistHref={tierlistHref}
-          ownerName={profile.display_name}
-          ownerId={profile.id}
-          isOwner={isOwner}
-          ownerIsVip={ownerIsVip}
-          note={profile.tierlist_meta.note}
-          heartsCount={profile.tierlist_meta.heartsCount}
-          viewerHearted={viewerHearted}
-          canHeart={viewerLoggedIn && !isOwner}
         />
 
         <MeusReviewsGrid

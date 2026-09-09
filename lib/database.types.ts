@@ -1706,7 +1706,7 @@ export type Database = {
         Row: {
           user_id: string
           peripheral_id: string
-          tier: "S" | "A" | "B" | "C" | "D"
+          tier_id: string
           position: number
           created_at: string
           updated_at: string
@@ -1714,12 +1714,34 @@ export type Database = {
         Insert: {
           user_id: string
           peripheral_id: string
-          tier: "S" | "A" | "B" | "C" | "D"
+          tier_id: string
           position?: number
           created_at?: string
           updated_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["user_tierlist_items"]["Insert"]>
+      }
+      user_tierlist_tiers: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          position: number
+          label: string
+          color: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          position: number
+          label: string
+          color: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_tierlist_tiers"]["Insert"]>
       }
       user_tierlist_meta: {
         Relationships: []
@@ -2353,6 +2375,11 @@ export type Database = {
       }
       redeem_aura_peripheral: {
         Args: { p_user_id: string; p_item_id: string }
+        Returns: string
+      }
+      replace_user_tierlist_tiers: {
+        Args: { p_user_id: string; p_tiers: { id: string | null; label: string; color: string }[] }
+        /** `"ok"` | `"in_use:<label>"` | `"bad_count"` */
         Returns: string
       }
       purchase_vip_with_aura: {

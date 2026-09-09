@@ -164,8 +164,12 @@ export function ProfileCard({
   showFollowButton?: boolean
 }) {
 
-  const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier)
-  const miniBanner = resolveProfileMedia(profile.mini_banner_url, profile.account_tier)
+  const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier, profile.vip_expires_at)
+  const miniBanner = resolveProfileMedia(
+    profile.mini_banner_url,
+    profile.account_tier,
+    profile.vip_expires_at
+  )
   const initials =
     profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
     "?"
@@ -217,6 +221,7 @@ export function ProfileCard({
                 alt=""
                 fill
                 unoptimized={miniBanner.animated}
+                freeze={miniBanner.needsFreeze}
                 sizes="(max-width: 640px) 50vw, 240px"
                 style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}
                 className="object-cover"
@@ -252,6 +257,7 @@ export function ProfileCard({
                 alt={profile.display_name}
                 fill
                 unoptimized={avatar.animated}
+                freeze={avatar.needsFreeze}
                 sizes="(max-width: 640px) 64px, 86px"
                 style={mediaAdjustStyle(profile.media_adjustments.avatar)}
                 className="object-cover"

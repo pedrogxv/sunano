@@ -154,6 +154,10 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
     setSelectedKeyboardLayout("all")
   }
 
+  const shareQueryString = searchParams.toString()
+  const sharePath = shareQueryString ? `${pathname}?${shareQueryString}` : pathname
+  const shareTitle = `Tierlist de ${categoryLabel} — Sunano`
+
   return (
     <>
       <FilterBar
@@ -175,6 +179,8 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
         onReset={resetFilters}
         showMouseShapeFilter={selectedCategory === "mouse"}
         showKeyboardLayoutFilter={selectedCategory === "keyboard"}
+        shareTitle={shareTitle}
+        sharePath={sharePath}
       />
 
       <TierlistGrid filtered={filtered} category={selectedCategory} />

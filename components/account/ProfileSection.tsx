@@ -20,6 +20,7 @@ import {
   type ProfileMediaAdjustments,
 } from "@/lib/profile-media-adjust"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { FrozenFrame } from "@/components/ui/image-with-fallback"
 import { TikTokIcon } from "@/components/icons/social-icons"
 import { resolveProfileMedia, type ProfileMedia } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -252,8 +253,9 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     : "image/jpeg,image/png,image/webp"
   // O preview passa pelas mesmas regras de tier do perfil público: um GIF de
   // conta comum aparece parado aqui, exatamente como vai aparecer lá.
-  const bannerPreview = resolveProfileMedia(bannerUrl, tier)
-  const miniBannerPreview = resolveProfileMedia(miniBannerUrl, tier)
+  const bannerPreview = resolveProfileMedia(bannerUrl, tier, profile.vip_expires_at ?? null)
+  const miniBannerPreview = resolveProfileMedia(miniBannerUrl, tier, profile.vip_expires_at ?? null)
+  const avatarMediaPreview = resolveProfileMedia(avatarUrl, tier, profile.vip_expires_at ?? null)
   // Mesma cor de fallback que o card de /pessoas usa quando falta mini banner.
   const accentHue = profile.id ? profileAccentHue(profile.id) : 210
 
@@ -532,6 +534,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 <MediaAdjuster
                   src={bannerPreview.src}
                   animated={bannerPreview.animated}
+                  freeze={bannerPreview.needsFreeze}
                   value={adjustments.banner}
                   onChange={(next) => setAdjust("banner", next)}
                   aspect="banner"
@@ -568,6 +571,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 <MediaAdjuster
                   src={miniBannerPreview.src}
                   animated={miniBannerPreview.animated}
+                  freeze={miniBannerPreview.needsFreeze}
                   value={adjustments.mini_banner}
                   onChange={(next) => setAdjust("mini_banner", next)}
                   aspect="mini"
@@ -604,7 +608,8 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                   <div className="w-32">
                     <MediaAdjuster
                       src={avatarPreview}
-                      animated={resolveProfileMedia(avatarUrl, tier).animated}
+                      animated={avatarMediaPreview.animated}
+                      freeze={avatarMediaPreview.needsFreeze}
                       value={adjustments.avatar}
                       onChange={(next) => setAdjust("avatar", next)}
                       aspect="avatar"
@@ -857,15 +862,26 @@ function ProfilePagePreview({
         )}
       >
         {banner.src && (
-          <Image
-            src={banner.src}
-            alt=""
-            fill
-            unoptimized={banner.animated}
-            sizes="(max-width: 768px) 100vw, 640px"
-            style={mediaAdjustStyle(bannerAdjust)}
-            className="h-full w-full object-cover"
-          />
+          banner.needsFreeze ? (
+            <FrozenFrame
+              src={banner.src}
+              alt=""
+              fill
+              style={mediaAdjustStyle(bannerAdjust)}
+              className="h-full w-full object-cover"
+              onError={() => {}}
+            />
+          ) : (
+            <Image
+              src={banner.src}
+              alt=""
+              fill
+              unoptimized={banner.animated}
+              sizes="(max-width: 768px) 100vw, 640px"
+              style={mediaAdjustStyle(bannerAdjust)}
+              className="h-full w-full object-cover"
+            />
+          )
         )}
         {/* Mesmo véu do perfil público: a foto encosta na base da capa e
             precisa de contraste sob ela (ver `ProfileShowcase`). */}
@@ -1033,15 +1049,26 @@ function MiniBannerCardPreview({
           }
         >
           {miniBanner.src && (
-            <Image
-              src={miniBanner.src}
-              alt=""
-              fill
-              unoptimized={miniBanner.animated}
-              sizes="240px"
-              style={mediaAdjustStyle(miniBannerAdjust)}
-              className="object-cover"
-            />
+            miniBanner.needsFreeze ? (
+              <FrozenFrame
+                src={miniBanner.src}
+                alt=""
+                fill
+                style={mediaAdjustStyle(miniBannerAdjust)}
+                className="object-cover"
+                onError={() => {}}
+              />
+            ) : (
+              <Image
+                src={miniBanner.src}
+                alt=""
+                fill
+                unoptimized={miniBanner.animated}
+                sizes="240px"
+                style={mediaAdjustStyle(miniBannerAdjust)}
+                className="object-cover"
+              />
+            )
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
           <button

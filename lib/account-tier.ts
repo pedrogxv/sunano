@@ -85,30 +85,49 @@ export function isAnimatedMediaUrl(url: string | null | undefined): boolean {
 export type ProfileMedia = {
   src: string | null
   /**
-   * `true` só quando o arquivo é animado E o tier libera animação.
+   * `true` só quando o arquivo é animado E o tier VIP está ativo agora
+   * (`isVipActive`) — não apenas quando `account_tier` diz "vip", que pode
+   * estar desatualizado (VIP pago que venceu, cargo removido).
    *
-   * Os componentes repassam este valor para `unoptimized` do `next/image`:
-   * o GIF de um VIP pula o redimensionamento e chega exatamente como foi
-   * enviado, sem perder quadros na reamostragem.
-   *
-   * Atenção: isto não é mais o que *impede* um GIF de animar. O
-   * redimensionamento agora é feito pelo Supabase Storage (ver
-   * `lib/image-loader.ts`), que preserva a animação — diferente do otimizador
-   * da Vercel, que servia só o primeiro quadro. Quem garante a regra de
-   * "animado só para VIP" é o upload (`app/api/profile/upload-avatar`), que
-   * recusa GIF de conta comum.
+   * Os componentes repassam este valor para `unoptimized` do `next/image`,
+   * mas isto sozinho não impede a animação: o loader não redimensiona nada
+   * (ver `lib/storage-image.ts`), então o navegador recebe o GIF original de
+   * qualquer forma. Quem de fato barra a animação de conta não-VIP é
+   * `needsFreeze` abaixo.
    */
   animated: boolean
+  /**
+   * `true` quando o arquivo é GIF mas o tier atual (VIP ativo ou não) não
+   * libera animação — ex.: a conta era VIP quando enviou, o VIP venceu
+   * depois, e o arquivo continua sendo o mesmo GIF no Storage.
+   *
+   * O upload (`app/api/profile/upload-avatar` etc.) recusa GIF de conta
+   * comum, mas isso só protege o momento do envio — não cobre quem já tinha
+   * o arquivo antes de perder o VIP. `ImageWithFallback` usa esta flag para
+   * desenhar o primeiro quadro num `<canvas>` em vez de exibir o GIF animado.
+   */
+  needsFreeze: boolean
 }
 
-/** Resolve como renderizar banner/avatar conforme o tier de quem os enviou. */
+/**
+ * Resolve como renderizar banner/avatar conforme o tier de quem os enviou.
+ *
+ * `vipExpiresAt` é obrigatório de propósito: `account_tier` sozinho não diz
+ * se o VIP está ativo agora (ver `isVipActive`), e um chamador que
+ * esquecesse de checar a validade voltaria a deixar GIF de conta vencida
+ * animar — foi exatamente esse o bug que motivou o parâmetro.
+ */
 export function resolveProfileMedia(
   url: string | null | undefined,
-  tier: AccountTier
+  tier: AccountTier,
+  vipExpiresAt: string | null
 ): ProfileMedia {
+  const isGif = isAnimatedMediaUrl(url)
+  const canAnimate = isVipActive(tier, vipExpiresAt) && canUseAnimatedMedia(tier)
   return {
     src: url ?? null,
-    animated: isAnimatedMediaUrl(url) && canUseAnimatedMedia(tier),
+    animated: isGif && canAnimate,
+    needsFreeze: isGif && !canAnimate,
   }
 }
 

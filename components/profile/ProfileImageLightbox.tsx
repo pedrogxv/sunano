@@ -13,12 +13,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { FrozenFrame } from "@/components/ui/image-with-fallback"
 import { cn } from "@/lib/utils"
 
 interface ProfileImageLightboxProps {
   src: string
   alt: string
   unoptimized?: boolean
+  /**
+   * Mesma flag de `resolveProfileMedia` — quando `true`, o modal mostra o
+   * primeiro quadro congelado em vez do GIF animado (conta perdeu o VIP
+   * depois de enviar o arquivo).
+   */
+  freeze?: boolean
   /** Envolve a mídia (banner ou avatar) que deve ficar clicável. */
   children: React.ReactNode
   triggerClassName?: string
@@ -40,6 +47,7 @@ export function ProfileImageLightbox({
   src,
   alt,
   unoptimized,
+  freeze = false,
   children,
   triggerClassName,
 }: ProfileImageLightboxProps) {
@@ -69,15 +77,25 @@ export function ProfileImageLightbox({
           >
             <X className="size-5" />
           </DialogClose>
-          <Image
-            src={src}
-            alt={alt}
-            width={1200}
-            height={1200}
-            unoptimized={unoptimized}
-            onClick={(event) => event.stopPropagation()}
-            className="h-auto max-h-[85vh] w-auto cursor-default rounded-lg object-contain"
-          />
+          {freeze ? (
+            <FrozenFrame
+              src={src}
+              alt={alt}
+              onClick={(event) => event.stopPropagation()}
+              onError={() => {}}
+              className="h-auto max-h-[85vh] w-auto cursor-default rounded-lg object-contain"
+            />
+          ) : (
+            <Image
+              src={src}
+              alt={alt}
+              width={1200}
+              height={1200}
+              unoptimized={unoptimized}
+              onClick={(event) => event.stopPropagation()}
+              className="h-auto max-h-[85vh] w-auto cursor-default rounded-lg object-contain"
+            />
+          )}
         </DialogContent>
       </DialogPortal>
     </Dialog>

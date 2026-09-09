@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
-import { getRequestUser } from "@/lib/server/auth/current-user"
-import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { isVipActive } from "@/lib/account-tier"
+import { requireVipUser } from "@/lib/server/require-vip-user"
 import { upsertTierlistItem, removeTierlistItem } from "@/lib/server/repositories/user-tierlist-repository"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-const tierSchema = z.enum(["S", "A", "B", "C", "D"])
-
 const upsertSchema = z.object({
   peripheralId: z.string().uuid(),
-  tier: tierSchema,
+  tierId: z.string().uuid(),
   position: z.number().int().min(0).max(9999),
 })
 
@@ -21,25 +17,7 @@ const removeSchema = z.object({
   peripheralId: z.string().uuid(),
 })
 
-async function requireVipUser(request: NextRequest) {
-  const user = await getRequestUser(request)
-  if (!user) return { error: NextResponse.json({ error: "Você precisa estar logado." }, { status: 401 }) }
-
-  const db = createSupabaseAdminClient()
-  const { data: profile } = await db
-    .from("user_profiles")
-    .select("account_tier, vip_expires_at")
-    .eq("id", user.id)
-    .maybeSingle()
-
-  if (!isVipActive(profile?.account_tier, profile?.vip_expires_at)) {
-    return { error: NextResponse.json({ error: "Recurso exclusivo VIP." }, { status: 403 }) }
-  }
-
-  return { userId: user.id }
-}
-
-/** POST — adiciona/move um item na tierlist pessoal. Defesa em profundidade: a RLS já bloqueia não-VIP, isto barra antes de tentar. */
+/** POST — adiciona/move um item na tierlist pessoal. */
 export async function POST(request: NextRequest) {
   const auth = await requireVipUser(request)
   if (auth.error) return auth.error
@@ -51,7 +29,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await upsertTierlistItem(auth.userId, parsed.data.peripheralId, parsed.data.tier, parsed.data.position)
+    await upsertTierlistItem(auth.userId, parsed.data.peripheralId, parsed.data.tierId, parsed.data.position)
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("[perfil/tierlist] upsert:", err)

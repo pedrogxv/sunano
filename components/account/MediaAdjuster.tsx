@@ -4,6 +4,7 @@ import Image from "next/image"
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { Move, RotateCcw, ZoomIn } from "lucide-react"
 
+import { FrozenFrame } from "@/components/ui/image-with-fallback"
 import {
   DEFAULT_ADJUST,
   isDefaultAdjust,
@@ -38,6 +39,7 @@ const DRAG_SENSITIVITY = 0.35
 export function MediaAdjuster({
   src,
   animated,
+  freeze = false,
   value,
   onChange,
   aspect = "banner",
@@ -46,6 +48,11 @@ export function MediaAdjuster({
   src: string
   /** GIF de conta com direito a mídia animada — desliga o otimizador. */
   animated: boolean
+  /**
+   * GIF de conta que perdeu o direito a animar (VIP venceu depois do
+   * upload) — mostra o primeiro quadro congelado em vez do GIF rodando.
+   */
+  freeze?: boolean
   value: MediaAdjust
   onChange: (next: MediaAdjust) => void
   /** Formato do quadro, espelhando onde a imagem é exibida. */
@@ -116,16 +123,27 @@ export function MediaAdjuster({
           disabled ? "cursor-default opacity-60" : dragging ? "cursor-grabbing" : "cursor-grab"
         )}
       >
-        <Image
-          src={src}
-          alt=""
-          fill
-          unoptimized={animated}
-          sizes="512px"
-          draggable={false}
-          style={mediaAdjustStyle(value)}
-          className="pointer-events-none object-cover"
-        />
+        {freeze ? (
+          <FrozenFrame
+            src={src}
+            alt=""
+            fill
+            style={mediaAdjustStyle(value)}
+            className="pointer-events-none object-cover"
+            onError={() => {}}
+          />
+        ) : (
+          <Image
+            src={src}
+            alt=""
+            fill
+            unoptimized={animated}
+            sizes="512px"
+            draggable={false}
+            style={mediaAdjustStyle(value)}
+            className="pointer-events-none object-cover"
+          />
+        )}
 
         {!dragging && !disabled && (
           <span className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 bg-background/70 py-1 text-[10px] font-medium text-muted-foreground">

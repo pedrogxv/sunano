@@ -59,7 +59,7 @@ export function AvatarQuadrado({
   className,
   frameUrl,
 }: AvatarQuadradoProps) {
-  const { src, animated } = resolveProfileMedia(avatarUrl, tier)
+  const { src, animated, needsFreeze } = resolveProfileMedia(avatarUrl, tier, vipExpiresAt)
   const initials = name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2)
   const isVip = isVipActive(tier, vipExpiresAt)
 
@@ -79,6 +79,7 @@ export function AvatarQuadrado({
           fill
           priority
           unoptimized={animated}
+          freeze={needsFreeze}
           sizes="128px"
           style={mediaAdjustStyle(adjust)}
           className="object-cover"
@@ -121,7 +122,12 @@ export function AvatarQuadrado({
   if (!src) return frame
 
   return (
-    <ProfileImageLightbox src={src} alt={`Foto de perfil de ${name}`} unoptimized={animated}>
+    <ProfileImageLightbox
+      src={src}
+      alt={`Foto de perfil de ${name}`}
+      unoptimized={animated}
+      freeze={needsFreeze}
+    >
       {frame}
     </ProfileImageLightbox>
   )

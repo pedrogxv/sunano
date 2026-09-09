@@ -31,7 +31,7 @@ interface BannerProps {
  * capa ficar sem nenhum sinal de tier enquanto só a foto o exibe.
  */
 export function Banner({ bannerUrl, tier, vipExpiresAt = null, adjust = DEFAULT_ADJUST, className }: BannerProps) {
-  const { src, animated } = resolveProfileMedia(bannerUrl, tier)
+  const { src, animated, needsFreeze } = resolveProfileMedia(bannerUrl, tier, vipExpiresAt)
   const isVip = isVipActive(tier, vipExpiresAt)
 
   const image = (
@@ -59,6 +59,7 @@ export function Banner({ bannerUrl, tier, vipExpiresAt = null, adjust = DEFAULT_
         fill
         priority
         unoptimized={animated}
+        freeze={needsFreeze}
         sizes="100vw"
         style={mediaAdjustStyle(adjust)}
         className="h-full w-full object-cover"
@@ -76,7 +77,13 @@ export function Banner({ bannerUrl, tier, vipExpiresAt = null, adjust = DEFAULT_
   if (!src) return image
 
   return (
-    <ProfileImageLightbox src={src} alt="Capa do perfil" unoptimized={animated} triggerClassName="w-full">
+    <ProfileImageLightbox
+      src={src}
+      alt="Capa do perfil"
+      unoptimized={animated}
+      freeze={needsFreeze}
+      triggerClassName="w-full"
+    >
       {image}
     </ProfileImageLightbox>
   )

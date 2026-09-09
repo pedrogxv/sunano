@@ -19,10 +19,9 @@ import {
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { CARD_SURFACE } from "@/lib/ui-styles"
-import { PERSONAL_TIERS, PERSONAL_TIER_THEMES } from "@/lib/personal-tierlist-theme"
-import type { TierlistItem, TierlistTier } from "@/lib/personal-tierlist"
-
-const TIERS = PERSONAL_TIERS
+import { sortTiers, tierGradientStyle, tierTextColor } from "@/lib/personal-tierlist-theme"
+import { TierManager } from "./TierManager"
+import type { TierlistItem, TierlistTierDef } from "@/lib/personal-tierlist"
 
 type SearchResult = {
   id: string
@@ -50,8 +49,15 @@ const INITIAL_SUGGESTION_LIMIT = 6
  * 3. **Busca sempre povoada.** Ao focar já mostra sugestões, em vez de um
  *    painel vazio que só reagia a partir do segundo caractere.
  */
-export function PersonalTierlistEditor({ initialItems }: { initialItems: TierlistItem[] }) {
+export function PersonalTierlistEditor({
+  initialItems,
+  initialTiers,
+}: {
+  initialItems: TierlistItem[]
+  initialTiers: TierlistTierDef[]
+}) {
   const [items, setItems] = useState<TierlistItem[]>(initialItems)
+  const [tiers, setTiers] = useState<TierlistTierDef[]>(sortTiers(initialTiers))
   const [query, setQuery] = useState("")
   const [results, setResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -118,6 +124,11 @@ export function PersonalTierlistEditor({ initialItems }: { initialItems: Tierlis
 
   const existingIds = useMemo(() => new Set(items.map((i) => i.peripheralId)), [items])
   const activeItem = activeId ? items.find((i) => i.peripheralId === activeId) ?? null : null
+  const itemCountByTierId = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const item of items) counts.set(item.tierId, (counts.get(item.tierId) ?? 0) + 1)
+    return counts
+  }, [items])
 
   /** Envia a mudança e desfaz o estado local se o servidor recusar. */
   async function persist(body: unknown, method: "POST" | "DELETE", rollback: () => void, fallbackMessage: string) {
@@ -140,13 +151,13 @@ export function PersonalTierlistEditor({ initialItems }: { initialItems: Tierlis
     }
   }
 
-  function addItem(peripheral: SearchResult, tier: TierlistTier) {
+  function addItem(peripheral: SearchResult, tierId: string) {
     if (existingIds.has(peripheral.id)) return
 
-    const position = items.filter((i) => i.tier === tier).length
+    const position = items.filter((i) => i.tierId === tierId).length
     const optimistic: TierlistItem = {
       peripheralId: peripheral.id,
-      tier,
+      tierId,
       position,
       peripheral: {
         id: peripheral.id,
@@ -168,23 +179,23 @@ export function PersonalTierlistEditor({ initialItems }: { initialItems: Tierlis
     setSearchOpen(false)
 
     void persist(
-      { peripheralId: peripheral.id, tier, position },
+      { peripheralId: peripheral.id, tierId, position },
       "POST",
       () => setItems((prev) => prev.filter((i) => i.peripheralId !== peripheral.id)),
       "Não foi possível adicionar o item."
     )
   }
 
-  function moveItem(peripheralId: string, tier: TierlistTier) {
+  function moveItem(peripheralId: string, tierId: string) {
     const previous = items
     const current = items.find((i) => i.peripheralId === peripheralId)
-    if (!current || current.tier === tier) return
+    if (!current || current.tierId === tierId) return
 
-    const position = items.filter((i) => i.tier === tier).length
-    setItems((prev) => prev.map((i) => (i.peripheralId === peripheralId ? { ...i, tier, position } : i)))
+    const position = items.filter((i) => i.tierId === tierId).length
+    setItems((prev) => prev.map((i) => (i.peripheralId === peripheralId ? { ...i, tierId, position } : i)))
 
     void persist(
-      { peripheralId, tier, position },
+      { peripheralId, tierId, position },
       "POST",
       () => setItems(previous),
       "Não foi possível mover o item."
@@ -208,9 +219,9 @@ export function PersonalTierlistEditor({ initialItems }: { initialItems: Tierlis
     const { active, over } = event
     if (!over) return
 
-    const targetTier = over.id.toString()
-    if (!(TIERS as string[]).includes(targetTier)) return
-    moveItem(active.id.toString(), targetTier as TierlistTier)
+    const targetTierId = over.id.toString()
+    if (!tiers.some((t) => t.id === targetTierId)) return
+    moveItem(active.id.toString(), targetTierId)
   }
 
   return (
@@ -281,25 +292,19 @@ export function PersonalTierlistEditor({ initialItems }: { initialItems: Tierlis
                         {already ? (
                           <span className="shrink-0 text-xs text-muted-foreground">já adicionado</span>
                         ) : (
-                          <div className="flex shrink-0 gap-1">
-                            {TIERS.map((tier) => {
-                              const theme = PERSONAL_TIER_THEMES[tier]
-                              return (
-                                <button
-                                  key={tier}
-                                  type="button"
-                                  title={`Adicionar no tier ${tier} — ${theme.subtitle}`}
-                                  onClick={() => addItem(p, tier)}
-                                  className={cn(
-                                    "flex size-7 items-center justify-center rounded-md bg-gradient-to-b text-[11px] font-black transition-transform hover:scale-110",
-                                    theme.accent,
-                                    theme.textColor
-                                  )}
-                                >
-                                  {tier}
-                                </button>
-                              )
-                            })}
+                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                            {tiers.map((tier) => (
+                              <button
+                                key={tier.id}
+                                type="button"
+                                title={`Adicionar no tier ${tier.label}`}
+                                onClick={() => addItem(p, tier.id)}
+                                style={{ backgroundColor: tier.color, color: tierTextColor(tier.color) }}
+                                className="flex h-7 min-w-7 items-center justify-center rounded-md px-1 text-[11px] font-black transition-transform hover:scale-110"
+                              >
+                                {tier.label}
+                              </button>
+                            ))}
                           </div>
                         )}
                       </li>
@@ -311,6 +316,8 @@ export function PersonalTierlistEditor({ initialItems }: { initialItems: Tierlis
           </div>
         )}
       </div>
+
+      <TierManager tiers={tiers} itemCountByTierId={itemCountByTierId} onTiersChange={setTiers} />
 
       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <p>Arraste os periféricos entre os tiers para reordenar.</p>
@@ -334,11 +341,11 @@ export function PersonalTierlistEditor({ initialItems }: { initialItems: Tierlis
           <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_rgba(124,58,237,0.07),_transparent_60%)]" />
 
           <div className="divide-y divide-border">
-            {TIERS.map((tier) => (
+            {tiers.map((tier) => (
               <TierDropRow
-                key={tier}
+                key={tier.id}
                 tier={tier}
-                items={items.filter((i) => i.tier === tier)}
+                items={items.filter((i) => i.tierId === tier.id)}
                 onRemove={removeItem}
               />
             ))}
@@ -365,23 +372,25 @@ function TierDropRow({
   items,
   onRemove,
 }: {
-  tier: TierlistTier
+  tier: TierlistTierDef
   items: TierlistItem[]
   onRemove: (peripheralId: string) => void
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: tier })
-  const theme = PERSONAL_TIER_THEMES[tier]
+  const { setNodeRef, isOver } = useDroppable({ id: tier.id })
+  const textColor = tierTextColor(tier.color)
 
   return (
     <div className="flex items-stretch">
       <div
-        className={cn(
-          "flex w-16 shrink-0 flex-col items-center justify-center bg-gradient-to-b px-2 sm:w-20",
-          theme.accent
-        )}
+        style={tierGradientStyle(tier.color)}
+        className="flex w-16 shrink-0 flex-col items-center justify-center px-2 sm:w-20"
       >
-        <span className={cn("text-2xl font-black leading-none", theme.textColor)}>{tier}</span>
-        <span className={cn("mt-1 text-[10px] font-medium opacity-75", theme.textColor)}>{theme.subtitle}</span>
+        <span
+          className="line-clamp-2 break-words text-center text-base font-black leading-tight"
+          style={{ color: textColor }}
+        >
+          {tier.label}
+        </span>
       </div>
 
       <div
@@ -417,20 +426,16 @@ function DraggableItemChip({
   onRemove,
 }: {
   item: TierlistItem
-  tier: TierlistTier
+  tier: TierlistTierDef
   onRemove: (peripheralId: string) => void
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: item.peripheralId })
-  const theme = PERSONAL_TIER_THEMES[tier]
 
   return (
     <div
       ref={setNodeRef}
-      style={{ opacity: isDragging ? 0.3 : 1 }}
-      className={cn(
-        "group flex cursor-grab items-center gap-2 rounded-lg border bg-black/40 py-1.5 pl-1.5 pr-1.5 active:cursor-grabbing",
-        theme.card.border
-      )}
+      style={{ opacity: isDragging ? 0.3 : 1, borderColor: `${tier.color}40` }}
+      className="group flex cursor-grab items-center gap-2 rounded-lg border bg-black/40 py-1.5 pl-1.5 pr-1.5 active:cursor-grabbing"
       {...attributes}
       {...listeners}
     >

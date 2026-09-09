@@ -14,10 +14,7 @@ import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtu
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { hasConfirmedDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
 import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
-import {
-  getUserTierlistItems,
-  getUserTierlistMeta,
-} from "@/lib/server/repositories/user-tierlist-repository"
+import { getUserTierlistItemCount } from "@/lib/server/repositories/user-tierlist-repository"
 import {
   coerceAccountTier,
   selectVisibleFavorites,
@@ -140,8 +137,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviewedPeripheralIds,
     youtubeSubscribed,
     discordMember,
-    tierlistItems,
-    tierlistMeta,
+    tierlistItemCount,
   ] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
@@ -160,22 +156,12 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     getReviewedPeripheralIds(userId),
     isYoutubeSubscriptionEnabled() ? hasConfirmedYoutubeSubscription(userId) : Promise.resolve(false),
     isDiscordMembershipEnabled() ? hasConfirmedDiscordMembership(userId) : Promise.resolve(false),
-    // Os itens (e não só a contagem) alimentam o preview do board no perfil —
-    // a contagem sai daqui, sem uma segunda query só pra contar. O catch
-    // segue o resto deste repositório: uma seção que falha vira seção vazia,
-    // nunca um 500 no perfil inteiro.
-    getUserTierlistItems(userId).catch((err) => {
-      console.error("[profile-showcase-repository] getUserTierlistItems:", err)
-      return []
-    }),
-    // Sem `viewerId`: este repositório é `React.cache`ado por userId e
-    // compartilhado entre `generateMetadata` e a página. Se o "já curtiu"
-    // entrasse aqui, o perfil passaria a variar por visitante e perderia o
-    // cache. Quem precisa do estado do coração (a página do perfil) passa
-    // `viewerHearted` como prop, igual já faz com `isFollowing`.
-    getUserTierlistMeta(userId).catch((err) => {
-      console.error("[profile-showcase-repository] getUserTierlistMeta:", err)
-      return { note: null, heartsCount: 0, viewerHearted: false }
+    // Só o `count` (ver `getUserTierlistItemCount`). O catch segue o resto
+    // deste repositório: uma seção que falha vira seção vazia, nunca um 500
+    // no perfil inteiro.
+    getUserTierlistItemCount(userId).catch((err) => {
+      console.error("[profile-showcase-repository] getUserTierlistItemCount:", err)
+      return 0
     }),
   ])
 
@@ -215,9 +201,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviews_total: reviewsTotal,
     reviews_integrity_accepted_at: row.reviews_integrity_accepted_at,
     reviewed_peripheral_ids: reviewedPeripheralIds,
-    tierlist_item_count: tierlistItems.length,
-    tierlist_items: tierlistItems,
-    tierlist_meta: tierlistMeta,
+    tierlist_item_count: tierlistItemCount,
   }
 })
 

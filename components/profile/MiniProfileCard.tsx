@@ -49,8 +49,12 @@ function formatCount(value: number): string {
  * completa, que já mostra a capa grande.
  */
 export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
-  const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier)
-  const background = resolveProfileMedia(profile.mini_banner_url, profile.account_tier)
+  const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier, profile.vip_expires_at)
+  const background = resolveProfileMedia(
+    profile.mini_banner_url,
+    profile.account_tier,
+    profile.vip_expires_at
+  )
   const hue = profileAccentHue(profile.id)
   const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
   const bgTheme = getMiniProfileBgTheme(profile.equipped_mini_profile_bg)
@@ -98,6 +102,7 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
           alt=""
           fill
           unoptimized={background.animated}
+          freeze={background.needsFreeze}
           sizes="256px"
           style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}
           className="object-cover"
@@ -135,6 +140,7 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
             alt={profile.display_name}
             fill
             unoptimized={avatar.animated}
+            freeze={avatar.needsFreeze}
             sizes="72px"
             style={mediaAdjustStyle(profile.media_adjustments.avatar)}
             className="object-cover"

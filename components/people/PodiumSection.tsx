@@ -103,8 +103,12 @@ function PodiumCard({
 }) {
   const layout = PODIUM_LAYOUT[place]
   const isFirst = place === 1
-  const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier)
-  const miniBanner = resolveProfileMedia(profile.mini_banner_url, profile.account_tier)
+  const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier, profile.vip_expires_at)
+  const miniBanner = resolveProfileMedia(
+    profile.mini_banner_url,
+    profile.account_tier,
+    profile.vip_expires_at
+  )
   const initials =
     profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
     "?"
@@ -162,6 +166,7 @@ function PodiumCard({
               alt=""
               fill
               unoptimized={miniBanner.animated}
+              freeze={miniBanner.needsFreeze}
               sizes="168px"
               style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}
               className="object-cover"
@@ -188,6 +193,7 @@ function PodiumCard({
                   alt={profile.display_name}
                   fill
                   unoptimized={avatar.animated}
+                  freeze={avatar.needsFreeze}
                   sizes={isFirst ? "80px" : "64px"}
                   className="object-cover"
                   fallback={

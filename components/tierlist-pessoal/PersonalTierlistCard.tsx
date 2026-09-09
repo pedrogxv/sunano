@@ -6,13 +6,13 @@ import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { mapTier } from "@/lib/tier-utils"
-import { PERSONAL_TIER_THEMES } from "@/lib/personal-tierlist-theme"
+import { tierCardVars } from "@/lib/personal-tierlist-theme"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   TierItemTooltipContent,
   type TierItemTooltipContentProps,
 } from "@/components/tierlist/TierItemTooltipContent"
-import type { TierlistItem, TierlistTier } from "@/lib/personal-tierlist"
+import type { TierlistItem, TierlistTierDef } from "@/lib/personal-tierlist"
 
 /**
  * Card de periférico da tierlist pessoal, com o mesmo hover da tierlist
@@ -31,10 +31,10 @@ export function PersonalTierlistCard({
   variant = "full",
 }: {
   item: TierlistItem
-  tier: TierlistTier
+  tier: TierlistTierDef
   variant?: "full" | "preview"
 }) {
-  const theme = PERSONAL_TIER_THEMES[tier]
+  const cardVars = tierCardVars(tier.color)
   const isPreview = variant === "preview"
   const href = `/perifericos/${buildPeripheralSlug(item.peripheral.name, item.peripheralId)}`
 
@@ -55,39 +55,43 @@ export function PersonalTierlistCard({
     </div>
   )
 
+  // Borda/glow do card vêm de custom properties calculadas a partir da cor
+  // do tier (`tierCardVars`) — classes Tailwind arbitrárias referenciando
+  // `var(--tier-*)` mantêm o hover em CSS puro, sem precisar de estado JS
+  // pra cada card (mesmo efeito visual de `CARD_TIER_STYLES`, só computado).
   const card = isPreview ? (
     <Link
       href={href}
       aria-label={item.peripheral.name}
+      style={cardVars}
       className={cn(
         "group relative block size-11 shrink-0 overflow-hidden rounded-lg border bg-black transition-all duration-[220ms] ease-out",
         "hover:z-10 hover:-translate-y-0.5",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-        theme.card.border,
-        theme.card.borderHover,
-        theme.card.glow,
-        theme.card.glowHover
+        "border-[color:var(--tier-border)] hover:border-[color:var(--tier-color)]",
+        "shadow-[0_0_12px_var(--tier-glow)]",
+        "hover:shadow-[0_0_10px_2px_var(--tier-glow-strong),0_0_28px_6px_var(--tier-glow-mid),0_0_60px_16px_var(--tier-glow-soft)]"
       )}
     >
-      <div className={cn("absolute inset-y-0 left-0 z-10 w-1", theme.card.accent)} />
+      <div className="absolute inset-y-0 left-0 z-10 w-1 bg-[var(--tier-color)]" />
       {image}
     </Link>
   ) : (
     <Link
       href={href}
       aria-label={item.peripheral.name}
+      style={cardVars}
       className={cn(
         "group relative block w-[104px] shrink-0 overflow-hidden rounded-lg border bg-black transition-all duration-[220ms] ease-out",
         // Mesmo gesto da tierlist oficial: sobe, cresce e acende no hover.
         "hover:z-10 hover:-translate-y-1 hover:scale-[1.3] hover:brightness-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",
-        theme.card.border,
-        theme.card.borderHover,
-        theme.card.glow,
-        theme.card.glowHover
+        "border-[color:var(--tier-border)] hover:border-[color:var(--tier-color)]",
+        "shadow-[0_0_12px_var(--tier-glow)]",
+        "hover:shadow-[0_0_10px_2px_var(--tier-glow-strong),0_0_28px_6px_var(--tier-glow-mid),0_0_60px_16px_var(--tier-glow-soft)]"
       )}
     >
-      <div className={cn("absolute inset-y-0 left-0 z-10 w-1.5", theme.card.accent)} />
+      <div className="absolute inset-y-0 left-0 z-10 w-1.5 bg-[var(--tier-color)]" />
 
       <div className="relative ml-1.5 h-[62px] overflow-hidden" style={{ background: "var(--card-image-bg)" }}>
         {image}

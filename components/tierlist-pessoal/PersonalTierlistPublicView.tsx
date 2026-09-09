@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
-import { PERSONAL_TIERS, PERSONAL_TIER_THEMES, groupByTier } from "@/lib/personal-tierlist-theme"
+import { groupByTierId, sortTiers, tierGradientStyle, tierTextColor } from "@/lib/personal-tierlist-theme"
 import { PersonalTierlistCard } from "./PersonalTierlistCard"
-import type { TierlistItem } from "@/lib/personal-tierlist"
+import type { TierlistItem, TierlistTierDef } from "@/lib/personal-tierlist"
 
 /**
  * Board read-only da tierlist pessoal, no mesmo idioma visual da tierlist
@@ -15,10 +15,12 @@ import type { TierlistItem } from "@/lib/personal-tierlist"
  * num bloco curto sem virar uma segunda página.
  */
 export function PersonalTierlistPublicView({
+  tiers,
   items,
   variant = "full",
   maxPerTier,
 }: {
+  tiers: TierlistTierDef[]
   items: TierlistItem[]
   variant?: "full" | "preview"
   /** Corta cada linha em N itens e mostra "+N" no fim — só usado no preview. */
@@ -33,8 +35,9 @@ export function PersonalTierlistPublicView({
   }
 
   const isPreview = variant === "preview"
-  const byTier = groupByTier(items)
-  const visibleTiers = PERSONAL_TIERS.filter((tier) => (byTier.get(tier)?.length ?? 0) > 0)
+  const orderedTiers = sortTiers(tiers)
+  const byTier = groupByTierId(orderedTiers, items)
+  const visibleTiers = orderedTiers.filter((tier) => (byTier.get(tier.id)?.length ?? 0) > 0)
 
   return (
     // `overflow-visible`: o hover cresce o card pra fora da linha — com overflow
@@ -45,32 +48,33 @@ export function PersonalTierlistPublicView({
 
       <div className="divide-y divide-border">
         {visibleTiers.map((tier, index) => {
-          const rowItems = byTier.get(tier) ?? []
+          const rowItems = byTier.get(tier.id) ?? []
           const shown = maxPerTier ? rowItems.slice(0, maxPerTier) : rowItems
           const overflow = rowItems.length - shown.length
-          const theme = PERSONAL_TIER_THEMES[tier]
+          const textColor = tierTextColor(tier.color)
 
           return (
-            <div key={tier} className="flex items-stretch">
+            <div key={tier.id} className="flex items-stretch">
               {/* Coluna do tier: gradiente vertical + legenda, como no board oficial.
                   Os cantos arredondam nas pontas para acompanhar a moldura. */}
               <div
+                style={tierGradientStyle(tier.color)}
                 className={cn(
-                  "flex shrink-0 flex-col items-center justify-center bg-gradient-to-b",
-                  theme.accent,
-                  isPreview ? "w-12 px-1" : "w-16 px-2 sm:w-20",
+                  "flex shrink-0 flex-col items-center justify-center px-1",
+                  isPreview ? "w-12" : "w-16 sm:w-20",
                   index === 0 && "rounded-tl-xl",
                   index === visibleTiers.length - 1 && "rounded-bl-xl"
                 )}
               >
-                <span className={cn("font-black leading-none", theme.textColor, isPreview ? "text-lg" : "text-2xl")}>
-                  {tier}
+                <span
+                  className={cn(
+                    "line-clamp-2 break-words text-center font-black leading-tight",
+                    isPreview ? "text-sm" : "text-base"
+                  )}
+                  style={{ color: textColor }}
+                >
+                  {tier.label}
                 </span>
-                {!isPreview && (
-                  <span className={cn("mt-1 text-[10px] font-medium opacity-75", theme.textColor)}>
-                    {theme.subtitle}
-                  </span>
-                )}
               </div>
 
               <div className={cn("min-w-0 flex-1 bg-muted/20", isPreview ? "p-1.5" : "p-2")}>

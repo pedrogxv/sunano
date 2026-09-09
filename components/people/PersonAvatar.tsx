@@ -33,7 +33,11 @@ export function PersonAvatar({
   size?: keyof typeof SIZE_CLASSES
   className?: string
 }) {
-  const { src, animated } = resolveProfileMedia(profile.avatar_url, profile.account_tier)
+  const { src, animated, needsFreeze } = resolveProfileMedia(
+    profile.avatar_url,
+    profile.account_tier,
+    profile.vip_expires_at
+  )
   const initials =
     profile.display_name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2) || "?"
   const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
@@ -47,6 +51,7 @@ export function PersonAvatar({
           alt={profile.display_name}
           fill
           unoptimized={animated}
+          freeze={needsFreeze}
           sizes="56px"
           className="object-cover"
           fallback={

@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Package, ShoppingBag } from "lucide-react"
+import { Package } from "lucide-react"
 
 import { AnimatedCounter } from "@/components/animated-counter"
 import { cn } from "@/lib/utils"
@@ -80,13 +80,6 @@ export default function DefaultHero({
             >
               <Package className="size-4" />
               Explorar Tierlist
-            </Link>
-            <Link
-              href="/loja"
-              className="inline-flex items-center gap-2 rounded-full border-2 border-emerald-500/30 bg-emerald-500/10 px-5 py-2.5 text-sm font-bold text-emerald-600 transition-all hover:-translate-y-0.5 hover:border-emerald-500/50 hover:bg-emerald-500/15 dark:text-emerald-300"
-            >
-              <ShoppingBag className="size-4" />
-              Ver Loja
             </Link>
           </div>
 

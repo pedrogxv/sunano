@@ -21,9 +21,17 @@ export const runtime = "nodejs"
 
 /**
  * GET /api/vip/subscribe — diz ao modal de assinatura, ANTES de tentar
- * criar o checkout, se falta telefone/endereço no perfil (a Asaas Checkout
- * de cartão sempre exige) — pro modal mostrar os campos direto em vez de só
- * descobrir isso depois de um 400 do POST.
+ * criar o checkout, quais dados de cobrança faltam no perfil (a Asaas
+ * Checkout de cartão exige o pagador completo: nome/CPF para criar o
+ * customer, telefone/endereço para tokenizar o cartão) — pro modal mostrar
+ * exatamente esses campos em vez de só descobrir isso depois de um 400.
+ *
+ * `needsPayerInfo` e `needsAddressInfo` são separados de propósito: o POST
+ * valida os dois blocos por schemas distintos (`payerInfoSchema` e
+ * `payerAddressSchema`) e o modal precisa enviar exatamente o que falta.
+ * Enquanto o GET só reportava endereço, quem tinha endereço salvo mas não
+ * tinha nome/CPF recebia "Informe seu nome completo." num formulário que
+ * sequer mostrava esse campo.
  */
 export async function GET(request: NextRequest) {
   const user = await getRequestUser(request)
@@ -34,9 +42,11 @@ export async function GET(request: NextRequest) {
   const db = createSupabaseAdminClient()
   const { data: profile } = await db
     .from("user_profiles")
-    .select("phone, postal_code, street, number, neighborhood, city, state")
+    .select("full_name, cpf, phone, postal_code, street, number, neighborhood, city, state")
     .eq("id", user.id)
     .single()
+
+  const hasPayerInfo = Boolean(profile?.full_name && profile?.cpf)
 
   const hasCompleteAddressInfo = Boolean(
     profile?.phone &&
@@ -48,7 +58,15 @@ export async function GET(request: NextRequest) {
       profile?.state
   )
 
-  return NextResponse.json({ hasCompleteAddressInfo })
+  return NextResponse.json({
+    hasPayerInfo,
+    hasCompleteAddressInfo,
+    // Pré-preenche o que já existe — o usuário confirma em vez de redigitar.
+    payer: {
+      fullName: profile?.full_name ?? null,
+      cpf: profile?.cpf ?? null,
+    },
+  })
 }
 
 /**

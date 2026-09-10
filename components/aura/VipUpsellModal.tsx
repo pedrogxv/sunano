@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Crown, Check, ChevronDown, Loader2 } from "lucide-react"
+import { ArrowRight, Crown, Check, Loader2, Lock, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -51,6 +51,14 @@ function formatCepInput(value: string): string {
   return digits.replace(/(\d{5})(\d{1,3})/, "$1-$2")
 }
 
+function formatCpfInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 11)
+  return digits
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2")
+}
+
 interface CepLookupResponse {
   error?: string
   street?: string
@@ -59,7 +67,13 @@ interface CepLookupResponse {
   state?: string
 }
 
-/** Modal "Vantagens do VIP" — banner explicativo com as vantagens e os dois caminhos de ativação (Aura ou assinatura). */
+/** Estado do que o perfil já tem, vindo do GET /api/vip/subscribe. */
+interface BillingRequirements {
+  needsPayerInfo: boolean
+  needsAddressInfo: boolean
+}
+
+/** Modal "Vantagens do VIP" — vantagens à esquerda, cobrança à direita, os dois caminhos de ativação (Aura ou assinatura). */
 export function VipUpsellModal({
   open,
   onOpenChange,
@@ -74,11 +88,15 @@ export function VipUpsellModal({
   const [subscribing, setSubscribing] = useState(false)
   const [purchasingWithAura, setPurchasingWithAura] = useState(false)
 
-  const [needsAddressInfo, setNeedsAddressInfo] = useState(false)
-  const [addressChecked, setAddressChecked] = useState(false)
-  const [addressFormOpen, setAddressFormOpen] = useState(false)
-  const phoneInputRef = useRef<HTMLInputElement>(null)
+  // `null` = ainda checando. A Asaas Checkout de cartão exige o pagador
+  // completo, e os dois blocos são validados por schemas distintos no POST —
+  // por isso o modal rastreia o que falta separadamente.
+  const [requirements, setRequirements] = useState<BillingRequirements | null>(null)
+  const [formOpen, setFormOpen] = useState(false)
+  const firstFieldRef = useRef<HTMLInputElement>(null)
 
+  const [guestName, setGuestName] = useState("")
+  const [guestDocument, setGuestDocument] = useState("")
   const [guestPhone, setGuestPhone] = useState("")
   const [guestPostalCode, setGuestPostalCode] = useState("")
   const [guestStreet, setGuestStreet] = useState("")
@@ -90,23 +108,45 @@ export function VipUpsellModal({
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState<string | null>(null)
 
+  const needsPayerInfo = requirements?.needsPayerInfo ?? false
+  const needsAddressInfo = requirements?.needsAddressInfo ?? false
+  const needsAnything = needsPayerInfo || needsAddressInfo
+  const checked = requirements != null
+
   useEffect(() => {
     if (!open || !subscriptionEnabled) return
-    setAddressChecked(false)
-    setAddressFormOpen(false)
+    setRequirements(null)
+    setFormOpen(false)
     let cancelled = false
     fetch("/api/vip/subscribe")
-      .then((res) => (res.ok ? res.json() : { hasCompleteAddressInfo: true }))
-      .then((data: { hasCompleteAddressInfo?: boolean }) => {
-        if (cancelled) return
-        setNeedsAddressInfo(!data.hasCompleteAddressInfo)
-      })
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          data: {
+            hasPayerInfo?: boolean
+            hasCompleteAddressInfo?: boolean
+            payer?: { fullName?: string | null; cpf?: string | null }
+          } | null
+        ) => {
+          if (cancelled) return
+          // Falha na checagem não deve bloquear a assinatura: o POST valida de
+          // novo e, se realmente faltar dado, devolve o erro.
+          if (!data) {
+            setRequirements({ needsPayerInfo: false, needsAddressInfo: false })
+            return
+          }
+          // Pré-preenche o que já existe: quem só não tem CPF confirma o nome
+          // em vez de redigitá-lo.
+          if (data.payer?.fullName) setGuestName(data.payer.fullName)
+          if (data.payer?.cpf) setGuestDocument(formatCpfInput(data.payer.cpf))
+          setRequirements({
+            needsPayerInfo: !data.hasPayerInfo,
+            needsAddressInfo: !data.hasCompleteAddressInfo,
+          })
+        }
+      )
       .catch(() => {
-        // Falha na checagem não deve bloquear a assinatura: o POST valida de
-        // novo e, se realmente faltar dado, devolve o erro.
-      })
-      .finally(() => {
-        if (!cancelled) setAddressChecked(true)
+        if (!cancelled) setRequirements({ needsPayerInfo: false, needsAddressInfo: false })
       })
     return () => {
       cancelled = true
@@ -141,28 +181,37 @@ export function VipUpsellModal({
   }
 
   function handleSubscribeClick() {
-    if (needsAddressInfo && !addressFormOpen) {
-      setAddressFormOpen(true)
-      requestAnimationFrame(() => phoneInputRef.current?.focus())
+    if (needsAnything && !formOpen) {
+      setFormOpen(true)
+      requestAnimationFrame(() => firstFieldRef.current?.focus())
       return
     }
     handleSubscribe()
   }
 
   async function handleSubscribe() {
-    if (needsAddressInfo) {
-      if (!guestPhone || !guestPostalCode || !guestStreet || !guestNumber || !guestNeighborhood || !guestCity || !guestState) {
-        toast.error("Preencha todos os campos obrigatórios de cobrança.")
-        return
-      }
+    if (needsPayerInfo && (!guestName.trim() || guestDocument.replace(/\D/g, "").length !== 11)) {
+      toast.error("Preencha nome completo e CPF.")
+      return
     }
+    if (
+      needsAddressInfo &&
+      (!guestPhone || !guestPostalCode || !guestStreet || !guestNumber || !guestNeighborhood || !guestCity || !guestState)
+    ) {
+      toast.error("Preencha todos os campos obrigatórios de cobrança.")
+      return
+    }
+
     setSubscribing(true)
     try {
       const res = await fetch("/api/vip/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          needsAddressInfo
+        body: JSON.stringify({
+          ...(needsPayerInfo
+            ? { guestName: guestName.trim(), guestDocument: guestDocument.replace(/\D/g, "") }
+            : {}),
+          ...(needsAddressInfo
             ? {
                 guestPhone: guestPhone.replace(/\D/g, ""),
                 guestPostalCode: guestPostalCode.replace(/\D/g, ""),
@@ -173,8 +222,8 @@ export function VipUpsellModal({
                 guestCity,
                 guestState,
               }
-            : {}
-        ),
+            : {}),
+        }),
       })
       const data = (await res.json()) as {
         ok?: boolean
@@ -199,6 +248,14 @@ export function VipUpsellModal({
           setSubscribing(false)
           return
         }
+        // Um 400 de validação com o formulário fechado significa que o perfil
+        // tem menos dado do que o GET indicou — abre o formulário em vez de
+        // deixar o usuário preso num toast que ele não tem como resolver.
+        if (res.status === 400 && !formOpen) {
+          setRequirements({ needsPayerInfo: true, needsAddressInfo: true })
+          setFormOpen(true)
+          requestAnimationFrame(() => firstFieldRef.current?.focus())
+        }
         throw new Error(data.error ?? "Erro ao iniciar assinatura")
       }
       onSubscribeStarted?.()
@@ -221,214 +278,312 @@ export function VipUpsellModal({
     }
   }
 
+  const inputClass = "h-9 border-border/70 bg-background/60 text-sm"
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <div className="mx-auto flex size-14 items-center justify-center rounded-full" style={{ backgroundColor: "var(--vip-accent-soft)" }}>
-            <Crown className="size-7 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
-          </div>
-          <DialogTitle className="text-center vip-badge-text text-xl">
-            {isResubscribe ? "Voltar a assinar" : "Vantagens do VIP"}
-          </DialogTitle>
-          <DialogDescription className="text-center">
-            {isResubscribe
-              ? currentAccessUntil
-                ? `Seu VIP atual vale até ${currentAccessUntil} e nada disso é perdido: o mês que você pagar agora é somado ao que já resta, e a cobrança mensal só volta a partir daí.`
-                : "O período que você já pagou não é perdido: o mês que você pagar agora é somado ao que já resta, e a cobrança mensal só volta a partir daí."
-              : VIP_SUPPORT_MESSAGE}
-          </DialogDescription>
-        </DialogHeader>
-
-        <ul className="space-y-2.5 py-2">
-          {VIP_SUBSCRIPTION_BENEFITS.map((benefit) => (
-            <li key={benefit} className="flex items-start gap-2 text-sm text-foreground">
-              <Check className="mt-0.5 size-4 shrink-0" style={{ color: "var(--vip-accent)" }} />
-              <span>{benefit}</span>
-            </li>
-          ))}
-        </ul>
-
-        {addressChecked && needsAddressInfo && (
+      {/*
+        Duas colunas a partir de `sm`: vantagens à esquerda (coluna fixa com o
+        preço), cobrança + ações à direita. Antes tudo era uma coluna de
+        `max-w-sm`, o que espremia 9 campos de endereço numa faixa estreita e
+        obrigava a rolar o modal inteiro para chegar no botão.
+      */}
+      <DialogContent
+        showCloseButton
+        className={`gap-0 overflow-hidden p-0 sm:max-w-md ${
+          formOpen && needsAnything ? "sm:max-w-3xl" : ""
+        } transition-[max-width] duration-300 ease-out`}
+      >
+        <div className={`grid ${formOpen && needsAnything ? "sm:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]" : ""}`}>
+          {/* Coluna 1 — a oferta */}
           <div
-            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${
-              addressFormOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
-            }`}
+            className="relative flex flex-col gap-4 p-5 sm:p-6"
+            style={{
+              background:
+                "radial-gradient(120% 80% at 0% 0%, var(--vip-accent-soft), transparent 60%)",
+            }}
           >
-            <div className="overflow-hidden">
-              <div className="space-y-4 rounded-xl border p-4">
-                <p className="text-xs text-muted-foreground">
-                  Pagamento com cartão exige telefone e endereço de cobrança. Eles ficam salvos no seu perfil.
-                </p>
-
-                <div className="space-y-2">
-                  <Label>Telefone *</Label>
-                  <Input
-                    ref={phoneInputRef}
-                    required
-                    inputMode="numeric"
-                    value={guestPhone}
-                    onChange={(e) => setGuestPhone(formatPhoneInput(e.target.value))}
-                    placeholder="(00) 00000-0000"
-                    maxLength={15}
-                    className="border-border/80 bg-muted/30"
-                  />
+            <DialogHeader className="space-y-3 text-left">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex size-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: "var(--vip-accent-soft)" }}
+                >
+                  <Crown className="size-6 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
                 </div>
+                <div className="min-w-0">
+                  <DialogTitle className="vip-badge-text text-lg leading-tight">
+                    {isResubscribe ? "Voltar a assinar" : "Vantagens do VIP"}
+                  </DialogTitle>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-bold text-foreground">{formatVipPrice()}</span>/mês · cancele quando quiser
+                  </p>
+                </div>
+              </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>CEP *</Label>
-                    <div className="relative">
+              <DialogDescription className="text-xs leading-relaxed">
+                {isResubscribe
+                  ? currentAccessUntil
+                    ? `Seu VIP atual vale até ${currentAccessUntil} e nada disso é perdido: o mês que você pagar agora é somado ao que já resta, e a cobrança mensal só volta a partir daí.`
+                    : "O período que você já pagou não é perdido: o mês que você pagar agora é somado ao que já resta, e a cobrança mensal só volta a partir daí."
+                  : VIP_SUPPORT_MESSAGE}
+              </DialogDescription>
+            </DialogHeader>
+
+            <ul className="space-y-2">
+              {VIP_SUBSCRIPTION_BENEFITS.map((benefit) => (
+                <li key={benefit} className="flex items-start gap-2 text-xs leading-relaxed text-foreground">
+                  <Check className="mt-0.5 size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />
+                  <span>{benefit}</span>
+                </li>
+              ))}
+            </ul>
+
+            {/* Ações ficam nesta coluna enquanto o formulário está fechado; com
+                ele aberto, migram para o rodapé da coluna 2 (junto dos campos). */}
+            {!(formOpen && needsAnything) && (
+              <div className="mt-auto space-y-2 pt-2">
+                <SubscribeActions />
+              </div>
+            )}
+          </div>
+
+          {/* Coluna 2 — cobrança. Só existe com o formulário aberto. */}
+          {formOpen && needsAnything && (
+            <div className="flex flex-col border-t bg-muted/20 p-5 sm:border-t-0 sm:border-l sm:p-6">
+              <div className="mb-4 flex items-start gap-2">
+                <Lock className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-bold text-foreground">Dados de cobrança</p>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Exigidos pela operadora para cobrar no cartão. Ficam salvos no seu perfil — você só preenche
+                    uma vez.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-3 overflow-y-auto sm:max-h-[52vh] sm:pr-1">
+                {needsPayerInfo && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Nome completo *</Label>
+                      <Input
+                        ref={firstFieldRef}
+                        required
+                        minLength={2}
+                        maxLength={200}
+                        value={guestName}
+                        onChange={(e) => setGuestName(e.target.value)}
+                        placeholder="Como está no documento"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">CPF *</Label>
                       <Input
                         required
                         inputMode="numeric"
-                        value={guestPostalCode}
-                        onChange={(e) => handleCepChange(e.target.value)}
-                        placeholder="00000-000"
-                        maxLength={9}
-                        className="border-border/80 bg-muted/30"
+                        value={guestDocument}
+                        onChange={(e) => setGuestDocument(formatCpfInput(e.target.value))}
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                        className={inputClass}
                       />
-                      {cepLoading && (
-                        <Loader2 className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-                      )}
                     </div>
-                    {cepError && <p className="text-[10px] text-red-400">{cepError}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Número *</Label>
-                    <Input
-                      required
-                      maxLength={20}
-                      value={guestNumber}
-                      onChange={(e) => setGuestNumber(e.target.value)}
-                      placeholder="123"
-                      className="border-border/80 bg-muted/30"
-                    />
-                  </div>
-                </div>
+                  </>
+                )}
 
-                <div className="space-y-2">
-                  <Label>Endereço *</Label>
-                  <Input
-                    required
-                    maxLength={200}
-                    value={guestStreet}
-                    onChange={(e) => setGuestStreet(e.target.value)}
-                    placeholder="Rua, avenida..."
-                    className="border-border/80 bg-muted/30"
-                  />
-                </div>
+                {needsAddressInfo && (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Telefone *</Label>
+                      <Input
+                        ref={needsPayerInfo ? undefined : firstFieldRef}
+                        required
+                        inputMode="numeric"
+                        value={guestPhone}
+                        onChange={(e) => setGuestPhone(formatPhoneInput(e.target.value))}
+                        placeholder="(00) 00000-0000"
+                        maxLength={15}
+                        className={inputClass}
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label>Complemento</Label>
-                  <Input
-                    maxLength={100}
-                    value={guestComplement}
-                    onChange={(e) => setGuestComplement(e.target.value)}
-                    placeholder="Apto, bloco... (opcional)"
-                    className="border-border/80 bg-muted/30"
-                  />
-                </div>
+                    <div className="grid grid-cols-[1.4fr_1fr] gap-2.5">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">CEP *</Label>
+                        <div className="relative">
+                          <Input
+                            required
+                            inputMode="numeric"
+                            value={guestPostalCode}
+                            onChange={(e) => handleCepChange(e.target.value)}
+                            placeholder="00000-000"
+                            maxLength={9}
+                            className={inputClass}
+                          />
+                          {cepLoading && (
+                            <Loader2 className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+                          )}
+                        </div>
+                        {cepError && <p className="text-[10px] text-red-400">{cepError}</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Número *</Label>
+                        <Input
+                          required
+                          maxLength={20}
+                          value={guestNumber}
+                          onChange={(e) => setGuestNumber(e.target.value)}
+                          placeholder="123"
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label>Bairro *</Label>
-                  <Input
-                    required
-                    maxLength={100}
-                    value={guestNeighborhood}
-                    onChange={(e) => setGuestNeighborhood(e.target.value)}
-                    placeholder="Seu bairro"
-                    className="border-border/80 bg-muted/30"
-                  />
-                </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Endereço *</Label>
+                      <Input
+                        required
+                        maxLength={200}
+                        value={guestStreet}
+                        onChange={(e) => setGuestStreet(e.target.value)}
+                        placeholder="Rua, avenida..."
+                        className={inputClass}
+                      />
+                    </div>
 
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2 space-y-2">
-                    <Label>Cidade *</Label>
-                    <Input
-                      required
-                      maxLength={100}
-                      value={guestCity}
-                      onChange={(e) => setGuestCity(e.target.value)}
-                      placeholder="Sua cidade"
-                      className="border-border/80 bg-muted/30"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>UF *</Label>
-                    <Select value={guestState} onValueChange={setGuestState} required>
-                      <SelectTrigger className="w-full border-border/80 bg-muted/30">
-                        <SelectValue placeholder="UF" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {BR_STATES.map((state) => (
-                          <SelectItem key={state.uf} value={state.uf}>
-                            {state.uf}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Complemento</Label>
+                        <Input
+                          maxLength={100}
+                          value={guestComplement}
+                          onChange={(e) => setGuestComplement(e.target.value)}
+                          placeholder="Apto, bloco..."
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Bairro *</Label>
+                        <Input
+                          required
+                          maxLength={100}
+                          value={guestNeighborhood}
+                          onChange={(e) => setGuestNeighborhood(e.target.value)}
+                          placeholder="Seu bairro"
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-[1fr_5.5rem] gap-2.5">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Cidade *</Label>
+                        <Input
+                          required
+                          maxLength={100}
+                          value={guestCity}
+                          onChange={(e) => setGuestCity(e.target.value)}
+                          placeholder="Sua cidade"
+                          className={inputClass}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">UF *</Label>
+                        <Select value={guestState} onValueChange={setGuestState} required>
+                          <SelectTrigger className="h-9 w-full border-border/70 bg-background/60 text-sm">
+                            <SelectValue placeholder="UF" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {BR_STATES.map((state) => (
+                              <SelectItem key={state.uf} value={state.uf}>
+                                {state.uf}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="mt-4 space-y-2 border-t pt-4">
+                <SubscribeActions />
+                <p className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/70">
+                  <ShieldCheck className="size-3" />
+                  Os dados do cartão são digitados na página segura da Asaas.
+                </p>
               </div>
             </div>
-          </div>
-        )}
-
-        <div className="space-y-2 pt-2">
-          {subscriptionEnabled ? (
-            <button
-              type="button"
-              onClick={handleSubscribeClick}
-              disabled={subscribing || purchasingWithAura || !addressChecked}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-bold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ backgroundColor: "var(--vip-accent)" }}
-            >
-              {subscribing && <Loader2 className="size-4 animate-spin" />}
-              {needsAddressInfo && !addressFormOpen ? (
-                <>
-                  {isResubscribe ? "Voltar a assinar" : "Assinar"} por {formatVipPrice()}/mês
-                  <ChevronDown className="size-4" />
-                </>
-              ) : (
-                `Confirmar assinatura · ${formatVipPrice()}/mês`
-              )}
-            </button>
-          ) : (
-            // Assinatura paga desligada: sem uma saída aqui o modal vira beco
-            // sem saída para quem abriu por um CTA de "Seja VIP". Ativar com
-            // Aura continua valendo (não envolve cobrança), então mandamos
-            // para a Central — onde a `VipMonthCard` faz o resgate.
-            <div className="space-y-2 rounded-lg border border-dashed px-4 py-3 text-center">
-              <p className="text-xs text-muted-foreground">
-                A assinatura paga está temporariamente indisponível; dá para ativar o VIP resgatando Aura.
-              </p>
-              <Link
-                href="/aura"
-                onClick={() => onOpenChange(false)}
-                className="inline-flex items-center gap-1.5 text-xs font-bold transition-opacity hover:opacity-80"
-                style={{ color: "var(--vip-accent)" }}
-              >
-                Ativar com Aura
-                <ArrowRight className="size-3.5" />
-              </Link>
-            </div>
-          )}
-
-          {onPurchaseWithAura && auraCost != null && (
-            <button
-              type="button"
-              onClick={handlePurchaseWithAura}
-              disabled={subscribing || purchasingWithAura}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm font-bold transition-colors hover:bg-[var(--vip-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
-            >
-              {purchasingWithAura && <Loader2 className="size-4 animate-spin" />}
-              Ativar com {auraCost.toLocaleString("pt-BR")} de Aura
-            </button>
           )}
         </div>
       </DialogContent>
     </Dialog>
   )
+
+  /**
+   * Botões de ação — renderizados na coluna da oferta enquanto o formulário
+   * está fechado e no rodapé da coluna de cobrança quando ele abre, para o
+   * CTA ficar sempre ao lado do que a pessoa acabou de preencher.
+   */
+  function SubscribeActions() {
+    return (
+      <>
+        {subscriptionEnabled ? (
+          <button
+            type="button"
+            onClick={handleSubscribeClick}
+            disabled={subscribing || purchasingWithAura || !checked}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-bold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ backgroundColor: "var(--vip-accent)" }}
+          >
+            {subscribing && <Loader2 className="size-4 animate-spin" />}
+            {needsAnything && !formOpen ? (
+              <>
+                {isResubscribe ? "Voltar a assinar" : "Assinar"} por {formatVipPrice()}/mês
+                <ArrowRight className="size-4" />
+              </>
+            ) : (
+              `Confirmar assinatura · ${formatVipPrice()}/mês`
+            )}
+          </button>
+        ) : (
+          // Assinatura paga desligada: sem uma saída aqui o modal vira beco
+          // sem saída para quem abriu por um CTA de "Seja VIP". Ativar com
+          // Aura continua valendo (não envolve cobrança), então mandamos
+          // para a Central — onde a `VipMonthCard` faz o resgate.
+          <div className="space-y-2 rounded-lg border border-dashed px-4 py-3 text-center">
+            <p className="text-xs text-muted-foreground">
+              A assinatura paga está temporariamente indisponível; dá para ativar o VIP resgatando Aura.
+            </p>
+            <Link
+              href="/aura"
+              onClick={() => onOpenChange(false)}
+              className="inline-flex items-center gap-1.5 text-xs font-bold transition-opacity hover:opacity-80"
+              style={{ color: "var(--vip-accent)" }}
+            >
+              Ativar com Aura
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+        )}
+
+        {onPurchaseWithAura && auraCost != null && (
+          <button
+            type="button"
+            onClick={handlePurchaseWithAura}
+            disabled={subscribing || purchasingWithAura}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm font-bold transition-colors hover:bg-[var(--vip-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+          >
+            {purchasingWithAura && <Loader2 className="size-4 animate-spin" />}
+            Ativar com {auraCost.toLocaleString("pt-BR")} de Aura
+          </button>
+        )}
+      </>
+    )
+  }
 }

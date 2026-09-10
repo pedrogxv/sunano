@@ -10,6 +10,7 @@ import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { profilePath } from "@/lib/profile-name"
 import { ALL_CATEGORIES, CATEGORY_PLURAL_LABELS } from "@/lib/tag-options"
+import { TIERLIST_CATEGORY_SLUGS } from "@/lib/tierlist-categories"
 import { SITE_URL } from "@/lib/site-url"
 
 
@@ -31,6 +32,7 @@ const STATIC_ROUTES: { path: string; priority: number; changeFrequency: Metadata
   { path: "/noticias", priority: 0.8, changeFrequency: "daily" },
   { path: "/perifericos", priority: 0.8, changeFrequency: "daily" },
   { path: "/tierlist", priority: 0.7, changeFrequency: "weekly" },
+  { path: "/tierlist/comunidade", priority: 0.5, changeFrequency: "daily" },
   { path: "/videos", priority: 0.6, changeFrequency: "weekly" },
   { path: "/ranking", priority: 0.6, changeFrequency: "weekly" },
   { path: "/pessoas", priority: 0.5, changeFrequency: "weekly" },
@@ -131,6 +133,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }))
 
+  // Uma entrada por categoria da tierlist (`/tierlist/<slug>` em pt-BR) — são
+  // as páginas que ranqueiam para "tierlist de mouse", "tier list teclado
+  // gamer" etc. Antes cada categoria vivia só em `?categoria=` client-side,
+  // sem URL própria.
+  const tierlistCategoryEntries: MetadataRoute.Sitemap = TIERLIST_CATEGORY_SLUGS.map((slug) => ({
+    url: `${SITE_URL}/tierlist/${slug}`,
+    changeFrequency: "weekly" as const,
+    priority: 0.6,
+  }))
+
   // Cada ficha de periférico. É o maior acervo indexável do site e o que
   // responde a busca de cauda longa por modelo — anunciá-las explicitamente
   // evita depender do rastreio dos links da listagem paginada.
@@ -160,6 +172,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...storeRootEntries,
     ...categoryEntries,
     ...peripheralCategoryEntries,
+    ...tierlistCategoryEntries,
     ...peripheralEntries,
     ...forumEntries,
     ...blogEntries,

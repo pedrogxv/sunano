@@ -92,17 +92,22 @@ export async function updateSession(
   // leitura do próprio registro), sem precisar do client de service-role.
   let needsLgpdConsent = false
   let isAccountBanned = false
+  let hasStoreAccess = false
   if (data.user) {
     // Mesma query que já buscava lgpd_consent_at — ban geral entra de graça
     // no round-trip existente (ver account-ban-repository.ts para o resto do
     // enforcement: aqui só precisamos saber se expulsa a sessão ou não).
     const { data: userProfile } = await supabase
       .from("user_profiles")
-      .select("lgpd_consent_at, account_banned_at")
+      .select("lgpd_consent_at, account_banned_at, store_access")
       .eq("id", data.user.id)
       .maybeSingle()
 
     isAccountBanned = Boolean(userProfile?.account_banned_at)
+    // Liberação individual da Loja/Afiliados: entra de carona nesta query, que
+    // já roda para toda requisição autenticada — o proxy precisa do valor para
+    // decidir a manutenção da Loja e não pode importar o helper `server-only`.
+    hasStoreAccess = Boolean(userProfile?.store_access)
     if (isAccountBanned) {
       // Encerra a sessão já neste response — o cookie sai invalidado junto
       // com o redirect que proxy.ts monta a partir daqui.
@@ -134,5 +139,6 @@ export async function updateSession(
     aal,
     needsLgpdConsent,
     isAccountBanned,
+    hasStoreAccess,
   }
 }

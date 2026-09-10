@@ -5,6 +5,7 @@ import {
   mediaAdjustStyle,
   type MediaAdjust,
 } from "@/lib/profile-media-adjust"
+import { buildProfileMediaItems, indexOfMedia } from "@/lib/profile-media-items"
 import { cn } from "@/lib/utils"
 import { ProfileImageLightbox } from "./ProfileImageLightbox"
 
@@ -16,6 +17,15 @@ interface BannerProps {
   /** Enquadramento escolhido pelo dono no editor de perfil. */
   adjust?: MediaAdjust
   className?: string
+  /**
+   * Nome do dono — vai para o rótulo acessível da capa no visualizador.
+   */
+  name?: string
+  /**
+   * Foto do perfil, só para o visualizador poder oferecer a aba "Foto" ao lado
+   * da capa. Não é renderizada aqui (quem desenha o avatar é `AvatarQuadrado`).
+   */
+  avatarUrl?: string | null
 }
 
 /**
@@ -30,7 +40,15 @@ interface BannerProps {
  * borda no rodapé da capa — as duas marcas formam um conjunto só, em vez da
  * capa ficar sem nenhum sinal de tier enquanto só a foto o exibe.
  */
-export function Banner({ bannerUrl, tier, vipExpiresAt = null, adjust = DEFAULT_ADJUST, className }: BannerProps) {
+export function Banner({
+  bannerUrl,
+  tier,
+  vipExpiresAt = null,
+  adjust = DEFAULT_ADJUST,
+  className,
+  name = "",
+  avatarUrl = null,
+}: BannerProps) {
   const { src, animated, needsFreeze } = resolveProfileMedia(bannerUrl, tier, vipExpiresAt)
   const isVip = isVipActive(tier, vipExpiresAt)
 
@@ -76,12 +94,18 @@ export function Banner({ bannerUrl, tier, vipExpiresAt = null, adjust = DEFAULT_
   // Sem capa enviada não há o que ampliar — o gradiente de fallback não abre modal.
   if (!src) return image
 
+  const { items, kinds } = buildProfileMediaItems({
+    bannerUrl,
+    avatarUrl,
+    name,
+    tier,
+    vipExpiresAt,
+  })
+
   return (
     <ProfileImageLightbox
-      src={src}
-      alt="Capa do perfil"
-      unoptimized={animated}
-      freeze={needsFreeze}
+      items={items}
+      index={indexOfMedia(kinds, "banner")}
       triggerClassName="w-full"
     >
       {image}

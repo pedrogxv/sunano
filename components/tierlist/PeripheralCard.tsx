@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { AlertTriangle } from "lucide-react"
@@ -43,6 +44,10 @@ interface PeripheralCardProps {
 }
 
 export function PeripheralCard({ ...item }: PeripheralCardProps) {
+  // Tooltip controlado: com 168 cards numa aba, montar o conteúdo do tooltip
+  // (imagem + tags + 7 barras de nota) de todos de uma vez pesava no DOM. Aqui
+  // o `<TooltipContent>` só entra na árvore quando o card abre.
+  const [open, setOpen] = useState(false)
   const isGolpe = item.priceGroup === GOLPE_KEY
   const tierStyle = item.priceGroup
     ? CARD_PRICE_BAND_STYLES[item.priceGroup]
@@ -55,7 +60,7 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
   const href = `/perifericos/${buildPeripheralSlug(item.name, item.id)}`
 
   return (
-    <Tooltip>
+    <Tooltip open={open} onOpenChange={setOpen}>
       <TooltipTrigger asChild>
         {/* Link e não div: o Radix Tooltip ignora input de toque por design, então no
             mobile o tooltip (que continha o único link) nunca abria e o card ficava
@@ -99,7 +104,8 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
                 alt={item.name}
                 src={item.image_url}
                 fill
-                sizes="(max-width: 768px) 30vw, 120px"
+                loading="lazy"
+                sizes="(max-width: 768px) 30vw, 140px"
                 // Contra-filtro pro hover:brightness-150 do card (abaixo). Sem isso,
                 // periféricos claros/brancos estouram pra #fff e "derretem" no hover —
                 // a imagem em si não deve clarear, só o glow/borda ao redor dela.
@@ -131,26 +137,28 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
         </Link>
       </TooltipTrigger>
 
-      <TooltipContent
-        className="rounded-xl border border-border bg-popover p-4 shadow-2xl backdrop-blur-md"
-        sideOffset={12}
-        side="bottom"
-        align="center"
-      >
-        <Link href={href} aria-label={item.name} className="block cursor-pointer hover:opacity-95">
-          <TierItemTooltipContent
-            name={item.name}
-            brand={item.brand}
-            categoryLabel={item.category}
-            image_url={item.image_url}
-            tier={item.priceGroup ? null : item.tier}
-            ratings={item.ratings ?? {}}
-            tags={item.tags}
-            priceBand={item.priceGroup ? PRICE_BAND_LABEL[item.priceGroup] : undefined}
-            golpeMotivo={isGolpe ? item.golpeMotivo : undefined}
-          />
-        </Link>
-      </TooltipContent>
+      {open && (
+        <TooltipContent
+          className="rounded-xl border border-border bg-popover p-4 shadow-2xl backdrop-blur-md"
+          sideOffset={12}
+          side="bottom"
+          align="center"
+        >
+          <Link href={href} aria-label={item.name} className="block cursor-pointer hover:opacity-95">
+            <TierItemTooltipContent
+              name={item.name}
+              brand={item.brand}
+              categoryLabel={item.category}
+              image_url={item.image_url}
+              tier={item.priceGroup ? null : item.tier}
+              ratings={item.ratings ?? {}}
+              tags={item.tags}
+              priceBand={item.priceGroup ? PRICE_BAND_LABEL[item.priceGroup] : undefined}
+              golpeMotivo={isGolpe ? item.golpeMotivo : undefined}
+            />
+          </Link>
+        </TooltipContent>
+      )}
     </Tooltip>
   )
 }

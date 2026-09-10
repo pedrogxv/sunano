@@ -62,4 +62,10 @@ export type TierlistMeta = {
   heartsCount: number
   /** O visitante atual já deu coração? `false` para quem não está logado. */
   viewerHearted: boolean
+  /**
+   * Dono ocultou a tierlist. Não depende de VIP — mesmo quem deixou o VIP
+   * expirar pode ligar/desligar. Some da comunidade, do link no perfil e da
+   * página pública para visitantes; o dono continua vendo o próprio board.
+   */
+  isHidden: boolean
 }

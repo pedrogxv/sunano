@@ -111,14 +111,19 @@ export type PaginatedForumPosts = {
 
 type CategoryRow = { id: string; slug: string; name: string; parent_id: string | null }
 
-/** Carrega todas as categorias (tabela pequena) para resolver nome/pai em memória. */
-async function buildCategoryMap(): Promise<Map<string, CategoryRow>> {
+/**
+ * Carrega todas as categorias (tabela pequena) para resolver nome/pai em
+ * memória. `cache()` do React deduplica por requisição: uma mesma render que
+ * enriquece mais de uma lista de posts (ou pagina duas vezes) buscava a
+ * tabela inteira de novo a cada chamada.
+ */
+const buildCategoryMap = cache(async (): Promise<Map<string, CategoryRow>> => {
   const db = createSupabaseAdminClient()
   const { data } = await db.from("forum_categories").select("id, slug, name, parent_id")
   const map = new Map<string, CategoryRow>()
   for (const row of data ?? []) map.set(row.id, row)
   return map
-}
+})
 
 function resolveCategoryInfo(
   categoryId: string | null,
@@ -177,31 +182,42 @@ export async function enrichForumPostRows(rows: ForumPostRow[]): Promise<ForumLi
   // linha por post, `body_preview` em vez do corpo inteiro) — antes esta etapa
   // trazia uma linha por comentário de todos os posts da página só pra contar
   // em JS. Ver 20261010000000_forum_post_top_comment_preview.sql.
-  const [{ data: summaryRows, error: summaryError }, { data: savedRows }] = await Promise.all([
-    db.rpc("get_forum_posts_comment_summary", { p_post_ids: postIds }),
-    db.from("forum_saved_posts").select("post_id").in("post_id", postIds),
-  ])
+  // A contagem de salvos também é agregada no banco (uma linha por post) —
+  // antes vinha uma linha por SALVAMENTO só pra ser contada em JS. Ver
+  // 20261030000000_forum_listing_perf.sql.
+  const [{ data: summaryRows, error: summaryError }, { data: savedRows, error: savedError }] =
+    await Promise.all([
+      db.rpc("get_forum_posts_comment_summary", { p_post_ids: postIds }),
+      db.rpc("get_forum_posts_saved_counts", { p_post_ids: postIds }),
+    ])
 
   if (summaryError) {
     // Preview é enfeite: se a RPC falhar (ex: migration ainda não aplicada), a
     // listagem continua renderizando sem contagem/destaque em vez de quebrar.
     console.error("[forum-repository] get_forum_posts_comment_summary:", summaryError)
   }
+  if (savedError) {
+    console.error("[forum-repository] get_forum_posts_saved_counts:", savedError)
+  }
 
   const summaryMap = new Map((summaryRows ?? []).map((row) => [row.post_id, row]))
 
   const savedCounts: Record<string, number> = {}
   for (const s of savedRows ?? []) {
-    savedCounts[s.post_id] = (savedCounts[s.post_id] ?? 0) + 1
+    savedCounts[s.post_id] = s.saved_count ?? 0
   }
 
   // Um `buildProfileMap` só para autores de post E autores dos comentários
-  // destaque — juntar os ids evita uma segunda ida a `user_profiles`.
-  const profileMap = await buildProfileMap([
-    ...rows.map((p) => p.user_id),
-    ...(summaryRows ?? []).map((row) => row.top_comment_user_id),
+  // destaque — juntar os ids evita uma segunda ida a `user_profiles`. Roda em
+  // paralelo com as categorias: as duas só dependem do resultado acima, não
+  // uma da outra.
+  const [profileMap, categoryMap] = await Promise.all([
+    buildProfileMap([
+      ...rows.map((p) => p.user_id),
+      ...(summaryRows ?? []).map((row) => row.top_comment_user_id),
+    ]),
+    buildCategoryMap(),
   ])
-  const categoryMap = await buildCategoryMap()
 
   function resolveTopComment(postId: string): ForumTopComment | null {
     const summary = summaryMap.get(postId)

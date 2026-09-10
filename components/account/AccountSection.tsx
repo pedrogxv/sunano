@@ -1,16 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, Handshake, KeyRound, Link2, Shield, SlidersHorizontal } from "lucide-react"
+import { ArrowRight, Crown, Handshake, KeyRound, Link2, Shield, SlidersHorizontal } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { useAuthUser } from "@/components/providers/auth-context"
-import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 
 import { LinkedAccountsTab } from "./LinkedAccountsTab"
 import { PreferencesTab } from "./PreferencesTab"
 import { PrivacidadeTab } from "./PrivacidadeTab"
 import { SecurityTab } from "./SecurityTab"
+import { SubscriptionTab } from "./SubscriptionTab"
 
 interface AccountSectionProps {
   email: string | null
@@ -21,6 +21,7 @@ interface AccountSectionProps {
 const BASE_GROUPS = [
   { id: "seguranca", label: "Segurança", Icon: KeyRound },
   { id: "conexoes", label: "Conexões", Icon: Link2 },
+  { id: "assinatura", label: "Assinatura", Icon: Crown },
   { id: "preferencias", label: "Preferências", Icon: SlidersHorizontal },
   { id: "privacidade", label: "Privacidade e dados", Icon: Shield },
 ] as const
@@ -36,7 +37,10 @@ export function AccountSection({ email, lgpdConsentAt, lgpdConsentVersion }: Acc
   const { user: authUser } = useAuthUser()
   // Afiliados acompanha a manutenção da Loja (ver lib/server/auth/affiliate-access.ts).
   // O WEB MASTER continua vendo a seção, igual ao que faz na Loja.
-  const showAffiliates = !isStoreMaintenanceEnabled() || (authUser?.isWebMaster ?? false)
+  // Resolvido no servidor (ver /api/auth/me): manutenção desligada, WEB MASTER,
+  // ou liberação individual do "pacote Loja". Ler a env aqui não funcionaria —
+  // no browser a variante sem NEXT_PUBLIC_ não existe.
+  const showAffiliates = authUser?.canUseStore ?? false
   const GROUPS = showAffiliates ? [...BASE_GROUPS, AFFILIATES_GROUP] : BASE_GROUPS
 
   function scrollTo(id: string) {
@@ -67,6 +71,14 @@ export function AccountSection({ email, lgpdConsentAt, lgpdConsentVersion }: Acc
       <section id="conexoes" className="scroll-mt-20 space-y-5">
         <SectionHeading title="Conexões" description="Logins sociais vinculados à sua conta." />
         <LinkedAccountsTab />
+      </section>
+
+      <section id="assinatura" className="scroll-mt-20 space-y-5">
+        <SectionHeading
+          title="Assinatura"
+          description="Seu plano VIP: estado da cobrança, renovação e cancelamento."
+        />
+        <SubscriptionTab />
       </section>
 
       <section id="preferencias" className="scroll-mt-20 space-y-5">

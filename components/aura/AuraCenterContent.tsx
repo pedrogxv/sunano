@@ -379,6 +379,158 @@ export function AuraCenterContent({
         </div>
       </div>
 
+      {/* Produtos — prêmio físico, estoque limitado, só nível verificado.
+          Fica logo abaixo do saldo: é o item mais cobiçado da Central, então
+          abre a área de troca em vez de ficar no rodapé da página. */}
+      <AuraPeripheralSection
+        items={peripheralItems}
+        owners={peripheralOwnerMap}
+        balance={currentBalance}
+        isLoggedIn={isLoggedIn}
+        isVip={vip.active}
+        trustTier={usage.trustTier}
+        currentUserSlug={currentUserSlug}
+        currentUserAvatarUrl={currentUserAvatarUrl}
+        currentUserName={currentName}
+        shippingPrefill={shippingPrefill}
+        requireLogin={requireLogin}
+        onRedeemed={(itemId, cost, owner) => {
+          setPeripheralOwnerMap((prev) => {
+            const next = new Map(prev)
+            next.set(itemId, [...(next.get(itemId) ?? []), owner])
+            return next
+          })
+          setCurrentBalance((prev) => prev - cost)
+        }}
+      />
+
+      {/* Loja de itens — cosméticos genéricos (molduras, VIP, troca de nome).
+          Escudo, Fundos de Mini Perfil e Produtos têm seção própria.
+          `id="vip"`: alvo do link "Assinar" vindo das configurações da conta. */}
+      <div id="vip" className="scroll-mt-20 space-y-3">
+        <div className="space-y-1">
+          <h2 className="font-display text-lg font-bold text-foreground">Itens da loja</h2>
+          <p className="text-xs text-muted-foreground">
+            Cosméticos de perfil e vantagens. Sempre disponíveis, sem limite de unidades.
+          </p>
+        </div>
+        {nonShieldItems.length === 0 && !hasShieldItem ? (
+          <p className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
+            Nenhum item disponível no momento. Volte em breve!
+          </p>
+        ) : (
+          // Fragment com space-y próprio: o `space-y-3` do wrapper só separa
+          // filhos diretos, e agora banner e grade estão dentro do fragment.
+          <div className="space-y-4">
+          {/* Faixa do desconto VIP: confirma para o VIP que a grade abaixo já
+              está com o preço dele, e mostra ao comum o que ele deixa na mesa.
+              Fica acima da grade porque explica os números dela. */}
+          <AuraVipDiscountBanner
+            isVip={vip.active}
+            listPrices={discountableListPrices}
+            onShowBenefits={() => setVipUpsellOpen(true)}
+          />
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {hasShieldItem && (
+              <StreakShieldCard
+                key="streak-shield"
+                variants={shieldVariants}
+                balance={currentBalance}
+                isVip={vip.active}
+                shieldArmed={shield.armed}
+                shieldGraceDays={shield.graceDays}
+                requireLogin={requireLogin}
+                onPurchased={(_variant, graceDays, cost) => {
+                  setShield({ armed: true, graceDays })
+                  setCurrentBalance((prev) => prev - cost)
+                }}
+              />
+            )}
+            {nonShieldItems.map((item) => {
+              if (item.kind === "vip_month") {
+                return (
+                  <VipMonthCard
+                    key={item.id}
+                    item={item}
+                    balance={currentBalance}
+                    vipActive={vip.active}
+                    vipExpiresAt={vip.expiresAt}
+                    requireLogin={requireLogin}
+                    onPurchased={(expiresAt) => {
+                      setVip({ active: true, expiresAt })
+                      setCurrentBalance((prev) => prev - item.auraCost)
+                      // O selo VIP da topbar e o "Seja VIP" da sidebar leem do
+                      // AuthProvider, que só reconsulta quando o cookie de
+                      // sessão muda — comprar VIP não mexe em cookie nenhum.
+                      refreshAuthUser()
+                    }}
+                    onShowBenefits={() => setVipUpsellOpen(true)}
+                  />
+                )
+              }
+
+              if (item.kind === "display_name_change") {
+                return (
+                  <DisplayNameChangeCard
+                    key={item.id}
+                    item={item}
+                    balance={currentBalance}
+                    isVip={vip.active}
+                    cooldown={nameCooldownState}
+                    currentName={currentName}
+                    requireLogin={requireLogin}
+                    onChanged={(newName, _newSlug, cost) => {
+                      const now = new Date()
+                      const endsAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
+                      setCurrentName(newName)
+                      setNameCooldownState({ onCooldown: true, changedAt: now.toISOString(), endsAt: endsAt.toISOString() })
+                      setCurrentBalance((prev) => prev - cost)
+                      // O nome também aparece na topbar, que lê do AuthProvider.
+                      refreshAuthUser()
+                    }}
+                  />
+                )
+              }
+
+              return (
+                <AuraItemCard
+                  key={item.id}
+                  item={item}
+                  balance={currentBalance}
+                  isVip={vip.active}
+                  owned={ownedItemIds.has(item.id)}
+                  equipped={equippedItemId === item.id}
+                  requireLogin={requireLogin}
+                  onRedeemed={(cost) => {
+                    setOwnedItemIds((prev) => new Set(prev).add(item.id))
+                    setCurrentBalance((prev) => prev - cost)
+                  }}
+                  onEquipChange={(next) => setEquippedItemId(next)}
+                />
+              )
+            })}
+          </div>
+          </div>
+        )}
+      </div>
+
+      {/* Fundos de Mini Perfil — seção própria, fora da grade genérica: o
+          preview de cada um é o efeito rodando, e os cards precisam de mais
+          espaço do que uma célula de moldura. */}
+      <MiniProfileBgSection
+        items={miniBgItems}
+        balance={currentBalance}
+        isVip={vip.active}
+        ownedItemIds={ownedItemIds}
+        equippedItemId={equippedMiniBgId}
+        requireLogin={requireLogin}
+        onRedeemed={(itemId, cost) => {
+          setOwnedItemIds((prev) => new Set(prev).add(itemId))
+          setCurrentBalance((prev) => prev - cost)
+        }}
+        onEquipChange={setEquippedMiniBgId}
+      />
+
       {/* Tarefas diárias reais — mesmo estado de daily_missions, feito/pendente hoje */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
@@ -473,151 +625,6 @@ export function AuraCenterContent({
           posts/comentários, mesma família das conquistas acima. Só o resumo —
           a mecânica inteira é explicada em /indicar. */}
       <ReferralAuraCard />
-
-      {/* Loja de itens — cosméticos genéricos (molduras, VIP, troca de nome).
-          Escudo, Fundos de Mini Perfil e Produtos têm seção própria abaixo. */}
-      <div className="space-y-3">
-        <div className="space-y-1">
-          <h2 className="font-display text-lg font-bold text-foreground">Itens da loja</h2>
-          <p className="text-xs text-muted-foreground">
-            Cosméticos de perfil e vantagens. Sempre disponíveis, sem limite de unidades.
-          </p>
-        </div>
-        {nonShieldItems.length === 0 && !hasShieldItem ? (
-          <p className="rounded-2xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
-            Nenhum item disponível no momento. Volte em breve!
-          </p>
-        ) : (
-          // Fragment com space-y próprio: o `space-y-3` do wrapper só separa
-          // filhos diretos, e agora banner e grade estão dentro do fragment.
-          <div className="space-y-4">
-          {/* Faixa do desconto VIP: confirma para o VIP que a grade abaixo já
-              está com o preço dele, e mostra ao comum o que ele deixa na mesa.
-              Fica acima da grade porque explica os números dela. */}
-          <AuraVipDiscountBanner
-            isVip={vip.active}
-            listPrices={discountableListPrices}
-            onShowBenefits={() => setVipUpsellOpen(true)}
-          />
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {hasShieldItem && (
-              <StreakShieldCard
-                key="streak-shield"
-                variants={shieldVariants}
-                balance={currentBalance}
-                isVip={vip.active}
-                shieldArmed={shield.armed}
-                shieldGraceDays={shield.graceDays}
-                requireLogin={requireLogin}
-                onPurchased={(_variant, graceDays, cost) => {
-                  setShield({ armed: true, graceDays })
-                  setCurrentBalance((prev) => prev - cost)
-                }}
-              />
-            )}
-            {nonShieldItems.map((item) => {
-              if (item.kind === "vip_month") {
-                return (
-                  <VipMonthCard
-                    key={item.id}
-                    item={item}
-                    balance={currentBalance}
-                    vipActive={vip.active}
-                    vipExpiresAt={vip.expiresAt}
-                    requireLogin={requireLogin}
-                    onPurchased={(expiresAt) => {
-                      setVip({ active: true, expiresAt })
-                      setCurrentBalance((prev) => prev - item.auraCost)
-                    }}
-                    onShowBenefits={() => setVipUpsellOpen(true)}
-                  />
-                )
-              }
-
-              if (item.kind === "display_name_change") {
-                return (
-                  <DisplayNameChangeCard
-                    key={item.id}
-                    item={item}
-                    balance={currentBalance}
-                    isVip={vip.active}
-                    cooldown={nameCooldownState}
-                    currentName={currentName}
-                    requireLogin={requireLogin}
-                    onChanged={(newName, _newSlug, cost) => {
-                      const now = new Date()
-                      const endsAt = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000)
-                      setCurrentName(newName)
-                      setNameCooldownState({ onCooldown: true, changedAt: now.toISOString(), endsAt: endsAt.toISOString() })
-                      setCurrentBalance((prev) => prev - cost)
-                      // O nome também aparece na topbar, que lê do AuthProvider.
-                      refreshAuthUser()
-                    }}
-                  />
-                )
-              }
-
-              return (
-                <AuraItemCard
-                  key={item.id}
-                  item={item}
-                  balance={currentBalance}
-                  isVip={vip.active}
-                  owned={ownedItemIds.has(item.id)}
-                  equipped={equippedItemId === item.id}
-                  requireLogin={requireLogin}
-                  onRedeemed={(cost) => {
-                    setOwnedItemIds((prev) => new Set(prev).add(item.id))
-                    setCurrentBalance((prev) => prev - cost)
-                  }}
-                  onEquipChange={(next) => setEquippedItemId(next)}
-                />
-              )
-            })}
-          </div>
-          </div>
-        )}
-      </div>
-
-      {/* Fundos de Mini Perfil — seção própria, fora da grade genérica: o
-          preview de cada um é o efeito rodando, e os cards precisam de mais
-          espaço do que uma célula de moldura. */}
-      <MiniProfileBgSection
-        items={miniBgItems}
-        balance={currentBalance}
-        isVip={vip.active}
-        ownedItemIds={ownedItemIds}
-        equippedItemId={equippedMiniBgId}
-        requireLogin={requireLogin}
-        onRedeemed={(itemId, cost) => {
-          setOwnedItemIds((prev) => new Set(prev).add(itemId))
-          setCurrentBalance((prev) => prev - cost)
-        }}
-        onEquipChange={setEquippedMiniBgId}
-      />
-
-      {/* Produtos — prêmio físico, estoque limitado, só nível verificado */}
-      <AuraPeripheralSection
-        items={peripheralItems}
-        owners={peripheralOwnerMap}
-        balance={currentBalance}
-        isLoggedIn={isLoggedIn}
-        isVip={vip.active}
-        trustTier={usage.trustTier}
-        currentUserSlug={currentUserSlug}
-        currentUserAvatarUrl={currentUserAvatarUrl}
-        currentUserName={currentName}
-        shippingPrefill={shippingPrefill}
-        requireLogin={requireLogin}
-        onRedeemed={(itemId, cost, owner) => {
-          setPeripheralOwnerMap((prev) => {
-            const next = new Map(prev)
-            next.set(itemId, [...(next.get(itemId) ?? []), owner])
-            return next
-          })
-          setCurrentBalance((prev) => prev - cost)
-        }}
-      />
 
       {/* "Como funciona a Aura" agora mora na Central de Informações
           (/informacoes/central-de-aura) — texto de referência, sem duplicar.

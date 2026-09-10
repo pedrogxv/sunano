@@ -248,6 +248,24 @@ type Translations = {
     }
     criteria: { title: string; intro: string; item1: string; item2: string; item3: string; item4: string }
     latestUpdate: { title: string; dateFormat: string; description: string }
+    views: { official: string; mine: string; community: string }
+    howItWorks: string
+    moreInfo: string
+    updatedAt: (date: string) => string
+    community: {
+      title: string
+      subtitle: string
+      sortHearts: string
+      sortItems: string
+      sortRecent: string
+      empty: string
+      viewFull: string
+      seeAll: string
+      itemsCount: (count: number) => string
+      pageOf: (current: number, total: number) => string
+      prev: string
+      next: string
+    }
     viewingBy: string
     comingSoon: string
     comingSoonDesc: string
@@ -709,6 +727,14 @@ type Translations = {
       vipManualGrant: string
       vipManualRevoke: string
       failedToUpdateVip: string
+      storeAccessLabel: string
+      storeAccessGrant: string
+      storeAccessRevoke: string
+      storeAccessOnHint: string
+      storeAccessOffHint: string
+      storeAccessGranted: string
+      storeAccessRevoked: string
+      failedToUpdateStoreAccess: string
       makeWebMaster: (name: string) => string
       makeWebMasterDesc: string
       confirmMakeWebMaster: string
@@ -1239,56 +1265,74 @@ export const translations: Record<LocaleCode, Translations> = {
       youtubeReview: "Com Review no Youtube",
     },
     tierlist: {
-      info: "Informações da Tierlist",
+      info: "Informações da tierlist",
       about: {
         title: "Sobre",
-        p1: "A análise e ranqueamento dos periféricos é feita através de muitas horas de teste em uso e são baseados na minha opinião através disso",
-        p2: "Talvez sua opinião seja diferente da minha e tudo bem, não tem problema se tu discordar do rank dado em alguns, temos opiniões distintas e respeito totalmente a sua opinião",
-        p3: "Os periféricos são agrupados por Tier (Rank) e organizados por Categorias com foco em específicas áreas com determinado contexto",
+        p1: "A análise e o ranqueamento dos periféricos são feitos ao longo de muitas horas de teste em uso e refletem a minha opinião a partir disso.",
+        p2: "Talvez a sua opinião seja diferente da minha, e tudo bem. Não tem problema discordar do rank dado a alguns: temos opiniões distintas, e eu respeito totalmente a sua.",
+        p3: "Os periféricos são agrupados por tier (rank) e organizados por categorias, com foco em áreas específicas dentro de um determinado contexto.",
       },
       categoriesTab: {
         title: "Categorias",
-        p1: "Categorias são formas diferentes de se analisar os mesmo periféricos em contextos específicos",
-        p2: "São bem auto explicativos, por exemplo, a categoria \"Custo Benefício\" foge do padrão de Tier: em vez de GOAT/SS/S/A..., os periféricos são agrupados por faixa de preço, mostrando os melhores de cada faixa",
+        p1: "Categorias são formas diferentes de analisar os mesmos periféricos em contextos específicos.",
+        p2: "São bem autoexplicativas. Por exemplo, a categoria \"Custo-Benefício\" foge do padrão de tier: em vez de GOAT/SS/S/A…, os periféricos são agrupados por faixa de preço, mostrando os melhores de cada faixa.",
       },
       tagsTab: {
         title: "Tags",
-        p1: "Tags são etiquetas simples colocadas nos periféricos que visam descrever certos aspectos dele de forma breve, facilitando a busca dos interessados por outros periféricos que tenham essa determinada característica",
-        p2: "Por exemplo; na Tag \"Competitivo\" entende-se que tal Periférico se destaca nesse campo competitivo, com tua função sendo focada nesse área em especifica e sendo uma escolha sólida caso tu procure por algo com esse enfoque",
+        p1: "Tags são etiquetas simples colocadas nos periféricos para descrever certos aspectos deles de forma breve, facilitando a busca de quem procura outros periféricos com aquela característica.",
+        p2: "Por exemplo, na tag \"Competitivo\" entende-se que o periférico se destaca nesse campo, com a sua função focada nessa área específica, sendo uma escolha sólida caso você procure algo com esse enfoque.",
       },
       tiers: {
         title: "Tiers",
-        intro: "Tier ou Rank foi o formato escolhido para subdividir e organizar os periféricos. Baseado na cultura pop que se utiliza nos mangás para ranqueamento de heróis ou vilões.",
-        goat: "GOAT - Os melhores sem sombra de dúvidas, praticamente perfeitos.",
-        ss: "SS - Excepcional, quase perfeitos.",
-        s: "S - Muito bons mas podem ter ressalvas.",
-        a: "A - São bons mas com defeitos visíveis.",
-        b: "B - São decentes, atendem o que se espera por eles.",
-        c: "C - Usável, dá para usar tranquilo mas tem opções melhores.",
-        l: "L - Veio Podi, não valem a pena, seus defeitos sobressaem as suas qualidades.",
-        u: "U - Ultrapassados, não que eles sejam ruins mas estão ultrapassados, acaba não compensando pegar eles por justamente terem modelos mais recentes e atualizados.",
+        intro: "Tier (ou rank) foi o formato escolhido para subdividir e organizar os periféricos, baseado na cultura pop dos mangás, que rankeiam heróis e vilões.",
+        goat: "GOAT — os melhores sem sombra de dúvida, praticamente perfeitos.",
+        ss: "SS — excepcionais, quase perfeitos.",
+        s: "S — muito bons, mas podem ter ressalvas.",
+        a: "A — bons, mas com defeitos visíveis.",
+        b: "B — decentes, atendem ao que se espera deles.",
+        c: "C — usáveis, dá para usar tranquilo, mas há opções melhores.",
+        l: "L — Veio Podi, não valem a pena; os defeitos sobressaem às qualidades.",
+        u: "U — ultrapassados. Não que sejam ruins, mas não compensa pegá-los, porque já existem modelos mais recentes e atualizados.",
       },
       criteria: {
-        title: "Criterios",
-        intro: "A avaliação e ranqueamento se baseia:",
+        title: "Critérios",
+        intro: "A avaliação e o ranqueamento se baseiam em:",
         item1: "Uso real em jogos no dia a dia",
         item2: "Latência e consistência nos jogos",
         item3: "Qualidade de construção e materiais",
-        item4: "Recursos providos pela Marca",
+        item4: "Recursos oferecidos pela marca",
       },
       latestUpdate: {
-        title: "Ultima Atualizacao",
+        title: "Última atualização",
         dateFormat: "dd 'de' MMMM 'de' yyyy 'às' HH:mm",
         description: "As listas são atualizadas continuamente com novos lançamentos, revisões de firmware e mudanças de preço.",
       },
-      viewingBy: "Voce esta vendo a tierlist ordenada por:",
-      comingSoon: "Em Breve",
+      views: { official: "Oficial", mine: "Minha tierlist", community: "Comunidade" },
+      howItWorks: "Como funciona",
+      moreInfo: "Mais",
+      updatedAt: (date: string) => `Atualizado em ${date}`,
+      community: {
+        title: "Tierlists da comunidade",
+        subtitle: "Como os membros classificam os periféricos que já usaram",
+        sortHearts: "Mais amadas",
+        sortItems: "Mais completas",
+        sortRecent: "Recentes",
+        empty: "Ainda não há tierlists da comunidade por aqui. Seja o primeiro a montar a sua.",
+        viewFull: "Ver tierlist completa",
+        seeAll: "Ver todas as tierlists da comunidade",
+        itemsCount: (count: number) => `${count} ${count === 1 ? "periférico" : "periféricos"}`,
+        pageOf: (current: number, total: number) => `Página ${current} de ${total}`,
+        prev: "Anterior",
+        next: "Próxima",
+      },
+      viewingBy: "Você está vendo a tierlist ordenada por:",
+      comingSoon: "Em breve",
       comingSoonDesc: "Esta categoria de tierlist está em desenvolvimento e em breve estará disponível. Fique atento!",
       noItems: "Nenhum item encontrado com os filtros atuais.",
-      underReview: "Sob Revisão",
-      tierDescriptions: { GOAT: "Elite - Referencia absoluta", SS: "Extremo - Quase perfeito", S: "Top - Otima escolha", A: "Muito bom - Consistente e forte", B: "Bom - Opção sólida", C: "Ok - Funciona bem com limites", L: "Inferior - Apenas para casos específicos" },
+      underReview: "Sob revisão",
+      tierDescriptions: { GOAT: "Elite — referência absoluta", SS: "Extremo — quase perfeito", S: "Top — ótima escolha", A: "Muito bom — consistente e forte", B: "Bom — opção sólida", C: "Ok — funciona bem, com limites", L: "Inferior — apenas para casos específicos" },
       tierSubtitles: { GOAT: "Apelão", SS: "Excepcional", S: "Muito bom", A: "Bom", B: "Decente", C: "Usável", L: "Veio Podi" },
-      modeDescriptions: { oled: "Mostrando painéis OLED", overall: "Ordenado por desempenho geral", value: "Agrupado por faixa de preço", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", ips_va: "Mostrando painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
+      modeDescriptions: { oled: "Mostrando painéis OLED", overall: "Ordenado por desempenho geral", value: "Agrupado por faixa de preço", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho de PCB", recommended: "Escolhas sugeridas pelo Sunano, priorizando o equilíbrio geral", ips_va: "Mostrando painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
     },
     peripherals: {
       title: "Periféricos",
@@ -1752,6 +1796,16 @@ export const translations: Record<LocaleCode, Translations> = {
         vipManualGrant: "Conceder VIP",
         vipManualRevoke: "Remover VIP",
         failedToUpdateVip: "Erro ao atualizar VIP",
+        storeAccessLabel: "Loja",
+        storeAccessGrant: "Liberar Loja e Afiliados",
+        storeAccessRevoke: "Remover acesso à Loja",
+        storeAccessOnHint:
+          "Liberado: usa a Loja e o Programa de Afiliados normalmente, mesmo com a Loja em manutenção.",
+        storeAccessOffHint:
+          "Libera a Loja e o Programa de Afiliados só para este usuário, mesmo com a Loja em manutenção.",
+        storeAccessGranted: "Acesso à Loja liberado",
+        storeAccessRevoked: "Acesso à Loja removido",
+        failedToUpdateStoreAccess: "Erro ao atualizar o acesso à Loja",
         makeWebMaster: (name: string) => `Tornar ${name} um WEB Master?`,
         makeWebMasterDesc: "Um WEB Master tem acesso total e irrestrito: pode gerenciar todos os usuários, cargos e permissões. É o nível mais alto e, uma vez concedido, a conta fica protegida: não poderá ser editada nem rebaixada por este painel.",
         confirmMakeWebMaster: "Sim, tornar WEB Master",
@@ -2700,6 +2754,24 @@ export const translations: Record<LocaleCode, Translations> = {
         dateFormat: "MMMM dd, yyyy 'at' HH:mm",
         description: "Lists are updated continuously based on new releases, firmware revisions, and market price changes.",
       },
+      views: { official: "Official", mine: "My Tierlist", community: "Community" },
+      howItWorks: "How it works",
+      moreInfo: "More",
+      updatedAt: (date: string) => `Updated ${date}`,
+      community: {
+        title: "Community Tierlists",
+        subtitle: "How members rank the peripherals they've actually used",
+        sortHearts: "Most loved",
+        sortItems: "Most complete",
+        sortRecent: "Recent",
+        empty: "No community tierlists here yet. Be the first to build yours.",
+        viewFull: "View full tierlist",
+        seeAll: "See all community tierlists",
+        itemsCount: (count: number) => `${count} ${count === 1 ? "peripheral" : "peripherals"}`,
+        pageOf: (current: number, total: number) => `Page ${current} of ${total}`,
+        prev: "Previous",
+        next: "Next",
+      },
       viewingBy: "You are viewing the tierlist sorted by:",
       comingSoon: "Coming Soon",
       comingSoonDesc: "This tierlist category is under development and will be available soon. Stay tuned!",
@@ -3171,6 +3243,16 @@ export const translations: Record<LocaleCode, Translations> = {
         vipManualGrant: "Grant VIP",
         vipManualRevoke: "Remove VIP",
         failedToUpdateVip: "Failed to update VIP",
+        storeAccessLabel: "Store",
+        storeAccessGrant: "Enable Store and Affiliates",
+        storeAccessRevoke: "Remove Store access",
+        storeAccessOnHint:
+          "Enabled: uses the Store and the Affiliate Program normally, even while the Store is under maintenance.",
+        storeAccessOffHint:
+          "Enables the Store and the Affiliate Program for this user only, even while the Store is under maintenance.",
+        storeAccessGranted: "Store access enabled",
+        storeAccessRevoked: "Store access removed",
+        failedToUpdateStoreAccess: "Failed to update Store access",
         makeWebMaster: (name: string) => `Make ${name} a WEB Master?`,
         makeWebMasterDesc: "A WEB Master has full, unrestricted access: they can manage all users, roles and permissions. It is the highest level and, once granted, the account becomes protected: it cannot be edited or demoted from this panel.",
         confirmMakeWebMaster: "Yes, make WEB Master",

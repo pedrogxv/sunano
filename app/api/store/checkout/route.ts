@@ -36,7 +36,7 @@ import { getStoreSettings } from "@/lib/server/repositories/store-settings-repos
 import { getAffiliateByCode } from "@/lib/server/repositories/affiliates-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEventInBackground } from "@/lib/server/repositories/discord-orders-repository"
-import { isWebMaster } from "@/lib/admin-permissions"
+import { canUseStoreNow } from "@/lib/server/auth/store-access"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { computeCardPriceCents, computeEffectivePrice } from "@/lib/store-pricing"
 import { SITE_URL } from "@/lib/site-url"
@@ -348,25 +348,15 @@ export async function POST(request: NextRequest) {
 
   // Segunda checagem da mesma flag que o proxy já aplica (proxy.ts) — fechado
   // por padrão, caso o matcher/lógica do proxy mude e essa rota deixe de
-  // passar por lá. WEB MASTER ignora a manutenção, igual no proxy.
-  if (isStoreMaintenanceEnabled()) {
-    const maintenanceUser = await getRequestUser(request)
-    const { data: maintenanceProfile } = maintenanceUser
-      ? await db
-          .from("admin_profiles")
-          .select("id, role, permissions")
-          .eq("id", maintenanceUser.id)
-          .maybeSingle()
-      : { data: null }
-
-    if (!isWebMaster(maintenanceProfile)) {
-      return NextResponse.json(
-        {
-          error: "A Loja está temporariamente indisponível para novos pedidos.",
-        },
-        { status: 503 }
-      )
-    }
+  // passar por lá. Ignoram a manutenção, igual no proxy, o WEB MASTER e quem
+  // tem a liberação individual do "pacote Loja" (user_profiles.store_access).
+  if (isStoreMaintenanceEnabled() && !(await canUseStoreNow())) {
+    return NextResponse.json(
+      {
+        error: "A Loja está temporariamente indisponível para novos pedidos.",
+      },
+      { status: 503 }
+    )
   }
 
   try {

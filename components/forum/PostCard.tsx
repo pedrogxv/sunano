@@ -18,6 +18,7 @@ import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLin
 import { CommentBody } from "@/components/comments/CommentBody"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuthUser } from "@/components/providers/auth-context"
+import { useAuraReactions } from "@/components/providers/aura-reactions-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useSavedPosts } from "@/components/providers/saved-posts-context"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
@@ -98,27 +99,30 @@ function extractYoutubeId(url: string): string | null {
  * 20260823000000_forum_post_aura_from_comments.sql) com a reação direta no
  * post no mesmo campo.
  *
- * Self-contido de propósito: busca o estado inicial ("já dei aura nesse
- * post?") e o próprio clique de forma independente, sem depender de a página
- * que renderiza o `PostCard` ter passado esse dado — assim funciona igual em
- * qualquer listagem (fórum, categoria, perfil) sem precisar fiar prop por
- * prop. O custo é 1 fetch por card visível quando logado; aceitável na
- * escala atual do fórum.
+ * O estado inicial ("já dei aura nesse post?") vem do `AuraReactionsProvider`,
+ * que resolve a página inteira num pedido só — este componente apenas se
+ * registra ao montar. Antes cada card perguntava sozinho, e uma listagem
+ * logada abria com 1 requisição por card visível; continua funcionando igual
+ * em qualquer listagem (fórum, categoria, perfil) sem fiar prop por prop,
+ * agora sem o custo por card.
  */
 function PostAuraButton({
+  postId,
   postSlug,
   authorId,
   initialCount,
 }: {
+  postId: string
   postSlug: string
   authorId: string | null
   initialCount: number
 }) {
   const { user } = useAuthUser()
+  const { hasReacted, isPending, setReacted: setReactedGlobal, registerPost } = useAuraReactions()
   const isOwner = Boolean(user) && user!.id === authorId
   const canReact = Boolean(user) && !isOwner
 
-  const [reacted, setReacted] = useState(false)
+  const reacted = hasReacted(postId)
   const [count, setCount] = useState(initialCount)
   const [busy, setBusy] = useState(false)
 
@@ -128,33 +132,26 @@ function PostAuraButton({
 
   useEffect(() => {
     if (!canReact) return
-    let cancelled = false
-    fetch(`/api/forum/posts/${postSlug}/aura`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!cancelled && data?.ok) setReacted(data.reaction === "like")
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [canReact, postSlug])
+    registerPost(postId)
+  }, [canReact, postId, registerPost])
 
   async function handleClick(event: React.MouseEvent) {
     event.preventDefault()
     event.stopPropagation()
-    if (!canReact || busy) return
+    // Enquanto o lote do provider não voltou não dá pra saber se o clique é
+    // "dar" ou "remover" aura — clicar aí mandaria um toggle às cegas.
+    if (!canReact || busy || isPending(postId)) return
 
     const nextReacted = !reacted
     setBusy(true)
-    setReacted(nextReacted)
+    setReactedGlobal(postId, nextReacted)
     setCount((c) => c + (nextReacted ? 1 : -1))
 
     const res = await fetch(`/api/forum/posts/${postSlug}/aura`, { method: "POST" }).catch(() => null)
     setBusy(false)
 
     if (!res?.ok) {
-      setReacted(!nextReacted)
+      setReactedGlobal(postId, !nextReacted)
       setCount((c) => c + (nextReacted ? -1 : 1))
       const data = await res?.json().catch(() => null)
       if (data?.code === "daily_limit" || data?.code === "daily_pair_limit") {
@@ -167,7 +164,7 @@ function PostAuraButton({
 
     const data = await res.json().catch(() => null)
     if (data?.aura_count !== undefined) {
-      setReacted(data.reaction === "like")
+      setReactedGlobal(postId, data.reaction === "like")
       setCount(data.aura_count)
       notifyAuraChanged()
     }
@@ -188,7 +185,7 @@ function PostAuraButton({
           <button
             type="button"
             onClick={handleClick}
-            disabled={!canReact}
+            disabled={!canReact || isPending(postId)}
             aria-pressed={reacted}
             className={cn(
               "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold text-orange-500 transition-colors disabled:cursor-not-allowed",
@@ -434,7 +431,7 @@ export function PostCard({
           )}
 
           <div className="relative z-10 mt-3 flex flex-wrap items-center gap-2 pointer-events-auto">
-            <PostAuraButton postSlug={post.slug} authorId={post.user_id} initialCount={post.aura_count} />
+            <PostAuraButton postId={post.id} postSlug={post.slug} authorId={post.user_id} initialCount={post.aura_count} />
             <PostSaveButton postId={post.id} postSlug={post.slug} initialCount={post.saved_count} onUnsaved={onOwnPostUnsaved} />
             <Link
               href={clickable ? `/forum/${post.slug}#comments` : "#comments"}

@@ -289,9 +289,12 @@ export function PublicSidebar() {
           </div>
         </nav>
 
-        {/* Changelog para quem já é VIP — quem não é vê um convite pra virar VIP no lugar. */}
+        {/* Changelog para quem já é VIP — quem não é vê um convite pra virar VIP no lugar.
+            Quem CANCELOU vê "Renovar VIP" mesmo com o período pago ainda
+            correndo: esperar o acesso vencer para só então oferecer a
+            reativação é perder o momento em que a pessoa quer voltar. */}
         <div className="border-t border-border px-3 py-3">
-          {authUser?.isVip ? (
+          {authUser?.isVip && !authUser.subscriptionCanceled ? (
             <NavLink
               item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
               isActive={isActive("/changelog")}
@@ -313,7 +316,9 @@ export function PublicSidebar() {
               style={{ color: "var(--vip-accent)" }}
             >
               <Crown className="size-[18px] shrink-0 vip-badge-crown" />
-              <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>Vire VIP</span>
+              <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>
+                {authUser?.subscriptionCanceled ? "Renovar VIP" : "Vire VIP"}
+              </span>
             </button>
           ) : (
             <NavLink

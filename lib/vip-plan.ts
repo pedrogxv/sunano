@@ -14,7 +14,7 @@ export const VIP_SUBSCRIPTION_BENEFITS = [
   "10% de desconto em tudo que custa Aura (molduras, troca de nome, Proteção de Ofensiva e medalhas de evento)",
   "Limite diário de reações dobrado (100/dia)",
   "Bônus passivo de Aura: +0,4% sempre, ou +0,25% adicional com ofensiva ativa",
-  "Crie sua própria tierlist pessoal de periféricos (Beta)",
+  "Crie sua própria tierlist pessoal de periféricos",
 ] as const
 
 export const VIP_SUPPORT_MESSAGE =

@@ -21,7 +21,6 @@ import { useCart } from "@/components/providers/cart-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
-import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { computeCardPriceCents, computePixDiscountCents } from "@/lib/store-pricing"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -302,10 +301,15 @@ export default function CheckoutPage() {
   // Loja fechada para novos pedidos. A recusa de verdade é do servidor
   // (proxy.ts + a própria rota de checkout); aqui é só para DIZER isso antes
   // do clique — deixar o botão "Pagar com cartão" vivo numa loja fechada faz
-  // a pessoa preencher tudo e levar um erro genérico no final. WEB MASTER
-  // passa, igual ao servidor, para conseguir testar a compra com a loja
-  // fechada.
-  const storeClosed = isStoreMaintenanceEnabled() && !(user?.isWebMaster ?? false)
+  // a pessoa preencher tudo e levar um erro genérico no final. Passam, igual
+  // ao servidor, o WEB MASTER e quem tem a liberação individual do "pacote
+  // Loja" — `canUseStore` já chega resolvido de /api/auth/me.
+  //
+  // Enquanto a auth carrega não afirmamos "fechada": `canUseStore` só existe
+  // depois do /api/auth/me, e assumir fechado nesse intervalo faria a faixa de
+  // loja fechada piscar em toda visita — o botão de pagar já fica desabilitado
+  // por `authLoading` no mesmo período, então nada escapa.
+  const storeClosed = !authLoading && !(user?.canUseStore ?? false)
 
   const requireAddress = paymentMethod === "credit_card"
   // Cartão exige endereço; se o perfil não tem, o card já abre em edição.

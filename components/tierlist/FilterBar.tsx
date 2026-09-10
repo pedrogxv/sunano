@@ -1,7 +1,23 @@
 "use client"
 
-import Link from "next/link"
-import { Crown, Search, SlidersHorizontal, X } from "lucide-react"
+import {
+  Armchair,
+  CircleDot,
+  CircuitBoard,
+  Ear,
+  Footprints,
+  Headphones,
+  Keyboard,
+  Monitor,
+  Mouse,
+  Plug,
+  Search,
+  SlidersHorizontal,
+  Square,
+  ToggleLeft,
+  Volume2,
+  X,
+} from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Combobox } from "@/components/ui/combobox"
@@ -19,6 +35,22 @@ type PriceBand = "all" | "budget" | "mid" | "premium" | "golpe"
 type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
 
 const KEYBOARD_LAYOUTS: KeyboardLayout[] = ["60%", "75%", "tkl", "full-size"]
+
+const CATEGORY_ICONS: Record<Exclude<Category, "all">, React.ComponentType<{ className?: string }>> = {
+  keyboard: Keyboard,
+  mouse: Mouse,
+  mousepad: Square,
+  glasspad: CircleDot,
+  iem: Ear,
+  headset: Headphones,
+  feet: Footprints,
+  chairs: Armchair,
+  monitors: Monitor,
+  switches: ToggleLeft,
+  pcb: CircuitBoard,
+  dac_amp: Volume2,
+  psu: Plug,
+}
 function formatLabel(value: string) {
   return value
     .split("-")
@@ -89,41 +121,70 @@ export function FilterBar({
     { key: "psu",      label: t.categories.labels.psu },
   ]
 
-  return (
-    <div className={cn("space-y-3 rounded-xl border p-4", CARD_SURFACE)}>
-      <div>
-        <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
-          {sharePath && shareTitle && (
-            <Link
-              className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-2.5 text-xs font-medium transition-colors md:py-1.5"
-              href="/tierlist/pessoal"
-              style={{ borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
-            >
-              <Crown className="size-3.5" />
-              Minha Tierlist
-            </Link>
-          )}
-          {categoryOptions.map((category) => {
-            const active = selectedCategory === category.key
+  const selectedCategoryLabel =
+    categoryOptions.find((c) => c.key === selectedCategory)?.label ?? ""
+  const SelectedIcon = CATEGORY_ICONS[selectedCategory as Exclude<Category, "all">]
 
-            return (
-              <button
-                className={cn(
-                  // Alvo de toque maior no mobile; no desktop volta à altura compacta.
-                  "shrink-0 rounded-full border px-3 py-2.5 text-xs font-medium transition-all md:py-1.5",
-                  active
-                    ? "border-primary/50 bg-primary/15 text-primary"
-                    : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/40"
-                )}
-                key={category.key}
-                onClick={() => onCategoryChange(category.key)}
-                type="button"
-              >
-                {category.label}
-              </button>
-            )
-          })}
-        </div>
+  return (
+    <div className={cn("space-y-3 rounded-xl border p-3 sm:p-4", CARD_SURFACE)}>
+      {/* Categorias — mobile: um único <Select> (1 linha, sem aperto nem
+          scroll horizontal); sm+: chips com ícone que quebram linha.
+
+          O <SelectValue> é obrigatório pro Radix ligar o trigger (sem ele o
+          dropdown não abre), mas ele espelha TODO o conteúdo do <SelectItem>
+          escolhido — ícone incluso — e o `*:data-[slot=select-value]:flex` do
+          trigger vence um `sr-only`/`hidden` posto direto nele. Então fica
+          dentro de um wrapper `hidden`, e o valor visível é montado à mão. */}
+      <div className="sm:hidden">
+        <Select
+          value={selectedCategory}
+          onValueChange={(value) => onCategoryChange(value as Category)}
+        >
+          <SelectTrigger className="h-10 w-full border-border bg-muted/30">
+            <span className="flex min-w-0 items-center gap-2">
+              {SelectedIcon && <SelectedIcon className="size-4 shrink-0 text-primary" />}
+              <span className="truncate">{selectedCategoryLabel}</span>
+            </span>
+            <span className="hidden">
+              <SelectValue />
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {categoryOptions.map((category) => {
+              const Icon = CATEGORY_ICONS[category.key as Exclude<Category, "all">]
+              return (
+                <SelectItem key={category.key} value={category.key} className="pl-2.5">
+                  <Icon className="size-4 shrink-0 text-muted-foreground" />
+                  {category.label}
+                </SelectItem>
+              )
+            })}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="hidden flex-wrap gap-1.5 sm:flex">
+        {categoryOptions.map((category) => {
+          const active = selectedCategory === category.key
+          const Icon = CATEGORY_ICONS[category.key as Exclude<Category, "all">]
+
+          return (
+            <button
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-all",
+                active
+                  ? "border-primary/50 bg-primary/15 text-primary"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/40"
+              )}
+              key={category.key}
+              onClick={() => onCategoryChange(category.key)}
+              type="button"
+            >
+              {Icon && <Icon className="size-3.5 shrink-0" />}
+              <span>{category.label}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Search and Controls Row */}

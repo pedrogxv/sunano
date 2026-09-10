@@ -7,6 +7,7 @@ import {
   mediaAdjustStyle,
   type MediaAdjust,
 } from "@/lib/profile-media-adjust"
+import { buildProfileMediaItems, indexOfMedia } from "@/lib/profile-media-items"
 import { cn } from "@/lib/utils"
 import { ProfileImageLightbox } from "./ProfileImageLightbox"
 
@@ -21,6 +22,11 @@ interface AvatarQuadradoProps {
   className?: string
   /** Moldura cosmética equipada (Central de Aura), sobreposta à foto — `null`/ausente = nenhuma. */
   frameUrl?: string | null
+  /**
+   * Capa do perfil, só para o visualizador poder oferecer a aba "Capa" ao lado
+   * da foto. Não é renderizada aqui (quem desenha a capa é `Banner`).
+   */
+  bannerUrl?: string | null
 }
 
 /**
@@ -58,6 +64,7 @@ export function AvatarQuadrado({
   adjust = DEFAULT_ADJUST,
   className,
   frameUrl,
+  bannerUrl = null,
 }: AvatarQuadradoProps) {
   const { src, animated, needsFreeze } = resolveProfileMedia(avatarUrl, tier, vipExpiresAt)
   const initials = name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2)
@@ -121,12 +128,21 @@ export function AvatarQuadrado({
   // Sem foto enviada, o fallback de iniciais não tem o que ampliar.
   if (!src) return frame
 
+  const { items, kinds } = buildProfileMediaItems({
+    bannerUrl,
+    avatarUrl,
+    name,
+    tier,
+    vipExpiresAt,
+  })
+
   return (
     <ProfileImageLightbox
-      src={src}
-      alt={`Foto de perfil de ${name}`}
-      unoptimized={animated}
-      freeze={needsFreeze}
+      items={items}
+      index={indexOfMedia(kinds, "avatar")}
+      // A foto é pequena; a lupa no canto cobriria boa parte dela, então
+      // aqui ela vem centralizada sobre o rosto.
+      hintPosition="center"
     >
       {frame}
     </ProfileImageLightbox>

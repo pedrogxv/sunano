@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { Crown, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -56,8 +57,28 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
     setSubscribing(true)
     try {
       const res = await fetch("/api/vip/subscribe", { method: "POST" })
-      const data = (await res.json()) as { ok?: boolean; error?: string; checkoutUrl?: string }
+      const data = (await res.json()) as {
+        ok?: boolean
+        error?: string
+        checkoutUrl?: string
+        manageUrl?: string | null
+      }
       if (!res.ok || !data.ok || !data.checkoutUrl) {
+        // Assinatura já viva na Asaas — oferece o caminho de gerenciamento
+        // em vez de um erro sem saída.
+        if (data.manageUrl) {
+          toast.error("Você já tem uma assinatura", {
+            description: data.error ?? "Gerencie sua assinatura nas configurações da conta.",
+            action: {
+              label: "Gerenciar",
+              onClick: () => {
+                window.location.href = data.manageUrl as string
+              },
+            },
+          })
+          setSubscribing(false)
+          return
+        }
         throw new Error(data.error ?? "Erro ao iniciar assinatura")
       }
       window.location.href = data.checkoutUrl
@@ -102,17 +123,31 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
           <p className="font-display text-[15px] font-bold text-orange-400">🔥 {item.auraCost.toLocaleString("pt-BR")}</p>
 
           {vipActive ? (
-            <div
-              className="flex w-full flex-col items-center gap-0.5 rounded-lg border px-3 py-1.5 text-[10.5px] font-bold"
-              style={{ borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
-            >
-              <span className="flex items-center gap-1.5">
-                <Crown className="size-3" />
-                Você já é VIP
-              </span>
-              {vipExpiresAt && (
-                <span className="text-[9px] font-medium opacity-70">até {formatExpiresAt(vipExpiresAt)}</span>
-              )}
+            // VIP ativo: nem "Ativar com Aura" nem "Assinar" servem aqui — a RPC
+            // e o POST recusam quem já tem acesso. Mas o selo sozinho era um
+            // beco sem saída para quem cancelou a assinatura e ainda está
+            // usando o período pago: a aba Assinatura é o único lugar que
+            // conhece esse estado e sabe oferecer a reassinatura, então o card
+            // aponta para lá em vez de terminar a conversa.
+            <div className="space-y-1.5">
+              <div
+                className="flex w-full flex-col items-center gap-0.5 rounded-lg border px-3 py-1.5 text-[10.5px] font-bold"
+                style={{ borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+              >
+                <span className="flex items-center gap-1.5">
+                  <Crown className="size-3" />
+                  Você já é VIP
+                </span>
+                {vipExpiresAt && (
+                  <span className="text-[9px] font-medium opacity-70">até {formatExpiresAt(vipExpiresAt)}</span>
+                )}
+              </div>
+              <Link
+                href="/conta#assinatura"
+                className="block text-center text-[9.5px] font-semibold text-muted-foreground underline-offset-2 hover:underline"
+              >
+                Gerenciar assinatura
+              </Link>
             </div>
           ) : (
             <div className="space-y-1.5">

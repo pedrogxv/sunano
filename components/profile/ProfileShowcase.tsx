@@ -115,6 +115,8 @@ export function ProfileShowcase({
             vipExpiresAt={profile.vip_expires_at}
             adjust={profile.media_adjustments.banner}
             className={BANNER_HEIGHT}
+            name={profile.display_name}
+            avatarUrl={profile.avatar_url}
           />
 
           {/* Véu na base da capa: a foto e as medalhas encostam nela, e sem
@@ -143,6 +145,7 @@ export function ProfileShowcase({
               vipExpiresAt={profile.vip_expires_at}
               adjust={profile.media_adjustments.avatar}
               frameUrl={profile.equipped_avatar_frame_url}
+              bannerUrl={profile.banner_url}
             />
           </div>
 

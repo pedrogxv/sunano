@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
-import Link from "next/link"
-import { ArrowLeft } from "lucide-react"
 
+import { getTierlistMeta } from "@/lib/server/repositories/tierlist-meta-repository"
+import { TierlistPageHeader } from "@/components/tierlist/TierlistPageHeader"
 import { PersonalTierlistOwnerPanel } from "@/components/tierlist-pessoal/PersonalTierlistOwnerPanel"
 
 /**
@@ -20,20 +20,18 @@ export const dynamic = "force-dynamic"
 export const metadata: Metadata = {
   title: "Minha Tierlist",
   // Conteúdo varia por conta (é sempre a do próprio visitante) — a tierlist
-  // pública e indexável de cada membro é `/perfil/[handle]/tierlist`.
-  robots: { index: false, follow: false },
+  // pública e indexável de cada membro é `/perfil/[handle]/tierlist`. `follow`
+  // fica ligado: o Google não indexa esta página, mas segue os links dela
+  // (inclusive para a tierlist pública do membro).
+  robots: { index: false },
 }
 
-export default function TierlistPessoalPage() {
+export default async function TierlistPessoalPage() {
+  const tierlistMeta = await getTierlistMeta()
+
   return (
     <div className="mx-auto max-w-4xl space-y-4 px-4 py-6 md:px-6 md:py-8">
-      <Link
-        href="/tierlist"
-        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" />
-        Tierlist oficial
-      </Link>
+      <TierlistPageHeader active="pessoal" latestUpdate={tierlistMeta} />
       <PersonalTierlistOwnerPanel />
     </div>
   )

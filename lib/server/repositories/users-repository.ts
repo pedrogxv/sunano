@@ -1408,6 +1408,18 @@ export async function upsertUserProfileFromAuth(params: {
   id: string
   displayName: string
   avatarUrl: string | null
+  /**
+   * Chamado só quando o perfil ainda não existe, para copiar o avatar do
+   * provedor OAuth para o nosso bucket antes de gravá-lo. Recebe a URL do
+   * provedor e devolve a nossa (ou `null` se a cópia falhar, caso em que a
+   * do provedor é usada como estava).
+   *
+   * Fica atrás de `isNew` de propósito: em login recorrente o upsert abaixo
+   * usa `ignoreDuplicates`, então `avatar_url` não seria sobrescrito de
+   * qualquer forma — mas sem esta guarda a cópia rodaria a cada login e
+   * encheria o bucket de arquivos órfãos que ninguém referencia.
+   */
+  importAvatar?: (sourceUrl: string) => Promise<string | null>
 }): Promise<{ isNew: boolean }> {
   const db = createSupabaseAdminClient()
 
@@ -1417,12 +1429,17 @@ export async function upsertUserProfileFromAuth(params: {
     .eq("id", params.id)
     .maybeSingle()
 
+  let avatarUrl = params.avatarUrl
+  if (!existing && avatarUrl && params.importAvatar) {
+    avatarUrl = (await params.importAvatar(avatarUrl)) ?? avatarUrl
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (db.from("user_profiles") as any).upsert(
     {
       id: params.id,
       display_name: params.displayName,
-      avatar_url: params.avatarUrl,
+      avatar_url: avatarUrl,
     },
     { onConflict: "id", ignoreDuplicates: true }
   )

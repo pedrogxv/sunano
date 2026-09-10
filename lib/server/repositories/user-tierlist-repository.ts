@@ -1,5 +1,6 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   PERIPHERAL_SHOWCASE_COLUMNS,
@@ -12,6 +13,7 @@ import {
   TIERLIST_MIN_TIERS,
   TIERLIST_TIER_LABEL_MAX_LENGTH,
 } from "@/lib/personal-tierlist"
+import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
 
 // Os tipos vivem em `lib/personal-tierlist.ts` (módulo puro) para que Client
 // Components possam importá-los sem tocar em `lib/server/**`.
@@ -126,13 +128,23 @@ export async function replaceUserTierlistTiers(
  * tierlist oficial — `specs` bruto nunca sai daqui, `toShowcasePeripheral`
  * extrai apenas as notas públicas.
  */
-export async function getUserTierlistItems(userId: string): Promise<TierlistItem[]> {
+export async function getUserTierlistItems(
+  userId: string,
+  opts: { limit?: number } = {}
+): Promise<TierlistItem[]> {
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
+  let query = db
     .from("user_tierlist_items")
     .select(`peripheral_id, tier_id, position, peripherals ( ${PERIPHERAL_SHOWCASE_COLUMNS} )`)
     .eq("user_id", userId)
     .order("position", { ascending: true })
+
+  // A listagem da comunidade só mostra os primeiros N no mini-board — não
+  // precisa trazer (e fazer o join de `peripherals` de) a tierlist inteira de
+  // cada membro por linha da página.
+  if (opts.limit != null) query = query.limit(opts.limit)
+
+  const { data, error } = await query
 
   if (error) throw error
 
@@ -234,7 +246,7 @@ export async function getUserTierlistMeta(
   const db = createSupabaseAdminClient()
 
   const [metaResult, heartResult] = await Promise.all([
-    db.from("user_tierlist_meta").select("note, hearts_count").eq("user_id", userId).maybeSingle(),
+    db.from("user_tierlist_meta").select("note, hearts_count, is_hidden").eq("user_id", userId).maybeSingle(),
     viewerId && viewerId !== userId
       ? db
           .from("user_tierlist_hearts")
@@ -251,7 +263,24 @@ export async function getUserTierlistMeta(
     note: metaResult.data?.note?.trim() || null,
     heartsCount: metaResult.data?.hearts_count ?? 0,
     viewerHearted: Boolean(heartResult.data),
+    isHidden: metaResult.data?.is_hidden ?? false,
   }
+}
+
+/**
+ * Só a flag `is_hidden` — para os guardas de visibilidade (`/perfil/[handle]/
+ * tierlist`, o link no perfil) que não precisam do resto da meta. Um
+ * `maybeSingle` numa PK; sem linha = não oculta.
+ */
+export async function isUserTierlistHidden(userId: string): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_tierlist_meta")
+    .select("is_hidden")
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (error) throw error
+  return data?.is_hidden ?? false
 }
 
 /** Grava (ou apaga, com `null`) o recado do dono — checagem de VIP fica na rota. */
@@ -260,6 +289,24 @@ export async function saveUserTierlistNote(userId: string, note: string | null):
   const { error } = await db
     .from("user_tierlist_meta")
     .upsert({ user_id: userId, note, updated_at: new Date().toISOString() }, { onConflict: "user_id" })
+  if (error) throw error
+}
+
+/**
+ * Liga/desliga o "ocultar tierlist" do dono.
+ *
+ * De propósito NÃO checa VIP: montar a tierlist é feature VIP, mas tirar a
+ * própria do ar tem que funcionar mesmo com o VIP expirado (senão a tierlist
+ * congelada fica pública pra sempre). A rota só confirma que é o dono.
+ */
+export async function setUserTierlistHidden(userId: string, hidden: boolean): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const { error } = await db
+    .from("user_tierlist_meta")
+    .upsert(
+      { user_id: userId, is_hidden: hidden, updated_at: new Date().toISOString() },
+      { onConflict: "user_id" }
+    )
   if (error) throw error
 }
 
@@ -303,4 +350,154 @@ export async function setTierlistHeart(
   if (error) throw error
 
   return data?.hearts_count ?? 0
+}
+
+/* --------------------------------------------------------------------------
+ * Tierlists da comunidade — listagem pública de `/tierlist/comunidade`
+ * ------------------------------------------------------------------------ */
+
+/** Quantos itens de cada tierlist entram no mini-board do card da listagem. */
+const COMMUNITY_PREVIEW_ITEMS = 18
+
+export const COMMUNITY_TIERLIST_SORTS = ["hearts", "items", "recent"] as const
+export type CommunityTierlistSort = (typeof COMMUNITY_TIERLIST_SORTS)[number]
+
+export function coerceCommunityTierlistSort(value: unknown): CommunityTierlistSort {
+  return (COMMUNITY_TIERLIST_SORTS as readonly string[]).includes(value as string)
+    ? (value as CommunityTierlistSort)
+    : "hearts"
+}
+
+export type CommunityTierlistSummary = {
+  user: {
+    id: string
+    displayName: string
+    displaySlug: string
+    avatarUrl: string | null
+    accountTier: AccountTier
+    vipExpiresAt: string | null
+  }
+  itemCount: number
+  heartsCount: number
+  note: string | null
+  /** `updated_at` do item mais recente — usado para ordenar "recentes". */
+  updatedAt: string | null
+  tiers: TierlistTierDef[]
+  /** Primeiros itens (por posição), já com dados do periférico para o mini-board. */
+  previewItems: TierlistItem[]
+}
+
+/**
+ * Página da listagem de tierlists da comunidade.
+ *
+ * Passo 1: pagina/ordena sobre a view `user_tierlist_public_summary`. A
+ * view já agrega contagem/data (Postgrest não faz `group by` numa query
+ * normal), já traz nome/avatar/slug do perfil e já exclui quem não pode
+ * aparecer (sem `display_slug` ou o perfil do site) — ver migration
+ * `20261028000004`.
+ *
+ * Passo 2: para as ~12 linhas da página, carrega em paralelo os tiers e os
+ * primeiros itens de cada tierlist (reaproveitando `getUserTierlistTiers` e
+ * `getUserTierlistItems`). São poucas queries leves numa rota de nicho não
+ * cacheada — aceitável, e muito mais simples que um RPC dedicado.
+ */
+async function listCommunityTierlistsUncached(opts: {
+  sort: CommunityTierlistSort
+  page: number
+  pageSize: number
+}): Promise<{ rows: CommunityTierlistSummary[]; total: number }> {
+  const page = Math.max(1, Math.trunc(opts.page) || 1)
+  const pageSize = Math.max(1, Math.trunc(opts.pageSize) || 12)
+  const from = (page - 1) * pageSize
+  const to = from + pageSize - 1
+
+  const sortColumn: Record<CommunityTierlistSort, string> = {
+    hearts: "hearts_count",
+    items: "item_count",
+    recent: "last_item_at",
+  }
+
+  // A view `user_tierlist_public_summary` já traz as colunas do perfil e já
+  // filtra quem não pode aparecer (sem slug, perfil do site) — ver a
+  // migration `20261028000004`. Não há embed do PostgREST aqui de propósito:
+  // uma view sem FK declarada não é embutível (`user_profiles!inner` dava
+  // PGRST200).
+  const db = createSupabaseAdminClient()
+  const { data, error, count } = await db
+    .from("user_tierlist_public_summary")
+    .select(
+      "user_id, item_count, last_item_at, hearts_count, note, display_name, display_slug, avatar_url, account_tier, vip_expires_at",
+      { count: "exact" }
+    )
+    .order(sortColumn[opts.sort], { ascending: false, nullsFirst: false })
+    // Desempate estável entre linhas com a mesma contagem — sem isso a ordem
+    // dentro de um bloco de empate muda entre requisições e a paginação pula
+    // ou repete cards.
+    .order("user_id", { ascending: true })
+    .range(from, to)
+
+  if (error) throw error
+
+  type Row = {
+    user_id: string
+    item_count: number
+    last_item_at: string | null
+    hearts_count: number
+    note: string | null
+    display_name: string | null
+    display_slug: string | null
+    avatar_url: string | null
+    account_tier: string | null
+    vip_expires_at: string | null
+  }
+
+  const rawRows = ((data as unknown as Row[]) ?? []).filter((row) => Boolean(row.display_slug))
+
+  const enriched = await Promise.all(
+    rawRows.map(async (row) => {
+      const [tiers, items] = await Promise.all([
+        getUserTierlistTiers(row.user_id),
+        getUserTierlistItems(row.user_id, { limit: COMMUNITY_PREVIEW_ITEMS }),
+      ])
+
+      return {
+        user: {
+          id: row.user_id,
+          displayName: row.display_name?.trim() || `Membro ${row.user_id.slice(0, 6)}`,
+          displaySlug: row.display_slug as string,
+          avatarUrl: row.avatar_url,
+          accountTier: coerceAccountTier(row.account_tier),
+          vipExpiresAt: row.vip_expires_at,
+        },
+        itemCount: row.item_count,
+        heartsCount: row.hearts_count,
+        note: row.note?.trim() || null,
+        updatedAt: row.last_item_at,
+        tiers,
+        previewItems: items,
+      } satisfies CommunityTierlistSummary
+    })
+  )
+
+  return { rows: enriched, total: count ?? 0 }
+}
+
+/**
+ * Versão cacheada (60 s) da listagem da comunidade. A página é `force-dynamic`
+ * por ler `searchParams`, mas o conteúdo muda devagar (curtidas/itens); o
+ * cache absorve rajada de bots e navegação entre abas/páginas sem repetir as
+ * ~13 queries por request. A chave inclui sort+page+pageSize.
+ */
+export function listCommunityTierlists(opts: {
+  sort: CommunityTierlistSort
+  page: number
+  pageSize: number
+}): Promise<{ rows: CommunityTierlistSummary[]; total: number }> {
+  const page = Math.max(1, Math.trunc(opts.page) || 1)
+  const pageSize = Math.max(1, Math.trunc(opts.pageSize) || 12)
+  return unstable_cache(
+    () => listCommunityTierlistsUncached({ sort: opts.sort, page, pageSize }),
+    ["user-tierlist-repository:listCommunityTierlists", opts.sort, String(page), String(pageSize)],
+    { revalidate: 60 }
+  )()
 }

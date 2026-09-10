@@ -75,11 +75,34 @@ export function canUseAnimatedMedia(tier: AccountTier): boolean {
   return TIER_CAPABILITIES[tier].animatedMedia
 }
 
-/** Detecta GIF pela extensão da URL (ignora querystring). */
+/**
+ * Detecta mídia animada pela URL.
+ *
+ * Mídia enviada por nós termina em `.gif` — o upload deriva a extensão dos
+ * magic bytes (ver `lib/server/upload-validation.ts`), então a extensão é
+ * confiável. Mas avatar de login social **não passa pelo upload**: o
+ * `auth/callback` copia a URL do provedor direto para o perfil, e nenhum dos
+ * dois formatos abaixo tem `.gif` no caminho. Testar só a extensão deixava
+ * conta comum exibindo avatar animado do Google/Discord — foi exatamente o
+ * caso que motivou os dois padrões extras:
+ *
+ *  - Google (`lh3.googleusercontent.com/a/…=s96-c`): sem extensão nenhuma, o
+ *    tipo real só aparece no `Content-Type` da resposta. Não dá para checar
+ *    isso aqui (a função é síncrona e roda no cliente), então quem sonda o
+ *    `Content-Type` é `markAnimatedOAuthAvatar` (no login, veja
+ *    `lib/server/oauth-avatar.ts`), gravando o sufixo `#animated` na URL.
+ *    Os avatares que já existiam foram marcados pela migration
+ *    20261029000003.
+ *  - Discord (`cdn.discordapp.com/avatars/{id}/a_{hash}.png`): o prefixo
+ *    `a_` no hash é o que marca avatar animado; a extensão continua `.png`
+ *    (o CDN serve GIF na mesma URL).
+ */
 export function isAnimatedMediaUrl(url: string | null | undefined): boolean {
   if (!url) return false
   const [path] = url.split("?")
-  return /\.gif$/i.test(path)
+  if (/\.gif$/i.test(path)) return true
+  if (/#animated$/.test(url)) return true
+  return /\/avatars\/\d+\/a_[0-9a-f]+/i.test(path)
 }
 
 export type ProfileMedia = {

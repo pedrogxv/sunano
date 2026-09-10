@@ -330,7 +330,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return response
   }
 
-  const { response, user, profile, aal, needsLgpdConsent, isAccountBanned } = await updateSession(request, {
+  const { response, user, profile, aal, needsLgpdConsent, isAccountBanned, hasStoreAccess } = await updateSession(request, {
     needProfile: isAdminRoute || maintenanceMode || storeMaintenanceMode,
   })
 
@@ -425,9 +425,15 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
-  // Loja em manutenção, mas há sessão: só o WEB MASTER passa. Qualquer outro
-  // usuário logado (ou perfil ausente) continua recusado.
-  if (storeMaintenanceMode && !isWebMaster(profile)) {
+  // Loja em manutenção, mas há sessão: passam o WEB MASTER e quem tem a
+  // liberação individual do "pacote Loja" (`user_profiles.store_access`,
+  // concedida em /admin/users). Qualquer outro usuário logado (ou perfil
+  // ausente) continua recusado.
+  //
+  // `hasStoreAccess` vem da query de `user_profiles` que o updateSession já
+  // faz — a regra equivalente no lado server-only vive em
+  // lib/server/auth/store-access.ts; as duas precisam concordar.
+  if (storeMaintenanceMode && !isWebMaster(profile) && !hasStoreAccess) {
     const blockedResponse = storeMaintenanceResponse(request, isAffiliatePath)
     copyCookies(response, blockedResponse)
     return blockedResponse

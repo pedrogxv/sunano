@@ -21,7 +21,6 @@ import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useUserOrders, pendingPaymentHref } from "@/lib/hooks/use-user-orders"
 import { formatBRL } from "@/lib/format"
-import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
@@ -56,7 +55,10 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   const isAdmin = authUser?.isAdmin ?? false
   // Afiliados acompanha a manutenção da Loja (ver lib/server/auth/affiliate-access.ts).
   // O WEB MASTER continua vendo o item, igual ao que faz na Loja.
-  const showAffiliates = !isStoreMaintenanceEnabled() || (authUser?.isWebMaster ?? false)
+  // Resolvido no servidor (ver /api/auth/me): manutenção desligada, WEB MASTER,
+  // ou liberação individual do "pacote Loja". Ler a env aqui não funcionaria —
+  // no browser a variante sem NEXT_PUBLIC_ não existe.
+  const showAffiliates = authUser?.canUseStore ?? false
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
   // Só a topbar pública abre o modal — a sidebar de admin (/admin/login) segue
   // navegando de verdade, já que aquele login não é o alvo deste modal.
@@ -206,9 +208,23 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
             </div>
           </div>
           {authUser?.isVip ? (
-            <div className="flex items-center gap-1 px-2 pb-1.5">
-              <Crown className="size-3 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
-              <span className="vip-badge-text text-[10px] font-bold uppercase tracking-wide">VIP</span>
+            // Segue VIP (o período pago vale até o fim), mas se cancelou
+            // oferece a reativação junto do selo em vez de só o selo.
+            <div className="flex items-center gap-2 px-2 pb-1.5">
+              <div className="flex items-center gap-1">
+                <Crown className="size-3 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
+                <span className="vip-badge-text text-[10px] font-bold uppercase tracking-wide">VIP</span>
+              </div>
+              {authUser.subscriptionCanceled && isVipSubscriptionEnabled() && (
+                <button
+                  type="button"
+                  onClick={() => setVipUpsellOpen(true)}
+                  className="text-[10px] font-bold uppercase tracking-wide underline underline-offset-2 transition-opacity hover:opacity-80"
+                  style={{ color: "var(--vip-accent)" }}
+                >
+                  Renovar
+                </button>
+              )}
             </div>
           ) : isVipSubscriptionEnabled() ? (
             <button
@@ -218,7 +234,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               style={{ color: "var(--vip-accent)" }}
             >
               <Crown className="size-3" />
-              Seja VIP
+              {authUser?.subscriptionCanceled ? "Renovar VIP" : "Seja VIP"}
             </button>
           ) : null}
         </DropdownMenuLabel>

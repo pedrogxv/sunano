@@ -4,8 +4,6 @@ import { useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   Minus,
   Plus,
@@ -16,7 +14,7 @@ import {
   ZoomIn,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { MediaViewer } from "@/components/ui/media-viewer"
 import { markImageSettled } from "@/lib/image-settled"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
@@ -160,13 +158,6 @@ export function ProductDetailContent({
   const images = getVariantImages(activeVariant)
   const [activeImage, setActiveImage] = useState(0)
   const [lightboxOpen, setLightboxOpen] = useState(false)
-  const [zoomed, setZoomed] = useState(false)
-  const [pan, setPan] = useState({ x: 0, y: 0 })
-  const dragState = useState<{ startX: number; startY: number; panX: number; panY: number; moved: boolean } | null>(
-    null
-  )
-  const [drag, setDrag] = dragState
-  const [loadedDialog, setLoadedDialog] = useState<number | null>(null)
   const [mainImageLoaded, setMainImageLoaded] = useState<string | null>(null)
 
   function handleSelectVariant(id: string) {
@@ -177,49 +168,6 @@ export function ProductDetailContent({
     setActiveImage((prev) => Math.min(prev, nextImages.length - 1))
   }
 
-  function goToImage(delta: number, event?: React.MouseEvent) {
-    event?.stopPropagation()
-    setActiveImage((prev) => (prev + delta + images.length) % images.length)
-    setZoomed(false)
-    setPan({ x: 0, y: 0 })
-  }
-
-  const ZOOM_SCALE = 2.5
-  const PAN_LIMIT = 220
-
-  function clampPan(x: number, y: number) {
-    return {
-      x: Math.min(PAN_LIMIT, Math.max(-PAN_LIMIT, x)),
-      y: Math.min(PAN_LIMIT, Math.max(-PAN_LIMIT, y)),
-    }
-  }
-
-  function handleZoomPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (!zoomed) return
-    e.currentTarget.setPointerCapture(e.pointerId)
-    setDrag({ startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y, moved: false })
-  }
-
-  function handleZoomPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!zoomed || !drag) return
-    const dx = e.clientX - drag.startX
-    const dy = e.clientY - drag.startY
-    const next = clampPan(drag.panX + dx, drag.panY + dy)
-    setPan(next)
-    if (!drag.moved && Math.hypot(dx, dy) > 4) setDrag({ ...drag, moved: true })
-  }
-
-  function handleZoomPointerUp() {
-    setDrag(null)
-  }
-
-  function toggleZoom() {
-    if (drag?.moved) return
-    setZoomed((z) => {
-      if (z) setPan({ x: 0, y: 0 })
-      return !z
-    })
-  }
   // `linkedPeripheral` (FK única) e `linkedPeripherals` (M:N) podem apontar
   // pro mesmo periférico — mostra cada um só uma vez.
   const allLinkedPeripherals = linkedPeripheral
@@ -284,16 +232,20 @@ export function ProductDetailContent({
       <div className="flex flex-col gap-10 md:flex-row md:items-start lg:gap-16">
         {/* Images */}
         <div className="space-y-4 md:w-1/2">
-          <Dialog
+          {/* Visualizador compartilhado (mesmo do perfil, fórum e periféricos).
+              Substituiu o dialog próprio daqui, que tinha zoom fixo de 2,5× e
+              repetia a mesma lógica de arraste de outros três lugares. */}
+          <MediaViewer
+            items={images
+              .filter((img): img is string => Boolean(img))
+              .map((img, i) => ({
+                src: img,
+                alt: images.length > 1 ? `${product.name} (${i + 1} de ${images.length})` : product.name,
+              }))}
+            index={activeImage}
             open={lightboxOpen}
-            onOpenChange={(next) => {
-              setLightboxOpen(next)
-              if (!next) {
-                setZoomed(false)
-                setPan({ x: 0, y: 0 })
-              }
-            }}
-          >
+            onOpenChange={setLightboxOpen}
+          />
             <div className="group/zoom relative aspect-square overflow-hidden rounded-[24px] border border-border/40 bg-transparent">
               {images[activeImage] ? (
                 <button
@@ -333,88 +285,6 @@ export function ProductDetailContent({
                 </div>
               )}
             </div>
-
-            <DialogContent
-              showCloseButton
-              className="flex max-w-4xl items-center justify-center overflow-hidden border-none bg-transparent p-0 shadow-none ring-0 sm:max-w-4xl"
-            >
-              <DialogTitle className="sr-only">{product.name}</DialogTitle>
-              <div className="relative w-full">
-                <div
-                  onPointerDown={handleZoomPointerDown}
-                  onPointerMove={handleZoomPointerMove}
-                  onPointerUp={handleZoomPointerUp}
-                  onPointerLeave={handleZoomPointerUp}
-                  onDoubleClick={toggleZoom}
-                  className={cn(
-                    "relative mx-auto h-[85vh] w-full touch-none overflow-hidden rounded-lg select-none",
-                    zoomed ? (drag ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in"
-                  )}
-                >
-                  {images[activeImage] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={images[activeImage] as string}
-                      src={images[activeImage] as string}
-                      alt={product.name}
-                      draggable={false}
-                      onClick={toggleZoom}
-                      ref={(el) => markImageSettled(el, () => setLoadedDialog(activeImage))}
-                      onLoad={() => setLoadedDialog(activeImage)}
-                      onError={() => setLoadedDialog(activeImage)}
-                      className={cn(
-                        "h-full w-full object-contain",
-                        !drag && "transition-[opacity,transform] duration-200",
-                        loadedDialog === activeImage ? "opacity-100" : "opacity-0"
-                      )}
-                      style={{
-                        transform: zoomed
-                          ? `scale(${ZOOM_SCALE}) translate(${pan.x / ZOOM_SCALE}px, ${pan.y / ZOOM_SCALE}px)`
-                          : "scale(1)",
-                      }}
-                    />
-                  )}
-                  {!zoomed && (
-                    <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white/80 backdrop-blur-sm">
-                      Clique para ampliar
-                    </span>
-                  )}
-                </div>
-
-                {images.length > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={(e) => goToImage(-1, e)}
-                      className="absolute left-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-                      aria-label="Imagem anterior"
-                    >
-                      <ChevronLeft className="size-6" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => goToImage(1, e)}
-                      className="absolute right-3 top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-                      aria-label="Próxima imagem"
-                    >
-                      <ChevronRight className="size-6" />
-                    </button>
-                    <span className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 backdrop-blur-sm">
-                      {images.map((img, i) => (
-                        <span
-                          key={img ?? i}
-                          className={cn(
-                            "size-1.5 rounded-full transition-colors",
-                            i === activeImage ? "bg-white" : "bg-white/40"
-                          )}
-                        />
-                      ))}
-                    </span>
-                  </>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
           {images.length > 1 && (
             <div className="flex gap-3">
               {images.map((img, idx) => (

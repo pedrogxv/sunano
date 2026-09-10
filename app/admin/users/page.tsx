@@ -77,6 +77,8 @@ type AdminUser = Omit<AdminProfile, "role"> & {
   display_slug: string | null
   account_banned_at: string | null
   account_ban_reason: string | null
+  /** Liberação individual do "pacote Loja" (Loja + Afiliados) mesmo com a manutenção ligada. */
+  store_access: boolean
   created_at: string
   updated_at: string
 }
@@ -218,11 +220,13 @@ function UserCard({
   savingId,
   deletingId,
   vipSavingId,
+  storeAccessSavingId,
   banningId,
   onRoleChange,
   onSave,
   onDelete,
   onVipToggle,
+  onStoreAccessToggle,
   onBan,
   onUnban,
 }: {
@@ -232,11 +236,13 @@ function UserCard({
   savingId: string | null
   deletingId: string | null
   vipSavingId: string | null
+  storeAccessSavingId: string | null
   banningId: string | null
   onRoleChange: (id: string, role: UserRole) => void
   onSave: (user: AdminUser) => void
   onDelete: (user: AdminUser) => Promise<void>
   onVipToggle: (user: AdminUser) => Promise<void>
+  onStoreAccessToggle: (user: AdminUser) => Promise<void>
   onBan: (user: AdminUser, reason: string) => Promise<void>
   onUnban: (user: AdminUser) => Promise<void>
 }) {
@@ -281,6 +287,12 @@ function UserCard({
     isPersistedRegular &&
     !Boolean(user.account_banned_at)
   const isBanned = Boolean(user.account_banned_at)
+  // "Pacote Loja" — exclusivo do WEB Master. Não se concede a outro WEB Master
+  // (que já fura a manutenção por cargo, então o toggle não teria efeito) nem
+  // à própria conta. Espelha a trava do endpoint (PATCH /api/admin/users).
+  const canEditStoreAccess = isCurrentUserWebMaster && !isPersistedWebMaster && !isCurrentUser
+  const hasStoreAccess = Boolean(user.store_access)
+  const isSavingStoreAccess = storeAccessSavingId === user.id
   const isBanning = banningId === user.id
   const initials = (user.display_name ?? user.email ?? "?").slice(0, 2).toUpperCase()
   const isDeleting = deletingId === user.id
@@ -725,6 +737,44 @@ function UserCard({
             </div>
           )}
 
+          {/* Pacote Loja — libera Loja + Afiliados para ESTE usuário mesmo com
+              STORE_MAINTENANCE_MODE ligada. Não dá privilégio nenhum além
+              disso: o usuário compra e indica como qualquer um faria com a
+              loja aberta. Só o WEB Master concede. */}
+          {canEditStoreAccess && (
+            <div className="flex items-start gap-3">
+              <label className="min-w-16 shrink-0 pt-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {t.admin.users.storeAccessLabel}
+              </label>
+              <div className="space-y-1.5">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isSavingStoreAccess}
+                  onClick={() => onStoreAccessToggle(user)}
+                  className="gap-1.5 text-xs"
+                  style={
+                    hasStoreAccess
+                      ? { borderColor: "rgb(16 185 129 / 0.4)", color: "rgb(52 211 153)" }
+                      : undefined
+                  }
+                >
+                  <Store className="size-3.5" />
+                  {isSavingStoreAccess
+                    ? t.admin.users.saving
+                    : hasStoreAccess
+                      ? t.admin.users.storeAccessRevoke
+                      : t.admin.users.storeAccessGrant}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {hasStoreAccess
+                    ? t.admin.users.storeAccessOnHint
+                    : t.admin.users.storeAccessOffHint}
+                </p>
+              </div>
+            </div>
+          )}
+
           {locked && !isCurrentUser && (
             <p className="text-xs text-amber-400/80">
               {t.admin.users.webMasterProtected}
@@ -790,11 +840,13 @@ function UserListSection({
   savingId,
   deletingId,
   vipSavingId,
+  storeAccessSavingId,
   banningId,
   onRoleChange,
   onSave,
   onDelete,
   onVipToggle,
+  onStoreAccessToggle,
   onBan,
   onUnban,
 }: {
@@ -807,11 +859,13 @@ function UserListSection({
   savingId: string | null
   deletingId: string | null
   vipSavingId: string | null
+  storeAccessSavingId: string | null
   banningId: string | null
   onRoleChange: (id: string, role: UserRole) => void
   onSave: (user: AdminUser) => void
   onDelete: (user: AdminUser) => Promise<void>
   onVipToggle: (user: AdminUser) => Promise<void>
+  onStoreAccessToggle: (user: AdminUser) => Promise<void>
   onBan: (user: AdminUser, reason: string) => Promise<void>
   onUnban: (user: AdminUser) => Promise<void>
 }) {
@@ -840,11 +894,13 @@ function UserListSection({
               savingId={savingId}
               deletingId={deletingId}
               vipSavingId={vipSavingId}
+              storeAccessSavingId={storeAccessSavingId}
               banningId={banningId}
               onRoleChange={onRoleChange}
               onSave={onSave}
               onDelete={onDelete}
               onVipToggle={onVipToggle}
+              onStoreAccessToggle={onStoreAccessToggle}
               onBan={onBan}
               onUnban={onUnban}
             />
@@ -903,6 +959,7 @@ export default function AdminUsersPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [vipSavingId, setVipSavingId] = useState<string | null>(null)
+  const [storeAccessSavingId, setStoreAccessSavingId] = useState<string | null>(null)
   const [banningId, setBanningId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -1023,6 +1080,33 @@ export default function AdminUsersPage() {
       toast.error(t.admin.users.failedToUpdateVip, { description: message })
     } finally {
       setVipSavingId(null)
+    }
+  }
+
+  // Liga/desliga o "pacote Loja" (Loja + Afiliados) para um usuário. A
+  // autorização real é do servidor (PATCH /api/admin/users só aceita de WEB
+  // Master); aqui a UI só já esconde o botão de quem não pode.
+  async function toggleStoreAccess(user: AdminUser) {
+    const next = !user.store_access
+    try {
+      setStoreAccessSavingId(user.id)
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, store_access: next }),
+      })
+      const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
+      if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToUpdateStoreAccess)
+      toast.success(
+        next ? t.admin.users.storeAccessGranted : t.admin.users.storeAccessRevoked,
+        { description: user.display_name || user.email || undefined }
+      )
+      await loadUsers()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.users.failedToUpdateStoreAccess
+      toast.error(t.admin.users.failedToUpdateStoreAccess, { description: message })
+    } finally {
+      setStoreAccessSavingId(null)
     }
   }
 
@@ -1282,11 +1366,13 @@ export default function AdminUsersPage() {
             savingId={savingId}
             deletingId={deletingId}
             vipSavingId={vipSavingId}
+            storeAccessSavingId={storeAccessSavingId}
             banningId={banningId}
             onRoleChange={updateUserRole}
             onSave={saveUser}
             onDelete={deleteUser}
             onVipToggle={toggleVip}
+            onStoreAccessToggle={toggleStoreAccess}
             onBan={banUser}
             onUnban={unbanUser}
           />
@@ -1300,11 +1386,13 @@ export default function AdminUsersPage() {
             savingId={savingId}
             deletingId={deletingId}
             vipSavingId={vipSavingId}
+            storeAccessSavingId={storeAccessSavingId}
             banningId={banningId}
             onRoleChange={updateUserRole}
             onSave={saveUser}
             onDelete={deleteUser}
             onVipToggle={toggleVip}
+            onStoreAccessToggle={toggleStoreAccess}
             onBan={banUser}
             onUnban={unbanUser}
           />

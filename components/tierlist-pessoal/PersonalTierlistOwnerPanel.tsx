@@ -20,6 +20,7 @@ import { PersonalTierlistEditor } from "@/components/tierlist-pessoal/PersonalTi
 import { PersonalTierlistPublicView } from "@/components/tierlist-pessoal/PersonalTierlistPublicView"
 import { TierlistNoteCard } from "@/components/tierlist-pessoal/TierlistNoteCard"
 import { TierlistVipGate } from "@/components/tierlist-pessoal/TierlistVipGate"
+import { TierlistVisibilityToggle } from "@/components/tierlist-pessoal/TierlistVisibilityToggle"
 import { TierlistHeartCount } from "@/components/tierlist-pessoal/TierlistHeartButton"
 import { PersonalTierlistExportButton } from "@/components/tierlist-pessoal/PersonalTierlistExportButton"
 
@@ -80,7 +81,7 @@ export async function PersonalTierlistOwnerPanel() {
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--vip-accent)" }}>
               <Crown className="size-3" />
-              Minha tierlist · Beta
+              Minha tierlist
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {items.length === 0
@@ -110,6 +111,11 @@ export async function PersonalTierlistOwnerPanel() {
       </header>
 
       {!ownerIsVip && <TierlistVipGate variant={items.length > 0 ? "expired" : "locked"} />}
+
+      {/* Ocultar a própria tierlist não é feature VIP: quem perdeu o VIP não
+          edita mais, mas a lista dele ficou congelada e pública — este é o
+          único jeito de tirá-la do ar. Só aparece quando há tierlist. */}
+      {items.length > 0 && <TierlistVisibilityToggle initialHidden={meta.isHidden} />}
 
       {/* Recado do dono: mostra se já existe (mesmo com VIP expirado) ou se
           o dono pode escrever um agora — mesma regra de antes. */}

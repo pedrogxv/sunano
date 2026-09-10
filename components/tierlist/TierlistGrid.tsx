@@ -9,6 +9,7 @@ import { TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
 import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, resolvePriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { tierLabel, tiersForCategory } from "@/lib/tier-utils"
+import { getTierScore } from "@/lib/tierlist-score"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierValue = Tier | null
@@ -209,18 +210,6 @@ function getRatingModeLabel(mode: RatingMode, category: string): string {
   return modeMap[mode]
 }
 
-function getTierScore(tier: TierValue) {
-  if (tier === "GOAT") return 7
-  if (tier === "SS") return 6
-  if (tier === "S") return 5
-  if (tier === "A") return 4
-  if (tier === "B") return 3
-  if (tier === "C") return 2
-  if (tier === "L") return 1
-  return 0
-}
-
-
 function getRecommendedScore(item: Peripheral) {
   const tagScore = item.tags.reduce((accumulator, tag) => {
     if (tag === "competitive") return accumulator + 0.8
@@ -322,97 +311,108 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   const isPriceBandMode = ratingMode === "value" && category !== "mousepad" && category !== "glasspad"
   const allowedTiers = tiersForCategory(category)
 
-  const tierRows: TierRow[] = ([
-    {
-      key: "GOAT",
-      label: "GOAT",
-      description: t.tierlist.tierDescriptions.GOAT,
-      gradient: TIER_THEMES.GOAT.accent,
-      textColor: TIER_THEMES.GOAT.textColor,
-    },
-    {
-      key: "SS",
-      label: "SS",
-      description: t.tierlist.tierDescriptions.SS,
-      gradient: TIER_THEMES.SS.accent,
-      textColor: TIER_THEMES.SS.textColor,
-    },
-    {
-      key: "S",
-      label: "S",
-      description: t.tierlist.tierDescriptions.S,
-      gradient: TIER_THEMES.S.accent,
-      textColor: TIER_THEMES.S.textColor,
-    },
-    {
-      key: "A",
-      label: "A",
-      description: t.tierlist.tierDescriptions.A,
-      gradient: TIER_THEMES.A.accent,
-      textColor: TIER_THEMES.A.textColor,
-    },
-    {
-      key: "B",
-      label: "B",
-      description: t.tierlist.tierDescriptions.B,
-      gradient: TIER_THEMES.B.accent,
-      textColor: TIER_THEMES.B.textColor,
-    },
-    {
-      key: "C",
-      label: "C",
-      description: t.tierlist.tierDescriptions.C,
-      gradient: TIER_THEMES.C.accent,
-      textColor: TIER_THEMES.C.textColor,
-    },
-    {
-      key: "L",
-      label: "L",
-      description: t.tierlist.tierDescriptions.L,
-      gradient: TIER_THEMES.L.accent,
-      textColor: TIER_THEMES.L.textColor,
-    },
-  ] as TierRow[])
-    // Fontes usam uma escala própria: sem SS, e o último tier se chama BOMBA
-    // (ver lib/tier-utils.ts) — o valor gravado continua sendo "L".
-    .filter((tier) => allowedTiers.includes(tier.key))
-    .map((tier) => ({ ...tier, label: tierLabel(tier.key, category) }))
+  // tierRows depende só de category+t: sem memo, uma nova referência a cada
+  // render invalidava o useMemo de `itemsByTier` (que a tem como dep) toda vez,
+  // re-agrupando 168 mouses em cada troca de modo.
+  const tierRows: TierRow[] = useMemo(
+    () =>
+      ([
+        {
+          key: "GOAT",
+          label: "GOAT",
+          description: t.tierlist.tierDescriptions.GOAT,
+          gradient: TIER_THEMES.GOAT.accent,
+          textColor: TIER_THEMES.GOAT.textColor,
+        },
+        {
+          key: "SS",
+          label: "SS",
+          description: t.tierlist.tierDescriptions.SS,
+          gradient: TIER_THEMES.SS.accent,
+          textColor: TIER_THEMES.SS.textColor,
+        },
+        {
+          key: "S",
+          label: "S",
+          description: t.tierlist.tierDescriptions.S,
+          gradient: TIER_THEMES.S.accent,
+          textColor: TIER_THEMES.S.textColor,
+        },
+        {
+          key: "A",
+          label: "A",
+          description: t.tierlist.tierDescriptions.A,
+          gradient: TIER_THEMES.A.accent,
+          textColor: TIER_THEMES.A.textColor,
+        },
+        {
+          key: "B",
+          label: "B",
+          description: t.tierlist.tierDescriptions.B,
+          gradient: TIER_THEMES.B.accent,
+          textColor: TIER_THEMES.B.textColor,
+        },
+        {
+          key: "C",
+          label: "C",
+          description: t.tierlist.tierDescriptions.C,
+          gradient: TIER_THEMES.C.accent,
+          textColor: TIER_THEMES.C.textColor,
+        },
+        {
+          key: "L",
+          label: "L",
+          description: t.tierlist.tierDescriptions.L,
+          gradient: TIER_THEMES.L.accent,
+          textColor: TIER_THEMES.L.textColor,
+        },
+      ] as TierRow[])
+        // Fontes usam uma escala própria: sem SS, e o último tier se chama BOMBA
+        // (ver lib/tier-utils.ts) — o valor gravado continua sendo "L".
+        .filter((tier) => allowedTiers.includes(tier.key))
+        .map((tier) => ({ ...tier, label: tierLabel(tier.key, category) })),
+    [category, allowedTiers, t]
+  )
 
-  const ratingModes: { key: RatingMode; label: string; color: string }[] = category === "keyboard"
-    ? [
-        { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
-        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
-        { key: "mechanical" as const, label: getRatingModeLabel("mechanical", category), color: "bg-purple-400" },
-      ]
-    : category === "monitors"
-    ? [
-        { key: "oled" as const, label: getRatingModeLabel("oled", category), color: "bg-amber-400" },
-        { key: "ips_va" as const, label: getRatingModeLabel("ips_va", category), color: "bg-sky-400" },
-        { key: "competitive" as const, label: getRatingModeLabel("competitive", category), color: "bg-purple-400" },
-        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
-      ]
-    : category === "mouse"
-    ? [
-        { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
-        { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
-        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
-      ]
-    : category === "psu" || category === "iem"
-    ? [
-        { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
-        { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
-        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
-      ]
-    : [
-        { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
-        { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
-        ...(RECOMMENDED_TAB_CATEGORIES.includes(category) ? [
-          { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
-        ] : []),
-        ...(category === "switches" ? [
-          { key: "soundTyping" as const, label: "Som e Digitação", color: "bg-cyan-500" },
-        ] : []),
-      ]
+  const ratingModes: { key: RatingMode; label: string; color: string }[] = useMemo(
+    () =>
+      category === "keyboard"
+        ? [
+            { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
+            { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+            { key: "mechanical" as const, label: getRatingModeLabel("mechanical", category), color: "bg-purple-400" },
+          ]
+        : category === "monitors"
+        ? [
+            { key: "oled" as const, label: getRatingModeLabel("oled", category), color: "bg-amber-400" },
+            { key: "ips_va" as const, label: getRatingModeLabel("ips_va", category), color: "bg-sky-400" },
+            { key: "competitive" as const, label: getRatingModeLabel("competitive", category), color: "bg-purple-400" },
+            { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+          ]
+        : category === "mouse"
+        ? [
+            { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
+            { key: "magnetic" as const, label: getRatingModeLabel("magnetic", category), color: "bg-blue-400" },
+            { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+          ]
+        : category === "psu" || category === "iem"
+        ? [
+            { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
+            { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
+            { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+          ]
+        : [
+            { key: "overall" as const, label: getRatingModeLabel("overall", category), color: "bg-red-400" },
+            { key: "value" as const, label: getRatingModeLabel("value", category), color: "bg-emerald-400" },
+            ...(RECOMMENDED_TAB_CATEGORIES.includes(category) ? [
+              { key: "recommended" as const, label: getRatingModeLabel("recommended", category), color: "bg-purple-400" },
+            ] : []),
+            ...(category === "switches" ? [
+              { key: "soundTyping" as const, label: "Som e Digitação", color: "bg-cyan-500" },
+            ] : []),
+          ],
+    [category]
+  )
 
   const localizedModeDescription = t.tierlist.modeDescriptions[ratingMode]
 
@@ -527,11 +527,11 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
   return (
     <section className="space-y-4">
-      <div className={cn("flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between", CARD_SURFACE)}>
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">{t.tierlist.viewingBy}</p>
-          <p className="mt-0.5 text-sm font-semibold text-foreground">{localizedModeDescription}</p>
-        </div>
+      <div className={cn("flex flex-col gap-2.5 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4", CARD_SURFACE)}>
+        <p className="text-sm text-muted-foreground">
+          {t.tierlist.viewingBy}{" "}
+          <span className="font-semibold text-foreground">{localizedModeDescription}</span>
+        </p>
         {/* grid no mobile evita o wrap desbalanceado do flex (ex: 3 modos = 2 numa linha
             + 1 sozinho centralizado, "colado" visualmente) — cada botão ocupa uma célula
             de largura igual. A partir de sm, cabe tudo numa linha só, então volta a flex. */}

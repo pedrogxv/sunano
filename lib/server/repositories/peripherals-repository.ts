@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { coercePeripheralId, slugToSearchPattern } from "@/lib/peripheral-slug"
 import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
+import { slimTierlistSpecs } from "@/lib/tierlist-specs"
 import type { Category } from "@/lib/tag-options"
 
 /**
@@ -129,6 +130,110 @@ export const listAllPeripherals = unstable_cache(
     return ((data ?? []) as unknown as Array<Parameters<typeof mapBrandFields>[0]>).map(mapBrandFields) as PeripheralRecord[]
   },
   ["peripherals-repository:listAllPeripherals"],
+  { revalidate: 120 }
+)
+
+/**
+ * Colunas para a Tierlist. Traz `specs` (o board admin grava `adminTier_*`,
+ * `adminTierOrder_*`, `adminPriceGroup`, `tierlistCategories` na raiz do jsonb,
+ * e o tooltip lê `specs.details.ratings`), mas o mapper abaixo recorta esse
+ * blob com `slimTierlistSpecs` ANTES de qualquer coisa sair do servidor — o
+ * payload que o Client Component serializa fica no mínimo. Ver
+ * `lib/tierlist-specs.ts`.
+ */
+const TIERLIST_COLUMNS =
+  "id, name, brand_id, brands(name), image_url, category, tier, price, tags, specs, " +
+  "mouse_shape, keyboard_layout, connectivity, surface, profile, panel_type"
+
+export type TierlistPeripheralRecord = {
+  id: string
+  name: string
+  brand: string
+  brandId: string
+  image_url: string | null
+  category: string
+  tier: string | null
+  price: number
+  tags: string[]
+  mouseShape: string | null
+  keyboardLayout: string | null
+  connectivity: string | null
+  surface: string | null
+  profile: string | null
+  panelType: string | null
+  /** Já recortado a só o que a tierlist usa — ver `slimTierlistSpecs`. */
+  specs: Record<string, unknown>
+  /** `specs.details` (score/ratings), fora do `specs` recortado. */
+  details: Record<string, unknown>
+}
+
+type RawTierlistRow = {
+  id: string
+  name: string
+  brand_id: string
+  brands: { name: string } | { name: string }[] | null
+  image_url: string | null
+  category: string
+  tier: string | null
+  price: number
+  tags: string[] | null
+  mouse_shape: string | null
+  keyboard_layout: string | null
+  connectivity: string | null
+  surface: string | null
+  profile: string | null
+  panel_type: string | null
+  specs: Record<string, unknown> | null
+}
+
+/**
+ * Catálogo inteiro para a Tierlist pública e a rota `/tierlist/[categoria]`.
+ *
+ * Diferente de `listAllPeripherals` (usada por ranking/admin), o retorno daqui
+ * já vem com `specs` recortado a só o que o grid lê e `details` separado — o
+ * Client Component não recebe o jsonb inteiro (antes ~293 KB no payload).
+ *
+ * `unstable_cache` de 120 s, mesmo TTL de `listAllPeripherals` — a tolerância
+ * de "edição no admin aparecer em até 2 min" já era aceita ali.
+ */
+export const listAllPeripheralsForTierlist = unstable_cache(
+  async (): Promise<TierlistPeripheralRecord[]> => {
+    const db = createSupabaseAdminClient()
+    const { data, error } = await db
+      .from("peripherals")
+      .select(TIERLIST_COLUMNS)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("[peripherals-repository] listAllPeripheralsForTierlist:", error)
+      return []
+    }
+
+    return ((data ?? []) as unknown as RawTierlistRow[]).map((row) => {
+      const brandRow = Array.isArray(row.brands) ? row.brands[0] : row.brands
+      const rawSpecs = (row.specs ?? {}) as Record<string, unknown>
+      return {
+        id: row.id,
+        name: row.name,
+        brand: brandRow?.name ?? "",
+        brandId: row.brand_id,
+        image_url: row.image_url,
+        category: row.category,
+        tier: row.tier,
+        price: row.price,
+        tags: (row.tags ?? []) as string[],
+        mouseShape: row.mouse_shape,
+        keyboardLayout: row.keyboard_layout,
+        connectivity: row.connectivity,
+        surface: row.surface,
+        profile: row.profile,
+        panelType: row.panel_type,
+        specs: slimTierlistSpecs(rawSpecs),
+        details: (rawSpecs.details ?? {}) as Record<string, unknown>,
+      }
+    })
+  },
+  ["peripherals-repository:listAllPeripheralsForTierlist"],
   { revalidate: 120 }
 )
 

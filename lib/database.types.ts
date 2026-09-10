@@ -150,6 +150,13 @@ export type Database = {
           /** Ban geral da conta — bloqueia login e some das listagens públicas (fórum/blog/reviews ocultos, fora de rankings). Distinto de market_banned_at. */
           account_banned_at: string | null
           account_ban_reason: string | null
+          /**
+           * "Pacote Loja": libera Loja + Programa de Afiliados para este
+           * usuário mesmo com STORE_MAINTENANCE_MODE=true. Concedido só por
+           * WEB MASTER em /admin/users; protegido contra auto-concessão pelo
+           * trigger `enforce_store_access_grant` (RLS não filtra coluna).
+           */
+          store_access: boolean
           /** Aceite do termo de integridade das mini reviews (item 1.2) — registrado 1x, nunca reexibido depois. */
           reviews_integrity_accepted_at: string | null
           /** Cache do id de cliente no Asaas — evita recriar o customer a cada compra. */
@@ -165,9 +172,16 @@ export type Database = {
         }
         Insert: Omit<
           Database["public"]["Tables"]["user_profiles"]["Row"],
-          "created_at" | "updated_at" | "display_slug" | "profile_views"
+          // `store_access` tem default no banco e só o WEB MASTER concede
+          // (ver /admin/users) — nunca faz parte da criação do perfil.
+          "created_at" | "updated_at" | "display_slug" | "profile_views" | "store_access"
         >
-        Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]>
+        // `store_access` não entra no Insert (tem default no banco), mas É
+        // atualizável — é exatamente assim que o WEB MASTER concede/revoga o
+        // "pacote Loja" em PATCH /api/admin/users.
+        Update: Partial<Database["public"]["Tables"]["user_profiles"]["Insert"]> & {
+          store_access?: boolean
+        }
       }
       user_follows: {
         Relationships: []
@@ -1749,6 +1763,7 @@ export type Database = {
           user_id: string
           note: string | null
           hearts_count: number
+          is_hidden: boolean
           created_at: string
           updated_at: string
         }
@@ -1756,6 +1771,7 @@ export type Database = {
           user_id: string
           note?: string | null
           hearts_count?: number
+          is_hidden?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -2444,6 +2460,13 @@ export type Database = {
           top_comment_images: number | null
         }[]
       }
+      get_forum_posts_saved_counts: {
+        Args: { p_post_ids: string[] }
+        Returns: {
+          post_id: string
+          saved_count: number
+        }[]
+      }
       expire_vip_accounts: {
         Args: Record<string, never>
         Returns: number
@@ -2460,12 +2483,20 @@ export type Database = {
         Args: { p_asaas_subscription_id: string }
         Returns: boolean
       }
+      end_vip_subscription: {
+        Args: { p_asaas_subscription_id: string }
+        Returns: boolean
+      }
       cancel_vip_subscription: {
         Args: {
           p_user_id?: string | null
           p_asaas_subscription_id?: string | null
           p_asaas_checkout_id?: string | null
         }
+        Returns: boolean
+      }
+      reconcile_vip_subscription: {
+        Args: { p_user_id: string; p_asaas_active: boolean }
         Returns: boolean
       }
       change_display_name_with_aura: {

@@ -6,10 +6,30 @@ import {
   activateSubscriptionFromWebhook,
   renewSubscriptionFromWebhook,
   markSubscriptionPastDue,
-  cancelSubscriptionByAsaasId,
+  endSubscriptionByAsaasId,
   cancelSubscriptionByCheckoutId,
 } from "@/lib/server/repositories/vip-subscription-repository"
 import { VIP_SUBSCRIPTION_PRICE_CENTS } from "@/lib/vip-plan"
+
+// Tolerância para o valor da cobrança recorrente divergir do plano local.
+// A Asaas é a fonte de verdade da cobrança real, e o preço do plano pode
+// mudar aqui (edição de `VIP_SUBSCRIPTION_PRICE_CENTS` + deploy) enquanto
+// assinaturas antigas seguem no valor antigo — por isso a folga é generosa
+// (metade do preço). O objetivo é só barrar uma assinatura adulterada no
+// painel para R$ 0,01, não brigar com reajuste legítimo.
+const VIP_PRICE_TOLERANCE_CENTS = Math.round(VIP_SUBSCRIPTION_PRICE_CENTS / 2)
+
+/**
+ * `true` quando o valor confirmado na origem está longe demais do plano VIP
+ * para ser tratado como cobrança legítima — nesse caso NÃO concedemos nem
+ * renovamos o acesso (defesa contra assinatura adulterada no painel Asaas).
+ * `null`/indefinido = sem valor no payload, não bloqueia.
+ */
+function isPaymentValueOffPlan(value: unknown): boolean {
+  if (typeof value !== "number") return false
+  const cents = Math.round(value * 100)
+  return Math.abs(cents - VIP_SUBSCRIPTION_PRICE_CENTS) > VIP_PRICE_TOLERANCE_CENTS
+}
 
 export const runtime = "nodejs"
 export const maxDuration = 20
@@ -93,14 +113,14 @@ export async function POST(request: NextRequest) {
       if (verified.status !== "RECEIVED" && verified.status !== "CONFIRMED") {
         return NextResponse.json({ received: true, ignored: "payment_not_confirmed" })
       }
-      if (typeof verified.value === "number" && Math.round(verified.value * 100) !== VIP_SUBSCRIPTION_PRICE_CENTS) {
+      if (isPaymentValueOffPlan(verified.value)) {
         console.error(
-          "[webhooks/asaas-subscription] valor divergente do plano VIP:",
+          "[webhooks/asaas-subscription] CHECKOUT_PAID com valor fora do plano VIP — acesso NÃO concedido:",
           verified.value,
           "esperado:",
           VIP_SUBSCRIPTION_PRICE_CENTS
         )
-        // Não bloqueia — a Asaas é a fonte de verdade da cobrança real, só alerta pra investigação manual.
+        return NextResponse.json({ received: true, ignored: "payment_value_off_plan" })
       }
 
       await activateSubscriptionFromWebhook({
@@ -124,13 +144,14 @@ export async function POST(request: NextRequest) {
       if (verified.status !== "RECEIVED" && verified.status !== "CONFIRMED") {
         return NextResponse.json({ received: true, ignored: "payment_not_confirmed" })
       }
-      if (typeof verified.value === "number" && Math.round(verified.value * 100) !== VIP_SUBSCRIPTION_PRICE_CENTS) {
+      if (isPaymentValueOffPlan(verified.value)) {
         console.error(
-          "[webhooks/asaas-subscription] valor divergente do plano VIP:",
+          "[webhooks/asaas-subscription] renovação com valor fora do plano VIP — acesso NÃO renovado:",
           verified.value,
           "esperado:",
           VIP_SUBSCRIPTION_PRICE_CENTS
         )
+        return NextResponse.json({ received: true, ignored: "payment_value_off_plan" })
       }
 
       await renewSubscriptionFromWebhook({ asaasSubscriptionId: subscriptionId, asaasPaymentId: paymentId })
@@ -149,14 +170,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
-    // Cancelamento feito direto no painel Asaas (fora do nosso endpoint de
-    // cancelamento) — idempotente, mesmo padrão do cancelamento manual.
+    // Assinatura encerrada na Asaas fora do nosso endpoint: ou o usuário
+    // cancelou pelo painel deles, ou — mais comum — a Asaas a excluiu
+    // sozinha depois de esgotar as tentativas de cobrança do cartão
+    // recusado. `endSubscriptionByAsaasId` distingue os dois casos pelo
+    // status atual da linha: se estava `past_due` (último ciclo não pago),
+    // corta `vip_expires_at` para agora — não há mais cobrança para
+    // renovar, e segurar um mês inteiro de graça seria brecha. Se estava
+    // `active` (em dia, exclusão por outro motivo), mantém o período pago.
+    // Idempotente.
     if (payload.event === "SUBSCRIPTION_DELETED") {
       const subscriptionId = payload.subscription?.id
       if (!subscriptionId) {
         return NextResponse.json({ error: "subscription.id ausente" }, { status: 400 })
       }
-      await cancelSubscriptionByAsaasId(subscriptionId)
+      await endSubscriptionByAsaasId(subscriptionId)
       return NextResponse.json({ received: true })
     }
 

@@ -70,6 +70,13 @@ const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"
 /** Teto de espera ao baixar do CDN do KLIPY — a rota não pode ficar pendurada. */
 const KLIPY_FETCH_TIMEOUT_MS = 15_000
 
+/**
+ * Teto de espera ao copiar o avatar do provedor OAuth. Bem menor que o do
+ * KLIPY de propósito: isto roda dentro do callback de login, e o usuário está
+ * parado numa tela em branco esperando o redirect.
+ */
+const OAUTH_AVATAR_FETCH_TIMEOUT_MS = 8_000
+
 const EXTENSION_BY_MIME: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -256,4 +263,91 @@ export async function importProfileMediaFromKlipy(
 
   const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path)
   return { ok: true, publicUrl: publicData.publicUrl }
+}
+
+/**
+ * Copia o avatar do provedor OAuth (Google/Discord) para o nosso bucket, no
+ * primeiro login.
+ *
+ * Existe porque a URL do provedor é um empréstimo, não um endereço estável:
+ * o Discord deriva o caminho do hash do avatar
+ * (`/avatars/{id}/{hash}.gif`), então **trocar a foto por lá apaga a URL
+ * antiga** — o CDN passa a devolver 404 e o perfil no nosso site fica sem
+ * imagem, sem que nada tenha mudado do nosso lado. Foi assim que um perfil
+ * VIP perdeu a foto em 2026-09-10: o arquivo nunca esteve conosco, só o
+ * texto da URL. O Google tem o mesmo problema por outros motivos (rotação
+ * de URL, conta removida).
+ *
+ * A cópia é feita **uma vez, na origem**, e deliberadamente NUNCA
+ * re-sincronizada depois. Manter espelhado com o provedor significaria
+ * sobrescrever em silêncio a foto que a pessoa escolheu no editor daqui só
+ * porque ela mexeu no avatar do Discord — o provedor é semente inicial, não
+ * fonte da verdade. Quem quiser trocar usa o upload do perfil, que já existe.
+ *
+ * Diferente de `importProfileMediaFromKlipy`, aqui **não** se cobra o tier de
+ * GIF: o gate de mídia animada continua valendo na renderização
+ * (`resolveProfileMedia`), e aplicá-lo neste ponto mudaria a foto de quem já
+ * entrou — a importação só troca o lugar onde o arquivo mora, nunca o que a
+ * pessoa vê.
+ *
+ * Best-effort por contrato: qualquer falha devolve `null` e o chamador segue
+ * com a URL do provedor, exatamente como antes. Login nunca trava por causa
+ * de avatar.
+ */
+export async function importOAuthAvatar(
+  userId: string,
+  sourceUrl: string
+): Promise<string | null> {
+  const config = FIELD_CONFIG.avatar
+
+  // A URL vem do provedor de identidade (não do cliente), mas só http(s)
+  // pode virar fetch — barra `file:`/`data:` caso um metadado venha torto.
+  try {
+    const { protocol } = new URL(sourceUrl)
+    if (protocol !== "https:" && protocol !== "http:") return null
+  } catch {
+    return null
+  }
+
+  try {
+    const res = await fetch(sourceUrl, {
+      // Sem cache: os bytes vão direto para o nosso bucket em seguida.
+      cache: "no-store",
+      signal: AbortSignal.timeout(OAUTH_AVATAR_FETCH_TIMEOUT_MS),
+    })
+    if (!res.ok) return null
+
+    const buffer = await res.arrayBuffer()
+    // Avatar do provedor costuma ter poucos KB, mas GIF do Discord chega a
+    // vários MB — acima do teto, desiste em vez de guardar peso morto.
+    if (buffer.byteLength > config.maxSizeBytes) return null
+
+    const bytes = new Uint8Array(buffer)
+    const detected = detectImageType(bytes)
+    if (!detected || !ALLOWED_MIME_TYPES.includes(detected.mime)) return null
+
+    const extension = EXTENSION_BY_MIME[detected.mime]
+    const path = `${config.prefix}-${userId}-${Date.now()}.${extension}`
+
+    // Mesma recompressão do upload local: o avatar do Discord vem no tamanho
+    // original (o da LuanaMaya tinha 5,8MB) e era servido cru a cada visita.
+    // GIF passa intacto — ver `compressUploadedImage`.
+    const compressed = await compressUploadedImage(bytes, detected.mime, PRESET_BY_FIELD.avatar)
+
+    const supabase = createSupabaseAdminClient()
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, compressed.bytes, {
+        contentType: compressed.mime,
+        cacheControl: IMMUTABLE_CACHE_CONTROL,
+        upsert: true,
+      })
+    if (uploadError) return null
+
+    const { data: publicData } = supabase.storage.from(BUCKET).getPublicUrl(path)
+    return publicData.publicUrl
+  } catch {
+    // Timeout/DNS/host fora do ar — o chamador cai na URL do provedor.
+    return null
+  }
 }

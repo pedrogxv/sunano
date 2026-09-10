@@ -7,8 +7,7 @@ import { listActiveBannersBySection } from "@/lib/server/repositories/store-bann
 import { StoreContent } from "@/components/store/StoreContent"
 import { ItemListJsonLd } from "@/components/seo/JsonLd"
 import { ComingSoon } from "@/components/store/ComingSoon"
-import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
-import { isWebMaster } from "@/lib/admin-permissions"
+import { canUseStoreNow } from "@/lib/server/auth/store-access"
 import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
 
 export const revalidate = 60
@@ -26,9 +25,9 @@ const PAGE_SIZE = 24
 
 export default async function LojaPage() {
   if (isStoreMaintenanceEnabled()) {
-    // WEB MASTER ignora o modo de manutenção da Loja e continua vendo tudo.
-    const { profile } = await getAuthorizedProfile()
-    if (!isWebMaster(profile)) {
+    // WEB MASTER e quem tem a liberação individual do "pacote Loja"
+    // (user_profiles.store_access) ignoram a manutenção e continuam vendo tudo.
+    if (!(await canUseStoreNow())) {
       return (
         <ComingSoon
           icon={ShoppingBag}

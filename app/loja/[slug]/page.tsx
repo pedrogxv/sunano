@@ -6,8 +6,7 @@ import { getReviewAggregate } from "@/lib/server/repositories/store-reviews-repo
 import { JsonLd } from "@/components/seo/JsonLd"
 import { ProductDetailContent } from "@/components/store/ProductDetailContent"
 import { ComingSoon } from "@/components/store/ComingSoon"
-import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
-import { isWebMaster } from "@/lib/admin-permissions"
+import { canUseStoreNow } from "@/lib/server/auth/store-access"
 import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
 import { buildDescription, buildMetadata } from "@/lib/seo"
 import { getCategoryLabel } from "@/lib/store-category-icons"
@@ -62,9 +61,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function ProductPage({ params }: PageProps) {
   if (isStoreMaintenanceEnabled()) {
-    // WEB MASTER ignora o modo de manutenção da Loja e continua vendo tudo.
-    const { profile } = await getAuthorizedProfile()
-    if (!isWebMaster(profile)) {
+    // WEB MASTER e quem tem a liberação individual do "pacote Loja"
+    // (user_profiles.store_access) ignoram a manutenção e continuam vendo tudo.
+    if (!(await canUseStoreNow())) {
       return (
         <ComingSoon
           icon={ShoppingBag}

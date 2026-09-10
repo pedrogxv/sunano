@@ -14,12 +14,45 @@ export type AuthContextUser = {
   isAdmin: boolean
   /** WEB MASTER — ignora o modo de manutenção da Loja e do Programa de Afiliados. */
   isWebMaster: boolean
+  /**
+   * A Loja e o Programa de Afiliados estão abertos PARA ESTE usuário agora.
+   *
+   * Já vem RESOLVIDO pelo servidor (`/api/auth/me`), que combina os três
+   * fatores: manutenção desligada, ser WEB MASTER, ou ter a liberação
+   * individual do "pacote Loja" (`user_profiles.store_access`, concedida em
+   * /admin/users). O client não recalcula nada — a env de manutenção nem
+   * existe no browser sem a variante NEXT_PUBLIC_, que foi justamente a
+   * origem do vazamento de UI descrito em lib/store-maintenance.ts.
+   */
+  canUseStore: boolean
   /** Se já abriu algum chamado de suporte — controla o item "Meus Tickets" do dropdown/nav (só aparece com histórico). */
   hasSupportTicket: boolean
   /** Quantos tickets abertos estão aguardando resposta do usuário — alimenta o ponto amber no sino e em "Meus Tickets". */
   supportTicketsAwaitingMe: number
-  /** VIP ativo agora (já considera expiração) — alimenta a tag roxa no dropdown do topbar. */
+  /**
+   * VIP ativo agora (já considera expiração) — alimenta a tag roxa no
+   * dropdown da topbar e o "Seja VIP" da sidebar.
+   *
+   * Derivado de `accountTier`/`vipExpiresAt` NO MOMENTO DA LEITURA, não
+   * congelado no fetch: uma aba aberta atravessando a data de expiração
+   * mostrava "VIP" para sempre, porque nada reconsulta `/api/auth/me` sem
+   * troca de cookie de sessão. Ver `buildUser`.
+   */
   isVip: boolean
+  /** Tier cru, como veio do servidor — base de `isVip`. */
+  accountTier: string | null
+  /** Expiração crua do VIP (null = sem expiração: cargo/manual). */
+  vipExpiresAt: string | null
+  /**
+   * Status da assinatura recorrente (null = nunca assinou). Distingue quem
+   * cancelou — e portanto vê "Renovar VIP" — de quem nunca assinou, que vê
+   * "Vire VIP".
+   */
+  subscriptionStatus: string | null
+  /** Cancelou a assinatura: o CTA vira "Renovar VIP" na sidebar. */
+  subscriptionCanceled: boolean
+  /** Se já criou algum post no fórum — controla a aba "Meus Posts" da listagem (só aparece com histórico). */
+  hasForumPost: boolean
 }
 
 type AuthContextValue = {
@@ -89,8 +122,11 @@ type MeResponse = {
   } | null
   hasSupportTicket?: boolean
   supportTicketsAwaitingMe?: number
+  hasForumPost?: boolean
   accountTier?: string | null
   vipExpiresAt?: string | null
+  subscriptionStatus?: string | null
+  canUseStore?: boolean
 }
 
 /**
@@ -104,7 +140,7 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
   if (!res.ok) throw new Error(`auth/me respondeu ${res.status}`)
 
   const data = (await res.json()) as MeResponse
-  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, accountTier, vipExpiresAt } = data
+  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore } = data
   if (!user) return null
 
   return {
@@ -118,9 +154,15 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
     avatarUrl: adminProfile?.avatar_url || userProfile?.avatar_url || null,
     isAdmin: Boolean(adminProfile),
     isWebMaster: adminProfile?.role === "webmaster",
+    canUseStore: Boolean(canUseStore),
     hasSupportTicket: Boolean(hasSupportTicket),
     supportTicketsAwaitingMe: supportTicketsAwaitingMe ?? 0,
     isVip: isVipActive(accountTier, vipExpiresAt),
+    accountTier: accountTier ?? null,
+    vipExpiresAt: vipExpiresAt ?? null,
+    subscriptionStatus: subscriptionStatus ?? null,
+    subscriptionCanceled: subscriptionStatus === "canceled" || subscriptionStatus === "expired",
+    hasForumPost: Boolean(hasForumPost),
   }
 }
 
@@ -236,7 +278,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resolve()
   }, [pathname, resolve])
 
-  const value = useMemo(() => ({ user, loading, refresh: resolve }), [user, loading, resolve])
+  // O VIP expira numa data conhecida, e nenhum dos três gatilhos do provider
+  // observa a passagem do tempo — uma aba deixada aberta cruzaria a expiração
+  // ainda exibindo o selo VIP. Agenda uma reavaliação para o instante exato
+  // do vencimento (e só então), em vez de ficar consultando de tempos em
+  // tempos. Sem expiração (`null` = cargo/manual) não há o que agendar.
+  const [vipRecheck, forceVipRecheck] = useState(0)
+  useEffect(() => {
+    const expiresAt = user?.vipExpiresAt
+    if (!expiresAt) return
+    const msUntilExpiry = new Date(expiresAt).getTime() - Date.now()
+    if (msUntilExpiry <= 0) return
+    // `setTimeout` satura acima de ~24,8 dias (int32) e dispararia na hora.
+    // Nesse caso não agenda: quem deixa a aba aberta tanto tempo já passou
+    // por navegações/refetches muito antes.
+    if (msUntilExpiry > 2 ** 31 - 1) return
+    const timer = setTimeout(() => forceVipRecheck((n) => n + 1), msUntilExpiry + 1000)
+    return () => clearTimeout(timer)
+  }, [user?.vipExpiresAt])
+
+  // Reavalia `isVip` na leitura em vez de servir o booleano congelado no
+  // fetch. `account_tier`/`vip_expires_at` mudam sem que o cookie de sessão
+  // mude (cancelamento, expiração do período pago, compra com Aura), e
+  // nenhum gatilho do provider observa isso sozinho. `vipRecheck` entra nas
+  // dependências de propósito: é ele que reexecuta este cálculo quando o
+  // timer acima dispara na virada da expiração.
+  const value = useMemo(() => {
+    void vipRecheck
+    const resolved = user ? { ...user, isVip: isVipActive(user.accountTier, user.vipExpiresAt) } : null
+    return { user: resolved, loading, refresh: resolve }
+  }, [user, loading, resolve, vipRecheck])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

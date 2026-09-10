@@ -6,7 +6,6 @@ import { isAllowedForumImageUrl } from "@/lib/server/forum-media"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import {
   createForumPost,
-  hasForumPostsByUser,
   listForumPosts,
   type ForumTab,
 } from "@/lib/server/repositories/forum-repository"
@@ -42,15 +41,6 @@ const VALID_TABS: ForumTab[] = ["recent", "hot", "category", "mine", "user"]
 export async function GET(request: NextRequest) {
   try {
     const url = new URL(request.url)
-
-    // Checagem leve pra decidir se a aba "Meus Posts" aparece — não carrega
-    // a lista inteira, só um `count`.
-    if (url.searchParams.get("hasPosts") === "1") {
-      const user = await getRequestUser(request)
-      if (!user) return NextResponse.json({ ok: true, hasPosts: false })
-      const hasPosts = await hasForumPostsByUser(user.id)
-      return NextResponse.json({ ok: true, hasPosts })
-    }
 
     const tabParam = url.searchParams.get("tab") ?? "recent"
     const tab: ForumTab = VALID_TABS.includes(tabParam as ForumTab)

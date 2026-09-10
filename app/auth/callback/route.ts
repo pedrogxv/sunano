@@ -12,6 +12,8 @@ import {
 import { awardEligibleEventMedals } from "@/lib/server/repositories/events-repository"
 import { registerReferral } from "@/lib/server/repositories/referrals-repository"
 import { verifyReferralFromIdentities } from "@/lib/server/referral-verification"
+import { markAnimatedOAuthAvatar } from "@/lib/server/oauth-avatar"
+import { importOAuthAvatar } from "@/lib/server/profile-media-upload"
 import { REFERRAL_COOKIE } from "@/lib/referral-code"
 
 export async function GET(request: NextRequest) {
@@ -146,13 +148,30 @@ export async function GET(request: NextRequest) {
       authData.user.email?.split("@")[0] ||
       "User"
 
+    // Avatar animado do provedor é marcado com `#animated` para que o gate de
+    // mídia animada (VIP) o reconheça — a URL do Google não tem extensão, e
+    // sem isso conta comum entrava com foto de perfil em GIF. Ver
+    // `lib/server/oauth-avatar.ts`.
+    const providerAvatarUrl = await markAnimatedOAuthAvatar(
+      authData.user.user_metadata?.avatar_url ||
+        authData.user.user_metadata?.picture ||
+        null
+    )
+
+    // A URL do provedor é um empréstimo: o Discord deriva o caminho do hash
+    // do avatar, então trocar a foto por lá apaga a URL antiga e o perfil
+    // daqui fica sem imagem (aconteceu com um perfil VIP em 2026-09-10).
+    // `importAvatar` copia o arquivo para o nosso bucket — só no primeiro
+    // login (quem chama é o repositório, atrás da checagem de perfil novo) e
+    // nunca re-sincronizado depois, para não sobrescrever a foto que a pessoa
+    // tenha escolhido no editor daqui. Falha na cópia devolve `null` e o
+    // avatar fica com a URL do provedor, como antes: login não trava por
+    // causa de foto.
     const { isNew } = await upsertUserProfileFromAuth({
       id: authData.user.id,
       displayName: await resolveAvailableDisplayName(suggestedName, authData.user.id),
-      avatarUrl:
-        authData.user.user_metadata?.avatar_url ||
-        authData.user.user_metadata?.picture ||
-        null,
+      avatarUrl: providerAvatarUrl,
+      importAvatar: (sourceUrl) => importOAuthAvatar(authData.user.id, sourceUrl),
     })
     // Primeiro login OAuth = cadastro genuíno: concede a medalha de evento ativo.
     if (isNew) {

@@ -64,7 +64,14 @@ export function ForumContent({
   const [categories, setCategories] = useState<ForumCategoryOption[]>([])
   const [activeRoot, setActiveRoot] = useState<string>("")
   const [activeCategoryId, setActiveCategoryId] = useState<string>("")
-  const [hasOwnPosts, setHasOwnPosts] = useState(false)
+  // Semente vem do `/api/auth/me` (campo `hasForumPost`), que o AuthProvider já
+  // busca uma vez por sessão — antes isso era um fetch próprio (`?hasPosts=1`)
+  // que só podia disparar DEPOIS da auth resolver, então a aba "Meus Posts"
+  // esperava duas idas ao servidor em série pra aparecer. O estado local
+  // continua existindo pra virar `true` na hora em que o usuário publica o
+  // primeiro post, sem refazer a consulta.
+  const [ownPostsOverride, setOwnPostsOverride] = useState(false)
+  const hasOwnPosts = ownPostsOverride || Boolean(contextUser?.hasForumPost)
 
   // New post form
   const [showForm, setShowForm] = useState(false)
@@ -84,16 +91,9 @@ export function ForumContent({
       .catch(() => setCategories([]))
   }, [])
 
-  // Decide se a aba "Meus Posts" aparece — só quando logado e com >= 1 post.
+  // Deslogou: derruba o override local, senão a aba sobreviveria à saída.
   useEffect(() => {
-    if (!authUser) {
-      setHasOwnPosts(false)
-      return
-    }
-    fetch("/api/forum/posts?hasPosts=1")
-      .then((res) => res.json())
-      .then((data) => setHasOwnPosts(Boolean(data?.hasPosts)))
-      .catch(() => setHasOwnPosts(false))
+    if (!authUser) setOwnPostsOverride(false)
   }, [authUser])
 
   // `reset = true` troca de aba/categoria (substitui a lista, volta pra
@@ -150,9 +150,9 @@ export function ForumContent({
 
   // O servidor já renderizou os posts da aba padrão (SSR/ISR) e essa lista em
   // si não depende de quem está logado — "já dei aura nesse post?" não vai
-  // junto (o ISR é compartilhado entre visitantes distintos); cada
-  // `PostCard` busca seu próprio estado de reação depois de montado (ver
-  // `PostAuraButton`). Isso dispensa o fetch client-side no primeiro paint;
+  // junto (o ISR é compartilhado entre visitantes distintos); isso é
+  // hidratado depois, num pedido só pra página inteira (ver
+  // `AuraReactionsProvider`). Isso dispensa o fetch client-side no primeiro paint;
   // daí em diante, trocar de aba/categoria recarrega normalmente.
   const isFirstLoadRef = useRef(true)
 
@@ -197,7 +197,7 @@ export function ForumContent({
       setMediaImageUrls([])
       setMediaVideoUrl(null)
       setShowForm(false)
-      setHasOwnPosts(true)
+      setOwnPostsOverride(true)
       await loadPosts(activeTab, activeCategoryId, 1, true)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao criar post")

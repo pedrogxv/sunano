@@ -14,7 +14,10 @@ import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtu
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { hasConfirmedDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
 import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
-import { getUserTierlistItemCount } from "@/lib/server/repositories/user-tierlist-repository"
+import {
+  getUserTierlistItemCount,
+  isUserTierlistHidden,
+} from "@/lib/server/repositories/user-tierlist-repository"
 import {
   coerceAccountTier,
   selectVisibleFavorites,
@@ -138,6 +141,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     youtubeSubscribed,
     discordMember,
     tierlistItemCount,
+    tierlistHidden,
   ] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
@@ -162,6 +166,10 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     getUserTierlistItemCount(userId).catch((err) => {
       console.error("[profile-showcase-repository] getUserTierlistItemCount:", err)
       return 0
+    }),
+    isUserTierlistHidden(userId).catch((err) => {
+      console.error("[profile-showcase-repository] isUserTierlistHidden:", err)
+      return false
     }),
   ])
 
@@ -201,7 +209,9 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviews_total: reviewsTotal,
     reviews_integrity_accepted_at: row.reviews_integrity_accepted_at,
     reviewed_peripheral_ids: reviewedPeripheralIds,
-    tierlist_item_count: tierlistItemCount,
+    // Dono ocultou a tierlist → o perfil trata como se não houvesse (o link
+    // "Ver tierlist" some, e a página pública já dá notFound).
+    tierlist_item_count: tierlistHidden ? 0 : tierlistItemCount,
   }
 })
 

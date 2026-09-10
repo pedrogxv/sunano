@@ -1,103 +1,54 @@
 "use client"
 
-import { useState } from "react"
-import Image from "next/image"
-import { X } from "lucide-react"
+import { MediaViewer, type MediaViewerItem } from "@/components/ui/media-viewer"
 
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogOverlay,
-  DialogPortal,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { FrozenFrame } from "@/components/ui/image-with-fallback"
-import { cn } from "@/lib/utils"
+/**
+ * Uma mídia do perfil (capa ou foto). Alias do item genérico do
+ * `MediaViewer` — o perfil sempre preenche `label` ("Capa"/"Foto"), que é o
+ * que faz o visualizador usar abas de texto em vez de miniaturas.
+ */
+export type ProfileLightboxItem = MediaViewerItem
 
 interface ProfileImageLightboxProps {
-  src: string
-  alt: string
-  unoptimized?: boolean
   /**
-   * Mesma flag de `resolveProfileMedia` — quando `true`, o modal mostra o
-   * primeiro quadro congelado em vez do GIF animado (conta perdeu o VIP
-   * depois de enviar o arquivo).
+   * Capa e foto do perfil, na ordem das abas. As duas entram juntas mesmo
+   * quando o clique veio de uma só: quem abriu a capa quase sempre quer ver a
+   * foto em seguida, e voltar pro perfil só pra clicar no outro elemento era o
+   * pior pedaço da experiência antiga.
    */
-  freeze?: boolean
+  items: ProfileLightboxItem[]
+  /** Índice de `items` que o clique neste gatilho deve abrir. */
+  index: number
   /** Envolve a mídia (banner ou avatar) que deve ficar clicável. */
   children: React.ReactNode
   triggerClassName?: string
+  /** Canto onde a lupa do hover aparece sobre o gatilho. */
+  hintPosition?: "center" | "corner"
 }
 
 /**
- * Torna a capa ou o avatar do perfil clicáveis, abrindo a imagem em tamanho
- * grande num modal. Mesma ideia do lightbox de imagens do fórum, mas sem o
- * zoom 2x — aqui a imagem já é a própria foto de perfil/capa, não um anexo de
- * post onde faz sentido examinar detalhe.
+ * Capa e foto do perfil no visualizador compartilhado (`MediaViewer`).
  *
- * O overlay padrão do Dialog (`bg-black/10`) já fecha ao clicar fora, mas é
- * sutil demais aqui — o usuário não percebe que pode clicar fora nem que há
- * como fechar. Escurecemos o fundo, deixamos toda a área fora da imagem com
- * `cursor-zoom-out` e adicionamos um botão de fechar grande e visível, em vez
- * de depender só do X pequeno padrão do Dialog.
+ * Continua existindo como componente próprio porque `Banner` e
+ * `AvatarQuadrado` têm um detalhe que é só deles: os dois são irmãos e
+ * precisam abrir a **mesma** lista de duas mídias, cada um no seu índice (ver
+ * `lib/profile-media-items.ts`).
  */
 export function ProfileImageLightbox({
-  src,
-  alt,
-  unoptimized,
-  freeze = false,
+  items,
+  index,
   children,
   triggerClassName,
+  hintPosition = "corner",
 }: ProfileImageLightboxProps) {
-  const [open, setOpen] = useState(false)
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button
-          type="button"
-          className={cn("group/lightbox-trigger block cursor-zoom-in", triggerClassName)}
-          aria-label={`Ampliar ${alt}`}
-        >
-          {children}
-        </button>
-      </DialogTrigger>
-      <DialogPortal>
-        <DialogOverlay className="cursor-zoom-out bg-black/80" />
-        <DialogContent
-          showCloseButton={false}
-          className="flex max-w-3xl cursor-zoom-out items-center justify-center overflow-hidden border-none bg-transparent p-0 shadow-none ring-0 sm:max-w-3xl"
-        >
-          <DialogTitle className="sr-only">{alt}</DialogTitle>
-          <DialogClose
-            className="absolute top-3 right-3 z-10 flex size-10 cursor-pointer items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm transition-colors hover:bg-black/80"
-            aria-label="Fechar"
-          >
-            <X className="size-5" />
-          </DialogClose>
-          {freeze ? (
-            <FrozenFrame
-              src={src}
-              alt={alt}
-              onClick={(event) => event.stopPropagation()}
-              onError={() => {}}
-              className="h-auto max-h-[85vh] w-auto cursor-default rounded-lg object-contain"
-            />
-          ) : (
-            <Image
-              src={src}
-              alt={alt}
-              width={1200}
-              height={1200}
-              unoptimized={unoptimized}
-              onClick={(event) => event.stopPropagation()}
-              className="h-auto max-h-[85vh] w-auto cursor-default rounded-lg object-contain"
-            />
-          )}
-        </DialogContent>
-      </DialogPortal>
-    </Dialog>
+    <MediaViewer
+      items={items}
+      index={index}
+      triggerClassName={triggerClassName}
+      hintPosition={hintPosition}
+    >
+      {children}
+    </MediaViewer>
   )
 }

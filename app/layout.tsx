@@ -11,6 +11,7 @@ import { PageHeaderProvider } from "@/components/providers/page-header-context"
 import { AuthProvider } from "@/components/providers/auth-context"
 import { AuthModalProvider } from "@/components/providers/auth-modal-context"
 import { SavedPostsProvider } from "@/components/providers/saved-posts-context"
+import { AuraReactionsProvider } from "@/components/providers/aura-reactions-context"
 import { AuthHashErrorListener } from "@/components/auth/AuthHashErrorListener"
 import { LayoutShell } from "@/components/layout/LayoutShell"
 import { CookieBanner } from "@/components/lgpd/CookieBanner"
@@ -118,19 +119,21 @@ export default function RootLayout({
           <AuthProvider>
             <AuthModalProvider>
               <SavedPostsProvider>
-                <SidebarProvider>
-                  <CartProvider>
-                    <PageHeaderProvider>
-                      <TooltipProvider delayDuration={200}>
-                        <LayoutShell>{children}</LayoutShell>
-                        <Toaster />
-                        <AuthHashErrorListener />
-                        <ImpersonationBanner />
-                        <CookieBanner />
-                      </TooltipProvider>
-                    </PageHeaderProvider>
-                  </CartProvider>
-                </SidebarProvider>
+                <AuraReactionsProvider>
+                  <SidebarProvider>
+                    <CartProvider>
+                      <PageHeaderProvider>
+                        <TooltipProvider delayDuration={200}>
+                          <LayoutShell>{children}</LayoutShell>
+                          <Toaster />
+                          <AuthHashErrorListener />
+                          <ImpersonationBanner />
+                          <CookieBanner />
+                        </TooltipProvider>
+                      </PageHeaderProvider>
+                    </CartProvider>
+                  </SidebarProvider>
+                </AuraReactionsProvider>
               </SavedPostsProvider>
             </AuthModalProvider>
           </AuthProvider>

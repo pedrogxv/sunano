@@ -1,8 +1,6 @@
 import "server-only"
 
-import { isWebMaster } from "@/lib/admin-permissions"
-import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
-import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
+import { isStoreBlockedByMaintenance } from "@/lib/server/auth/store-access"
 
 // Mensagem única para todas as recusas do Programa de Afiliados em manutenção,
 // para que proxy, rotas de API e páginas digam exatamente a mesma coisa.
@@ -12,14 +10,12 @@ export const AFFILIATES_MAINTENANCE_MESSAGE =
 /**
  * O Programa de Afiliados acompanha a manutenção da Loja: sem loja aberta não
  * há venda para comissionar, então em `STORE_MAINTENANCE_MODE=true` a área
- * inteira fecha. Igual à Loja (ver app/loja/page.tsx e api/store/checkout),
- * o WEB MASTER ignora a manutenção e continua com acesso normal.
+ * inteira fecha. Furam a manutenção, igual à Loja, o WEB MASTER e quem tem a
+ * liberação individual (`user_profiles.store_access`) — a regra completa vive
+ * em lib/server/auth/store-access.ts, que é a fonte única dos dois.
  *
  * Retorna `true` quando a requisição deve ser RECUSADA.
  */
 export async function isAffiliatesBlockedByMaintenance(): Promise<boolean> {
-  if (!isStoreMaintenanceEnabled()) return false
-
-  const { profile } = await getAuthorizedProfile()
-  return !isWebMaster(profile)
+  return isStoreBlockedByMaintenance()
 }

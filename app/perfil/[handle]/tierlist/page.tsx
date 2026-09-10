@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation"
 import Link from "next/link"
 import type { Metadata } from "next"
-import { ArrowLeft, Crown } from "lucide-react"
+import { ArrowLeft, ArrowRight, Crown } from "lucide-react"
 import { buildMetadata } from "@/lib/seo"
 
 import { cn } from "@/lib/utils"
@@ -15,6 +15,7 @@ import {
   getUserTierlistItems,
   getUserTierlistMeta,
   getUserTierlistTiers,
+  isUserTierlistHidden,
 } from "@/lib/server/repositories/user-tierlist-repository"
 import { findUserIdByDisplaySlug } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
@@ -48,6 +49,11 @@ export async function generateMetadata({
   const userId = await resolveUserId(handle)
   const profile = userId ? await getProfileShowcase(userId) : null
   if (!profile) return { title: "Tierlist não encontrada" }
+
+  // Oculta pelo dono: não indexa nem gera card social.
+  if (userId && (await isUserTierlistHidden(userId))) {
+    return { title: "Tierlist não encontrada", robots: { index: false, follow: false } }
+  }
 
   const canonical = profile.display_slug
     ? `${profilePath(profile.display_slug)}/tierlist`
@@ -90,6 +96,10 @@ export default async function PerfilTierlistPage({
     getUserTierlistMeta(userId, viewerId),
     getUserTierlistTiers(userId),
   ])
+
+  // Dono ocultou: some pra visitante (o próprio dono já foi redirecionado
+  // pra /tierlist/pessoal lá em cima, onde continua vendo o board).
+  if (meta.isHidden) notFound()
   const orderedTiers = sortTiers(tiers)
   // Coração é de terceiro: quem não está logado vê só o número.
   const canHeart = Boolean(viewerId)
@@ -108,13 +118,22 @@ export default async function PerfilTierlistPage({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 md:px-6 md:py-8">
-      <Link
-        href={profileHref}
-        className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="size-3.5" />
-        Voltar ao perfil
-      </Link>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <Link
+          href={profileHref}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft className="size-3.5" />
+          Voltar ao perfil
+        </Link>
+        <Link
+          href="/tierlist/comunidade"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          Ver todas as tierlists da comunidade
+          <ArrowRight className="size-3.5" />
+        </Link>
+      </div>
 
       {/* Header no espírito do board oficial: faixa de gradiente dos tiers como
           assinatura visual, avatar e contagem — em vez de uma linha de texto. */}
@@ -160,7 +179,7 @@ export default async function PerfilTierlistPage({
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider" style={{ color: "var(--vip-accent)" }}>
               <Crown className="size-3" />
-              Tierlist pessoal · Beta
+              Tierlist pessoal
             </p>
             <h1 className="mt-0.5 truncate text-xl font-bold text-foreground">
               Tierlist de {profile.display_name}

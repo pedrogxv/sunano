@@ -25,6 +25,17 @@ interface VipUpsellModalProps {
   /** Aura disponível para o botão "Ativar com Aura" — omitido esconde essa opção (ex.: usuário deslogado). */
   auraCost?: number
   onPurchaseWithAura?: () => Promise<void>
+  /**
+   * Reassinatura de quem cancelou e ainda está dentro do período já pago.
+   * Só muda o texto — o POST /api/vip/subscribe é o mesmo e já trata esse
+   * caso (`isResubscribeWithinPaidPeriod`), cobrando 1 mês que é SOMADO ao
+   * saldo restante em vez de substituí-lo.
+   */
+  mode?: "subscribe" | "resubscribe"
+  /** VIP atual (dd/mm/aaaa) — mostrado no modo `resubscribe` para deixar claro que nada é perdido. */
+  currentAccessUntil?: string | null
+  /** Chamado após o POST dar certo, antes do redirect pro checkout da Asaas. */
+  onSubscribeStarted?: () => void
 }
 
 function formatPhoneInput(value: string): string {
@@ -49,7 +60,16 @@ interface CepLookupResponse {
 }
 
 /** Modal "Vantagens do VIP" — banner explicativo com as vantagens e os dois caminhos de ativação (Aura ou assinatura). */
-export function VipUpsellModal({ open, onOpenChange, auraCost, onPurchaseWithAura }: VipUpsellModalProps) {
+export function VipUpsellModal({
+  open,
+  onOpenChange,
+  auraCost,
+  onPurchaseWithAura,
+  mode = "subscribe",
+  currentAccessUntil,
+  onSubscribeStarted,
+}: VipUpsellModalProps) {
+  const isResubscribe = mode === "resubscribe"
   const subscriptionEnabled = isVipSubscriptionEnabled()
   const [subscribing, setSubscribing] = useState(false)
   const [purchasingWithAura, setPurchasingWithAura] = useState(false)
@@ -156,10 +176,32 @@ export function VipUpsellModal({ open, onOpenChange, auraCost, onPurchaseWithAur
             : {}
         ),
       })
-      const data = (await res.json()) as { ok?: boolean; error?: string; checkoutUrl?: string }
+      const data = (await res.json()) as {
+        ok?: boolean
+        error?: string
+        checkoutUrl?: string
+        code?: string
+        manageUrl?: string | null
+      }
       if (!res.ok || !data.ok || !data.checkoutUrl) {
+        // Já existe assinatura viva na Asaas: em vez de um toast vermelho sem
+        // saída, manda o usuário para onde ele consegue de fato agir sobre ela.
+        if (data.manageUrl) {
+          toast.error("Você já tem uma assinatura", {
+            description: data.error ?? "Gerencie sua assinatura nas configurações da conta.",
+            action: {
+              label: "Gerenciar",
+              onClick: () => {
+                window.location.href = data.manageUrl as string
+              },
+            },
+          })
+          setSubscribing(false)
+          return
+        }
         throw new Error(data.error ?? "Erro ao iniciar assinatura")
       }
+      onSubscribeStarted?.()
       window.location.href = data.checkoutUrl
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao iniciar assinatura"
@@ -186,8 +228,16 @@ export function VipUpsellModal({ open, onOpenChange, auraCost, onPurchaseWithAur
           <div className="mx-auto flex size-14 items-center justify-center rounded-full" style={{ backgroundColor: "var(--vip-accent-soft)" }}>
             <Crown className="size-7 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
           </div>
-          <DialogTitle className="text-center vip-badge-text text-xl">Vantagens do VIP</DialogTitle>
-          <DialogDescription className="text-center">{VIP_SUPPORT_MESSAGE}</DialogDescription>
+          <DialogTitle className="text-center vip-badge-text text-xl">
+            {isResubscribe ? "Voltar a assinar" : "Vantagens do VIP"}
+          </DialogTitle>
+          <DialogDescription className="text-center">
+            {isResubscribe
+              ? currentAccessUntil
+                ? `Seu VIP atual vale até ${currentAccessUntil} e nada disso é perdido: o mês que você pagar agora é somado ao que já resta, e a cobrança mensal só volta a partir daí.`
+                : "O período que você já pagou não é perdido: o mês que você pagar agora é somado ao que já resta, e a cobrança mensal só volta a partir daí."
+              : VIP_SUPPORT_MESSAGE}
+          </DialogDescription>
         </DialogHeader>
 
         <ul className="space-y-2.5 py-2">
@@ -337,7 +387,7 @@ export function VipUpsellModal({ open, onOpenChange, auraCost, onPurchaseWithAur
               {subscribing && <Loader2 className="size-4 animate-spin" />}
               {needsAddressInfo && !addressFormOpen ? (
                 <>
-                  Assinar por {formatVipPrice()}/mês
+                  {isResubscribe ? "Voltar a assinar" : "Assinar"} por {formatVipPrice()}/mês
                   <ChevronDown className="size-4" />
                 </>
               ) : (

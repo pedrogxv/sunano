@@ -711,3 +711,30 @@ export async function getAuraRanking(window: AuraRankingWindow): Promise<AuraRan
   if (window === "week") return getCachedAuraRankingWeek()
   return getCachedAuraRankingAllTime()
 }
+
+/**
+ * Quais destes posts o usuário já deu aura — uma query só para a página
+ * inteira, em vez de uma por card.
+ *
+ * Mesma motivação do `listSavedPostIdsForUser`: cada `PostAuraButton` pedia
+ * o próprio estado ao montar, então a listagem do fórum abria com N
+ * requisições HTTP (cada uma pagando um `auth.getUser()` contra o servidor
+ * de Auth do Supabase) só para descobrir quais coraçõezinhos nascem acesos.
+ */
+export async function listUserPostAuraReactions(
+  userId: string,
+  postIds: string[]
+): Promise<string[]> {
+  if (postIds.length === 0) return []
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("forum_aura")
+    .select("post_id")
+    .eq("giver_id", userId)
+    .in("post_id", postIds)
+  if (error) {
+    console.error("[aura-repository] listUserPostAuraReactions:", error)
+    return []
+  }
+  return (data ?? []).map((row) => row.post_id).filter((id): id is string => Boolean(id))
+}

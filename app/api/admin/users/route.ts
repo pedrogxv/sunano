@@ -24,6 +24,10 @@ const userUpdateSchema = z.object({
   role: z.enum(["user", "webmaster", "admin", "moderator", "editor", "vendedor", "suporte"]).optional(),
   // Só aceito para quem não tem cargo: com cargo, o VIP é automático e não editável.
   account_tier: z.enum(["common", "vip"]).optional(),
+  // "Pacote Loja": libera Loja + Programa de Afiliados para este usuário mesmo
+  // com STORE_MAINTENANCE_MODE=true. Independente de cargo e de VIP — é só um
+  // bypass da manutenção, não dá nenhum outro privilégio.
+  store_access: z.boolean().optional(),
 })
 
 const userCreateSchema = z.object({
@@ -90,7 +94,7 @@ export async function GET() {
       admin.from("admin_profiles").select("id, email, display_name, avatar_url, role, permissions, updated_at"),
       admin
         .from("user_profiles")
-        .select("id, display_name, avatar_url, account_tier, display_slug, account_banned_at, account_ban_reason"),
+        .select("id, display_name, avatar_url, account_tier, display_slug, account_banned_at, account_ban_reason, store_access"),
     ])
 
     const adminMap = new Map<string, AdminProfileRow>()
@@ -104,6 +108,7 @@ export async function GET() {
         display_slug: string | null
         account_banned_at: string | null
         account_ban_reason: string | null
+        store_access: boolean | null
       }
     >()
     for (const row of (profileRows ?? []) as {
@@ -114,6 +119,7 @@ export async function GET() {
       display_slug: string | null
       account_banned_at: string | null
       account_ban_reason: string | null
+      store_access: boolean | null
     }[]) {
       profileMap.set(row.id, {
         display_name: row.display_name,
@@ -122,6 +128,7 @@ export async function GET() {
         display_slug: row.display_slug,
         account_banned_at: row.account_banned_at,
         account_ban_reason: row.account_ban_reason,
+        store_access: row.store_access,
       })
     }
 
@@ -140,6 +147,7 @@ export async function GET() {
           display_slug: up?.display_slug ?? null,
           account_banned_at: up?.account_banned_at ?? null,
           account_ban_reason: up?.account_ban_reason ?? null,
+          store_access: Boolean(up?.store_access),
           role,
           permissions: getRolePermissions(role),
           created_at: u.created_at,
@@ -207,6 +215,56 @@ export async function PATCH(request: Request) {
     }
 
     const ipAddress = getClientIp(request)
+
+    // ── "Pacote Loja" (Loja + Programa de Afiliados) ──
+    // Tratado ANTES dos branches de cargo, e não dentro deles, porque é
+    // ortogonal a cargo e a VIP: é só um bypass de STORE_MAINTENANCE_MODE. Sem
+    // isto, um PATCH que mande só `store_access` cairia num branch que retorna
+    // cedo sem gravar nada.
+    if (parsed.data.store_access !== undefined) {
+      // Outro WEB Master já fura a manutenção pelo cargo — o flag não teria
+      // efeito e só criaria estado contraditório. A própria conta também fica
+      // de fora, espelhando as outras travas desta rota.
+      if (isTargetWebMaster || isTargetCurrentUser) {
+        return NextResponse.json(
+          { error: "O WEB Master já tem acesso completo à Loja e aos Afiliados." },
+          { status: 400 }
+        )
+      }
+
+      const { error: storeAccessError } = await admin
+        .from("user_profiles")
+        .update({ store_access: parsed.data.store_access })
+        .eq("id", parsed.data.id)
+      if (storeAccessError) {
+        const { body, status } = dbErrorResponse(storeAccessError, "Erro ao atualizar o acesso à Loja.")
+        return NextResponse.json(body, { status })
+      }
+
+      // Auditável: é uma concessão de acesso a um fluxo que move dinheiro
+      // (pedidos e comissão de afiliado), então fica registrada igual às
+      // mudanças de cargo.
+      await admin.from("audit_log").insert({
+        user_id: parsed.data.id,
+        actor_id: authData.user.id,
+        action: parsed.data.store_access ? "store_access_granted" : "store_access_revoked",
+        table_name: "user_profiles",
+        record_id: parsed.data.id,
+        metadata: { store_access: parsed.data.store_access },
+        ip_address: ipAddress,
+      })
+
+      // Pedido que só mexe no pacote Loja termina aqui — nada de cargo/VIP
+      // para processar abaixo.
+      if (
+        parsed.data.role === undefined &&
+        parsed.data.account_tier === undefined &&
+        parsed.data.display_name === undefined &&
+        parsed.data.avatar_url === undefined
+      ) {
+        return NextResponse.json({ ok: true })
+      }
+    }
 
     // Rebaixar para usuário comum: remove a linha de admin_profiles. Sem cargo,
     // o VIP passa a ser controlável manualmente.

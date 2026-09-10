@@ -1,9 +1,10 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useDeferredValue, useMemo, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { FilterBar } from "./FilterBar"
 import { TierlistGrid } from "./TierlistGrid"
+import { tierlistCategoryPath } from "@/lib/tierlist-categories"
 
 type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
@@ -52,6 +53,13 @@ type Peripheral = {
 interface TierlistContentProps {
   initialData: Peripheral[]
   categoryLabels: Record<string, string>
+  /**
+   * Categoria da rota `/tierlist/[categoria]` (SSR). Usada como padrão quando
+   * a URL ainda não tem `?categoria=` — mantém o grid do cliente coerente com
+   * o `<h1>`/JSON-LD renderizados no servidor. Na rota base `/tierlist` fica
+   * indefinido e o padrão continua "keyboard".
+   */
+  initialCategory?: Category
 }
 
 function getPriceBand(price: number): Exclude<PriceBand, "all"> | null {
@@ -65,7 +73,7 @@ const CATEGORY_VALUES: Category[] = [
   "all", "keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp", "psu",
 ]
 
-export function TierlistContent({ initialData, categoryLabels }: TierlistContentProps) {
+export function TierlistContent({ initialData, categoryLabels, initialCategory }: TierlistContentProps) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -77,9 +85,15 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
   // (via router.replace abaixo), então back() simplesmente relê essa URL.
   const categoryParam = searchParams.get("categoria")
   const selectedCategory: Category =
-    categoryParam && CATEGORY_VALUES.includes(categoryParam as Category) ? (categoryParam as Category) : "keyboard"
+    categoryParam && CATEGORY_VALUES.includes(categoryParam as Category)
+      ? (categoryParam as Category)
+      : (initialCategory ?? "keyboard")
 
   const [query, setQuery] = useState("")
+  // A busca não bloqueia a re-renderização do grid: `deferredQuery` deixa o
+  // React manter o input responsivo e recalcular a lista (575 itens) em
+  // prioridade baixa, sem debounce manual.
+  const deferredQuery = useDeferredValue(query)
   const [selectedBrand, setSelectedBrand] = useState("all")
   const [selectedPriceBand, setSelectedPriceBand] = useState<PriceBand>("all")
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
@@ -87,7 +101,22 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
 
   const categoryLabel = categoryLabels[selectedCategory]
 
+  // Numa rota de categoria (`/tierlist/[categoria]`) trocar de aba navega para
+  // a rota irmã — cada categoria é uma página real, indexável, com seu próprio
+  // canonical/H1. Na rota base (`/tierlist`) o comportamento antigo de
+  // `?categoria=` fica, para o botão "voltar" restaurar a aba certa ao vir da
+  // página de detalhe do periférico.
+  const isCategoryRoute = /^\/tierlist\/[^/]+$/.test(pathname) && pathname !== "/tierlist/pessoal" && pathname !== "/tierlist/comunidade"
+
   const handleCategoryChange = (category: Category) => {
+    if (isCategoryRoute && category !== "all") {
+      router.push(tierlistCategoryPath(category as Exclude<Category, "all">), { scroll: false })
+      setSelectedBrand("all")
+      setSelectedMouseShape("all")
+      setSelectedKeyboardLayout("all")
+      return
+    }
+
     const params = new URLSearchParams(searchParams.toString())
     if (category === "keyboard") {
       params.delete("categoria")
@@ -97,14 +126,25 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
     const queryString = params.toString()
     // replace (não push): trocar de aba não deve empilhar histórico — senão
     // "voltar" ficaria desfazendo troca de aba por troca de aba em vez de
-    // sair da Tierlist. Cada troca substitui a URL atual, então o botão
-    // voltar de dentro da página de detalhe do periférico cai direto na
-    // última aba selecionada.
+    // sair da Tierlist.
     router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
     setSelectedBrand("all")
     setSelectedMouseShape("all")
     setSelectedKeyboardLayout("all")
   }
+
+  // String de busca por item, calculada uma vez por dataset — antes era
+  // remontada (template + toLowerCase) para os 575 itens a cada tecla.
+  const searchIndex = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const item of initialData) {
+      map.set(
+        item.id,
+        `${item.name} ${item.brand} ${item.specs.driver ?? ""} ${item.specs.profile ?? ""}`.toLowerCase()
+      )
+    }
+    return map
+  }, [initialData])
 
   const availableBrands = useMemo(() => {
     const inCategory =
@@ -115,12 +155,11 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
   }, [selectedCategory, initialData])
 
   const filtered = useMemo(() => {
+    const needle = deferredQuery.trim().toLowerCase()
     return initialData.filter((item) => {
       if (selectedCategory !== "all" && item.category !== selectedCategory) return false
 
-      const searchable = `${item.name} ${item.brand} ${item.specs.driver ?? ""} ${item.specs.profile ?? ""}`
-        .toLowerCase()
-      const matchesQuery = query.trim() === "" || searchable.includes(query.trim().toLowerCase())
+      const matchesQuery = needle === "" || (searchIndex.get(item.id) ?? "").includes(needle)
       const matchesBrand = selectedBrand === "all" || item.brand === selectedBrand
       const matchesPrice =
         selectedPriceBand === "all" ||
@@ -138,7 +177,7 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
 
       return matchesQuery && matchesBrand && matchesPrice && matchesMouseShape && matchesKeyboardLayout
     })
-  }, [query, selectedCategory, selectedBrand, selectedPriceBand, selectedMouseShape, selectedKeyboardLayout, initialData])
+  }, [deferredQuery, selectedCategory, selectedBrand, selectedPriceBand, selectedMouseShape, selectedKeyboardLayout, initialData, searchIndex])
 
   const activeFiltersCount = useMemo(() => {
     return [selectedBrand, selectedPriceBand, selectedMouseShape, selectedKeyboardLayout].filter(

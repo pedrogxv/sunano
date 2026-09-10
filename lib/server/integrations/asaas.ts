@@ -448,12 +448,44 @@ export async function createSubscriptionCheckout(
 
 export interface AsaasSubscription {
   id: string
+  /** ACTIVE | INACTIVE | EXPIRED — só ACTIVE segue gerando cobrança. */
   status: string
+  // Assinatura excluída no painel (ou pela própria Asaas após esgotar as
+  // tentativas num cartão recusado). Mesmo comportamento de `payment.deleted`:
+  // a Asaas NÃO devolve 404 para ela — o objeto vem normal com esta flag —,
+  // então quem só trata 404 conclui erradamente que a assinatura segue viva.
+  deleted?: boolean
+  nextDueDate?: string | null
+  value?: number
 }
 
 /** Reconsulta o status de uma assinatura na origem — defesa em profundidade antes de renovar via webhook. */
 export async function getSubscription(subscriptionId: string): Promise<AsaasSubscription> {
   return asaasFetch<AsaasSubscription>(`/subscriptions/${encodeURIComponent(subscriptionId)}`)
+}
+
+/**
+ * "Essa assinatura ainda cobra na Asaas?" — resolve a pergunta em um
+ * booleano, tratando o 404 como resposta legítima (assinatura inexistente)
+ * em vez de erro. É a base da reconciliação: a Asaas é a fonte de verdade,
+ * e um estado local divergente (linha `active` órfã travando a reassinatura)
+ * só pode ser corrigido perguntando aqui.
+ *
+ * Devolve `null` quando a Asaas está inacessível/instável (rede, 5xx): nesse
+ * caso NÃO se conclui nada — quem chama mantém o estado local como está, em
+ * vez de cancelar acesso pago por causa de uma indisponibilidade passageira.
+ */
+export async function isSubscriptionLiveAtAsaas(subscriptionId: string): Promise<boolean | null> {
+  try {
+    const sub = await getSubscription(subscriptionId)
+    if (sub.deleted) return false
+    return sub.status === "ACTIVE"
+  } catch (err) {
+    // 404 = a assinatura não existe mais lá. É informação, não falha.
+    if (err instanceof AsaasError && err.status === 404) return false
+    console.error("[asaas] isSubscriptionLiveAtAsaas:", err)
+    return null
+  }
 }
 
 /**

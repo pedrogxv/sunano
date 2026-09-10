@@ -66,7 +66,7 @@ export function PreferencesTab() {
             Idioma
           </CardTitle>
           <CardDescription>
-            Preferências sincronizadas com sua conta{savingPrefs ? " — salvando…" : "."}
+            Preferências sincronizadas com sua conta{savingPrefs ? ", salvando…" : "."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 pt-5 sm:grid-cols-2">

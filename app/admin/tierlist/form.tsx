@@ -1949,7 +1949,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   {t.admin.tierlistForm.category} <span className="text-red-400">*</span>
               </label>
               <p className="text-xs text-muted-foreground/80">
-                "Obrigatório. Escolha uma das categorias abaixo — os valores são validados pelo banco."
+                "Obrigatório. Escolha uma das categorias abaixo; os valores são validados pelo banco."
               </p>
               <div className="flex flex-wrap gap-2">
                 {CATEGORIES.map((cat) => (
@@ -2002,7 +2002,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 })}
               </div>
               {selectedTierlistCategories.length === 0 && (
-                <p className="text-xs text-amber-400">Nenhuma categoria selecionada — este periférico não aparecerá na Tierlist pública.</p>
+                <p className="text-xs text-amber-400">Nenhuma categoria selecionada: este periférico não aparecerá na Tierlist pública.</p>
               )}
             </div>
 
@@ -2166,7 +2166,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <FormSection title="Tag" icon={<TagIcon className="size-4" />} defaultOpen>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              "Obrigatório — selecione ao menos uma tag que descreva este periférico."
+              "Obrigatório: selecione ao menos uma tag que descreva este periférico."
             </p>
             <div className="flex flex-wrap gap-2">
               {getTagOptionsForCategory(watchedCategory).map((tag) => {
@@ -2384,7 +2384,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Vincular Switch (opcional)"}</label>
                   <LinkedSwitchPicker value={linkedSwitch} onChange={handleLinkedSwitchChange} />
-                  <p className="text-[10px] text-muted-foreground/60">{"Aponta para um Switch cadastrado — vira link na página. Se vazio, mostra o texto acima."}</p>
+                  <p className="text-[10px] text-muted-foreground/60">{"Aponta para um Switch cadastrado, vira link na página. Se vazio, mostra o texto acima."}</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Coating</label>
@@ -2419,7 +2419,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Foto do Shape (fundo preto)"}</label>
-                  <p className="text-[10px] text-muted-foreground/60">{"Foto 2D do mouse visto de cima, em fundo preto — padrão estilo eloshapes, pensada para comparação entre mouses."}</p>
+                  <p className="text-[10px] text-muted-foreground/60">{"Foto 2D do mouse visto de cima, em fundo preto: padrão estilo eloshapes, pensada para comparação entre mouses."}</p>
                   {shapeImagePreview ? (
                     <div className="relative group w-32 h-24 rounded-lg overflow-hidden border border-border bg-black">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -2561,7 +2561,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Vincular Switch (opcional)"}</label>
                   <LinkedSwitchPicker value={linkedSwitch} onChange={handleLinkedSwitchChange} />
-                  <p className="text-[10px] text-muted-foreground/60">{"Aponta para um Switch cadastrado — vira link na página. Se vazio, mostra o texto acima."}</p>
+                  <p className="text-[10px] text-muted-foreground/60">{"Aponta para um Switch cadastrado, vira link na página. Se vazio, mostra o texto acima."}</p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Latência"}</label>
@@ -3132,7 +3132,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 <div className="col-span-full space-y-3 rounded-xl border border-white/10 p-3" style={{ backgroundColor: "#161618" }}>
                   <div>
                     <p className="text-sm font-semibold text-foreground">{"Em 10% de Sobrecarga"}</p>
-                    <p className="text-[10px] text-muted-foreground">{"Cenário atípico — 110% da carga nominal."}</p>
+                    <p className="text-[10px] text-muted-foreground">{"Cenário atípico: 110% da carga nominal."}</p>
                   </div>
                   <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
                     {PSU_LOAD_FIELDS.map((field) => (
@@ -3507,7 +3507,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         <FormSection id="section-linked-products" forceOpen={forceOpenIds.has("section-linked-products")} title={t.admin.tierlistForm.sectionLinkedProducts} icon={<Link2 className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
             <p className="text-xs text-muted-foreground">
-              Vincule este periférico aos produtos da Loja. Todos aparecem no bloco &quot;Onde comprar&quot; da página do periférico, na ordem definida aqui — o primeiro é o destaque do botão &quot;Comprar&quot;.
+              Vincule este periférico aos produtos da Loja. Todos aparecem no bloco &quot;Onde comprar&quot; da página do periférico, na ordem definida aqui; o primeiro é o destaque do botão &quot;Comprar&quot;.
             </p>
             <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
               <div className="space-y-1.5">

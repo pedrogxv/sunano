@@ -27,7 +27,7 @@ function SignOutButton() {
       disabled={pending}
       className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
     >
-      Não tenho acesso ao app — sair
+      Não tenho acesso ao app, sair
     </button>
   )
 }
@@ -71,7 +71,7 @@ export function TwoFactorVerifyForm({ next }: { next: string }) {
           />
           <span className="text-xs text-muted-foreground">
             Confiar neste dispositivo por 30 dias e não pedir o código novamente.
-            Use apenas em aparelhos pessoais — você pode revogar a qualquer momento em
+            Use apenas em aparelhos pessoais; você pode revogar a qualquer momento em
             Conta &gt; Segurança.
           </span>
         </label>

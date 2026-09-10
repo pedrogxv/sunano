@@ -87,12 +87,12 @@ export function TierlistVipGate({
 
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-bold text-foreground">
-            {isExpired ? "Seu VIP expirou — a tierlist continua sua" : "Tierlist pessoal é exclusiva para VIPs"}
+            {isExpired ? "Seu VIP expirou: a tierlist continua sua" : "Tierlist pessoal é exclusiva para VIPs"}
           </h2>
 
           <p className="mt-1 text-xs text-muted-foreground">
             {isExpired
-              ? "Nada foi perdido: sua tierlist segue visível pra quem receber o link. Para voltar a mexer nela — adicionar, mover ou tirar periféricos — é só reativar o VIP."
+              ? "Nada foi perdido: sua tierlist segue visível pra quem receber o link. Para voltar a mexer nela (adicionar, mover ou tirar periféricos), é só reativar o VIP."
               : "Monte seu próprio ranking dos periféricos que você já usou, com os tiers do seu jeito (nome e cor), e compartilhe com quem quiser."}
           </p>
 

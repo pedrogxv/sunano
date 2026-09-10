@@ -149,10 +149,10 @@ function CardCheckoutContent() {
                   <span className="min-w-0 truncate text-foreground">
                     {item.quantity ?? 1}× {item.name ?? "Item"}
                     {item.variant_label ? (
-                      <span className="text-muted-foreground"> — {item.variant_label}</span>
+                      <span className="text-muted-foreground"> · {item.variant_label}</span>
                     ) : null}
                     {(item.variant_options ?? []).map((o, oi) => (
-                      <span key={oi} className="text-muted-foreground"> — {o.label}</span>
+                      <span key={oi} className="text-muted-foreground"> · {o.label}</span>
                     ))}
                   </span>
                   {typeof item.price_cents === "number" && (
@@ -180,7 +180,7 @@ function CardCheckoutContent() {
                     : "Pago no cartão à vista"}
                 </p>
                 <p>
-                  No PIX sairia por {formatBRL(order.pixPriceCents)} — {order.cardSurchargePercent}% de desconto.
+                  No PIX sairia por {formatBRL(order.pixPriceCents)}: {order.cardSurchargePercent}% de desconto.
                 </p>
               </div>
             </div>

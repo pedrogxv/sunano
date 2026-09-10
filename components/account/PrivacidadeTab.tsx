@@ -214,7 +214,7 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
             Exportar meus dados
           </CardTitle>
           <CardDescription>
-            Baixe todos os seus dados pessoais armazenados no Sunano em formato JSON (portabilidade —
+            Baixe todos os seus dados pessoais armazenados no Sunano em formato JSON (portabilidade,
             LGPD Art. 18, V).
           </CardDescription>
         </CardHeader>
@@ -238,7 +238,7 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
             Excluir minha conta
           </CardTitle>
           <CardDescription>
-            Ação permanente e irreversível — LGPD Art. 18, VI.
+            Ação permanente e irreversível: LGPD Art. 18, VI.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-5 space-y-4">
@@ -252,8 +252,8 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
             </ul>
             <p className="mt-2 text-sm font-medium text-foreground">O que permanece:</p>
             <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-              <li>• Posts e comentários do fórum — seu nome será substituído por &ldquo;[usuário removido]&rdquo;</li>
-              <li>• Pedidos de compra — anonimizados, retidos por obrigação fiscal por 5 anos</li>
+              <li>• Posts e comentários do fórum: seu nome será substituído por &ldquo;[usuário removido]&rdquo;</li>
+              <li>• Pedidos de compra: anonimizados, retidos por obrigação fiscal por 5 anos</li>
             </ul>
           </div>
 
@@ -273,7 +273,7 @@ export function PrivacidadeTab({ email, lgpdConsentAt, lgpdConsentVersion }: Pri
                 <AlertDialogDescription className="space-y-3">
                   <span className="block">
                     Esta ação é <strong>irreversível</strong>. Todos os seus dados pessoais serão
-                    excluídos imediatamente ao confirmar — nenhum e-mail de confirmação é
+                    excluídos imediatamente ao confirmar; nenhum e-mail de confirmação é
                     enviado.
                   </span>
                   <span className="block">

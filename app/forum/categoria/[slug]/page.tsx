@@ -25,7 +25,7 @@ export async function generateMetadata({
   if (!result) return { title: "Categoria não encontrada" }
 
   const { category } = result
-  const label = category.parent ? `${category.parent.name} — ${category.name}` : category.name
+  const label = category.parent ? `${category.parent.name} - ${category.name}` : category.name
 
   return buildMetadata({
     title: `Discussões sobre ${label}`,
@@ -47,7 +47,7 @@ export default async function ForumCategoryPage({
   if (!result) notFound()
 
   const { category, posts, hasMore } = result
-  const label = category.parent ? `${category.parent.name} — ${category.name}` : category.name
+  const label = category.parent ? `${category.parent.name} - ${category.name}` : category.name
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-2 py-8 sm:px-4 md:px-6">

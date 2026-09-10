@@ -50,7 +50,7 @@ export async function generateMetadata({
   const canonical = profile.display_slug ? profilePath(profile.display_slug) : `/perfil/${handle}`
 
   return buildMetadata({
-    title: `${profile.display_name} — Perfil`,
+    title: `${profile.display_name} - Perfil`,
     description: buildDescription(profile.bio, `Setup e periféricos favoritos de ${profile.display_name}.`, {
       context: "Veja a tierlist, as reviews e a Aura desse membro na Sunano.",
     }),

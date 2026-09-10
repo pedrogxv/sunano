@@ -31,7 +31,7 @@ export async function generateMetadata({
 
   return buildMetadata({
     title: post.title,
-    titleSuffix: categoryName ? ` — ${categoryName} | Fórum` : " | Fórum Sunano",
+    titleSuffix: categoryName ? ` - ${categoryName} | Fórum` : " | Fórum Sunano",
     // O corpo é markdown: `buildDescription` limpa a marcação antes de cortar,
     // senão `##`/`**`/`![](...)` vazavam pro preview. O complemento entra só
     // quando o post é curto demais pra formar uma descrição informativa.

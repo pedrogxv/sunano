@@ -351,7 +351,7 @@ export function VipUpsellModal({ open, onOpenChange, auraCost, onPurchaseWithAur
             // para a Central — onde a `VipMonthCard` faz o resgate.
             <div className="space-y-2 rounded-lg border border-dashed px-4 py-3 text-center">
               <p className="text-xs text-muted-foreground">
-                A assinatura paga está temporariamente indisponível — dá para ativar o VIP resgatando Aura.
+                A assinatura paga está temporariamente indisponível; dá para ativar o VIP resgatando Aura.
               </p>
               <Link
                 href="/aura"

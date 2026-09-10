@@ -604,7 +604,7 @@ function PriceBandPeripheralCard({
       {isGolpe && (
         <div
           className="absolute left-2 top-1 z-10 grid size-4 place-items-center rounded-full bg-red-600 text-white shadow"
-          title={golpeMotivo || "GOLPE — não recomendado"}
+          title={golpeMotivo || "GOLPE: não recomendado"}
         >
           <AlertTriangle className="size-2.5" />
         </div>
@@ -868,7 +868,7 @@ function LinkPeripheralPopover({
   const [linking, setLinking] = useState(false)
 
   const options = useMemo(
-    () => items.map((item) => ({ value: item.id, label: `${item.name} — ${item.brand}` })),
+    () => items.map((item) => ({ value: item.id, label: `${item.name} · ${item.brand}` })),
     [items],
   )
 

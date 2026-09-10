@@ -174,11 +174,11 @@ function PostAuraButton({
   }
 
   const tooltipText = !user
-    ? "Entre na sua conta pra dar aura — vale +1 pro autor do post"
+    ? "Entre na sua conta pra dar aura: vale +1 pro autor do post"
     : isOwner
       ? "Você não pode dar aura no seu próprio post"
       : reacted
-        ? "Você deu aura nesse post — toque de novo pra desfazer"
+        ? "Você deu aura nesse post; toque de novo pra desfazer"
         : "Dar aura credita +1 pro autor do post"
 
   return (

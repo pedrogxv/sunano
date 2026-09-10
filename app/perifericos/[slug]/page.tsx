@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: PerifericoPageProps): Promise
 
   return buildMetadata({
     title: fullName,
-    titleSuffix: ` — ${categoryLabel} | Sunano`,
+    titleSuffix: ` - ${categoryLabel} | Sunano`,
     // Sem `generateMetadata` esta página herdava o card genérico do layout
     // raiz: TODO periférico era compartilhado com o mesmo título e a mesma
     // imagem, sem dizer qual produto era.

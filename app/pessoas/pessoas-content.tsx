@@ -36,7 +36,7 @@ const TABS: {
     label: "Mais Aura",
     icon: Flame,
     description:
-      "Top 100 usuários por Aura — reputação ganha com curtidas da comunidade.",
+      "Top 100 usuários por Aura, reputação ganha com curtidas da comunidade.",
   },
   {
     key: "active",
@@ -50,7 +50,7 @@ const TABS: {
     label: "Mais visitados",
     icon: Eye,
     description:
-      "Top 100 perfis que mais chamaram atenção — ordenados por visitas.",
+      "Top 100 perfis que mais chamaram atenção, ordenados por visitas.",
   },
   {
     key: "followed",
@@ -63,7 +63,7 @@ const TABS: {
     label: "Maiores Ofensivas",
     icon: Bird,
     description:
-      "Top 100 usuários com a maior ofensiva ativa — dias seguidos completando as missões diárias.",
+      "Top 100 usuários com a maior ofensiva ativa: dias seguidos completando as missões diárias.",
   },
   {
     key: "following",
@@ -197,7 +197,7 @@ export function PessoasContent({
   const description =
     supportsPeriod && effectivePeriod !== "all"
       ? tab === "aura"
-        ? `Quem mais ganhou Aura ${periodLabel(effectivePeriod)} — reputação em alta na comunidade.`
+        ? `Quem mais ganhou Aura ${periodLabel(effectivePeriod)}, reputação em alta na comunidade.`
         : `Quem mais postou e comentou ${periodLabel(effectivePeriod)} no fórum e nas notícias.`
       : activeTab.description
 

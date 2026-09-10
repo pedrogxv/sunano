@@ -528,7 +528,7 @@ export default function AdminStoreBannersPage() {
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5">
                 <Video className="size-3.5" />
-                Vídeo de fundo — opcional
+                Vídeo de fundo, opcional
               </Label>
               <div className="aspect-[21/9] w-full overflow-hidden rounded-lg border border-dashed border-border bg-muted/40">
                 {form.videoUrl ? (
@@ -634,7 +634,7 @@ export default function AdminStoreBannersPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="banner-subtitle">Subtítulo — opcional</Label>
+              <Label htmlFor="banner-subtitle">Subtítulo, opcional</Label>
               <Input
                 id="banner-subtitle"
                 placeholder="Ex.: Só até domingo, unidades limitadas"

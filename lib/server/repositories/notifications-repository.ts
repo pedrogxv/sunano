@@ -299,7 +299,7 @@ export async function notifyAffiliatePayoutStatus(params: {
   const body = isPaid
     ? "O PIX já foi enviado para a chave cadastrada."
     : params.reason
-      ? `${params.reason} — o valor voltou para o seu saldo disponível.`
+      ? `${params.reason}; o valor voltou para o seu saldo disponível.`
       : "O valor voltou para o seu saldo disponível."
 
   const { error } = await db.from("notifications").insert({

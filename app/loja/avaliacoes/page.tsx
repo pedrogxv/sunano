@@ -8,7 +8,7 @@ import { StoreReviewsContent } from "@/components/store/StoreReviewsContent"
 export const revalidate = 60
 
 export const metadata: Metadata = buildMetadata({
-  title: "Avaliações — Loja",
+  title: "Avaliações - Loja",
   description: "Veja as avaliações de quem já comprou na Loja Sunano: notas e comentários reais de compradores verificados.",
   path: "/loja/avaliacoes",
   eyebrow: "Loja",

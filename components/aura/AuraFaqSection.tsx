@@ -110,7 +110,7 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
               {showPersonalBoost && !isVip && " Ative na loja abaixo."}
             </p>
             <p className="text-xs">
-              O boost nunca se aplica às tarefas diárias, ao bônus de +10 por completá-las, nem às conquistas — esses
+              O boost nunca se aplica às tarefas diárias, ao bônus de +10 por completá-las, nem às conquistas: esses
               valores são sempre fixos.
             </p>
           </div>
@@ -126,7 +126,7 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
           </div>
           <p className="pb-3 text-sm text-muted-foreground">
             Cada conta tem um nível de confiança que decide quantas reações ela pode dar por dia (no total, e para a
-            mesma pessoa) — uma defesa contra contas descartáveis usadas para farmar Aura.
+            mesma pessoa), uma defesa contra contas descartáveis usadas para farmar Aura.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] text-left text-xs">
@@ -151,7 +151,7 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
             </table>
           </div>
           <p className="pt-3 text-xs text-muted-foreground">
-            Isso é sobre suas reações dadas, não sobre a Aura que você recebe — o limite não afeta quanto você ganha
+            Isso é sobre suas reações dadas, não sobre a Aura que você recebe; o limite não afeta quanto você ganha
             ao postar, comentar ou avaliar. As tarefas diárias reiniciam à meia-noite UTC (21h em Brasília).
           </p>
         </div>

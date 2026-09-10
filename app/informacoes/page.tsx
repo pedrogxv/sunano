@@ -14,7 +14,7 @@ import { buildMetadata } from "@/lib/seo"
 export const metadata: Metadata = buildMetadata({
   title: "Central de Informações",
   description:
-    "Termos de Uso, Política de Privacidade, trocas e devoluções, direitos LGPD e identificação do vendedor — todos os documentos oficiais do Sunano em um só lugar.",
+    "Termos de Uso, Política de Privacidade, trocas e devoluções, direitos LGPD e identificação do vendedor: todos os documentos oficiais do Sunano em um só lugar.",
   path: "/informacoes",
   eyebrow: "Institucional",
   subtitle: "Documentos e políticas",
@@ -145,7 +145,7 @@ export default function InformacoesPage() {
           >
             privacidade@sunano.gg
           </a>{" "}
-          com o assunto <em>&ldquo;Direito LGPD — [seu direito]&rdquo;</em>. Para os demais
+          com o assunto <em>&ldquo;Direito LGPD: [seu direito]&rdquo;</em>. Para os demais
           assuntos, use{" "}
           <a href="mailto:contato@sunano.gg" className="text-primary hover:underline">
             contato@sunano.gg

@@ -217,7 +217,7 @@ function SortableBannerRow({
         {isHero ? (
           <div className="flex items-center gap-1.5 text-sm text-foreground">
             <Sparkles className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="truncate font-medium">Destaque padrão — “Periféricos sem mistério”</span>
+            <span className="truncate font-medium">Destaque padrão: “Periféricos sem mistério”</span>
           </div>
         ) : (
           <div className="flex items-center gap-1.5 text-sm text-foreground">
@@ -229,7 +229,7 @@ function SortableBannerRow({
         )}
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
           <span className="truncate">
-            {isHero ? "Bloco fixo do site — sem conteúdo editável aqui" : banner.alt_text || "Sem texto alternativo"}
+            {isHero ? "Bloco fixo do site, sem conteúdo editável aqui" : banner.alt_text || "Sem texto alternativo"}
           </span>
           {!isHero && banner.image_url_mobile && (
             <span
@@ -682,7 +682,7 @@ export default function AdminBannersPage() {
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5">
                 <Smartphone className="size-3.5" />
-                Imagem (mobile) — opcional
+                Imagem (mobile), opcional
               </Label>
               <div className="aspect-[2/1] w-full max-w-[15rem] overflow-hidden rounded-lg border border-dashed border-border bg-muted/40">
                 {form.imageUrlMobile ? (
@@ -729,7 +729,7 @@ export default function AdminBannersPage() {
                 )}
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Recomendado: {RECOMMENDED_MOBILE}. Use quando a arte tiver texto nas laterais — o
+                Recomendado: {RECOMMENDED_MOBILE}. Use quando a arte tiver texto nas laterais, pois o
                 recorte do desktop cortaria.
               </p>
             </div>
@@ -769,7 +769,7 @@ export default function AdminBannersPage() {
             <div className="space-y-2 rounded-lg border border-border p-3">
               <Label className="flex items-center gap-1.5">
                 <CalendarClock className="size-3.5" />
-                Agendamento — opcional
+                Agendamento, opcional
               </Label>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
@@ -812,7 +812,7 @@ export default function AdminBannersPage() {
                 <p className="text-[11px] text-muted-foreground">
                   {canActivateInForm
                     ? "Libera o banner para o carrossel, respeitando o agendamento."
-                    : `Limite de ${MAX_ACTIVE} ativos atingido — salve como inativo e ative depois.`}
+                    : `Limite de ${MAX_ACTIVE} ativos atingido; salve como inativo e ative depois.`}
                 </p>
               </div>
               <button

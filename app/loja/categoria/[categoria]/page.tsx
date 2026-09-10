@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: CategoriaPageProps): Promise<
   const category = decodeURIComponent(categoria)
   const categoryLabel = getCategoryLabel(category)
   return buildMetadata({
-    title: `${categoryLabel} — Loja`,
+    title: `${categoryLabel} - Loja`,
     description: `Todos os produtos da categoria ${categoryLabel} na Loja Sunano: periféricos novos e usados testados antes de anunciar, com PIX na hora e envio para todo o Brasil.`,
     path: `/loja/categoria/${encodeURIComponent(category)}`,
     eyebrow: "Loja",

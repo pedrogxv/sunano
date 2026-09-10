@@ -103,7 +103,7 @@ export default async function IndicarPage() {
         <p className="mt-2 max-w-2xl text-muted-foreground">
           Chame seus amigos para a Sunano. Cada amigo que se cadastrar e{" "}
           <strong className="text-foreground">confirmar a conta</strong> vale{" "}
-          <strong className="text-foreground">{REFERRAL_REWARD_DIRECT} de Aura</strong> para você — e
+          <strong className="text-foreground">{REFERRAL_REWARD_DIRECT} de Aura</strong> para você, e
           se ele também indicar alguém, você ganha mais{" "}
           <strong className="text-foreground">{REFERRAL_REWARD_INDIRECT}</strong>.
         </p>
@@ -198,7 +198,7 @@ export default async function IndicarPage() {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {item.status === "validated" && item.validatedVia
-                          ? `Confirmado — ${VIA_LABEL[item.validatedVia] ?? "conta verificada"}`
+                          ? `Confirmado: ${VIA_LABEL[item.validatedVia] ?? "conta verificada"}`
                           : item.status === "pending"
                             ? `Precisa confirmar até ${formatDate(item.expiresAt)}`
                             : `Cadastrou em ${formatDate(item.createdAt)}`}
@@ -248,7 +248,7 @@ export default async function IndicarPage() {
               <AccordionContent className="space-y-3 text-sm text-muted-foreground">
                 <p>
                   Só criar a conta não conta. Ele precisa fazer{" "}
-                  <strong className="text-foreground">uma</strong> destas três coisas — a que for
+                  <strong className="text-foreground">uma</strong> destas três coisas, a que for
                   mais fácil para ele:
                 </p>
                 <ul className="space-y-2">
@@ -272,8 +272,8 @@ export default async function IndicarPage() {
                     <span>
                       <strong className="text-foreground">
                         Fazer {REFERRAL_STREAK_DAYS} dias de ofensiva
-                      </strong>{" "}
-                      — completar as missões diárias por {REFERRAL_STREAK_DAYS} dias seguidos.
+                      </strong>
+                      : completar as missões diárias por {REFERRAL_STREAK_DAYS} dias seguidos.
                     </span>
                   </li>
                 </ul>
@@ -290,7 +290,7 @@ export default async function IndicarPage() {
                 <p>
                   Para o programa ser justo com quem indica de verdade. Se bastasse criar uma conta,
                   qualquer um poderia gerar dezenas de cadastros falsos com e-mails descartáveis e
-                  farmar Aura — e aí a Aura de todo mundo valeria menos.
+                  farmar Aura, e aí a Aura de todo mundo valeria menos.
                 </p>
                 <p>
                   As três opções acima são coisas que uma pessoa real faz naturalmente e que ninguém
@@ -306,12 +306,12 @@ export default async function IndicarPage() {
                 <p>
                   Se você indica a Ana, e a Ana indica o Bruno, você ganha{" "}
                   <strong className="text-foreground">{REFERRAL_REWARD_INDIRECT} de Aura</strong>{" "}
-                  quando o Bruno confirmar a conta — além dos{" "}
+                  quando o Bruno confirmar a conta, além dos{" "}
                   {REFERRAL_REWARD_DIRECT} que a Ana ganha por ele.
                 </p>
                 <p>
                   O bônus vai só até esse segundo nível: se o Bruno indicar mais alguém, esse ganho é
-                  dele e de quem o indicou, não seu. É de propósito — mantém o programa como uma
+                  dele e de quem o indicou, não seu. É de propósito: mantém o programa como uma
                   recompensa por trazer amigos, e não uma corrente onde quem chegou primeiro lucra
                   com todo mundo abaixo.
                 </p>
@@ -328,7 +328,7 @@ export default async function IndicarPage() {
                 </p>
                 <p>
                   O <strong className="text-foreground">cupom</strong> serve para quando não dá para
-                  clicar — num vídeo, numa live ou numa conversa presencial. A pessoa digita no campo
+                  clicar (num vídeo, numa live ou numa conversa presencial). A pessoa digita no campo
                   &quot;Cupom de Indicação&quot; ao criar a conta.
                 </p>
                 <p>
@@ -344,13 +344,13 @@ export default async function IndicarPage() {
                 <p>
                   Seu amigo tem <strong className="text-foreground">{REFERRAL_VALIDATION_DAYS} dias</strong>{" "}
                   depois do cadastro para confirmar a conta. Passou disso, a indicação expira e não
-                  gera mais Aura — por isso vale lembrar quem está na lista como
+                  gera mais Aura, por isso vale lembrar quem está na lista como
                   &quot;Aguardando&quot;.
                 </p>
                 <p>
                   O limite é de <strong className="text-foreground">{REFERRAL_MAX_PER_USER} indicações
                   confirmadas</strong> por pessoa. Cada pessoa também só pode ser indicada uma vez,
-                  por uma pessoa só — vale quem foi usado no cadastro dela.
+                  por uma pessoa só; vale quem foi usado no cadastro dela.
                 </p>
               </AccordionContent>
             </AccordionItem>
@@ -366,7 +366,7 @@ export default async function IndicarPage() {
                 <p>
                   Várias indicações vindas da mesma casa ou da mesma rede passam por uma conferência
                   antes de liberar. Se você mora com outras pessoas que se cadastraram de verdade,
-                  fica tranquilo — é só uma checagem, e a gente libera. Fale com o suporte se алguma
+                  fica tranquilo: é só uma checagem, e a gente libera. Fale com o suporte se alguma
                   indicação legítima ficar parada.
                 </p>
                 <p>

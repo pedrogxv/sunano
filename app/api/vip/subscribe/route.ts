@@ -215,7 +215,7 @@ export async function POST(request: NextRequest) {
     const checkout = await createSubscriptionCheckout({
       customerId: asaasCustomerId,
       amountCents: VIP_SUBSCRIPTION_PRICE_CENTS,
-      description: "Assinatura VIP — Sunano",
+      description: "Assinatura VIP - Sunano",
       externalReference: subscriptionId,
       nextDueDate,
       successUrl: absoluteUrl("/conta?vip=success"),

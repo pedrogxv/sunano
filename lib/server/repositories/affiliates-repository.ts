@@ -452,7 +452,7 @@ export async function cancelPayoutRequest(
   if (!data?.ok) {
     return {
       ok: false,
-      error: "Este saque não pode mais ser cancelado — ele já foi processado.",
+      error: "Este saque não pode mais ser cancelado; ele já foi processado.",
       status: 409,
     }
   }

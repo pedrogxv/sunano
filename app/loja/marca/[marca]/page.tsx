@@ -18,7 +18,7 @@ export async function generateMetadata({ params }: MarcaPageProps): Promise<Meta
   const { marca } = await params
   const brand = decodeURIComponent(marca)
   return buildMetadata({
-    title: `${brand} — Loja`,
+    title: `${brand} - Loja`,
     description: `Todos os produtos da marca ${brand} na Loja Sunano: periféricos novos e usados testados antes de anunciar, com PIX na hora e envio para todo o Brasil.`,
     path: `/loja/marca/${encodeURIComponent(brand)}`,
     eyebrow: "Loja",

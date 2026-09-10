@@ -878,7 +878,7 @@ export default function AdminOrdersPage() {
                       <StatusBadge status={order.status} />
                       {order.payment_method === "aura" && (
                         <span
-                          title="Resgate da Central de Aura — pago com Aura, sem cobrança em dinheiro"
+                          title="Resgate da Central de Aura: pago com Aura, sem cobrança em dinheiro"
                           className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-400"
                         >
                           <Sparkles className="size-2.5" strokeWidth={2.5} />
@@ -896,7 +896,7 @@ export default function AdminOrdersPage() {
                       )}
                       {isMissingShippingAddress(order) && (
                         <span
-                          title="Pedido pago de item físico sem endereço — o cliente ainda precisa informar em “Meus Pedidos”"
+                          title="Pedido pago de item físico sem endereço; o cliente ainda precisa informar em “Meus Pedidos”"
                           className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-400"
                         >
                           <MapPinOff className="size-2.5" strokeWidth={2.5} />
@@ -905,7 +905,7 @@ export default function AdminOrdersPage() {
                       )}
                       {order.is_sandbox && (
                         <span
-                          title="Pedido feito contra a Asaas sandbox — pagamento de teste, não gerou receita nem comissão"
+                          title="Pedido feito contra a Asaas sandbox: pagamento de teste, não gerou receita nem comissão"
                           className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-violet-400"
                         >
                           <FlaskConical className="size-2.5" strokeWidth={2.5} />
@@ -1195,7 +1195,7 @@ function OrderManageDialog({
             </p>
             {!order.requires_shipping_address ? (
               <p className="text-xs text-muted-foreground">
-                Pedido de serviço/item digital — não precisa de endereço de entrega.
+                Pedido de serviço/item digital: não precisa de endereço de entrega.
               </p>
             ) : order.shipping_address ? (
               <>
@@ -1217,7 +1217,7 @@ function OrderManageDialog({
               </>
             ) : (
               <p className="text-xs text-amber-400">
-                Não informado — o cliente ainda precisa preencher em &ldquo;Meus Pedidos&rdquo;.
+                Não informado; o cliente ainda precisa preencher em &ldquo;Meus Pedidos&rdquo;.
               </p>
             )}
           </div>
@@ -1329,7 +1329,7 @@ function OrderManageDialog({
               )}
               {next === "shipped" && order.requires_shipping_address && !order.shipping_address && (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
-                  Sem endereço de entrega informado — não há para onde despachar.
+                  Sem endereço de entrega informado; não há para onde despachar.
                 </p>
               )}
               <Button

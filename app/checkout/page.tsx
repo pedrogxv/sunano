@@ -713,7 +713,7 @@ export default function CheckoutPage() {
           <Rocket className="mt-0.5 size-4 shrink-0" />
           <p>
             <span className="font-bold">Seu pedido tem item(ns) em pré-venda.</span> O pagamento é processado
-            normalmente, mas o envio desses produtos só acontece quando o estoque chegar — acompanhe o status na sua conta.
+            normalmente, mas o envio desses produtos só acontece quando o estoque chegar; acompanhe o status na sua conta.
           </p>
         </div>
       )}
@@ -725,7 +725,7 @@ export default function CheckoutPage() {
           <span className="text-[11px] text-muted-foreground">
             {paymentMethod === "pix"
               ? "Pagamento via PIX, sem cadastro de cartão"
-              : "Cartão digitado direto na página segura da Asaas — nunca no nosso site"}
+              : "Cartão digitado direto na página segura da Asaas, nunca no nosso site"}
           </span>
         </div>
         <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors", CARD_SURFACE)}>
@@ -794,7 +794,7 @@ export default function CheckoutPage() {
             <Package className="mt-0.5 size-4 shrink-0" />
             <p>
               <span className="font-bold">A Loja está fechada para novos pedidos no momento.</span> Seu
-              carrinho fica salvo — assim que reabrirmos, é só voltar aqui e finalizar a compra.
+              carrinho fica salvo; assim que reabrirmos, é só voltar aqui e finalizar a compra.
             </p>
           </div>
         )}

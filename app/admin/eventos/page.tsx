@@ -188,7 +188,7 @@ export default function AdminEventsPage() {
           <DialogHeader>
             <DialogTitle>Deletar conquista?</DialogTitle>
             <DialogDescription>
-              A medalha já concedida a quem participou não é removida — só a conquista deixa de existir.
+              A medalha já concedida a quem participou não é removida; só a conquista deixa de existir.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

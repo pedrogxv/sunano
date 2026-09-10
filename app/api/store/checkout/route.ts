@@ -429,7 +429,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "impersonation_read_only",
-          message: "Sessão de acesso é somente leitura — não é possível finalizar uma compra.",
+          message: "Sessão de acesso é somente leitura; não é possível finalizar uma compra.",
         },
         { status: 403 }
       )
@@ -626,7 +626,7 @@ export async function POST(request: NextRequest) {
         if (!variant.is_active || variant.is_sold_out) {
           return NextResponse.json(
             {
-              error: `Variante indisponível: ${product.name} — ${variant.label}`,
+              error: `Variante indisponível: ${product.name} · ${variant.label}`,
             },
             { status: 400 }
           )
@@ -652,7 +652,7 @@ export async function POST(request: NextRequest) {
         if (option.is_sold_out) {
           return NextResponse.json(
             {
-              error: `Variante indisponível: ${product.name} — ${option.label}`,
+              error: `Variante indisponível: ${product.name} · ${option.label}`,
             },
             { status: 400 }
           )
@@ -676,7 +676,7 @@ export async function POST(request: NextRequest) {
           if (soldOutCombinationKeys.has(`${variant.id}:${option.id}`)) {
             return NextResponse.json(
               {
-                error: `Combinação indisponível: ${product.name} — ${variant.label} + ${option.label}`,
+                error: `Combinação indisponível: ${product.name} · ${variant.label} + ${option.label}`,
               },
               { status: 400 }
             )
@@ -822,7 +822,7 @@ export async function POST(request: NextRequest) {
       await revertDecrements(db, decrementedLines, reservationGroup)
       const { product, variant } = failed.line
       const label = variant
-        ? `${product.name} — ${variant.label}`
+        ? `${product.name} · ${variant.label}`
         : product.name
       return NextResponse.json(
         {
@@ -1144,7 +1144,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const description = `Pedido Sunano — ${orderItems.length} ${orderItems.length === 1 ? "item" : "itens"}`
+    const description = `Pedido Sunano · ${orderItems.length} ${orderItems.length === 1 ? "item" : "itens"}`
 
     let orderInsert: Partial<
       Database["public"]["Tables"]["store_orders"]["Insert"]

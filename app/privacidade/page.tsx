@@ -24,7 +24,7 @@ export default function PrivacidadePage() {
         </h1>
         <p className="mt-3 text-sm text-muted-foreground">
           Versão <strong>{CURRENT_VERSION}</strong> · Em vigor a partir de 8 de agosto de 2026.
-          Em conformidade com a <strong>Lei Geral de Proteção de Dados — LGPD (Lei 13.709/2018)</strong>.
+          Em conformidade com a <strong>Lei Geral de Proteção de Dados (LGPD, Lei 13.709/2018)</strong>.
         </p>
       </header>
 
@@ -48,15 +48,15 @@ export default function PrivacidadePage() {
 
           <h3>2.1 Dados de conta e autenticação</h3>
           <ul>
-            <li><strong>E-mail</strong> — obrigatório para criar conta e fazer login.</li>
-            <li><strong>Senha</strong> — armazenada exclusivamente como hash seguro pelo Supabase Auth.</li>
-            <li><strong>Nome de exibição</strong> — como você aparece no fórum e na loja.</li>
+            <li><strong>E-mail:</strong> obrigatório para criar conta e fazer login.</li>
+            <li><strong>Senha:</strong> armazenada exclusivamente como hash seguro pelo Supabase Auth.</li>
+            <li><strong>Nome de exibição:</strong> como você aparece no fórum e na loja.</li>
             <li>
-              <strong>Foto de perfil (avatar)</strong> — opcional; pode ser enviada por você ou
+              <strong>Foto de perfil (avatar):</strong> opcional; pode ser enviada por você ou
               obtida automaticamente via OAuth (Google / Discord).
             </li>
             <li>
-              <strong>Fatores de autenticação em dois fatores (2FA/TOTP)</strong> — gerenciados
+              <strong>Fatores de autenticação em dois fatores (2FA/TOTP):</strong> gerenciados
               pelo Supabase Auth, não armazenados diretamente pelo Sunano.
             </li>
           </ul>
@@ -196,7 +196,7 @@ export default function PrivacidadePage() {
           <p>
             Processa pagamentos via Pix e cartão de crédito. Recebe seu nome, CPF e e-mail para
             geração da cobrança e emissão de recibo; no pagamento com cartão, os dados do cartão são
-            digitados e processados exclusivamente no ambiente da Asaas — o Sunano nunca recebe
+            digitados e processados exclusivamente no ambiente da Asaas; o Sunano nunca recebe
             número, validade ou CVV. Política:{" "}
             <a href="https://www.asaas.com/politica-de-privacidade" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
               asaas.com
@@ -226,7 +226,7 @@ export default function PrivacidadePage() {
           <p>
             Alguns dos serviços tecnológicos, fornecedores ou parceiros utilizados pelo Sunano
             possuem infraestrutura localizada fora do Brasil. Consequentemente, determinados dados
-            pessoais poderão ser armazenados, processados ou acessados em outros países — por
+            pessoais poderão ser armazenados, processados ou acessados em outros países, por
             exemplo, em razão de serviços de banco de dados e autenticação, hospedagem, segurança e
             outros prestadores necessários à operação.
           </p>
@@ -276,8 +276,8 @@ export default function PrivacidadePage() {
             </li>
             <li>
               <strong>Contagem de visitas:</strong> o hash irreversível descrito na seção 6 é
-              mantido por até <strong>400 dias</strong> — o suficiente para os relatórios anuais
-              do painel administrativo — e removido pela rotina de expurgo diária.
+              mantido por até <strong>400 dias</strong> (o suficiente para os relatórios anuais
+              do painel administrativo) e removido pela rotina de expurgo diária.
             </li>
             <li>
               <strong>Notificações:</strong> as já lidas são removidas após{" "}
@@ -305,7 +305,7 @@ export default function PrivacidadePage() {
             <li>
               <strong>Carrinho de compras (localStorage):</strong> os itens adicionados à loja
               ficam salvos localmente no seu navegador para não se perderem entre páginas.
-              Nenhum dado de pagamento fica nesse armazenamento — nome, e-mail e CPF de compras sem
+              Nenhum dado de pagamento fica nesse armazenamento: nome, e-mail e CPF de compras sem
               conta são enviados apenas no momento da finalização, direto para gerar a cobrança PIX.
             </li>
             <li>
@@ -323,7 +323,7 @@ export default function PrivacidadePage() {
             hoje&rdquo; e &ldquo;visitantes no mês&rdquo;), geramos um hash irreversível
             (IP + navegador + um segredo do servidor) a cada acesso a uma página pública. Esse
             hash não é um cookie, não identifica você pessoalmente e não permite reconstruir seu
-            IP — serve só para contar visitantes de forma agregada e saber se um acesso é novo ou
+            IP; serve só para contar visitantes de forma agregada e saber se um acesso é novo ou
             recorrente no site. Não é usado para publicidade, perfil de comportamento individual
             ou compartilhado com terceiros.
           </p>
@@ -333,36 +333,36 @@ export default function PrivacidadePage() {
           <h2>7. Seus Direitos (LGPD Art. 18)</h2>
           <p>Como titular de dados, você tem os seguintes direitos, exercíveis a qualquer momento:</p>
           <ul>
-            <li><strong>Confirmação e acesso</strong> — saber se tratamos seus dados e consultá-los.</li>
+            <li><strong>Confirmação e acesso:</strong> saber se tratamos seus dados e consultá-los.</li>
             <li>
-              <strong>Correção</strong> — atualizar nome, avatar, banner e bio em{" "}
+              <strong>Correção:</strong> atualizar nome, avatar, banner e bio em{" "}
               <Link href="/perfil" className="text-primary hover:underline">/perfil</Link>. Para corrigir
               CPF, telefone ou endereço, envie um e-mail para{" "}
               <a href="mailto:privacidade@sunano.gg" className="text-primary hover:underline">privacidade@sunano.gg</a>
-              {" "}— esses campos ainda não têm edição self-service pela interface.
+              {" "}; esses campos
             </li>
             <li>
-              <strong>Anonimização, bloqueio ou eliminação</strong> — remover dados desnecessários ou
+              <strong>Anonimização, bloqueio ou eliminação:</strong> remover dados desnecessários ou
               excessivos. Use a opção de exclusão de conta em{" "}
               <Link href="/conta#privacidade" className="text-primary hover:underline">/conta → Privacidade e dados</Link>.
             </li>
             <li>
-              <strong>Portabilidade</strong> — exportar seus dados em formato estruturado (JSON) em{" "}
+              <strong>Portabilidade:</strong> exportar seus dados em formato estruturado (JSON) em{" "}
               <Link href="/conta#privacidade" className="text-primary hover:underline">/conta → Privacidade e dados → Exportar meus dados</Link>.
             </li>
             <li>
-              <strong>Informação sobre compartilhamento</strong> — saber com quais entidades seus dados
+              <strong>Informação sobre compartilhamento:</strong> saber com quais entidades seus dados
               são compartilhados (ver Seção 4).
             </li>
             <li>
-              <strong>Revogação de consentimento</strong> — retirar seu consentimento a qualquer momento,
+              <strong>Revogação de consentimento:</strong> retirar seu consentimento a qualquer momento,
               sem prejudicar tratamentos realizados anteriormente com base nele.
             </li>
             <li>
-              <strong>Oposição</strong> — opor-se a tratamentos baseados em legítimo interesse.
+              <strong>Oposição:</strong> opor-se a tratamentos baseados em legítimo interesse.
             </li>
             <li>
-              <strong>Petição à ANPD</strong> — apresentar reclamação à Autoridade Nacional de Proteção
+              <strong>Petição à ANPD:</strong> apresentar reclamação à Autoridade Nacional de Proteção
               de Dados (<a href="https://www.gov.br/anpd" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">gov.br/anpd</a>).
             </li>
           </ul>
@@ -371,7 +371,7 @@ export default function PrivacidadePage() {
             <a href="mailto:privacidade@sunano.gg" className="text-primary hover:underline">
               privacidade@sunano.gg
             </a>{" "}
-            com o assunto <em>&ldquo;Direito LGPD — [seu direito]&rdquo;</em>. Responderemos em até
+            com o assunto <em>&ldquo;Direito LGPD: [seu direito]&rdquo;</em>. Responderemos em até
             15 dias úteis.
           </p>
         </section>
@@ -398,15 +398,15 @@ export default function PrivacidadePage() {
           </p>
           <ul>
             <li>
-              <strong>Somente leitura</strong> — nenhuma ação é feita em seu nome (não publica,
+              <strong>Somente leitura:</strong> nenhuma ação é feita em seu nome (não publica,
               não compra, não altera seu perfil, senha, e-mail ou 2FA).
             </li>
             <li>
-              <strong>Restrito e temporário</strong> — apenas o responsável máximo pelo site pode
+              <strong>Restrito e temporário:</strong> apenas o responsável máximo pelo site pode
               iniciar, a sessão expira automaticamente em 30 minutos e não acessa dados de pagamento.
             </li>
             <li>
-              <strong>Registrado</strong> — cada acesso grava no log de auditoria quem acessou,
+              <strong>Registrado:</strong> cada acesso grava no log de auditoria quem acessou,
               quando, por quanto tempo e o motivo. Você pode solicitar esse registro a qualquer
               momento pelo canal da Seção 12 (direito de acesso, LGPD Art. 18).
             </li>

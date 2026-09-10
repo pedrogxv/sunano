@@ -66,7 +66,7 @@ const STATUS_META: Record<
     label: "Em análise",
     icon: Clock,
     variant: "secondary",
-    hint: "Costuma cair em até 2 dias úteis — você é notificado quando sair.",
+    hint: "Costuma cair em até 2 dias úteis; você é notificado quando sair.",
   },
   paid: { label: "Pago", icon: Check, variant: "default", hint: "Valor enviado para sua chave PIX." },
   rejected: { label: "Recusado", icon: X, variant: "destructive", hint: "O valor voltou para o seu saldo." },
@@ -134,7 +134,7 @@ export default function SaquesAfiliadoPage() {
     if (!amountCents) return null
     if (amountCents < MIN_PAYOUT_CENTS) return `O saque mínimo é de ${formatBRL(MIN_PAYOUT_CENTS)}.`
     if (amountCents > availableCents)
-      return `Você tem ${formatBRL(availableCents)} disponíveis — faltam ${formatBRL(amountCents - availableCents)}.`
+      return `Você tem ${formatBRL(availableCents)} disponíveis; faltam ${formatBRL(amountCents - availableCents)}.`
     return null
   }, [amountCents, availableCents])
 
@@ -266,7 +266,7 @@ export default function SaquesAfiliadoPage() {
             <p className="px-5 py-3 text-xs text-muted-foreground">
               <Clock className="mr-1 inline size-3 align-[-2px]" />
               {formatBRL(summary.totalRequestedPendingCents)} já reservados em {pendingCount}{" "}
-              {pendingCount === 1 ? "saque em análise" : "saques em análise"} — por isso não entram no valor acima.
+              {pendingCount === 1 ? "saque em análise" : "saques em análise"}, por isso não entram no valor acima.
             </p>
           )}
         </CardContent>
@@ -468,7 +468,7 @@ export default function SaquesAfiliadoPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirmar saque</DialogTitle>
-            <DialogDescription>Confira os dados — o PIX é enviado exatamente para esta chave.</DialogDescription>
+            <DialogDescription>Confira os dados: o PIX é enviado exatamente para esta chave.</DialogDescription>
           </DialogHeader>
 
           <dl className="space-y-3 rounded-lg border p-4 text-sm">

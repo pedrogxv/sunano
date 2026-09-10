@@ -359,7 +359,7 @@ export function CategoriesClient({
             <DialogTitle>Excluir categoria</DialogTitle>
             <DialogDescription>
               Excluir &quot;{deleteTarget?.name}&quot;? Categorias com posts ou subcategorias não podem ser
-              excluídas — desative-as em vez disso.
+              excluídas; desative-as em vez disso.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

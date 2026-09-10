@@ -79,7 +79,7 @@ export function SmartLink({ href, children }: { href: string; children: React.Re
     return (
       <Link
         href={target.href}
-        title={`Ir para ${target.label} — ${target.href}`}
+        title={`Ir para ${target.label}: ${target.href}`}
         className="mx-0.5 inline-flex max-w-full items-baseline gap-1 rounded-md border border-primary/25 bg-primary/10 px-1.5 py-0.5 align-baseline font-medium text-primary transition-colors hover:border-primary/50 hover:bg-primary/20"
       >
         <Icon aria-hidden className="size-3 shrink-0 self-center" />
@@ -97,7 +97,7 @@ export function SmartLink({ href, children }: { href: string; children: React.Re
         href={target.href}
         target="_blank"
         rel="noopener noreferrer nofollow ugc"
-        title={`Link externo — ${target.hostname}`}
+        title={`Link externo: ${target.hostname}`}
         onClick={(event) => {
           // Ctrl/Cmd/meio: o usuário já escolheu abrir em outra aba
           // conscientemente, o aviso só atrapalharia.

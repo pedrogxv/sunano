@@ -243,7 +243,7 @@ function PurchasesContent() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  usePageHeader("Histórico de compras da Aura", "Toda compra da Central de Aura — item, valor pago e carteira antes/depois.")
+  usePageHeader("Histórico de compras da Aura", "Toda compra da Central de Aura: item, valor pago e carteira antes/depois.")
 
   // Carrega o catálogo uma vez, para o seletor de item.
   useEffect(() => {

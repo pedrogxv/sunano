@@ -14,7 +14,7 @@ const CONDITIONS = [
   {
     label: "Novo",
     style: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-    description: "Produto lacrado, direto de fornecedor — nunca usado.",
+    description: "Produto lacrado, direto de fornecedor, nunca usado.",
   },
   {
     label: "Embalagem aberta",

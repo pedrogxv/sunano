@@ -519,6 +519,160 @@ button,
   animation: event-card-glow-pulse-strong 2.8s ease-in-out infinite;
 }
 
+/* Medalha holográfica (/conquistas) — foil que segue o PONTEIRO, não o relógio.
+
+   Portado do shader de github.com/EverettFish/holo-card-studio. Lá o arco-íris
+   é função da direção de vista (`uView`), e é isso que separa foil de verdade
+   de um shimmer em loop: o brilho para quando o mouse para, e a mesma posição
+   do ponteiro devolve sempre a mesma cor. As três camadas abaixo são os três
+   termos do fragment shader original — `spectrum(wave())`, `sweep` e `star()`.
+
+   Quem alimenta as variáveis é `useHoloTilt` (lib/hooks/use-holo-tilt.ts):
+   --holo-px/--holo-py (0..1, onde o ponteiro está), --holo-rx/--holo-ry
+   (inclinação) e --holo-on (1 em cima, 0 fora). A intensidade vem da raridade
+   em --holo-strength (MEDAL_RARITY_HOLO, lib/profile-showcase.ts).
+
+   Sunano é dark-only (--card: #0a0a0a): sobre um card quase preto o
+   `color-dodge` acende o foil sem estourar em branco. Num tema claro esta
+   camada teria de virar `overlay`. */
+
+.medal-holo {
+  /* Sem isto as camadas de `mix-blend-mode` mesclariam com o que está ATRÁS
+     do card (o halo de .event-card-glow, o fundo da página) em vez de com o
+     conteúdo dele. */
+  isolation: isolate;
+  transform: perspective(760px) rotateX(var(--holo-rx, 0deg)) rotateY(var(--holo-ry, 0deg))
+    translate3d(0, calc(var(--holo-on, 0) * -4px), 0);
+  /* Curto de propósito: o card tem que parecer preso ao ponteiro. Longo o
+     bastante só para a volta ao repouso não ser um corte seco. */
+  transition: transform 140ms ease-out;
+}
+
+.medal-holo-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  transition:
+    opacity 260ms ease-out,
+    background-position 120ms ease-out;
+}
+
+/* `spectrum(wave())` recortado por `sweep` — o arco-íris.
+
+   A linha que importa do shader é `col += foil * sweep * uFoil * 0.28`: o
+   arco-íris VIVO só existe multiplicado pela faixa especular estreita. Sem
+   esse recorte o card inteiro fica listrado de ponta a ponta e lê como papel
+   de bala, não como foil. Daí as duas viagens independentes aqui: o
+   `background-position` arrasta as listras devagar (70%) enquanto a
+   `mask-position` varre a faixa depressa (240%) — é o descompasso entre as
+   duas que produz o cintilar.
+
+   Confinado à faixa, o `color-dodge` pode ser o que é: fora dela a máscara
+   zera tudo, então ele não tem como lavar a arte da medalha.
+
+   As quatro cores são as do shader original (rosa → amarelo → azul → branco). */
+.medal-holo-foil {
+  background-image: repeating-linear-gradient(
+    112deg,
+    #ff529e 0%,
+    #ffd952 1.2%,
+    #389eff 2.4%,
+    #ffffff 3.1%,
+    #ff529e 4.2%
+  );
+  /* O ciclo de 4.2% sobre 200% de escala dá uma listra de ~8% da largura do
+     card (~20px): fino o bastante para ler como difração. */
+  background-size: 200% 200%;
+  background-position:
+    calc(50% + (0.5 - var(--holo-px, 0.5)) * 70%)
+    calc(50% + (0.5 - var(--holo-py, 0.5)) * 55%);
+  -webkit-mask-image: linear-gradient(
+    102deg,
+    transparent 40%,
+    rgb(0 0 0 / 0.45) 47%,
+    #000 50%,
+    rgb(0 0 0 / 0.45) 53%,
+    transparent 60%
+  );
+  mask-image: linear-gradient(
+    102deg,
+    transparent 40%,
+    rgb(0 0 0 / 0.45) 47%,
+    #000 50%,
+    rgb(0 0 0 / 0.45) 53%,
+    transparent 60%
+  );
+  -webkit-mask-size: 200% 200%;
+  mask-size: 200% 200%;
+  /* O `0.5 - px` (e não `px - 0.5`) inverte de propósito: com a máscara maior
+     que o card, aumentar a porcentagem de `mask-position` empurra a imagem
+     para a ESQUERDA. Sem essa troca de sinal o reflexo foge do cursor em vez
+     de acompanhá-lo. Mesma conta em todas as camadas.
+
+     130% de curso mantém a faixa DENTRO do card nos dois extremos. Com mais
+     que isso ela sai pela borda e o card volta a ficar liso justamente no
+     canto para onde o ponteiro foi. */
+  -webkit-mask-position:
+    calc(50% + (0.5 - var(--holo-px, 0.5)) * 130%)
+    calc(50% + (0.5 - var(--holo-py, 0.5)) * 100%);
+  mask-position:
+    calc(50% + (0.5 - var(--holo-px, 0.5)) * 130%)
+    calc(50% + (0.5 - var(--holo-py, 0.5)) * 100%);
+  mix-blend-mode: color-dodge;
+  /* O teto de ~0.52 é o limite onde o nome da medalha e o contador ainda se
+     leem por baixo da faixa. Acima disso o card fica bonito parado e ilegível
+     no hover, que é quando alguém está de fato lendo os detalhes dele. */
+  opacity: calc(var(--holo-strength, 1) * (0.1 + var(--holo-on, 0) * 0.42));
+  transition:
+    opacity 260ms ease-out,
+    background-position 120ms ease-out,
+    -webkit-mask-position 120ms ease-out,
+    mask-position 120ms ease-out;
+}
+
+/* `sweep` — no shader é um `pow(sin(...), 12)`: uma faixa estreita e muito
+   mais clara que o resto, o reflexo direto da luz. É esta camada que dá o
+   "brilho", então o arco-íris acima não precisa forçar. Corre bem mais que
+   ele (240% contra 70%), como num cartão de verdade. */
+.medal-holo-sheen {
+  background-image: linear-gradient(
+    102deg,
+    transparent 41%,
+    rgb(255 255 255 / 0.25) 47%,
+    rgb(255 255 255 / 0.6) 50%,
+    rgb(255 255 255 / 0.25) 53%,
+    transparent 59%
+  );
+  background-size: 300% 300%;
+  background-position:
+    calc(50% + (0.5 - var(--holo-px, 0.5)) * 240%)
+    calc(50% + (0.5 - var(--holo-py, 0.5)) * 190%);
+  mix-blend-mode: screen;
+  opacity: calc(var(--holo-strength, 1) * (0.05 + var(--holo-on, 0) * 0.5));
+}
+
+/* O `star()` do shader — o glitter Voronoi cintilante — ficou de fora de
+   propósito. Em CSS a única aproximação é um retículo de pontos, e um
+   retículo regular lê como tela de proteção sobre a arte, não como brilho.
+   Faixa de arco-íris + reflexo especular já são o efeito; um glitter falso só
+   sujaria a medalha. */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Sem inclinação e sem perseguir o ponteiro (`useHoloTilt` para de escrever
+     as variáveis): o foil vira uma estampa parada, que ainda separa as
+     raridades sem nada se mexendo. */
+  .medal-holo {
+    transform: none;
+    transition: none;
+  }
+
+  .medal-holo-layer {
+    transition: none;
+  }
+}
+
 /* Badge "VIP" no perfil público (InfoBasica.tsx) — shimmer no texto + leve
    respiração de escala na coroa. Mesma técnica de .nav-fire-text/.nav-fire-icon. */
 @keyframes vip-badge-text-shimmer {

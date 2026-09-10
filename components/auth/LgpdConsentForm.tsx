@@ -26,7 +26,7 @@ function DeclineButton() {
       disabled={pending}
       className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
     >
-      Não aceito — sair
+      Não aceito, sair
     </button>
   )
 }

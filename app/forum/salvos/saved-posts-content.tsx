@@ -68,7 +68,7 @@ export function SavedPostsContent({
     return (
       <div className={cn("rounded-2xl p-12 text-center", CARD_SURFACE)}>
         <p className="text-sm text-muted-foreground">
-          Você ainda não salvou nenhum post — toque no marcador em qualquer post do fórum para guardá-lo aqui.
+          Você ainda não salvou nenhum post. Toque no marcador em qualquer post do fórum para guardá-lo aqui.
         </p>
       </div>
     )

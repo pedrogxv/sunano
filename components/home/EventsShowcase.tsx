@@ -45,7 +45,7 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
             </h2>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground md:text-sm">
-            Medalhas por tempo ou vagas limitadas — ainda dá tempo de resgatar
+            Medalhas por tempo ou vagas limitadas, ainda dá tempo de resgatar
           </p>
         </div>
         <Link

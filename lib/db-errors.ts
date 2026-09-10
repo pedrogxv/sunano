@@ -202,7 +202,7 @@ export function humanizeDbError(err: unknown, fallback = "Erro ao processar a op
     return {
       message: label
         ? `Referência inválida em ${label}. O item vinculado não existe mais.`
-        : "Referência inválida — o item vinculado não foi encontrado.",
+        : "Referência inválida: o item vinculado não foi encontrado.",
       status: 400,
       field: col ?? undefined,
     }

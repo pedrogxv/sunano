@@ -34,6 +34,17 @@ export type EventDisplay = {
   endDate: string | null
 }
 
+/**
+ * Rótulo de uma palavra — a faixa de "tipo" do card de medalha, onde uma
+ * carta colecionável traria o tipo/estágio. O `EVENT_CRITERIA_LABEL` abaixo
+ * é a frase explicativa do admin e não cabe ali.
+ */
+export const EVENT_CRITERIA_SHORT_LABEL: Record<EventCriteriaType, string> = {
+  first_n_signups: "Cadastro",
+  manual_opt_in: "Resgate",
+  aura_redeem: "Aura",
+}
+
 /** Rótulo curto do critério, usado no admin e na página pública. */
 export const EVENT_CRITERIA_LABEL: Record<EventCriteriaType, string> = {
   first_n_signups: "Primeiros N usuários cadastrados no site",

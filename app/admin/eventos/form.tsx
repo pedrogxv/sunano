@@ -34,12 +34,12 @@ const RARITY_OPTIONS: Array<{ value: MedalRarity; label: string }> = [
 const CRITERIA_OPTIONS: Array<{ value: EventCriteriaType; label: string; hint: string }> = [
   {
     value: "first_n_signups",
-    label: "Automático — primeiros N cadastros",
+    label: "Automático: primeiros N cadastros",
     hint: "A medalha é concedida sozinha no cadastro/login enquanto houver vagas. Ninguém precisa clicar em nada.",
   },
   {
     value: "manual_opt_in",
-    label: "Manual — usuário clica em Resgatar",
+    label: "Manual: usuário clica em Resgatar",
     hint: "A medalha só é concedida quando o usuário logado clica em \"Resgatar\" em /eventos (Conquistas), enquanto houver vagas.",
   },
   {

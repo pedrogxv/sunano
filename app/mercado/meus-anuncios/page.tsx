@@ -231,7 +231,7 @@ export default function MeusAnunciosPage() {
           <DialogHeader>
             <DialogTitle>Reduzir preço</DialogTitle>
             <DialogDescription>
-              O preço só pode cair — nunca subir. Tentar burlar essa regra pode resultar em
+              O preço só pode cair, nunca subir. Tentar burlar essa regra pode resultar em
               banimento do Mercado.
             </DialogDescription>
           </DialogHeader>

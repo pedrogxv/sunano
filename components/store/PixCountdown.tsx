@@ -171,7 +171,7 @@ export function PixCountdown({
                 {formatRemaining(remaining)}
               </span>
               <span className="text-xs font-medium text-muted-foreground">
-                {urgent ? "para pagar — corre!" : "para pagar"}
+                {urgent ? "para pagar, corre!" : "para pagar"}
               </span>
             </p>
             <p className="text-[11px] leading-snug text-muted-foreground">

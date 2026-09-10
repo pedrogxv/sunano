@@ -504,7 +504,7 @@ export default function AdminStorePage() {
       <div className="space-y-2.5 rounded-xl border border-border bg-card/50 p-3.5">
         <div className="flex items-center gap-2">
           <TrendingUp className="size-4 text-emerald-400" />
-          <p className="text-sm font-semibold text-foreground">Mais vendidos — ordem manual</p>
+          <p className="text-sm font-semibold text-foreground">Mais vendidos: ordem manual</p>
           <p className="text-xs text-muted-foreground">
             {pinnedProducts.length > 0
               ? "Arraste pra reordenar. Aparecem na Home nessa ordem, à frente do ranking de vendas."

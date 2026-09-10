@@ -140,7 +140,7 @@ export default async function AdminSupportTicketPage({ params }: { params: Promi
               <p className="mt-1 text-foreground">
                 Avaliação do cliente: {"★".repeat(ticket.rating)}{"☆".repeat(5 - ticket.rating)}
                 {ticket.rating_comment && (
-                  <span className="text-muted-foreground"> — &ldquo;{ticket.rating_comment}&rdquo;</span>
+                  <span className="text-muted-foreground"> · &ldquo;{ticket.rating_comment}&rdquo;</span>
                 )}
               </p>
             )}

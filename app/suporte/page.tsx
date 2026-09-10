@@ -18,7 +18,7 @@ export default function SuportePage() {
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">Suporte</p>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Precisa de ajuda?</h1>
         <p className="mt-3 text-sm text-muted-foreground">
-          Conta pra gente o que aconteceu — se for sobre um pedido ou produto, vincule ele abaixo.
+          Conta pra gente o que aconteceu; se for sobre um pedido ou produto, vincule ele abaixo.
           Nossa equipe responde por aqui mesmo, e você acompanha tudo em &ldquo;Meus Tickets&rdquo;.
         </p>
       </header>

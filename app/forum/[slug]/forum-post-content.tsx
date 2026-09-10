@@ -60,7 +60,7 @@ export function ForumPostContent({
             <div className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-500">
               <EyeOff className="size-4 shrink-0" />
               <span>
-                Este post está oculto — só você consegue vê-lo. Use o botão &quot;Mostrar post&quot;
+                Este post está oculto; só você consegue vê-lo. Use o botão &quot;Mostrar post&quot;
                 abaixo para reativá-lo.
               </span>
             </div>

@@ -355,10 +355,10 @@ export function AuraCenterContent({
           <p className="text-xs text-muted-foreground">
             {streak.frozen
               ? streak.frozenUntil
-                ? `Escudo ativado — complete as 3 tarefas até ${new Date(`${streak.frozenUntil}T00:00:00`).toLocaleDateString("pt-BR")} para retomar a ofensiva.`
-                : "Escudo ativado — complete as 3 tarefas para retomar a ofensiva."
+                ? `Escudo ativado: complete as 3 tarefas até ${new Date(`${streak.frozenUntil}T00:00:00`).toLocaleDateString("pt-BR")} para retomar a ofensiva.`
+                : "Escudo ativado: complete as 3 tarefas para retomar a ofensiva."
               : streak.current > 0
-                ? <>Recorde: {streak.longest} dia{streak.longest === 1 ? "" : "s"} — bônus em todo ganho de Aura</>
+                ? <>Recorde: {streak.longest} dia{streak.longest === 1 ? "" : "s"}, bônus em todo ganho de Aura</>
                 : "Complete as 3 tarefas abaixo hoje para começar"}
           </p>
         </div>

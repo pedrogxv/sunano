@@ -96,7 +96,7 @@ export default function QuemSomosPage() {
               <Link href="/informacoes" className="text-primary hover:underline">
                 Central de Informações
               </Link>{" "}
-              — todos os documentos oficiais reunidos
+              : todos os documentos oficiais reunidos
             </li>
           </ul>
         </section>

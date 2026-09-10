@@ -69,7 +69,7 @@ export function EditReferralCodeDialog({ currentCode }: { currentCode: string })
         return
       }
       toast.success("Cupom atualizado!", {
-        description: "Compartilhe o link novo — o anterior não vale mais.",
+        description: "Compartilhe o link novo: o anterior não vale mais.",
       })
       setOpen(false)
       router.refresh()
@@ -93,7 +93,7 @@ export function EditReferralCodeDialog({ currentCode }: { currentCode: string })
           <DialogTitle>Personalizar seu cupom</DialogTitle>
           <DialogDescription>
             Você pode trocar seu cupom <strong>uma única vez</strong>. Depois de salvar, o cupom
-            antigo deixa de funcionar — quem já tiver seu link antigo precisará do novo.
+            antigo deixa de funcionar; quem já tiver seu link antigo precisará do novo.
           </DialogDescription>
         </DialogHeader>
 

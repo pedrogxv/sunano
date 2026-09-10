@@ -156,7 +156,7 @@ export function TierlistContent({ initialData, categoryLabels }: TierlistContent
 
   const shareQueryString = searchParams.toString()
   const sharePath = shareQueryString ? `${pathname}?${shareQueryString}` : pathname
-  const shareTitle = `Tierlist de ${categoryLabel} — Sunano`
+  const shareTitle = `Tierlist de ${categoryLabel} - Sunano`
 
   return (
     <>

@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(
       {
         error: "impersonation_read_only",
-        message: "Sessão de acesso é somente leitura — não é possível cancelar um pedido.",
+        message: "Sessão de acesso é somente leitura; não é possível cancelar um pedido.",
       },
       { status: 403 }
     )

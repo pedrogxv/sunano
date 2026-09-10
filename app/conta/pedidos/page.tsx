@@ -301,7 +301,7 @@ function CancelOrderButton({
           <AlertDialogTitle>Cancelar este pedido?</AlertDialogTitle>
           <AlertDialogDescription>
             O pedido #{orderNumber(order.id)} será cancelado e a cobrança pendente será encerrada. Essa
-            ação não pode ser desfeita — se ainda quiser comprar, será preciso fazer um novo pedido.
+            ação não pode ser desfeita; se ainda quiser comprar, será preciso fazer um novo pedido.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -426,7 +426,7 @@ function OrderCard({
           <p className="flex items-start gap-1.5 text-[11px] text-amber-300">
             <MapPin className="mt-px size-3.5 shrink-0" />
             <span>
-              Pagamento confirmado, mas falta o endereço de entrega — este pedido não é
+              Pagamento confirmado, mas falta o endereço de entrega: este pedido não é
               despachado enquanto isso.
             </span>
           </p>
@@ -598,7 +598,7 @@ function OrderDetailsDialog({
               {auraOrder && (
                 <p className="flex items-center gap-1.5 text-[11px] font-medium text-amber-400/90">
                   <Sparkles className="size-3" />
-                  Resgate da Central de Aura — pago com Aura, sem cobrança em dinheiro.
+                  Resgate da Central de Aura: pago com Aura, sem cobrança em dinheiro.
                 </p>
               )}
               <OrderTimeline order={order} />
@@ -655,7 +655,7 @@ function OrderDetailsDialog({
               </p>
               {!order.requires_shipping_address ? (
                 <p className="text-xs text-muted-foreground">
-                  Este pedido não precisa de endereço — nada será enviado pelos Correios.
+                  Este pedido não precisa de endereço; nada será enviado pelos Correios.
                 </p>
               ) : order.shipping_address ? (
                 <>
@@ -666,7 +666,7 @@ function OrderDetailsDialog({
                 </>
               ) : (
                 <p className="text-xs text-amber-400">
-                  Ainda não informado — o pedido não é despachado até você preencher.
+                  Ainda não informado; o pedido não é despachado até você preencher.
                 </p>
               )}
               {order.requires_shipping_address && SHIPPING_EDITABLE.includes(order.status) && (
@@ -686,7 +686,7 @@ function OrderDetailsDialog({
                 !SHIPPING_EDITABLE.includes(order.status) &&
                 (order.status === "shipped" || order.status === "delivered") && (
                   <p className="text-[11px] text-muted-foreground">
-                    Pedido já despachado — o endereço não pode mais ser alterado por aqui.{" "}
+                    Pedido já despachado; o endereço não pode mais ser alterado por aqui.{" "}
                     <Link href="/suporte" className="font-medium text-emerald-400 hover:underline">
                       Fale com o suporte
                     </Link>
@@ -1003,7 +1003,7 @@ export default function PedidosPage() {
               <>
                 <p className="text-sm text-muted-foreground">
                   {missingOnly && orders.length === 0
-                    ? "Nenhum pedido esperando endereço — está tudo em dia."
+                    ? "Nenhum pedido esperando endereço: está tudo em dia."
                     : "Nenhum pedido encontrado com esses filtros."}
                 </p>
                 <Button variant="ghost" size="sm" className="gap-1.5 text-emerald-400" onClick={clearFilters}>

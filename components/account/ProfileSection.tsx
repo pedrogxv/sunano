@@ -689,7 +689,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 value={bio}
                 onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX_LENGTH))}
                 className="border-border bg-background min-h-20 resize-none"
-                placeholder="Uma linha sobre você — aparece no seu perfil público."
+                placeholder="Uma linha sobre você: aparece no seu perfil público."
                 maxLength={BIO_MAX_LENGTH}
               />
             </div>

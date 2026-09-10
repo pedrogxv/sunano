@@ -252,7 +252,7 @@ export function CartDrawer() {
 
             {hasPreOrderItem && (
               <p className="rounded-lg bg-amber-500/10 px-2.5 py-2 text-[10px] font-semibold text-amber-400">
-                Seu carrinho tem item(ns) em pré-venda — o envio desses produtos só ocorre quando o estoque chegar.
+                Seu carrinho tem item(ns) em pré-venda; o envio desses produtos só ocorre quando o estoque chegar.
               </p>
             )}
 

@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     const payment = await createPixPayment({
       customerId: customer.id,
       amountCents: quote.feeCents,
-      description: `Taxa de publicação — ${parsed.data.title}`,
+      description: `Taxa de publicação - ${parsed.data.title}`,
       externalReference: randomUUID(),
     })
 

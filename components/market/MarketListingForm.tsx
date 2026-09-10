@@ -190,7 +190,7 @@ export function MarketListingForm() {
             />
           </div>
           <p className="text-[10px] text-muted-foreground/60">
-            Depois de publicado, o preço só pode ser reduzido — nunca aumentado. Tentar aumentar
+            Depois de publicado, o preço só pode ser reduzido, nunca aumentado. Tentar aumentar
             pode resultar em banimento do Mercado.
           </p>
         </div>
@@ -205,7 +205,7 @@ export function MarketListingForm() {
             placeholder="https://www.olx.com.br/..."
           />
           <p className="text-[10px] text-muted-foreground/60">
-            Obrigatório — é para lá que o comprador vai negociar com você.
+            Obrigatório: é para lá que o comprador vai negociar com você.
           </p>
         </div>
       </div>
@@ -218,7 +218,7 @@ export function MarketListingForm() {
             : "border-amber-500/30 bg-amber-500/5 text-amber-300"
         )}>
           {fee.isFreeVipSlot
-            ? "Você tem direito a 1 anúncio grátis como VIP — esta publicação não terá custo."
+            ? "Você tem direito a 1 anúncio grátis como VIP: esta publicação não terá custo."
             : `Taxa de publicação (5% do valor anunciado): ${formatBRL(fee.feeCents)}. Cobrada agora, na criação do anúncio.`}
         </div>
       )}

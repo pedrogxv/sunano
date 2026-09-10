@@ -686,7 +686,7 @@ export async function advanceOrderStatus(
   if (nextStatus === "shipped" && !mapShippingAddress(existing as Partial<RawShippingColumns>)) {
     return {
       ok: false,
-      error: "Este pedido não tem endereço de entrega informado — não é possível marcá-lo como enviado.",
+      error: "Este pedido não tem endereço de entrega informado; não é possível marcá-lo como enviado.",
       status: 400,
     }
   }
@@ -703,7 +703,7 @@ export async function advanceOrderStatus(
       ok: false,
       error: requiresShipping
         ? "Só é possível avançar uma etapa por vez, na ordem do fluxo."
-        : "Este pedido não tem entrega — só é possível marcá-lo como concluído.",
+        : "Este pedido não tem entrega; só é possível marcá-lo como concluído.",
       status: 400,
     }
   }
@@ -783,7 +783,7 @@ export async function refundOrder(
   if (!existing.asaas_payment_id) {
     return {
       ok: false,
-      error: "Este pedido não tem cobrança Asaas associada — extorne manualmente e atualize o status.",
+      error: "Este pedido não tem cobrança Asaas associada; extorne manualmente e atualize o status.",
       status: 400,
     }
   }
@@ -1259,7 +1259,7 @@ export async function syncOrderRefundState(paymentId: string): Promise<Repositor
     return { ok: false, error: "Pedido não encontrado para este pagamento.", status: 404 }
   }
   if (!["paid", "awaiting_shipping_info", "shipped", "delivered", "refunded"].includes(existing.status)) {
-    return { ok: false, error: "Pedido fora do fluxo pós-pagamento — nada a reconciliar.", status: 400 }
+    return { ok: false, error: "Pedido fora do fluxo pós-pagamento, nada a reconciliar.", status: 400 }
   }
 
   const { getPayment } = await import("@/lib/server/integrations/asaas")
@@ -1393,7 +1393,7 @@ export async function setOrderShippingAddress(
       ok: false,
       error:
         currentStatus === "shipped" || currentStatus === "delivered"
-          ? "Este pedido já foi despachado — fale com o suporte para alterar o endereço."
+          ? "Este pedido já foi despachado; fale com o suporte para alterar o endereço."
           : "Não é possível informar endereço para este pedido.",
       status: 400,
     }

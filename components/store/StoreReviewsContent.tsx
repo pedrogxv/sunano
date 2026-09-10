@@ -67,7 +67,7 @@ export function StoreReviewsContent({ filterOptions, aggregate, reviews }: Store
             </div>
           ) : (
             <p className="text-[13px] font-semibold text-[#9a9a9a]">
-              Ainda não há avaliações — seja o primeiro a comprar e avaliar um produto.
+              Ainda não há avaliações. Seja o primeiro a comprar e avaliar um produto.
             </p>
           )}
         </div>

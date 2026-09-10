@@ -54,7 +54,7 @@ export default async function LoginPage({
         {accountDeleted && (
           <AuthMotionBanner>
             <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
-              Sua conta foi excluída com sucesso. Nenhum e-mail de confirmação é enviado — a
+              Sua conta foi excluída com sucesso. Nenhum e-mail de confirmação é enviado; a
               exclusão é imediata.
             </div>
           </AuthMotionBanner>

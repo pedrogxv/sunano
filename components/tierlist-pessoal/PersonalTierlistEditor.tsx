@@ -257,7 +257,7 @@ export function PersonalTierlistEditor({
             <p className="border-b border-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               {query.trim().length < 2 ? "Sugestões" : "Resultados"}
               <span className="ml-1.5 font-normal normal-case tracking-normal">
-                — escolha o tier para adicionar
+                escolha o tier para adicionar
               </span>
             </p>
 

@@ -58,7 +58,7 @@ export async function ensureUserTierlistTiers(userId: string): Promise<TierlistT
 
 export class TierlistTierInUseError extends Error {
   constructor(label: string) {
-    super(`O tier "${label}" ainda tem periféricos — mova ou remova eles antes de apagar o tier.`)
+    super(`O tier "${label}" ainda tem periféricos; mova ou remova eles antes de apagar o tier.`)
     this.name = "TierlistTierInUseError"
   }
 }

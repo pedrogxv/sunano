@@ -33,7 +33,7 @@ const REGISTER_ERRORS: Record<string, string> = {
   // Falhas de servidor: dizem que o problema não é o preenchimento e apontam o
   // cadastro social, que não depende do envio de e-mail e segue funcionando.
   email_send_limit:
-    "Não conseguimos enviar o email de confirmação agora — o limite de envios do nosso provedor foi atingido. Tente de novo em alguns minutos, ou cadastre-se com Google/Discord (não precisa de email de confirmação).",
+    "Não conseguimos enviar o email de confirmação agora: o limite de envios do nosso provedor foi atingido. Tente de novo em alguns minutos, ou cadastre-se com Google/Discord (não precisa de email de confirmação).",
   signup_unavailable:
     "O cadastro está temporariamente indisponível. Tente de novo em alguns minutos, ou cadastre-se com Google/Discord.",
   signup_disabled: "O cadastro por email está desativado no momento. Use Google ou Discord.",
@@ -210,7 +210,7 @@ export function UserRegisterForm({
     return (
       <div className="space-y-5">
         <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-4 text-sm text-green-600 dark:text-green-400">
-          Conta criada! Enviamos um email de confirmação — confirme seu endereço e depois faça login.
+          Conta criada! Enviamos um email de confirmação; confirme seu endereço e depois faça login.
         </div>
         {state.values?.email && <ResendConfirmationForm email={state.values.email} />}
         <LoginLink

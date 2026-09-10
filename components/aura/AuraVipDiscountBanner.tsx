@@ -69,7 +69,7 @@ export function AuraVipDiscountBanner({ isVip, listPrices, onShowBenefits }: Aur
         <p className="text-[11px] leading-snug text-muted-foreground">
           {isVip ? (
             <>
-              Os preços abaixo são os seus — vale em molduras, troca de nome, Proteção de Ofensiva e
+              Os preços abaixo são os seus: vale em molduras, troca de nome, Proteção de Ofensiva e
               medalhas de evento.{" "}
               {totalSavings > 0 && (
                 <>

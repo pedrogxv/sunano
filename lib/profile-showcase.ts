@@ -48,6 +48,39 @@ export const MEDAL_RARITY_SOLID: Record<MedalRarity, string> = {
   legendary: "#fbbf24",
 }
 
+/**
+ * Símbolo de raridade do rodapé do card de medalha, na convenção de carta
+ * colecionável: círculo → losango → estrela, do mais comum ao mais raro.
+ */
+export const MEDAL_RARITY_SYMBOL: Record<MedalRarity, string> = {
+  common: "●",
+  rare: "◆",
+  epic: "★",
+  legendary: "✦",
+}
+
+export const MEDAL_RARITY_LABEL: Record<MedalRarity, string> = {
+  common: "Comum",
+  rare: "Rara",
+  epic: "Épica",
+  legendary: "Lendária",
+}
+
+/**
+ * Intensidade do foil holográfico do card de medalha (`--holo-strength`, ver
+ * `.medal-holo` em app/globals.css). `0` não acende camada nenhuma.
+ *
+ * A raridade é o que decide porque o foil é justamente o sinal de raridade —
+ * se toda medalha brilhasse, o brilho não diria mais nada. Comum fica de
+ * fora; da rara pra cima o efeito cresce.
+ */
+export const MEDAL_RARITY_HOLO: Record<MedalRarity, number> = {
+  common: 0,
+  rare: 0.55,
+  epic: 0.8,
+  legendary: 1,
+}
+
 export type ShowcasePeripheral = {
   id: string
   name: string

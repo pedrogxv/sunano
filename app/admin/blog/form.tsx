@@ -460,7 +460,7 @@ export function BlogPostForm({ postId }: BlogPostFormProps) {
               {watchedExcerpt.length} / {EXCERPT_MAX_CHARS} {t.admin.blog.form.chars}
               {watchedExcerpt.length > HEADLINE_EXCERPT_LIMIT && (
                 <span className="ml-1 text-muted-foreground/70">
-                  — na manchete será cortado em {HEADLINE_EXCERPT_LIMIT} com &ldquo;Ler mais&rdquo;
+                  na manchete, será cortado em {HEADLINE_EXCERPT_LIMIT} com &ldquo;Ler mais&rdquo;
                 </span>
               )}
             </p>

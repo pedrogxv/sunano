@@ -193,7 +193,7 @@ export async function updateBanner(
 
   if (touchesContent && previous?.kind === "hero") {
     throw new Error(
-      "O banner padrão da Home não tem conteúdo editável — só pode ser ativado, desativado ou reordenado."
+      "O banner padrão da Home não tem conteúdo editável; só pode ser ativado, desativado ou reordenado."
     )
   }
 
@@ -246,7 +246,7 @@ export async function deleteBanner(id: string): Promise<void> {
   const banner = await findBannerById(id)
 
   if (banner?.kind === "hero") {
-    throw new Error("O banner padrão da Home não pode ser removido — desative-o em vez disso.")
+    throw new Error("O banner padrão da Home não pode ser removido; desative-o em vez disso.")
   }
 
   const { error } = await db.from("home_banners").delete().eq("id", id)

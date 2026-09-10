@@ -18,7 +18,7 @@ import type { PublicProfileSummary } from "@/lib/user-directory"
 const RULES = [
   "Proibido NSFW, discurso de ódio ou comportamento tóxico.",
   "Sem spam, flood ou publicidade para benefício próprio sem autorização da moderação.",
-  "Não divulgue informações pessoais de outros membros — ações legais podem ser tomadas, com colaboração do site.",
+  "Não divulgue informações pessoais de outros membros; ações legais podem ser tomadas, com colaboração do site.",
   "Respeite os demais membros do fórum.",
   "Seja inscrito no canal do YouTube 🥹",
 ]

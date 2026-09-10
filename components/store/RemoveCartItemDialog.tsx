@@ -55,7 +55,7 @@ export function RemoveCartItemDialog({
           <AlertDialogTitle>Remover do carrinho?</AlertDialogTitle>
           <AlertDialogDescription>
             {pending?.fromDecrement
-              ? "Essa é a última unidade — diminuir mais tira o produto do carrinho."
+              ? "Essa é a última unidade; diminuir mais tira o produto do carrinho."
               : "O produto sai do carrinho. Você pode adicioná-lo de novo depois."}
           </AlertDialogDescription>
         </AlertDialogHeader>

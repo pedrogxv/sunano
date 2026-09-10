@@ -1019,7 +1019,7 @@ export function StoreProductForm({
             priceCentsOverride = Math.round(parseFloat(o.price_brl.replace(",", ".")) * 100)
             if (isNaN(priceCentsOverride) || priceCentsOverride < MIN_PRICE_CENTS) {
               throw new Error(
-                `Preço inválido em "${name} — ${label}". Use um valor de pelo menos ${formatBRL(MIN_PRICE_CENTS)}.`
+                `Preço inválido em "${name} · ${label}". Use um valor de pelo menos ${formatBRL(MIN_PRICE_CENTS)}.`
               )
             }
           }
@@ -1247,7 +1247,7 @@ export function StoreProductForm({
           <MultiCombobox
             options={peripheralOptions.map<ComboboxOption>((p) => ({
               value: p.id,
-              label: p.brand ? `${p.name} — ${p.brand}` : p.name,
+              label: p.brand ? `${p.name} · ${p.brand}` : p.name,
             }))}
             values={peripheralIds}
             onValuesChange={setPeripheralIds}
@@ -1419,7 +1419,7 @@ export function StoreProductForm({
             <>
               <p className="text-[10px] text-amber-400">
                 Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; ou
-                &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar — o anúncio, reviews
+                &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar; o anúncio, reviews
                 e vendas já feitas continuam os mesmos.
               </p>
               <div className="space-y-1.5 pt-1">
@@ -1434,7 +1434,7 @@ export function StoreProductForm({
                 />
                 <p className="text-[10px] text-muted-foreground">
                   Quantas unidades do lote você aceita reservar. Em pré-venda o estoque não é
-                  descontado — é este número que fecha as reservas. Deixe vazio para não limitar.
+                  descontado: é este número que fecha as reservas. Deixe vazio para não limitar.
                 </p>
               </div>
             </>
@@ -1471,7 +1471,7 @@ export function StoreProductForm({
             {formData.sale_type === "pre_order" && (
               <p className="text-[10px] text-amber-400">
                 Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; ou
-                &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar — o anúncio, reviews
+                &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar; o anúncio, reviews
                 e vendas já feitas continuam os mesmos.
               </p>
             )}
@@ -1503,7 +1503,7 @@ export function StoreProductForm({
           ref={descriptionTextareaRef}
           value={formData.description}
           onChange={(e) => set("description", e.target.value)}
-          placeholder="Descreva o produto, características, diferenciais... (evite repetir specs como Plate, Keycaps, Layout, Carcaça — isso já vai na tabela de Especificação Técnica)"
+          placeholder="Descreva o produto, características, diferenciais... (evite repetir specs como Plate, Keycaps, Layout, Carcaça, isso já vai na tabela de Especificação Técnica)"
           rows={8}
           className={cn(
             "flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
@@ -1515,7 +1515,7 @@ export function StoreProductForm({
           Suporta **negrito**, *itálico*, __sublinhado__, ==destaque==, [texto](url) para link e "- item" no início da linha para lista.
         </p>
         <p className="text-[10px] text-amber-600 dark:text-amber-500">
-          Não repita aqui specs como Plate, Keycaps, Layout, Carcaça etc. — esses dados já aparecem na tabela de "Especificação Técnica".
+          Não repita aqui specs como Plate, Keycaps, Layout, Carcaça etc.: esses dados já aparecem na tabela de "Especificação Técnica".
         </p>
       </div>
 
@@ -1629,7 +1629,7 @@ export function StoreProductForm({
               </>
             ) : (
               <p className="rounded-md border border-dashed border-border bg-muted/20 px-3 py-2 text-[10px] text-muted-foreground">
-                Sem controle de estoque — nunca esgota. Limite de {" "}
+                Sem controle de estoque: nunca esgota. Limite de {" "}
                 <span className="font-semibold text-foreground">15 unidades/dia por comprador</span>.
               </p>
             )}
@@ -1670,7 +1670,7 @@ export function StoreProductForm({
         </Select>
         <p className="text-[10px] text-muted-foreground/70">
           {formData.requires_shipping
-            ? "Produto físico: o comprador vê o aviso de endereço no checkout e o pedido entra na fila de “falta endereço” até informar. O endereço nunca trava a compra — pode ser informado depois de pagar."
+            ? "Produto físico: o comprador vê o aviso de endereço no checkout e o pedido entra na fila de “falta endereço” até informar. O endereço nunca trava a compra; pode ser informado depois de pagar."
             : "Serviço ou item digital: o checkout não pede endereço e o pedido nunca aparece como “falta endereço”. Marque como físico se ainda assim precisar do endereço (visita técnica, envio de brinde)."}
         </p>
       </div>

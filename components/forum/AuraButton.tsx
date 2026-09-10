@@ -156,15 +156,15 @@ export function AuraButton({
   const particleDistance = 15
 
   const tooltipText = disabled
-    ? "Entre na sua conta para reagir — like concede +1 de aura, dislike tira -1"
+    ? "Entre na sua conta para reagir: like concede +1 de aura, dislike tira -1"
     : blockReason === "own-comment"
       ? "Você não pode reagir ao seu próprio comentário"
       : blockReason === "daily-limit"
-        ? "Limite de aura do dia esgotado — as reações recarregam aos poucos, tente de novo mais tarde"
+        ? "Limite de aura do dia esgotado; as reações recarregam aos poucos, tente de novo mais tarde"
         : reaction === "like"
-          ? "Você curtiu isso (+1 de aura pro autor) — toque de novo pra desfazer"
+          ? "Você curtiu isso (+1 de aura pro autor); toque de novo pra desfazer"
           : reaction === "dislike"
-            ? "Você descurtiu isso (-1 de aura pro autor) — toque de novo pra desfazer"
+            ? "Você descurtiu isso (-1 de aura pro autor); toque de novo pra desfazer"
             : "Curtir dá +1 de aura ao autor, descurtir tira -1"
 
   const count = (

@@ -463,7 +463,7 @@ function UserCard({
                   <DialogDescription className="space-y-2">
                     <span className="block">
                       Você entrará no site <strong>como este usuário</strong>, em modo{" "}
-                      <strong>somente leitura</strong> — nenhuma ação em nome dele é permitida.
+                      <strong>somente leitura</strong>: nenhuma ação em nome dele é permitida.
                       A sessão expira em 30 minutos e fica registrada na auditoria (quem, quando,
                       motivo).
                     </span>

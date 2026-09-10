@@ -293,7 +293,7 @@ export async function getTelegramOffers(limit = SCRAPE_LIMIT): Promise<TelegramO
 
   const warning = scrapeError
     ? offers.length > 0
-      ? "Não foi possível atualizar as ofertas agora — mostrando as últimas guardadas."
+      ? "Não foi possível atualizar as ofertas agora; mostrando as últimas guardadas."
       : "Não foi possível carregar as ofertas agora. Tente novamente em alguns instantes."
     : offers.length === 0
       ? "Nenhuma mensagem encontrada no canal configurado. Verifique se o nome de usuário está correto."

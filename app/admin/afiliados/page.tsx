@@ -180,7 +180,7 @@ export default function AdminAfiliadosPage() {
                 <div>
                   <p className="font-medium">{affiliate.code ?? "(sem código ainda)"}</p>
                   <p className="text-xs text-muted-foreground">
-                    Chave PIX: {affiliate.pix_key_type} — {affiliate.pix_key}
+                    Chave PIX: {affiliate.pix_key_type} · {affiliate.pix_key}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Solicitado em {new Date(affiliate.created_at).toLocaleString("pt-BR")}
@@ -225,7 +225,7 @@ export default function AdminAfiliadosPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Rejeitar solicitação</DialogTitle>
-            <DialogDescription>Informe o motivo — o afiliado poderá enviar uma nova solicitação depois.</DialogDescription>
+            <DialogDescription>Informe o motivo: o afiliado poderá enviar uma nova solicitação depois.</DialogDescription>
           </DialogHeader>
           <Input
             value={rejectDialog.reason}

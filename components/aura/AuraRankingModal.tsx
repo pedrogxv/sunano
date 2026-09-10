@@ -22,7 +22,7 @@ type RankingEntry = {
 }
 
 const WINDOW_TABS: Array<{ key: RankingWindow; label: string; empty: string }> = [
-  { key: "all", label: "Tudo", empty: "Ninguém tem Aura ainda — seja o primeiro." },
+  { key: "all", label: "Tudo", empty: "Ninguém tem Aura ainda, seja o primeiro." },
   { key: "today", label: "Hoje", empty: "Ninguém ganhou Aura hoje ainda." },
   { key: "week", label: "Semana", empty: "Ninguém ganhou Aura nesta semana ainda." },
 ]
@@ -97,7 +97,7 @@ export function AuraRankingModal({ open, onOpenChange }: AuraRankingModalProps) 
           </div>
           <DialogTitle className="text-center text-xl">Ranking de Aura</DialogTitle>
           <DialogDescription className="text-center">
-            Os 10 usuários com mais Aura — no geral e por período.
+            Os 10 usuários com mais Aura, no geral e por período.
           </DialogDescription>
         </DialogHeader>
 

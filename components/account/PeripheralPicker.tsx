@@ -204,7 +204,7 @@ export function PeripheralPicker({
             Nada encontrado para <span className="font-medium text-foreground">“{term}”</span>.
           </p>
           <p className="text-[11px] text-muted-foreground/60">
-            Só o que já está na wiki aparece aqui — peça o cadastro no fórum.
+            Só o que já está na wiki aparece aqui; peça o cadastro no fórum.
           </p>
         </div>
       )}

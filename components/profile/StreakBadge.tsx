@@ -54,9 +54,9 @@ export function StreakBadge({
     : null
 
   const title = isFrozen
-    ? `Ofensiva protegida por um escudo${frozenUntilLabel ? ` — complete as missões até ${frozenUntilLabel} para não perder os ${days} dia${days === 1 ? "" : "s"}` : ` — você não perde os ${days} dia${days === 1 ? "" : "s"}`}`
+    ? `Ofensiva protegida por um escudo${frozenUntilLabel ? `: complete as missões até ${frozenUntilLabel} para não perder os ${days} dia${days === 1 ? "" : "s"}` : `; você não perde os ${days} dia${days === 1 ? "" : "s"}`}`
     : active
-      ? `${days} dia${days === 1 ? "" : "s"} de ofensiva — +${formatStreakMultiplier(days)} de Aura`
+      ? `${days} dia${days === 1 ? "" : "s"} de ofensiva: +${formatStreakMultiplier(days)} de Aura`
       : "Complete as missões diárias para começar uma ofensiva"
 
   if (size === "sm") {

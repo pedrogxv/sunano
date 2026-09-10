@@ -80,7 +80,7 @@ export function PeripheralCard({ ...item }: PeripheralCardProps) {
           {isGolpe && (
             <div
               className="absolute right-1 top-1 z-10 grid size-4 place-items-center rounded-full bg-red-600 text-white shadow"
-              title={item.golpeMotivo || "GOLPE — não recomendado"}
+              title={item.golpeMotivo || "GOLPE: não recomendado"}
             >
               <AlertTriangle className="size-2.5" />
             </div>

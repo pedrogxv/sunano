@@ -84,7 +84,7 @@ export default function AdminIndicacoesPage() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error ?? "Erro.")
-      toast.success(approve ? "Indicação liberada — Aura creditada." : "Indicação rejeitada.")
+      toast.success(approve ? "Indicação liberada, Aura creditada." : "Indicação rejeitada.")
       await load()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Não foi possível atualizar.")
@@ -118,7 +118,7 @@ export default function AdminIndicacoesPage() {
           <AlertCircle className="size-4" />
           <AlertDescription>
             Indicações barradas automaticamente por virem da mesma rede ou por estourarem o limite.
-            Várias pessoas de uma mesma casa é um caso legítimo comum — confira antes de rejeitar.
+            Várias pessoas de uma mesma casa é um caso legítimo comum; confira antes de rejeitar.
             Aprovar credita a Aura ao indicador.
           </AlertDescription>
         </Alert>

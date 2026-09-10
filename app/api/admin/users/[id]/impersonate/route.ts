@@ -125,7 +125,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     if (!targetEmail) {
       return NextResponse.json(
-        { error: "Usuário sem e-mail — não é possível emitir sessão." },
+        { error: "Usuário sem e-mail; não é possível emitir sessão." },
         { status: 422 }
       )
     }

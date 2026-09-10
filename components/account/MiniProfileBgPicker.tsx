@@ -118,7 +118,7 @@ export function MiniProfileBgPicker() {
           Você ainda não tem nenhum Fundo de Mini Perfil
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          Bordas com brilho, raios, partículas e mais — a partir de 50 de Aura.
+          Bordas com brilho, raios, partículas e mais, a partir de 50 de Aura.
         </p>
         <Link
           href="/aura"

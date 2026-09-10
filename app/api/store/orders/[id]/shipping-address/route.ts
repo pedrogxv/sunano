@@ -32,7 +32,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json(
       {
         error: "impersonation_read_only",
-        message: "Sessão de acesso é somente leitura — não é possível alterar o endereço de entrega.",
+        message: "Sessão de acesso é somente leitura; não é possível alterar o endereço de entrega.",
       },
       { status: 403 }
     )

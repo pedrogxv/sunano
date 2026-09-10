@@ -161,7 +161,7 @@ export function EventsContent({
           Conquistas
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Medalhas por tempo ou vagas limitadas. Passe o mouse sobre um card para ver os detalhes.
+          Medalhas por tempo ou vagas limitadas. Quanto mais rara a carta, mais ela brilha.
         </p>
       </div>
 
@@ -183,7 +183,7 @@ export function EventsContent({
           {youtubeEnabled && !youtubeConfirmed && (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-red-600/30 bg-red-600/5 px-4 py-3">
               <p className="flex-1 text-sm text-foreground">
-                Ganhe uma conquista especial por ser inscrito no nosso canal — só rola uma vez! <span className="font-bold text-red-500">+50 de Aura</span>
+                Ganhe uma conquista especial por ser inscrito no nosso canal, só rola uma vez! <span className="font-bold text-red-500">+50 de Aura</span>
               </p>
               <YoutubeSubscribeButton />
             </div>
@@ -191,7 +191,7 @@ export function EventsContent({
           {discordEnabled && !discordConfirmed && (
             <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#5865F2]/30 bg-[#5865F2]/5 px-4 py-3">
               <p className="flex-1 text-sm text-foreground">
-                Conecte seu Discord e confirme que está no nosso servidor — só rola uma vez! <span className="font-bold text-[#5865F2]">+50 de Aura</span>
+                Conecte seu Discord e confirme que está no nosso servidor, só rola uma vez! <span className="font-bold text-[#5865F2]">+50 de Aura</span>
               </p>
               <DiscordMembershipButton />
             </div>

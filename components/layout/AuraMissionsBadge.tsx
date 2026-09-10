@@ -213,7 +213,7 @@ export function AuraMissionsBadge() {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={`Aura: ${usage.balance} — ${completed}/${DAILY_MISSION_KEYS.length} missões diárias`}
+          aria-label={`Aura: ${usage.balance}, ${completed}/${DAILY_MISSION_KEYS.length} missões diárias`}
           onMouseEnter={() => setOpen(true)}
           onMouseLeave={() => setOpen(false)}
           className="animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card/70 text-sm font-semibold tabular-nums text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
@@ -325,10 +325,10 @@ export function AuraMissionsBadge() {
             {streak.current > 0 ? (
               <>
                 <span className="font-semibold text-amber-400">{streak.current} dia{streak.current === 1 ? "" : "s"}</span> de ofensiva
-                {allDone ? " — mantida hoje!" : ". Complete as 3 hoje para não perder."}
+                {allDone ? ", mantida hoje!" : ". Complete as 3 hoje para não perder."}
               </>
             ) : allDone ? (
-              "Ofensiva iniciada — volte amanhã para continuar."
+              "Ofensiva iniciada. Volte amanhã para continuar."
             ) : (
               "Complete as 3 missões hoje para começar uma ofensiva."
             )}

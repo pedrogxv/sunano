@@ -96,7 +96,7 @@ export function PeripheralRedeemDialog({
             Resgatar {itemName}
           </DialogTitle>
           <DialogDescription>
-            Produto físico pago com Aura. Ele vira um pedido igual aos da loja — você
+            Produto físico pago com Aura. Ele vira um pedido igual aos da loja; você
             acompanha o envio em <span className="font-medium text-foreground">Meus Pedidos</span>.
           </DialogDescription>
         </DialogHeader>
@@ -148,7 +148,7 @@ export function PeripheralRedeemDialog({
           Endereço de entrega
         </div>
         <p className="-mt-1 text-[11px] text-muted-foreground">
-          O produto só é despachado depois deste endereço. Não dá para completar depois — o
+          O produto só é despachado depois deste endereço. Não dá para completar depois: o
           resgate já é o pedido.
         </p>
 

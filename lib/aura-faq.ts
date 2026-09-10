@@ -37,7 +37,7 @@ export const AURA_GAIN_ENTRIES: AuraFaqEntry[] = [
     id: "post",
     question: "Criar um post no fórum",
     answer:
-      "+10 de Aura, no máximo 1 vez a cada 24h. Passa pelo multiplicador de Ofensiva/VIP — quanto maior sua sequência, mais isso rende.",
+      "+10 de Aura, no máximo 1 vez a cada 24h. Passa pelo multiplicador de Ofensiva/VIP: quanto maior sua sequência, mais isso rende.",
   },
   {
     id: "comment",
@@ -54,41 +54,41 @@ export const AURA_GAIN_ENTRIES: AuraFaqEntry[] = [
     id: "review",
     question: "Escrever uma avaliação (review) de periférico",
     answer:
-      "+10 de Aura, 1 vez por periférico para sempre — mesmo se você excluir e recriar a avaliação. Passa pelo multiplicador.",
+      "+10 de Aura, 1 vez por periférico para sempre, mesmo se você excluir e recriar a avaliação. Passa pelo multiplicador.",
   },
   {
     id: "received-like",
     question: "Receber uma curtida (aura) em post ou comentário",
     answer:
-      "+1 de Aura por curtida, direto para quem foi curtido. Passa pelo multiplicador de quem recebeu — e só conta se quem deu a curtida ainda tiver reações disponíveis no dia (veja os limites abaixo).",
+      "+1 de Aura por curtida, direto para quem foi curtido. Passa pelo multiplicador de quem recebeu, e só conta se quem deu a curtida ainda tiver reações disponíveis no dia (veja os limites abaixo).",
   },
   {
     id: "missions",
     question: "Completar as tarefas diárias",
     answer:
-      "Criar um post: +5. Comentar em algo: +3. Dar aura em algo (curtir post/comentário/comentário de periférico, ou votar em BOM OU BAGRE): +1. Completar as 3 no mesmo dia: +10 de bônus e avança sua Ofensiva. Esses valores são fixos — não passam pelo multiplicador.",
+      "Criar um post: +5. Comentar em algo: +3. Dar aura em algo (curtir post/comentário/comentário de periférico, ou votar em BOM OU BAGRE): +1. Completar as 3 no mesmo dia: +10 de bônus e avança sua Ofensiva. Esses valores são fixos, não passam pelo multiplicador.",
   },
   {
     id: "youtube",
     question: "Confirmar inscrição no canal do YouTube",
-    answer: "+50 de Aura, uma única vez — conquista especial \"Inscrito\", não passa pelo multiplicador.",
+    answer: "+50 de Aura, uma única vez: conquista especial \"Inscrito\", não passa pelo multiplicador.",
   },
   {
     id: "discord",
     question: "Conectar o Discord e confirmar que está no servidor",
-    answer: "+50 de Aura, uma única vez — conquista especial \"No Discord\", não passa pelo multiplicador. Vale uma vez por conta do Discord: a mesma conta não pode resgatar em dois perfis.",
+    answer: "+50 de Aura, uma única vez: conquista especial \"No Discord\", não passa pelo multiplicador. Vale uma vez por conta do Discord: a mesma conta não pode resgatar em dois perfis.",
   },
   {
     id: "referral",
     question: "Indicar um amigo que se cadastra no site",
     answer:
-      "+50 de Aura por amigo, e +20 quando alguém que você indicou também indica outra pessoa. Valores fixos — não passam pelo multiplicador. Só conta depois que o amigo confirma a conta (entrar no Discord, conectar Google/Discord ou fazer 3 dias de ofensiva), e ele tem 30 dias para isso. Veja tudo em /indicar.",
+      "+50 de Aura por amigo, e +20 quando alguém que você indicou também indica outra pessoa. Valores fixos, não passam pelo multiplicador. Só conta depois que o amigo confirma a conta (entrar no Discord, conectar Google/Discord ou fazer 3 dias de ofensiva), e ele tem 30 dias para isso. Veja tudo em /indicar.",
   },
   {
     id: "achievements",
     question: "Desbloquear conquistas (posts, comentários, seguidores, Aura farmada)",
     answer:
-      "Cada trilha tem 5 níveis (Bronze a Diamante) que pagam Aura ao serem alcançados: 10 / 25 / 50 / 100 / 250. Esses valores são fixos — não passam pelo multiplicador. A trilha \"Aura farmada\" usa o total histórico ganho (não o saldo atual), e a Aura que vem das próprias conquistas não conta nesse total.",
+      "Cada trilha tem 5 níveis (Bronze a Diamante) que pagam Aura ao serem alcançados: 10 / 25 / 50 / 100 / 250. Esses valores são fixos, não passam pelo multiplicador. A trilha \"Aura farmada\" usa o total histórico ganho (não o saldo atual), e a Aura que vem das próprias conquistas não conta nesse total.",
   },
 ]
 
@@ -102,7 +102,7 @@ export const AURA_SPEND_ENTRIES: AuraFaqEntry[] = [
     id: "vip",
     question: "Ativar 1 mês de VIP com Aura",
     answer:
-      "Custo fixo listado no card. Só funciona se você ainda não for VIP agora — se já for, renove pela assinatura paga ou espere expirar.",
+      "Custo fixo listado no card. Só funciona se você ainda não for VIP agora; se já for, renove pela assinatura paga ou espere expirar.",
   },
   {
     id: "name-change",
@@ -113,7 +113,7 @@ export const AURA_SPEND_ENTRIES: AuraFaqEntry[] = [
     id: "streak-shield",
     question: "Comprar Proteção de Ofensiva",
     answer:
-      "Você compra e a proteção fica guardada — sem prazo — até o dia em que precisar. Se perder 1 dia de missões, sua ofensiva não zera: ao fechar as 3 tarefas de novo, ela continua de onde estava e a proteção é consumida. A versão padrão (59 Aura) exige que você volte já no dia seguinte ao dia perdido; a de margem estendida (199 Aura) te dá até 3 dias para voltar. VIP paga 10% a menos nas duas. Cobre 1 dia perdido por vez — se você faltar 2 dias corridos, ou demorar além da margem, a proteção não salva. Só dá para ter uma guardada por vez.",
+      "Você compra e a proteção fica guardada (sem prazo) até o dia em que precisar. Se perder 1 dia de missões, sua ofensiva não zera: ao fechar as 3 tarefas de novo, ela continua de onde estava e a proteção é consumida. A versão padrão (59 Aura) exige que você volte já no dia seguinte ao dia perdido; a de margem estendida (199 Aura) te dá até 3 dias para voltar. VIP paga 10% a menos nas duas. Cobre 1 dia perdido por vez; se você faltar 2 dias corridos, ou demorar além da margem, a proteção não salva. Só dá para ter uma guardada por vez.",
   },
   {
     id: "event-medal",
@@ -125,7 +125,7 @@ export const AURA_SPEND_ENTRIES: AuraFaqEntry[] = [
     id: "peripheral",
     question: "Resgatar um periférico com Aura",
     answer:
-      "Periféricos são prêmios físicos e de unidade única: o primeiro membro que resgatar leva, e o item aparece como esgotado para todo mundo, com o perfil de quem levou. Só quem é nível verificado (Discord/YouTube confirmado, ou VIP ativo, ou conta com 14+ dias) pode resgatar. Não tem desconto VIP — é produto físico.",
+      "Periféricos são prêmios físicos e de unidade única: o primeiro membro que resgatar leva, e o item aparece como esgotado para todo mundo, com o perfil de quem levou. Só quem é nível verificado (Discord/YouTube confirmado, ou VIP ativo, ou conta com 14+ dias) pode resgatar. Não tem desconto VIP: é produto físico.",
   },
   {
     id: "dislike",
@@ -139,13 +139,13 @@ export const AURA_NOT_COUNTED_ENTRIES: AuraFaqEntry[] = [
     id: "vote",
     question: "Votar \"BOM OU BAGRE\" num periférico",
     answer:
-      "Não credita Aura direto para ninguém — mas conta para a tarefa diária \"dar aura em algo\" (+1, 1x/dia).",
+      "Não credita Aura direto para ninguém, mas conta para a tarefa diária \"dar aura em algo\" (+1, 1x/dia).",
   },
   {
     id: "follow",
     question: "Seguir outro usuário",
     answer:
-      "Não gera Aura para quem segue nem para quem é seguido diretamente — só conta para a trilha de conquistas \"Seguidores\" de quem é seguido (que aí sim paga Aura ao bater um nível).",
+      "Não gera Aura para quem segue nem para quem é seguido diretamente; só conta para a trilha de conquistas \"Seguidores\" de quem é seguido (que aí sim paga Aura ao bater um nível).",
   },
   {
     id: "undo",
@@ -155,12 +155,12 @@ export const AURA_NOT_COUNTED_ENTRIES: AuraFaqEntry[] = [
   {
     id: "self",
     question: "Reagir ao próprio post/comentário",
-    answer: "Bloqueado — você não pode dar nem receber Aura de si mesmo.",
+    answer: "Bloqueado: você não pode dar nem receber Aura de si mesmo.",
   },
   {
     id: "edit",
     question: "Editar um post, comentário ou review já publicado",
-    answer: "Não gera Aura nova — só a criação original credita, e não é possível creditar de novo editando.",
+    answer: "Não gera Aura nova; só a criação original credita, e não é possível creditar de novo editando.",
   },
 ]
 

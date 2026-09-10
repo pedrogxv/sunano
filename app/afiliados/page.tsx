@@ -82,7 +82,7 @@ export default async function AfiliadosPage() {
         {affiliate.code && (
           <p className="mt-4 text-sm text-muted-foreground">
             Seu código <strong className="text-foreground">{affiliate.code}</strong> já está
-            reservado — ninguém mais pode usá-lo enquanto sua solicitação estiver em análise.
+            reservado; ninguém mais pode usá-lo enquanto sua solicitação estiver em análise.
           </p>
         )}
       </div>
@@ -116,7 +116,7 @@ export default async function AfiliadosPage() {
           <p className="mt-3 text-sm text-muted-foreground">Motivo: {affiliate.rejection_reason}</p>
         )}
         <p className="mt-4 text-sm text-muted-foreground">
-          Se você tinha saldo, ele continua registrado — fale com o suporte para resolver a
+          Se você tinha saldo, ele continua registrado; fale com o suporte para resolver a
           situação e voltar a sacar.
         </p>
       </div>
@@ -162,7 +162,7 @@ export default async function AfiliadosPage() {
           <div className="flex flex-wrap items-center gap-3">
             <AffiliateShareButton path="/" label="Copiar link" />
             <p className="text-xs text-muted-foreground">
-              Vale para qualquer página do site — copie o link de um produto específico pelo botão
+              Vale para qualquer página do site; copie o link de um produto específico pelo botão
               que aparece na própria página dele.
             </p>
           </div>
@@ -226,7 +226,7 @@ export default async function AfiliadosPage() {
                 {stats.pendingOrders === 1 ? "pedido aguardando pagamento" : "pedidos aguardando pagamento"}
               </strong>{" "}
               vieram do seu link. Se forem pagos, viram{" "}
-              {formatCents(stats.pendingCommissionCents)} de comissão — o valor só entra no seu
+              {formatCents(stats.pendingCommissionCents)} de comissão, valor que só entra no seu
               saldo depois que o pagamento é confirmado.
             </p>
           </CardContent>
@@ -256,7 +256,7 @@ export default async function AfiliadosPage() {
           {
             icon: ShoppingBag,
             title: "2. A pessoa compra",
-            body: `Qualquer compra que ela finalizar dentro desses ${ATTRIBUTION_DAYS} dias conta como sua indicação — mesmo que ela não use o link de novo.`,
+            body: `Qualquer compra que ela finalizar dentro desses ${ATTRIBUTION_DAYS} dias conta como sua indicação, mesmo que ela não use o link de novo.`,
           },
           {
             icon: Wallet,
@@ -283,7 +283,7 @@ export default async function AfiliadosPage() {
           <AccordionTrigger>Quando a comissão entra no meu saldo?</AccordionTrigger>
           <AccordionContent className="text-muted-foreground">
             Só quando o pagamento do pedido é confirmado. Pedido com PIX gerado e ainda não pago
-            não gera comissão — se ele expirar ou for cancelado, nada entra. É por isso que o
+            não gera comissão; se ele expirar ou for cancelado, nada entra. É por isso que o
             painel separa &ldquo;vendas confirmadas&rdquo; de &ldquo;pedidos aguardando
             pagamento&rdquo;.
           </AccordionContent>
@@ -293,7 +293,7 @@ export default async function AfiliadosPage() {
           <AccordionTrigger>A comissão é sobre qual valor?</AccordionTrigger>
           <AccordionContent className="text-muted-foreground">
             Sobre o valor dos produtos no preço à vista (PIX). Quando o cliente escolhe cartão, o
-            acréscimo cobrado pela operadora não entra na conta — ele é repassado ao gateway de
+            acréscimo cobrado pela operadora não entra na conta: ele é repassado ao gateway de
             pagamento e não é receita da loja, então sua comissão é a mesma nos dois casos.
           </AccordionContent>
         </AccordionItem>
@@ -302,7 +302,7 @@ export default async function AfiliadosPage() {
           <AccordionTrigger>Por quanto tempo minha indicação vale?</AccordionTrigger>
           <AccordionContent className="text-muted-foreground">
             {ATTRIBUTION_DAYS} dias a partir do momento em que a pessoa abre o site pelo seu link.
-            Dentro desse prazo, qualquer compra dela é sua — não precisa clicar de novo. Se ela
+            Dentro desse prazo, qualquer compra dela é sua, não precisa clicar de novo. Se ela
             abrir o site pelo link de outro afiliado nesse meio-tempo, a indicação passa a ser da
             pessoa mais recente. A contagem é por navegador: se ela comprar de outro aparelho sem
             usar seu link, a venda não é atribuída.
@@ -312,7 +312,7 @@ export default async function AfiliadosPage() {
         <AccordionItem value="proprias-compras">
           <AccordionTrigger>Posso usar meu próprio link para comprar?</AccordionTrigger>
           <AccordionContent className="text-muted-foreground">
-            Não. Compras feitas por você não geram comissão — a verificação é pela conta e também
+            Não. Compras feitas por você não geram comissão: a verificação é pela conta e também
             pelo CPF do pagador, então criar uma segunda conta não contorna a regra. A compra
             acontece normalmente, ela apenas não é atribuída a você. Tentar burlar isso pode levar
             à suspensão do cadastro.
@@ -323,7 +323,7 @@ export default async function AfiliadosPage() {
           <AccordionTrigger>E se o cliente pedir reembolso?</AccordionTrigger>
           <AccordionContent className="text-muted-foreground">
             A comissão daquela venda é descontada do seu saldo, proporcionalmente ao valor
-            devolvido — reembolso parcial desconta só a parte correspondente. O mesmo vale se o
+            devolvido; reembolso parcial desconta só a parte correspondente. O mesmo vale se o
             cliente abrir uma disputa no cartão (chargeback): o valor sai do seu saldo quando a
             disputa é aberta e volta se a loja vencer. Tudo isso aparece no seu extrato como
             &ldquo;Estorno&rdquo;.
@@ -335,7 +335,7 @@ export default async function AfiliadosPage() {
           <AccordionContent className="text-muted-foreground">
             O mínimo é {formatCents(MIN_PAYOUT_CENTS)} e você pode ter até {MAX_PENDING_PAYOUTS}{" "}
             pedidos em análise ao mesmo tempo. O pagamento é feito por PIX para a chave que você
-            informar no momento do saque — confira com atenção, porque o envio é exatamente para
+            informar no momento do saque; confira com atenção, porque o envio é exatamente para
             ela. Enquanto o saque está em análise, o valor fica reservado e sai do
             &ldquo;disponível&rdquo;. Você pode cancelar um saque a qualquer momento antes de ele
             ser processado, e o valor volta na hora.

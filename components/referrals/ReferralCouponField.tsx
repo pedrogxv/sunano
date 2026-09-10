@@ -153,7 +153,7 @@ export function ReferralCouponField({ defaultValue = "" }: { defaultValue?: stri
       )}
       {state.kind === "idle" && !code && (
         <p className="text-xs text-muted-foreground">
-          Tem um cupom de indicação? Digite aqui — dá pra usar só no cadastro.
+          Tem um cupom de indicação? Digite aqui, dá pra usar só no cadastro.
         </p>
       )}
     </div>

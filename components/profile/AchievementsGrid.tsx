@@ -181,7 +181,7 @@ export function AchievementsGrid({
               </TooltipTrigger>
               <TooltipContent>
                 <p className="font-semibold">
-                  {ACHIEVEMENT_TRACK_LABELS[progress.track]} — {tierName ?? "Sem nível ainda"}
+                  {ACHIEVEMENT_TRACK_LABELS[progress.track]} · {tierName ?? "Sem nível ainda"}
                 </p>
                 <p className="text-xs text-background/70">
                   {formatAchievementCount(progress.count)} {ACHIEVEMENT_TRACK_LABELS[progress.track].toLowerCase()}

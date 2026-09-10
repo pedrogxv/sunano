@@ -220,10 +220,10 @@ function PixCheckoutContent() {
                   <span className="min-w-0 truncate text-foreground">
                     {item.quantity ?? 1}× {item.name ?? "Item"}
                     {item.variant_label ? (
-                      <span className="text-muted-foreground"> — {item.variant_label}</span>
+                      <span className="text-muted-foreground"> · {item.variant_label}</span>
                     ) : null}
                     {(item.variant_options ?? []).map((o, oi) => (
-                      <span key={oi} className="text-muted-foreground"> — {o.label}</span>
+                      <span key={oi} className="text-muted-foreground"> · {o.label}</span>
                     ))}
                   </span>
                   {typeof item.price_cents === "number" && (
@@ -297,7 +297,7 @@ function PixCheckoutContent() {
           <h1 className="text-2xl font-black text-foreground">PIX expirado</h1>
           <p className="text-sm text-muted-foreground">
             O prazo para pagar o pedido #{orderNumber(order.id)} acabou e o código PIX perdeu a
-            validade. <span className="font-semibold text-foreground">Nada foi cobrado</span> — os
+            validade. <span className="font-semibold text-foreground">Nada foi cobrado</span>; os
             itens voltaram ao estoque.
           </p>
           <p className="text-xs text-muted-foreground/70">

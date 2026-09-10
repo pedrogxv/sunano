@@ -116,7 +116,7 @@ export function ImpersonationBanner() {
       >
         <Eye className="size-4 shrink-0" />
         <span className="truncate">
-          Você está navegando como <strong>{state.target}</strong> — modo somente leitura
+          Você está navegando como <strong>{state.target}</strong> (modo somente leitura)
         </span>
         <span className="shrink-0 rounded bg-black/15 px-1.5 py-0.5 font-mono text-xs tabular-nums">
           {formatRemaining(remainingMs)}

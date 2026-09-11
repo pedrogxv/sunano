@@ -1,5 +1,6 @@
 import "server-only"
 
+import { profileMediaProxyUrl } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { ORDER_FULFILLMENT_FLOW } from "@/lib/server/repositories/orders-repository"
 
@@ -61,7 +62,8 @@ export async function listPublishedReviews(productId: string): Promise<ProductRe
 
   const profileMap = new Map(
     ((profiles ?? []) as unknown as { id: string; display_name: string | null; avatar_url: string | null }[]).map(
-      (p) => [p.id, { display_name: p.display_name, avatar_url: p.avatar_url }]
+      // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+      (p) => [p.id, { display_name: p.display_name, avatar_url: p.avatar_url ? profileMediaProxyUrl(p.id, "avatar") : null }]
     )
   )
 
@@ -222,7 +224,8 @@ export async function listStoreWideReviews(limit = 40): Promise<StoreWideReview[
 
   const profileMap = new Map(
     ((profiles ?? []) as unknown as { id: string; display_name: string | null; avatar_url: string | null }[]).map(
-      (p) => [p.id, { display_name: p.display_name, avatar_url: p.avatar_url }]
+      // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+      (p) => [p.id, { display_name: p.display_name, avatar_url: p.avatar_url ? profileMediaProxyUrl(p.id, "avatar") : null }]
     )
   )
 

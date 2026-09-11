@@ -5,7 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import type { Database } from "@/lib/database.types"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { completeDailyMission } from "@/lib/server/repositories/achievements-repository"
-import { getTierCapabilities, isVipActive } from "@/lib/account-tier"
+import { getTierCapabilities, isVipActive, profileMediaProxyUrl } from "@/lib/account-tier"
 
 type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reason"]
 
@@ -624,7 +624,7 @@ async function hydrateRankingProfiles(
         userId: profile.id,
         displayName: profile.display_name ?? "Usuário",
         displaySlug: profile.display_slug,
-        avatarUrl: profile.avatar_url,
+        avatarUrl: profile.avatar_url ? profileMediaProxyUrl(profile.id, "avatar") : null,
         isVip: isVipActive(profile.account_tier, profile.vip_expires_at),
         value: valueByUser.get(id) ?? 0,
       },

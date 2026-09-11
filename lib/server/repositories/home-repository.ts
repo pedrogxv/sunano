@@ -1,5 +1,6 @@
 import "server-only"
 
+import { profileMediaProxyUrl } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getYouTubeChannelFeed } from "@/lib/server/integrations/youtube"
 import { listActiveBanners, type HomeBanner } from "@/lib/server/repositories/banners-repository"
@@ -145,7 +146,10 @@ export async function getHomeData(): Promise<HomeData> {
   const avatarMap: Record<string, string | null> = {}
   if (authorIds.length > 0) {
     const { data: profiles } = await db.from("user_profiles").select("id, avatar_url").in("id", authorIds)
-    for (const row of profiles ?? []) avatarMap[row.id] = row.avatar_url
+    // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+    for (const row of profiles ?? []) {
+      avatarMap[row.id] = row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null
+    }
   }
 
   const topPeripheralRows = (topPeripheralsRes.data ?? []) as unknown as Array<{

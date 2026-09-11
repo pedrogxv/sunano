@@ -215,6 +215,11 @@ export function EventCard(props: EventCardProps) {
   // Evento encerrado já sai dessaturado: acender o foil por cima brigaria com
   // o "isto acabou" que a própria cor do card está dizendo.
   const holoStrength = event.active ? MEDAL_RARITY_HOLO[event.rarity] : 0
+  // A inclinação (a carta seguindo o ponteiro) é uma mecânica separada do
+  // foil: ela não é sinal de raridade, é só "isto é uma carta". Antes estava
+  // amarrada a `holoStrength > 0`, e como toda medalha nasce `common` no
+  // banco (holo 0), a maioria dos cards ficava totalmente parada.
+  const tiltEnabled = event.active
   const accent = MEDAL_RARITY_SOLID[event.rarity]
   const showCost = event.criteriaType === "aura_redeem" && !claimed && Boolean(event.auraCost)
 
@@ -227,13 +232,13 @@ export function EventCard(props: EventCardProps) {
         <Tooltip>
           <TooltipTrigger asChild>
             <div
-              {...(holoStrength > 0 ? holoProps : null)}
+              {...(tiltEnabled ? holoProps : null)}
               className={cn(
                 "relative flex aspect-[63/88] w-full cursor-help flex-col overflow-hidden rounded-xl p-[5px]",
                 // O `.medal-holo` já sobe o card no hover pelo próprio
                 // transform; deixar as duas regras juntas seria uma
                 // sobrescrevendo a outra.
-                holoStrength > 0 ? "medal-holo" : "transition-transform hover:-translate-y-1",
+                tiltEnabled ? "medal-holo" : "transition-transform hover:-translate-y-1",
                 !event.active && "grayscale-[0.4] opacity-70"
               )}
               style={

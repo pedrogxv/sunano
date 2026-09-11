@@ -1,7 +1,7 @@
 import { Crown } from "lucide-react"
 
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { isVipActive, resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
+import { isVipActive, type AccountTier } from "@/lib/account-tier"
 import {
   DEFAULT_ADJUST,
   mediaAdjustStyle,
@@ -53,8 +53,10 @@ const TIER_GLOW: Record<AccountTier, string> = {
  * ao lado dela em vez de descer para baixo do banner, e some a tira vazia que
  * o layout centralizado obrigava a existir sob a capa.
  *
- * A regra de mídia animada é a mesma do resto do perfil — GIF de VIP passa
- * direto (`unoptimized`), sem perder quadros na reamostragem do storage.
+ * `avatarUrl` já chega como `profileMediaProxyUrl` (nunca a coluna crua) —
+ * quem resolve tier/VIP e decide se o GIF anima ou congela é a rota, com
+ * dado fresco do banco (ver `resolveProfileMedia`/`profileMediaProxyUrl` em
+ * `lib/account-tier.ts` e `profile-showcase-repository.ts`).
  */
 export function AvatarQuadrado({
   avatarUrl,
@@ -66,7 +68,7 @@ export function AvatarQuadrado({
   frameUrl,
   bannerUrl = null,
 }: AvatarQuadradoProps) {
-  const { src, animated, needsFreeze } = resolveProfileMedia(avatarUrl, tier, vipExpiresAt)
+  const src = avatarUrl
   const initials = name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2)
   const isVip = isVipActive(tier, vipExpiresAt)
 
@@ -85,8 +87,6 @@ export function AvatarQuadrado({
           alt={name}
           fill
           priority
-          unoptimized={animated}
-          freeze={needsFreeze}
           sizes="128px"
           style={mediaAdjustStyle(adjust)}
           className="object-cover"
@@ -132,8 +132,6 @@ export function AvatarQuadrado({
     bannerUrl,
     avatarUrl,
     name,
-    tier,
-    vipExpiresAt,
   })
 
   return (

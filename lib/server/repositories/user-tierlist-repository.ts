@@ -13,7 +13,7 @@ import {
   TIERLIST_MIN_TIERS,
   TIERLIST_TIER_LABEL_MAX_LENGTH,
 } from "@/lib/personal-tierlist"
-import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
+import { coerceAccountTier, profileMediaProxyUrl, type AccountTier } from "@/lib/account-tier"
 
 // Os tipos vivem em `lib/personal-tierlist.ts` (módulo puro) para que Client
 // Components possam importá-los sem tocar em `lib/server/**`.
@@ -465,7 +465,7 @@ async function listCommunityTierlistsUncached(opts: {
           id: row.user_id,
           displayName: row.display_name?.trim() || `Membro ${row.user_id.slice(0, 6)}`,
           displaySlug: row.display_slug as string,
-          avatarUrl: row.avatar_url,
+          avatarUrl: row.avatar_url ? profileMediaProxyUrl(row.user_id, "avatar") : null,
           accountTier: coerceAccountTier(row.account_tier),
           vipExpiresAt: row.vip_expires_at,
         },

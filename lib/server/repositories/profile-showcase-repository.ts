@@ -20,6 +20,7 @@ import {
 } from "@/lib/server/repositories/user-tierlist-repository"
 import {
   coerceAccountTier,
+  profileMediaProxyUrl,
   selectVisibleFavorites,
   selectVisibleMedals,
   type AccountTier,
@@ -178,9 +179,10 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     media_adjustments: settings[userId] ?? DEFAULT_ADJUSTMENTS,
     display_name: row.display_name?.trim() || defaultNameFrom(row.id),
     display_slug: row.display_slug,
-    avatar_url: row.avatar_url,
-    banner_url: row.banner_url,
-    mini_banner_url: row.mini_banner_url,
+    // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+    avatar_url: row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null,
+    banner_url: row.banner_url ? profileMediaProxyUrl(row.id, "banner") : null,
+    mini_banner_url: row.mini_banner_url ? profileMediaProxyUrl(row.id, "mini-banner") : null,
     bio: row.bio,
     account_tier: tier,
     vip_expires_at: row.vip_expires_at,

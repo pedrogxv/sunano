@@ -4,7 +4,7 @@ import Link from "next/link"
 import { Bird, Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
 
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia, isVipActive } from "@/lib/account-tier"
+import { isVipActive } from "@/lib/account-tier"
 import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -49,12 +49,8 @@ function formatCount(value: number): string {
  * completa, que já mostra a capa grande.
  */
 export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
-  const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier, profile.vip_expires_at)
-  const background = resolveProfileMedia(
-    profile.mini_banner_url,
-    profile.account_tier,
-    profile.vip_expires_at
-  )
+  const avatarSrc = profile.avatar_url
+  const backgroundSrc = profile.mini_banner_url
   const hue = profileAccentHue(profile.id)
   const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
   const bgTheme = getMiniProfileBgTheme(profile.equipped_mini_profile_bg)
@@ -98,17 +94,15 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
           segue ocupando o cartão inteiro, como sempre. */}
       <div className={cn("absolute inset-x-0 top-0", bgTheme ? "h-[92px]" : "bottom-0")}>
         <ImageWithFallback
-          src={background.src}
+          src={backgroundSrc}
           alt=""
           fill
-          unoptimized={background.animated}
-          freeze={background.needsFreeze}
           sizes="256px"
           style={mediaAdjustStyle(profile.media_adjustments.mini_banner)}
           className="object-cover"
           fallback={null}
         />
-        {bgTheme && background.src && (
+        {bgTheme && backgroundSrc && (
           // Dissolve a base da faixa no tema, para não ficar um corte reto
           // entre a foto e o efeito.
           <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/90 to-transparent" />
@@ -136,11 +130,9 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
           )}
         >
           <ImageWithFallback
-            src={avatar.src}
+            src={avatarSrc}
             alt={profile.display_name}
             fill
-            unoptimized={avatar.animated}
-            freeze={avatar.needsFreeze}
             sizes="72px"
             style={mediaAdjustStyle(profile.media_adjustments.avatar)}
             className="object-cover"

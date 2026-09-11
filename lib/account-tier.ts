@@ -154,6 +154,26 @@ export function resolveProfileMedia(
   }
 }
 
+/** Campo de mídia de perfil servido por `/api/profile-media/[userId]/[field]`. */
+export type ProfileMediaField = "avatar" | "banner" | "mini-banner"
+
+/**
+ * URL pela qual banner/avatar/mini-banner devem ser exibidos — nunca a coluna
+ * `avatar_url`/`banner_url`/`mini_banner_url` crua.
+ *
+ * O congelamento de GIF de conta não-VIP (`needsFreeze` acima) sempre foi só
+ * decisão de renderização: o navegador recebia o arquivo original do Storage
+ * (bucket público) de qualquer forma, então qualquer um com a URL direta via
+ * a animação rodando, tier nenhum. Esta rota resolve tier fresco no servidor
+ * (não confia no `tier`/`vipExpiresAt` que o chamador tinha em mão) e só
+ * então decide se devolve o arquivo original ou um quadro estático — a
+ * mesma checagem, uma única vez, no único lugar que pode de fato impedir a
+ * entrega do byte.
+ */
+export function profileMediaProxyUrl(userId: string, field: ProfileMediaField): string {
+  return `/api/profile-media/${userId}/${field}`
+}
+
 /** Uma medalha conquistada, no formato mínimo exigido pela seleção. */
 export type AwardedMedalLike = {
   awarded_at: string

@@ -2,7 +2,7 @@ import "server-only"
 
 import { cache } from "react"
 import { unstable_cache } from "next/cache"
-import { coerceAccountTier } from "@/lib/account-tier"
+import { coerceAccountTier, profileMediaProxyUrl } from "@/lib/account-tier"
 import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -81,7 +81,11 @@ export async function getUserProfiles(
     .select("id, display_name, avatar_url")
     .in("id", [...new Set(userIds)])
   for (const row of (data ?? []) as Array<{ id: string } & UserProfile>) {
-    map[row.id] = { display_name: row.display_name, avatar_url: row.avatar_url }
+    // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+    map[row.id] = {
+      display_name: row.display_name,
+      avatar_url: row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null,
+    }
   }
   return map
 }
@@ -114,8 +118,9 @@ function toProfileSummary(
     media_adjustments: mediaAdjustments,
     display_name: row.display_name?.trim() || `Membro ${row.id.slice(0, 6)}`,
     display_slug: row.display_slug,
-    avatar_url: row.avatar_url,
-    mini_banner_url: row.mini_banner_url,
+    // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+    avatar_url: row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null,
+    mini_banner_url: row.mini_banner_url ? profileMediaProxyUrl(row.id, "mini-banner") : null,
     account_tier: coerceAccountTier(row.account_tier),
     vip_expires_at: row.vip_expires_at,
     profile_views: row.profile_views ?? 0,

@@ -1,4 +1,3 @@
-import { resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
 import type { ProfileLightboxItem } from "@/components/profile/ProfileImageLightbox"
 
 /**
@@ -11,6 +10,10 @@ import type { ProfileLightboxItem } from "@/components/profile/ProfileImageLight
  *
  * Entradas sem arquivo enviado não entram — o gradiente de fallback da capa e
  * as iniciais do avatar não têm o que ampliar.
+ *
+ * `bannerUrl`/`avatarUrl` já chegam como `profileMediaProxyUrl` (nunca a
+ * coluna crua) — quem decide se o GIF anima ou congela é a própria rota, com
+ * o tier lido fresco do banco, então esta lista não precisa saber de tier/VIP.
  */
 export type ProfileMediaKind = "banner" | "avatar"
 
@@ -18,38 +21,28 @@ export function buildProfileMediaItems({
   bannerUrl,
   avatarUrl,
   name,
-  tier,
-  vipExpiresAt,
 }: {
   bannerUrl: string | null | undefined
   avatarUrl: string | null | undefined
   name: string
-  tier: AccountTier
-  vipExpiresAt: string | null
 }): { items: ProfileLightboxItem[]; kinds: ProfileMediaKind[] } {
   const items: ProfileLightboxItem[] = []
   const kinds: ProfileMediaKind[] = []
 
-  const banner = resolveProfileMedia(bannerUrl, tier, vipExpiresAt)
-  if (banner.src) {
+  if (bannerUrl) {
     items.push({
-      src: banner.src,
+      src: bannerUrl,
       label: "Capa",
       alt: `Capa do perfil de ${name}`,
-      unoptimized: banner.animated,
-      freeze: banner.needsFreeze,
     })
     kinds.push("banner")
   }
 
-  const avatar = resolveProfileMedia(avatarUrl, tier, vipExpiresAt)
-  if (avatar.src) {
+  if (avatarUrl) {
     items.push({
-      src: avatar.src,
+      src: avatarUrl,
       label: "Foto",
       alt: `Foto de perfil de ${name}`,
-      unoptimized: avatar.animated,
-      freeze: avatar.needsFreeze,
     })
     kinds.push("avatar")
   }

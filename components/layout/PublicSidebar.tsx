@@ -224,11 +224,13 @@ export function PublicSidebar() {
                 isCollapsed && "justify-center",
                 isLojaActive
                   ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/40"
-                  : "border border-emerald-500/40 bg-emerald-500/10 text-emerald-700 hover:border-emerald-500/60 hover:bg-emerald-500/20 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-200"
+                  : "nav-bag-holder border border-emerald-500/40 bg-emerald-500/10 hover:border-emerald-500/60 hover:bg-emerald-500/20"
               )}
             >
-              <ShoppingBag className="size-[18px] shrink-0" />
-              <span className={cn("flex-1", isCollapsed && "hidden")}>
+              <ShoppingBag
+                className={cn("size-[18px] shrink-0", !isLojaActive && "nav-bag-icon")}
+              />
+              <span className={cn("flex-1", isCollapsed && "hidden", !isLojaActive && "nav-bag-text")}>
                 {t.nav.store}
               </span>
               {cartCount > 0 && (

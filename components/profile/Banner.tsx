@@ -1,5 +1,5 @@
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { isVipActive, resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
+import { isVipActive, type AccountTier } from "@/lib/account-tier"
 import {
   DEFAULT_ADJUST,
   mediaAdjustStyle,
@@ -32,9 +32,10 @@ interface BannerProps {
  * Capa do perfil. Ocupa a largura total do card e reserva espaço embaixo
  * para a foto sobreposta (ver `AvatarFoto`).
  *
- * O redimensionamento vem do storage (ver `lib/image-loader.ts`). A capa de um
- * VIP com GIF pula esse caminho (`unoptimized`) e chega como foi enviada, sem
- * perder quadros na reamostragem.
+ * `bannerUrl` já chega como `profileMediaProxyUrl` (nunca a coluna crua) —
+ * quem resolve tier/VIP e decide se o GIF anima ou congela é a rota, com
+ * dado fresco do banco (ver `resolveProfileMedia`/`profileMediaProxyUrl` em
+ * `lib/account-tier.ts` e `profile-showcase-repository.ts`).
  *
  * VIP também ganha o mesmo brilho roxo da foto (`AvatarQuadrado`), com a
  * borda no rodapé da capa — as duas marcas formam um conjunto só, em vez da
@@ -49,7 +50,7 @@ export function Banner({
   name = "",
   avatarUrl = null,
 }: BannerProps) {
-  const { src, animated, needsFreeze } = resolveProfileMedia(bannerUrl, tier, vipExpiresAt)
+  const src = bannerUrl
   const isVip = isVipActive(tier, vipExpiresAt)
 
   const image = (
@@ -76,8 +77,6 @@ export function Banner({
         alt=""
         fill
         priority
-        unoptimized={animated}
-        freeze={needsFreeze}
         sizes="100vw"
         style={mediaAdjustStyle(adjust)}
         className="h-full w-full object-cover"
@@ -98,8 +97,6 @@ export function Banner({
     bannerUrl,
     avatarUrl,
     name,
-    tier,
-    vipExpiresAt,
   })
 
   return (

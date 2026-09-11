@@ -1,5 +1,6 @@
 import "server-only"
 
+import { profileMediaProxyUrl } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { parseSlug } from "@/lib/format"
 import { validateDisplayName } from "@/lib/profile-name"
@@ -410,7 +411,8 @@ export async function getPeripheralOwners(): Promise<Map<string, PeripheralOwner
     buyerById.set(p.id, {
       display_name: p.display_name,
       display_slug: p.display_slug,
-      avatar_url: p.avatar_url,
+      // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+      avatar_url: p.avatar_url ? profileMediaProxyUrl(p.id, "avatar") : null,
     })
   }
 
@@ -1125,7 +1127,12 @@ export async function listAuraPurchases(
       .select("id, display_name, display_slug, avatar_url")
       .in("id", buyerIds)
     for (const p of (profiles ?? []) as Array<{ id: string; display_name: string | null; display_slug: string | null; avatar_url: string | null }>) {
-      buyerById.set(p.id, { display_name: p.display_name, display_slug: p.display_slug, avatar_url: p.avatar_url })
+      // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+      buyerById.set(p.id, {
+        display_name: p.display_name,
+        display_slug: p.display_slug,
+        avatar_url: p.avatar_url ? profileMediaProxyUrl(p.id, "avatar") : null,
+      })
     }
   }
 

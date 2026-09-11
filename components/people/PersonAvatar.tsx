@@ -1,7 +1,7 @@
 import { Crown, Sparkles } from "lucide-react"
 
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia, isVipActive } from "@/lib/account-tier"
+import { isVipActive } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 import type { PublicProfileSummary } from "@/lib/user-directory"
@@ -33,11 +33,7 @@ export function PersonAvatar({
   size?: keyof typeof SIZE_CLASSES
   className?: string
 }) {
-  const { src, animated, needsFreeze } = resolveProfileMedia(
-    profile.avatar_url,
-    profile.account_tier,
-    profile.vip_expires_at
-  )
+  const src = profile.avatar_url
   const initials =
     profile.display_name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2) || "?"
   const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
@@ -50,8 +46,6 @@ export function PersonAvatar({
           src={src}
           alt={profile.display_name}
           fill
-          unoptimized={animated}
-          freeze={needsFreeze}
           sizes="56px"
           className="object-cover"
           fallback={

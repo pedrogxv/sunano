@@ -1,6 +1,6 @@
 import "server-only"
 
-import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
+import { coerceAccountTier, profileMediaProxyUrl, type AccountTier } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getUserStreaksByUser } from "@/lib/server/repositories/achievements-repository"
 
@@ -31,7 +31,12 @@ export async function buildProfileMap(userIds: (string | null)[]): Promise<Recor
   for (const row of data ?? []) {
     map[row.id] = {
       display_name: row.display_name,
-      avatar_url: row.avatar_url,
+      // Nunca a coluna crua: quem lê daqui recebe posts/comentários pra um
+      // Client Component (`PostCard`, `CommentRow`), e o que vira prop de
+      // Client Component é serializado pro navegador tal e qual — mandar a
+      // URL do Storage ali expunha o GIF original mesmo quando a UI mostrava
+      // só o quadro congelado. Ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+      avatar_url: row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null,
       account_tier: coerceAccountTier(row.account_tier),
       vip_expires_at: row.vip_expires_at,
       display_slug: row.display_slug,

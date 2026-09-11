@@ -1,7 +1,7 @@
 import "server-only"
 
 import { cache } from "react"
-import { coerceAccountTier, type AccountTier } from "@/lib/account-tier"
+import { coerceAccountTier, profileMediaProxyUrl, type AccountTier } from "@/lib/account-tier"
 import { canEditComment } from "@/lib/comment-edit"
 import type { CommentMention } from "@/components/comments/types"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -228,7 +228,9 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const row of (data ?? []) as any[]) {
     map[row.id] = {
-      avatar_url: row.avatar_url ?? null,
+      // Nunca a coluna crua — ver o mesmo comentário em `buildProfileMap`
+      // (`profile-enrichment.ts`).
+      avatar_url: row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null,
       account_tier: coerceAccountTier(row.account_tier),
       vip_expires_at: row.vip_expires_at ?? null,
       display_slug: row.display_slug ?? null,

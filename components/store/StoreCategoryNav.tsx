@@ -120,25 +120,27 @@ export function StoreCategoryNav({
 
   return (
     <div className="relative" onMouseLeave={() => hoverGroup(null)}>
-      {/* Desktop: layout space-between em 3 blocos — Home | Categorias | Busca+Suporte.
-          gap-x garante que Avaliações nunca encoste na busca (as colunas 1fr não são
-          simétricas porque a coluna da busca é bem mais larga que a do Home, mas o
-          bloco de categorias já fica visualmente centralizado no espaço do meio). */}
+      {/* Desktop: layout space-between em 3 blocos — spacer vazio | Categorias
+          (com Home já dentro, coladinho no Mouse, tudo centralizado) |
+          Busca+Suporte. O spacer da coluna 1 existe só pra manter o bloco de
+          categorias centralizado no espaço do meio (mesma matemática de antes,
+          só que agora sem o Home ocupando aquela coluna). */}
       <nav className="hidden grid-cols-[1fr_auto_1fr] items-center gap-x-8 border-b border-[#262626] bg-card px-4 md:grid lg:px-8">
-        <Link
-          href="/loja"
-          className={cn(
-            "flex h-[54px] shrink-0 items-center justify-self-start gap-[5px] border-b-2 text-[13.5px] transition-colors",
-            activeCategory === null
-              ? "border-white font-bold text-white"
-              : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
-          )}
-        >
-          <Home className="size-[13px]" strokeWidth={2.2} />
-          Home
-        </Link>
+        <div />
 
         <div className="flex items-center justify-center gap-[26px] overflow-x-auto [scrollbar-width:none]">
+          <Link
+            href="/loja"
+            className={cn(
+              "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
+              activeCategory === null
+                ? "border-white font-bold text-white"
+                : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
+            )}
+          >
+            <Home className="size-[13px]" strokeWidth={2.2} />
+            Home
+          </Link>
           {groupsWithCategories.map((group) => {
             const groupCategories = grouped.get(group) ?? []
             const isOpen = hovered === group

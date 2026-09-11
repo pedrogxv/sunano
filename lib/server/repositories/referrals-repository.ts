@@ -1,5 +1,6 @@
 import "server-only"
 
+import { profileMediaProxyUrl } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { normalizeReferralCode, validateReferralCode } from "@/lib/referral-code"
 
@@ -282,7 +283,8 @@ export async function listMyReferrals(userId: string, limit = 100): Promise<Refe
     return {
       userId: row.referred_user_id,
       displayName: profile?.display_name ?? "Usuário",
-      avatarUrl: profile?.avatar_url ?? null,
+      // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+      avatarUrl: profile?.avatar_url ? profileMediaProxyUrl(row.referred_user_id, "avatar") : null,
       status: row.status as ReferralStatus,
       validatedVia: row.validated_via as ReferralVia | null,
       expiresAt: row.expires_at,
@@ -341,7 +343,10 @@ export async function listReferralsForAdmin(params: {
   return rows.map((row) => ({
     userId: row.referred_user_id,
     displayName: byId.get(row.referred_user_id)?.display_name ?? "Usuário",
-    avatarUrl: byId.get(row.referred_user_id)?.avatar_url ?? null,
+    // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+    avatarUrl: byId.get(row.referred_user_id)?.avatar_url
+      ? profileMediaProxyUrl(row.referred_user_id, "avatar")
+      : null,
     status: row.status as ReferralStatus,
     validatedVia: row.validated_via as ReferralVia | null,
     expiresAt: row.expires_at,

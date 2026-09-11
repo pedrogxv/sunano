@@ -20,6 +20,7 @@ import { SupportReplySubmitButton } from "@/components/admin/SupportReplySubmitB
 import { SupportReplyTextarea } from "@/components/admin/SupportReplyTextarea"
 import { SupportTicketStatusActions } from "@/components/admin/SupportTicketStatusActions"
 import { Badge } from "@/components/ui/badge"
+import { safeHref } from "@/lib/safe-url"
 
 const STATUS_LABELS = { open: "Aberto", resolved: "Resolvido", cancelled: "Cancelado" } as const
 const STATUS_BADGE = {
@@ -166,7 +167,7 @@ export default async function AdminSupportTicketPage({ params }: { params: Promi
             {message.image_urls.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {message.image_urls.map((url) => (
-                  <a key={url} href={url} target="_blank" rel="noreferrer">
+                  <a key={url} href={safeHref(url)} target="_blank" rel="noreferrer">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={url} alt="Anexo" className="size-20 rounded-lg border border-border object-cover" />
                   </a>

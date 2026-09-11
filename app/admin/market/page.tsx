@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
+import { safeHref } from "@/lib/safe-url"
 
 type ModerationListing = {
   id: string
@@ -226,7 +227,7 @@ export default function AdminMarketPage() {
                       {listing.is_free_vip_slot ? " · vaga VIP grátis" : ` · taxa ${formatBRL(listing.fee_cents)}`}
                     </p>
                     <a
-                      href={listing.olx_url}
+                      href={safeHref(listing.olx_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[11px] text-primary hover:underline"

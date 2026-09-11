@@ -4,10 +4,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getPayment, getPaymentsByCheckoutSession } from "@/lib/server/integrations/asaas"
 import {
   activateSubscriptionFromWebhook,
+  activatePixSubscriptionFromWebhook,
+  setPendingPixPayment,
   renewSubscriptionFromWebhook,
   markSubscriptionPastDue,
   endSubscriptionByAsaasId,
   cancelSubscriptionByCheckoutId,
+  getLatestSubscriptionByAsaasId,
 } from "@/lib/server/repositories/vip-subscription-repository"
 import { VIP_SUBSCRIPTION_PRICE_CENTS } from "@/lib/vip-plan"
 
@@ -132,7 +135,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ received: true })
     }
 
-    // Ciclos seguintes — cobrança confirmada de uma assinatura já ativada.
+    // Nova cobrança gerada pela assinatura. Só interessa no PIX: é o QR que
+    // o usuário precisa pagar naquele ciclo. No cartão a Asaas cobra sozinha
+    // o cartão tokenizado, não há nada para o usuário fazer.
+    if (payload.event === "PAYMENT_CREATED") {
+      const paymentId = payload.payment?.id
+      const subscriptionId = payload.payment?.subscription
+      if (!paymentId || !subscriptionId) {
+        return NextResponse.json({ received: true, ignored: "not_a_subscription_payment" })
+      }
+
+      const local = await getLatestSubscriptionByAsaasId(subscriptionId)
+      if (!local || local.paymentMethod !== "pix") {
+        return NextResponse.json({ received: true, ignored: "not_a_pix_subscription" })
+      }
+
+      await setPendingPixPayment({ asaasSubscriptionId: subscriptionId, asaasPaymentId: paymentId })
+      return NextResponse.json({ received: true })
+    }
+
+    // Cobrança confirmada de uma assinatura. No cartão isto é sempre uma
+    // RENOVAÇÃO (o 1º pagamento chega como CHECKOUT_PAID). No PIX não existe
+    // checkout, então o 1º pagamento chega por aqui também — e a assinatura
+    // ainda está `pending`, precisando de ATIVAÇÃO, não de renovação.
     if (payload.event === "PAYMENT_CONFIRMED" || payload.event === "PAYMENT_RECEIVED") {
       const paymentId = payload.payment?.id
       const subscriptionId = payload.payment?.subscription
@@ -152,6 +177,18 @@ export async function POST(request: NextRequest) {
           VIP_SUBSCRIPTION_PRICE_CENTS
         )
         return NextResponse.json({ received: true, ignored: "payment_value_off_plan" })
+      }
+
+      // Assinatura PIX ainda não ativada = este é o 1º pagamento dela.
+      // `activate_vip_subscription_pix` localiza por asaas_subscription_id
+      // (no PIX não há asaas_checkout_id para a RPC do cartão usar).
+      const local = await getLatestSubscriptionByAsaasId(subscriptionId)
+      if (local?.paymentMethod === "pix" && local.status === "pending") {
+        await activatePixSubscriptionFromWebhook({
+          asaasSubscriptionId: subscriptionId,
+          asaasPaymentId: paymentId,
+        })
+        return NextResponse.json({ received: true })
       }
 
       await renewSubscriptionFromWebhook({ asaasSubscriptionId: subscriptionId, asaasPaymentId: paymentId })

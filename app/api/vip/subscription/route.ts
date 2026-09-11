@@ -4,6 +4,7 @@ import { isVipActive } from "@/lib/account-tier"
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getLatestSubscriptionForUser } from "@/lib/server/repositories/vip-subscription-repository"
+import { getPixQrCode } from "@/lib/server/integrations/asaas"
 import { syncSubscriptionWithAsaas } from "@/lib/server/vip-subscription-sync"
 import { VIP_SUBSCRIPTION_PRICE_CENTS } from "@/lib/vip-plan"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
@@ -57,10 +58,41 @@ export async function GET(request: NextRequest) {
       subscription.status === "active" ||
       subscription.status === "past_due")
 
-  // Cancelável = tem assinatura viva JÁ confirmada na Asaas (asaas_subscription_id
-  // só existe após o 1º pagamento). `pending` sem id ainda é um checkout em
-  // aberto — não há o que cancelar do nosso lado, ele expira sozinho.
+  // Cancelável = tem assinatura viva JÁ confirmada na Asaas
+  // (`asaas_subscription_id`). No CARTÃO esse id só existe após o 1º
+  // pagamento, então uma linha `pending` é um checkout em aberto que expira
+  // sozinho — não há o que cancelar. No PIX a assinatura nasce na Asaas
+  // junto com a linha, então mesmo `pending` (1º QR ainda não pago) já é
+  // cancelável — e precisa ser: sem isso, quem gerou o QR e desistiu ficaria
+  // com uma assinatura viva gerando cobrança todo mês sem nenhuma forma de
+  // parar pela interface.
   const canCancel = isSubscriber && subscription!.asaasSubscriptionId != null
+
+  // Cobrança PIX do ciclo em aberto — o QR que o usuário precisa pagar.
+  // Buscado sob demanda (não guardamos a imagem: é grande e tem validade
+  // própria). Falha aqui não derruba a aba: o resto do estado ainda é útil.
+  let pendingPixPayment: {
+    id: string
+    qrCodeBase64: string
+    copyPaste: string
+    expiresAt: string
+    amountCents: number
+  } | null = null
+
+  if (subscription?.paymentMethod === "pix" && subscription.pendingPaymentId && isSubscriber) {
+    try {
+      const qr = await getPixQrCode(subscription.pendingPaymentId, { clampToOrderWindow: false })
+      pendingPixPayment = {
+        id: subscription.pendingPaymentId,
+        qrCodeBase64: qr.encodedImage,
+        copyPaste: qr.payload,
+        expiresAt: qr.expirationDate,
+        amountCents: VIP_SUBSCRIPTION_PRICE_CENTS,
+      }
+    } catch (err) {
+      console.error("[vip/subscription] getPixQrCode falhou:", err)
+    }
+  }
 
   return NextResponse.json({
     subscriptionEnabled: isVipSubscriptionEnabled(),
@@ -72,8 +104,10 @@ export async function GET(request: NextRequest) {
           status: subscription.status,
           isSubscriber,
           canCancel,
+          paymentMethod: subscription.paymentMethod,
           currentPeriodEnd: subscription.currentPeriodEnd,
           canceledAt: subscription.canceledAt,
+          pendingPixPayment,
         }
       : null,
   })

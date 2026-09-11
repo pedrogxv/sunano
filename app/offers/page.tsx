@@ -3,6 +3,7 @@
 import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
 import { format, formatDistanceToNow, isToday, type Locale } from "date-fns"
+import { safeHref } from "@/lib/safe-url"
 import { enUS, ptBR } from "date-fns/locale"
 import {
   AlertCircle,
@@ -283,7 +284,7 @@ function OfferCard({
           )}
           {offer.url && (
             <a
-              href={offer.url}
+              href={safeHref(offer.url)}
               target="_blank"
               rel="noopener noreferrer"
               title={t.offers.openInTelegram}

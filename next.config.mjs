@@ -1,8 +1,17 @@
 const isDev = process.env.NODE_ENV !== "production"
 
 // Next.js precisa de 'unsafe-inline' para os scripts de bootstrap/hydration
-// e 'unsafe-eval' só em dev (HMR/Fast Refresh). Sem nonce/strict-dynamic por
-// enquanto — adotar isso exigiria instrumentar nonce em cada response.
+// e 'unsafe-eval' só em dev (HMR/Fast Refresh). Migrar para nonce/strict-dynamic
+// removeria o 'unsafe-inline', MAS a doc do Next 16 (node_modules/next/dist/
+// docs/01-app/02-guides/content-security-policy.md) é explícita: nonce força
+// TODA página a renderizar dinamicamente — mata SSG/ISR/PPR e o cache de CDN.
+// Este site depende de páginas estáticas indexáveis (fórum/blog/notícias) e de
+// cache por custo (ver otimizações de 2026-08/09), então nonce sairia caro
+// demais. Mitigação equivalente sem regressão: o roubo de sessão por
+// 'unsafe-inline' só se concretiza com um XSS, e todo conteúdo de usuário é
+// sanitizado/reassinado no servidor (comment-media.ts, support-media.ts) ou
+// renderizado como texto pelo React; hrefs de URL externa passam por
+// `safeHref` (lib/safe-url.ts). `upgrade-insecure-requests` fecha mixed content.
 const csp = [
 	"default-src 'self'",
 	`script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
@@ -18,6 +27,11 @@ const csp = [
 	"base-uri 'self'",
 	"form-action 'self'",
 	"frame-ancestors 'self'",
+	// Sem 'unsafe-inline' pra atributos on*=... inline nem <a href="javascript:">
+	// (a diretiva script-src-attr não herda de script-src): fecha a superfície
+	// de handler inline mesmo que algum HTML injetado escape.
+	"script-src-attr 'none'",
+	...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ")
 
 const securityHeaders = [

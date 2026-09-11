@@ -1796,10 +1796,13 @@ export type Database = {
         Row: {
           id: string
           user_id: string
-          asaas_checkout_id: string
+          // NULL nas assinaturas PIX — o checkout hospedado só existe no cartão.
+          asaas_checkout_id: string | null
           asaas_subscription_id: string | null
           asaas_customer_id: string
           status: "pending" | "active" | "past_due" | "canceled" | "expired"
+          payment_method: "credit_card" | "pix"
+          pending_payment_id: string | null
           current_period_end: string | null
           created_at: string
           updated_at: string
@@ -1808,10 +1811,12 @@ export type Database = {
         Insert: {
           id?: string
           user_id: string
-          asaas_checkout_id: string
+          asaas_checkout_id?: string | null
           asaas_subscription_id?: string | null
           asaas_customer_id: string
           status?: "pending" | "active" | "past_due" | "canceled" | "expired"
+          payment_method?: "credit_card" | "pix"
+          pending_payment_id?: string | null
           current_period_end?: string | null
           created_at?: string
           updated_at?: string
@@ -2476,6 +2481,14 @@ export type Database = {
         Returns: boolean
       }
       renew_vip_subscription: {
+        Args: { p_asaas_subscription_id: string; p_asaas_payment_id: string }
+        Returns: boolean
+      }
+      activate_vip_subscription_pix: {
+        Args: { p_asaas_subscription_id: string; p_asaas_payment_id: string }
+        Returns: boolean
+      }
+      set_vip_subscription_pending_payment: {
         Args: { p_asaas_subscription_id: string; p_asaas_payment_id: string }
         Returns: boolean
       }

@@ -240,6 +240,10 @@ export interface CreatePixPaymentParams {
 export interface AsaasPayment {
   id: string
   status: string
+  /** Em reais (a Asaas trabalha em reais, não centavos). Presente ao listar cobranças. */
+  value?: number
+  /** YYYY-MM-DD. Presente ao listar cobranças de uma assinatura. */
+  dueDate?: string
 }
 
 /**
@@ -270,7 +274,19 @@ export interface PixQrCode {
   expirationDate: string
 }
 
-export async function getPixQrCode(paymentId: string): Promise<PixQrCode> {
+/**
+ * `clampToOrderWindow` (padrão `true`) limita a validade ao prazo de reserva
+ * de estoque do PEDIDO. Passe `false` para cobranças que não seguram estoque
+ * — a cobrança mensal de uma assinatura PIX é o caso: ela vale até o
+ * vencimento do ciclo, e cortá-la em 60 min faria a UI anunciar que o QR do
+ * mês morre em uma hora, empurrando o assinante a "pagar rápido" um boleto
+ * que na verdade está aberto o mês inteiro.
+ */
+export async function getPixQrCode(
+  paymentId: string,
+  options?: { clampToOrderWindow?: boolean }
+): Promise<PixQrCode> {
+  const clampToOrderWindow = options?.clampToOrderWindow ?? true
   const result = await asaasFetch<PixQrCode>(`/payments/${encodeURIComponent(paymentId)}/pixQrCode`)
 
   // Asaas devolve "2022-06-24 23:59:59" (sem fuso, sem "T") — normaliza para
@@ -285,8 +301,9 @@ export async function getPixQrCode(paymentId: string): Promise<PixQrCode> {
   // estoque, porque o cron filtra justamente por `pix_expires_at < now`.
   // Vale o que vencer primeiro.
   const ourExpiration = new Date(Date.now() + PIX_EXPIRATION_MINUTES * 60_000)
-  const expiration =
-    Number.isNaN(gatewayExpiration.getTime()) || gatewayExpiration > ourExpiration
+  const expiration = !clampToOrderWindow
+    ? gatewayExpiration
+    : Number.isNaN(gatewayExpiration.getTime()) || gatewayExpiration > ourExpiration
       ? ourExpiration
       : gatewayExpiration
 
@@ -295,7 +312,9 @@ export async function getPixQrCode(paymentId: string): Promise<PixQrCode> {
     // Asaas devolve só o base64 cru — normalizamos para um data URI completo,
     // consumido direto por <img src>.
     encodedImage: `data:image/png;base64,${result.encodedImage}`,
-    expirationDate: expiration.toISOString(),
+    // Data inválida só acontece se a Asaas mudar o formato — cair no prazo
+    // do pedido é melhor que estourar um RangeError no toISOString().
+    expirationDate: (Number.isNaN(expiration.getTime()) ? ourExpiration : expiration).toISOString(),
   }
 }
 
@@ -444,6 +463,74 @@ export async function createSubscriptionCheckout(
       },
     }),
   })
+}
+
+/**
+ * Cria uma ASSINATURA PIX diretamente (`POST /v3/subscriptions`), sem passar
+ * pelo Asaas Checkout hospedado.
+ *
+ * POR QUE NÃO USA O CHECKOUT HOSPEDADO
+ * ------------------------------------
+ * `POST /v3/checkouts` com `chargeTypes: ["RECURRENT"]` aceita SOMENTE
+ * `billingTypes: ["CREDIT_CARD"]` — PIX não é combinável com RECURRENT lá.
+ * Já `POST /v3/subscriptions` aceita `billingType: "PIX"` normalmente. Como
+ * o PIX não guarda credencial reutilizável (diferente do cartão tokenizado),
+ * não há dado sensível para a página hospedada proteger: a assinatura pode
+ * ser criada direto pela API.
+ *
+ * COMO A RECORRÊNCIA FUNCIONA AQUI
+ * --------------------------------
+ * A assinatura age como AGENDADOR: a cada ciclo a Asaas gera sozinha uma
+ * nova cobrança PIX (com QR code próprio) e dispara `PAYMENT_CREATED`. Não é
+ * Pix Automático (que exige autorização do pagador no ecossistema PIX e
+ * debita sem ação dele) — aqui o usuário paga cada mês manualmente, lendo o
+ * QR daquele ciclo. O acesso VIP só avança quando a cobrança do ciclo é
+ * confirmada (`PAYMENT_RECEIVED`), exatamente como no cartão.
+ *
+ * `nextDueDate` é a 1ª cobrança e deve ser HOJE: diferente do cartão (onde o
+ * checkout hospedado cobra o 1º mês na hora e a assinatura assume do 2º
+ * ciclo em diante), aqui não existe cobrança avulsa inicial — a própria
+ * assinatura gera a 1ª cobrança.
+ */
+export interface CreatePixSubscriptionParams {
+  customerId: string
+  amountCents: number
+  description: string
+  externalReference: string
+  /** YYYY-MM-DD — vencimento da 1ª cobrança (hoje, no fluxo normal). */
+  nextDueDate: string
+}
+
+export async function createPixSubscription(
+  params: CreatePixSubscriptionParams
+): Promise<AsaasSubscription> {
+  return asaasFetch<AsaasSubscription>("/subscriptions", {
+    method: "POST",
+    body: JSON.stringify({
+      customer: params.customerId,
+      billingType: "PIX",
+      cycle: "MONTHLY",
+      value: params.amountCents / 100,
+      nextDueDate: params.nextDueDate,
+      description: sanitizeAsaasText(params.description),
+      externalReference: params.externalReference,
+    }),
+  })
+}
+
+/**
+ * Cobranças já geradas por uma assinatura, da mais recente para a mais
+ * antiga. É assim que descobrimos o `payment` do ciclo atual para montar o
+ * QR code — a resposta de `POST /v3/subscriptions` traz só a assinatura, não
+ * a cobrança que ela agendou.
+ */
+export async function getSubscriptionPayments(
+  subscriptionId: string
+): Promise<AsaasPayment[]> {
+  const result = await asaasFetch<{ data: AsaasPayment[] }>(
+    `/subscriptions/${encodeURIComponent(subscriptionId)}/payments`
+  )
+  return result.data ?? []
 }
 
 export interface AsaasSubscription {

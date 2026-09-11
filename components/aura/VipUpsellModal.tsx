@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Crown, Check, Loader2, Lock, ShieldCheck } from "lucide-react"
+import { ArrowRight, Crown, Check, CreditCard, Loader2, Lock, QrCode, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BR_STATES } from "@/lib/br-states"
 import { VIP_SUBSCRIPTION_BENEFITS, VIP_SUPPORT_MESSAGE, formatVipPrice } from "@/lib/vip-plan"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
+import { VipPixCharge, type VipPixPayment } from "@/components/account/VipPixCharge"
 
 interface VipUpsellModalProps {
   open: boolean
@@ -93,6 +94,13 @@ export function VipUpsellModal({
   // por isso o modal rastreia o que falta separadamente.
   const [requirements, setRequirements] = useState<BillingRequirements | null>(null)
   const [formOpen, setFormOpen] = useState(false)
+  // Método escolhido. PIX é o padrão: não exige endereço nem cartão, então é
+  // o caminho com menos atrito para a maioria.
+  const [method, setMethod] = useState<"pix" | "credit_card">("pix")
+  // Cobrança PIX devolvida pelo POST — o modal vira a tela do QR em vez de
+  // redirecionar para fora (no PIX não há página hospedada da Asaas).
+  const [pixPayment, setPixPayment] = useState<VipPixPayment | null>(null)
+  const [pixPending, setPixPending] = useState<string | null>(null)
   const firstFieldRef = useRef<HTMLInputElement>(null)
 
   const [guestName, setGuestName] = useState("")
@@ -109,7 +117,10 @@ export function VipUpsellModal({
   const [cepError, setCepError] = useState<string | null>(null)
 
   const needsPayerInfo = requirements?.needsPayerInfo ?? false
-  const needsAddressInfo = requirements?.needsAddressInfo ?? false
+  // Endereço é exigência da TOKENIZAÇÃO DO CARTÃO, não da Asaas em geral: a
+  // cobrança PIX precisa só de nome + CPF. Pedir endereço no PIX seria
+  // inventar uma barreira que o gateway não impõe.
+  const needsAddressInfo = method === "credit_card" && (requirements?.needsAddressInfo ?? false)
   const needsAnything = needsPayerInfo || needsAddressInfo
   const checked = requirements != null
 
@@ -117,6 +128,8 @@ export function VipUpsellModal({
     if (!open || !subscriptionEnabled) return
     setRequirements(null)
     setFormOpen(false)
+    setPixPayment(null)
+    setPixPending(null)
     let cancelled = false
     fetch("/api/vip/subscribe")
       .then((res) => (res.ok ? res.json() : null))
@@ -152,6 +165,16 @@ export function VipUpsellModal({
       cancelled = true
     }
   }, [open, subscriptionEnabled])
+
+  function handleMethodChange(next: "pix" | "credit_card") {
+    setMethod(next)
+    // Trocar para PIX com o formulário aberto só por causa do endereço
+    // deixaria uma coluna de campos que não são mais exigidos. Se ainda
+    // faltar nome/CPF o formulário continua aberto — só encolhe.
+    if (next === "pix" && !(requirements?.needsPayerInfo ?? false)) {
+      setFormOpen(false)
+    }
+  }
 
   async function handleCepChange(value: string) {
     const formatted = formatCepInput(value)
@@ -208,6 +231,7 @@ export function VipUpsellModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          paymentMethod: method,
           ...(needsPayerInfo
             ? { guestName: guestName.trim(), guestDocument: guestDocument.replace(/\D/g, "") }
             : {}),
@@ -231,15 +255,34 @@ export function VipUpsellModal({
         checkoutUrl?: string
         code?: string
         manageUrl?: string | null
+        paymentMethod?: "pix" | "credit_card"
+        pending?: boolean
+        message?: string
+        payment?: VipPixPayment
       }
+
+      // PIX: não há página hospedada para onde ir — a assinatura já existe e
+      // o QR do 1º mês vem nesta resposta. O modal vira a tela de pagamento.
+      if (res.ok && data.ok && data.paymentMethod === "pix") {
+        onSubscribeStarted?.()
+        if (data.payment) {
+          setPixPayment(data.payment)
+        } else {
+          setPixPending(data.message ?? "Assinatura criada. A cobrança aparecerá em instantes.")
+        }
+        setSubscribing(false)
+        return
+      }
+
       if (!res.ok || !data.ok || !data.checkoutUrl) {
         // Já existe assinatura viva na Asaas: em vez de um toast vermelho sem
         // saída, manda o usuário para onde ele consegue de fato agir sobre ela.
         if (data.manageUrl) {
-          toast.error("Você já tem uma assinatura", {
+          const isPendingPix = data.code === "subscription_pending_pix"
+          toast.error(isPendingPix ? "Pagamento pendente" : "Você já tem uma assinatura", {
             description: data.error ?? "Gerencie sua assinatura nas configurações da conta.",
             action: {
-              label: "Gerenciar",
+              label: isPendingPix ? "Pagar agora" : "Gerenciar",
               onClick: () => {
                 window.location.href = data.manageUrl as string
               },
@@ -294,6 +337,51 @@ export function VipUpsellModal({
           formOpen && needsAnything ? "sm:max-w-3xl" : ""
         } transition-[max-width] duration-300 ease-out`}
       >
+        {/* Assinatura PIX criada: o modal deixa de ser oferta e vira a tela
+            de pagamento. Sair daqui sem pagar não gera cobrança — mas a
+            assinatura existe, e a aba "Assinatura" da conta permite cancelar. */}
+        {pixPayment || pixPending ? (
+          <div className="space-y-4 p-5 sm:p-6">
+            <DialogHeader className="space-y-2 text-left">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex size-11 shrink-0 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: "var(--vip-accent-soft)" }}
+                >
+                  <QrCode className="size-6" style={{ color: "var(--vip-accent)" }} />
+                </div>
+                <div className="min-w-0">
+                  <DialogTitle className="text-lg leading-tight">Assinatura criada</DialogTitle>
+                  <p className="text-xs text-muted-foreground">
+                    Pague o primeiro mês para liberar o VIP
+                  </p>
+                </div>
+              </div>
+              <DialogDescription className="text-xs leading-relaxed">
+                A cada mês a Asaas gera uma nova cobrança PIX, que aparece nas configurações da sua
+                conta. Você pode cancelar quando quiser — nenhuma cobrança futura é feita depois disso.
+              </DialogDescription>
+            </DialogHeader>
+
+            {pixPayment ? (
+              <VipPixCharge payment={pixPayment} isFirstCharge />
+            ) : (
+              <p className="rounded-xl border border-border/70 bg-background/40 p-4 text-sm text-muted-foreground">
+                {pixPending}
+              </p>
+            )}
+
+            <Link
+              href="/conta#assinatura"
+              onClick={() => onOpenChange(false)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-4 py-2.5 text-sm font-bold transition-colors hover:bg-[var(--vip-accent-soft)]"
+              style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+            >
+              Ver minha assinatura
+              <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+        ) : (
         <div className={`grid ${formOpen && needsAnything ? "sm:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]" : ""}`}>
           {/* Coluna 1 — a oferta */}
           <div
@@ -356,8 +444,9 @@ export function VipUpsellModal({
                 <div>
                   <p className="text-sm font-bold text-foreground">Dados de cobrança</p>
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Exigidos pela operadora para cobrar no cartão. Ficam salvos no seu perfil — você só preenche
-                    uma vez.
+                    {method === "pix"
+                      ? "O CPF identifica o pagador da cobrança PIX. Fica salvo no seu perfil — você só preenche uma vez."
+                      : "Exigidos pela operadora para cobrar no cartão. Ficam salvos no seu perfil — você só preenche uma vez."}
                   </p>
                 </div>
               </div>
@@ -512,17 +601,56 @@ export function VipUpsellModal({
 
               <div className="mt-4 space-y-2 border-t pt-4">
                 <SubscribeActions />
-                <p className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/70">
-                  <ShieldCheck className="size-3" />
-                  Os dados do cartão são digitados na página segura da Asaas.
-                </p>
+                {method === "credit_card" && (
+                  <p className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground/70">
+                    <ShieldCheck className="size-3" />
+                    Os dados do cartão são digitados na página segura da Asaas.
+                  </p>
+                )}
               </div>
             </div>
           )}
         </div>
+        )}
       </DialogContent>
     </Dialog>
   )
+
+  /** Um cartão de escolha de método (PIX ou cartão). */
+  function MethodOption({
+    value,
+    icon,
+    label,
+    hint,
+  }: {
+    value: "pix" | "credit_card"
+    icon: React.ReactNode
+    label: string
+    hint: string
+  }) {
+    const selected = method === value
+    return (
+      <button
+        type="button"
+        onClick={() => handleMethodChange(value)}
+        disabled={subscribing || purchasingWithAura}
+        aria-pressed={selected}
+        className={`flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+          selected ? "bg-[var(--vip-accent-soft)]" : "border-border/70 hover:bg-muted/40"
+        }`}
+        style={selected ? { borderColor: "var(--vip-accent)" } : undefined}
+      >
+        <span
+          className="flex items-center gap-1.5 text-sm font-bold"
+          style={{ color: selected ? "var(--vip-accent)" : undefined }}
+        >
+          {icon}
+          {label}
+        </span>
+        <span className="text-[10px] text-muted-foreground">{hint}</span>
+      </button>
+    )
+  }
 
   /**
    * Botões de ação — renderizados na coluna da oferta enquanto o formulário
@@ -532,6 +660,33 @@ export function VipUpsellModal({
   function SubscribeActions() {
     return (
       <>
+        {subscriptionEnabled && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+              Como pagar
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <MethodOption
+                value="pix"
+                icon={<QrCode className="size-4" />}
+                label="PIX"
+                hint="QR todo mês"
+              />
+              <MethodOption
+                value="credit_card"
+                icon={<CreditCard className="size-4" />}
+                label="Cartão"
+                hint="Renova sozinho"
+              />
+            </div>
+            <p className="text-[10px] leading-relaxed text-muted-foreground/70">
+              {method === "pix"
+                ? "Assinatura mensal: a cada mês geramos um novo QR para você pagar. Sem cartão, sem endereço."
+                : "Cobrança automática no cartão todo mês. Exige telefone e endereço de cobrança."}
+            </p>
+          </div>
+        )}
+
         {subscriptionEnabled ? (
           <button
             type="button"
@@ -546,6 +701,11 @@ export function VipUpsellModal({
                 {isResubscribe ? "Voltar a assinar" : "Assinar"} por {formatVipPrice()}/mês
                 <ArrowRight className="size-4" />
               </>
+            ) : method === "pix" ? (
+              // No PIX o botão não conclui a compra — gera o QR do 1º mês.
+              // Prometer "confirmar assinatura" aqui faria o usuário achar
+              // que já pagou e fechar o modal antes de ler o código.
+              `Gerar PIX de ${formatVipPrice()}`
             ) : (
               `Confirmar assinatura · ${formatVipPrice()}/mês`
             )}

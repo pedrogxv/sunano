@@ -12,22 +12,34 @@ export async function expireVipAccounts(): Promise<number> {
 
 export type VipSubscriptionStatus = "pending" | "active" | "past_due" | "canceled" | "expired"
 
+export type VipPaymentMethod = "credit_card" | "pix"
+
 export type VipSubscription = {
   id: string
   userId: string
-  asaasCheckoutId: string
+  /** NULL nas assinaturas PIX — elas não passam pelo checkout hospedado. */
+  asaasCheckoutId: string | null
   asaasSubscriptionId: string | null
   status: VipSubscriptionStatus
+  paymentMethod: VipPaymentMethod
+  /** Cobrança PIX do ciclo em aberto, para montar o QR. NULL = nada a pagar agora. */
+  pendingPaymentId: string | null
   currentPeriodEnd: string | null
   canceledAt: string | null
 }
 
+/** Colunas lidas em toda consulta de assinatura — uma fonte só, para não divergirem. */
+const SUBSCRIPTION_COLUMNS =
+  "id, user_id, asaas_checkout_id, asaas_subscription_id, status, payment_method, pending_payment_id, current_period_end, canceled_at"
+
 function mapSubscription(row: {
   id: string
   user_id: string
-  asaas_checkout_id: string
+  asaas_checkout_id: string | null
   asaas_subscription_id: string | null
   status: VipSubscriptionStatus
+  payment_method: VipPaymentMethod | null
+  pending_payment_id: string | null
   current_period_end: string | null
   canceled_at: string | null
 }): VipSubscription {
@@ -37,6 +49,11 @@ function mapSubscription(row: {
     asaasCheckoutId: row.asaas_checkout_id,
     asaasSubscriptionId: row.asaas_subscription_id,
     status: row.status,
+    // Linhas criadas antes da migration do PIX não têm a coluna preenchida
+    // em memória se a consulta vier de um cache antigo — o default do banco
+    // já é 'credit_card', isto só protege o caminho de leitura.
+    paymentMethod: row.payment_method ?? "credit_card",
+    pendingPaymentId: row.pending_payment_id,
     currentPeriodEnd: row.current_period_end,
     canceledAt: row.canceled_at,
   }
@@ -54,7 +71,7 @@ export async function getOngoingSubscriptionForUser(userId: string): Promise<Vip
   // tanto /subscribe quanto /cancel): ordeno por recência e pego a primeira.
   const { data, error } = await db
     .from("vip_subscriptions")
-    .select("id, user_id, asaas_checkout_id, asaas_subscription_id, status, current_period_end, canceled_at")
+    .select(SUBSCRIPTION_COLUMNS)
     .eq("user_id", userId)
     .in("status", ["pending", "active", "past_due"])
     .order("updated_at", { ascending: false })
@@ -73,7 +90,7 @@ export async function getLatestSubscriptionForUser(userId: string): Promise<VipS
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("vip_subscriptions")
-    .select("id, user_id, asaas_checkout_id, asaas_subscription_id, status, current_period_end, canceled_at")
+    .select(SUBSCRIPTION_COLUMNS)
     .eq("user_id", userId)
     .order("updated_at", { ascending: false })
     .limit(1)
@@ -112,8 +129,18 @@ export async function getLatestSubscriptionForUser(userId: string): Promise<VipS
 export async function createSubscriptionRecord(params: {
   id: string
   userId: string
-  asaasCheckoutId: string
+  /** Cartão: id do checkout hospedado. PIX: null (não existe checkout). */
+  asaasCheckoutId: string | null
   asaasCustomerId: string
+  /** Ausente = cartão, preservando o comportamento anterior deste método. */
+  paymentMethod?: VipPaymentMethod
+  /**
+   * PIX: a assinatura já existe na Asaas no momento da criação da linha, ao
+   * contrário do cartão (onde o id só nasce no CHECKOUT_PAID).
+   */
+  asaasSubscriptionId?: string | null
+  /** PIX: cobrança do 1º ciclo, já gerada pela assinatura. */
+  pendingPaymentId?: string | null
 }): Promise<string> {
   const db = createSupabaseAdminClient()
 
@@ -130,9 +157,11 @@ export async function createSubscriptionRecord(params: {
         id: effectiveId,
         user_id: params.userId,
         asaas_checkout_id: params.asaasCheckoutId,
-        asaas_subscription_id: null,
+        asaas_subscription_id: params.asaasSubscriptionId ?? null,
         asaas_customer_id: params.asaasCustomerId,
         status: "pending",
+        payment_method: params.paymentMethod ?? "credit_card",
+        pending_payment_id: params.pendingPaymentId ?? null,
         current_period_end: null,
         canceled_at: null,
         updated_at: new Date().toISOString(),
@@ -167,6 +196,64 @@ export async function renewSubscriptionFromWebhook(params: {
 }): Promise<boolean> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db.rpc("renew_vip_subscription", {
+    p_asaas_subscription_id: params.asaasSubscriptionId,
+    p_asaas_payment_id: params.asaasPaymentId,
+  })
+  if (error) throw error
+  return Boolean(data)
+}
+
+/**
+ * Assinatura pelo id da Asaas — usada pelo webhook para saber COMO tratar um
+ * evento antes de agir: uma cobrança confirmada de assinatura PIX ainda
+ * `pending` é o 1º pagamento (ativa), a mesma cobrança numa assinatura já
+ * `active` é renovação. No cartão essa distinção não existe (o 1º pagamento
+ * chega como CHECKOUT_PAID), por isso a consulta nasceu aqui.
+ */
+export async function getLatestSubscriptionByAsaasId(
+  asaasSubscriptionId: string
+): Promise<VipSubscription | null> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("vip_subscriptions")
+    .select(SUBSCRIPTION_COLUMNS)
+    .eq("asaas_subscription_id", asaasSubscriptionId)
+    .limit(1)
+  if (error) throw error
+  return data && data.length > 0 ? mapSubscription(data[0]) : null
+}
+
+/**
+ * 1º pagamento de uma assinatura PIX (webhook PAYMENT_RECEIVED/CONFIRMED de
+ * uma cobrança cuja assinatura ainda está `pending`). Diferente do cartão,
+ * localiza pela assinatura — no PIX não há checkout hospedado, então
+ * `asaas_checkout_id` é NULL e `activate_vip_subscription` não serviria.
+ * Idempotente.
+ */
+export async function activatePixSubscriptionFromWebhook(params: {
+  asaasSubscriptionId: string
+  asaasPaymentId: string
+}): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.rpc("activate_vip_subscription_pix", {
+    p_asaas_subscription_id: params.asaasSubscriptionId,
+    p_asaas_payment_id: params.asaasPaymentId,
+  })
+  if (error) throw error
+  return Boolean(data)
+}
+
+/**
+ * Nova cobrança PIX gerada pela Asaas para o ciclo seguinte (webhook
+ * PAYMENT_CREATED). Guarda o payment id para a UI conseguir mostrar o QR do
+ * mês — sem isso o usuário não teria como pagar a renovação.
+ */
+export async function setPendingPixPayment(params: {
+  asaasSubscriptionId: string
+  asaasPaymentId: string
+}): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.rpc("set_vip_subscription_pending_payment", {
     p_asaas_subscription_id: params.asaasSubscriptionId,
     p_asaas_payment_id: params.asaasPaymentId,
   })

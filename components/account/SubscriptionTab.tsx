@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
+import { VipPixCharge, type VipPixPayment } from "@/components/account/VipPixCharge"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
 import { VIP_SUBSCRIPTION_BENEFITS } from "@/lib/vip-plan"
@@ -36,8 +37,11 @@ interface SubscriptionState {
     status: SubscriptionStatus
     isSubscriber: boolean
     canCancel: boolean
+    paymentMethod: "credit_card" | "pix"
     currentPeriodEnd: string | null
     canceledAt: string | null
+    /** Cobrança PIX do ciclo em aberto — null no cartão ou com o mês já pago. */
+    pendingPixPayment: VipPixPayment | null
   } | null
 }
 
@@ -83,6 +87,20 @@ export function SubscriptionTab() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Enquanto houver uma cobrança PIX em aberto, reconsulta o estado: a
+  // confirmação chega pelo webhook (fora desta aba), então sem polling o
+  // usuário pagaria o QR e continuaria vendo "pague este QR" até dar F5.
+  // Para quando não há mais nada pendente — não é um polling permanente.
+  const hasPendingPix = state?.subscription?.pendingPixPayment != null
+  useEffect(() => {
+    if (!hasPendingPix) return
+    const timer = setInterval(() => {
+      void load()
+      refreshAuthUser()
+    }, 10_000)
+    return () => clearInterval(timer)
+  }, [hasPendingPix, load, refreshAuthUser])
 
   // Volta do checkout hospedado da Asaas (successUrl/cancelUrl/expiredUrl de
   // POST /api/vip/subscribe apontam para /conta?vip=…). Sem isto o assinante
@@ -184,9 +202,16 @@ export function SubscriptionTab() {
           <CardDescription>
             {formatBRL(state.priceCents)}/mês
             {renewsOn ? ` · próxima renovação em ${renewsOn}` : ""}.
+            {sub.paymentMethod === "pix"
+              ? " Pagamento via PIX: a cada mês geramos uma nova cobrança para você pagar."
+              : " Renova automaticamente no cartão cadastrado."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* No PIX a renovação NÃO é automática: a Asaas gera o QR do ciclo
+              e o usuário paga. Mostrar aqui é o que torna a assinatura PIX
+              utilizável — sem isto ele não teria onde pagar o mês seguinte. */}
+          {sub.pendingPixPayment && <VipPixCharge payment={sub.pendingPixPayment} />}
           <BenefitsList />
           <CancelDialog canceling={canceling} onConfirm={handleCancel} accessUntil={renewsOn} />
         </CardContent>
@@ -204,12 +229,15 @@ export function SubscriptionTab() {
             <CardTitle className="text-base">Pagamento pendente</CardTitle>
           </div>
           <CardDescription>
-            A última cobrança de {formatBRL(state.priceCents)} não foi confirmada. A Asaas vai tentar
-            de novo automaticamente no cartão cadastrado.
+            A última cobrança de {formatBRL(state.priceCents)} não foi confirmada.
+            {sub.paymentMethod === "pix"
+              ? " Pague o PIX abaixo para regularizar."
+              : " A Asaas vai tentar de novo automaticamente no cartão cadastrado."}
             {vipUntil ? ` Seu VIP segue ativo até ${vipUntil}.` : ""}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {sub.pendingPixPayment && <VipPixCharge payment={sub.pendingPixPayment} />}
           <p className="text-xs text-muted-foreground">
             Se a cobrança não for regularizada até essa data, o VIP é encerrado. Você pode cancelar a
             assinatura agora se preferir não continuar.
@@ -220,8 +248,40 @@ export function SubscriptionTab() {
     )
   }
 
-  // ── Checkout em aberto (pending sem confirmação) ────────────────────────
+  // ── Aguardando o 1º pagamento ───────────────────────────────────────────
+  // PIX e cartão são situações diferentes aqui. No PIX a assinatura JÁ existe
+  // na Asaas e há um QR concreto para pagar (e para cancelar, se desistir).
+  // No cartão é só um checkout hospedado em aberto, que expira sozinho.
   if (sub?.isSubscriber && sub.status === "pending") {
+    if (sub.paymentMethod === "pix") {
+      return (
+        <Card className={cn(CARD_SURFACE_INTERACTIVE, "transition-colors")}>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Crown className="size-4" style={{ color: "var(--vip-accent)" }} />
+              <CardTitle className="text-base">Assinatura aguardando pagamento</CardTitle>
+            </div>
+            <CardDescription>
+              {formatBRL(state.priceCents)}/mês via PIX. Seu VIP é liberado assim que a primeira
+              cobrança for confirmada.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {sub.pendingPixPayment ? (
+              <VipPixCharge payment={sub.pendingPixPayment} isFirstCharge />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Estamos gerando a cobrança do primeiro mês. Recarregue em instantes.
+              </p>
+            )}
+            {sub.canCancel && (
+              <CancelDialog canceling={canceling} onConfirm={handleCancel} accessUntil={null} />
+            )}
+          </CardContent>
+        </Card>
+      )
+    }
+
     return (
       <div className="rounded-lg border border-border/60 bg-secondary/30 px-4 py-4 text-sm text-muted-foreground">
         Há um checkout de assinatura em aberto aguardando o pagamento. Assim que a Asaas confirmar, sua
@@ -309,7 +369,7 @@ export function SubscriptionTab() {
           </Button>
         ) : (
           <p className="text-xs text-muted-foreground">
-            A assinatura mensal por cartão está temporariamente indisponível. Você ainda pode ativar o
+            A assinatura mensal paga está temporariamente indisponível. Você ainda pode ativar o
             VIP com Aura na{" "}
             <Link href="/aura" className="underline underline-offset-2">
               Central de Aura

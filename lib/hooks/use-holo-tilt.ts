@@ -29,6 +29,7 @@ type OrientationListener = (deltaBeta: number, deltaGamma: number) => void
 const orientationListeners = new Set<OrientationListener>()
 let orientationBaseline: { beta: number; gamma: number } | null = null
 let orientationAttached = false
+let orientationSource: string | null = null
 let latestDelta: { beta: number; gamma: number } | null = null
 let orientationFrame = 0
 
@@ -40,6 +41,11 @@ function flushOrientationFrame() {
 
 function handleDeviceOrientation(event: DeviceOrientationEvent) {
   if (event.beta === null || event.gamma === null) return
+  // Trava no primeiro tipo de evento que entregar leitura válida: parte dos
+  // Androids dispara `deviceorientationabsolute` junto, e misturar as duas
+  // faria o card tremer entre duas convenções de eixo diferentes.
+  if (orientationSource === null) orientationSource = event.type
+  if (event.type !== orientationSource) return
   // A primeira leitura vira o "neutro": ninguém segura o celular perfeitamente
   // vertical pra ler a tela, então zerar contra 0° faria o card nascer torto.
   if (!orientationBaseline) orientationBaseline = { beta: event.beta, gamma: event.gamma }
@@ -50,24 +56,53 @@ function handleDeviceOrientation(event: DeviceOrientationEvent) {
   if (!orientationFrame) orientationFrame = requestAnimationFrame(flushOrientationFrame)
 }
 
+function attachOrientationListeners() {
+  // Remove antes de somar porque esta função roda duas vezes no iOS (uma no
+  // mount, outra depois do "permitir"): lá o listener registrado ANTES da
+  // permissão fica mudo, e re-adicionar a MESMA referência seria descartado
+  // como duplicata pelo DOM — sem o remove, o religamento não aconteceria.
+  window.removeEventListener("deviceorientation", handleDeviceOrientation)
+  window.removeEventListener("deviceorientationabsolute", handleDeviceOrientation)
+  window.addEventListener("deviceorientation", handleDeviceOrientation)
+  // Parte dos Androids só dispara a variante absoluta; `handleDeviceOrientation`
+  // trava na primeira das duas que entregar leitura válida.
+  window.addEventListener("deviceorientationabsolute", handleDeviceOrientation)
+}
+
 /** Liga o listener global uma única vez por sessão de página. */
 function ensureOrientationAttached() {
   if (orientationAttached || typeof window === "undefined" || typeof DeviceOrientationEvent === "undefined") return
   orientationAttached = true
-  window.addEventListener("deviceorientation", handleDeviceOrientation)
+
+  // Liga de cara, sem esperar gesto nenhum: onde não existe porteiro de
+  // permissão (Android) os eventos já começam a chegar sozinhos, e exigir um
+  // toque ali tiraria o efeito de quem só rola a página.
+  attachOrientationListeners()
+
+  const iosApi = window.DeviceOrientationEvent as unknown as DeviceOrientationEventiOS
+  if (typeof iosApi.requestPermission !== "function") return
 
   // iOS 13+ só entrega os eventos depois de uma permissão concedida DENTRO de
-  // um gesto do usuário — não dá pra pedir no mount. `once` no primeiro toque
-  // ou clique em qualquer lugar da página cobre o card sem precisar de um
-  // botão dedicado só para isso.
-  const iosApi = window.DeviceOrientationEvent as unknown as DeviceOrientationEventiOS
-  if (typeof iosApi.requestPermission === "function") {
-    const requestOnGesture = () => {
-      iosApi.requestPermission!().catch(() => {})
-    }
-    window.addEventListener("touchstart", requestOnGesture, { once: true, passive: true })
-    window.addEventListener("click", requestOnGesture, { once: true })
+  // um gesto do usuário — daí o religamento no `then`.
+  //
+  // `touchend`/`click` (e não `touchstart`) porque só eles contam como ativação
+  // do usuário no Safari: com `touchstart` a promise rejeita sem nem abrir o
+  // aviso do sistema.
+  const requestOnGesture = () => {
+    iosApi
+      .requestPermission!()
+      .then((result) => {
+        window.removeEventListener("click", requestOnGesture)
+        window.removeEventListener("touchend", requestOnGesture)
+        if (result === "granted") attachOrientationListeners()
+      })
+      // Gesto que não contou como ativação: mantém os listeners no lugar para
+      // tentar de novo no próximo toque, senão a primeira tentativa perdida
+      // mataria o efeito pelo resto da visita.
+      .catch(() => {})
   }
+  window.addEventListener("click", requestOnGesture)
+  window.addEventListener("touchend", requestOnGesture)
 }
 
 /**

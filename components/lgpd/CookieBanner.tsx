@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { requestMotionPermission } from "@/lib/motion-permission"
 
 const STORAGE_KEY = "sunano_cookie_consent"
 const CONSENT_VERSION = "2026-06"
@@ -23,6 +24,12 @@ export function CookieBanner() {
   }, [])
 
   function accept() {
+    // Antes do setState: no iOS o pedido de sensor só vale dentro do gesto que
+    // disparou este clique, e re-renderizar primeiro arrisca perder a janela.
+    // Aproveitar este toque é o que evita o aviso do sistema pipocar sozinho
+    // no meio da navegação, já que a Apple não deixa conceder em silêncio.
+    void requestMotionPermission()
+
     try {
       localStorage.setItem(
         STORAGE_KEY,

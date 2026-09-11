@@ -2,6 +2,13 @@
 
 import { useCallback, useEffect, useRef } from "react"
 
+import {
+  motionPermissionState,
+  reportMotionReadingReceived,
+  requestMotionPermission,
+  subscribeMotionPermission,
+} from "@/lib/motion-permission"
+
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)"
 
 /** Inclinação do card, em graus, quando o ponteiro está numa das bordas. */
@@ -13,10 +20,6 @@ const MAX_TILT_DEG = 8
  * Mais estreito que isso e o foil trepida com o tremor natural da mão.
  */
 const GYRO_RANGE_DEG = 20
-
-interface DeviceOrientationEventiOS {
-  requestPermission?: () => Promise<"granted" | "denied">
-}
 
 type OrientationListener = (deltaBeta: number, deltaGamma: number) => void
 
@@ -44,7 +47,11 @@ function handleDeviceOrientation(event: DeviceOrientationEvent) {
   // Trava no primeiro tipo de evento que entregar leitura válida: parte dos
   // Androids dispara `deviceorientationabsolute` junto, e misturar as duas
   // faria o card tremer entre duas convenções de eixo diferentes.
-  if (orientationSource === null) orientationSource = event.type
+  if (orientationSource === null) {
+    orientationSource = event.type
+    // O sensor já está entregando: nada a pedir a ninguém.
+    reportMotionReadingReceived()
+  }
   if (event.type !== orientationSource) return
   // A primeira leitura vira o "neutro": ninguém segura o celular perfeitamente
   // vertical pra ler a tela, então zerar contra 0° faria o card nascer torto.
@@ -79,30 +86,33 @@ function ensureOrientationAttached() {
   // toque ali tiraria o efeito de quem só rola a página.
   attachOrientationListeners()
 
-  const iosApi = window.DeviceOrientationEvent as unknown as DeviceOrientationEventiOS
-  if (typeof iosApi.requestPermission !== "function") return
+  // Religa quando a permissão do iOS for concedida (quem pede é o banner de
+  // cookies, ver lib/motion-permission.ts): lá o listener registrado ANTES da
+  // permissão fica mudo.
+  subscribeMotionPermission(attachOrientationListeners)
 
-  // iOS 13+ só entrega os eventos depois de uma permissão concedida DENTRO de
-  // um gesto do usuário — daí o religamento no `then`.
-  //
-  // `touchend`/`click` (e não `touchstart`) porque só eles contam como ativação
-  // do usuário no Safari: com `touchstart` a promise rejeita sem nem abrir o
-  // aviso do sistema.
-  const requestOnGesture = () => {
-    iosApi
-      .requestPermission!()
-      .then((result) => {
-        window.removeEventListener("click", requestOnGesture)
-        window.removeEventListener("touchend", requestOnGesture)
-        if (result === "granted") attachOrientationListeners()
-      })
-      // Gesto que não contou como ativação: mantém os listeners no lugar para
-      // tentar de novo no próximo toque, senão a primeira tentativa perdida
-      // mataria o efeito pelo resto da visita.
-      .catch(() => {})
+  // Quem já concedeu numa visita anterior resolve na hora e sem aviso na tela
+  // — é o que faz a permissão parecer permanente em vez de perguntar de novo.
+  if (motionPermissionState() === "granted") {
+    void requestMotionPermission()
+    return
   }
-  window.addEventListener("click", requestOnGesture)
-  window.addEventListener("touchend", requestOnGesture)
+
+  if (motionPermissionState() !== "undecided") return
+
+  // Rede de segurança para quem aceitou os cookies ANTES desta mudança: o
+  // banner não volta a aparecer, então sem isto o efeito nunca ligaria para
+  // esse pessoal. Fica preso ao primeiro toque nas páginas que têm carta —
+  // não no site inteiro, que é o que faria o aviso pipocar do nada.
+  const askOnGesture = () => {
+    void requestMotionPermission().then(() => {
+      if (motionPermissionState() === "undecided") return // gesto não valeu; tenta no próximo
+      window.removeEventListener("click", askOnGesture)
+      window.removeEventListener("touchend", askOnGesture)
+    })
+  }
+  window.addEventListener("click", askOnGesture)
+  window.addEventListener("touchend", askOnGesture)
 }
 
 /**

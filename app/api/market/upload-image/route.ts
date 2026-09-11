@@ -74,7 +74,13 @@ export async function POST(request: NextRequest) {
       upsert: false,
     })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    // Mensagem genérica de propósito: `error.message` do Storage é
+    // server-side e pode descrever bucket/política interna. Log guarda o
+    // motivo real.
+    console.error("[market/upload-image] storage.upload:", error.message)
+    return NextResponse.json({ error: "Falha ao enviar a imagem. Tente novamente." }, { status: 500 })
+  }
 
   const {
     data: { publicUrl },

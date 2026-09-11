@@ -12,8 +12,24 @@ export const STRONG_PASSWORD_HINT =
 const MIN_LENGTH = 8
 const DEV_MIN_LENGTH = 6
 
-/** Detecta se a requisição veio de localhost a partir do header `host`. */
-export function isLocalhostHost(host: string | null | undefined): boolean {
+/**
+ * Detecta se a requisição veio de localhost a partir do header `host`.
+ *
+ * O `host` é definido pelo CLIENTE e trivial de falsificar (`curl -H "Host:
+ * localhost"`). Se o relaxamento dependesse só dele, qualquer pessoa poderia
+ * pedir a política fraca em produção e cadastrar/redefinir senha com 6
+ * caracteres. Por isso EM PRODUÇÃO esta função retorna sempre `false`, custe
+ * o que o `host` disser — o relaxamento só existe fora de produção, onde o
+ * `NODE_ENV` (não o cliente) é a autoridade. Em produção a Vercel também
+ * normaliza o `host` para o domínio do projeto, mas não dependemos disso: um
+ * proxy à frente poderia repassar um host arbitrário, e a trava de ambiente
+ * fecha esse caminho de vez.
+ *
+ * `browserHost` só existe para o medidor de força no client (que não tem
+ * `NODE_ENV`); ele nunca decide a validação do servidor.
+ */
+export function isLocalhostHost(host: string | null | undefined, browserHost = false): boolean {
+  if (!browserHost && process.env.NODE_ENV === "production") return false
   if (!host) return false
   const hostname = host.split(":")[0].toLowerCase()
   return (

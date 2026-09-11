@@ -26,7 +26,11 @@ export async function DELETE(request: NextRequest) {
     const { error } = await admin.auth.admin.deleteUser(userId)
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      // Mensagem genérica de propósito: `error.message` vem da API admin do
+      // Supabase Auth (server-side, não pensada para usuário final) e pode
+      // descrever detalhe interno. O log guarda o motivo real para suporte.
+      console.error("[profile/delete] admin.deleteUser:", error.message)
+      return NextResponse.json({ error: "Não foi possível excluir a conta. Tente novamente." }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true })

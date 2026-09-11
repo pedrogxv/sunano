@@ -25,7 +25,7 @@ export function ResetPasswordForm() {
   const [password, setPassword] = useState("")
 
   useEffect(() => {
-    setRelaxed(isLocalhostHost(window.location.host))
+    setRelaxed(isLocalhostHost(window.location.host, true))
   }, [])
 
   const minLength = relaxed ? 6 : 8

@@ -223,6 +223,13 @@ export function humanizeDbError(err: unknown, fallback = "Erro ao processar a op
     return { message: "Falha de conexão com o banco. Tente novamente em alguns segundos.", status: 503 }
   }
 
+  // 8) Nenhuma linha retornada por um `.single()` (PostgREST PGRST116). Não é
+  // erro de servidor: o recurso pedido não existe. Devolver 500 aqui assustava
+  // (parecia bug) e disfarçava o 404 correto — ver /api/store/orders/[id].
+  if (code === "PGRST116" || /results contain 0 rows|multiple \(or no\) rows returned/i.test(haystack)) {
+    return { message: fallback ?? "Registro não encontrado.", status: 404 }
+  }
+
   return { message: fallback, status: 500 }
 }
 

@@ -13,6 +13,7 @@ import {
   resolveAvailableDisplayName,
   updateUserProfileSettings,
 } from "@/lib/server/repositories/users-repository"
+import { isAllowedProfileMediaUrl } from "@/lib/server/profile-media-url"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"
@@ -143,6 +144,23 @@ export async function POST(request: Request) {
         { error: parsed.error.issues[0]?.message ?? "Dados inválidos." },
         { status: 400 }
       )
+    }
+
+    // Origem das URLs de mídia: só o nosso Storage ou os hosts de avatar de
+    // OAuth. Fecha o SSRF autenticado — `/api/profile-media/[id]/[field]` faz
+    // fetch server-side dessas URLs para congelar GIF, então uma URL arbitrária
+    // gravada aqui viraria requisição do servidor para o host escolhido.
+    for (const [field, value] of [
+      ["avatar_url", parsed.data.avatar_url],
+      ["banner_url", parsed.data.banner_url],
+      ["mini_banner_url", parsed.data.mini_banner_url],
+    ] as const) {
+      if (!isAllowedProfileMediaUrl(value)) {
+        return NextResponse.json(
+          { error: "URL de imagem não permitida. Envie a imagem pelo próprio site.", field },
+          { status: 400 }
+        )
+      }
     }
 
     const supabase = await createSupabaseServerClient()

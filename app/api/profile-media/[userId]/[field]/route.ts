@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import sharp from "sharp"
 
 import { coerceAccountTier, resolveProfileMedia, type ProfileMediaField } from "@/lib/account-tier"
+import { isAllowedProfileMediaUrl } from "@/lib/server/profile-media-url"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 export const runtime = "nodejs"
@@ -49,6 +50,13 @@ export async function GET(
 
   const url = profile?.[COLUMN_BY_FIELD[field]] ?? null
   if (!profile || !url) {
+    return new NextResponse(null, { status: 404 })
+  }
+
+  // Segunda barreira contra SSRF (a escrita em /api/profile já valida): uma
+  // URL fora da allowlist — inclusive registros legados gravados antes desta
+  // checagem — nunca vira `fetch` server-side nem `redirect` para o cliente.
+  if (!isAllowedProfileMediaUrl(url)) {
     return new NextResponse(null, { status: 404 })
   }
 

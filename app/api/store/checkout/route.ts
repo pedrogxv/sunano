@@ -19,7 +19,7 @@ import {
   orderNeedsShippingAddress,
   parseOptionalShippingAddress,
 } from "@/lib/server/validation/shipping-address"
-import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
+import { checkRateLimit, getClientIpIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
 import {
   getVariantsForCheckout,
@@ -54,6 +54,18 @@ type DecrementedLine = {
 
 const MAX_ITEM_LINES = 50
 const MAX_QUANTITY_PER_LINE = 20
+
+/**
+ * Pedidos aguardando pagamento que uma conta pode ter ao mesmo tempo.
+ *
+ * Cada pedido pendente segura estoque (60 min no PIX) ou vaga do lote de
+ * pré-venda (24h, porque `preorder_reserved_quantity` conta `pending`). Sem
+ * teto, uma conta com script mantinha a loja "esgotada" e o lote travado
+ * indefinidamente, gerando uma cobrança na Asaas por tentativa. Três cobre
+ * quem desistiu de um carrinho e montou outro; a partir daí a pessoa cancela
+ * um em "Meus Pedidos" (ou ele expira) e segue.
+ */
+const MAX_PENDING_ORDERS_PER_USER = 3
 
 const AFFILIATE_REF_COOKIE = "sn_aff_ref"
 const AFFILIATE_REF_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
@@ -156,10 +168,18 @@ async function resolveAffiliateAttribution(
  * quando pediu afiliação com chave PIX do tipo `cpf`.
  *
  * Compara também com o CPF do perfil do afiliado, que cobre quem se cadastrou
- * com chave PIX de outro tipo (e-mail, aleatória).
+ * com chave PIX de outro tipo (e-mail, aleatória), e com todo documento já
+ * usado como chave de SAQUE: `request_affiliate_payout` sobrescreve
+ * `affiliates.pix_key` a cada pedido, então a chave da afiliação se perdia e
+ * bastava sacar uma vez com chave de e-mail para a comparação ficar cega.
+ *
+ * Continua sendo heurística, não prova: o pagador pode informar o CPF de
+ * outra pessoa (a Asaas só exige que seja válido). A revisão do saque segue
+ * sendo o controle que fecha a fraude de verdade.
  */
 async function isSelfReferral(
   db: SupabaseClient<Database>,
+  affiliateId: string,
   affiliateUserId: string,
   payerDocument: string | null
 ): Promise<boolean> {
@@ -167,13 +187,18 @@ async function isSelfReferral(
   const normalizedPayer = payerDocument.replace(/\D/g, "")
   if (!normalizedPayer) return false
 
-  const [{ data: affiliateRow }, { data: affiliateProfile }] = await Promise.all([
+  const [{ data: affiliateRow }, { data: affiliateProfile }, { data: payoutRows }] = await Promise.all([
     db
       .from("affiliates")
       .select("pix_key, pix_key_type")
       .eq("user_id", affiliateUserId)
       .maybeSingle(),
     db.from("user_profiles").select("cpf").eq("id", affiliateUserId).maybeSingle(),
+    db
+      .from("affiliate_payout_requests")
+      .select("pix_key, pix_key_type")
+      .eq("affiliate_id", affiliateId)
+      .in("pix_key_type", ["cpf", "cnpj"]),
   ])
 
   const candidates = [
@@ -181,6 +206,7 @@ async function isSelfReferral(
       ? affiliateRow.pix_key
       : null,
     affiliateProfile?.cpf,
+    ...(payoutRows ?? []).map((row) => row.pix_key),
   ]
 
   return candidates.some(
@@ -361,14 +387,14 @@ export async function POST(request: NextRequest) {
 
   try {
     // Primeiro portão, ANTES de autenticar: só contém flood anônimo contra a
-    // rota. O teto é folgado de propósito — o identificador é hash de IP+UA,
-    // e CG-NAT/redes corporativas fazem compradores sem relação nenhuma
-    // dividirem a mesma cota. Quem limita de verdade é o portão por usuário,
-    // logo abaixo.
-    const clientId = getClientIdentifier(request)
+    // rota. O teto é folgado de propósito, porque CG-NAT/redes corporativas
+    // fazem compradores sem relação nenhuma dividirem o mesmo IP. O
+    // identificador é só o IP: com IP+UA, trocar o User-Agent a cada
+    // requisição renovava a cota. Quem limita de verdade é o portão por
+    // conta, logo abaixo.
     const ipRateLimit = await checkRateLimit({
       action: "store_checkout_create_ip",
-      identifier: clientId,
+      identifier: getClientIpIdentifier(request),
       maxAttempts: 40,
       windowSeconds: 600,
       onError: "closed",
@@ -390,14 +416,13 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       )
     }
-    // Portão real: a cota é da CONTA, não do IP. Limitar só por IP+UA deixava
-    // uma mesma conta renovar o limite a cada troca de rede (4G, VPN, proxy),
-    // justamente na rota mais cara do fluxo — cada tentativa gera cobrança e
-    // QR code na Asaas. Mesmo padrão de `PUT /orders/[id]/shipping-address`:
-    // compõe usuário + cliente, então trocar de IP não zera a contagem.
+    // Portão real: a cota é da CONTA, só do id. A versão anterior compunha
+    // `user.id` com o hash de IP+UA, e isso deixava a mesma conta renovar o
+    // limite trocando de rede ou de User-Agent, justamente na rota mais cara
+    // do fluxo (cada tentativa gera cobrança e QR code na Asaas).
     const userRateLimit = await checkRateLimit({
       action: "store_checkout_create",
-      identifier: `${user.id}:${clientId}`,
+      identifier: user.id,
       maxAttempts: 10,
       windowSeconds: 600,
       onError: "closed",
@@ -425,6 +450,31 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Teto de pedidos pendentes (ver MAX_PENDING_ORDERS_PER_USER). Conta só
+    // o ambiente atual do gateway: um pedido de sandbox nunca prende estoque
+    // de produção e vice-versa.
+    const { count: pendingCount, error: pendingError } = await db
+      .from("store_orders")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+      .eq("is_sandbox", isSandboxGateway())
+      .contains("metadata", { user_id: user.id })
+    if (pendingError) {
+      const { body, status } = dbErrorResponse(
+        pendingError,
+        "Não foi possível conferir seus pedidos em aberto. Tente novamente."
+      )
+      return NextResponse.json(body, { status })
+    }
+    if ((pendingCount ?? 0) >= MAX_PENDING_ORDERS_PER_USER) {
+      return NextResponse.json(
+        {
+          error: `Você já tem ${pendingCount} pedidos aguardando pagamento. Pague ou cancele um deles em Meus Pedidos antes de criar outro.`,
+        },
+        { status: 409 }
+      )
+    }
+
     const affiliateAttribution = await resolveAffiliateAttribution(
       request,
       user.id
@@ -448,7 +498,7 @@ export async function POST(request: NextRequest) {
     if (paymentMethod === "credit_card") {
       const cardRateLimit = await checkRateLimit({
         action: "store_checkout_card_attempt",
-        identifier: `${user.id}:${clientId}`,
+        identifier: user.id,
         maxAttempts: 3,
         windowSeconds: 600,
         onError: "closed",
@@ -958,7 +1008,12 @@ export async function POST(request: NextRequest) {
     let affiliateForOrder = affiliateAttribution
     if (
       affiliateForOrder &&
-      (await isSelfReferral(db, affiliateForOrder.affiliateUserId, payerDocument))
+      (await isSelfReferral(
+        db,
+        affiliateForOrder.affiliateId,
+        affiliateForOrder.affiliateUserId,
+        payerDocument
+      ))
     ) {
       affiliateForOrder = null
     }
@@ -1222,6 +1277,12 @@ export async function POST(request: NextRequest) {
         asaas_customer_id: customer.id,
         pix_price_cents: totalCents,
         card_surcharge_percent: settings.cardSurchargePercent,
+        // Apesar do nome, é o prazo que a LOJA impõe e a coluna que o cron de
+        // expiração lê. Sem ela o pedido de cartão caía no fallback de
+        // PIX_EXPIRATION_MINUTES: pré-venda no cartão expirava (e liberava a
+        // vaga do lote) em 60 min enquanto o link da Asaas seguia pagável por
+        // 24h. A tela do PIX é a única que mostra este campo.
+        pix_expires_at: new Date(Date.now() + expirationMinutes * 60_000).toISOString(),
       }
       checkoutUrl = checkout.link
 

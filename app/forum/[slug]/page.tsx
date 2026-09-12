@@ -4,6 +4,7 @@ import { notFound } from "next/navigation"
 import { getForumPostBySlug, getForumSidebarData } from "@/lib/server/repositories/forum-repository"
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { JsonLd } from "@/components/seo/JsonLd"
 import { ForumPostContent } from "./forum-post-content"
 import { profilePath } from "@/lib/profile-name"
 import { buildDescription, buildMetadata, truncate } from "@/lib/seo"
@@ -136,9 +137,10 @@ export default async function ForumPostPage({
   return (
     <>
       {/* Post oculto só é renderizado pro próprio dono reativar — sem dado estruturado, não deve parecer indexável. */}
-      {!post.is_hidden && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      )}
+      {/* `JsonLd` escapa `<`: o objeto carrega título, corpo e comentários de
+          usuário, e um `JSON.stringify` cru deixava `</script>` fechar a tag e
+          executar o resto como script (XSS armazenado, ver 2026-09-11). */}
+      {!post.is_hidden && <JsonLd data={jsonLd} />}
       <ForumPostContent
         post={post}
         initialComments={comments}

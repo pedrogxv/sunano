@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server"
 
-import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { verifyTurnstileToken } from "@/lib/server/integrations/turnstile"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
+import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { SITE_URL } from "@/lib/site-url"
 
+// Captcha + dois tetos (por cliente e por e-mail) porque esta rota é pública
+// e cada chamada aceita dispara um e-mail pelo provedor padrão do Supabase,
+// cuja cota é do projeto inteiro: sem isso, poucas requisições anônimas por
+// hora esgotavam a cota e ninguém mais conseguia recuperar senha nem
+// confirmar cadastro. O teto por e-mail não depende de IP nem de User-Agent,
+// então trocar de rede não renova a contagem de um mesmo alvo.
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null)
@@ -13,15 +20,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: "Email enviado." })
     }
 
+    const clientIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
+    const captcha = await verifyTurnstileToken(
+      typeof body?.turnstileToken === "string" ? body.turnstileToken : null,
+      clientIp
+    )
+    if (!captcha.success) {
+      // Único caso que não responde de forma genérica: o formulário precisa
+      // saber que deve pedir o captcha de novo. Não revela nada sobre a conta.
+      return NextResponse.json({ error: "captcha_failed" }, { status: 400 })
+    }
+
+    const normalizedEmail = email.toLowerCase()
     const identifier = getClientIdentifier(request)
-    const rateLimit = await checkRateLimit({
-      action: "admin_password_reset",
-      identifier: `${identifier}:${email.toLowerCase()}`,
-      maxAttempts: 5,
-      windowSeconds: 900,
-      onError: "closed",
-    })
-    if (!rateLimit.allowed) {
+    const [perClient, perEmail] = await Promise.all([
+      checkRateLimit({
+        action: "admin_password_reset",
+        identifier: `${identifier}:${normalizedEmail}`,
+        maxAttempts: 5,
+        windowSeconds: 900,
+        onError: "closed",
+      }),
+      checkRateLimit({
+        action: "password_reset_email",
+        identifier: normalizedEmail,
+        maxAttempts: 3,
+        windowSeconds: 3600,
+        onError: "closed",
+      }),
+    ])
+    if (!perClient.allowed || !perEmail.allowed) {
       // Resposta genérica de propósito — não revela rate limit a quem tenta abusar.
       return NextResponse.json({ message: "Email enviado." })
     }

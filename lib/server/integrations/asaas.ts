@@ -663,6 +663,11 @@ export interface AsaasPaymentStatus {
   subscription?: string | null
   checkoutSession?: string | null
   value?: number
+  // Preenchidos quando a cobrança faz parte de um parcelamento: aí `value` é
+  // o valor DA PARCELA, não o total do pedido. Quem confere valor pago contra
+  // `total_cents` precisa olhar isto antes de comparar.
+  installment?: string | null
+  installmentNumber?: number | null
   // `transactionReceiptUrl` só vem preenchido depois que o PIX é recebido —
   // é o comprovante da transação em si. `invoiceUrl` é a fatura hospedada no
   // Asaas e existe desde a criação da cobrança; usamos como fallback.

@@ -1,13 +1,24 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
+import { isImpersonating } from "@/lib/server/auth/current-user"
 import { getUserDataExport } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"
 
 // GET /api/profile/export — Portabilidade de dados (LGPD Art. 18, V)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+  // Sessão "logado como" é somente leitura E de escopo mínimo (LGPD Art. 6º,
+  // III): dar o dump completo de dados pessoais do usuário para quem está fazendo suporte não tem
+  // finalidade legítima.
+  if (isImpersonating(request)) {
+    return NextResponse.json(
+      { error: "impersonation_read_only", message: "Sessão de acesso é somente leitura." },
+      { status: 403 }
+    )
+  }
+
     const supabase = await createSupabaseServerClient()
     const { data: authData } = await supabase.auth.getUser()
 

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import * as z from "zod"
 
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
+import { verifyCurrentPassword } from "@/lib/server/auth/verify-current-password"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 const passwordSchema = z.object({
@@ -33,14 +34,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Sessão expirada. Entre novamente." }, { status: 401 })
     }
 
-    // Reautentica com a senha atual antes de trocar — evita que uma sessão
-    // sequestrada (cookie roubado/XSS) vire takeover permanente da conta.
-    const { error: reauthError } = await supabase.auth.signInWithPassword({
-      email: authData.user.email,
-      password: parsed.data.currentPassword,
-    })
-    if (reauthError) {
-      return NextResponse.json({ error: "Senha atual incorreta." }, { status: 401 })
+    // Confere a senha atual antes de trocar: evita que uma sessão sequestrada
+    // (cookie roubado/XSS) vire takeover permanente da conta. A conferência
+    // não substitui a sessão atual (ver verify-current-password.ts).
+    const check = await verifyCurrentPassword(
+      authData.user.id,
+      authData.user.email,
+      parsed.data.currentPassword
+    )
+    if (!check.ok) {
+      return NextResponse.json({ error: check.error }, { status: check.status })
     }
 
     const { error } = await supabase.auth.updateUser({ password: parsed.data.password })

@@ -45,6 +45,8 @@ const RESEND_ERRORS: Record<string, string> = {
   missing_fields: "Não foi possível identificar o email. Recarregue a página e tente de novo.",
   email_send_limit: "O limite de envios do nosso provedor de email foi atingido. Tente de novo em alguns minutos.",
   resend_failed: "Não foi possível reenviar agora. Tente de novo em instantes.",
+  captcha_failed: "Não foi possível confirmar que você não é um robô. Tente novamente.",
+  too_many_attempts: "Muitos reenvios seguidos. Aguarde um pouco antes de pedir de novo.",
 }
 
 const RESEND_COOLDOWN_SECONDS = 60
@@ -64,12 +66,21 @@ function RegisterSubmitButton({ disabled = false }: { disabled?: boolean }) {
 function ResendConfirmationForm({ email }: { email: string }) {
   const [state, action, pending] = useActionState(resendConfirmationAction, initialResendState)
   const [cooldown, setCooldown] = useState(0)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaKey, setCaptchaKey] = useState(0)
 
   useEffect(() => {
     if (state.success || state.error) {
       setCooldown(RESEND_COOLDOWN_SECONDS)
     }
   }, [state])
+
+  // O token do Turnstile é de uso único e já foi lido para o FormData neste ponto: o widget remonta para a próxima tentativa.
+  function submitWithFreshCaptcha(formData: FormData) {
+    setCaptchaToken(null)
+    setCaptchaKey((key) => key + 1)
+    action(formData)
+  }
 
   useEffect(() => {
     if (cooldown <= 0) return
@@ -78,13 +89,19 @@ function ResendConfirmationForm({ email }: { email: string }) {
   }, [cooldown])
 
   return (
-    <form action={action} className="space-y-2">
+    <form action={submitWithFreshCaptcha} className="space-y-2">
       <input type="hidden" name="email" value={email} />
+      <TurnstileWidget key={captchaKey} onTokenChange={setCaptchaToken} />
+      <input type="hidden" name="cf_turnstile_response" value={captchaToken ?? ""} />
       <Button
         type="submit"
         variant="outline"
         className="w-full"
-        disabled={pending || cooldown > 0}
+        disabled={
+          pending ||
+          cooldown > 0 ||
+          (Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) && !captchaToken)
+        }
       >
         {cooldown > 0 ? `Aguarde ${cooldown}s` : pending ? "Enviando…" : "Reenviar email de confirmação"}
       </Button>

@@ -25,6 +25,13 @@ const COLUMN_BY_FIELD: Record<ProfileMediaField, "avatar_url" | "banner_url" | "
 /** Teto de espera baixando o arquivo original (bucket nosso ou avatar de OAuth ainda não copiado). */
 const FETCH_TIMEOUT_MS = 8_000
 
+/**
+ * Teto do arquivo original. O bucket já limita o upload, mas esta rota também
+ * busca avatar de provedor OAuth, e sem teto um servidor hostil poderia
+ * devolver gigabytes para a Function segurar em memória.
+ */
+const MAX_SOURCE_BYTES = 20 * 1024 * 1024
+
 /** Lado do quadro estático — o avatar/banner nunca é exibido maior que isso. */
 const FROZEN_FRAME_SIZE = 256
 
@@ -57,6 +64,7 @@ export async function GET(
   // URL fora da allowlist — inclusive registros legados gravados antes desta
   // checagem — nunca vira `fetch` server-side nem `redirect` para o cliente.
   if (!isAllowedProfileMediaUrl(url)) {
+    console.error("[profile-media] origem não permitida no perfil", userId, field)
     return new NextResponse(null, { status: 404 })
   }
 
@@ -78,11 +86,19 @@ export async function GET(
   try {
     const res = await fetch(url, {
       cache: "no-store",
+      // Não segue redirect: sem isto, um host permitido que responda 302
+      // levaria o servidor a buscar um endereço arbitrário (interno,
+      // inclusive) sem passar pela checagem de origem acima.
+      redirect: "error",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
     if (!res.ok) return new NextResponse(null, { status: 404 })
 
+    const declaredLength = Number(res.headers.get("content-length") ?? "0")
+    if (declaredLength > MAX_SOURCE_BYTES) return new NextResponse(null, { status: 404 })
+
     const bytes = new Uint8Array(await res.arrayBuffer())
+    if (bytes.byteLength > MAX_SOURCE_BYTES) return new NextResponse(null, { status: 404 })
 
     // Sem `{ animated: true }`, o sharp decodifica só o primeiro quadro do
     // GIF — mesmo comportamento (e mesmo motivo) de `compressUploadedImage`.

@@ -7,13 +7,13 @@ import { dbErrorResponse } from "@/lib/db-errors"
 import { coerceMediaAdjustments, DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { slugifyDisplayName } from "@/lib/profile-name"
 import { BIO_MAX_LENGTH, normalizeSocialHandle, SOCIAL_HANDLE_PATTERN } from "@/lib/profile-showcase"
+import { isAllowedProfileMediaUrl } from "@/lib/server/profile-media-url"
 import {
   getAdminProfileSummary,
   getUserProfileSettings,
   resolveAvailableDisplayName,
   updateUserProfileSettings,
 } from "@/lib/server/repositories/users-repository"
-import { isAllowedProfileMediaUrl } from "@/lib/server/profile-media-url"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"

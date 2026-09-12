@@ -8,6 +8,7 @@ import { useSearchParams } from "next/navigation"
 import { loginAction } from "@/app/admin/actions"
 import { DiscordAuthButton } from "@/components/auth/DiscordAuthButton"
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton"
+import { TurnstileWidget } from "@/components/auth/TurnstileWidget"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useT } from "@/lib/use-t"
@@ -18,13 +19,19 @@ const LOGIN_ERROR_KEYS = {
   missing_credentials: "missingCredentials",
   invalid_credentials: "invalidCredentials",
   no_admin_access: "noAdminAccess",
+  captcha_failed: "captchaFailed",
+  too_many_attempts: "tooManyAttempts",
 } as const
 
-function LoginSubmitButton() {
+// Sem site key o widget não renderiza e o servidor falha aberto (dev local);
+// com ela, o envio só libera depois do captcha resolvido.
+const CAPTCHA_REQUIRED = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY)
+
+function LoginSubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
   const t = useT()
   return (
-    <Button className="w-full" disabled={pending} type="submit">
+    <Button className="w-full" disabled={pending || disabled} type="submit">
       {pending ? t.admin.login.signingIn : t.admin.login.signIn}
     </Button>
   )
@@ -48,6 +55,9 @@ function ForgotMode({ onBack }: ForgotModeProps) {
   const [pending, setPending] = useState(false)
   const [email, setEmail] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  // Token do Turnstile é de uso único: cada envio remonta o widget.
+  const [captchaKey, setCaptchaKey] = useState(0)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -67,16 +77,25 @@ function ForgotMode({ onBack }: ForgotModeProps) {
     setError(null)
 
     try {
-      await fetch("/api/admin/password-reset", {
+      const res = await fetch("/api/admin/password-reset", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: trimmed }),
+        body: JSON.stringify({ email: trimmed, turnstileToken: captchaToken }),
       })
+      // Só o captcha recusado volta como erro: qualquer outra resposta segue
+      // genérica, para não revelar se o email existe.
+      if (res.status === 400) {
+        setError(t.admin.login.errors.captchaFailed)
+        setCaptchaToken(null)
+        setCaptchaKey((key) => key + 1)
+        return
+      }
+      setSent(true)
     } catch {
-      // silently ignore — always show success to avoid user enumeration
+      // Falha de rede também mostra sucesso, pelo mesmo motivo acima.
+      setSent(true)
     } finally {
       setPending(false)
-      setSent(true)
     }
   }
 
@@ -122,13 +141,15 @@ function ForgotMode({ onBack }: ForgotModeProps) {
           />
         </div>
 
+        <TurnstileWidget key={captchaKey} onTokenChange={setCaptchaToken} />
+
         {error && (
           <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
             {error}
           </div>
         )}
 
-        <Button className="w-full" disabled={pending} type="submit">
+        <Button className="w-full" disabled={pending || (CAPTCHA_REQUIRED && !captchaToken)} type="submit">
           {pending ? t.admin.login.sending : t.admin.login.sendResetLink}
         </Button>
       </form>
@@ -144,6 +165,14 @@ export function AdminLoginForm() {
   const t = useT()
   const [mode, setMode] = useState<"login" | "forgot">("login")
   const [state, formAction] = useActionState(loginAction, initialState)
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaKey, setCaptchaKey] = useState(0)
+  // O token do Turnstile é de uso único e já foi lido para o FormData neste ponto: o widget remonta para a próxima tentativa.
+  function submitWithFreshCaptcha(formData: FormData) {
+    setCaptchaToken(null)
+    setCaptchaKey((key) => key + 1)
+    formAction(formData)
+  }
   // O login por OAuth não passa pela server action: quando ele recusa o acesso
   // ao painel, o motivo volta na query string.
   const searchParams = useSearchParams()
@@ -173,7 +202,7 @@ export function AdminLoginForm() {
         </div>
       </div>
 
-      <form action={formAction} className="space-y-4">
+      <form action={submitWithFreshCaptcha} className="space-y-4">
         <div className="space-y-2">
           <label className="text-sm font-medium text-foreground" htmlFor="email">
             Email
@@ -202,13 +231,20 @@ export function AdminLoginForm() {
         />
       </div>
 
+      <TurnstileWidget
+        key={captchaKey}
+        onTokenChange={setCaptchaToken}
+        error={state.error === "captcha_failed"}
+      />
+      <input type="hidden" name="cf_turnstile_response" value={captchaToken ?? ""} />
+
       {localizedError && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
           {localizedError}
         </div>
       )}
 
-      <LoginSubmitButton />
+      <LoginSubmitButton disabled={CAPTCHA_REQUIRED && !captchaToken} />
 
       <Button
         className="w-full"

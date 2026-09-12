@@ -49,12 +49,24 @@ export function isMfaStepUpRequired(aal: AssuranceLevel | null | undefined): boo
 /**
  * Garante que um destino de redirecionamento é interno e seguro, evitando
  * open-redirects (`//host`, `/\host`, URLs absolutas) vindos de `?next=`.
+ *
+ * Caractere de controle e barra invertida são recusados em qualquer posição:
+ * o parser de URL do navegador descarta tab/CR/LF antes de interpretar, então
+ * `/\t/evil.com` passava pelo teste de `//` e virava `//evil.com` no redirect.
+ * A resolução contra uma origem fictícia é a checagem final: o que não
+ * continuar na mesma origem depois de parseado cai no fallback.
  */
 export function sanitizeNextPath(
   next: string | null | undefined,
   fallback = "/forum"
 ): string {
   if (!next || !next.startsWith("/")) return fallback
-  if (next.startsWith("//") || next.startsWith("/\\")) return fallback
+  if (next.startsWith("//") || /[\u0000-\u001F\u007F\\]/.test(next)) return fallback
+  try {
+    const base = "https://sunano.invalid"
+    if (new URL(next, base).origin !== base) return fallback
+  } catch {
+    return fallback
+  }
   return next
 }

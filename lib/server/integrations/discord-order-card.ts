@@ -34,6 +34,8 @@ export type OrderEventStatus =
   | "partial_refund"
   /** Pagamento chegou depois da expiração e não havia estoque. */
   | "oversold"
+  /** O valor confirmado na Asaas não bate com o total do pedido. */
+  | "payment_mismatch"
 
 type StatusStyle = {
   /** Emoji do título — é o que se lê primeiro na lista de threads. */
@@ -138,6 +140,13 @@ const STATUS_STYLE: Record<OrderEventStatus, StatusStyle> = {
     color: COLORS.red,
     headline: "O pagamento entrou depois da expiração e o estoque já tinha sido vendido.",
     action: "Decida agora: repor o item, trocar por outro ou **estornar**. O cliente pagou por algo que a loja não tem.",
+  },
+  payment_mismatch: {
+    emoji: "🧮",
+    label: "Valor divergente",
+    color: COLORS.red,
+    headline: "A Asaas confirmou um valor diferente do total do pedido. O pedido NÃO foi liberado.",
+    action: "Confira a cobrança no painel da Asaas. Se o valor estiver certo, libere o pedido manualmente; se não, trate como tentativa de fraude.",
   },
 }
 

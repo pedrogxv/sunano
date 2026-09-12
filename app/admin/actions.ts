@@ -1,10 +1,12 @@
 "use server"
 
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { hasAnyAdminAccess } from "@/lib/admin-permissions"
 import { isMfaStepUpRequired, TRUSTED_DEVICE_COOKIE_NAME } from "@/lib/auth-mfa"
+import { verifyTurnstileToken } from "@/lib/server/integrations/turnstile"
+import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import {
@@ -20,6 +22,8 @@ const AUTH_ERRORS = {
   missingCredentials: "missing_credentials",
   invalidCredentials: "invalid_credentials",
   noAdminAccess: "no_admin_access",
+  captchaFailed: "captcha_failed",
+  tooManyAttempts: "too_many_attempts",
 } as const
 
 export async function loginAction(_: AuthState, formData: FormData): Promise<AuthState> {
@@ -28,6 +32,33 @@ export async function loginAction(_: AuthState, formData: FormData): Promise<Aut
 
   if (!email || !password) {
     return { error: AUTH_ERRORS.missingCredentials }
+  }
+
+  // Mesmas duas barreiras do login público (app/login/actions.ts). Este
+  // formulário chama `signInWithPassword` para QUALQUER conta, não só admin,
+  // então sem elas ele era o atalho de força bruta que contornava o captcha
+  // do /login. A ação de rate limit é a MESMA ("login", mesmo identificador):
+  // alternar entre os dois formulários não dobra a cota de tentativas.
+  const headersList = await headers()
+  const turnstileToken = formData.get("cf_turnstile_response")
+  const clientIp = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
+  const captcha = await verifyTurnstileToken(
+    typeof turnstileToken === "string" ? turnstileToken : null,
+    clientIp
+  )
+  if (!captcha.success) {
+    return { error: AUTH_ERRORS.captchaFailed }
+  }
+
+  const rateLimit = await checkRateLimit({
+    action: "login",
+    identifier: `${getClientIdentifierFromHeaders(headersList)}:${email.toLowerCase()}`,
+    maxAttempts: 10,
+    windowSeconds: 300,
+    onError: "closed",
+  })
+  if (!rateLimit.allowed) {
+    return { error: AUTH_ERRORS.tooManyAttempts }
   }
 
   const supabase = await createSupabaseServerClient()

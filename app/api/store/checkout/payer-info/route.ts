@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { getRequestUser } from "@/lib/server/auth/current-user"
+import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 
 /**
  * Diz ao checkout, ANTES de tentar gerar o PIX/cartão, se falta nome/CPF (ou,
@@ -23,6 +23,16 @@ export async function GET(request: NextRequest) {
   const user = await getRequestUser(request)
   if (!user) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 })
+  }
+
+  // Sessão "logado como" é somente leitura E de escopo mínimo (LGPD Art. 6º,
+  // III): dar CPF e endereço do usuário para quem está fazendo suporte não tem
+  // finalidade legítima.
+  if (isImpersonating(request)) {
+    return NextResponse.json(
+      { error: "impersonation_read_only", message: "Sessão de acesso é somente leitura." },
+      { status: 403 }
+    )
   }
 
   const db = createSupabaseAdminClient()

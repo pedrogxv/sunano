@@ -1,5 +1,6 @@
 import "server-only"
 
+import { escapeOrFilterValue } from "@/lib/server/repositories/_shared"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -233,10 +234,15 @@ async function removeUnreferencedMedia(urls: string[]): Promise<void> {
       // Só mexe em arquivo do nosso bucket; URL externa colada à mão é ignorada.
       if (markerIndex === -1) continue
 
+      // `url` vai entre aspas e escapado: sem isso, uma URL com vírgula ou
+      // ponto quebra a gramática do `.or()` do PostgREST e a contagem de
+      // referências volta errada — o arquivo seria apagado ainda em uso, ou a
+      // query erraria e derrubaria a limpeza inteira.
+      const safeUrl = escapeOrFilterValue(url)
       const { count } = await db
         .from("store_section_banners")
         .select("id", { count: "exact", head: true })
-        .or(`image_url.eq.${url},video_url.eq.${url}`)
+        .or(`image_url.eq."${safeUrl}",video_url.eq."${safeUrl}"`)
 
       if ((count ?? 0) > 0) continue
 

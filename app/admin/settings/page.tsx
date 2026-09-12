@@ -44,6 +44,7 @@ export default function SettingsPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [role, setRole] = useState<AdminRole>("admin")
+  const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [passwordError, setPasswordError] = useState<string | null>(null)
@@ -236,10 +237,11 @@ export default function SettingsPage() {
       const res = await fetch("/api/admin/profile/password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: newPassword }),
+        body: JSON.stringify({ currentPassword, password: newPassword }),
       })
       const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "")
+      setCurrentPassword("")
       setNewPassword("")
       setConfirmPassword("")
       setPasswordSuccess(true)
@@ -364,6 +366,17 @@ export default function SettingsPage() {
               </div>
             )}
 
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.settings.currentPassword}</label>
+              <Input
+                value={currentPassword}
+                onChange={(e) => { setCurrentPassword(e.target.value); setPasswordSuccess(false) }}
+                className="border-amber-500/20 bg-background"
+                autoComplete="current-password"
+                type="password"
+              />
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t.settings.newPassword}</label>
@@ -394,7 +407,7 @@ export default function SettingsPage() {
             <div className="flex justify-end border-t border-amber-500/20 pt-4">
               <Button
                 onClick={updatePassword}
-                disabled={!newPassword || newPassword !== confirmPassword}
+                disabled={!currentPassword || !newPassword || newPassword !== confirmPassword}
                 className="gap-2 bg-amber-500 text-black hover:bg-amber-400 min-w-32"
               >
                 <KeyRound className="size-4" />

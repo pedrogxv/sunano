@@ -2,7 +2,11 @@ import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { creditCommissionForOrder } from "@/lib/server/repositories/affiliates-repository"
-import { lineMovesPhysicalStock, orderOwnerId } from "@/lib/server/repositories/orders-repository"
+import {
+  lineMovesPhysicalStock,
+  orderOwnerId,
+  reReserveStockForLatePayment,
+} from "@/lib/server/repositories/orders-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
 import { getPaymentsByCheckoutSession } from "@/lib/server/integrations/asaas"
@@ -62,28 +66,32 @@ export async function POST(request: NextRequest) {
 
   try {
     if (payload.event === "CHECKOUT_PAID") {
-      // Sem defesa em profundidade aqui (diferente do webhook de PIX, que
-      // reconsulta getPayment antes de liberar): GET /v3/checkouts/{id} não
-      // é exposto pela API v3 do Asaas — retorna 404 mesmo para checkouts
-      // reais e pagos. Por isso confiamos direto no evento assinado — o
-      // token em `asaas-access-token`, validado acima, já impede forjar a
-      // chamada.
-
-      // GET /v3/payments?checkoutSession= (diferente de GET /v3/checkouts/{id},
-      // esse endpoint existe) devolve o payment real gerado pelo checkout —
-      // é como obtemos paymentId/comprovante para gravar em store_orders,
-      // já que o payload do webhook não traz isso.
+      // GET /v3/checkouts/{id} não é exposto pela API v3 do Asaas (retorna
+      // 404 mesmo para checkout real e pago), mas o PAYMENT gerado por ele é
+      // consultável — e é essa consulta, que já fazíamos só para obter
+      // paymentId/comprovante, que vale como defesa em profundidade: quando
+      // o pagamento é encontrado, exigimos status e valor compatíveis antes
+      // de liberar o pedido, em vez de confiar apenas no evento assinado.
       let paymentId: string | null = null
       let receiptUrl: string | null = null
       let paidCents: number | null = null
+      let isInstallment = false
+      let paymentFound = false
+      let paymentConfirmed = false
       const customerId = payload.checkout?.customer
       try {
         if (customerId) {
           const [payment] = await getPaymentsByCheckoutSession(checkoutId, customerId)
           if (payment) {
+            paymentFound = true
             paymentId = payment.id
             receiptUrl = payment.transactionReceiptUrl ?? payment.invoiceUrl ?? null
-            if (typeof payment.value === "number") paidCents = Math.round(payment.value * 100)
+            paidCents = typeof payment.value === "number" ? Math.round(payment.value * 100) : null
+            isInstallment = Boolean(payment.installment)
+            paymentConfirmed =
+              payment.status === "RECEIVED" ||
+              payment.status === "CONFIRMED" ||
+              payment.status === "RECEIVED_IN_CASH"
           }
         } else {
           console.error("[webhooks/asaas-checkout] checkout.customer ausente no payload:", checkoutId)
@@ -92,50 +100,93 @@ export async function POST(request: NextRequest) {
         console.error("[webhooks/asaas-checkout] getPaymentsByCheckoutSession:", err)
       }
 
-      // Confere o VALOR antes de liberar. Este ramo é o mais exposto da loja:
-      // ao contrário do PIX, não existe `GET /v3/checkouts/{id}` para
-      // reconsultar, então o evento assinado era a ÚNICA evidência — e ele não
-      // carrega valor nenhum. O payment resolvido acima carrega, e é dinheiro
-      // de verdade: comparar com o `total_cents` que o checkout gravou é o que
-      // impede um pedido de ser liberado por uma cobrança de valor menor.
-      //
-      // Só barra com evidência POSITIVA de divergência: se o payment não pôde
-      // ser resolvido (falha de rede, `customer` ausente no payload), seguimos
-      // liberando como antes — uma instabilidade da Asaas não pode segurar
-      // pedido pago de verdade.
-      if (paidCents !== null) {
-        const { data: pendingOrders } = await db
-          .from("store_orders")
-          .select("id, total_cents")
-          .eq("asaas_checkout_id", checkoutId)
-          .neq("status", "paid")
-
-        const underpaid = (pendingOrders ?? []).filter((order) => paidCents! < order.total_cents)
-        if (underpaid.length > 0) {
-          console.error(
-            "[webhooks/asaas-checkout] valor pago MENOR que o total do pedido — NÃO liberado:",
-            `checkout ${checkoutId} pagou ${paidCents} centavos;`,
-            underpaid.map((o) => `pedido ${o.id} espera ${o.total_cents}`).join(", ")
-          )
-          return NextResponse.json({ received: true, ignored: "payment_value_below_order_total" })
-        }
+      // Achamos a cobrança e ela não está paga na origem: evento adiantado ou
+      // forjado. Não libera. Quando a consulta falha (rede, cliente com
+      // muitos pagamentos), seguimos confiando no evento assinado — recusar
+      // aqui travaria venda legítima por indisponibilidade da Asaas.
+      if (paymentFound && !paymentConfirmed) {
+        console.error(
+          `[webhooks/asaas-checkout] CHECKOUT_PAID com pagamento não confirmado na origem (checkout ${checkoutId}).`
+        )
+        return NextResponse.json({ received: true, ignored: "payment_not_confirmed" })
       }
 
-      // Idempotente: só transiciona se ainda não estava pago, protegendo
-      // contra reentrega do mesmo webhook. Estoque NÃO é decrementado aqui —
-      // já foi reservado atomicamente no checkout (ver
-      // app/api/store/checkout/route.ts).
-      const { data: updatedOrders } = await db
+      // Estado ANTES da transição: o pedido pode ter sido cancelado pelo
+      // cliente ou expirado pelo cron, e nos dois casos o estoque já voltou
+      // para a prateleira. Como o link do checkout continua pagável na Asaas,
+      // o pagamento pode chegar depois disso.
+      const { data: priorOrders } = await db
         .from("store_orders")
-        .update({
-          status: "paid",
-          updated_at: new Date().toISOString(),
-          ...(paymentId && { asaas_payment_id: paymentId }),
-          ...(receiptUrl && { asaas_receipt_url: receiptUrl }),
-        })
+        .select("id, status, total_cents")
         .eq("asaas_checkout_id", checkoutId)
-        .neq("status", "paid")
-        .select("id, affiliate_id, metadata")
+
+      // Valor conferido contra o total do pedido, exceto em parcelamento, em
+      // que o `value` da Asaas é o da PARCELA e não o total.
+      const underpaid = (priorOrders ?? []).filter(
+        (order) => paidCents !== null && !isInstallment && paidCents < order.total_cents
+      )
+      for (const order of underpaid) {
+        console.error(
+          `[webhooks/asaas-checkout] valor divergente no checkout ${checkoutId}: pago ${paidCents} vs total ${order.total_cents} do pedido ${order.id} — pedido NÃO liberado.`
+        )
+        await notifyDiscordOrderEvent({
+          orderId: order.id,
+          status: "payment_mismatch",
+          actor: "webhook-asaas",
+          note: `Asaas confirmou R$ ${((paidCents ?? 0) / 100).toFixed(2)} para um pedido de R$ ${(order.total_cents / 100).toFixed(2)} (checkout ${checkoutId}).`,
+        })
+      }
+
+      const underpaidIds = new Set(underpaid.map((order) => order.id))
+      const payableIds = (priorOrders ?? [])
+        .filter((order) => !underpaidIds.has(order.id))
+        .map((order) => order.id)
+      const stockWasReturned = new Set(
+        (priorOrders ?? [])
+          .filter((order) => order.status === "expired" || order.status === "cancelled")
+          .map((order) => order.id)
+      )
+
+      // Idempotente e sem regressão de status: só avança do que ainda espera
+      // pagamento. Estoque NÃO é decrementado aqui — já foi reservado
+      // atomicamente no checkout (ver app/api/store/checkout/route.ts).
+      const updatedOrders =
+        payableIds.length === 0
+          ? []
+          : ((
+              await db
+                .from("store_orders")
+                .update({
+                  status: "paid",
+                  updated_at: new Date().toISOString(),
+                  ...(paymentId && { asaas_payment_id: paymentId }),
+                  ...(receiptUrl && { asaas_receipt_url: receiptUrl }),
+                })
+                .eq("asaas_checkout_id", checkoutId)
+                .in("id", payableIds)
+                .in("status", ["pending", "expired", "cancelled"])
+                .select("id, affiliate_id, metadata")
+            ).data ?? [])
+
+      // Pedido que já tinha devolvido o estoque precisa reservá-lo de novo,
+      // senão a loja vende a mesma unidade duas vezes. Mesmo tratamento do
+      // webhook de PIX: quando não há estoque, o pedido é marcado para
+      // revisão manual em vez de mentir sobre o inventário.
+      for (const order of updatedOrders) {
+        if (!stockWasReturned.has(order.id)) continue
+        try {
+          const { restocked, oversoldItems } = await reReserveStockForLatePayment(order.id)
+          if (restocked) continue
+          await notifyDiscordOrderEvent({
+            orderId: order.id,
+            status: "oversold",
+            actor: "webhook-asaas",
+            note: `Sem estoque para: ${oversoldItems.join(", ")}`,
+          })
+        } catch (err) {
+          console.error("[webhooks/asaas-checkout] reReserveStockForLatePayment:", err)
+        }
+      }
 
       for (const order of updatedOrders ?? []) {
         if (!order.affiliate_id) continue

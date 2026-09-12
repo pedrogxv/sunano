@@ -539,7 +539,11 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
       const method = request.method.toUpperCase()
       const isWrite = method !== "GET" && method !== "HEAD" && method !== "OPTIONS"
 
-      if (pathname.startsWith("/api") && isWrite) {
+      // Qualquer escrita, não só sob `/api`: Server Actions são POST na rota
+      // da PÁGINA (ex.: `/reset-password`, `/consentimento`), então o filtro
+      // antigo por prefixo deixava o admin trocar a senha do usuário alvo
+      // durante uma sessão que deveria ser somente leitura.
+      if (isWrite) {
         const apiResponse = NextResponse.json(
           { error: "impersonation_read_only", message: "Sessão de acesso é somente leitura." },
           { status: 403 }

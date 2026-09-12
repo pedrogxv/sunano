@@ -873,7 +873,13 @@ type Translations = {
       backToLogin: string
       enterEmail: string
       enterValidEmail: string
-      errors: { missingCredentials: string; invalidCredentials: string; noAdminAccess: string }
+      errors: {
+        missingCredentials: string
+        invalidCredentials: string
+        noAdminAccess: string
+        captchaFailed: string
+        tooManyAttempts: string
+      }
     }
     tierlistPage: {
       newPeripheral: string
@@ -944,6 +950,7 @@ type Translations = {
     failedToLoadProfile: string
     changePassword: string
     exclusiveToWebmaster: string
+    currentPassword: string
     newPassword: string
     minChars: string
     confirmPassword: string
@@ -1888,7 +1895,13 @@ export const translations: Record<LocaleCode, Translations> = {
         backToLogin: "Voltar ao login",
         enterEmail: "Informe seu email.",
         enterValidEmail: "Informe um email válido.",
-        errors: { missingCredentials: "Informe email e senha.", invalidCredentials: "Credenciais inválidas.", noAdminAccess: "Conta sem acesso ao admin." },
+        errors: {
+          missingCredentials: "Informe email e senha.",
+          invalidCredentials: "Credenciais inválidas.",
+          noAdminAccess: "Conta sem acesso ao admin.",
+          captchaFailed: "Não foi possível confirmar que você não é um robô. Tente novamente.",
+          tooManyAttempts: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
+        },
       },
       tierlistForm: {
         parentPeripherals: "Periféricos",
@@ -2024,6 +2037,7 @@ export const translations: Record<LocaleCode, Translations> = {
       failedToLoadProfile: "Erro ao carregar perfil",
       changePassword: "Alterar senha",
       exclusiveToWebmaster: "Exclusivo para o WEB Master.",
+      currentPassword: "Senha atual",
       newPassword: "Nova senha",
       minChars: "Mín. 8 caracteres",
       confirmPassword: "Confirmar senha",
@@ -3409,7 +3423,13 @@ export const translations: Record<LocaleCode, Translations> = {
         backToLogin: "Back to login",
         enterEmail: "Enter your email.",
         enterValidEmail: "Enter a valid email.",
-        errors: { missingCredentials: "Enter email and password.", invalidCredentials: "Invalid credentials.", noAdminAccess: "Account has no admin access." },
+        errors: {
+          missingCredentials: "Enter email and password.",
+          invalidCredentials: "Invalid credentials.",
+          noAdminAccess: "Account has no admin access.",
+          captchaFailed: "We could not confirm you are not a robot. Please try again.",
+          tooManyAttempts: "Too many attempts. Wait a few minutes and try again.",
+        },
       },
       tierlistPage: {
         newPeripheral: "New Peripheral",
@@ -3480,6 +3500,7 @@ export const translations: Record<LocaleCode, Translations> = {
       failedToLoadProfile: "Failed to load profile",
       changePassword: "Change password",
       exclusiveToWebmaster: "Exclusive to WEB Master.",
+      currentPassword: "Current password",
       newPassword: "New password",
       minChars: "Min. 8 characters",
       confirmPassword: "Confirm password",

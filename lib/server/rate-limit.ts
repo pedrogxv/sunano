@@ -73,6 +73,21 @@ export function getClientIdentifier(request: Request) {
   return getClientIdentifierFromHeaders(request.headers)
 }
 
+/**
+ * Hash só do IP, sem o User-Agent.
+ *
+ * `getClientIdentifier` mistura o UA para não punir quem divide IP (CG-NAT,
+ * rede corporativa), mas o UA é escolhido pelo cliente: trocar o header a
+ * cada requisição gera um balde novo. Use esta versão nos tetos que não podem
+ * ser renovados assim (ex.: portão anônimo do checkout), com limite folgado o
+ * bastante para caber um IP compartilhado.
+ */
+export function getClientIpIdentifier(request: Request) {
+  const forwardedFor = request.headers.get("x-forwarded-for")
+  const ip = forwardedFor?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown"
+  return createHash("sha256").update(`${getRateLimitSalt()}:ip:${ip}`).digest("hex")
+}
+
 /** Verifica e registra uma tentativa para a janela de tempo informada. */
 export async function checkRateLimit({
   action,

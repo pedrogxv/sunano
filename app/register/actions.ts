@@ -355,6 +355,41 @@ export async function resendConfirmationAction(
   }
 
   const headersList = await headers()
+
+  // Sem captcha e sem teto próprio, esta action era a outra porta para
+  // esgotar a cota de e-mail do projeto (a mesma do reset de senha): bastava
+  // um cadastro não confirmado e reenviar em loop. O teto por e-mail não
+  // depende de IP/UA, então trocar de rede não renova a contagem.
+  const turnstileToken = formData.get("cf_turnstile_response")
+  const clientIp = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
+  const captcha = await verifyTurnstileToken(
+    typeof turnstileToken === "string" ? turnstileToken : null,
+    clientIp
+  )
+  if (!captcha.success) {
+    return { error: "captcha_failed", success: false }
+  }
+
+  const [perClient, perEmail] = await Promise.all([
+    checkRateLimit({
+      action: "resend_confirmation",
+      identifier: `${getClientIdentifierFromHeaders(headersList)}:${email}`,
+      maxAttempts: 5,
+      windowSeconds: 900,
+      onError: "closed",
+    }),
+    checkRateLimit({
+      action: "resend_confirmation_email",
+      identifier: email,
+      maxAttempts: 3,
+      windowSeconds: 3600,
+      onError: "closed",
+    }),
+  ])
+  if (!perClient.allowed || !perEmail.allowed) {
+    return { error: "too_many_attempts", success: false }
+  }
+
   const supabase = await createSupabaseServerClient()
   const { error } = await supabase.auth.resend({
     type: "signup",

@@ -141,14 +141,34 @@ async function loadImageConverter(): Promise<ImageConverter | null> {
  */
 async function loadImageAsDataUri(url: string): Promise<string | undefined> {
   try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
-      headers: { accept: "image/*" },
-    })
-    if (!response.ok) return undefined
+    // `safeImageUrl` aceita a própria origem do site, e havia rota nossa que
+    // responde 302 para uma URL guardada no banco (`/api/profile-media/...`).
+    // Seguir redirect automaticamente deixava essa rota escolher o destino
+    // final do fetch, furando a allowlist: aqui cada salto é revalidado.
+    let target = url
+    let response: Response | undefined
+    for (let hop = 0; hop < 3; hop += 1) {
+      const hopResponse = await fetch(target, {
+        redirect: "manual",
+        signal: AbortSignal.timeout(IMAGE_FETCH_TIMEOUT_MS),
+        headers: { accept: "image/*" },
+      })
+      if (hopResponse.status < 300 || hopResponse.status >= 400) {
+        response = hopResponse
+        break
+      }
+      const location = hopResponse.headers.get("location")
+      const next = location ? safeImageUrl(new URL(location, target).toString()) : undefined
+      if (!next) return undefined
+      target = next
+    }
+    if (!response || !response.ok) return undefined
 
     const contentType = response.headers.get("content-type") ?? ""
     if (!contentType.startsWith("image/")) return undefined
+
+    const declaredLength = Number(response.headers.get("content-length") ?? "0")
+    if (declaredLength > MAX_SOURCE_BYTES) return undefined
 
     const buffer = Buffer.from(await response.arrayBuffer())
     if (buffer.byteLength > MAX_SOURCE_BYTES) return undefined

@@ -1,5 +1,6 @@
 import "server-only"
 
+import { escapeOrFilterValue } from "@/lib/server/repositories/_shared"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -283,10 +284,14 @@ async function removeUnreferencedImages(urls: string[]): Promise<void> {
       // Só mexe em arquivo do nosso bucket; URL externa colada à mão é ignorada.
       if (markerIndex === -1) continue
 
+      // Mesmo motivo do store-banners-repository: URL com vírgula ou ponto
+      // quebra a gramática do `.or()` e a contagem de referências volta errada,
+      // apagando arquivo ainda em uso.
+      const safeUrl = escapeOrFilterValue(url)
       const { count } = await db
         .from("home_banners")
         .select("id", { count: "exact", head: true })
-        .or(`image_url.eq.${url},image_url_mobile.eq.${url}`)
+        .or(`image_url.eq."${safeUrl}",image_url_mobile.eq."${safeUrl}"`)
 
       if ((count ?? 0) > 0) continue
 

@@ -4,9 +4,11 @@ import * as z from "zod"
 
 import { canChangePasswords, isWebMaster } from "@/lib/admin-permissions"
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
+import { verifyCurrentPassword } from "@/lib/server/auth/verify-current-password"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 const passwordSchema = z.object({
+  currentPassword: z.string().min(1, "Informe sua senha atual."),
   password: z.string().min(1, "Informe uma senha."),
 })
 
@@ -29,7 +31,7 @@ export async function POST(request: Request) {
     const supabase = await createSupabaseServerClient()
     const { data: authData } = await supabase.auth.getUser()
 
-    if (!authData.user) {
+    if (!authData.user?.email) {
       return NextResponse.json({ error: "Sessão expirada. Entre novamente no admin." }, { status: 401 })
     }
 
@@ -41,6 +43,18 @@ export async function POST(request: Request) {
 
     if (!profile || !canChangePasswords(profile) || !isWebMaster(profile)) {
       return NextResponse.json({ error: "Apenas o WEB Master pode alterar senhas." }, { status: 403 })
+    }
+
+    // Senha atual obrigatória, igual à troca de senha de Conta: sem ela, uma
+    // sessão roubada do WEB MASTER trocava a senha da conta mais privilegiada
+    // do site e o dono perdia o acesso de vez.
+    const check = await verifyCurrentPassword(
+      authData.user.id,
+      authData.user.email,
+      parsed.data.currentPassword
+    )
+    if (!check.ok) {
+      return NextResponse.json({ error: check.error }, { status: check.status })
     }
 
     const { error } = await supabase.auth.updateUser({

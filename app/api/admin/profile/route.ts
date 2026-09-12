@@ -3,6 +3,7 @@ import * as z from "zod"
 
 import { hasAdminPermission, type AdminProfile } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
+import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { countSupportTicketsAwaitingAdmin } from "@/lib/server/repositories/support-repository"
 
@@ -112,7 +113,12 @@ export async function POST(request: Request) {
       permissions: typedCurrentProfile.permissions,
     }
 
-    const { error } = await supabase.from("admin_profiles").upsert(
+    // Service role DEPOIS da checagem de permissão acima. Cargo e permissões
+    // vão do que já está gravado (lidos logo acima), então esta rota nunca é
+    // caminho de escalada; escrever pela sessão exigiria manter a policy de
+    // UPDATE em admin_profiles para authenticated, que era o atalho para
+    // alterar cargo direto pela API REST do Supabase.
+    const { error } = await createSupabaseAdminClient().from("admin_profiles").upsert(
       payload as any,
       {
         onConflict: "id",

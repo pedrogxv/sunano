@@ -34,8 +34,10 @@ export function OrganizationJsonLd() {
   return (
     <script
       type="application/ld+json"
+      // Mesmo escape de `components/seo/JsonLd.tsx`: hoje o conteúdo é fixo,
+      // mas nenhum `<script>` do site deve depender disso para não quebrar.
       // eslint-disable-next-line react/no-danger
-      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
     />
   )
 }

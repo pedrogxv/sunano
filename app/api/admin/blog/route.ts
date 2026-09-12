@@ -3,6 +3,7 @@ import * as z from "zod"
 
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
+import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { revalidateBlogPost } from "@/lib/server/seo/revalidate-public"
 
@@ -73,7 +74,7 @@ function calculateReadTimeMinutes(content: string) {
 }
 
 async function generateUniqueSlug(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
   title: string
 ) {
   const baseSlug = slugify(title) || "review"
@@ -133,6 +134,13 @@ export async function POST(request: Request) {
       )
     }
 
+    // Escrita com service role DEPOIS da checagem de cargo/permissão acima.
+    // Antes ia pela sessão do admin, o que exigia manter policies de escrita
+    // em `blog_posts`/`admin_profiles` para o papel `authenticated` — e essas
+    // policies eram exatamente o caminho para escrever direto pela API REST
+    // do Supabase, sem passar por esta rota (e sem 2FA).
+    const db = createSupabaseAdminClient()
+
     const profileEnsurePayload: Record<string, unknown> = {
       id: authData.user.id,
       email: authData.user.email ?? null,
@@ -140,7 +148,7 @@ export async function POST(request: Request) {
       avatar_url: null,
     }
 
-    const { error: profileEnsureError } = await supabase
+    const { error: profileEnsureError } = await db
       .from("admin_profiles")
       .upsert(profileEnsurePayload as any, {
         onConflict: "id",
@@ -230,13 +238,13 @@ export async function POST(request: Request) {
     ) => Boolean(message && message.includes(column))
 
     let result = parsed.data.id
-      ? await (supabase.from("blog_posts") as any)
+      ? await (db.from("blog_posts") as any)
           .update(payload as any)
           .eq("id", parsed.data.id)
-      : await (supabase.from("blog_posts") as any).insert([
+      : await (db.from("blog_posts") as any).insert([
           {
             ...payloadWithAuthor,
-            slug: await generateUniqueSlug(supabase, parsed.data.title),
+            slug: await generateUniqueSlug(db, parsed.data.title),
           },
         ])
 
@@ -251,13 +259,13 @@ export async function POST(request: Request) {
       >
       delete payloadWithAuthorNoType.post_type
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any)
+        ? await (db.from("blog_posts") as any)
             .update(payloadNoType as any)
             .eq("id", parsed.data.id)
-        : await (supabase.from("blog_posts") as any).insert([
+        : await (db.from("blog_posts") as any).insert([
             {
               ...payloadWithAuthorNoType,
-              slug: await generateUniqueSlug(supabase, parsed.data.title),
+              slug: await generateUniqueSlug(db, parsed.data.title),
             },
           ])
     }
@@ -272,39 +280,39 @@ export async function POST(request: Request) {
       >
       delete payloadWithAuthorNoFeatured.is_featured
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any)
+        ? await (db.from("blog_posts") as any)
             .update(payloadNoFeatured as any)
             .eq("id", parsed.data.id)
-        : await (supabase.from("blog_posts") as any).insert([
+        : await (db.from("blog_posts") as any).insert([
             {
               ...payloadWithAuthorNoFeatured,
-              slug: await generateUniqueSlug(supabase, parsed.data.title),
+              slug: await generateUniqueSlug(db, parsed.data.title),
             },
           ])
     }
 
     if (isMissingColumnError(result.error?.message, "cover_thumbnail_url")) {
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any)
+        ? await (db.from("blog_posts") as any)
             .update(payloadWithoutThumbnail as any)
             .eq("id", parsed.data.id)
-        : await (supabase.from("blog_posts") as any).insert([
+        : await (db.from("blog_posts") as any).insert([
             {
               ...payloadWithoutThumbnail,
-              slug: await generateUniqueSlug(supabase, parsed.data.title),
+              slug: await generateUniqueSlug(db, parsed.data.title),
             },
           ])
     }
 
     if (isMissingColumnError(result.error?.message, "author_id")) {
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any)
+        ? await (db.from("blog_posts") as any)
             .update(payloadWithoutAuthor as any)
             .eq("id", parsed.data.id)
-        : await (supabase.from("blog_posts") as any).insert([
+        : await (db.from("blog_posts") as any).insert([
             {
               ...payloadWithoutAuthor,
-              slug: await generateUniqueSlug(supabase, parsed.data.title),
+              slug: await generateUniqueSlug(db, parsed.data.title),
             },
           ])
     }
@@ -316,13 +324,13 @@ export async function POST(request: Request) {
         : { ...payloadWithoutReadTime, author_id: authData.user.id }
 
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any)
+        ? await (db.from("blog_posts") as any)
             .update(insertPayload as any)
             .eq("id", parsed.data.id)
-        : await (supabase.from("blog_posts") as any).insert([
+        : await (db.from("blog_posts") as any).insert([
             {
               ...insertPayload,
-              slug: await generateUniqueSlug(supabase, parsed.data.title),
+              slug: await generateUniqueSlug(db, parsed.data.title),
             },
           ])
     }
@@ -348,13 +356,13 @@ export async function POST(request: Request) {
         : { ...payloadWithoutReadTimeOrThumbnail, author_id: authData.user.id }
 
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any)
+        ? await (db.from("blog_posts") as any)
             .update(insertPayload as any)
             .eq("id", parsed.data.id)
-        : await (supabase.from("blog_posts") as any).insert([
+        : await (db.from("blog_posts") as any).insert([
             {
               ...insertPayload,
-              slug: await generateUniqueSlug(supabase, parsed.data.title),
+              slug: await generateUniqueSlug(db, parsed.data.title),
             },
           ])
     }
@@ -364,13 +372,13 @@ export async function POST(request: Request) {
       isMissingColumnError(result.error?.message, "author_id")
     ) {
       result = parsed.data.id
-        ? await (supabase.from("blog_posts") as any)
+        ? await (db.from("blog_posts") as any)
             .update(payloadWithoutThumbnailOrAuthor as any)
             .eq("id", parsed.data.id)
-        : await (supabase.from("blog_posts") as any).insert([
+        : await (db.from("blog_posts") as any).insert([
             {
               ...payloadWithoutThumbnailOrAuthor,
-              slug: await generateUniqueSlug(supabase, parsed.data.title),
+              slug: await generateUniqueSlug(db, parsed.data.title),
             },
           ])
     }

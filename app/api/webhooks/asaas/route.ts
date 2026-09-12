@@ -357,30 +357,40 @@ export async function POST(request: NextRequest) {
       .eq("asaas_payment_id", paymentId)
 
     // Confere o VALOR, não só o status: até aqui, uma cobrança adulterada na
-    // origem (valor editado no painel da Asaas, cobrança avulsa criada lá com
-    // o mesmo `asaas_payment_id` de um pedido) liberava o pedido inteiro
+    // origem (valor editado no painel da Asaas) liberava o pedido inteiro
     // porque `status === RECEIVED` era a única condição. Mesmo princípio do
     // webhook de assinatura (`isPaymentValueOffPlan`), com a diferença de que
     // aqui o esperado não é um plano fixo: é o `total_cents` do próprio
     // pedido, que o checkout gravou a partir do preço do banco.
     //
-    // Só barra com evidência POSITIVA de divergência — `value` ausente no
-    // payload da Asaas não bloqueia (mesma escolha do webhook de assinatura),
-    // senão uma mudança de contrato na API deles travaria todas as vendas.
-    if (typeof verified.value === "number" && (priorOrders?.length ?? 0) > 0) {
-      const paidCents = Math.round(verified.value * 100)
-      const underpaid = (priorOrders ?? []).filter(
-        (order) => paidCents < order.total_cents
+    // Só barra com evidência POSITIVA de divergência: `value` ausente no
+    // payload não bloqueia (mesma escolha do webhook de assinatura), senão uma
+    // mudança de contrato na API deles travaria todas as vendas. Parcelamento
+    // também fica de fora, porque aí o `value` da Asaas é o da PARCELA e
+    // comparar com o total recusaria venda legítima.
+    const paidCents =
+      typeof verified.value === "number" ? Math.round(verified.value * 100) : null
+    const isInstallment = Boolean(verified.installment)
+    const underpaidOrders = (priorOrders ?? []).filter(
+      (order) => paidCents !== null && !isInstallment && paidCents < order.total_cents
+    )
+
+    for (const order of underpaidOrders) {
+      console.error(
+        `[webhooks/asaas] valor divergente na cobrança ${paymentId}: pago ${paidCents} vs total ${order.total_cents} do pedido ${order.id} — pedido NÃO liberado.`
       )
-      if (underpaid.length > 0) {
-        console.error(
-          "[webhooks/asaas] valor pago MENOR que o total do pedido — NÃO liberado:",
-          `cobrança ${paymentId} pagou ${paidCents} centavos;`,
-          underpaid.map((o) => `pedido ${o.id} espera ${o.total_cents}`).join(", ")
-        )
-        return NextResponse.json({ received: true, ignored: "payment_value_below_order_total" })
-      }
+      await notifyDiscordOrderEvent({
+        orderId: order.id,
+        status: "payment_mismatch",
+        actor: "webhook-asaas",
+        note: `Asaas confirmou R$ ${((paidCents ?? 0) / 100).toFixed(2)} para um pedido de R$ ${(order.total_cents / 100).toFixed(2)} (cobrança ${paymentId}).`,
+      })
     }
+
+    const underpaidIds = new Set(underpaidOrders.map((order) => order.id))
+    const payableIds = (priorOrders ?? [])
+      .filter((order) => !underpaidIds.has(order.id))
+      .map((order) => order.id)
     // `cancelled` entra junto com `expired`: os dois devolveram o estoque ao
     // inventário antes deste pagamento chegar. O cancelamento marca o pedido
     // localmente mesmo quando o DELETE da cobrança na Asaas falha (ver
@@ -392,16 +402,30 @@ export async function POST(request: NextRequest) {
         .map((o) => o.id)
     )
 
-    const { data: updatedOrders } = await db
-      .from("store_orders")
-      .update({
-        status: "paid",
-        asaas_receipt_url: verified.transactionReceiptUrl ?? verified.invoiceUrl ?? null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("asaas_payment_id", paymentId)
-      .neq("status", "paid")
-      .select("id, affiliate_id, metadata")
+    // Só avança a partir dos estados que ainda esperam pagamento. Com o
+    // `.neq("status", "paid")` de antes, um `PAYMENT_RECEIVED` atrasado (no
+    // cartão a Asaas manda o CONFIRMED na aprovação e o RECEIVED quando o
+    // dinheiro cai, semanas depois) puxava um pedido já `shipped`/`delivered`
+    // de volta para `paid`, com notificação nova para o cliente.
+    // Nenhum pedido pagável (cobrança de outro fluxo, pedido já pago ou valor
+    // divergente): não chega a montar o UPDATE, inclusive porque um `in.()`
+    // vazio não é filtro válido no PostgREST.
+    const updatedOrders =
+      payableIds.length === 0
+        ? []
+        : ((
+            await db
+              .from("store_orders")
+              .update({
+                status: "paid",
+                asaas_receipt_url: verified.transactionReceiptUrl ?? verified.invoiceUrl ?? null,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("asaas_payment_id", paymentId)
+              .in("id", payableIds)
+              .in("status", ["pending", "expired", "cancelled"])
+              .select("id, affiliate_id, metadata")
+          ).data ?? [])
 
     for (const order of updatedOrders ?? []) {
       if (!stockWasReturned.has(order.id)) continue

@@ -2,6 +2,7 @@
 
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { headers } from "next/headers"
+import { verifyTurnstileToken } from "@/lib/server/integrations/turnstile"
 import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 
 type State = { error: string | null; success: boolean }
@@ -21,15 +22,38 @@ export async function forgotPasswordAction(_: State, formData: FormData): Promis
   const proto = headersList.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")
   const origin = headersList.get("origin") || (host ? `${proto}://${host}` : "")
 
+  // Cada envio aceito gasta a cota de e-mail do projeto inteiro (provedor
+  // padrão do Supabase), então sem captcha poucas requisições anônimas por
+  // hora bastavam para ninguém mais recuperar senha. O teto por e-mail é o
+  // mesmo balde de `/api/admin/password-reset` e não depende de IP/UA.
+  const turnstileToken = formData.get("cf_turnstile_response")
+  const clientIp = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
+  const captcha = await verifyTurnstileToken(
+    typeof turnstileToken === "string" ? turnstileToken : null,
+    clientIp
+  )
+  if (!captcha.success) {
+    return { error: "Não foi possível confirmar que você não é um robô. Tente novamente.", success: false }
+  }
+
   const identifier = getClientIdentifierFromHeaders(headersList)
-  const rateLimit = await checkRateLimit({
-    action: "forgot_password",
-    identifier: `${identifier}:${email}`,
-    maxAttempts: 5,
-    windowSeconds: 300,
-    onError: "closed",
-  })
-  if (!rateLimit.allowed) {
+  const [rateLimit, perEmail] = await Promise.all([
+    checkRateLimit({
+      action: "forgot_password",
+      identifier: `${identifier}:${email}`,
+      maxAttempts: 5,
+      windowSeconds: 300,
+      onError: "closed",
+    }),
+    checkRateLimit({
+      action: "password_reset_email",
+      identifier: email,
+      maxAttempts: 3,
+      windowSeconds: 3600,
+      onError: "closed",
+    }),
+  ])
+  if (!rateLimit.allowed || !perEmail.allowed) {
     return { error: "Muitas tentativas. Aguarde alguns minutos antes de pedir um novo link.", success: false }
   }
 

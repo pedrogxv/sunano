@@ -23,10 +23,10 @@ const LOGIN_ERRORS: Record<string, string> = {
   captcha_failed: "Não foi possível confirmar que você não é um robô. Tente novamente.",
 }
 
-function ForgotSubmitButton() {
+function ForgotSubmitButton({ disabled = false }: { disabled?: boolean }) {
   const { pending } = useFormStatus()
   return (
-    <Button className="w-full" disabled={pending} type="submit">
+    <Button className="w-full" disabled={pending || disabled} type="submit">
       {pending ? "Enviando…" : "Enviar link de redefinição"}
     </Button>
   )
@@ -34,6 +34,14 @@ function ForgotSubmitButton() {
 
 function ForgotMode({ onBack }: { onBack: () => void }) {
   const [state, action] = useActionState(forgotPasswordAction, { error: null, success: false })
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const [captchaKey, setCaptchaKey] = useState(0)
+  // O token do Turnstile é de uso único e já foi lido para o FormData neste ponto: o widget remonta para a próxima tentativa.
+  function submitWithFreshCaptcha(formData: FormData) {
+    setCaptchaToken(null)
+    setCaptchaKey((key) => key + 1)
+    action(formData)
+  }
 
   if (state.success) {
     return (
@@ -61,7 +69,7 @@ function ForgotMode({ onBack }: { onBack: () => void }) {
         </p>
       </div>
 
-      <form action={action} className="space-y-4">
+      <form action={submitWithFreshCaptcha} className="space-y-4">
         <div className="space-y-1.5">
           <label className="text-sm font-medium text-foreground" htmlFor="forgot-email">
             Email
@@ -78,13 +86,16 @@ function ForgotMode({ onBack }: { onBack: () => void }) {
           />
         </div>
 
+        <TurnstileWidget key={captchaKey} onTokenChange={setCaptchaToken} />
+        <input type="hidden" name="cf_turnstile_response" value={captchaToken ?? ""} />
+
         {state.error && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {state.error}
           </div>
         )}
 
-        <ForgotSubmitButton />
+        <ForgotSubmitButton disabled={Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) && !captchaToken} />
       </form>
 
       <button

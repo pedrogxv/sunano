@@ -19,7 +19,17 @@ const PROVIDERS: { key: ProviderKey; label: string; Icon: typeof GoogleIcon }[] 
   { key: "discord", label: "Discord", Icon: DiscordIcon },
 ]
 
-export function LinkedAccountsTab() {
+interface LinkedAccountsTabProps {
+  /**
+   * Avisa o hub de /conta que as identidades mudaram, para o selo do card
+   * ("2 de 2 conectadas") acompanhar. Só dispara ao DESVINCULAR: vincular
+   * redireciona o browser para o OAuth e volta em `/conta#conexoes`, quando o
+   * hub relê tudo do zero de qualquer forma. Opcional.
+   */
+  onIdentitiesChange?: () => void
+}
+
+export function LinkedAccountsTab({ onIdentitiesChange }: LinkedAccountsTabProps = {}) {
   const [identities, setIdentities] = useState<UserIdentity[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<ProviderKey | null>(null)
@@ -101,6 +111,7 @@ export function LinkedAccountsTab() {
       if (error) throw error
       toast.success(`${provider === "google" ? "Google" : "Discord"} desvinculado`)
       await loadIdentities()
+      onIdentitiesChange?.()
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : "Tente novamente."
       toast.error("Não foi possível desvincular", { description: message })

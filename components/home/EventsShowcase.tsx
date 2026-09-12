@@ -1,13 +1,11 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
-import { ArrowRight, Award, CheckCircle2, Sparkles } from "lucide-react"
+import { ArrowRight, Sparkles } from "lucide-react"
 import { useEffect, useState } from "react"
 
-import { MEDAL_RARITY_SOLID, MEDAL_RARITY_STYLES } from "@/lib/profile-showcase"
+import { MedalCard } from "@/components/events/MedalCard"
 import type { EventDisplay } from "@/lib/events"
-import { cn } from "@/lib/utils"
 
 /**
  * Prévia de eventos na Home — estrutura de dados (lista de eventos ativos)
@@ -60,48 +58,21 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
       {/* flex-wrap com cards de largura fixa (não grid de colunas fixas): a
           fileira acompanha a quantidade real de eventos em vez de reservar
           um número fixo de "slots" vazios quando há só 1 ou 2. */}
-      <div className="flex flex-wrap gap-4">
-        {events.map((event) => {
-          const claimed = claimedMedalIds.has(event.medalId)
-          const ringColor = MEDAL_RARITY_SOLID[event.rarity]
-
-          return (
-            <Link
-              key={event.id}
-              href="/conquistas"
-              style={{ "--glow-color": ringColor } as React.CSSProperties}
-              className={cn(
-                "event-card-glow event-card-glow-strong group relative flex w-48 shrink-0 flex-col items-center gap-3 rounded-2xl border-2 bg-card p-6 text-center transition-transform hover:z-10 hover:-translate-y-1",
-                MEDAL_RARITY_STYLES[event.rarity]
-              )}
-            >
-              {claimed && (
-                <span className="absolute left-2.5 top-2.5 flex size-5 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400">
-                  <CheckCircle2 className="size-3.5" />
-                </span>
-              )}
-
-              <div className="flex size-20 items-center justify-center rounded-full bg-card">
-                {event.imageUrl ? (
-                  <Image
-                    src={event.imageUrl}
-                    alt={event.name}
-                    width={48}
-                    height={48}
-                    className="size-12 object-contain"
-                  />
-                ) : (
-                  <Award className="size-9" />
-                )}
-              </div>
-
-              <p className="line-clamp-1 text-sm font-semibold text-foreground">{event.name}</p>
-              <p className="text-[11px] text-muted-foreground">
-                {event.maxParticipants !== null ? `${event.currentCount}/${event.maxParticipants} vagas` : `${event.currentCount} resgates`}
-              </p>
-            </Link>
-          )
-        })}
+      <div className="flex flex-wrap gap-6">
+        {events.map((event) => (
+          <Link
+            key={event.id}
+            href="/conquistas"
+            aria-label={`${event.name} — ver conquistas`}
+            className="w-48 shrink-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <MedalCard
+              event={event}
+              claimed={claimedMedalIds.has(event.medalId)}
+              glow="strong"
+            />
+          </Link>
+        ))}
       </div>
     </section>
   )

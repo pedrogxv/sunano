@@ -25,9 +25,15 @@ import { cn } from "@/lib/utils"
 
 interface SecurityTabProps {
   email: string | null
+  /**
+   * Avisa o hub de /conta que os fatores de 2FA mudaram, para o selo do card
+   * ("2FA ativo") não ficar mostrando o estado anterior depois de ativar ou
+   * desativar aqui dentro. Opcional: a tab funciona igual sem ele.
+   */
+  onFactorsChange?: () => void
 }
 
-export function SecurityTab({ email }: SecurityTabProps) {
+export function SecurityTab({ email, onFactorsChange }: SecurityTabProps) {
   // ── Senha ──
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -169,6 +175,7 @@ export function SecurityTab({ email }: SecurityTabProps) {
       setOtp("")
       toast.success("2FA ativado")
       await refreshFactors()
+      onFactorsChange?.()
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : "Código inválido"
       toast.error("Não foi possível validar o código", { description: message })
@@ -196,6 +203,7 @@ export function SecurityTab({ email }: SecurityTabProps) {
       setTrustedDeviceCount(0)
       toast.success("2FA desativado")
       await refreshFactors()
+      onFactorsChange?.()
     } catch (err) {
       const message = err instanceof Error && err.message ? err.message : "Erro ao desativar 2FA"
       toast.error("Erro ao desativar 2FA", { description: message })

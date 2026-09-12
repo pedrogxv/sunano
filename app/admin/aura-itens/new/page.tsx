@@ -8,7 +8,10 @@ import { usePageHeader } from "@/components/providers/page-header-context"
 export default function NewAuraItemPage() {
   const router = useRouter()
 
-  usePageHeader("Novo item de Aura", "Crie uma moldura de avatar compráveis com Aura na Central de Aura.")
+  usePageHeader(
+    "Novo item de Aura",
+    "Escolha a natureza do item: cosmético digital ilimitado ou prêmio físico com estoque real."
+  )
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">

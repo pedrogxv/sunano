@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { parseVipBillingPeriod, type VipBillingPeriod } from "@/lib/vip-plan"
 
 /** Rebaixa em lote quem passou de `vip_expires_at` — chamada pelo cron diário (ver app/api/cron/vip-expiration). */
 export async function expireVipAccounts(): Promise<number> {
@@ -14,49 +15,91 @@ export type VipSubscriptionStatus = "pending" | "active" | "past_due" | "cancele
 
 export type VipPaymentMethod = "credit_card" | "pix"
 
+export type { VipBillingPeriod }
+
 export type VipSubscription = {
   id: string
   userId: string
   /** NULL nas assinaturas PIX — elas não passam pelo checkout hospedado. */
   asaasCheckoutId: string | null
   asaasSubscriptionId: string | null
+  /** Customer na Asaas — necessário para resolver os payments de um checkout. */
+  asaasCustomerId: string | null
   status: VipSubscriptionStatus
   paymentMethod: VipPaymentMethod
+  /**
+   * Plano contratado. Gravado na criação a partir do catálogo do servidor, e
+   * é DELE que as RPCs tiram quanto tempo de acesso cada cobrança concede —
+   * nunca do payload do webhook. Ver a migration 20261108120000.
+   */
+  billingPeriod: VipBillingPeriod
   /** Cobrança PIX do ciclo em aberto, para montar o QR. NULL = nada a pagar agora. */
   pendingPaymentId: string | null
   currentPeriodEnd: string | null
   canceledAt: string | null
+  /** URL do checkout hospedado em aberto — deixa o usuário retomar o pagamento. */
+  checkoutLink: string | null
+  /** Quando o checkout em aberto expira. Governa a trava local, nunca o pagamento. */
+  checkoutExpiresAt: string | null
 }
 
 /** Colunas lidas em toda consulta de assinatura — uma fonte só, para não divergirem. */
 const SUBSCRIPTION_COLUMNS =
-  "id, user_id, asaas_checkout_id, asaas_subscription_id, status, payment_method, pending_payment_id, current_period_end, canceled_at"
+  "id, user_id, asaas_checkout_id, asaas_subscription_id, asaas_customer_id, status, payment_method, billing_period, pending_payment_id, current_period_end, canceled_at, checkout_link, checkout_expires_at"
 
 function mapSubscription(row: {
   id: string
   user_id: string
   asaas_checkout_id: string | null
   asaas_subscription_id: string | null
+  asaas_customer_id: string | null
   status: VipSubscriptionStatus
   payment_method: VipPaymentMethod | null
+  billing_period: string | null
   pending_payment_id: string | null
   current_period_end: string | null
   canceled_at: string | null
+  checkout_link: string | null
+  checkout_expires_at: string | null
 }): VipSubscription {
   return {
     id: row.id,
     userId: row.user_id,
     asaasCheckoutId: row.asaas_checkout_id,
     asaasSubscriptionId: row.asaas_subscription_id,
+    asaasCustomerId: row.asaas_customer_id,
     status: row.status,
     // Linhas criadas antes da migration do PIX não têm a coluna preenchida
     // em memória se a consulta vier de um cache antigo — o default do banco
     // já é 'credit_card', isto só protege o caminho de leitura.
     paymentMethod: row.payment_method ?? "credit_card",
+    // Linhas criadas antes da migration do plano anual não têm o valor em
+    // memória se a leitura vier de um cache antigo; o default do banco já é
+    // 'monthly'. `parseVipBillingPeriod` fecha o caso com o mesmo fallback —
+    // o plano mais curto, nunca o mais longo.
+    billingPeriod: parseVipBillingPeriod(row.billing_period),
     pendingPaymentId: row.pending_payment_id,
     currentPeriodEnd: row.current_period_end,
     canceledAt: row.canceled_at,
+    checkoutLink: row.checkout_link,
+    checkoutExpiresAt: row.checkout_expires_at,
   }
+}
+
+/**
+ * Um checkout hospedado em aberto que JÁ PASSOU do prazo.
+ *
+ * Só é verdade no fluxo de cartão ainda `pending` (sem `asaas_subscription_id`
+ * — ele nasce no 1º pagamento) e com prazo conhecido e vencido. Linhas antigas,
+ * criadas antes da migration que trouxe `checkout_expires_at`, têm a data nula
+ * e nunca entram aqui: sem prazo gravado não dá para afirmar que venceu, e
+ * destravar por suposição é que seria perigoso.
+ */
+export function isCheckoutExpired(subscription: VipSubscription): boolean {
+  if (subscription.status !== "pending") return false
+  if (subscription.asaasSubscriptionId != null) return false
+  if (!subscription.checkoutExpiresAt) return false
+  return new Date(subscription.checkoutExpiresAt).getTime() <= Date.now()
 }
 
 /**
@@ -135,12 +178,40 @@ export async function createSubscriptionRecord(params: {
   /** Ausente = cartão, preservando o comportamento anterior deste método. */
   paymentMethod?: VipPaymentMethod
   /**
+   * Plano contratado, resolvido pelo catálogo do servidor em
+   * POST /api/vip/subscribe. Obrigatório: sem valor explícito, uma assinatura
+   * anual gravada como mensal receberia 1 mês de acesso por uma cobrança de
+   * R$ 89,90 quando o webhook confirmasse o pagamento.
+   */
+  billingPeriod: VipBillingPeriod
+  /**
    * PIX: a assinatura já existe na Asaas no momento da criação da linha, ao
    * contrário do cartão (onde o id só nasce no CHECKOUT_PAID).
    */
   asaasSubscriptionId?: string | null
   /** PIX: cobrança do 1º ciclo, já gerada pela assinatura. */
   pendingPaymentId?: string | null
+  /** Cartão: URL do checkout hospedado, para o usuário retomar o pagamento. */
+  checkoutLink?: string | null
+  /** Cartão: quando o checkout expira — solta a trava mesmo sem webhook. */
+  checkoutExpiresAt?: string | null
+  /**
+   * REATIVAÇÃO por cartão: fim do período JÁ PAGO, preservado enquanto o
+   * checkout do novo cartão não é concluído.
+   *
+   * Sem isto, reativar zerava `current_period_end` e a assinatura de um VIP
+   * ativo virava "aguardando o 1º pagamento" no ato — a aba de assinatura
+   * passava a mostrar "Pagamento em andamento" para quem tinha VIP corrente,
+   * e o `status` era rebaixado para `pending` mesmo antes de qualquer
+   * webhook. O PIX nunca teve esse defeito porque usa
+   * `reactivateSubscriptionRecord`; o cartão não pode usar aquela função
+   * (precisa do checkout hospedado para tokenizar), então recebe o período
+   * por aqui.
+   *
+   * `user_profiles.vip_expires_at` nunca foi afetado — o acesso em si seguia
+   * correto. O que estragava era o ESTADO EXIBIDO da assinatura.
+   */
+  keepCurrentPeriodEnd?: string | null
 }): Promise<string> {
   const db = createSupabaseAdminClient()
 
@@ -161,8 +232,11 @@ export async function createSubscriptionRecord(params: {
         asaas_customer_id: params.asaasCustomerId,
         status: "pending",
         payment_method: params.paymentMethod ?? "credit_card",
+        billing_period: params.billingPeriod,
         pending_payment_id: params.pendingPaymentId ?? null,
-        current_period_end: null,
+        checkout_link: params.checkoutLink ?? null,
+        checkout_expires_at: params.checkoutExpiresAt ?? null,
+        current_period_end: params.keepCurrentPeriodEnd ?? null,
         canceled_at: null,
         updated_at: new Date().toISOString(),
       },
@@ -171,6 +245,53 @@ export async function createSubscriptionRecord(params: {
   if (error) throw error
 
   return effectiveId
+}
+
+/**
+ * REATIVAÇÃO dentro do período já pago — o usuário cancelou, ainda tem VIP
+ * correndo, e voltou atrás antes de o acesso vencer.
+ *
+ * Diferente de `createSubscriptionRecord`, a linha NÃO nasce `pending`:
+ * nasce `active`, com `current_period_end` igual ao `vip_expires_at` que o
+ * usuário já tinha. O motivo é que reativar não é comprar — nenhuma cobrança
+ * é feita agora (a 1ª cobrança da assinatura na Asaas foi agendada para
+ * `vip_expires_at`), e o acesso VIP nunca chegou a ser interrompido.
+ *
+ * Marcar `pending` aqui, como o fluxo de assinatura nova faz, diria
+ * "aguardando o pagamento do 1º mês" a quem é VIP neste exato momento, e
+ * faria a aba de assinatura procurar um QR code que não existe.
+ *
+ * `vip_expires_at` em `user_profiles` NÃO é tocado: ele já está correto, e é
+ * ele quem garante que nenhum dia pago se perde. Quem o avança daqui em
+ * diante é o webhook do 1º pagamento agendado.
+ */
+export async function reactivateSubscriptionRecord(params: {
+  id: string
+  userId: string
+  asaasCustomerId: string
+  paymentMethod: VipPaymentMethod
+  asaasSubscriptionId: string
+  /** Fim do período já pago — vira `current_period_end` e é quando a 1ª cobrança vence. */
+  currentPeriodEnd: string
+  /**
+   * Plano da assinatura reativada — pode DIFERIR do anterior: quem cancelou o
+   * mensal pode reativar no anual. É este valor que a renovação vai ler para
+   * saber quanto tempo a cobrança agendada concede.
+   */
+  billingPeriod: VipBillingPeriod
+}): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.rpc("reactivate_vip_subscription", {
+    p_id: params.id,
+    p_user_id: params.userId,
+    p_asaas_customer_id: params.asaasCustomerId,
+    p_payment_method: params.paymentMethod,
+    p_asaas_subscription_id: params.asaasSubscriptionId,
+    p_current_period_end: params.currentPeriodEnd,
+    p_billing_period: params.billingPeriod,
+  })
+  if (error) throw error
+  return Boolean(data)
 }
 
 /** 1º pagamento de uma assinatura recém-criada (webhook CHECKOUT_PAID) — idempotente. */
@@ -224,6 +345,27 @@ export async function getLatestSubscriptionByAsaasId(
 }
 
 /**
+ * Assinatura pelo id do CHECKOUT hospedado — o único identificador que existe
+ * antes do 1º pagamento (o `asaas_subscription_id` só nasce no CHECKOUT_PAID).
+ *
+ * Usada pelo webhook para distinguir uma reativação com cobrança agendada
+ * (payment `PENDING` com período pago ainda correndo) de um checkout comum
+ * que simplesmente não foi pago.
+ */
+export async function getLatestSubscriptionByCheckoutId(
+  asaasCheckoutId: string
+): Promise<VipSubscription | null> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("vip_subscriptions")
+    .select(SUBSCRIPTION_COLUMNS)
+    .eq("asaas_checkout_id", asaasCheckoutId)
+    .limit(1)
+  if (error) throw error
+  return data && data.length > 0 ? mapSubscription(data[0]) : null
+}
+
+/**
  * 1º pagamento de uma assinatura PIX (webhook PAYMENT_RECEIVED/CONFIRMED de
  * uma cobrança cuja assinatura ainda está `pending`). Diferente do cartão,
  * localiza pela assinatura — no PIX não há checkout hospedado, então
@@ -269,6 +411,23 @@ export async function markSubscriptionPastDue(asaasSubscriptionId: string): Prom
   })
   if (error) throw error
   return Boolean(data)
+}
+
+/**
+ * Limpa os campos do checkout hospedado ao encerrá-lo — chamado depois de
+ * `cancelSubscriptionForUser` em POST /api/vip/checkout/cancel.
+ *
+ * Sem isto a linha ficaria `canceled` mas ainda carregando `checkout_link`, e
+ * a aba de assinatura ofereceria "Continuar pagamento" para uma página que a
+ * Asaas já recusa.
+ */
+export async function clearCheckoutFields(userId: string): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const { error } = await db
+    .from("vip_subscriptions")
+    .update({ checkout_link: null, checkout_expires_at: null, updated_at: new Date().toISOString() })
+    .eq("user_id", userId)
+  if (error) throw error
 }
 
 /** Cancelamento pedido pelo usuário (POST /api/vip/cancel). */

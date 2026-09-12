@@ -3,13 +3,15 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
- * Repositório do ban geral de conta — distinto de `market-repository.ts`
- * (`setMarketBan`), que só restringe o Mercado. Aqui a conta perde login,
- * some das listagens públicas e tem conteúdo/aura ajustados; toda a lógica
- * atômica vive nas RPCs `admin_ban_account`/`admin_unban_account`
- * (20260923000001_account_ban.sql) — este arquivo só chama a RPC e registra
- * em `audit_log` (mesmo padrão de `setMarketBan`, já que a RPC não tem acesso
- * ao `actorId` de quem clicou banir).
+ * Repositório do ban geral de conta: a conta perde login, some das listagens
+ * públicas e tem conteúdo/aura ajustados. Toda a lógica atômica vive nas RPCs
+ * `admin_ban_account`/`admin_unban_account` (20260923000001_account_ban.sql)
+ * — este arquivo só chama a RPC e registra em `audit_log`, já que a RPC não
+ * tem acesso ao `actorId` de quem clicou banir.
+ *
+ * (As colunas `market_banned_at`/`market_ban_reason` de `user_profiles` são
+ * resquício do Mercado, removido do produto em 2026-09-12: nenhum código as
+ * escreve mais.)
  */
 
 export type RepositoryResult = { ok: true } | { ok: false; error: string; status: number }

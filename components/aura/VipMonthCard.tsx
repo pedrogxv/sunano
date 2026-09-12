@@ -60,6 +60,7 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
       const data = (await res.json()) as {
         ok?: boolean
         error?: string
+        code?: string
         checkoutUrl?: string
         manageUrl?: string | null
       }
@@ -67,10 +68,13 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
         // Assinatura já viva na Asaas — oferece o caminho de gerenciamento
         // em vez de um erro sem saída.
         if (data.manageUrl) {
-          toast.error("Você já tem uma assinatura", {
+          // Um checkout em aberto ainda não é assinatura: o id na Asaas só
+          // nasce no 1º pagamento. Ver POST /api/vip/subscribe.
+          const isPendingCheckout = data.code === "subscription_already_pending"
+          toast.error(isPendingCheckout ? "Pagamento pendente" : "Você já tem uma assinatura", {
             description: data.error ?? "Gerencie sua assinatura nas configurações da conta.",
             action: {
-              label: "Gerenciar",
+              label: isPendingCheckout ? "Ver checkout" : "Gerenciar",
               onClick: () => {
                 window.location.href = data.manageUrl as string
               },
@@ -174,13 +178,17 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
               {subscriptionEnabled && (
                 <button
                   type="button"
-                  onClick={handleSubscribe}
+                  // Abre o modal em vez de disparar o POST direto QUANDO há
+                  // handler: existem dois planos (mensal e anual) e só o modal
+                  // deixa escolher. O POST direto continua como fallback — ele
+                  // assina no MENSAL, que é o preço que este botão anuncia.
+                  onClick={onShowBenefits ?? handleSubscribe}
                   disabled={loading || subscribing}
                   className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-1.5 text-[10.5px] font-bold transition-colors hover:bg-[var(--vip-accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
                   style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
                 >
                   {subscribing && <Loader2 className="size-3 animate-spin" />}
-                  Assinar por {formatVipPrice()}/mês
+                  A partir de {formatVipPrice("monthly")}/mês
                 </button>
               )}
             </div>

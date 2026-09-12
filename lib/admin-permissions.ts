@@ -31,8 +31,8 @@ export type AdminPermissionKey =
   | "forum_write"
   | "store_read"
   | "store_write"
-  | "market_read"
-  | "market_write"
+  | "vip_read"
+  | "vip_write"
   | "banners_read"
   | "banners_write"
   | "events_read"
@@ -53,7 +53,7 @@ export type AdminProfile = {
   permissions: Record<string, boolean> | null
 }
 
-export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store" | "market" | "banners" | "events" | "brands" | "affiliates" | "support"
+export type AdminFeatureKey = "dashboard" | "peripherals" | "blog" | "settings" | "tiers" | "maintenance" | "profile" | "offers" | "forum" | "store" | "vip" | "banners" | "events" | "brands" | "affiliates" | "support"
 
 export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKey: AdminPermissionKey; writeKey: AdminPermissionKey }> = [
   { key: "dashboard", label: "Dashboard", readKey: "dashboard_read", writeKey: "dashboard_read" },
@@ -68,7 +68,7 @@ export const ADMIN_FEATURES: Array<{ key: AdminFeatureKey; label: string; readKe
   { key: "profile", label: "Perfil", readKey: "profile_read", writeKey: "profile_write" },
   { key: "offers", label: "Ofertas", readKey: "offers_read", writeKey: "offers_write" },
   { key: "store", label: "Loja", readKey: "store_read", writeKey: "store_write" },
-  { key: "market", label: "Mercado", readKey: "market_read", writeKey: "market_write" },
+  { key: "vip", label: "VIPs", readKey: "vip_read", writeKey: "vip_write" },
   { key: "banners", label: "Banners da Home", readKey: "banners_read", writeKey: "banners_write" },
   { key: "events", label: "Conquistas", readKey: "events_read", writeKey: "events_write" },
   { key: "affiliates", label: "Afiliados", readKey: "affiliates_read", writeKey: "affiliates_write" },
@@ -94,8 +94,8 @@ export const ADMIN_PERMISSION_KEYS: AdminPermissionKey[] = [
   "offers_write",
   "store_read",
   "store_write",
-  "market_read",
-  "market_write",
+  "vip_read",
+  "vip_write",
   "banners_read",
   "banners_write",
   "events_read",
@@ -160,8 +160,14 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Record<AdminPermissionKey, bool
     brands_read: true,
     brands_write: true,
   }),
-  // Gestão da loja: Loja/Bazar (módulo "store"; Bazar foi incorporado à Loja)
-  // e Tickets (módulo "support", os chamados em /admin/suporte).
+  // Gestão da loja: Loja/Bazar (módulo "store"; Bazar foi incorporado à Loja) e
+  // Tickets (módulo "support", os chamados em /admin/suporte).
+  //
+  // VIP: só LEITURA. Consultar o estado de uma assinatura é atendimento comum
+  // ("meu VIP sumiu", "fui cobrado duas vezes") e ele precisa disso; MEXER no
+  // VIP não é trabalho de vendedor. Conceder/revogar acesso pago e cancelar
+  // assinatura ficam com webmaster e admin — decisão do dono do site
+  // (2026-09-12), não limitação técnica.
   vendedor: build({
     dashboard_read: true,
     profile_read: true,
@@ -170,6 +176,7 @@ export const ROLE_PERMISSIONS: Record<AdminRole, Record<AdminPermissionKey, bool
     store_write: true,
     support_read: true,
     support_write: true,
+    vip_read: true,
   }),
   // Beta tester da comunidade: silencia/apaga postagens e apazigua conflitos
   // em Fórum e Blog. O sistema não distingue "moderação leve" de edição

@@ -6,6 +6,7 @@ import { listAllBlogSlugsForSitemap } from "@/lib/server/repositories/blog-repos
 import { listAllStoreSlugsForSitemap } from "@/lib/server/repositories/store-repository"
 import { listAllPeripheralSlugsForSitemap } from "@/lib/server/repositories/peripherals-repository"
 import { listProfileSlugsForSitemap } from "@/lib/server/repositories/users-repository"
+import { isMaintenanceEnabled } from "@/lib/maintenance"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { profilePath } from "@/lib/profile-name"
@@ -22,6 +23,13 @@ import { SITE_URL } from "@/lib/site-url"
  * 5 queries indexadas cada, servido do CDN no intervalo. Mantê-lo estático (e
  * não `force-dynamic`) é deliberado — são 600+ URLs, e regerar isso a cada
  * request de bot seria caro sem ganho nenhum.
+ *
+ * Consequência para a manutenção: a cópia em cache pode continuar sendo
+ * servida por até 6h depois de ligar a flag. Isso é aceitável porque o
+ * `robots.txt` (esse sim `force-dynamic`) passa a proibir o rastreamento na
+ * hora — o crawler não vai buscar as URLs mesmo que o sitemap velho ainda as
+ * liste. Trocar este arquivo para dinâmico custaria 6 queries por request de
+ * bot o ano inteiro para melhorar só a janela de manutenção.
  */
 export const revalidate = 21600
 
@@ -52,6 +60,16 @@ const STATIC_ROUTES: { path: string; priority: number; changeFrequency: Metadata
 // 50 mil URLs por arquivo do protocolo). Se o fórum crescer muito, isso vira
 // um sitemap index com arquivos separados por seção.
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Site inteiro em manutenção: toda rota pública redireciona para
+  // `/maintenance`. Continuar anunciando 600+ URLs mandaria o crawler bater
+  // numa cadeia de redirects e arriscaria desindexar o site inteiro; além
+  // disso as 6 queries abaixo rodariam contra um banco que pode estar no meio
+  // de uma migração. O sitemap vazio é o estado honesto da janela.
+  //
+  // Esta rota NÃO passa pelo proxy (o matcher exclui `sitemap.xml`), por isso
+  // a checagem precisa existir aqui dentro.
+  if (isMaintenanceEnabled()) return []
+
   // A Loja em manutenção responde `ComingSoon` em toda rota de produto —
   // anunciá-las no sitemap mandaria o Google indexar páginas que hoje não
   // têm o conteúdo prometido.
@@ -88,11 +106,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   ])
 
+  // Post de fórum é o conteúdo mais forte do site para rastreio: texto
+  // original, escrito por uma pessoa, único por URL — o oposto das fichas e
+  // perfis vazios que puseram 732 URLs em "Detectada, mas não indexada". Com o
+  // sitemap encolhido pelo filtro de `lib/indexability.ts`, a prioridade sobe
+  // de 0.6 para 0.8: é para cá que o crawl budget liberado deve ir primeiro.
   const forumEntries: MetadataRoute.Sitemap = forumPosts.map((p) => ({
     url: `${SITE_URL}/forum/${p.slug}`,
     lastModified: new Date(p.updated_at),
     changeFrequency: "weekly" as const,
-    priority: 0.6,
+    priority: 0.8,
   }))
 
   const blogEntries: MetadataRoute.Sitemap = blogPosts.map((p) => ({
@@ -156,11 +179,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // O perfil público é conteúdo indexável e não era anunciado em lugar nenhum:
   // o diretório `/pessoas` pagina no cliente, então não havia link rastreável
   // para a maioria deles.
+  //
+  // `listProfileSlugsForSitemap` já devolve só quem tem atividade (ver
+  // `lib/indexability.ts`), então o que chega aqui não é mais "todo mundo
+  // cadastrado" — é quem escreveu, avaliou ou montou setup. Daí 0.5 em vez de
+  // 0.4: ainda abaixo do conteúdo editorial, mas não mais no piso.
   const profileEntries: MetadataRoute.Sitemap = profiles.map((p) => ({
     url: `${SITE_URL}${profilePath(p.slug)}`,
     lastModified: p.updated_at ? new Date(p.updated_at) : undefined,
     changeFrequency: "weekly" as const,
-    priority: 0.4,
+    priority: 0.5,
   }))
 
   const storeRootEntries: MetadataRoute.Sitemap = storeEnabled

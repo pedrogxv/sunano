@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { DEFAULT_TIER_PRESET } from "@/lib/personal-tierlist-theme"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
+import { useAuthUser } from "@/components/providers/auth-context"
+import { vipCtaLabel } from "@/lib/vip-status"
 
 /**
  * Aviso de que montar tierlist é exclusivo de VIP.
@@ -24,6 +26,13 @@ import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
  * Central de Aura, a sidebar e o menu de conta já usam, para "Seja VIP"
  * significar a mesma coisa em todo lugar. Com a assinatura paga desligada
  * (`isVipSubscriptionEnabled`), o próprio modal oferece o caminho da Aura.
+ *
+ * O RÓTULO do CTA vem de `vipCtaLabel`, não do `variant`. `variant` descreve
+ * a TIERLIST (existe e está congelada vs. nunca existiu); só o estado da
+ * assinatura sabe se a ação é reativar sem cobrança ou assinar de novo
+ * cobrando. Escrever o rótulo à mão aqui produzia "Renovar VIP" no aviso
+ * compacto e "Reativar VIP" no card — dois verbos para a mesma ação, e ambos
+ * errados para quem já tinha vencido. Ver lib/vip-status.ts.
  */
 export function TierlistVipGate({
   variant = "locked",
@@ -37,6 +46,11 @@ export function TierlistVipGate({
 }) {
   const [upsellOpen, setUpsellOpen] = useState(false)
   const isExpired = variant === "expired"
+  const { user: authUser } = useAuthUser()
+  // Quem cai neste gate normalmente não tem VIP ativo, então o rótulo tende a
+  // ser "Assinar de novo"/"Seja VIP". O fallback cobre o gate renderizado
+  // antes de `/api/auth/me` responder.
+  const ctaLabel = (authUser ? vipCtaLabel(authUser.vip) : null) ?? "Seja VIP"
 
   if (compact) {
     return (
@@ -59,7 +73,7 @@ export function TierlistVipGate({
           className="font-semibold transition-opacity hover:opacity-80"
           style={{ color: "var(--vip-accent)" }}
         >
-          {isExpired ? "Renovar VIP" : "Seja VIP"} →
+          {ctaLabel} →
         </button>
 
         <VipUpsellModal open={upsellOpen} onOpenChange={setUpsellOpen} />
@@ -118,7 +132,7 @@ export function TierlistVipGate({
             className="mt-4 inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-bold text-black transition-opacity hover:opacity-90"
             style={{ backgroundColor: "var(--vip-accent)" }}
           >
-            {isExpired ? "Reativar VIP" : "Seja VIP"}
+            {ctaLabel}
             <ArrowRight className="size-3.5" />
           </button>
         </div>

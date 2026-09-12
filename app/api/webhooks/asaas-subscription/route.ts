@@ -1,7 +1,11 @@
 import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
-import { getPayment, getPaymentsByCheckoutSession } from "@/lib/server/integrations/asaas"
+import {
+  getPayment,
+  getPaymentsByCheckoutSession,
+  isSubscriptionLiveAtAsaas,
+} from "@/lib/server/integrations/asaas"
 import {
   activateSubscriptionFromWebhook,
   activatePixSubscriptionFromWebhook,
@@ -11,27 +15,37 @@ import {
   endSubscriptionByAsaasId,
   cancelSubscriptionByCheckoutId,
   getLatestSubscriptionByAsaasId,
+  getLatestSubscriptionByCheckoutId,
+  reactivateSubscriptionRecord,
 } from "@/lib/server/repositories/vip-subscription-repository"
-import { VIP_SUBSCRIPTION_PRICE_CENTS } from "@/lib/vip-plan"
-
-// Tolerância para o valor da cobrança recorrente divergir do plano local.
-// A Asaas é a fonte de verdade da cobrança real, e o preço do plano pode
-// mudar aqui (edição de `VIP_SUBSCRIPTION_PRICE_CENTS` + deploy) enquanto
-// assinaturas antigas seguem no valor antigo — por isso a folga é generosa
-// (metade do preço). O objetivo é só barrar uma assinatura adulterada no
-// painel para R$ 0,01, não brigar com reajuste legítimo.
-const VIP_PRICE_TOLERANCE_CENTS = Math.round(VIP_SUBSCRIPTION_PRICE_CENTS / 2)
+import { getVipPlan, type VipBillingPeriod } from "@/lib/vip-plan"
 
 /**
- * `true` quando o valor confirmado na origem está longe demais do plano VIP
- * para ser tratado como cobrança legítima — nesse caso NÃO concedemos nem
- * renovamos o acesso (defesa contra assinatura adulterada no painel Asaas).
- * `null`/indefinido = sem valor no payload, não bloqueia.
+ * `true` quando o valor confirmado na origem está longe demais do plano
+ * CONTRATADO para ser tratado como cobrança legítima — nesse caso NÃO
+ * concedemos nem renovamos o acesso (defesa contra assinatura adulterada no
+ * painel da Asaas). Valor ausente no payload não bloqueia.
+ *
+ * A validação é POR PLANO, contra o `billing_period` gravado na linha local.
+ * Com um único preço global, a chegada do plano anual abriria duas brechas ao
+ * mesmo tempo:
+ *
+ *   • uma tolerância larga o bastante para aceitar R$ 89,90 aceitaria também
+ *     qualquer coisa entre R$ 8,90 e R$ 89,90 numa assinatura MENSAL;
+ *   • e uma cobrança de R$ 8,90 numa assinatura marcada como ANUAL passaria
+ *     batido, concedendo 12 meses pelo preço de 1.
+ *
+ * Comparando com o preço do plano da linha, cada assinatura só aceita o valor
+ * da sua própria faixa. A folga (metade do preço do plano) existe para não
+ * brigar com reajuste legítimo: assinaturas antigas seguem no valor antigo
+ * depois de uma edição de `lib/vip-plan.ts` + deploy. O objetivo é barrar uma
+ * assinatura adulterada para R$ 0,01, não recusar quem paga o preço de ontem.
  */
-function isPaymentValueOffPlan(value: unknown): boolean {
+function isPaymentValueOffPlan(value: unknown, billingPeriod: VipBillingPeriod): boolean {
   if (typeof value !== "number") return false
+  const expected = getVipPlan(billingPeriod).priceCents
   const cents = Math.round(value * 100)
-  return Math.abs(cents - VIP_SUBSCRIPTION_PRICE_CENTS) > VIP_PRICE_TOLERANCE_CENTS
+  return Math.abs(cents - expected) > Math.round(expected / 2)
 }
 
 export const runtime = "nodejs"
@@ -113,15 +127,63 @@ export async function POST(request: NextRequest) {
 
       // Defesa em profundidade: reconsulta na origem antes de ativar.
       const verified = await getPayment(payment.id)
+
+      // A linha local é lida ANTES de qualquer decisão porque é ela que diz
+      // qual plano foi contratado — e o valor aceitável depende disso. O
+      // webhook nunca é a fonte do plano: se fosse, bastaria uma cobrança
+      // adulterada para transformar 1 mês em 12.
+      const local = await getLatestSubscriptionByCheckoutId(checkoutId)
+
+      // REATIVAÇÃO dentro do período já pago: a cobrança nasce agendada para
+      // o FIM desse período (`nextDueDate` = `vip_expires_at`, ver
+      // POST /api/vip/subscribe), então o payment fica `PENDING` até lá e
+      // NUNCA chega em RECEIVED/CONFIRMED agora. O checkout serviu só para
+      // cadastrar o cartão.
+      //
+      // A evidência de sucesso aqui não é o pagamento — é a ASSINATURA estar
+      // viva na Asaas. Exigir payment confirmado fazia a linha local ficar
+      // presa em `pending` para sempre, exibindo "Renovação em andamento" a
+      // um VIP ativo que já tinha cadastrado o cartão.
+      //
+      // Usa `reactivateSubscriptionRecord` (e não `activateSubscriptionFromWebhook`):
+      // aquela SOMA um mês ao acesso, o que seria conceder tempo não pago. A
+      // reativação só religa a cobrança futura — o período atual já foi pago
+      // no ciclo anterior.
       if (verified.status !== "RECEIVED" && verified.status !== "CONFIRMED") {
+        const live = await isSubscriptionLiveAtAsaas(payment.subscription)
+
+        if (live && local?.currentPeriodEnd && new Date(local.currentPeriodEnd) > new Date()) {
+          await reactivateSubscriptionRecord({
+            id: local.id,
+            userId: local.userId,
+            asaasCustomerId: local.asaasCustomerId ?? "",
+            paymentMethod: local.paymentMethod,
+            asaasSubscriptionId: payment.subscription,
+            currentPeriodEnd: local.currentPeriodEnd,
+            // Preserva o plano que o usuário escolheu ao reativar — ele já foi
+            // gravado por POST /api/vip/subscribe e a cobrança agendada na
+            // Asaas é a desse plano. Reescrever com um default aqui faria uma
+            // reativação no anual conceder 1 mês quando aquela cobrança de
+            // R$ 89,90 fosse confirmada.
+            billingPeriod: local.billingPeriod,
+          })
+          return NextResponse.json({ received: true, reactivated: true })
+        }
+
         return NextResponse.json({ received: true, ignored: "payment_not_confirmed" })
       }
-      if (isPaymentValueOffPlan(verified.value)) {
+      // Sem linha local não há plano contratado para comparar. Cai no mensal
+      // (o mais barato) em vez de aceitar qualquer valor: a RPC logo abaixo
+      // levanta `subscription_not_found` nesse caso de qualquer forma.
+      const checkoutPlan = local?.billingPeriod ?? "monthly"
+      if (isPaymentValueOffPlan(verified.value, checkoutPlan)) {
         console.error(
           "[webhooks/asaas-subscription] CHECKOUT_PAID com valor fora do plano VIP — acesso NÃO concedido:",
           verified.value,
+          "plano:",
+          checkoutPlan,
           "esperado:",
-          VIP_SUBSCRIPTION_PRICE_CENTS
+          getVipPlan(checkoutPlan).priceCents
         )
         return NextResponse.json({ received: true, ignored: "payment_value_off_plan" })
       }
@@ -169,12 +231,21 @@ export async function POST(request: NextRequest) {
       if (verified.status !== "RECEIVED" && verified.status !== "CONFIRMED") {
         return NextResponse.json({ received: true, ignored: "payment_not_confirmed" })
       }
-      if (isPaymentValueOffPlan(verified.value)) {
+
+      // A linha local vem ANTES da validação de valor: é ela que carrega o
+      // plano contratado, e é contra o preço DESSE plano que o valor pago tem
+      // de ser conferido. Validar contra um preço fixo aceitaria R$ 8,90 numa
+      // assinatura anual — 12 meses de acesso pelo preço de 1.
+      const local = await getLatestSubscriptionByAsaasId(subscriptionId)
+      const renewalPlan = local?.billingPeriod ?? "monthly"
+      if (isPaymentValueOffPlan(verified.value, renewalPlan)) {
         console.error(
           "[webhooks/asaas-subscription] renovação com valor fora do plano VIP — acesso NÃO renovado:",
           verified.value,
+          "plano:",
+          renewalPlan,
           "esperado:",
-          VIP_SUBSCRIPTION_PRICE_CENTS
+          getVipPlan(renewalPlan).priceCents
         )
         return NextResponse.json({ received: true, ignored: "payment_value_off_plan" })
       }
@@ -182,7 +253,6 @@ export async function POST(request: NextRequest) {
       // Assinatura PIX ainda não ativada = este é o 1º pagamento dela.
       // `activate_vip_subscription_pix` localiza por asaas_subscription_id
       // (no PIX não há asaas_checkout_id para a RPC do cartão usar).
-      const local = await getLatestSubscriptionByAsaasId(subscriptionId)
       if (local?.paymentMethod === "pix" && local.status === "pending") {
         await activatePixSubscriptionFromWebhook({
           asaasSubscriptionId: subscriptionId,
@@ -235,6 +305,38 @@ export async function POST(request: NextRequest) {
       if (!checkoutId) {
         return NextResponse.json({ error: "checkout.id ausente" }, { status: 400 })
       }
+
+      // Defesa em profundidade antes de encerrar a linha: este evento pode
+      // chegar DEPOIS de o checkout ter sido pago — reentrega atrasada, ou a
+      // corrida entre o usuário clicando "cancelar checkout" e a confirmação
+      // do pagamento. Marcar `canceled` por cima de uma assinatura recém-paga
+      // tiraria o VIP de quem acabou de pagar.
+      //
+      // `GET /v3/checkouts/{id}` não existe na API v3, mas os payments do
+      // checkout são consultáveis — mesma verificação que o webhook da loja
+      // já faz antes de devolver estoque.
+      //
+      // Só aborta com evidência POSITIVA de pagamento: falha de rede ou
+      // `customer` ausente não podem impedir a liberação da trava, senão uma
+      // instabilidade da Asaas prende o usuário em `pending`.
+      const customerId = payload.checkout?.customer
+      if (customerId) {
+        try {
+          const payments = await getPaymentsByCheckoutSession(checkoutId, customerId)
+          const paid = payments.find(
+            (p) => p.status === "RECEIVED" || p.status === "CONFIRMED" || p.status === "RECEIVED_IN_CASH"
+          )
+          if (paid) {
+            console.warn(
+              `[webhooks/asaas-subscription] ${payload.event} ignorado: checkout ${checkoutId} tem pagamento ${paid.id} (${paid.status}).`
+            )
+            return NextResponse.json({ received: true, ignored: "already_paid" })
+          }
+        } catch (err) {
+          console.error("[webhooks/asaas-subscription] verificação de pagamento antes de cancelar:", err)
+        }
+      }
+
       await cancelSubscriptionByCheckoutId(checkoutId)
       return NextResponse.json({ received: true })
     }

@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
-import { notFound } from "next/navigation"
+import { notFound, permanentRedirect } from "next/navigation"
 
 import { getPublishedPostBySlug } from "@/lib/server/repositories/blog-repository"
 import { BlogPostContent, type BlogPost } from "./blog-post-content"
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/seo/JsonLd"
+import { profilePath } from "@/lib/profile-name"
 import { buildDescription, buildMetadata } from "@/lib/seo"
 
 
@@ -70,6 +71,17 @@ export default async function BlogPostPage({
   const { slug } = await params
   const post = await getReviewPost(slug)
 
+  // Notícia acessada pela URL antiga de blog: até o commit 8325a2c o sitemap
+  // anunciava TODA notícia como `/blog/<slug>`, então o Google guardou essas
+  // URLs e hoje elas batem em 404 ("O URL não está disponível para o Google").
+  // O conteúdo existe — só mudou de rota —, então o certo é 301 para a URL
+  // canônica em vez de 404: preserva o sinal que a URL antiga acumulou e
+  // transfere para `/noticias/<slug>`.
+  if (!post) {
+    const anyPost = (await getPublishedPostBySlug(slug)) as BlogPost | null
+    if (anyPost?.post_type === "news") permanentRedirect(`/noticias/${anyPost.slug}`)
+  }
+
   // 404 de verdade em vez do "não encontrado" renderizado com status 200: o
   // soft-404 fazia o Google indexar a página de erro como conteúdo válido.
   if (!post) notFound()
@@ -87,6 +99,7 @@ export default async function BlogPostPage({
         datePublished={post.created_at}
         dateModified={post.updated_at ?? post.created_at}
         authorName={post.admin_profiles?.display_name}
+        authorPath={post.author_profile?.display_slug ? profilePath(post.author_profile.display_slug) : null}
       />
       <BreadcrumbJsonLd
         items={[

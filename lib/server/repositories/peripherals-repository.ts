@@ -5,6 +5,10 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { coercePeripheralId, slugToSearchPattern } from "@/lib/peripheral-slug"
 import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
 import { slimTierlistSpecs } from "@/lib/tierlist-specs"
+import {
+  PERIPHERAL_INDEX_SIGNAL_COLUMNS,
+  isPeripheralIndexable,
+} from "@/lib/indexability"
 import type { Category } from "@/lib/tag-options"
 
 /**
@@ -629,7 +633,15 @@ export async function listPeripheralIdsWithYoutubeReview(): Promise<Set<string>>
  * técnica"), o tráfego não-marca que faltava no Search Console.
  *
  * Consulta enxuta de propósito (`listAllPeripherals` traz `FULL_COLUMNS`,
- * incluindo `specs` jsonb inteiro): o sitemap só precisa de slug e data.
+ * incluindo `specs` jsonb inteiro): o sitemap só precisa de slug, data e os
+ * sinais que decidem indexabilidade.
+ *
+ * **Só fichas com conteúdo.** Anunciar as 576 linhas da tabela pôs 732 URLs em
+ * "Detectada, mas não indexada" no Search Console — o Google adiou o rastreio
+ * de quase tudo em vez de escolher. 364 fichas não tinham nem uma spec nem uma
+ * review: notas 0/6 e "-" em todo campo. O filtro é `lib/indexability.ts`, e a
+ * ficha volta sozinha ao sitemap quando ganhar specs ou review (o sitemap
+ * revalida a cada 6h) — nada aqui é lista fixa.
  */
 export async function listAllPeripheralSlugsForSitemap(): Promise<
   { name: string; id: string; updated_at: string }[]
@@ -637,7 +649,12 @@ export async function listAllPeripheralSlugsForSitemap(): Promise<
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("peripherals")
-    .select("id, name, updated_at, created_at")
+    // `peripheral_reviews(count)` resolve a contagem no Postgres: sem isto
+    // seriam 576 consultas, ou trazer as reviews inteiras para contar em JS.
+    .select(
+      `id, name, updated_at, created_at, ${PERIPHERAL_INDEX_SIGNAL_COLUMNS}, peripheral_reviews!left(count)`
+    )
+    .eq("peripheral_reviews.is_hidden", false)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -645,9 +662,20 @@ export async function listAllPeripheralSlugsForSitemap(): Promise<
     return []
   }
 
-  return (data ?? []).map((p) => ({
-    name: p.name as string,
-    id: p.id as string,
-    updated_at: (p.updated_at ?? p.created_at) as string,
-  }))
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[])
+    .filter((p) =>
+      isPeripheralIndexable({
+        ...p,
+        // O embed agregado vem como `[{ count: n }]` (ou `[]` sem review).
+        reviewCount: Array.isArray(p.peripheral_reviews)
+          ? (p.peripheral_reviews[0]?.count ?? 0)
+          : 0,
+      })
+    )
+    .map((p) => ({
+      name: p.name as string,
+      id: p.id as string,
+      updated_at: (p.updated_at ?? p.created_at) as string,
+    }))
 }

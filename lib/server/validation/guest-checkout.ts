@@ -30,10 +30,9 @@ export function isValidCPF(raw: string): boolean {
 
 /**
  * Nome+CPF enviados por um usuário logado que ainda não tem esses dados no
- * perfil (sem e-mail, que já vem da sessão), para o checkout/anúncio
- * completar o perfil no mesmo request em vez de mandar a pessoa para uma
- * tela de edição que não existe. Compartilhado entre `store/checkout` e
- * `market/listings` — os dois cobram PIX e exigem o mesmo par de dados.
+ * perfil (sem e-mail, que já vem da sessão), para o checkout completar o
+ * perfil no mesmo request em vez de mandar a pessoa para uma tela de edição
+ * que não existe.
  */
 export const payerInfoSchema = z.object({
   guestName: z

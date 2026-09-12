@@ -244,6 +244,18 @@ export interface AsaasPayment {
   value?: number
   /** YYYY-MM-DD. Presente ao listar cobranças de uma assinatura. */
   dueDate?: string
+  /** PIX | CREDIT_CARD | … — como o ciclo foi (ou será) cobrado. */
+  billingType?: string
+  /** YYYY-MM-DD do pagamento efetivo. Ausente enquanto não foi pago. */
+  paymentDate?: string | null
+  /** Data de crédito na conta (compensação do cartão). */
+  clientPaymentDate?: string | null
+  /** Fatura hospedada da cobrança — o link que o cliente recebe. */
+  invoiceUrl?: string | null
+  /** Comprovante da transação, quando já paga. */
+  transactionReceiptUrl?: string | null
+  /** Excluída na origem: a Asaas devolve o objeto com a flag, não um 404. */
+  deleted?: boolean
 }
 
 /**
@@ -416,6 +428,14 @@ export interface CreateSubscriptionCheckoutParams {
   description: string
   externalReference: string
   nextDueDate: string // YYYY-MM-DD, vencimento da 1ª cobrança
+  /**
+   * Periodicidade da recorrência. Obrigatório e sem default: o plano é
+   * resolvido no servidor (`lib/vip-plan.ts`) e precisa chegar íntegro até
+   * aqui. Um default `MONTHLY` silencioso faria uma assinatura ANUAL ser
+   * criada como mensal na Asaas — o usuário pagaria R$ 89,90 e seria cobrado
+   * de novo no mês seguinte.
+   */
+  cycle: "MONTHLY" | "YEARLY"
   successUrl: string
   cancelUrl: string
   expiredUrl: string
@@ -445,7 +465,7 @@ export async function createSubscriptionCheckout(
     body: JSON.stringify({
       billingTypes: ["CREDIT_CARD"],
       chargeTypes: ["RECURRENT"],
-      subscription: { cycle: "MONTHLY", nextDueDate: params.nextDueDate },
+      subscription: { cycle: params.cycle, nextDueDate: params.nextDueDate },
       minutesToExpire: params.minutesToExpire,
       externalReference: params.externalReference,
       customer: params.customerId,
@@ -483,14 +503,15 @@ export async function createSubscriptionCheckout(
  * A assinatura age como AGENDADOR: a cada ciclo a Asaas gera sozinha uma
  * nova cobrança PIX (com QR code próprio) e dispara `PAYMENT_CREATED`. Não é
  * Pix Automático (que exige autorização do pagador no ecossistema PIX e
- * debita sem ação dele) — aqui o usuário paga cada mês manualmente, lendo o
- * QR daquele ciclo. O acesso VIP só avança quando a cobrança do ciclo é
- * confirmada (`PAYMENT_RECEIVED`), exatamente como no cartão.
+ * debita sem ação dele) — aqui o usuário paga o QR de cada ciclo manualmente
+ * (mensal ou anual, conforme `cycle`). O acesso VIP só avança quando a
+ * cobrança do ciclo é confirmada (`PAYMENT_RECEIVED`), igual ao cartão.
  *
- * `nextDueDate` é a 1ª cobrança e deve ser HOJE: diferente do cartão (onde o
- * checkout hospedado cobra o 1º mês na hora e a assinatura assume do 2º
- * ciclo em diante), aqui não existe cobrança avulsa inicial — a própria
- * assinatura gera a 1ª cobrança.
+ * `nextDueDate` é a 1ª cobrança e deve ser HOJE numa assinatura nova:
+ * diferente do cartão (onde o checkout hospedado cobra o 1º ciclo na hora e a
+ * assinatura assume do 2º em diante), aqui não existe cobrança avulsa inicial
+ * — a própria assinatura gera a 1ª cobrança. Na REATIVAÇÃO dentro do período
+ * pago ele é uma data futura, e então nada é cobrado no ato.
  */
 export interface CreatePixSubscriptionParams {
   customerId: string
@@ -499,6 +520,8 @@ export interface CreatePixSubscriptionParams {
   externalReference: string
   /** YYYY-MM-DD — vencimento da 1ª cobrança (hoje, no fluxo normal). */
   nextDueDate: string
+  /** Periodicidade da recorrência — ver a nota em CreateSubscriptionCheckoutParams. */
+  cycle: "MONTHLY" | "YEARLY"
 }
 
 export async function createPixSubscription(
@@ -509,7 +532,7 @@ export async function createPixSubscription(
     body: JSON.stringify({
       customer: params.customerId,
       billingType: "PIX",
-      cycle: "MONTHLY",
+      cycle: params.cycle,
       value: params.amountCents / 100,
       nextDueDate: params.nextDueDate,
       description: sanitizeAsaasText(params.description),
@@ -544,6 +567,12 @@ export interface AsaasSubscription {
   deleted?: boolean
   nextDueDate?: string | null
   value?: number
+  /**
+   * MONTHLY | YEARLY — a periodicidade que a Asaas de fato registrou. Lida na
+   * reconciliação para detectar uma assinatura cujo ciclo divergiu do plano
+   * gravado localmente (adulteração no painel, ou assinatura editada lá).
+   */
+  cycle?: string | null
 }
 
 /** Reconsulta o status de uma assinatura na origem — defesa em profundidade antes de renovar via webhook. */
@@ -584,6 +613,31 @@ export async function isSubscriptionLiveAtAsaas(subscriptionId: string): Promise
 export async function cancelSubscription(subscriptionId: string): Promise<AsaasDeleteResult> {
   return asaasFetch<AsaasDeleteResult>(`/subscriptions/${encodeURIComponent(subscriptionId)}`, {
     method: "DELETE",
+  })
+}
+
+/**
+ * Cancela um Asaas Checkout hospedado que ainda não foi pago
+ * (`POST /v3/checkouts/{id}/cancel`). A resposta traz o checkout com
+ * `status: "CANCELED"`, e a Asaas emite o evento `CHECKOUT_CANCELED` — já
+ * tratado pelo webhook de assinatura, que marca a linha local.
+ *
+ * Existe porque um checkout de CARTÃO em aberto não tem
+ * `asaas_subscription_id` (ele só nasce no 1º pagamento), então
+ * `cancelSubscription` não serve: não há assinatura na Asaas para excluir.
+ * Sem este endpoint, o usuário que desistia ficava travado até o checkout
+ * expirar sozinho — sem poder pagar nem assinar de novo.
+ *
+ * NÃO gera estorno nem cobrança: um checkout não pago nunca chegou a
+ * tokenizar cartão nem a emitir cobrança. Cancelar é seguro por construção.
+ *
+ * A Asaas responde 400/404 quando o checkout já não está cancelável (já
+ * pago, já cancelado, já expirado). Quem chama deve tratar isso como "já
+ * resolvido" e seguir — ver POST /api/vip/checkout/cancel.
+ */
+export async function cancelCheckout(checkoutId: string): Promise<AsaasCheckout> {
+  return asaasFetch<AsaasCheckout>(`/checkouts/${encodeURIComponent(checkoutId)}/cancel`, {
+    method: "POST",
   })
 }
 
@@ -632,6 +686,12 @@ export async function getPayment(paymentId: string): Promise<AsaasPaymentStatus>
   return asaasFetch<AsaasPaymentStatus>(`/payments/${encodeURIComponent(paymentId)}`)
 }
 
+/** Teto de páginas varridas por `getPaymentsByCheckoutSession`. */
+const CHECKOUT_PAYMENT_SCAN_MAX_PAGES = 10
+
+/** Tamanho da página. 100 é o máximo aceito por `GET /v3/payments`. */
+const CHECKOUT_PAYMENT_SCAN_PAGE_SIZE = 100
+
 /**
  * Busca o(s) payment(s) gerado(s) por um Asaas Checkout hospedado.
  * Necessário porque `GET /v3/checkouts/{id}` não existe na API v3 (retorna
@@ -645,15 +705,48 @@ export async function getPayment(paymentId: string): Promise<AsaasPaymentStatus>
  * por `customer`, mas o filtro por `checkoutSession` sempre devolve
  * `data: []`. Por isso filtramos por `customer` (funciona) e comparamos
  * `checkoutSession` no cliente.
+ *
+ * PAGINA, e isso não é detalhe: sem `limit`, `GET /v3/payments` devolve só os
+ * 10 mais recentes. Um cliente com mais de 10 cobranças — trivial em sandbox,
+ * e normal em produção para quem compra com recorrência — tinha o payment do
+ * checkout FORA da primeira página, o filtro devolvia vazio e quem chamou
+ * concluía "não há pagamento".
+ *
+ * As consequências disso eram silenciosas e sérias, porque três caminhos
+ * críticos leem esta função como evidência de pagamento:
+ *   • o webhook de assinatura desistia com `no_subscription_on_payment` e
+ *     nunca ativava o VIP de quem tinha pago (foi o bug observado);
+ *   • o webhook da loja liberava o pedido sem conferir o VALOR pago, porque
+ *     a conferência só roda quando o payment é resolvido;
+ *   • os ramos de expiração/cancelamento não viam o pagamento e revertiam
+ *     estoque (ou cancelavam a assinatura) de uma compra já paga.
+ *
+ * A varredura para no primeiro match — o caso normal, já que a Asaas devolve
+ * os mais recentes primeiro e o checkout em questão costuma ser recente.
  */
 export async function getPaymentsByCheckoutSession(
   checkoutId: string,
   customerId: string
 ): Promise<AsaasPaymentStatus[]> {
-  const result = await asaasFetch<{ data: AsaasPaymentStatus[] }>(
-    `/payments?customer=${encodeURIComponent(customerId)}`
-  )
-  return result.data.filter((payment) => payment.checkoutSession === checkoutId)
+  const matches: AsaasPaymentStatus[] = []
+
+  for (let page = 0; page < CHECKOUT_PAYMENT_SCAN_MAX_PAGES; page++) {
+    const offset = page * CHECKOUT_PAYMENT_SCAN_PAGE_SIZE
+    const result = await asaasFetch<{ data: AsaasPaymentStatus[]; hasMore?: boolean }>(
+      `/payments?customer=${encodeURIComponent(customerId)}` +
+        `&limit=${CHECKOUT_PAYMENT_SCAN_PAGE_SIZE}&offset=${offset}`
+    )
+
+    const data = result.data ?? []
+    matches.push(...data.filter((payment) => payment.checkoutSession === checkoutId))
+
+    // Um checkout gera uma cobrança (ou um punhado, em parcelamento) e todas
+    // vêm juntas: achou, não há por que continuar varrendo o histórico.
+    if (matches.length > 0) break
+    if (!result.hasMore || data.length === 0) break
+  }
+
+  return matches
 }
 
 export interface AsaasRefund {

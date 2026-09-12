@@ -28,10 +28,30 @@ export async function updateSession(
         getAll() {
           return request.cookies.getAll()
         },
-        setAll(cookiesToSet) {
+        // O segundo argumento (`headers`) NÃO é opcional na prática, apesar de
+        // o tipo permitir ignorá-lo. Quando um refresh de token acontece, a
+        // lib pede junto `Cache-Control: private, no-cache, no-store,
+        // must-revalidate, max-age=0`, `Expires: 0` e `Pragma: no-cache` — e
+        // esta resposta carrega `Set-Cookie` com a sessão de UM usuário.
+        //
+        // Sem repassar esses headers, a resposta fica cacheável: uma CDN ou
+        // proxy reverso na frente (é o caso aqui — Vercel, com ISR pesado nas
+        // páginas indexáveis) pode guardar o `Set-Cookie` e ENTREGAR A SESSÃO
+        // DE UM USUÁRIO PARA OUTRO. A doc do Supabase trata esse cache
+        // cruzado como o risco prático mais grave da auth por cookie, acima
+        // do roubo de token por XSS — ver o comentário de `SetAllCookies` em
+        // node_modules/@supabase/ssr/dist/main/types.d.ts.
+        //
+        // O refresh é o único momento em que `setAll` roda, então o custo de
+        // cache é limitado a essas respostas: nada do que é servido
+        // estaticamente hoje passa a ser no-store por causa disto.
+        setAll(cookiesToSet, headers) {
           cookiesToSet.forEach(({ name, value, options }) => {
             request.cookies.set(name, value)
             response.cookies.set(name, value, options)
+          })
+          Object.entries(headers ?? {}).forEach(([key, value]) => {
+            response.headers.set(key, value)
           })
         },
       },
@@ -47,6 +67,14 @@ export async function updateSession(
   // `getSession()` só lê do cookie (sem rede) — decodifica localmente o
   // claim `aal` e usa `data.user.factors`, que já veio populado.
   let aal: AssuranceLevel = { current: null, next: null }
+  // Existe um fator TOTP verificado NA CONTA — independente do nível da
+  // sessão atual. `aal` responde "esta sessão já fez o segundo fator?";
+  // isto responde "esta conta tem segundo fator cadastrado?". São perguntas
+  // diferentes: quem nunca cadastrou tem `next === "aal1"` e portanto
+  // `isMfaStepUpRequired` é falso — ou seja, o gate de 2FA existente deixa
+  // passar direto. É exatamente esse caso que a exigência de MFA para WEB
+  // MASTER precisa enxergar (ver proxy.ts).
+  let hasVerifiedMfaFactor = false
   const profilePromise =
     data.user && needProfile
       ? supabase
@@ -60,6 +88,17 @@ export async function updateSession(
     profilePromise,
     (async () => {
       if (!data.user) return
+
+      // Calculado ANTES de qualquer early-return abaixo. Os `return` dali
+      // tratam "não deu para descobrir o nível da sessão", que é diferente de
+      // "a conta não tem fator" — e o gate de MFA obrigatório do WEB MASTER
+      // lê este valor. Se ele ficasse preso depois de um early-return, uma
+      // falha ao decodificar o JWT apareceria como "sem fator cadastrado" e
+      // trancaria um webmaster que JÁ tem 2FA numa tela pedindo para ativá-lo.
+      hasVerifiedMfaFactor = (data.user.factors ?? []).some(
+        (factor) => factor.status === "verified"
+      )
+
       const { data: sessionData } = await supabase.auth.getSession()
       const accessToken = sessionData.session?.access_token
       if (!accessToken) return
@@ -73,8 +112,7 @@ export async function updateSession(
         return
       }
 
-      const hasVerifiedFactor = (data.user!.factors ?? []).some((factor) => factor.status === "verified")
-      const nextLevel = hasVerifiedFactor ? "aal2" : currentLevel
+      const nextLevel = hasVerifiedMfaFactor ? "aal2" : currentLevel
 
       aal = { current: currentLevel, next: nextLevel }
     })(),
@@ -137,6 +175,7 @@ export async function updateSession(
     user: data.user,
     profile: (profile as AdminProfile | null) ?? null,
     aal,
+    hasVerifiedMfaFactor,
     needsLgpdConsent,
     isAccountBanned,
     hasStoreAccess,

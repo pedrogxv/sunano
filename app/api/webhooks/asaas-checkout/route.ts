@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       // já que o payload do webhook não traz isso.
       let paymentId: string | null = null
       let receiptUrl: string | null = null
+      let paidCents: number | null = null
       const customerId = payload.checkout?.customer
       try {
         if (customerId) {
@@ -82,12 +83,42 @@ export async function POST(request: NextRequest) {
           if (payment) {
             paymentId = payment.id
             receiptUrl = payment.transactionReceiptUrl ?? payment.invoiceUrl ?? null
+            if (typeof payment.value === "number") paidCents = Math.round(payment.value * 100)
           }
         } else {
           console.error("[webhooks/asaas-checkout] checkout.customer ausente no payload:", checkoutId)
         }
       } catch (err) {
         console.error("[webhooks/asaas-checkout] getPaymentsByCheckoutSession:", err)
+      }
+
+      // Confere o VALOR antes de liberar. Este ramo é o mais exposto da loja:
+      // ao contrário do PIX, não existe `GET /v3/checkouts/{id}` para
+      // reconsultar, então o evento assinado era a ÚNICA evidência — e ele não
+      // carrega valor nenhum. O payment resolvido acima carrega, e é dinheiro
+      // de verdade: comparar com o `total_cents` que o checkout gravou é o que
+      // impede um pedido de ser liberado por uma cobrança de valor menor.
+      //
+      // Só barra com evidência POSITIVA de divergência: se o payment não pôde
+      // ser resolvido (falha de rede, `customer` ausente no payload), seguimos
+      // liberando como antes — uma instabilidade da Asaas não pode segurar
+      // pedido pago de verdade.
+      if (paidCents !== null) {
+        const { data: pendingOrders } = await db
+          .from("store_orders")
+          .select("id, total_cents")
+          .eq("asaas_checkout_id", checkoutId)
+          .neq("status", "paid")
+
+        const underpaid = (pendingOrders ?? []).filter((order) => paidCents! < order.total_cents)
+        if (underpaid.length > 0) {
+          console.error(
+            "[webhooks/asaas-checkout] valor pago MENOR que o total do pedido — NÃO liberado:",
+            `checkout ${checkoutId} pagou ${paidCents} centavos;`,
+            underpaid.map((o) => `pedido ${o.id} espera ${o.total_cents}`).join(", ")
+          )
+          return NextResponse.json({ received: true, ignored: "payment_value_below_order_total" })
+        }
       }
 
       // Idempotente: só transiciona se ainda não estava pago, protegendo

@@ -12,10 +12,14 @@ import { AlertTriangle, CheckCircle2, Info, Loader2, XCircle } from "lucide-reac
  * mostrando só a borda dos que estão atrás — ocupa a altura de um único toast
  * em vez de crescer verticalmente. Ao passar o mouse (ou tocar) a pilha se abre.
  *
- * No mobile a pilha fica no topo, não embaixo: a borda inferior é disputada pelo
- * CookieBanner (fixed bottom-0 full-width), pelo FAB do AdminShell e pela barra
- * de ações de /perifericos — um toast ali sobrepõe todos eles. O offset desce
- * abaixo da TopBar via --sticky-header-h.
+ * No desktop a pilha fica embaixo à direita: no topo ela tampava a TopBar. Ali
+ * o canto está livre — o CookieBanner vai pra `md:bottom-4 md:left-4` e a barra
+ * de ações de /perifericos é centralizada.
+ *
+ * No mobile continua no topo: lá o CookieBanner ocupa `bottom-0` em toda a
+ * largura e a barra de /perifericos fica centralizada embaixo, então um toast
+ * na base sobrepõe os dois. O offset desce abaixo da TopBar via
+ * --sticky-header-h.
  */
 const TOAST_DURATION = 4500
 
@@ -32,7 +36,7 @@ export function Toaster() {
 
   return (
     <SonnerToaster
-      position={isMobile ? "top-center" : "top-right"}
+      position={isMobile ? "top-center" : "bottom-right"}
       theme="dark"
       expand={false}
       closeButton

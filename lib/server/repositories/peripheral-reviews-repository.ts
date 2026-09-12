@@ -1,5 +1,7 @@
 import "server-only"
 
+import { cache } from "react"
+
 import type { AccountTier } from "@/lib/account-tier"
 import { reviewCategoryKeyFor, REVIEW_CATEGORY_GROUPS } from "@/lib/peripheral-review-categories"
 import type { ShowcaseReview, ShowcaseReviewCategoryBlock } from "@/lib/profile-showcase"
@@ -221,6 +223,25 @@ export async function countUserReviews(userId: string): Promise<number> {
     .eq("is_hidden", false)
   return count ?? 0
 }
+
+/**
+ * Só quantas reviews visíveis um periférico tem.
+ *
+ * `head: true` — o total vem no header, sem trazer linha nenhuma. Existe
+ * separado de `getPeripheralReviewsWithStats` (que carrega até 2000 linhas
+ * para poder ordenar por Aura em memória) porque o `generateMetadata` da ficha
+ * só precisa do número, para decidir indexabilidade. `cache` do React
+ * deduplica com a chamada do corpo da página na mesma requisição.
+ */
+export const countPeripheralReviews = cache(async (peripheralId: string): Promise<number> => {
+  const db = createSupabaseAdminClient()
+  const { count } = await db
+    .from("peripheral_reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("peripheral_id", peripheralId)
+    .eq("is_hidden", false)
+  return count ?? 0
+})
 
 /** Ids de todos os periféricos já avaliados pelo usuário, sem cap — filtro `excludeIds` do picker de criação. */
 export async function getReviewedPeripheralIds(userId: string): Promise<string[]> {

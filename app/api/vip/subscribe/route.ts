@@ -14,16 +14,30 @@ import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { payerInfoSchema, payerAddressSchema } from "@/lib/server/validation/guest-checkout"
 import {
   createSubscriptionRecord,
+  reactivateSubscriptionRecord,
   getLatestSubscriptionForUser,
 } from "@/lib/server/repositories/vip-subscription-repository"
 import { syncSubscriptionWithAsaas } from "@/lib/server/vip-subscription-sync"
 import { isVipActive } from "@/lib/account-tier"
-import { VIP_SUBSCRIPTION_PRICE_CENTS } from "@/lib/vip-plan"
+import { getVipPlan, parseVipBillingPeriod, VIP_PLANS } from "@/lib/vip-plan"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import { absoluteUrl } from "@/lib/site-url"
+import { isoDateInTimeZone } from "@/lib/server/time"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
+
+/**
+ * Validade do checkout hospedado de cartão.
+ *
+ * Usado em DOIS lugares que precisam concordar: o `minutesToExpire` enviado à
+ * Asaas e o `checkout_expires_at` gravado localmente. Separá-los em dois
+ * literais faria a trava local soltar antes ou depois do checkout real
+ * morrer — no primeiro caso permitindo um 2º checkout enquanto o 1º ainda
+ * aceita pagamento, que é exatamente a cobrança duplicada que a trava existe
+ * para impedir.
+ */
+const CHECKOUT_MINUTES_TO_EXPIRE = 60
 
 /**
  * GET /api/vip/subscribe — diz ao modal de assinatura, ANTES de tentar
@@ -72,14 +86,38 @@ export async function GET(request: NextRequest) {
       fullName: profile?.full_name ?? null,
       cpf: profile?.cpf ?? null,
     },
+    // O catálogo vem do servidor para a interface não repetir preço nem
+    // periodicidade em lugar nenhum. O cliente escolhe a CHAVE do plano; o
+    // POST reconfere essa chave no mesmo catálogo antes de cobrar qualquer
+    // coisa, então um preço adulterado no devtools não tem efeito.
+    plans: Object.values(VIP_PLANS).map((plan) => ({
+      period: plan.period,
+      priceCents: plan.priceCents,
+      months: plan.months,
+      label: plan.label,
+      unitLabel: plan.unitLabel,
+    })),
   })
 }
 
 /**
- * POST /api/vip/subscribe — inicia uma assinatura recorrente de VIP
- * (R$8,90/mês, só cartão). Cria um Asaas Checkout hospedado vinculado a uma
- * assinatura (chargeTypes: RECURRENT) — o backend nunca recebe dado de
- * cartão, o cliente digita tudo na página hospedada da Asaas.
+ * POST /api/vip/subscribe — inicia uma assinatura recorrente de VIP, no plano
+ * MENSAL (R$ 8,90/mês) ou ANUAL (R$ 89,90/ano), pagando com cartão ou PIX.
+ *
+ * SEGURANÇA DO PLANO
+ * ------------------
+ * O corpo da requisição envia apenas uma CHAVE (`billingPeriod`), nunca preço
+ * nem duração. `parseVipBillingPeriod` normaliza essa chave contra o catálogo
+ * hardcoded de `lib/vip-plan.ts` (qualquer valor não reconhecido cai no
+ * mensal, o plano mais curto), e é esse catálogo que define o que é enviado à
+ * Asaas — valor e `cycle` — e o que é gravado em
+ * `vip_subscriptions.billing_period`. As RPCs de pagamento leem o intervalo de
+ * acesso DA LINHA, então nem o cliente nem o webhook conseguem comprar 12
+ * meses pelo preço de 1.
+ *
+ * No cartão o caminho é o Asaas Checkout hospedado (chargeTypes: RECURRENT) —
+ * o backend nunca recebe dado de cartão. No PIX a assinatura é criada direto
+ * na API, que é o único jeito de combinar PIX com recorrência.
  */
 export async function POST(request: NextRequest) {
   if (!isVipSubscriptionEnabled()) {
@@ -137,8 +175,11 @@ export async function POST(request: NextRequest) {
   if (ongoing) {
     // Assinatura confirmada viva na Asaas. Três situações distintas:
     //
-    //  • CARTÃO pendente (sem asaas_subscription_id): é só um checkout
-    //    hospedado em aberto. Não há o que gerenciar — expira sozinho.
+    //  • CARTÃO pendente (sem asaas_subscription_id): é um checkout hospedado
+    //    em aberto. A aba de assinatura agora mostra o prazo e oferece
+    //    retomar o pagamento ou cancelar o checkout — por isso o manageUrl
+    //    aponta para lá também neste caso. Antes dizia "aguarde expirar" e
+    //    não havia realmente nada a fazer.
     //  • PIX pendente: a assinatura JÁ existe na Asaas e tem um QR esperando
     //    pagamento. Dizer "você já tem uma assinatura ativa" seria falso (ela
     //    não está ativa, está aguardando o 1º pagamento) e esconderia a única
@@ -150,10 +191,10 @@ export async function POST(request: NextRequest) {
     let error: string
     let code: string
     if (isPendingCheckout) {
-      error = "Você tem um checkout de assinatura em aberto. Conclua ou aguarde ele expirar."
+      error = "Você tem um checkout de assinatura em aberto. Conclua o pagamento ou cancele-o nas configurações da conta."
       code = "subscription_already_pending"
     } else if (isPendingPix) {
-      error = "Você já tem uma assinatura PIX aguardando o pagamento do primeiro mês."
+      error = "Você já tem uma assinatura PIX aguardando o pagamento da primeira cobrança."
       code = "subscription_pending_pix"
     } else {
       error = "Você já tem uma assinatura ativa. Gerencie-a nas configurações da conta."
@@ -161,7 +202,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error, code, manageUrl: isPendingCheckout ? null : "/conta#assinatura" },
+      { error, code, manageUrl: "/conta#assinatura" },
       { status: 409 }
     )
   }
@@ -180,9 +221,18 @@ export async function POST(request: NextRequest) {
   //
   // EXCEÇÃO: quem cancelou a assinatura e ainda está usando o período já pago
   // pode voltar atrás. Barrar aqui obrigava a pessoa a esperar o VIP vencer
-  // para poder reassinar — ou seja, a perder o acesso primeiro. A cobrança
-  // não duplica porque a assinatura nova começa a cobrar só no fim do
-  // período atual (`nextDueDate` abaixo parte de `vip_expires_at`).
+  // para poder reassinar — ou seja, a perder o acesso primeiro.
+  //
+  // Isso é uma REATIVAÇÃO, e ela não cobra nada: a 1ª cobrança da assinatura
+  // é agendada para `vip_expires_at` (ver o cálculo de `nextDueDate` abaixo).
+  //
+  // O ciclo "cancelo e reativo todo dia para ser cobrado todo dia" não existe
+  // por dois motivos independentes: (1) cada reativação apenas reagenda a
+  // mesma cobrança para a mesma data, sem emitir nada no ato; e (2) a trava
+  // `ongoing` logo acima — que consulta a Asaas — barra qualquer POST
+  // enquanto houver assinatura viva, então para reativar de novo é preciso
+  // cancelar de novo, e o resultado continua sendo uma única cobrança
+  // agendada para o fim do período pago.
   const previous = await getLatestSubscriptionForUser(user.id)
   const wasCanceledSubscription =
     previous != null && (previous.status === "canceled" || previous.status === "expired")
@@ -197,9 +247,19 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.json().catch(() => null)
 
   // Método escolhido no modal. PIX e cartão têm exigências e fluxos
-  // diferentes (ver abaixo), mas a MESMA recorrência mensal.
+  // diferentes (ver abaixo), mas a mesma recorrência — mensal ou anual,
+  // conforme o plano resolvido logo abaixo.
   const paymentMethod: "credit_card" | "pix" =
     (rawBody as { paymentMethod?: unknown } | null)?.paymentMethod === "pix" ? "pix" : "credit_card"
+
+  // PLANO. O corpo manda só a chave; preço, ciclo da Asaas e duração do acesso
+  // saem do catálogo do servidor. `parseVipBillingPeriod` é o único ponto onde
+  // dado externo entra, e ele cai no mensal diante de qualquer valor estranho
+  // — falhar para o plano mais curto e mais barato, nunca para o mais longo.
+  const billingPeriod = parseVipBillingPeriod(
+    (rawBody as { billingPeriod?: unknown } | null)?.billingPeriod
+  )
+  const plan = getVipPlan(billingPeriod)
 
   let payerName = profile?.full_name ?? null
   let payerDocument = profile?.cpf ?? null
@@ -326,25 +386,48 @@ export async function POST(request: NextRequest) {
   // `externalReference` precisa refletir o id que de fato será gravado, e
   // não um uuid novo que a linha nunca vai receber.
   const subscriptionId = previous?.id ?? randomUUID()
-  // `nextDueDate` da assinatura = daqui a 1 mês, NÃO hoje. O checkout
-  // hospedado (chargeTypes: ["RECURRENT"]) já cobra o 1º mês na hora que o
-  // cliente paga a página; a assinatura recorrente só assume a partir do
-  // 2º ciclo. Se `nextDueDate` fosse hoje, a Asaas geraria uma 2ª cobrança
-  // imediata para o mesmo dia (cobrança do checkout + 1º ciclo da
-  // subscription) — cobrança dupla no mês 1.
+
+  // ── QUANDO A PRIMEIRA COBRANÇA VENCE ──────────────────────────────────
   //
-  // REASSINATURA DENTRO DO PERÍODO PAGO: o ciclo parte de `vip_expires_at`,
-  // não de hoje. O checkout cobra 1 mês agora, e esse mês é ADICIONADO ao
-  // saldo restante (`activate_vip_subscription` usa
-  // `greatest(now(), vip_expires_at) + 1 month`), então nenhum dia pago se
-  // perde. Se a recorrência partisse de hoje, a 2ª cobrança cairia ainda
-  // dentro do período que o usuário já tinha.
-  const firstRecurringDueDate =
+  // Regra única, para PIX e cartão: `nextDueDate` é o vencimento da 1ª
+  // cobrança da assinatura (documentação da Asaas), e ele NUNCA cai dentro
+  // de um período de VIP que o usuário já pagou.
+  //
+  //  • REATIVAÇÃO (cancelou e ainda tem VIP correndo): vence em
+  //    `vip_expires_at` — exatamente o dia em que o acesso atual acabaria.
+  //    Nenhuma cobrança hoje. Reativar é DESFAZER O CANCELAMENTO, não
+  //    comprar outro mês: o usuário já pagou o mês em que está.
+  //
+  //    Era aqui que estava o bug: o PIX ignorava esse cálculo e vencia
+  //    sempre HOJE, então cancelar e reativar no mesmo dia gerava um QR
+  //    imediato de mais um mês. Repetindo o ciclo todo dia, o usuário
+  //    pagava N meses adiantado num dia só — sempre pelo mesmo mês corrente
+  //    que já estava pago. O cartão tinha o mesmo defeito por outra via: o
+  //    checkout hospedado cobrava o 1º mês no ato, independentemente do
+  //    `nextDueDate`.
+  //
+  //  • ASSINATURA NOVA (sem VIP ativo): vence HOJE. É a compra do 1º ciclo, e
+  //    o acesso só é liberado quando ela for confirmada.
+  //
+  // TROCA DE PLANO NA REATIVAÇÃO: quem cancelou o mensal pode reativar no
+  // anual (e vice-versa). Isso não muda nada aqui, e é justamente o que torna
+  // a regra segura — a 1ª cobrança do plano novo vence no fim do período que
+  // o plano antigo pagou, seja ela de R$ 8,90 ou de R$ 89,90. Nenhum dia pago
+  // se perde e nada é cobrado adiantado. O `billing_period` gravado passa a
+  // ser o novo (ver `reactivate_vip_subscription`), então quando aquela
+  // cobrança for confirmada o acesso concedido é o do plano que a emitiu.
+  //
+  // Em ambos os casos a assinatura é a ÚNICA origem de cobrança — não
+  // existe mais cobrança avulsa inicial somada ao 1º ciclo.
+  // A data é formatada no fuso de Brasília, não em UTC: a Asaas cobra pelo
+  // calendário brasileiro, e `vip_expires_at` é timestamptz. Um VIP que vence
+  // 12/10 às 02:00 UTC ainda é dia 11 às 23:00 aqui — `toISOString()` diria
+  // 12/10 e a cobrança cairia quase um dia depois do acesso ter acabado.
+  const firstDueDate =
     isResubscribeWithinPaidPeriod && profile?.vip_expires_at
       ? new Date(profile.vip_expires_at)
       : new Date()
-  firstRecurringDueDate.setMonth(firstRecurringDueDate.getMonth() + 1)
-  const nextDueDate = firstRecurringDueDate.toISOString().slice(0, 10)
+  const nextDueDate = isoDateInTimeZone(firstDueDate)
 
   if (paymentMethod === "pix") {
     // ─── PIX ───────────────────────────────────────────────────────────
@@ -355,29 +438,52 @@ export async function POST(request: NextRequest) {
     // ciclo sozinha — mesma recorrência mensal do cartão. A diferença é que
     // o usuário paga o QR de cada mês manualmente (não é Pix Automático).
     //
-    // `nextDueDate` AQUI É DIFERENTE do cartão: como não existe uma cobrança
-    // avulsa inicial (o checkout hospedado é quem cobrava o 1º mês), é a
-    // própria assinatura que gera a 1ª cobrança — então ela vence HOJE. Usar
-    // a data de daqui a 1 mês deixaria o usuário assinando sem nada para
-    // pagar e sem VIP até lá.
-    //
-    // REASSINATURA DENTRO DO PERÍODO PAGO: o 1º vencimento continua hoje (é
-    // o mês que ele está comprando agora, somado ao saldo restante pela
-    // RPC), e os ciclos seguintes seguem a partir daí.
-    const pixFirstDueDate = new Date().toISOString().slice(0, 10)
-
+    // `nextDueDate` vem do cálculo único acima. Na assinatura NOVA ele é
+    // hoje (a 1ª cobrança é a compra do 1º mês). Na REATIVAÇÃO ele é
+    // `vip_expires_at`: a Asaas agenda a cobrança para lá e NÃO emite nada
+    // hoje — o usuário segue usando o mês que já pagou, sem QR nenhum para
+    // pagar agora.
     let subscription
     try {
       subscription = await createPixSubscription({
         customerId: asaasCustomerId,
-        amountCents: VIP_SUBSCRIPTION_PRICE_CENTS,
-        description: "Assinatura VIP - Sunano",
+        amountCents: plan.priceCents,
+        description: `Assinatura VIP ${plan.label} - Sunano`,
         externalReference: subscriptionId,
-        nextDueDate: pixFirstDueDate,
+        nextDueDate,
+        cycle: plan.asaasCycle,
       })
     } catch (err) {
       console.error("[vip/subscribe] createPixSubscription:", err)
       return NextResponse.json({ error: "Não foi possível iniciar a assinatura." }, { status: 502 })
+    }
+
+    // REATIVAÇÃO: a 1ª cobrança está agendada para o futuro, então não há QR
+    // a exibir e nada a pagar agora. A linha nasce `active` (não `pending`):
+    // o acesso VIP já existe e já foi pago, o que a reativação faz é só
+    // garantir que a cobrança volte a acontecer no fim do período. Deixá-la
+    // `pending` diria "aguardando o 1º pagamento" para quem é VIP neste
+    // exato momento — e a aba de assinatura cobraria um QR inexistente.
+    if (isResubscribeWithinPaidPeriod) {
+      await reactivateSubscriptionRecord({
+        id: subscriptionId,
+        userId: user.id,
+        asaasCustomerId,
+        paymentMethod: "pix",
+        asaasSubscriptionId: subscription.id,
+        currentPeriodEnd: profile!.vip_expires_at!,
+        billingPeriod,
+      })
+
+      return NextResponse.json({
+        ok: true,
+        paymentMethod: "pix",
+        reactivated: true,
+        chargedNow: false,
+        nextChargeAt: nextDueDate,
+        billingPeriod,
+        priceCents: plan.priceCents,
+      })
     }
 
     // A resposta de POST /v3/subscriptions traz a assinatura, não a cobrança
@@ -405,6 +511,7 @@ export async function POST(request: NextRequest) {
       paymentMethod: "pix",
       asaasSubscriptionId: subscription.id,
       pendingPaymentId: firstPayment?.id ?? null,
+      billingPeriod,
     })
 
     if (!firstPayment) {
@@ -414,7 +521,10 @@ export async function POST(request: NextRequest) {
         ok: true,
         paymentMethod: "pix",
         pending: true,
-        message: "Assinatura criada. A cobrança do primeiro mês aparecerá em instantes.",
+        billingPeriod,
+        message: `Assinatura criada. A cobrança do primeiro ${
+          plan.period === "yearly" ? "ano" : "mês"
+        } aparecerá em instantes.`,
       })
     }
 
@@ -428,7 +538,7 @@ export async function POST(request: NextRequest) {
           qrCodeBase64: qr.encodedImage,
           copyPaste: qr.payload,
           expiresAt: qr.expirationDate,
-          amountCents: VIP_SUBSCRIPTION_PRICE_CENTS,
+          amountCents: plan.priceCents,
         },
       })
     } catch (err) {
@@ -437,33 +547,83 @@ export async function POST(request: NextRequest) {
         ok: true,
         paymentMethod: "pix",
         pending: true,
-        message: "Assinatura criada. Abra as configurações da conta para pagar a cobrança do mês.",
+        billingPeriod,
+        message: "Assinatura criada. Abra as configurações da conta para pagar a cobrança em aberto.",
       })
     }
   }
 
+  // ─── CARTÃO ────────────────────────────────────────────────────────────
+  // O checkout hospedado (chargeTypes: ["RECURRENT"]) é o único caminho: não
+  // guardamos token de cartão em lugar nenhum — quem tokeniza é a página da
+  // Asaas —, então mesmo a reativação precisa passar por lá para o cartão
+  // ser cadastrado de novo.
+  //
+  // O que muda na REATIVAÇÃO é o `nextDueDate` (calculado acima como
+  // `vip_expires_at`): a documentação da Asaas define esse campo como o
+  // vencimento da PRIMEIRA cobrança da assinatura, e com ele no futuro o
+  // cartão é apenas validado/salvo no momento do checkout — a cobrança só
+  // acontece na data informada. Ou seja: o usuário confirma o cartão hoje e
+  // paga só quando o período que ele já pagou terminar.
+  //
+  // Antes o `nextDueDate` da reativação era `vip_expires_at + 1 mês`, o que
+  // assumia uma cobrança avulsa inicial no ato do checkout — justamente a
+  // cobrança que não deveria existir para quem ainda está dentro do período
+  // pago.
   try {
     const checkout = await createSubscriptionCheckout({
       customerId: asaasCustomerId,
-      amountCents: VIP_SUBSCRIPTION_PRICE_CENTS,
-      description: "Assinatura VIP - Sunano",
+      amountCents: plan.priceCents,
+      description: `Assinatura VIP ${plan.label} - Sunano`,
       externalReference: subscriptionId,
       nextDueDate,
+      cycle: plan.asaasCycle,
       successUrl: absoluteUrl("/conta?vip=success"),
       cancelUrl: absoluteUrl("/conta?vip=cancel"),
       expiredUrl: absoluteUrl("/conta?vip=expired"),
-      minutesToExpire: 60,
+      minutesToExpire: CHECKOUT_MINUTES_TO_EXPIRE,
     })
 
+    // O link e o prazo são GRAVADOS, não descartados como antes. São eles que
+    // dão saída a quem fecha a aba no meio do pagamento: o link deixa retomar
+    // de onde parou, e o prazo deixa a trava de "assinatura em andamento" se
+    // soltar sozinha caso o webhook CHECKOUT_EXPIRED não chegue. Sem os dois,
+    // a aba de assinatura só conseguia dizer "espere expirar" — por até uma
+    // hora, e para sempre se o webhook se perdesse.
     await createSubscriptionRecord({
       id: subscriptionId,
       userId: user.id,
       asaasCheckoutId: checkout.id,
       asaasCustomerId,
       paymentMethod: "credit_card",
+      checkoutLink: checkout.link,
+      checkoutExpiresAt: new Date(
+        Date.now() + CHECKOUT_MINUTES_TO_EXPIRE * 60_000
+      ).toISOString(),
+      // REATIVAÇÃO: preserva o período já pago. Zerá-lo aqui rebaixava a
+      // assinatura de um VIP ativo para "aguardando pagamento" no instante em
+      // que ele clicava em reativar — a aba passava a mostrar "Pagamento em
+      // andamento" a quem tinha acesso corrente e nada devia. O acesso em si
+      // (`user_profiles.vip_expires_at`) nunca foi tocado; o que quebrava era
+      // o estado exibido da assinatura.
+      keepCurrentPeriodEnd: isResubscribeWithinPaidPeriod
+        ? (profile?.vip_expires_at ?? null)
+        : null,
+      billingPeriod,
     })
 
-    return NextResponse.json({ ok: true, paymentMethod: "credit_card", checkoutUrl: checkout.link })
+    return NextResponse.json({
+      ok: true,
+      paymentMethod: "credit_card",
+      checkoutUrl: checkout.link,
+      // A UI usa isto para não prometer "pagamento agora" numa reativação:
+      // o checkout só cadastra o cartão, a cobrança fica para `nextDueDate`.
+      reactivated: isResubscribeWithinPaidPeriod,
+      chargedNow: !isResubscribeWithinPaidPeriod,
+      nextChargeAt: nextDueDate,
+      billingPeriod,
+      priceCents: plan.priceCents,
+    })
   } catch (err) {
     console.error("[vip/subscribe] createSubscriptionCheckout:", err)
     return NextResponse.json({ error: "Não foi possível iniciar a assinatura." }, { status: 502 })

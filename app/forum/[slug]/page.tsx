@@ -5,8 +5,32 @@ import { getForumPostBySlug, getForumSidebarData } from "@/lib/server/repositori
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { ForumPostContent } from "./forum-post-content"
+import { profilePath } from "@/lib/profile-name"
 import { buildDescription, buildMetadata, truncate } from "@/lib/seo"
 import { SITE_URL } from "@/lib/site-url"
+
+/**
+ * SEM `loading.tsx` nesta pasta — de propósito.
+ *
+ * Um `loading.tsx` no segmento dinâmico é um Suspense boundary: o Next começa
+ * a streamar a resposta e se compromete com `200 OK` antes de o componente
+ * chegar ao `notFound()`. Dali em diante o status não pode mais mudar para
+ * 404 — o Next só injeta `<meta robots="noindex">` no HTML já enviado (ver
+ * node_modules/next/dist/docs/01-app/02-guides/streaming.md, "The HTTP
+ * contract"). O efeito era soft-404: `/forum/<qualquer-coisa>` respondia
+ * 200 com a tela "não encontrado", e o Search Console contava a URL como
+ * rastreada sem conteúdo.
+ *
+ * Verificado empiricamente: com o arquivo presente, 200; sem ele, 404 — e as
+ * rotas que nunca o tiveram (`/blog`, `/noticias`) sempre devolveram 404.
+ * Atenção ao testar: `next dev` rodando em paralelo recria o cache de
+ * `.next` e falseia o resultado — use `rm -rf .next && next build && next start`.
+ *
+ * O custo é não ter skeleton nesta rota (o conteúdo aparece de uma vez, após
+ * o servidor resolver). Se um dia o skeleton for necessário aqui, ele precisa
+ * vir de um `<Suspense>` DENTRO do componente, depois do `notFound()`, nunca
+ * de um `loading.tsx` neste nível.
+ */
 
 
 // ISR: o post e os comentários são renderizados no servidor — essencial para
@@ -61,6 +85,7 @@ export default async function ForumPostPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
+
   const supabase = await createSupabaseServerClient()
   const { data: authData } = await supabase.auth.getUser()
   const viewerId = authData.user?.id ?? null
@@ -85,6 +110,9 @@ export default async function ForumPostPage({
     author: {
       "@type": "Person",
       name: post.author_display_name,
+      // O Search Console pede `author.url`: sem ela o autor não vira entidade
+      // clicável no resultado. Só existe quando o perfil tem slug público.
+      ...(post.author_display_slug ? { url: `${SITE_URL}${profilePath(post.author_display_slug)}` } : {}),
     },
     ...(post.category ? { about: post.category.name } : {}),
     ...(post.media_image_urls.length > 0 ? { image: post.media_image_urls } : {}),
@@ -97,7 +125,11 @@ export default async function ForumPostPage({
       "@type": "Comment",
       text: c.body,
       dateCreated: c.created_at,
-      author: { "@type": "Person", name: c.author_display_name },
+      author: {
+        "@type": "Person",
+        name: c.author_display_name,
+        ...(c.author_display_slug ? { url: `${SITE_URL}${profilePath(c.author_display_slug)}` } : {}),
+      },
     })),
   }
 

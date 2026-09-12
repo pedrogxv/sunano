@@ -2,7 +2,6 @@ import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { getPayment } from "@/lib/server/integrations/asaas"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { markMarketFeePaid } from "@/lib/server/repositories/market-repository"
 import {
   syncOrderRefundState,
   orderOwnerId,
@@ -185,9 +184,8 @@ export async function POST(request: NextRequest) {
 
       const result = await expireOrderByPaymentId(paymentId)
 
-      // Nenhum pedido `pending` casou: pode ser a taxa de anúncio do Mercado
-      // (mesmo gateway, mesmo webhook) ou um pedido que já saiu de `pending`.
-      // Nos dois casos não há nada a fazer — e não é erro.
+      // Nenhum pedido `pending` casou: provavelmente um pedido que já saiu
+      // de `pending`. Não há nada a fazer — e não é erro.
       if (!result.expired) {
         return NextResponse.json({ received: true, ignored: "no pending order" })
       }
@@ -355,8 +353,34 @@ export async function POST(request: NextRequest) {
     // vezes). Lido antes do UPDATE porque depois dele a informação some.
     const { data: priorOrders } = await db
       .from("store_orders")
-      .select("id, status")
+      .select("id, status, total_cents")
       .eq("asaas_payment_id", paymentId)
+
+    // Confere o VALOR, não só o status: até aqui, uma cobrança adulterada na
+    // origem (valor editado no painel da Asaas, cobrança avulsa criada lá com
+    // o mesmo `asaas_payment_id` de um pedido) liberava o pedido inteiro
+    // porque `status === RECEIVED` era a única condição. Mesmo princípio do
+    // webhook de assinatura (`isPaymentValueOffPlan`), com a diferença de que
+    // aqui o esperado não é um plano fixo: é o `total_cents` do próprio
+    // pedido, que o checkout gravou a partir do preço do banco.
+    //
+    // Só barra com evidência POSITIVA de divergência — `value` ausente no
+    // payload da Asaas não bloqueia (mesma escolha do webhook de assinatura),
+    // senão uma mudança de contrato na API deles travaria todas as vendas.
+    if (typeof verified.value === "number" && (priorOrders?.length ?? 0) > 0) {
+      const paidCents = Math.round(verified.value * 100)
+      const underpaid = (priorOrders ?? []).filter(
+        (order) => paidCents < order.total_cents
+      )
+      if (underpaid.length > 0) {
+        console.error(
+          "[webhooks/asaas] valor pago MENOR que o total do pedido — NÃO liberado:",
+          `cobrança ${paymentId} pagou ${paidCents} centavos;`,
+          underpaid.map((o) => `pedido ${o.id} espera ${o.total_cents}`).join(", ")
+        )
+        return NextResponse.json({ received: true, ignored: "payment_value_below_order_total" })
+      }
+    }
     // `cancelled` entra junto com `expired`: os dois devolveram o estoque ao
     // inventário antes deste pagamento chegar. O cancelamento marca o pedido
     // localmente mesmo quando o DELETE da cobrança na Asaas falha (ver
@@ -389,9 +413,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (!updatedOrders || updatedOrders.length === 0) {
-      // Não é um pedido da loja — pode ser a taxa de publicação de um
-      // anúncio do Mercado, que usa o mesmo gateway/mesmo webhook.
-      await markMarketFeePaid(paymentId)
+      // Nenhum pedido `pending` casou com esta cobrança. Pode ser um pedido
+      // que já saiu de `pending` (reentrega da Asaas) ou uma cobrança que não
+      // é da loja. Nos dois casos não há o que fazer — e não é erro.
       return NextResponse.json({ received: true })
     }
 

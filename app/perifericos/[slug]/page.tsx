@@ -8,11 +8,38 @@ import { SITE_URL } from "@/lib/site-url"
 import { getPeripheralByIdOrSlug, listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { listProductsByPeripheral } from "@/lib/server/repositories/store-repository"
 import { listPublishedPostsByPeripheral } from "@/lib/server/repositories/blog-repository"
-import { getPeripheralReviewsWithStats } from "@/lib/server/repositories/peripheral-reviews-repository"
+import {
+  countPeripheralReviews,
+  getPeripheralReviewsWithStats,
+} from "@/lib/server/repositories/peripheral-reviews-repository"
+import { isPeripheralRecordIndexable } from "@/lib/indexability"
 import { BreadcrumbJsonLd, JsonLd } from "@/components/seo/JsonLd"
 import { CATEGORY_PLURAL_LABELS, isCategory } from "@/lib/tag-options"
 import { BackButton } from "@/components/ui/back-button"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
+
+/**
+ * SEM `loading.tsx` nesta pasta — de propósito.
+ *
+ * Um `loading.tsx` no segmento dinâmico é um Suspense boundary: o Next começa
+ * a streamar a resposta e se compromete com `200 OK` antes de o componente
+ * chegar ao `notFound()`. Dali em diante o status não pode mais mudar para
+ * 404 — o Next só injeta `<meta robots="noindex">` no HTML já enviado (ver
+ * node_modules/next/dist/docs/01-app/02-guides/streaming.md, "The HTTP
+ * contract"). O efeito era soft-404: `/perifericos/<qualquer-coisa>` respondia
+ * 200 com a tela "não encontrado", e o Search Console contava a URL como
+ * rastreada sem conteúdo.
+ *
+ * Verificado empiricamente: com o arquivo presente, 200; sem ele, 404 — e as
+ * rotas que nunca o tiveram (`/blog`, `/noticias`) sempre devolveram 404.
+ * Atenção ao testar: `next dev` rodando em paralelo recria o cache de
+ * `.next` e falseia o resultado — use `rm -rf .next && next build && next start`.
+ *
+ * O custo é não ter skeleton nesta rota (o conteúdo aparece de uma vez, após
+ * o servidor resolver). Se um dia o skeleton for necessário aqui, ele precisa
+ * vir de um `<Suspense>` DENTRO do componente, depois do `notFound()`, nunca
+ * de um `loading.tsx` neste nível.
+ */
 
 interface PerifericoPageProps {
   params: Promise<{ slug: string }>
@@ -39,7 +66,16 @@ export async function generateMetadata({ params }: PerifericoPageProps): Promise
   const fullName = buildPeripheralDisplayName(data.brand, data.name)
   const tierLabel = data.tier ? `Tier ${data.tier}` : null
 
+  // Ficha ainda sem specs nem review sai do índice (mas mantém `follow`): é a
+  // mesma decisão que o `app/sitemap.ts` toma via `lib/indexability.ts`, e os
+  // dois lados precisam concordar — anunciar no sitemap uma URL marcada
+  // `noindex` é sinal contraditório. Preenchida a ficha, ela volta ao índice
+  // sozinha. `count` com `head: true`, deduplicado pelo `cache` do React com
+  // a leitura de reviews do corpo da página.
+  const reviewCount = await countPeripheralReviews(data.id)
+
   return buildMetadata({
+    thinContent: !isPeripheralRecordIndexable({ ...data, reviewCount }),
     title: fullName,
     titleSuffix: ` - ${categoryLabel} | Sunano`,
     // Sem `generateMetadata` esta página herdava o card genérico do layout
@@ -131,28 +167,56 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const canonicalUrl = `${SITE_URL}/perifericos/${buildPeripheralSlug(data.name, data.id)}`
   const fullProductName = buildPeripheralDisplayName(data.brand, data.name)
 
-  const peripheralJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    "@id": canonicalUrl,
-    name: fullProductName,
-    ...(data.brand ? { brand: { "@type": "Brand", name: data.brand } } : {}),
-    ...(data.image_url ? { image: [new URL(data.image_url, SITE_URL).toString()] } : {}),
-    ...(CATEGORY_LABEL[data.category] ? { category: CATEGORY_LABEL[data.category] } : {}),
-    description: `Ficha técnica, tier e reviews do ${fullProductName} na Sunano.`,
-    ...(reviewStats.average != null && reviewStats.totalCount > 0
-      ? {
-          aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: reviewStats.average,
-            reviewCount: reviewStats.totalCount,
-            bestRating: 5,
-            worstRating: 1,
-          },
-        }
-      : {}),
-    ...(linkedStore ? { offers: { "@type": "Offer", url: `${SITE_URL}/loja/${linkedStore.slug}`, priceCurrency: "BRL", seller: { "@id": `${SITE_URL}/#organization` } } } : {}),
-  }
+  const hasRating = reviewStats.average != null && reviewStats.totalCount > 0
+
+  /**
+   * O Google exige que um `Product` traga ao menos UM entre `offers`,
+   * `review` e `aggregateRating` — sem nenhum deles o item é reprovado com
+   * "Especifique offers, review ou aggregateRating" (erro crítico no relatório
+   * de Itens detectados), e o erro se propaga para a página inteira.
+   *
+   * Era o caso de 509 das 576 fichas: sem review (só 49 têm) e sem produto
+   * na loja (22), sobrava um `Product` com nome, marca e imagem — exatamente
+   * os campos que NÃO satisfazem a exigência.
+   *
+   * Então `Product` só é emitido quando há de fato oferta ou nota. Sem isso a
+   * ficha declara `ItemPage`, que descreve a página honestamente (é uma ficha
+   * técnica, não um produto à venda) e não pede rich result nenhum — melhor
+   * que marcação reprovada, que só gera ruído no Search Console.
+   */
+  const peripheralJsonLd = hasRating || linkedStore
+    ? {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "@id": canonicalUrl,
+        name: fullProductName,
+        ...(data.brand ? { brand: { "@type": "Brand", name: data.brand } } : {}),
+        ...(data.image_url ? { image: [new URL(data.image_url, SITE_URL).toString()] } : {}),
+        ...(CATEGORY_LABEL[data.category] ? { category: CATEGORY_LABEL[data.category] } : {}),
+        description: `Ficha técnica, tier e reviews do ${fullProductName} na Sunano.`,
+        ...(hasRating
+          ? {
+              aggregateRating: {
+                "@type": "AggregateRating",
+                ratingValue: reviewStats.average,
+                reviewCount: reviewStats.totalCount,
+                bestRating: 5,
+                worstRating: 1,
+              },
+            }
+          : {}),
+        ...(linkedStore ? { offers: { "@type": "Offer", url: `${SITE_URL}/loja/${linkedStore.slug}`, priceCurrency: "BRL", seller: { "@id": `${SITE_URL}/#organization` } } } : {}),
+      }
+    : {
+        "@context": "https://schema.org",
+        "@type": "ItemPage",
+        "@id": canonicalUrl,
+        url: canonicalUrl,
+        name: fullProductName,
+        description: `Ficha técnica, tier e reviews do ${fullProductName} na Sunano.`,
+        ...(data.image_url ? { primaryImageOfPage: new URL(data.image_url, SITE_URL).toString() } : {}),
+        isPartOf: { "@id": `${SITE_URL}/#website` },
+      }
 
   return (
     <div className="mx-auto max-w-[1600px] px-2 py-4 sm:px-4 md:px-6 lg:px-8">

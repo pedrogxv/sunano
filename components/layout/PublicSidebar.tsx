@@ -26,6 +26,7 @@ import { useEffect, useState } from "react"
 import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
+import { vipCtaLabel } from "@/lib/vip-status"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useSidebar } from "@/components/providers/sidebar-context"
@@ -291,19 +292,18 @@ export function PublicSidebar() {
           </div>
         </nav>
 
-        {/* Changelog para quem já é VIP — quem não é vê um convite pra virar VIP no lugar.
-            Quem CANCELOU vê "Renovar VIP" mesmo com o período pago ainda
-            correndo: esperar o acesso vencer para só então oferecer a
-            reativação é perder o momento em que a pessoa quer voltar. */}
+        {/* Changelog para quem é VIP; convite para assinar para quem não é.
+            O gate é `isVip` (VIP valendo AGORA), NÃO "tem assinatura viva":
+            quem cancelou dentro do período pago continua VIP até o fim dele e
+            não pode perder o Changelog por isso — era exatamente o que
+            acontecia quando esta condição também exigia
+            `!subscriptionCanceled`.
+
+            O convite a reativar existe, mas no dropdown da conta (ao lado do
+            selo VIP) e na aba de assinatura, que é onde ele cabe sem tirar
+            nada de quem ainda tem acesso. Ver lib/vip-status.ts. */}
         <div className="border-t border-border px-3 py-3">
-          {authUser?.isVip && !authUser.subscriptionCanceled ? (
-            <NavLink
-              item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
-              isActive={isActive("/changelog")}
-              collapsed={isCollapsed}
-              onClick={close}
-            />
-          ) : isVipSubscriptionEnabled() ? (
+          {!authUser?.vip.isVip && isVipSubscriptionEnabled() ? (
             <button
               type="button"
               onClick={() => {
@@ -319,7 +319,8 @@ export function PublicSidebar() {
             >
               <Crown className="size-[18px] shrink-0 vip-badge-crown" />
               <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>
-                {authUser?.subscriptionCanceled ? "Renovar VIP" : "Vire VIP"}
+                {/* Visitante deslogado não tem estado: o convite é o genérico. */}
+                {authUser ? vipCtaLabel(authUser.vip) ?? "Seja VIP" : "Seja VIP"}
               </span>
             </button>
           ) : (

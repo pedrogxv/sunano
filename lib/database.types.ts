@@ -144,10 +144,14 @@ export type Database = {
           tiktok_handle: string | null
           /** Incrementado só via RPC `increment_profile_views` — nunca escrito direto. */
           profile_views: number
-          /** Ban restrito ao Mercado — não impede login nem o resto da conta. */
+          /**
+           * Resquício do Mercado, removido do produto em 2026-09-12. As colunas
+           * seguem no banco (dados históricos), mas nenhum código as lê ou
+           * escreve — não reintroduzir uso sem trazer o Mercado de volta.
+           */
           market_banned_at: string | null
           market_ban_reason: string | null
-          /** Ban geral da conta — bloqueia login e some das listagens públicas (fórum/blog/reviews ocultos, fora de rankings). Distinto de market_banned_at. */
+          /** Ban geral da conta — bloqueia login e some das listagens públicas (fórum/blog/reviews ocultos, fora de rankings). */
           account_banned_at: string | null
           account_ban_reason: string | null
           /**
@@ -1802,8 +1806,16 @@ export type Database = {
           asaas_customer_id: string
           status: "pending" | "active" | "past_due" | "canceled" | "expired"
           payment_method: "credit_card" | "pix"
+          // Plano contratado. Escrito pelo servidor na criação, a partir do
+          // catálogo de lib/vip-plan.ts — as RPCs de pagamento leem daqui
+          // quanto tempo de acesso cada cobrança concede, NUNCA do webhook.
+          billing_period: "monthly" | "yearly"
           pending_payment_id: string | null
           current_period_end: string | null
+          // URL do checkout hospedado em aberto (só cartão) — deixa retomar o pagamento.
+          checkout_link: string | null
+          // Prazo do checkout em aberto: solta a trava local mesmo sem o webhook.
+          checkout_expires_at: string | null
           created_at: string
           updated_at: string
           canceled_at: string | null
@@ -1816,8 +1828,11 @@ export type Database = {
           asaas_customer_id: string
           status?: "pending" | "active" | "past_due" | "canceled" | "expired"
           payment_method?: "credit_card" | "pix"
+          billing_period?: "monthly" | "yearly"
           pending_payment_id?: string | null
           current_period_end?: string | null
+          checkout_link?: string | null
+          checkout_expires_at?: string | null
           created_at?: string
           updated_at?: string
           canceled_at?: string | null
@@ -2510,6 +2525,17 @@ export type Database = {
       }
       reconcile_vip_subscription: {
         Args: { p_user_id: string; p_asaas_active: boolean }
+        Returns: boolean
+      }
+      reactivate_vip_subscription: {
+        Args: {
+          p_id: string
+          p_user_id: string
+          p_asaas_customer_id: string
+          p_payment_method: string
+          p_asaas_subscription_id: string
+          p_current_period_end: string
+        }
         Returns: boolean
       }
       change_display_name_with_aura: {

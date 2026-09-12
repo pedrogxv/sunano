@@ -55,7 +55,7 @@ const ADMIN_PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/users":       { title: "Usuários e permissões", description: "Controle quem pode ler ou editar cada seção." },
   "/admin/settings":    { title: "Configurações", description: "Gerencie seu perfil e preferências do sistema." },
   "/admin/store":       { title: "Loja", description: "Gerencie os produtos da loja." },
-  "/admin/market":      { title: "Mercado", description: "Modere os anúncios publicados pela comunidade e gerencie banimentos." },
+  "/admin/vips":        { title: "VIPs", description: "Assinaturas VIP: estado na Asaas, cobranças e concessão manual." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
   "/admin/suporte":     { title: "Suporte", description: "Veja e responda aos chamados abertos pelos clientes." },
   "/admin/forum/denuncias": { title: "Denúncias", description: "Posts e comentários denunciados pela comunidade." },
@@ -111,9 +111,6 @@ function publicPageDefaults(t: Dict): Record<string, PageDefaults> {
     "/tierlist":              { title: h.tierlist, description: h.tierlistDesc },
     "/blog":                  { title: h.guides, description: h.guidesDesc },
     "/offers":                { title: h.offers, description: h.offersDesc },
-    "/mercado":               { title: h.market, description: h.marketDesc },
-    "/mercado/novo":          { title: h.marketNew, description: h.marketNewDesc },
-    "/mercado/meus-anuncios": { title: h.marketMine, description: h.marketMineDesc },
     "/forum":                 { title: h.forum, description: h.forumDesc },
     "/pessoas":               { title: h.people, description: h.peopleDesc },
     "/conquistas":            { title: h.achievements, description: h.achievementsDesc },
@@ -145,7 +142,6 @@ function getPageDefaults(pathname: string, t: Dict): PageDefaults {
   if (pathname.startsWith("/forum/"))            return { title: t.pageHeader.forum }
   if (pathname.startsWith("/perifericos/"))      return { title: t.pageHeader.peripheral }
   if (pathname.startsWith("/perfil/"))           return { title: t.pageHeader.profile, description: t.pageHeader.profileDesc }
-  if (pathname.startsWith("/mercado/"))          return { title: t.pageHeader.listing }
   return { title: t.pageHeader.fallback }
 }
 

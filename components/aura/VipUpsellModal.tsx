@@ -16,8 +16,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BR_STATES } from "@/lib/br-states"
-import { VIP_SUBSCRIPTION_BENEFITS, VIP_SUPPORT_MESSAGE, formatVipPrice } from "@/lib/vip-plan"
+import {
+  VIP_PLANS,
+  VIP_SUBSCRIPTION_BENEFITS,
+  VIP_SUPPORT_MESSAGE,
+  formatBrlCents,
+  vipYearlyMonthlyEquivalentCents,
+  vipYearlySavingsPercent,
+  type VipBillingPeriod,
+} from "@/lib/vip-plan"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
+import { useAuthUser } from "@/components/providers/auth-context"
 import { VipPixCharge, type VipPixPayment } from "@/components/account/VipPixCharge"
 
 interface VipUpsellModalProps {
@@ -27,13 +36,24 @@ interface VipUpsellModalProps {
   auraCost?: number
   onPurchaseWithAura?: () => Promise<void>
   /**
-   * Reassinatura de quem cancelou e ainda está dentro do período já pago.
-   * Só muda o texto — o POST /api/vip/subscribe é o mesmo e já trata esse
-   * caso (`isResubscribeWithinPaidPeriod`), cobrando 1 mês que é SOMADO ao
-   * saldo restante em vez de substituí-lo.
+   * Força o modo, ignorando o estado real do usuário. NÃO PASSE isto: por
+   * padrão o modal deriva o modo do contexto de auth (ver `resolveVipStatus`),
+   * que é o que garante o mesmo texto e o mesmo verbo venha o modal da
+   * sidebar, do menu da conta, da tierlist, da Central de Aura ou de /conta.
+   *
+   * Enquanto o modo vinha só por prop, apenas /conta o passava — abrir o
+   * MESMO modal pela sidebar oferecia "Assinar por R$ 8,90/mês" a quem só
+   * precisava reativar sem pagar nada.
+   *
+   * Existe para o caso em que o chamador sabe algo mais fresco que o contexto
+   * (ex.: /conta acabou de reconsultar /api/vip/subscription).
    */
   mode?: "subscribe" | "resubscribe"
-  /** VIP atual (dd/mm/aaaa) — mostrado no modo `resubscribe` para deixar claro que nada é perdido. */
+  /**
+   * VIP atual (dd/mm/aaaa), mostrado na reativação para deixar claro que nada
+   * é perdido e que não há cobrança agora. Sem isto o modal formata a data a
+   * partir do próprio contexto de auth.
+   */
   currentAccessUntil?: string | null
   /** Chamado após o POST dar certo, antes do redirect pro checkout da Asaas. */
   onSubscribeStarted?: () => void
@@ -80,11 +100,27 @@ export function VipUpsellModal({
   onOpenChange,
   auraCost,
   onPurchaseWithAura,
-  mode = "subscribe",
+  mode,
   currentAccessUntil,
   onSubscribeStarted,
 }: VipUpsellModalProps) {
-  const isResubscribe = mode === "resubscribe"
+  const { user: authUser } = useAuthUser()
+  // O estado REAL do usuário decide o modo; a prop só sobrescreve quando o
+  // chamador tem informação mais fresca. Foi a inversão disso (prop primeiro,
+  // sem fallback) que deixou o modal com texto de assinatura nova em todos os
+  // pontos de entrada menos /conta.
+  const isResubscribe = mode ? mode === "resubscribe" : Boolean(authUser?.vip.canReactivate)
+  // Mesma lógica para a data: o chamador pode passar a sua, senão sai do
+  // contexto — nunca fica vazia só porque o modal foi aberto pela sidebar.
+  const accessUntil =
+    currentAccessUntil ??
+    (authUser?.vipExpiresAt
+      ? new Date(authUser.vipExpiresAt).toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : null)
   const subscriptionEnabled = isVipSubscriptionEnabled()
   const [subscribing, setSubscribing] = useState(false)
   const [purchasingWithAura, setPurchasingWithAura] = useState(false)
@@ -97,6 +133,12 @@ export function VipUpsellModal({
   // Método escolhido. PIX é o padrão: não exige endereço nem cartão, então é
   // o caminho com menos atrito para a maioria.
   const [method, setMethod] = useState<"pix" | "credit_card">("pix")
+  // Plano escolhido. MENSAL é o padrão de propósito: é o compromisso menor, e
+  // empurrar o anual por default cobraria 10× mais de quem só clicou em
+  // "assinar" sem olhar. O anual ganha destaque visual (selo de economia), não
+  // vantagem no default.
+  const [billingPeriod, setBillingPeriod] = useState<VipBillingPeriod>("monthly")
+  const selectedPlan = VIP_PLANS[billingPeriod]
   // Cobrança PIX devolvida pelo POST — o modal vira a tela do QR em vez de
   // redirecionar para fora (no PIX não há página hospedada da Asaas).
   const [pixPayment, setPixPayment] = useState<VipPixPayment | null>(null)
@@ -130,6 +172,10 @@ export function VipUpsellModal({
     setFormOpen(false)
     setPixPayment(null)
     setPixPending(null)
+    // O plano volta ao mensal a cada abertura: uma escolha de "anual" deixada
+    // de uma sessão anterior do modal levaria a pessoa a confirmar R$ 89,90
+    // achando que estava no fluxo que ela conhece.
+    setBillingPeriod("monthly")
     let cancelled = false
     fetch("/api/vip/subscribe")
       .then((res) => (res.ok ? res.json() : null))
@@ -232,6 +278,7 @@ export function VipUpsellModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           paymentMethod: method,
+          billingPeriod,
           ...(needsPayerInfo
             ? { guestName: guestName.trim(), guestDocument: guestDocument.replace(/\D/g, "") }
             : {}),
@@ -259,6 +306,24 @@ export function VipUpsellModal({
         pending?: boolean
         message?: string
         payment?: VipPixPayment
+        reactivated?: boolean
+        chargedNow?: boolean
+        nextChargeAt?: string
+      }
+
+      // REATIVAÇÃO no PIX: não há QR nenhum — a 1ª cobrança foi agendada para
+      // o fim do período já pago. Só confirma e fecha; ficar na tela de
+      // pagamento pediria ao usuário que pagasse algo que não existe.
+      if (res.ok && data.ok && data.reactivated && data.chargedNow === false && !data.checkoutUrl) {
+        onSubscribeStarted?.()
+        toast.success("Assinatura reativada", {
+          description: accessUntil
+            ? `Nenhuma cobrança agora. Seu VIP segue até ${accessUntil} e a cobrança de ${formatBrlCents(selectedPlan.priceCents)}${selectedPlan.unitLabel} volta a valer a partir dessa data.`
+            : `Nenhuma cobrança agora. A cobrança de ${formatBrlCents(selectedPlan.priceCents)}${selectedPlan.unitLabel} volta a valer no fim do período já pago.`,
+        })
+        setSubscribing(false)
+        onOpenChange(false)
+        return
       }
 
       // PIX: não há página hospedada para onde ir — a assinatura já existe e
@@ -279,15 +344,22 @@ export function VipUpsellModal({
         // saída, manda o usuário para onde ele consegue de fato agir sobre ela.
         if (data.manageUrl) {
           const isPendingPix = data.code === "subscription_pending_pix"
-          toast.error(isPendingPix ? "Pagamento pendente" : "Você já tem uma assinatura", {
+          // Checkout de cartão em aberto ainda NÃO é assinatura (ela só nasce
+          // no 1º pagamento), então dizer "você já tem uma assinatura" seria
+          // falso — e esconderia a ação real: retomar o pagamento ou desistir.
+          const isPendingCheckout = data.code === "subscription_already_pending"
+          toast.error(
+            isPendingPix || isPendingCheckout ? "Pagamento pendente" : "Você já tem uma assinatura",
+            {
             description: data.error ?? "Gerencie sua assinatura nas configurações da conta.",
             action: {
-              label: isPendingPix ? "Pagar agora" : "Gerenciar",
+              label: isPendingPix ? "Pagar agora" : isPendingCheckout ? "Ver checkout" : "Gerenciar",
               onClick: () => {
                 window.location.href = data.manageUrl as string
               },
             },
-          })
+            }
+          )
           setSubscribing(false)
           return
         }
@@ -353,13 +425,14 @@ export function VipUpsellModal({
                 <div className="min-w-0">
                   <DialogTitle className="text-lg leading-tight">Assinatura criada</DialogTitle>
                   <p className="text-xs text-muted-foreground">
-                    Pague o primeiro mês para liberar o VIP
+                    Pague a primeira cobrança para liberar o VIP
                   </p>
                 </div>
               </div>
               <DialogDescription className="text-xs leading-relaxed">
-                A cada mês a Asaas gera uma nova cobrança PIX, que aparece nas configurações da sua
-                conta. Você pode cancelar quando quiser — nenhuma cobrança futura é feita depois disso.
+                {billingPeriod === "yearly"
+                  ? "A cada 12 meses a Asaas gera uma nova cobrança PIX, que aparece nas configurações da sua conta. Você pode cancelar quando quiser — nenhuma cobrança futura é feita depois disso."
+                  : "A cada mês a Asaas gera uma nova cobrança PIX, que aparece nas configurações da sua conta. Você pode cancelar quando quiser — nenhuma cobrança futura é feita depois disso."}
               </DialogDescription>
             </DialogHeader>
 
@@ -401,19 +474,30 @@ export function VipUpsellModal({
                 </div>
                 <div className="min-w-0">
                   <DialogTitle className="vip-badge-text text-lg leading-tight">
-                    {isResubscribe ? "Voltar a assinar" : "Vantagens do VIP"}
+                    {isResubscribe ? "Reativar assinatura" : "Vantagens do VIP"}
                   </DialogTitle>
+                  {/* Acompanha o plano selecionado: com o anual marcado, um
+                      "R$ 8,90/mês" fixo aqui contradiria o botão de confirmar
+                      logo abaixo, que cobra R$ 89,90. */}
                   <p className="text-xs text-muted-foreground">
-                    <span className="font-bold text-foreground">{formatVipPrice()}</span>/mês · cancele quando quiser
+                    <span className="font-bold text-foreground">
+                      {formatBrlCents(selectedPlan.priceCents)}
+                    </span>
+                    {selectedPlan.unitLabel} · cancele quando quiser
                   </p>
                 </div>
               </div>
 
               <DialogDescription className="text-xs leading-relaxed">
+                {/* Reativar NÃO cobra nada: a 1ª cobrança da assinatura é
+                    agendada para o fim do período que já foi pago. O texto
+                    anterior ("o mês que você pagar agora é somado ao que já
+                    resta") descrevia o comportamento antigo, em que reativar
+                    gerava cobrança imediata — o bug que esta tela corrige. */}
                 {isResubscribe
-                  ? currentAccessUntil
-                    ? `Seu VIP atual vale até ${currentAccessUntil} e nada disso é perdido: o mês que você pagar agora é somado ao que já resta, e a cobrança mensal só volta a partir daí.`
-                    : "O período que você já pagou não é perdido: o mês que você pagar agora é somado ao que já resta, e a cobrança mensal só volta a partir daí."
+                  ? accessUntil
+                    ? `Nenhuma cobrança agora: seu VIP já está pago até ${accessUntil}. Reativar só religa a assinatura, que volta a ser cobrada a partir dessa data.`
+                    : "Nenhuma cobrança agora: o período atual já está pago. Reativar só religa a assinatura, que volta a ser cobrada quando ele terminar."
                   : VIP_SUPPORT_MESSAGE}
               </DialogDescription>
             </DialogHeader>
@@ -653,6 +737,57 @@ export function VipUpsellModal({
   }
 
   /**
+   * Escolha do plano. Só aparece numa assinatura NOVA: na reativação o plano
+   * também pode ser trocado, mas aí o card já explica que nada é cobrado agora
+   * e a troca é oferecida junto — ver `PlanOption` abaixo, que é usada nos dois
+   * casos com textos diferentes.
+   */
+  function PlanOption({ period }: { period: VipBillingPeriod }) {
+    const plan = VIP_PLANS[period]
+    const selected = billingPeriod === period
+    const savings = vipYearlySavingsPercent()
+    return (
+      <button
+        type="button"
+        onClick={() => setBillingPeriod(period)}
+        disabled={subscribing || purchasingWithAura}
+        aria-pressed={selected}
+        className={`relative flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+          selected ? "bg-[var(--vip-accent-soft)]" : "border-border/70 hover:bg-muted/40"
+        }`}
+        style={selected ? { borderColor: "var(--vip-accent)" } : undefined}
+      >
+        {/* Selo de economia derivado do catálogo: se um reajuste tornar o anual
+            igual ou pior que 12 mensais, `vipYearlySavingsPercent` devolve 0 e
+            o selo desaparece em vez de mentir. */}
+        {period === "yearly" && savings > 0 && (
+          <span
+            className="absolute -top-2 right-2 rounded-full px-1.5 py-0.5 text-[9px] font-bold text-black"
+            style={{ backgroundColor: "var(--vip-accent)" }}
+          >
+            -{savings}%
+          </span>
+        )}
+        <span
+          className="text-sm font-bold"
+          style={{ color: selected ? "var(--vip-accent)" : undefined }}
+        >
+          {plan.label}
+        </span>
+        <span className="text-[11px] font-semibold text-foreground">
+          {formatBrlCents(plan.priceCents)}
+          <span className="font-normal text-muted-foreground">{plan.unitLabel}</span>
+        </span>
+        <span className="text-[10px] text-muted-foreground">
+          {period === "yearly"
+            ? `equivale a ${formatBrlCents(vipYearlyMonthlyEquivalentCents())}/mês`
+            : "cancele quando quiser"}
+        </span>
+      </button>
+    )
+  }
+
+  /**
    * Botões de ação — renderizados na coluna da oferta enquanto o formulário
    * está fechado e no rodapé da coluna de cobrança quando ele abre, para o
    * CTA ficar sempre ao lado do que a pessoa acabou de preencher.
@@ -663,6 +798,33 @@ export function VipUpsellModal({
         {subscriptionEnabled && (
           <div className="space-y-1.5">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
+              Plano
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <PlanOption period="monthly" />
+              <PlanOption period="yearly" />
+            </div>
+            {/* Na reativação a troca de plano é permitida e não antecipa
+                cobrança nenhuma: a 1ª cobrança do plano novo vence no fim do
+                período que o plano antigo já pagou. Dizer isso aqui evita que
+                a pessoa evite o anual por medo de ser cobrada duas vezes. */}
+            <p className="text-[10px] leading-relaxed text-muted-foreground/70">
+              {isResubscribe
+                ? billingPeriod === "yearly"
+                  ? accessUntil
+                    ? `Você pode reativar já no plano anual: nada é cobrado agora, e a primeira cobrança de ${formatBrlCents(selectedPlan.priceCents)} vence em ${accessUntil}.`
+                    : "Você pode reativar já no plano anual: nada é cobrado agora, e a primeira cobrança vence no fim do período já pago."
+                  : "Nada é cobrado agora — a mensalidade volta a valer no fim do período já pago."
+                : billingPeriod === "yearly"
+                  ? `Uma cobrança de ${formatBrlCents(selectedPlan.priceCents)} por 12 meses de VIP, renovada a cada ano.`
+                  : `Uma cobrança de ${formatBrlCents(selectedPlan.priceCents)} por mês, renovada a cada mês.`}
+            </p>
+          </div>
+        )}
+
+        {subscriptionEnabled && (
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/70">
               Como pagar
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -670,7 +832,7 @@ export function VipUpsellModal({
                 value="pix"
                 icon={<QrCode className="size-4" />}
                 label="PIX"
-                hint="QR todo mês"
+                hint={billingPeriod === "yearly" ? "QR todo ano" : "QR todo mês"}
               />
               <MethodOption
                 value="credit_card"
@@ -681,8 +843,12 @@ export function VipUpsellModal({
             </div>
             <p className="text-[10px] leading-relaxed text-muted-foreground/70">
               {method === "pix"
-                ? "Assinatura mensal: a cada mês geramos um novo QR para você pagar. Sem cartão, sem endereço."
-                : "Cobrança automática no cartão todo mês. Exige telefone e endereço de cobrança."}
+                ? billingPeriod === "yearly"
+                  ? "A cada ano geramos um novo QR para você pagar. Sem cartão, sem endereço."
+                  : "A cada mês geramos um novo QR para você pagar. Sem cartão, sem endereço."
+                : billingPeriod === "yearly"
+                  ? "Cobrança automática no cartão a cada 12 meses. Exige telefone e endereço de cobrança."
+                  : "Cobrança automática no cartão todo mês. Exige telefone e endereço de cobrança."}
             </p>
           </div>
         )}
@@ -696,18 +862,32 @@ export function VipUpsellModal({
             style={{ backgroundColor: "var(--vip-accent)" }}
           >
             {subscribing && <Loader2 className="size-4 animate-spin" />}
-            {needsAnything && !formOpen ? (
+            {/* Na REATIVAÇÃO nenhum rótulo pode citar um valor a pagar agora:
+                não há cobrança no ato, nem QR para gerar. "Reativar
+                assinatura" é a ação inteira — inclusive no PIX, onde o botão
+                deixou de gerar QR nesse caso. */}
+            {isResubscribe ? (
+              needsAnything && !formOpen ? (
+                <>
+                  Reativar assinatura
+                  <ArrowRight className="size-4" />
+                </>
+              ) : (
+                "Reativar assinatura"
+              )
+            ) : needsAnything && !formOpen ? (
               <>
-                {isResubscribe ? "Voltar a assinar" : "Assinar"} por {formatVipPrice()}/mês
+                Assinar por {formatBrlCents(selectedPlan.priceCents)}
+                {selectedPlan.unitLabel}
                 <ArrowRight className="size-4" />
               </>
             ) : method === "pix" ? (
-              // No PIX o botão não conclui a compra — gera o QR do 1º mês.
-              // Prometer "confirmar assinatura" aqui faria o usuário achar
-              // que já pagou e fechar o modal antes de ler o código.
-              `Gerar PIX de ${formatVipPrice()}`
+              // No PIX o botão não conclui a compra — gera o QR da 1ª
+              // cobrança. Prometer "confirmar assinatura" aqui faria o usuário
+              // achar que já pagou e fechar o modal antes de ler o código.
+              `Gerar PIX de ${formatBrlCents(selectedPlan.priceCents)}`
             ) : (
-              `Confirmar assinatura · ${formatVipPrice()}/mês`
+              `Confirmar assinatura · ${formatBrlCents(selectedPlan.priceCents)}${selectedPlan.unitLabel}`
             )}
           </button>
         ) : (

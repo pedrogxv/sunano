@@ -40,11 +40,15 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
     pathname === "/reset-password" ||
     pathname === "/2fa" ||
     pathname === "/consentimento"
+  // Manutenção: sidebar e TopBar oferecem navegação para um site que está
+  // fechado — todo link levaria de volta para cá. A tela vai sozinha, sem
+  // chrome, como as páginas de auth.
+  const isMaintenancePage = pathname === "/maintenance"
 
   // Admin pages that self-manage their own padding/max-width (like PerifericosContent)
   const isSelfPaddedAdminPage = pathname === "/admin/perifericos"
 
-  if (isAdminLogin || isAuthPage) {
+  if (isAdminLogin || isAuthPage || isMaintenancePage) {
     return (
       <div className="min-h-screen bg-background text-foreground">
         {children}

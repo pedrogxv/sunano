@@ -14,6 +14,7 @@ import { SavedPostsProvider } from "@/components/providers/saved-posts-context"
 import { AuraReactionsProvider } from "@/components/providers/aura-reactions-context"
 import { AuthHashErrorListener } from "@/components/auth/AuthHashErrorListener"
 import { LayoutShell } from "@/components/layout/LayoutShell"
+import { ChromeOutsideMaintenance } from "@/components/layout/ChromeOutsideMaintenance"
 import { CookieBanner } from "@/components/lgpd/CookieBanner"
 import { ImpersonationBanner } from "@/components/admin/ImpersonationBanner"
 import { OrganizationJsonLd } from "@/components/seo/OrganizationJsonLd"
@@ -128,7 +129,9 @@ export default function RootLayout({
                           <Toaster />
                           <AuthHashErrorListener />
                           <ImpersonationBanner />
-                          <CookieBanner />
+                          <ChromeOutsideMaintenance>
+                            <CookieBanner />
+                          </ChromeOutsideMaintenance>
                         </TooltipProvider>
                       </PageHeaderProvider>
                     </CartProvider>

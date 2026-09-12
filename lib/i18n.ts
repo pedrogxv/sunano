@@ -144,7 +144,6 @@ type Translations = {
     videos: string
     forum: string
     store: string
-    market: string
     used: string
     offers: string
     people: string
@@ -424,12 +423,6 @@ type Translations = {
     guidesDesc: string
     offers: string
     offersDesc: string
-    market: string
-    marketDesc: string
-    marketNew: string
-    marketNewDesc: string
-    marketMine: string
-    marketMineDesc: string
     forum: string
     forumDesc: string
     people: string
@@ -1064,8 +1057,24 @@ type Translations = {
     title: string
     body1: string
     body2: string
-    signInAsAdmin: string
     tryAgain: string
+    gameTitle: string
+    gameIntro: string
+    gameStart: string
+    gameRestart: string
+    gameScore: string
+    gameBest: string
+    gameOver: string
+    gameNewBest: string
+    gameCombo: string
+    gameLives: string
+    gameRating: string
+    gameNice: string
+    gameWas: string
+    statusChecking: string
+    statusStillDown: string
+    statusBackOnline: string
+    statusBackAction: string
   }
   changelog: {
     title: string
@@ -1151,7 +1160,6 @@ export const translations: Record<LocaleCode, Translations> = {
       videos: "Vídeos e redes sociais",
       forum: "Fórum",
       store: "Loja",
-      market: "Mercado",
       used: "Usado",
       offers: "Promoções",
       people: "Usuários",
@@ -1481,12 +1489,6 @@ export const translations: Record<LocaleCode, Translations> = {
       guidesDesc: "Guias completos para diversos assuntos, redigidos por especialistas do Sunano.",
       offers: "Promoções",
       offersDesc: "Promoções e descontos selecionados do Telegram.",
-      market: "Mercado",
-      marketDesc: "Anúncios de produtos novos e usados publicados pela comunidade.",
-      marketNew: "Anunciar",
-      marketNewDesc: "Publique um anúncio no Mercado.",
-      marketMine: "Meus anúncios",
-      marketMineDesc: "Gerencie os anúncios que você publicou no Mercado.",
       forum: "Fórum",
       forumDesc: "Discussões e perguntas da comunidade.",
       people: "Pessoas",
@@ -2134,9 +2136,25 @@ export const translations: Record<LocaleCode, Translations> = {
       mode: "Modo Manutenção",
       title: "Estamos ajustando o site",
       body1: "O conteúdo público está temporariamente indisponível enquanto realizamos melhorias.",
-      body2: "Administradores autenticados continuam com acesso normal.",
-      signInAsAdmin: "Entrar como admin",
+      body2: "Volta já. Enquanto isso, mostra que você sabe tierar.",
       tryAgain: "Tentar novamente",
+      gameTitle: "Tier Rush",
+      gameIntro: "Cai um periférico com a nota. Manda pro tier certo antes do tempo acabar — teclas 1 a 7.",
+      gameStart: "Começar",
+      gameRestart: "Jogar de novo",
+      gameScore: "Pontos",
+      gameBest: "Recorde",
+      gameOver: "Fim de jogo!",
+      gameNewBest: "Novo recorde!",
+      gameCombo: "Combo",
+      gameLives: "vidas",
+      gameRating: "nota",
+      gameNice: "Boa!",
+      gameWas: "Era",
+      statusChecking: "Verificando...",
+      statusStillDown: "Ainda em manutenção",
+      statusBackOnline: "O site voltou!",
+      statusBackAction: "Entrar",
     },
     changelog: {
       title: "Changelog",
@@ -2598,7 +2616,6 @@ export const translations: Record<LocaleCode, Translations> = {
       videos: "Videos & socials",
       forum: "Forum",
       store: "Store",
-      market: "Market",
       used: "Used",
       offers: "Deals",
       people: "People",
@@ -2928,12 +2945,6 @@ export const translations: Record<LocaleCode, Translations> = {
       guidesDesc: "In-depth guides on many topics, written by Sunano specialists.",
       offers: "Deals",
       offersDesc: "Deals and discounts handpicked from Telegram.",
-      market: "Marketplace",
-      marketDesc: "New and used listings posted by the community.",
-      marketNew: "Post a listing",
-      marketNewDesc: "Publish a listing on the Marketplace.",
-      marketMine: "My listings",
-      marketMineDesc: "Manage the listings you published on the Marketplace.",
       forum: "Forum",
       forumDesc: "Community discussions and questions.",
       people: "People",
@@ -3581,9 +3592,25 @@ export const translations: Record<LocaleCode, Translations> = {
       mode: "Maintenance Mode",
       title: "We are updating the website",
       body1: "Public content is temporarily unavailable while we perform improvements.",
-      body2: "Authenticated administrators continue to have normal access.",
-      signInAsAdmin: "Sign in as admin",
+      body2: "Back soon. Meanwhile, show us you know how to tier.",
       tryAgain: "Try again",
+      gameTitle: "Tier Rush",
+      gameIntro: "A peripheral drops with its rating. Send it to the right tier before time runs out — keys 1 to 7.",
+      gameStart: "Start",
+      gameRestart: "Play again",
+      gameScore: "Score",
+      gameBest: "Best",
+      gameOver: "Game over!",
+      gameNewBest: "New best!",
+      gameCombo: "Combo",
+      gameLives: "lives",
+      gameRating: "rating",
+      gameNice: "Nice!",
+      gameWas: "It was",
+      statusChecking: "Checking...",
+      statusStillDown: "Still under maintenance",
+      statusBackOnline: "The site is back!",
+      statusBackAction: "Enter",
     },
     changelog: {
       title: "Changelog",

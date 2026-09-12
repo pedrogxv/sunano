@@ -28,6 +28,8 @@ export type BlogPost = {
   updated_at?: string | null
   post_type?: "news" | "review"
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
+  /** Perfil público do autor — usado para o `author.url` do dado estruturado. */
+  author_profile?: { display_slug: string | null } | null
   peripherals?: { name: string; brand: string }[] | null
 }
 

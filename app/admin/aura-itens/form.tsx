@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Loader2, Trash2, Upload } from "lucide-react"
+import { AlertTriangle, Boxes, Loader2, Lock, Trash2, Truck, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { cn } from "@/lib/utils"
 import { compressImageFile, type CompressImageOptions } from "@/lib/client/compress-image"
 import type { AuraItemAdmin, AuraItemKind } from "@/lib/server/repositories/aura-store-repository"
+import {
+  auraItemKindMeta,
+  CONVERTIBLE_AURA_ITEM_KINDS,
+  isConvertibleAuraItemKind,
+} from "@/lib/aura-item-kinds"
+import { VIP_AURA_DISCOUNT_PERCENT } from "@/lib/aura-pricing"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
 
 /**
@@ -36,13 +42,51 @@ const FRAME_COMPRESS_OPTIONS: CompressImageOptions = {
 }
 
 
-const KIND_LABELS: Record<AuraItemKind, string> = {
-  avatar_frame: "Moldura de avatar",
-  peripheral: "Produto (prêmio físico)",
-  vip_month: "VIP (1 mês)",
-  display_name_change: "Troca de nome",
-  streak_shield: "Proteção de Ofensiva",
-  mini_profile_bg: "Fundo de Mini Perfil",
+/**
+ * Cartão de escolha do tipo. Substitui o `<select>`: entre "moldura" e
+ * "produto físico" a diferença não é de rótulo, é de consequência — um
+ * consome estoque real e gera entrega. Mostrar as duas naturezas lado a lado,
+ * com o que cada uma implica, evita cadastrar prêmio real como cosmético.
+ */
+function KindChoice({
+  kind,
+  selected,
+  onSelect,
+}: {
+  kind: AuraItemKind
+  selected: boolean
+  onSelect: () => void
+}) {
+  const meta = auraItemKindMeta(kind)
+  const Icon = meta.icon
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      className={cn(
+        "flex items-start gap-3 rounded-xl border p-3 text-left transition-colors",
+        selected
+          ? "border-foreground/30 bg-foreground/5"
+          : "border-border bg-card hover:border-foreground/20"
+      )}
+    >
+      <span
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-lg border",
+          meta.badgeClassName
+        )}
+      >
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-foreground">{meta.longLabel}</span>
+        <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+          {meta.blurb}
+        </span>
+      </span>
+    </button>
+  )
 }
 
 interface AuraItemFormProps {
@@ -63,8 +107,8 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
   // podem mudar. `convertible` guarda essa condição.
   const [kind, setKind] = useState<AuraItemKind>(item?.kind ?? "avatar_frame")
   const isPeripheral = kind === "peripheral"
-  const kindConvertible =
-    !item || item.kind === "avatar_frame" || item.kind === "peripheral"
+  const kindConvertible = !item || isConvertibleAuraItemKind(item.kind)
+  const kindMeta = auraItemKindMeta(kind)
 
   const [formData, setFormData] = useState({
     name: item?.name ?? "",
@@ -231,54 +275,87 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
       <div className="space-y-2">
         <Label>Tipo *</Label>
         {kindConvertible ? (
-          <select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as AuraItemKind)}
-            className={cn(
-              "flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm",
-              "ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            )}
-          >
-            <option value="avatar_frame">Moldura de avatar</option>
-            <option value="peripheral">Produto (prêmio físico)</option>
-          </select>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {CONVERTIBLE_AURA_ITEM_KINDS.map((k) => (
+              <KindChoice key={k} kind={k} selected={kind === k} onSelect={() => setKind(k)} />
+            ))}
+          </div>
         ) : (
-          <p className="flex h-9 items-center text-sm text-muted-foreground">
-            {KIND_LABELS[kind] ?? kind}
-          </p>
-        )}
-        {isPeripheral && (
-          <p className="text-[10px] text-muted-foreground/60">
-            Produto físico: some da loja quando as unidades acabam. Só membros nível verificado
-            podem resgatar, e cada pessoa resgata no máximo 1 unidade. Sem desconto VIP.
-          </p>
+          // Kinds especiais (VIP, escudo, troca de nome, fundo) têm RPC e slug
+          // próprios: o código depende deles, então o tipo é só informativo.
+          <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3">
+            <span
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-lg border",
+                kindMeta.badgeClassName
+              )}
+            >
+              <kindMeta.icon className="size-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                {kindMeta.longLabel}
+                <Lock className="size-3 text-muted-foreground" />
+              </p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                {kindMeta.blurb} O tipo é fixo — o código depende do slug deste item.
+              </p>
+            </div>
+          </div>
         )}
         {item && kindConvertible && kind !== item.kind && (
-          <p className="text-[10px] text-amber-400/80">
-            Você está mudando o tipo deste item. A conversão só é segura se ninguém resgatou ou
-            equipou ele ainda.
-          </p>
+          <Alert className="border-amber-500/30 bg-amber-500/10 py-2">
+            <AlertTriangle className="size-3.5 text-amber-400" />
+            <AlertDescription className="text-xs text-amber-200">
+              Você está mudando o tipo deste item. A conversão só é segura se ninguém resgatou ou
+              equipou ele ainda.
+            </AlertDescription>
+          </Alert>
         )}
       </div>
 
-      {/* Unidades — só periférico */}
+      {/* Estoque e regras do prêmio físico — o bloco que não existe para
+          itens digitais. Agrupado para deixar claro que essas condições vêm
+          todas juntas com o tipo "produto". */}
       {isPeripheral && (
-        <div className="space-y-2">
-          <Label>Unidades disponíveis *</Label>
-          <Input
-            required
-            type="number"
-            min={1}
-            step={1}
-            value={formData.stock}
-            onChange={(e) => set("stock", e.target.value)}
-            placeholder="Ex: 1"
-            className="max-w-[160px]"
-          />
-          <p className="text-[10px] text-muted-foreground/60">
-            Quantas pessoas podem resgatar este produto no total. O card mostra
-            &ldquo;Esgotado&rdquo; quando chega a zero.
-          </p>
+        <div className="space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-4">
+          <div className="flex items-center gap-2">
+            <Boxes className="size-4 text-amber-400" />
+            <h3 className="text-sm font-semibold text-foreground">Estoque real</h3>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Unidades disponíveis *</Label>
+            <Input
+              required
+              type="number"
+              min={1}
+              step={1}
+              value={formData.stock}
+              onChange={(e) => set("stock", e.target.value)}
+              placeholder="Ex: 1"
+              className="max-w-[160px]"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Quantas pessoas podem resgatar este produto no total. Ao zerar, o item some da
+              Central de Aura — ninguém vê &ldquo;esgotado&rdquo;, ele simplesmente sai da lista.
+            </p>
+          </div>
+
+          <ul className="space-y-1.5 border-t border-amber-500/20 pt-3 text-[11px] text-muted-foreground">
+            <li className="flex items-start gap-2">
+              <Truck className="mt-0.5 size-3 shrink-0 text-amber-400/80" />
+              Gera um pedido de entrega e exige endereço completo no resgate.
+            </li>
+            <li className="flex items-start gap-2">
+              <Lock className="mt-0.5 size-3 shrink-0 text-amber-400/80" />
+              Só membros de nível verificado resgatam, no máximo 1 unidade por pessoa.
+            </li>
+            <li className="flex items-start gap-2">
+              <Boxes className="mt-0.5 size-3 shrink-0 text-amber-400/80" />
+              Sem desconto VIP: o preço em Aura é o que todo mundo paga.
+            </li>
+          </ul>
         </div>
       )}
 
@@ -305,8 +382,13 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
             step={1}
             value={formData.auraCost}
             onChange={(e) => set("auraCost", e.target.value)}
-            placeholder="Ex: 250"
+            placeholder={isPeripheral ? "Ex: 25000" : "Ex: 250"}
           />
+          <p className="text-[10px] text-muted-foreground/60">
+            {isPeripheral
+              ? "Preço cheio — prêmios físicos não recebem o desconto VIP."
+              : `VIP paga ${VIP_AURA_DISCOUNT_PERCENT}% menos que este valor.`}
+          </p>
         </div>
       </div>
 

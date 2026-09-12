@@ -1,6 +1,6 @@
 import "server-only"
 
-import { profileMediaProxyUrl } from "@/lib/account-tier"
+import { isVipActive, profileMediaProxyUrl } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { parseSlug } from "@/lib/format"
 import { validateDisplayName } from "@/lib/profile-name"
@@ -543,7 +543,11 @@ export async function getVipStatus(userId: string): Promise<VipStatus> {
     .maybeSingle()
 
   const expiresAt = data?.vip_expires_at ?? null
-  const active = data?.account_tier === "vip" && (expiresAt === null || new Date(expiresAt) > new Date())
+  // `isVipActive` é o ponto único de verdade (espelho TS de `is_vip_active` no
+  // SQL). Repetir a regra aqui à mão já esteve correto, mas duplicata de regra
+  // de acesso é duplicata que diverge — e divergir aqui significa cobrar VIP
+  // de quem já tem, ou liberar benefício a quem não tem.
+  const active = isVipActive(data?.account_tier, expiresAt)
   return { active, expiresAt }
 }
 

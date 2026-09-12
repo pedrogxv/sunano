@@ -220,6 +220,19 @@ interface BuildMetadataInput {
   authors?: string[]
   /** Páginas de conteúdo privado/utilitário saem do índice. */
   noIndex?: boolean
+  /**
+   * `noindex, follow` — página fina, não privada.
+   *
+   * Diferente de `noIndex` (que também manda `nofollow`, certo para erro e
+   * área logada): aqui o conteúdo é público e legítimo, só não rende um slot
+   * no índice ainda — ficha de periférico sem specs, perfil sem atividade.
+   * O `follow` é o ponto: essas páginas linkam para fichas e posts que DEVEM
+   * ser indexados, e `nofollow` cortaria esse caminho de descoberta.
+   *
+   * Anda junto com `lib/indexability.ts`, que decide o mesmo para o sitemap —
+   * uma URL nunca deve ser anunciada e marcada `noindex` ao mesmo tempo.
+   */
+  thinContent?: boolean
   keywords?: string[]
 }
 
@@ -258,7 +271,11 @@ export function buildMetadata(input: BuildMetadataInput): Metadata {
     description,
     keywords: input.keywords,
     alternates: { canonical: input.path },
-    robots: input.noIndex ? { index: false, follow: false } : undefined,
+    robots: input.noIndex
+      ? { index: false, follow: false }
+      : input.thinContent
+        ? { index: false, follow: true }
+        : undefined,
     openGraph: {
       title,
       description,

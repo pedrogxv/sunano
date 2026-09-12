@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getLatestSubscriptionForUser } from "@/lib/server/repositories/vip-subscription-repository"
 import { getPixQrCode } from "@/lib/server/integrations/asaas"
 import { syncSubscriptionWithAsaas } from "@/lib/server/vip-subscription-sync"
-import { VIP_SUBSCRIPTION_PRICE_CENTS } from "@/lib/vip-plan"
+import { getVipPlan, VIP_PLANS } from "@/lib/vip-plan"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 
 export const dynamic = "force-dynamic"
@@ -58,10 +58,30 @@ export async function GET(request: NextRequest) {
       subscription.status === "active" ||
       subscription.status === "past_due")
 
+  // Checkout de cartão em aberto: a única forma de "assinatura pendente" que
+  // NÃO tem assinatura na Asaas por trás (o id só nasce no 1º pagamento).
+  // Enquanto a UI não recebia estes dados, este era um estado sem saída —
+  // mostrava "aguarde expirar" e nada mais. Com o link e o prazo, a aba
+  // oferece retomar o pagamento ou desistir (POST /api/vip/checkout/cancel).
+  const pendingCheckout =
+    subscription &&
+    subscription.status === "pending" &&
+    subscription.asaasCheckoutId != null &&
+    subscription.asaasSubscriptionId == null
+      ? {
+          // A URL é a mesma para a qual o usuário já foi redirecionado ao
+          // assinar, e a página hospedada exige os dados do cartão de
+          // qualquer forma — devolvê-la não expõe nada que ele já não tenha.
+          link: subscription.checkoutLink,
+          expiresAt: subscription.checkoutExpiresAt,
+        }
+      : null
+
   // Cancelável = tem assinatura viva JÁ confirmada na Asaas
   // (`asaas_subscription_id`). No CARTÃO esse id só existe após o 1º
-  // pagamento, então uma linha `pending` é um checkout em aberto que expira
-  // sozinho — não há o que cancelar. No PIX a assinatura nasce na Asaas
+  // pagamento, então uma linha `pending` é um checkout em aberto: não há
+  // ASSINATURA para cancelar, e desistir dele é outra operação — o
+  // `pendingCheckout` acima, via POST /api/vip/checkout/cancel. No PIX a assinatura nasce na Asaas
   // junto com a linha, então mesmo `pending` (1º QR ainda não pago) já é
   // cancelável — e precisa ser: sem isso, quem gerou o QR e desistiu ficaria
   // com uma assinatura viva gerando cobrança todo mês sem nenhuma forma de
@@ -87,7 +107,9 @@ export async function GET(request: NextRequest) {
         qrCodeBase64: qr.encodedImage,
         copyPaste: qr.payload,
         expiresAt: qr.expirationDate,
-        amountCents: VIP_SUBSCRIPTION_PRICE_CENTS,
+        // Valor do plano CONTRATADO, não de um preço global: a aba mostra o
+        // QR de uma cobrança real, e num plano anual ela é de R$ 89,90.
+        amountCents: getVipPlan(subscription.billingPeriod).priceCents,
       }
     } catch (err) {
       console.error("[vip/subscription] getPixQrCode falhou:", err)
@@ -98,16 +120,29 @@ export async function GET(request: NextRequest) {
     subscriptionEnabled: isVipSubscriptionEnabled(),
     vipActive,
     vipExpiresAt: profile?.vip_expires_at ?? null,
-    priceCents: VIP_SUBSCRIPTION_PRICE_CENTS,
+    // Catálogo completo: a aba oferece assinar/reativar em qualquer plano, e
+    // precisa dos dois preços sem repeti-los no cliente.
+    plans: Object.values(VIP_PLANS).map((plan) => ({
+      period: plan.period,
+      priceCents: plan.priceCents,
+      months: plan.months,
+      label: plan.label,
+      unitLabel: plan.unitLabel,
+    })),
     subscription: subscription
       ? {
           status: subscription.status,
           isSubscriber,
           canCancel,
           paymentMethod: subscription.paymentMethod,
+          // Plano em vigor — governa o que a aba diz sobre a próxima cobrança
+          // ("renova todo mês" vs "renova todo ano") e quanto ela custa.
+          billingPeriod: subscription.billingPeriod,
+          priceCents: getVipPlan(subscription.billingPeriod).priceCents,
           currentPeriodEnd: subscription.currentPeriodEnd,
           canceledAt: subscription.canceledAt,
           pendingPixPayment,
+          pendingCheckout,
         }
       : null,
   })

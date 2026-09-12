@@ -1,11 +1,82 @@
 /**
- * Configuração hardcoded do plano de assinatura VIP recorrente via Asaas —
- * mesmo padrão de `lib/market-fees.ts`: números centralizados num módulo
- * puro, sem tabela admin editável (trocar preço = editar aqui + deploy).
+ * Catálogo dos planos de assinatura VIP recorrente via Asaas.
+ *
+ * Módulo puro, hardcoded, sem tabela admin editável (trocar preço = editar
+ * aqui + deploy) — e é exatamente por ser hardcoded que ele pode servir de
+ * FONTE DE VERDADE de segurança: nada que venha do cliente, do corpo da
+ * requisição ou do webhook define preço ou duração. O usuário escolhe uma
+ * CHAVE de plano (`monthly` | `yearly`); todo o resto — quanto custa, quantos
+ * meses concede, qual ciclo vai para a Asaas — é resolvido aqui no servidor.
+ *
+ * POR QUE O PLANO É GRAVADO NA LINHA DA ASSINATURA
+ * ------------------------------------------------
+ * A duração do acesso (`+ interval`) é aplicada pelas RPCs quando o webhook
+ * confirma um pagamento. Se o período viesse no payload do webhook, quem
+ * conseguisse adulterar a cobrança no painel da Asaas (ou reenviar um evento
+ * costurado) pediria "anual" pagando o preço mensal. Por isso
+ * `vip_subscriptions.billing_period` é escrito no INSTANTE da criação, a
+ * partir deste catálogo, e as RPCs leem o intervalo DA LINHA — o webhook só
+ * diz "este pagamento foi confirmado", nunca "conceda 12 meses".
  */
 
-export const VIP_SUBSCRIPTION_PRICE_CENTS = 890
-export const VIP_SUBSCRIPTION_CYCLE = "MONTHLY" as const
+export type VipBillingPeriod = "monthly" | "yearly"
+
+export type VipPlan = {
+  period: VipBillingPeriod
+  priceCents: number
+  /** Ciclo aceito pela API da Asaas (`cycle` de /v3/subscriptions). */
+  asaasCycle: "MONTHLY" | "YEARLY"
+  /** Meses de acesso concedidos por cobrança confirmada — espelha o `interval` das RPCs. */
+  months: number
+  /** Rótulo curto do período, para colar depois do preço ("/mês", "/ano"). */
+  unitLabel: string
+  /** Nome do plano na interface. */
+  label: string
+}
+
+export const VIP_PLANS: Record<VipBillingPeriod, VipPlan> = {
+  monthly: {
+    period: "monthly",
+    priceCents: 890,
+    asaasCycle: "MONTHLY",
+    months: 1,
+    unitLabel: "/mês",
+    label: "Mensal",
+  },
+  yearly: {
+    period: "yearly",
+    priceCents: 8990,
+    asaasCycle: "YEARLY",
+    months: 12,
+    unitLabel: "/ano",
+    label: "Anual",
+  },
+}
+
+export const VIP_DEFAULT_BILLING_PERIOD: VipBillingPeriod = "monthly"
+
+/**
+ * Converte um valor QUALQUER (corpo de requisição, query string, coluna
+ * antiga do banco) na chave de plano correspondente, caindo no mensal quando
+ * não reconhece. É o único ponto de entrada permitido para dado externo: o
+ * resto do código trabalha com `VipBillingPeriod`, nunca com a string crua.
+ *
+ * O fallback é o MENSAL de propósito — o plano mais curto e mais barato. Um
+ * valor lixo nunca pode virar 12 meses de acesso por acidente.
+ */
+export function parseVipBillingPeriod(value: unknown): VipBillingPeriod {
+  return value === "yearly" ? "yearly" : VIP_DEFAULT_BILLING_PERIOD
+}
+
+/** Plano a partir da chave, sempre com fallback seguro (mensal). */
+export function getVipPlan(period: unknown): VipPlan {
+  return VIP_PLANS[parseVipBillingPeriod(period)]
+}
+
+/** Preço do plano em centavos. */
+export function vipPlanPriceCents(period: unknown): number {
+  return getVipPlan(period).priceCents
+}
 
 export const VIP_SUBSCRIPTION_BENEFITS = [
   "Selo VIP em destaque no perfil, comentários e posts",
@@ -20,10 +91,40 @@ export const VIP_SUBSCRIPTION_BENEFITS = [
 export const VIP_SUPPORT_MESSAGE =
   "Assinando o VIP, você ajuda a manter o site no ar e em constante melhoria."
 
-/** Formata o preço mensal para exibição, ex.: "R$ 8,90". */
-export function formatVipPrice(): string {
-  return (VIP_SUBSCRIPTION_PRICE_CENTS / 100).toLocaleString("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  })
+/** Formata centavos em BRL, ex.: "R$ 8,90". */
+export function formatBrlCents(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+}
+
+/** Preço do plano formatado, ex.: "R$ 8,90" / "R$ 89,90". */
+export function formatVipPrice(period: unknown = VIP_DEFAULT_BILLING_PERIOD): string {
+  return formatBrlCents(getVipPlan(period).priceCents)
+}
+
+/**
+ * Quanto o anual custa por mês, para a interface justificar a escolha
+ * ("equivale a R$ 7,49/mês"). Arredonda para cima ao centavo: prometer menos
+ * do que o usuário vai pagar em 12 parcelas seria propaganda enganosa, ainda
+ * que por um centavo.
+ */
+export function vipYearlyMonthlyEquivalentCents(): number {
+  return Math.ceil(VIP_PLANS.yearly.priceCents / VIP_PLANS.yearly.months)
+}
+
+/**
+ * Economia percentual do anual contra 12 mensais — número exibido no selo
+ * "economize X%". Derivado do catálogo, nunca digitado à mão: um reajuste de
+ * preço que tornasse o anual pior automaticamente zera o selo em vez de
+ * mentir na tela.
+ */
+export function vipYearlySavingsPercent(): number {
+  const twelveMonths = VIP_PLANS.monthly.priceCents * VIP_PLANS.yearly.months
+  if (twelveMonths <= VIP_PLANS.yearly.priceCents) return 0
+  return Math.round(((twelveMonths - VIP_PLANS.yearly.priceCents) / twelveMonths) * 100)
+}
+
+/** Economia em centavos do anual contra 12 mensais (0 se não houver). */
+export function vipYearlySavingsCents(): number {
+  const twelveMonths = VIP_PLANS.monthly.priceCents * VIP_PLANS.yearly.months
+  return Math.max(0, twelveMonths - VIP_PLANS.yearly.priceCents)
 }

@@ -1,10 +1,12 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { usePathname } from "next/navigation"
 
 import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { readAuthSnapshot, writeAuthSnapshot } from "@/lib/client/auth-snapshot"
 import { isVipActive } from "@/lib/account-tier"
+import { resolveVipStatus, type VipStatus } from "@/lib/vip-status"
 
 export type AuthContextUser = {
   id: string
@@ -43,21 +45,41 @@ export type AuthContextUser = {
   accountTier: string | null
   /** Expiração crua do VIP (null = sem expiração: cargo/manual). */
   vipExpiresAt: string | null
-  /**
-   * Status da assinatura recorrente (null = nunca assinou). Distingue quem
-   * cancelou — e portanto vê "Renovar VIP" — de quem nunca assinou, que vê
-   * "Vire VIP".
-   */
+  /** Status cru da assinatura recorrente (null = nunca assinou). Base de `vip`. */
   subscriptionStatus: string | null
-  /** Cancelou a assinatura: o CTA vira "Renovar VIP" na sidebar. */
-  subscriptionCanceled: boolean
+  /**
+   * ESTADO RESOLVIDO do VIP e da assinatura — o que toda UI deve consumir.
+   *
+   * Substitui o antigo booleano `subscriptionCanceled`, que não distinguia
+   * "cancelou com período pago correndo" (reativar, sem cobrança) de
+   * "cancelou e já venceu" (assinar de novo, com cobrança). Cada tela
+   * aplicava a sua própria leitura desse booleano e elas divergiam: a
+   * sidebar chegou a esconder o Changelog e oferecer "Renovar VIP" a um VIP
+   * ativo. Ver lib/vip-status.ts.
+   */
+  vip: VipStatus
   /** Se já criou algum post no fórum — controla a aba "Meus Posts" da listagem (só aparece com histórico). */
   hasForumPost: boolean
 }
 
 type AuthContextValue = {
   user: AuthContextUser | null
+  /**
+   * Ainda não há resposta AUTORITATIVA do servidor nesta sessão de página.
+   *
+   * Continua sendo o sinal correto para decisões que não podem errar. Para
+   * decidir entre mostrar ESQUELETO ou mostrar a interface, porém, use
+   * `pending`: com o snapshot semeado já existe o que desenhar, e insistir no
+   * esqueleto enquanto `loading` é `true` recriaria o salto que o snapshot
+   * remove.
+   */
   loading: boolean
+  /**
+   * Não há NADA para desenhar ainda — nem confirmado pelo servidor, nem
+   * palpitado pelo snapshot. É este o sinal que a UI deve usar para escolher o
+   * esqueleto.
+   */
+  pending: boolean
   /**
    * Reconsulta `/api/auth/me` imediatamente. Necessário para o login pelo
    * modal (ver AuthModal): sem `redirect()` do servidor, nem o pathname muda
@@ -68,7 +90,12 @@ type AuthContextValue = {
   refresh: () => void
 }
 
-const AuthContext = createContext<AuthContextValue>({ user: null, loading: true, refresh: () => {} })
+const AuthContext = createContext<AuthContextValue>({
+  user: null,
+  loading: true,
+  pending: true,
+  refresh: () => {},
+})
 
 /** Teto para `/api/auth/me`. Um fetch pendurado sem limite deixaria o avatar da
  *  topbar em skeleton e o sino invisível para sempre. */
@@ -130,16 +157,14 @@ type MeResponse = {
 }
 
 /**
- * Quem está logado, segundo o SERVIDOR — que lê o cookie de sessão e já aplica
- * a regra de 2FA (devolve `user: null` enquanto a sessão está em aal1 com fator
- * pendente, ver app/api/auth/me/route.ts). Por isso o cliente não precisa — e
- * não deve — repetir a checagem de MFA por conta própria.
+ * Monta o usuário do contexto a partir do payload cru da sessão.
+ *
+ * Existe separado de `fetchMe` para ser reutilizável por qualquer origem do
+ * mesmo payload — hoje o fetch do client, e amanhã um render de servidor, caso
+ * o app venha a adotar Cache Components (ver o comentário de
+ * lib/client/auth-snapshot.ts sobre por que isso ainda não é possível).
  */
-async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
-  const res = await fetch("/api/auth/me", { signal, cache: "no-store" })
-  if (!res.ok) throw new Error(`auth/me respondeu ${res.status}`)
-
-  const data = (await res.json()) as MeResponse
+export function buildAuthUser(data: MeResponse): AuthContextUser | null {
   const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore } = data
   if (!user) return null
 
@@ -161,9 +186,22 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
     accountTier: accountTier ?? null,
     vipExpiresAt: vipExpiresAt ?? null,
     subscriptionStatus: subscriptionStatus ?? null,
-    subscriptionCanceled: subscriptionStatus === "canceled" || subscriptionStatus === "expired",
+    vip: resolveVipStatus({ accountTier, vipExpiresAt, subscriptionStatus }),
     hasForumPost: Boolean(hasForumPost),
   }
+}
+
+/**
+ * Quem está logado, segundo o SERVIDOR — que lê o cookie de sessão e já aplica
+ * a regra de 2FA (devolve `user: null` enquanto a sessão está em aal1 com fator
+ * pendente, ver lib/server/auth/resolve-auth-user.ts). Por isso o cliente não
+ * precisa — e não deve — repetir a checagem de MFA por conta própria.
+ */
+async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
+  const res = await fetch("/api/auth/me", { signal, cache: "no-store" })
+  if (!res.ok) throw new Error(`auth/me respondeu ${res.status}`)
+
+  return buildAuthUser((await res.json()) as MeResponse)
 }
 
 /**
@@ -173,16 +211,27 @@ async function fetchMe(signal: AbortSignal): Promise<AuthContextUser | null> {
  * São três gatilhos, e nenhum depende dos outros:
  *
  *  1. MOUNT — `/api/auth/me`, uma chamada HTTP comum que só depende do cookie e
- *     não encosta no lock de auth do gotrue-js. É sempre esta que produz a
- *     primeira resposta. Quando o `onAuthStateChange` era a única fonte,
- *     qualquer falha em entregar o evento inicial (webview, aba restaurada,
- *     lock órfão) travava a topbar no esqueleto para sempre.
+ *     não encosta no lock de auth do gotrue-js. Quando o `onAuthStateChange`
+ *     era a única fonte, qualquer falha em entregar o evento inicial (webview,
+ *     aba restaurada, lock órfão) travava a topbar no esqueleto para sempre.
+ *     É sempre esta que produz a primeira resposta AUTORITATIVA.
  *  2. NAVEGAÇÃO — cobre login/2FA/logout, que são server actions: o cookie
  *     muda no servidor sem que o client do navegador fique sabendo.
  *  3. `onAuthStateChange` — cobre o que acontece pelo próprio navegador
  *     (`signOut()` client-side, OAuth, refresh de token).
+ *
+ * Antes dos três, e apenas como PALPITE, entra o snapshot da última sessão
+ * conhecida (lib/client/auth-snapshot.ts): ele pinta a interface certa antes
+ * da primeira renderização e é confirmado — ou corrigido — pelo gatilho 1 logo
+ * em seguida. É o que remove o salto de 1–2s no selo VIP sem tornar as páginas
+ * dinâmicas, já que o HTML servido pelo cache ISR precisa continuar igual para
+ * todos os visitantes.
  */
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // Começa SEMPRE vazio, igual ao que o servidor renderiza. Ler o snapshot
+  // aqui produziria HTML do servidor (sem storage) diferente do primeiro
+  // render do cliente (com storage) — erro de hidratação. O snapshot é
+  // aplicado no efeito abaixo, que roda antes da pintura.
   const [user, setUser] = useState<AuthContextUser | null>(null)
   const [loading, setLoading] = useState(true)
   const pathname = usePathname()
@@ -208,6 +257,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then((next) => {
           if (id !== requestId.current) return
           setUser(next)
+          // Guarda o estado CONFIRMADO pelo servidor para a próxima visita
+          // partir dele em vez de partir do zero. É isto que remove o salto
+          // visual de quem já navegou logado.
+          writeAuthSnapshot(next)
         })
         .catch(() => {
           // Rede fora ou estouro do teto: não dá para afirmar nada sobre a
@@ -228,6 +281,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     run(0)
   }, [])
 
+  // Semeia a interface com o último estado conhecido ANTES da primeira pintura.
+  // `useLayoutEffect` (e não `useEffect`) é o que garante isso: com `useEffect`
+  // o navegador chegaria a desenhar um quadro do estado vazio — "Seja VIP" para
+  // um VIP ativo, avatar em esqueleto — e só então corrigiria. Esse quadro é
+  // exatamente o salto que se quer eliminar.
+  //
+  // O React não executa layout effects no servidor, então o HTML servido pelo
+  // cache ISR continua idêntico para todo visitante e a hidratação casa: o
+  // primeiro render do cliente também parte de `null`, e a semeadura só
+  // acontece depois dele.
+  useLayoutEffect(() => {
+    // Só semeia se AINDA existe cookie de sessão. Sem esta guarda, quem saiu em
+    // outra aba — ou teve a sessão expirada — voltaria vendo o próprio avatar e
+    // o selo VIP até o `/api/auth/me` responder que não há mais ninguém.
+    if (!sessionCookieSignature()) {
+      writeAuthSnapshot(null)
+      return
+    }
+
+    const snapshot = readAuthSnapshot()
+    if (!snapshot) return
+
+    // Continua sendo só um palpite: `loading` permanece `true` e o `resolve()`
+    // do efeito seguinte confirma ou corrige. Como o valor confirmado quase
+    // sempre é idêntico ao exibido, a correção não produz troca visível.
+    setUser(snapshot)
+  }, [])
+
   useEffect(() => {
     resolve()
 
@@ -245,6 +326,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (retryTimer.current) clearTimeout(retryTimer.current)
         cookieAtLastCheck.current = sessionCookieSignature()
         setUser(null)
+        // Sem isto a próxima visita partiria do snapshot de quem ACABOU de
+        // sair e mostraria o avatar dele por um instante — o mesmo salto de
+        // antes, agora com o estado errado.
+        writeAuthSnapshot(null)
         setLoading(false)
         return
       }
@@ -305,8 +390,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // timer acima dispara na virada da expiração.
   const value = useMemo(() => {
     void vipRecheck
-    const resolved = user ? { ...user, isVip: isVipActive(user.accountTier, user.vipExpiresAt) } : null
-    return { user: resolved, loading, refresh: resolve }
+    // Reresolve o ESTADO INTEIRO, não só `isVip`: a virada da expiração leva
+    // `reactivatable` para `lapsed`, o que troca o CTA de "Reativar
+    // assinatura" (sem cobrança) para "Assinar de novo" (com cobrança).
+    // Recalcular só o booleano deixaria a sidebar oferecendo reativação
+    // gratuita de um período que acabou de vencer.
+    const resolved = user
+      ? {
+          ...user,
+          isVip: isVipActive(user.accountTier, user.vipExpiresAt),
+          vip: resolveVipStatus({
+            accountTier: user.accountTier,
+            vipExpiresAt: user.vipExpiresAt,
+            subscriptionStatus: user.subscriptionStatus,
+          }),
+        }
+      : null
+    // `pending` só enquanto não há resposta do servidor E também não há
+    // snapshot semeado: com um palpite na tela, o esqueleto já não é o estado
+    // certo a exibir.
+    return { user: resolved, loading, pending: loading && resolved === null, refresh: resolve }
   }, [user, loading, resolve, vipRecheck])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -72,6 +72,8 @@ export interface ArticleJsonLdInput {
   datePublished: string
   dateModified?: string | null
   authorName?: string | null
+  /** Caminho do perfil público do autor — vira `author.url` no dado estruturado. */
+  authorPath?: string | null
 }
 
 export function ArticleJsonLd({
@@ -83,6 +85,7 @@ export function ArticleJsonLd({
   datePublished,
   dateModified,
   authorName,
+  authorPath,
 }: ArticleJsonLdInput) {
   const url = absoluteUrl(path)
 
@@ -104,7 +107,13 @@ export function ArticleJsonLd({
         // atualizado nunca recupera frescor no ranking.
         dateModified: dateModified ?? datePublished,
         author: authorName
-          ? { "@type": "Person", name: authorName }
+          ? {
+              "@type": "Person",
+              name: authorName,
+              // Sem `author.url` o Search Console avisa que o autor não é uma
+              // entidade identificável; só existe quando o perfil é público.
+              ...(authorPath ? { url: absoluteUrl(authorPath) } : {}),
+            }
           : { "@id": `${SITE_URL}/#organization` },
         publisher: { "@id": `${SITE_URL}/#organization` },
         inLanguage: "pt-BR",

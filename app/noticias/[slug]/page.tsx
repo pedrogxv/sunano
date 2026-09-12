@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/repositories/blog-repository"
 import { NoticiasPostContent, type NewsPost } from "./noticias-post-content"
 import { ArticleJsonLd, BreadcrumbJsonLd } from "@/components/seo/JsonLd"
+import { profilePath } from "@/lib/profile-name"
 import { buildDescription, buildMetadata } from "@/lib/seo"
 
 // ISR: post, relacionados e comentários são renderizados no servidor e
@@ -101,6 +102,7 @@ export default async function NoticiasSlugPage({
         datePublished={post.created_at}
         dateModified={post.updated_at ?? post.created_at}
         authorName={post.admin_profiles?.display_name}
+        authorPath={post.author_profile?.display_slug ? profilePath(post.author_profile.display_slug) : null}
       />
       <BreadcrumbJsonLd
         items={[

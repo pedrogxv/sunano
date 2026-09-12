@@ -10,12 +10,9 @@ import {
 import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { hashVisitor, recordVisit } from "@/lib/server/repositories/visits-repository"
 import { updateSession } from "@/lib/server/supabase/middleware-client"
+import { isMaintenanceEnabled } from "@/lib/maintenance"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 
-function isMaintenanceEnabled() {
-  const value = process.env.MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_MAINTENANCE_MODE
-  return value === "true"
-}
 
 // Bloqueia SOMENTE a Loja pública — admin, login/cadastro e o resto do site
 // continuam normais. As páginas /loja mostram "em breve" sozinhas (ver
@@ -55,6 +52,114 @@ function isPublicAuthRoute(pathname: string) {
 // fator ou sair. Tudo o mais fica bloqueado até a sessão chegar a `aal2`.
 function isMfaPendingAllowedPath(pathname: string) {
   return pathname === TWO_FACTOR_PATH || pathname.startsWith("/auth/")
+}
+
+// Onde o WEB MASTER sem 2FA é mandado para ativá-lo — a aba "Segurança" de
+// /conta (components/account/SecurityTab.tsx), que é a única tela do projeto
+// que cadastra TOTP.
+const MFA_SETUP_PATH = "/conta"
+const MFA_SETUP_HASH = "seguranca"
+
+/**
+ * Caminhos que um WEB MASTER sem 2FA ainda PODE acessar — o mínimo para
+ * conseguir ativar o fator ou sair da conta. Tudo o mais fica bloqueado.
+ *
+ * `/conta` é o destino da própria regra (sem ele o redirect vira loop).
+ * As rotas de auth e o `/2fa` ficam abertos porque o fluxo de sair/entrar
+ * não pode depender de um fator que ainda não existe.
+ *
+ * O enroll em si (`mfa.enroll`/`challenge`/`verify`) NÃO precisa estar aqui:
+ * a SecurityTab fala direto com o Supabase pelo client do browser, sem passar
+ * por este proxy. O que precisa passar é o que a página /conta carrega para
+ * renderizar — daí `/api/account/`, usado pela aba (contagem de dispositivos
+ * confiáveis) e pelo restante da tela.
+ */
+function isMfaSetupAllowedPath(pathname: string) {
+  return (
+    pathname === MFA_SETUP_PATH ||
+    pathname === TWO_FACTOR_PATH ||
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/api/account/") ||
+    pathname === "/api/auth/me"
+  )
+}
+
+/**
+ * Server Action em voo.
+ *
+ * O "Sair" do painel (`logoutAction`, em app/admin/actions.ts) é uma Server
+ * Action, e uma Server Action é um POST para a URL da PÁGINA ATUAL — não para
+ * uma rota própria. Se o webmaster sem 2FA estiver em `/admin` (bloqueada
+ * pelo gate), o POST do logout seria interceptado e redirecionado antes de
+ * executar: ele não conseguiria nem ativar o 2FA pelo painel, nem sair da
+ * conta para entrar com outra. Lockout completo, e sem rota de logout
+ * alternativa para contornar.
+ *
+ * Deixar a action passar não abre brecha: quem faz a triagem do que cada
+ * action pode fazer é a própria action (todas as do /admin revalidam sessão e
+ * cargo no servidor), e o gate continua bloqueando toda NAVEGAÇÃO — que é o
+ * que dá acesso ao painel.
+ */
+function isServerActionRequest(request: NextRequest) {
+  return request.method === "POST" && request.headers.has("next-action")
+}
+
+// Tela de aviso pública do modo de manutenção (app/maintenance/page.tsx).
+const MAINTENANCE_PATH = "/maintenance"
+
+// Sonda de status usada pelo botão "Tentar novamente" da tela de manutenção.
+// Precisa responder mesmo com a manutenção ligada — o gate abaixo devolve 503
+// para todo `/api/*`, e sem esta exceção a própria sonda cairia junto e o
+// botão nunca conseguiria detectar que o site voltou.
+const MAINTENANCE_STATUS_PATH = "/api/maintenance-status"
+
+// Janela estimada que o `Retry-After` anuncia aos crawlers, em segundos.
+// Uma hora é deliberadamente conservador: o valor não prende ninguém (nada
+// impede o site de voltar antes, e o Google revisita mesmo assim), mas um
+// valor curto demais convida o crawler a insistir durante a janela, que é
+// exatamente o tráfego que não se quer enquanto o banco está em migração.
+const MAINTENANCE_RETRY_AFTER_SECONDS = 3600
+
+/**
+ * Headers que toda resposta da janela de manutenção carrega.
+ *
+ * `Retry-After` é o que transforma o 503 em "temporário" para o Google: sem
+ * ele o 503 ainda é tratado como transitório, mas com prazo indefinido e
+ * revisita mais lenta.
+ *
+ * O anti-cache existe porque um 503 guardado pela CDN sobreviveria ao fim da
+ * manutenção — o site voltaria e parte dos visitantes (e dos crawlers)
+ * continuaria recebendo a tela de fora do ar, que é o pior desfecho possível
+ * desta feature. Na prática o Next sobrescreve este valor por
+ * `no-cache, must-revalidate` na resposta do rewrite (verificado com
+ * `curl -D -`); serve igual, porque `no-cache` também força revalidação a
+ * cada request — o que o 503 não pode é ser reutilizado sem perguntar.
+ *
+ * O `X-Robots-Tag: noindex` é cinto e suspensório: um 503 já não indexa, mas
+ * se algum dia esta resposta escapar com status 200 por engano, o header
+ * ainda impede a tela de manutenção de entrar no índice no lugar do conteúdo.
+ */
+function applyMaintenanceHeaders(response: NextResponse) {
+  response.headers.set("Retry-After", String(MAINTENANCE_RETRY_AFTER_SECONDS))
+  response.headers.set("Cache-Control", "no-store, must-revalidate")
+  response.headers.set("X-Robots-Tag", "noindex")
+}
+
+// Máquina-a-máquina: precisa continuar funcionando DURANTE a manutenção.
+//
+// Sem esta exceção o gate devolvia 503 para os três webhooks da Asaas — ou
+// seja, um PIX pago no meio da janela não confirmava o pedido — e para os
+// quatro crons da Vercel (expiração de pedidos, VIP, limpeza LGPD, ofertas).
+// A Asaas reenvia, mas com backoff e por tempo limitado; a Vercel simplesmente
+// perde a execução daquela janela.
+//
+// Não é afrouxamento de segurança: nenhuma destas rotas usa sessão de usuário.
+// Os webhooks validam `asaas-access-token` (ASAAS_WEBHOOK_TOKEN) e os crons
+// exigem `Authorization: Bearer $CRON_SECRET`, ambos fail-closed quando a env
+// não está configurada. O que a manutenção fecha é o site para gente, não a
+// integração com quem já se autentica por segredo próprio.
+function isMachineToMachinePath(pathname: string) {
+  return pathname.startsWith("/api/webhooks/") || pathname.startsWith("/api/cron/")
 }
 
 // Caminhos que um usuário com consentimento LGPD pendente PODE acessar —
@@ -100,9 +205,21 @@ function storeMaintenanceResponse(request: NextRequest, isAffiliatePath: boolean
   return NextResponse.redirect(homeUrl)
 }
 
+// Headers anti-cache que o `setAll` de `middleware-client.ts` grava no
+// `response` quando um refresh de token emite `Set-Cookie`. Precisam viajar
+// JUNTO com os cookies: `copyCookies` move a sessão para um response novo
+// (redirect, 503, JSON de erro), e sem isto a resposta que carrega a sessão de
+// um usuário sairia cacheável para a CDN — o cenário de vazamento cruzado que
+// o comentário do `setAll` descreve.
+const NO_STORE_HEADERS = ["cache-control", "expires", "pragma"]
+
 function copyCookies(source: NextResponse, destination: NextResponse) {
   source.cookies.getAll().forEach((cookie) => {
     destination.cookies.set(cookie.name, cookie.value, cookie)
+  })
+  NO_STORE_HEADERS.forEach((header) => {
+    const value = source.headers.get(header)
+    if (value) destination.headers.set(header, value)
   })
 }
 
@@ -250,6 +367,7 @@ function getRequiredPermission(pathname: string): AdminPermissionKey | null {
     return "store_write"
   }
   if (pathname.startsWith("/admin/store")) return "store_read"
+  if (pathname.startsWith("/admin/vips")) return "vip_read"
   if (pathname.startsWith("/admin/afiliados")) return "affiliates_read"
   if (pathname === NO_ACCESS_PATH) return null
   if (pathname.startsWith("/admin/users")) return null
@@ -270,6 +388,7 @@ const ADMIN_LANDING_ROUTES: Array<{ path: string; permission: AdminPermissionKey
   { path: "/admin/forum", permission: "forum_read" },
   { path: "/admin/offers", permission: "offers_read" },
   { path: "/admin/store", permission: "store_read" },
+  { path: "/admin/vips", permission: "vip_read" },
   { path: "/admin/settings", permission: "settings_read" },
   { path: "/admin/maintenance", permission: "maintenance_read" },
 ]
@@ -290,10 +409,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const isAffiliatePath = AFFILIATE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
   const storeMaintenanceMode = isStoreMaintenanceEnabled() && (isStoreOrderWritePath || isAffiliatePath)
 
-  if (pathname === "/maintenance") {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = "/admin/maintenance"
-    return NextResponse.redirect(redirectUrl)
+  // `/maintenance` é a tela de aviso pública (app/maintenance/page.tsx). Antes
+  // isto redirecionava para `/admin/maintenance`, uma rota que nunca existiu —
+  // o resultado era 404 e a tela jamais aparecia. Fora da manutenção a página
+  // não tem o que dizer, então volta para a home; durante a manutenção ela
+  // segue adiante e é liberada no gate lá embaixo.
+  if (pathname === MAINTENANCE_PATH && !maintenanceMode) {
+    const homeUrl = request.nextUrl.clone()
+    homeUrl.pathname = "/"
+    homeUrl.search = ""
+    return NextResponse.redirect(homeUrl)
   }
 
   // Loja em manutenção — recusa qualquer criação de pedido novo (fechado por
@@ -307,7 +432,10 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return storeMaintenanceResponse(request, isAffiliatePath)
   }
 
-  // Mercado desativado temporariamente — bloqueia a rota pública inteira.
+  // Mercado REMOVIDO do produto (2026-09-12): as rotas `/mercado/**` e
+  // `/api/market/**` não existem mais. O redirect fica como rede de segurança
+  // para links antigos (posts do fórum, banners, resultados de busca), que de
+  // outro modo cairiam num 404 — barato, e some sozinho quando os links morrerem.
   if (pathname === "/mercado" || pathname.startsWith("/mercado/")) {
     if (pathname.startsWith("/api")) {
       return NextResponse.json({ error: "not_found" }, { status: 404 })
@@ -330,9 +458,25 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return response
   }
 
-  const { response, user, profile, aal, needsLgpdConsent, isAccountBanned, hasStoreAccess } = await updateSession(request, {
-    needProfile: isAdminRoute || maintenanceMode || storeMaintenanceMode,
-  })
+  // `needProfile` agora é sempre true quando há sessão. Antes era só
+  // admin/manutenção, para poupar uma query por pageview de usuário comum —
+  // mas o gate de MFA obrigatório do WEB MASTER (lá embaixo) decide por
+  // `isWebMaster(profile)`, e com `profile: null` em rota pública ele nunca
+  // dispararia: um webmaster sem 2FA navegaria o site inteiro, e a exigência
+  // valeria só dentro do /admin. Como só vale para quem TEM cookie de sessão
+  // (visitante anônimo já retornou acima), o custo recai sobre usuários
+  // logados, não sobre o tráfego indexável — que é o que a otimização
+  // original protegia.
+  const {
+    response,
+    user,
+    profile,
+    aal,
+    hasVerifiedMfaFactor,
+    needsLgpdConsent,
+    isAccountBanned,
+    hasStoreAccess,
+  } = await updateSession(request, { needProfile: true })
 
   // ── Ban geral de conta (vale para QUALQUER usuário autenticado) ──
   // Roda antes do 2FA e do LGPD: uma conta banida nunca deve progredir por
@@ -496,6 +640,52 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return redirectResponse
   }
 
+  // ── MFA OBRIGATÓRIO PARA WEB MASTER ──
+  // O bloco de 2FA acima só age quando a conta JÁ tem um fator verificado
+  // (`isMfaStepUpRequired` exige `next === "aal2"`). Quem nunca cadastrou
+  // TOTP tem `next === "aal1"` e passa direto — inclusive um WEB MASTER, que
+  // é a conta que pode trocar senha de terceiros, rebaixar admins e mexer em
+  // dinheiro. Este gate fecha isso: para o cargo mais alto, ter 2FA deixa de
+  // ser opcional.
+  //
+  // O corte é `isWebMaster`, o mesmo de `canChangePasswords` e do gate de
+  // manutenção — não uma permissão da matriz. Cargos abaixo seguem com o 2FA
+  // opcional, de propósito: o objetivo é proteger a conta que concentra o
+  // poder, sem transformar o onboarding de moderador/suporte num obstáculo.
+  //
+  // Só bloqueia a NAVEGAÇÃO, não o login: a pessoa entra normalmente e é
+  // levada para `/conta#seguranca` até ativar. Sem isso a regra seria
+  // irreversível pela interface — um webmaster sem TOTP ficaria trancado
+  // fora da própria tela de cadastrar TOTP.
+  if (
+    user &&
+    isWebMaster(profile) &&
+    !hasVerifiedMfaFactor &&
+    !isMfaSetupAllowedPath(pathname) &&
+    !isServerActionRequest(request)
+  ) {
+    if (pathname.startsWith("/api")) {
+      const apiResponse = NextResponse.json(
+        {
+          error: "mfa_enrollment_required",
+          message: "Contas WEB MASTER precisam ativar a verificação em duas etapas.",
+        },
+        { status: 403 }
+      )
+      copyCookies(response, apiResponse)
+      return apiResponse
+    }
+
+    const setupUrl = request.nextUrl.clone()
+    setupUrl.pathname = MFA_SETUP_PATH
+    setupUrl.search = ""
+    setupUrl.hash = MFA_SETUP_HASH
+
+    const redirectResponse = NextResponse.redirect(setupUrl)
+    copyCookies(response, redirectResponse)
+    return redirectResponse
+  }
+
   // ── Aplicação do consentimento LGPD (vale para QUALQUER usuário autenticado) ──
   // Antes, o único gate era um redirect avulso no callback do OAuth — uma vez
   // alcançada `/consentimento`, nada impedia navegar direto para outra URL, e
@@ -519,23 +709,55 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return redirectResponse
   }
 
-  if (maintenanceMode && !profile) {
-    if (isLoginRoute || isPublicAuthRoute(pathname)) {
+  // ── Manutenção geral — SÓ WEB MASTER atravessa ──
+  // Antes a condição era `!profile`: qualquer linha em `admin_profiles` passava,
+  // ou seja editor/vendedor/moderador/suporte navegavam o site inteiro durante
+  // a janela. Manutenção é troca de token e migração — estado em que o site
+  // pode responder qualquer coisa —, então o corte é o cargo mais alto, o mesmo
+  // usado por `canChangePasswords`. Impersonation não é brecha aqui: os cookies
+  // da sessão são do usuário-alvo, então `profile` é null e cai neste bloqueio.
+  if (maintenanceMode && !isWebMaster(profile)) {
+    // `/maintenance` é o destino desta própria regra: precisa renderizar, ou o
+    // redirect abaixo a mandaria para o login e o usuário nunca veria o aviso.
+    // `/admin/login` continua aberto para o WEB MASTER conseguir entrar — sem
+    // ele a manutenção se tornaria irreversível pela interface.
+    if (
+      isLoginRoute ||
+      isPublicAuthRoute(pathname) ||
+      pathname === MAINTENANCE_STATUS_PATH ||
+      isMachineToMachinePath(pathname)
+    ) {
       return response
     }
 
     if (pathname.startsWith("/api")) {
       const apiResponse = NextResponse.json({ error: "Site em manutenção." }, { status: 503 })
+      applyMaintenanceHeaders(apiResponse)
       copyCookies(response, apiResponse)
       return apiResponse
     }
 
-    const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = "/admin/login"
+    // REWRITE, não redirect. A URL original é preservada e responde 503 nela
+    // mesma — o Google precisa ver o 503 em `/forum`, `/blog`, etc., que são
+    // as URLs que ele tem indexadas. Um redirect (307) para `/maintenance`
+    // diria outra coisa: que aquele conteúdo se mudou. Pior, o crawler
+    // seguiria o redirect e encontraria um 200 na ponta — lendo a tela de
+    // manutenção como o conteúdo definitivo daquela URL e derrubando a
+    // posição. Com rewrite + 503 + Retry-After, a leitura é "volte depois",
+    // que é justamente o tratamento documentado do Google para janelas de
+    // indisponibilidade, e o ranking é preservado.
+    //
+    // `/maintenance` também cai aqui (não está mais na allow-list acima):
+    // servida diretamente ela respondia 200, o mesmo problema. A exceção
+    // some porque o rewrite já a renderiza para qualquer rota.
+    const maintenanceUrl = request.nextUrl.clone()
+    maintenanceUrl.pathname = MAINTENANCE_PATH
+    maintenanceUrl.search = ""
 
-    const redirectResponse = NextResponse.redirect(loginUrl)
-    copyCookies(response, redirectResponse)
-    return redirectResponse
+    const maintenanceResponse = NextResponse.rewrite(maintenanceUrl, { status: 503 })
+    applyMaintenanceHeaders(maintenanceResponse)
+    copyCookies(response, maintenanceResponse)
+    return maintenanceResponse
   }
 
   if (isAdminRoute && !profile && !isLoginRoute) {

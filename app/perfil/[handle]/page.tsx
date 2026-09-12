@@ -11,6 +11,30 @@ import {
 } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { buildDescription, buildMetadata } from "@/lib/seo"
+import { isProfileIndexable } from "@/lib/indexability"
+
+/**
+ * SEM `loading.tsx` nesta pasta — de propósito.
+ *
+ * Um `loading.tsx` no segmento dinâmico é um Suspense boundary: o Next começa
+ * a streamar a resposta e se compromete com `200 OK` antes de o componente
+ * chegar ao `notFound()`. Dali em diante o status não pode mais mudar para
+ * 404 — o Next só injeta `<meta robots="noindex">` no HTML já enviado (ver
+ * node_modules/next/dist/docs/01-app/02-guides/streaming.md, "The HTTP
+ * contract"). O efeito era soft-404: `/perfil/<qualquer-coisa>` respondia
+ * 200 com a tela "não encontrado", e o Search Console contava a URL como
+ * rastreada sem conteúdo.
+ *
+ * Verificado empiricamente: com o arquivo presente, 200; sem ele, 404 — e as
+ * rotas que nunca o tiveram (`/blog`, `/noticias`) sempre devolveram 404.
+ * Atenção ao testar: `next dev` rodando em paralelo recria o cache de
+ * `.next` e falseia o resultado — use `rm -rf .next && next build && next start`.
+ *
+ * O custo é não ter skeleton nesta rota (o conteúdo aparece de uma vez, após
+ * o servidor resolver). Se um dia o skeleton for necessário aqui, ele precisa
+ * vir de um `<Suspense>` DENTRO do componente, depois do `notFound()`, nunca
+ * de um `loading.tsx` neste nível.
+ */
 
 // Server Component: chama o repositório direto (ARQUITETURA.md §1), sem
 // spinner client-side. Renderiza por requisição porque lê a sessão para
@@ -50,6 +74,19 @@ export async function generateMetadata({
   const canonical = profile.display_slug ? profilePath(profile.display_slug) : `/perfil/${handle}`
 
   return buildMetadata({
+    // Perfil sem nenhuma atividade sai do índice (mantendo `follow`): o HTML
+    // servido eram ~565 chars, 191 deles o menu, e o resto o mesmo template
+    // de todos os outros. Mesma decisão do `app/sitemap.ts`, via
+    // `lib/indexability.ts` — escreva no fórum, avalie um periférico, preencha
+    // a bio ou cadastre favoritos e o perfil volta a ser indexável sozinho.
+    thinContent: !isProfileIndexable({
+      bio: profile.bio,
+      forumPosts: profile.forum_posts,
+      forumComments: profile.forum_comments,
+      reviewsTotal: profile.reviews_total,
+      favoritesTotal: profile.favorites_total,
+      tierlistItemCount: profile.tierlist_item_count,
+    }),
     title: `${profile.display_name} - Perfil`,
     description: buildDescription(profile.bio, `Setup e periféricos favoritos de ${profile.display_name}.`, {
       context: "Veja a tierlist, as reviews e a Aura desse membro na Sunano.",

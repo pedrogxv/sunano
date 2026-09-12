@@ -56,8 +56,10 @@ export function VipPixCharge({ payment, isFirstCharge = false }: VipPixChargePro
       <div className="flex items-start gap-2">
         <QrCode className="mt-0.5 size-4 shrink-0" style={{ color: "var(--vip-accent)" }} />
         <div className="min-w-0">
+          {/* Rótulo sem periodicidade: o valor já diz qual plano é, e
+              "deste mês" seria falso numa assinatura anual. */}
           <p className="text-sm font-bold text-foreground">
-            {isFirstCharge ? "Pague o primeiro mês" : "Cobrança deste mês"} ·{" "}
+            {isFirstCharge ? "Pague a primeira cobrança" : "Cobrança em aberto"} ·{" "}
             {formatBRL(payment.amountCents)}
           </p>
           <p className="text-[11px] leading-relaxed text-muted-foreground">

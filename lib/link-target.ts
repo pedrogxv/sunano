@@ -17,7 +17,6 @@ export type InternalSection =
   | "perfil"
   | "blog"
   | "noticias"
-  | "mercado"
   | "ranking"
   | "aura"
   | "tierlist"
@@ -61,7 +60,6 @@ const SECTION_LABEL: Record<InternalSection, string> = {
   perfil: "Perfil",
   blog: "Blog",
   noticias: "Notícias",
-  mercado: "Mercado",
   ranking: "Ranking",
   aura: "Aura",
   tierlist: "Tier List",
@@ -82,7 +80,6 @@ const SECTIONS: Record<string, InternalSection> = {
   perfil: "perfil",
   blog: "blog",
   noticias: "noticias",
-  mercado: "mercado",
   ranking: "ranking",
   aura: "aura",
   tierlist: "tierlist",

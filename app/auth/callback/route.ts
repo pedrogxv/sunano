@@ -15,6 +15,7 @@ import { verifyReferralFromIdentities } from "@/lib/server/referral-verification
 import { markAnimatedOAuthAvatar } from "@/lib/server/oauth-avatar"
 import { importOAuthAvatar } from "@/lib/server/profile-media-upload"
 import { REFERRAL_COOKIE } from "@/lib/referral-code"
+import { checkRateLimit, getClientIdentifierFromHeaders } from "@/lib/server/rate-limit"
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -99,6 +100,34 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=missing_code`)
   }
 
+  // Rate limit do resgate de `code`. Fica AQUI, e não no topo da função, de
+  // propósito: os ramos acima (erro devolvido pelo provedor, `token_hash` de
+  // recovery/signup) são tráfego legítimo de redirect e de scanner de e-mail
+  // corporativo, e não podem consumir cota — quem varre o link de recuperação
+  // de alguém trancaria o dono fora do próprio callback.
+  //
+  // O que se protege é o caminho caro: `exchangeCodeForSession` é uma ida à
+  // rede do Supabase, e um resgate bem-sucedido ainda dispara upsert de
+  // perfil, medalhas, indicação e `importOAuthAvatar` — que baixa um arquivo
+  // de origem externa. Um `code` inválido já falha no exchange, então isto não
+  // é autenticação: é a cota que faltava para essa superfície, que todas as
+  // outras rotas sensíveis do projeto já têm.
+  //
+  // `onError: "open"`: ao contrário do login por senha, aqui negar em falha de
+  // banco derrubaria um login que o provedor já autorizou, e o `code` é de uso
+  // único — a pessoa não conseguiria repetir a tentativa. Deixar passar custa
+  // uma requisição a mais; fechar custa a conta.
+  const rateLimit = await checkRateLimit({
+    action: "oauth_callback",
+    identifier: getClientIdentifierFromHeaders(request.headers),
+    maxAttempts: 20,
+    windowSeconds: 300,
+    onError: "open",
+  })
+  if (!rateLimit.allowed) {
+    return NextResponse.redirect(`${origin}/login?error=too_many_attempts`)
+  }
+
   // PKCE recovery: Supabase envia code + type=recovery (em vez de token_hash).
   // Aqui, ao contrário do ramo `token_hash`, NÃO adianta adiar o consumo até
   // um clique: quem queima o token de uso único é o `/auth/v1/verify` do
@@ -136,6 +165,59 @@ export async function GET(request: NextRequest) {
     if (banStatus.isBanned) {
       await supabase.auth.signOut()
       return NextResponse.redirect(`${origin}/login?error=account_banned`)
+    }
+
+    // E-mail não verificado no provedor social.
+    //
+    // O Discord permite usar a conta com o e-mail ainda não verificado, e o
+    // `email` que ele devolve entra no `auth.users` como qualquer outro. Hoje
+    // isto NÃO é explorável: a vinculação automática por e-mail está
+    // desligada no Supabase — é o que o ramo `identity_already_exists` lá em
+    // cima demonstra, já que o GoTrue recusa o merge em vez de fundir as
+    // contas. O risco é o dia em que alguém ligar essa opção no painel: a
+    // partir daí, cadastrar no Discord um e-mail alheio e entrar por ele
+    // fundiria a sessão com a conta de senha já existente daquele e-mail,
+    // sem nunca provar posse da caixa postal.
+    //
+    // A checagem fica aqui, no código, porque a proteção não pode depender de
+    // um checkbox do painel permanecer desmarcado — é exatamente o tipo de
+    // configuração que se perde numa migração de projeto. Custo zero enquanto
+    // o linking estiver off (o provedor manda `email_verified: true` no caso
+    // normal); rede de segurança no dia em que não estiver.
+    //
+    // O Google usa `email_verified`; o Discord manda `verified`. Ausência do
+    // campo não reprova: provedor que não informa o estado não é tratado como
+    // reprovado, senão um provedor novo quebraria o login inteiro em silêncio.
+    //
+    // A identidade avaliada é a que ACABOU de autenticar, escolhida por
+    // `last_sign_in_at` — não `identities[0]`. Numa conta com Google e
+    // Discord vinculados a ordem do array não é garantida, então o índice
+    // fixo leria o provedor errado: bastaria ter um Google verificado
+    // vinculado para o Discord não verificado passar (ou o inverso barraria
+    // um login legítimo). `app_metadata.provider` também não serve — é o
+    // primeiro provedor usado no cadastro, não o desta sessão.
+    const identities = authData.user.identities ?? []
+    const currentIdentity = identities.reduce<(typeof identities)[number] | null>(
+      (latest, identity) => {
+        if (!identity.last_sign_in_at) return latest
+        if (!latest?.last_sign_in_at) return identity
+        return identity.last_sign_in_at > latest.last_sign_in_at ? identity : latest
+      },
+      null
+    )
+
+    const identityData = currentIdentity?.identity_data ?? {}
+    const claimedEmail = authData.user.email
+    const emailVerifiedClaim =
+      identityData.email_verified ?? identityData.verified ?? undefined
+
+    if (claimedEmail && emailVerifiedClaim === false) {
+      console.error(
+        "[auth/callback] provedor devolveu e-mail não verificado — login recusado.",
+        currentIdentity?.provider
+      )
+      await supabase.auth.signOut()
+      return NextResponse.redirect(`${origin}/login?error=email_not_verified`)
     }
 
     // Garante o perfil do usuário a partir dos metadados do OAuth.

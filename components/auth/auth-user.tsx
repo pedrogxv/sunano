@@ -24,6 +24,7 @@ import { formatBRL } from "@/lib/format"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
+import { vipCtaLabel, vipCtaShortLabel } from "@/lib/vip-status"
 
 function getInitials(name: string) {
   return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
@@ -48,10 +49,14 @@ interface AuthUserProps {
 
 export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", variant = "admin", layout = "sidebar", mobileExtraItems }: AuthUserProps) {
   const t = useT()
-  const { user: authUser, loading } = useAuthUser()
+  const { user: authUser, pending } = useAuthUser()
   const { openLogin } = useAuthModal()
   const { pendingOrder } = useUserOrders()
-  const ready = !loading
+  // `pending`, não `loading`: quando o snapshot da última sessão já semeou o
+  // usuário (lib/client/auth-snapshot.ts) existe o que desenhar, e insistir no
+  // esqueleto até a confirmação do servidor traria de volta o salto de 1–2s no
+  // avatar e no selo VIP que o snapshot existe para remover.
+  const ready = !pending
   const isAdmin = authUser?.isAdmin ?? false
   // Afiliados acompanha a manutenção da Loja (ver lib/server/auth/affiliate-access.ts).
   // O WEB MASTER continua vendo o item, igual ao que faz na Loja.
@@ -207,22 +212,26 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               <span className="truncate text-xs text-muted-foreground">{user.email}</span>
             </div>
           </div>
-          {authUser?.isVip ? (
-            // Segue VIP (o período pago vale até o fim), mas se cancelou
-            // oferece a reativação junto do selo em vez de só o selo.
+          {authUser?.vip.isVip ? (
+            // Segue VIP (o período pago vale até o fim). Se cancelou dentro
+            // dele, o selo vem acompanhado do convite a REATIVAR — mesmo
+            // verbo da aba de assinatura, porque é a mesma ação e ela não
+            // cobra nada agora. O rótulo sai de `vipCtaShortLabel`, nunca
+            // escrito à mão aqui: era assim que este menu dizia "RENOVAR"
+            // enquanto /conta dizia "Reativar assinatura".
             <div className="flex items-center gap-2 px-2 pb-1.5">
               <div className="flex items-center gap-1">
                 <Crown className="size-3 vip-badge-crown" style={{ color: "var(--vip-accent)" }} />
                 <span className="vip-badge-text text-[10px] font-bold uppercase tracking-wide">VIP</span>
               </div>
-              {authUser.subscriptionCanceled && isVipSubscriptionEnabled() && (
+              {authUser.vip.canReactivate && isVipSubscriptionEnabled() && (
                 <button
                   type="button"
                   onClick={() => setVipUpsellOpen(true)}
                   className="text-[10px] font-bold uppercase tracking-wide underline underline-offset-2 transition-opacity hover:opacity-80"
                   style={{ color: "var(--vip-accent)" }}
                 >
-                  Renovar
+                  {vipCtaShortLabel(authUser.vip)}
                 </button>
               )}
             </div>
@@ -234,7 +243,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               style={{ color: "var(--vip-accent)" }}
             >
               <Crown className="size-3" />
-              {authUser?.subscriptionCanceled ? "Renovar VIP" : "Seja VIP"}
+              {authUser ? vipCtaLabel(authUser.vip) ?? "Seja VIP" : "Seja VIP"}
             </button>
           ) : null}
         </DropdownMenuLabel>

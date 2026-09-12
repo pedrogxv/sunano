@@ -33,6 +33,8 @@ export default async function LoginPage({
   const isAccountBanned = params.error === "account_banned"
   const isOAuthError = params.error === "oauth_error"
   const isMissingCode = params.error === "missing_code"
+  const isTooManyAttempts = params.error === "too_many_attempts"
+  const isEmailNotVerified = params.error === "email_not_verified"
   const accountDeleted = params.deleted === "1"
   const emailConfirmed = params.confirmed === "1"
 
@@ -103,6 +105,23 @@ export default async function LoginPage({
           <AuthMotionBanner>
             <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               Conta suspensa ou banida.
+            </div>
+          </AuthMotionBanner>
+        )}
+
+        {isEmailNotVerified && (
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              O e-mail da sua conta social ainda não foi verificado. Confirme o e-mail no Google ou
+              no Discord e tente entrar novamente.
+            </div>
+          </AuthMotionBanner>
+        )}
+
+        {isTooManyAttempts && (
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Muitas tentativas de login em pouco tempo. Aguarde alguns minutos e tente novamente.
             </div>
           </AuthMotionBanner>
         )}

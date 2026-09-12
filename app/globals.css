@@ -2574,3 +2574,17 @@ button:not(:disabled):hover .aura-icon-holder {
     opacity: 0.6;
   }
 }
+
+/* Xadrez de transparência — admin de Itens de Aura.
+   Molduras e fundos são PNGs com alpha; sobre um fundo chapado não dá pra
+   distinguir "fundo transparente" de "fundo da cor do card". O xadrez torna a
+   transparência visível na miniatura do catálogo. */
+.aura-admin-checker {
+  background-image:
+    linear-gradient(45deg, color-mix(in oklab, var(--muted) 70%, transparent) 25%, transparent 25%),
+    linear-gradient(-45deg, color-mix(in oklab, var(--muted) 70%, transparent) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, color-mix(in oklab, var(--muted) 70%, transparent) 75%),
+    linear-gradient(-45deg, transparent 75%, color-mix(in oklab, var(--muted) 70%, transparent) 75%);
+  background-size: 10px 10px;
+  background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+}

@@ -6,17 +6,11 @@ import { useRouter, useSearchParams } from "next/navigation"
 import {
   ArrowRight,
   Coins,
-  Crown,
   Gem,
-  Keyboard,
-  Layers,
   Loader2,
   Search,
-  ShieldCheck,
   ShoppingBag,
-  Sparkles,
   TrendingUp,
-  UserRound,
   Users,
   X,
 } from "lucide-react"
@@ -37,10 +31,14 @@ import {
 import { cn } from "@/lib/utils"
 import type {
   AuraItemAdmin,
-  AuraItemKind,
   AuraPurchaseRow,
   AuraPurchaseTotals,
 } from "@/lib/server/repositories/aura-store-repository"
+import {
+  AURA_ITEM_KIND_META,
+  AURA_ITEM_KIND_ORDER,
+  auraItemKindMeta,
+} from "@/lib/aura-item-kinds"
 
 // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -65,15 +63,6 @@ function relativeTime(iso: string): string {
   const d = Math.round(h / 24)
   if (d < 30) return `${d} d atrás`
   return new Date(iso).toLocaleDateString("pt-BR")
-}
-
-const KIND_META: Record<AuraItemKind, { label: string; icon: typeof Sparkles; className: string }> = {
-  avatar_frame: { label: "Moldura", icon: Sparkles, className: "text-violet-300 bg-violet-500/10 border-violet-500/25" },
-  vip_month: { label: "VIP", icon: Crown, className: "text-amber-300 bg-amber-500/10 border-amber-500/25" },
-  display_name_change: { label: "Troca de nome", icon: UserRound, className: "text-sky-300 bg-sky-500/10 border-sky-500/25" },
-  streak_shield: { label: "Escudo", icon: ShieldCheck, className: "text-cyan-300 bg-cyan-500/10 border-cyan-500/25" },
-  mini_profile_bg: { label: "Fundo de perfil", icon: Layers, className: "text-fuchsia-300 bg-fuchsia-500/10 border-fuchsia-500/25" },
-  peripheral: { label: "Produto", icon: Keyboard, className: "text-amber-300 bg-amber-500/10 border-amber-500/25" },
 }
 
 type BuyerHit = {
@@ -378,12 +367,11 @@ function PurchasesContent() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os tipos</SelectItem>
-            <SelectItem value="avatar_frame">Moldura de avatar</SelectItem>
-            <SelectItem value="vip_month">VIP</SelectItem>
-            <SelectItem value="display_name_change">Troca de nome</SelectItem>
-            <SelectItem value="streak_shield">Escudo de ofensiva</SelectItem>
-            <SelectItem value="mini_profile_bg">Fundo de perfil</SelectItem>
-            <SelectItem value="peripheral">Produto</SelectItem>
+            {AURA_ITEM_KIND_ORDER.map((k) => (
+              <SelectItem key={k} value={k}>
+                {AURA_ITEM_KIND_META[k].longLabel}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -425,7 +413,7 @@ function PurchasesContent() {
               </thead>
               <tbody className="divide-y divide-border">
                 {rows.map((r) => {
-                  const meta = KIND_META[r.itemKind] ?? KIND_META.avatar_frame
+                  const meta = auraItemKindMeta(r.itemKind)
                   const KindIcon = meta.icon
                   const discounted = r.vipDiscountApplied && r.amountPaid !== r.listPrice
                   return (
@@ -456,7 +444,7 @@ function PurchasesContent() {
                           <span
                             className={cn(
                               "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
-                              meta.className
+                              meta.badgeClassName
                             )}
                           >
                             <KindIcon className="size-3" />

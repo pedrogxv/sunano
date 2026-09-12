@@ -648,8 +648,7 @@ export type RepositoryResult = { ok: true } | { ok: false; error: string; status
 /**
  * Avança o status de um pedido para a próxima etapa válida do fluxo
  * pós-venda (`ORDER_FULFILLMENT_FLOW`). Só aceita avançar exatamente uma
- * etapa a partir do status atual — nunca pular, nunca regredir — mesmo
- * padrão de validação de `market-repository.ts` (`markOwnMarketListingSold`).
+ * etapa a partir do status atual — nunca pular, nunca regredir.
  */
 export async function advanceOrderStatus(
   id: string,

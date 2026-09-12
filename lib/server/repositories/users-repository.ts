@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache"
 import { coerceAccountTier, profileMediaProxyUrl } from "@/lib/account-tier"
 import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
+import { isProfileIndexable } from "@/lib/indexability"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { removeReplacedStorageObjects } from "@/lib/server/storage-cleanup"
 import {
@@ -67,6 +68,34 @@ export async function getUserVipStatus(
     .eq("id", userId)
     .maybeSingle()
   return (data ?? null) as UserVipStatus | null
+}
+
+/**
+ * Perfil + status do VIP do MESMO usuário, em UMA consulta.
+ *
+ * `getUserProfile` e `getUserVipStatus` leem a mesma linha da mesma tabela,
+ * variando só as colunas do `select`. Quem precisa das duas — a resolução da
+ * sessão, que roda em toda visita de usuário logado — gastava dois
+ * round-trips ao banco para buscar quatro colunas de uma única linha. As duas
+ * funções originais continuam existindo para quem quer só uma das metades.
+ */
+export async function getUserProfileWithVipStatus(
+  userId: string
+): Promise<{ profile: UserProfile | null; vip: UserVipStatus | null }> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_profiles")
+    .select("display_name, avatar_url, account_tier, vip_expires_at")
+    .eq("id", userId)
+    .maybeSingle()
+
+  if (!data) return { profile: null, vip: null }
+
+  const row = data as UserProfile & UserVipStatus
+  return {
+    profile: { display_name: row.display_name, avatar_url: row.avatar_url },
+    vip: { account_tier: row.account_tier, vip_expires_at: row.vip_expires_at },
+  }
 }
 
 /** Perfis públicos de vários usuários do fórum, indexados por id. */
@@ -661,13 +690,24 @@ export async function getNewestProfiles(
  * Respeita `excludeFromPublicListings` (mesmo filtro das listagens: sem o
  * perfil do dono do site, sem conta banida) e ignora quem ainda não tem
  * `display_slug`, já que a URL canônica do perfil é derivada dele.
+ *
+ * **Só perfis com conteúdo.** Anunciar os 238 perfis existentes foi parte das
+ * 732 URLs em "Detectada, mas não indexada" no Search Console: medindo o HTML
+ * servido, 100% da amostra tinha ~565 chars de texto, dos quais 191 eram o
+ * menu — o resto era o mesmo template ("0 Posts · Mouse Não informado · Vazio
+ * Vazio Vazio") com o nome trocado. O Google não gasta rastreio nisso, e
+ * enquanto essas URLs estavam na fila ele adiava o conteúdo que importa.
+ *
+ * O critério vive em `lib/indexability.ts` e é dinâmico: quem escrever no
+ * fórum, publicar review, preencher bio ou cadastrar favoritos entra sozinho
+ * no sitemap na próxima revalidação (6h), sem deploy.
  */
 export async function listProfileSlugsForSitemap(): Promise<
   { slug: string; updated_at: string }[]
 > {
   const db = createSupabaseAdminClient()
   const { data, error } = await excludeFromPublicListings(
-    db.from("user_profiles").select("display_slug, created_at")
+    db.from("user_profiles").select("id, display_slug, bio, created_at")
   ).not("display_slug", "is", null)
 
   if (error) {
@@ -676,8 +716,52 @@ export async function listProfileSlugsForSitemap(): Promise<
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return ((data ?? []) as any[])
-    .filter((row) => typeof row.display_slug === "string" && row.display_slug.length > 0)
+  const rows = ((data ?? []) as any[]).filter(
+    (row) => typeof row.display_slug === "string" && row.display_slug.length > 0
+  )
+  if (rows.length === 0) return []
+
+  // Quem tem atividade, em 4 varreduras — não uma consulta por perfil. Cada
+  // tabela devolve só a coluna de dono; o Set responde "esta pessoa produziu
+  // algo?" em memória. São tabelas pequenas (128 posts, 55 favoritos) e o
+  // sitemap roda 4× por dia, servido do CDN no intervalo.
+  const [posts, comments, reviews, favorites] = await Promise.all([
+    db.from("forum_posts").select("user_id").eq("is_hidden", false).not("user_id", "is", null),
+    db.from("forum_comments").select("user_id").eq("is_hidden", false).not("user_id", "is", null),
+    db.from("peripheral_reviews").select("user_id").eq("is_hidden", false),
+    db.from("user_favorite_peripherals").select("user_id"),
+  ])
+
+  for (const [label, res] of [
+    ["forum_posts", posts],
+    ["forum_comments", comments],
+    ["peripheral_reviews", reviews],
+    ["user_favorite_peripherals", favorites],
+  ] as const) {
+    if (res.error) {
+      // Sinal que falhou vira sinal ausente, nunca sitemap vazio: perder uma
+      // tabela deve remover alguns perfis do anúncio, não o site inteiro.
+      console.error(`[users-repository] listProfileSlugsForSitemap ${label}:`, res.error)
+    }
+  }
+
+  const activeIds = new Set<string>()
+  for (const res of [posts, comments, reviews, favorites]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const row of (res.data ?? []) as any[]) {
+      if (row.user_id) activeIds.add(row.user_id as string)
+    }
+  }
+
+  return rows
+    .filter((row) =>
+      isProfileIndexable({
+        bio: row.bio,
+        // Um único contador basta: `isProfileIndexable` só pergunta se existe
+        // atividade, não quanta.
+        forumPosts: activeIds.has(row.id as string) ? 1 : 0,
+      })
+    )
     .map((row) => ({ slug: row.display_slug as string, updated_at: row.created_at as string }))
 }
 

@@ -37,10 +37,10 @@ export async function getRequestUser(request: NextRequest): Promise<SessionUser 
  * entrega em nome de outra pessoa é exatamente o que a sessão de suporte
  * nunca pode fazer, mesmo que a primeira trava falhe.
  *
- * Só detecta a presença do cookie assinado — não o valida nem o decodifica.
+ * Só detecta a presença do cookie cifrado — não o valida nem o decodifica.
  * É de propósito: `lib/server/impersonation.ts` usa `next/headers` e o
  * segredo do service role, e para "negar escrita" a presença basta. Um
- * cookie forjado sem assinatura válida não concede nada; no máximo faz quem
+ * cookie forjado, que não decifra, não concede nada; no máximo faz quem
  * o enviou perder o próprio acesso de escrita.
  */
 export function isImpersonating(request: NextRequest): boolean {

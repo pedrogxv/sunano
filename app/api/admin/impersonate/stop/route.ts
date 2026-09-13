@@ -20,7 +20,7 @@ function getClientIp(request: Request): string | null {
 /**
  * Encerra a sessão "logado como" e devolve o admin à própria sessão.
  *
- * Não exige checagem de cargo: quem tem o cookie `imp-origin` assinado
+ * Não exige checagem de cargo: quem tem o cookie `imp-origin` cifrado
  * (emitido só pelo endpoint de start, que já validou WEB MASTER) é o único que
  * consegue chamar isto com efeito. Sem o cookie, é no-op.
  *

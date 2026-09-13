@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { syncTelegramOffers } from "@/lib/server/integrations/telegram-offers"
+import { isAuthorizedCronRequest } from "@/lib/server/secret-compare"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -23,10 +24,7 @@ export const maxDuration = 30
  * Sem ela a rota fica inacessível (fail closed).
  */
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET
-  const authHeader = request.headers.get("authorization")
-
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

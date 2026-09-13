@@ -5,7 +5,7 @@
  * `server-only` e usa `next/headers` — não pode ser importado no proxy.
  */
 
-/** Cookie assinado (httpOnly) com a sessão do admin + metadados da sessão. */
+/** Cookie cifrado (JWE, httpOnly) com a sessão do admin + metadados da sessão. */
 export const IMPERSONATION_ORIGIN_COOKIE = "imp-origin"
 
 /** Flag legível pelo client (não httpOnly, sem segredo) para o banner. */

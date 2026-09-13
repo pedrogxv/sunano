@@ -1,7 +1,7 @@
-import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
+import { secretsMatch } from "@/lib/server/secret-compare"
 import {
   hashVisitor,
   recordVisit,
@@ -9,13 +9,6 @@ import {
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
-
-function safeTokenMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
-}
 
 /**
  * Registra a visita do dia para o dashboard admin (ver visits-repository).
@@ -41,7 +34,7 @@ export async function POST(request: NextRequest) {
     }
   } else {
     const providedToken = request.headers.get("x-internal-token") ?? ""
-    if (!providedToken || !safeTokenMatch(providedToken, expectedToken)) {
+    if (!secretsMatch(providedToken, expectedToken)) {
       // 204 mesmo ao recusar: esta rota nunca informa o chamador sobre o
       // motivo, e um 401 aqui só serviria para alguém calibrar tentativas.
       return new NextResponse(null, { status: 204 })

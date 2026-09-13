@@ -514,7 +514,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // ── Sessão "logado como" (impersonation) — modo SOMENTE LEITURA ──
   // Enquanto o WEB MASTER navega como um usuário comum, os cookies sb-* são do
   // alvo (o proxy nem sabe que é impersonation pela sessão). O sinal é o
-  // cookie `imp-origin`, assinado e emitido só pelo endpoint de start.
+  // cookie `imp-origin`, cifrado e emitido só pelo endpoint de start.
   //
   // Regras (LGPD Art. 6º, III — minimização; ver lib/server/impersonation.ts):
   //   • Nenhuma escrita: todo método != GET/HEAD sob /api é recusado, exceto

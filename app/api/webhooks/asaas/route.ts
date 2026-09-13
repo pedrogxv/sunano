@@ -1,6 +1,6 @@
-import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { getPayment } from "@/lib/server/integrations/asaas"
+import { secretsMatch } from "@/lib/server/secret-compare"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   syncOrderRefundState,
@@ -89,13 +89,6 @@ const CHARGEBACK_OPENED_EVENT = "PAYMENT_CHARGEBACK_REQUESTED"
 // recreditada. Sem isso, o afiliado pagaria por um chargeback revertido.
 const CHARGEBACK_REVERSED_EVENT = "PAYMENT_AWAITING_CHARGEBACK_REVERSAL"
 
-function safeTokenMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
-}
-
 export async function POST(request: NextRequest) {
   // O Asaas assina o webhook com um token fixo configurado no painel
   // (header `asaas-access-token`) — validamos antes de processar qualquer
@@ -107,7 +100,7 @@ export async function POST(request: NextRequest) {
   }
 
   const providedToken = request.headers.get("asaas-access-token") ?? ""
-  if (!providedToken || !safeTokenMatch(providedToken, expectedToken)) {
+  if (!secretsMatch(providedToken, expectedToken)) {
     return NextResponse.json({ error: "Token inválido" }, { status: 401 })
   }
 

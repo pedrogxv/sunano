@@ -1,7 +1,8 @@
 import "server-only"
 
+import { createHash } from "node:crypto"
 import { cookies } from "next/headers"
-import { SignJWT, jwtVerify } from "jose"
+import { EncryptJWT, jwtDecrypt } from "jose"
 
 import {
   IMPERSONATION_ACTIVE_COOKIE,
@@ -28,9 +29,12 @@ import {
  * `sb-<ref>-auth-token(.N)`. Para impersonar sem perder a sessão do admin:
  *
  *   1. Antes de trocar a sessão, os cookies `sb-*` atuais do admin são
- *      serializados e guardados num cookie `imp-origin` — assinado com HMAC
- *      (jose, segredo = SUPABASE_SERVICE_ROLE_KEY) e `httpOnly`. Ninguém no
- *      browser consegue ler nem forjar.
+ *      serializados e guardados num cookie `imp-origin`, `httpOnly` e CIFRADO
+ *      (JWE `dir` + A256GCM, que também autentica: não dá para forjar nem
+ *      alterar). Só assinar não bastava: o payload de um JWS é base64 legível,
+ *      e este cookie carrega o refresh token do WEB MASTER. Se ele vazasse
+ *      (log, proxy, extensão com acesso a cookies), dava para tomar a conta de
+ *      maior privilégio do site.
  *   2. Uma sessão real do alvo é emitida (generateLink + verifyOtp) e grava os
  *      cookies `sb-*` por cima.
  *   3. Ao encerrar (ou expirar em `IMPERSONATION_TTL_MS`), os cookies do admin
@@ -47,12 +51,18 @@ const ACTIVE_COOKIE = IMPERSONATION_ACTIVE_COOKIE
 /** Janela máxima de uma sessão impersonada. Curta de propósito (Art. 6º, III). */
 export const IMPERSONATION_TTL_MS = SHARED_TTL
 
-const alg = "HS256"
+const KEY_MANAGEMENT_ALG = "dir"
+const CONTENT_ENCRYPTION_ALG = "A256GCM"
 
-function secret() {
+/**
+ * Chave de 256 bits do cookie, derivada da service role key com um rótulo
+ * próprio em vez de usar o segredo cru do banco como chave. Trocar o rótulo
+ * invalida todo cookie emitido antes (o `v1` era o JWS só assinado).
+ */
+function encryptionKey(): Uint8Array {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY ausente — impersonation indisponível.")
-  return new TextEncoder().encode(key)
+  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY ausente, impersonation indisponível.")
+  return new Uint8Array(createHash("sha256").update(`sunano:imp-origin:v2:${key}`).digest())
 }
 
 /** Cookies `sb-*` (sessão) presentes na requisição atual, no formato {name,value}. */
@@ -76,14 +86,14 @@ export type ImpersonationOrigin = {
 }
 
 /**
- * Grava o cookie assinado com a sessão do admin + metadados. `expiresAt` do
+ * Grava o cookie cifrado com a sessão do admin + metadados. `expiresAt` do
  * cookie casa com o TTL: mesmo que o `/stop` nunca seja chamado, o cookie
  * some e o proxy trata a ausência como "não impersonando".
  */
 export async function writeImpersonationOrigin(origin: ImpersonationOrigin): Promise<void> {
   const expSeconds = Math.floor((origin.startedAt + IMPERSONATION_TTL_MS) / 1000)
 
-  const token = await new SignJWT({
+  const token = await new EncryptJWT({
     adminId: origin.adminId,
     adminEmail: origin.adminEmail,
     targetId: origin.targetId,
@@ -93,10 +103,10 @@ export async function writeImpersonationOrigin(origin: ImpersonationOrigin): Pro
     startedAt: origin.startedAt,
     adminCookies: origin.adminCookies,
   })
-    .setProtectedHeader({ alg })
+    .setProtectedHeader({ alg: KEY_MANAGEMENT_ALG, enc: CONTENT_ENCRYPTION_ALG })
     .setIssuedAt(Math.floor(origin.startedAt / 1000))
     .setExpirationTime(expSeconds)
-    .sign(secret())
+    .encrypt(encryptionKey())
 
   const store = await cookies()
   const commonOpts = {
@@ -120,14 +130,17 @@ export async function writeImpersonationOrigin(origin: ImpersonationOrigin): Pro
   )
 }
 
-/** Lê e valida o cookie de origem. `null` se ausente, inválido ou expirado. */
+/** Lê e decifra o cookie de origem. `null` se ausente, inválido, adulterado ou expirado. */
 export async function readImpersonationOrigin(): Promise<ImpersonationOrigin | null> {
   const store = await cookies()
   const raw = store.get(ORIGIN_COOKIE)?.value
   if (!raw) return null
 
   try {
-    const { payload } = await jwtVerify(raw, secret(), { algorithms: [alg] })
+    const { payload } = await jwtDecrypt(raw, encryptionKey(), {
+      keyManagementAlgorithms: [KEY_MANAGEMENT_ALG],
+      contentEncryptionAlgorithms: [CONTENT_ENCRYPTION_ALG],
+    })
     const startedAt = Number(payload.startedAt)
     if (!Number.isFinite(startedAt)) return null
     if (Date.now() > startedAt + IMPERSONATION_TTL_MS) return null

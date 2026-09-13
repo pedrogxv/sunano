@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { purgeExpiredLgpdData } from "@/lib/server/repositories/lgpd-repository"
+import { isAuthorizedCronRequest } from "@/lib/server/secret-compare"
 
 export const dynamic = "force-dynamic"
 
@@ -9,10 +10,7 @@ export const dynamic = "force-dynamic"
 // cron quando a env var CRON_SECRET está configurada no projeto — sem ela
 // configurada, a rota fica inacessível (falha fechada, não aberta).
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET
-  const authHeader = request.headers.get("authorization")
-
-  if (!secret || authHeader !== `Bearer ${secret}`) {
+  if (!isAuthorizedCronRequest(request)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
     })
 
   if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 400 })
+    console.error("[admin/support/upload-image] upload no storage falhou:", uploadError)
+    return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
   }
 
   // Bucket `support` é privado (20260906120000_support_bucket_private.sql) —

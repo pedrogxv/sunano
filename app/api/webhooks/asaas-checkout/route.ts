@@ -1,6 +1,6 @@
-import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { secretsMatch } from "@/lib/server/secret-compare"
 import { creditCommissionForOrder } from "@/lib/server/repositories/affiliates-repository"
 import {
   lineMovesPhysicalStock,
@@ -31,13 +31,6 @@ type OrderItemLine = {
   sale_type?: string | null
 }
 
-function safeTokenMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
-}
-
 export async function POST(request: NextRequest) {
   const expectedToken = process.env.ASAAS_WEBHOOK_CHECKOUT_TOKEN
   if (!expectedToken) {
@@ -46,7 +39,7 @@ export async function POST(request: NextRequest) {
   }
 
   const providedToken = request.headers.get("asaas-access-token") ?? ""
-  if (!providedToken || !safeTokenMatch(providedToken, expectedToken)) {
+  if (!secretsMatch(providedToken, expectedToken)) {
     return NextResponse.json({ error: "Token inválido" }, { status: 401 })
   }
 

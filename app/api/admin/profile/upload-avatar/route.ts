@@ -86,7 +86,8 @@ export async function POST(request: Request) {
       })
 
     if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 400 })
+      console.error("[admin/profile/upload-avatar] upload no storage falhou:", uploadError)
+      return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
     }
 
     const { data: publicData } = supabase.storage

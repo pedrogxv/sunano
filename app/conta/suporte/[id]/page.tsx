@@ -9,6 +9,7 @@ import { ptBR } from "date-fns/locale"
 import { ImagePlus, Loader2, Package, ShoppingBag, Star, X } from "lucide-react"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
+import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -95,7 +96,7 @@ function RatingWidget({ ticketId, onRated }: { ticketId: string; onRated: () => 
 export default function TicketDetailPage() {
   const params = useParams<{ id: string }>()
   const ticketId = params.id
-  const { profile, loading: profileLoading } = useOwnProfile()
+  const { profile, loading: profileLoading, error: profileError, reload: reloadProfile } = useOwnProfile()
   const { ticket, messages, loading, notFound, reload } = useSupportTicket(ticketId)
 
   const [body, setBody] = useState("")
@@ -163,6 +164,8 @@ export default function TicketDetailPage() {
       void sendMessage()
     }
   }
+
+  if (profileError) return <ProfileLoadError onRetry={reloadProfile} />
 
   if (profileLoading || !profile || loading) {
     return (

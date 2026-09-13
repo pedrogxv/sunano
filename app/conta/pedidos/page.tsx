@@ -52,6 +52,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 import {
   useUserOrders,
@@ -800,7 +801,7 @@ function OrderCardSkeleton() {
 }
 
 export default function PedidosPage() {
-  const { profile, loading: profileLoading } = useOwnProfile()
+  const { profile, loading: profileLoading, error: profileError, reload: reloadProfile } = useOwnProfile()
   const [statusFilter, setStatusFilter] = useState<UserOrder["status"] | "all">("all")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -867,6 +868,8 @@ export default function PedidosPage() {
     setMissingOnly((v) => !v)
     setPage(1)
   }
+
+  if (profileError) return <ProfileLoadError onRetry={reloadProfile} />
 
   if (profileLoading || !profile) {
     return (

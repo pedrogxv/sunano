@@ -73,14 +73,26 @@ const MFA_SETUP_HASH = "seguranca"
  * por este proxy. O que precisa passar é o que a página /conta carrega para
  * renderizar — daí `/api/account/`, usado pela aba (contagem de dispositivos
  * confiáveis) e pelo restante da tela.
+ *
+ * `GET /api/profile` entra pelo mesmo motivo, e a falta dele trancava o
+ * webmaster para fora da própria tela de cadastrar TOTP: /conta só monta
+ * `AccountSection` (onde vive a SecurityTab) depois que `useOwnProfile`
+ * recebe o perfil, e um 403 aqui deixava a página no esqueleto para sempre
+ * — sem erro na tela, porque o hook trata "sem perfil" e "falhou" do mesmo
+ * jeito. Ver lib/hooks/use-own-profile.ts.
+ *
+ * Só a LEITURA passa: `POST /api/profile` grava avatar, banner e bio, que
+ * não têm nada a ver com ativar o segundo fator. Liberar o método de escrita
+ * junto ampliaria o gate para além do que ele precisa permitir.
  */
-function isMfaSetupAllowedPath(pathname: string) {
+function isMfaSetupAllowedPath(pathname: string, method: string) {
   return (
     pathname === MFA_SETUP_PATH ||
     pathname === TWO_FACTOR_PATH ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/api/account/") ||
-    pathname === "/api/auth/me"
+    pathname === "/api/auth/me" ||
+    (pathname === "/api/profile" && (method === "GET" || method === "HEAD"))
   )
 }
 
@@ -665,7 +677,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     user &&
     isWebMaster(profile) &&
     !hasVerifiedMfaFactor &&
-    !isMfaSetupAllowedPath(pathname) &&
+    !isMfaSetupAllowedPath(pathname, request.method) &&
     !isServerActionRequest(request)
   ) {
     if (pathname.startsWith("/api")) {

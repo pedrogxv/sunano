@@ -6,6 +6,7 @@ import { ptBR } from "date-fns/locale"
 import { LifeBuoy } from "lucide-react"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
+import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import BoxLoader from "@/components/ui/box-loader"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 import { useSupportTickets, type SupportTicketStatus } from "@/lib/hooks/use-support-tickets"
@@ -24,8 +25,10 @@ const STATUS_STYLE: Record<SupportTicketStatus, string> = {
 }
 
 export default function MeusTicketsPage() {
-  const { profile, loading: profileLoading } = useOwnProfile()
+  const { profile, loading: profileLoading, error: profileError, reload: reloadProfile } = useOwnProfile()
   const { tickets, loading: ticketsLoading } = useSupportTickets()
+
+  if (profileError) return <ProfileLoadError onRetry={reloadProfile} />
 
   if (profileLoading || !profile) {
     return (

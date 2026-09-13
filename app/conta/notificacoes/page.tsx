@@ -4,6 +4,7 @@ import { enUS, ptBR } from "date-fns/locale"
 import { Bell, Loader2 } from "lucide-react"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
+import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
@@ -16,13 +17,15 @@ import { NotificationRow } from "@/components/notifications/notification-row"
 const PAGE_SIZE = 30
 
 export default function NotificacoesPage() {
-  const { profile, loading: profileLoading } = useOwnProfile()
+  const { profile, loading: profileLoading, error: profileError, reload: reloadProfile } = useOwnProfile()
   const t = useT()
   const { locale } = useLocale()
   const dateLocale = locale === "en-US" ? enUS : ptBR
 
   const { items, loaded, failed, hasMore, loadingMore, loadMore, toggleRead, dismiss } =
     useNotifications({ pageSize: PAGE_SIZE, poll: false })
+
+  if (profileError) return <ProfileLoadError onRetry={reloadProfile} />
 
   if (profileLoading || !profile) {
     return (

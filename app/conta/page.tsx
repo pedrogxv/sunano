@@ -2,11 +2,16 @@
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
 import { AccountSection } from "@/components/account/AccountSection"
+import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import BoxLoader from "@/components/ui/box-loader"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 
 export default function ContaPage() {
-  const { profile, loading } = useOwnProfile()
+  const { profile, loading, error, reload } = useOwnProfile()
+
+  // Antes do `error`: sem ele um perfil que não carrega deixava esta página
+  // — a única que cadastra 2FA — no esqueleto para sempre.
+  if (error) return <ProfileLoadError onRetry={reload} />
 
   if (loading || !profile) {
     return (

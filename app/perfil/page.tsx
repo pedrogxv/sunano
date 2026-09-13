@@ -1,12 +1,15 @@
 "use client"
 
 import { AccountPageHeader } from "@/components/account/AccountPageHeader"
+import { ProfileLoadError } from "@/components/account/ProfileLoadError"
 import { ProfileSection } from "@/components/account/ProfileSection"
 import BoxLoader from "@/components/ui/box-loader"
 import { useOwnProfile } from "@/lib/hooks/use-own-profile"
 
 export default function ProfilePage() {
-  const { profile, setProfile, loading } = useOwnProfile()
+  const { profile, setProfile, loading, error, reload } = useOwnProfile()
+
+  if (error) return <ProfileLoadError onRetry={reload} />
 
   if (loading || !profile) {
     return (

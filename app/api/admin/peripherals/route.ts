@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
+import { escapeLikePattern } from "@/lib/server/repositories/_shared"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import {
   ALLOWED_PERIPHERAL_CATEGORIES,
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: false })
 
   if (category) query = query.eq("category", category as any)
-  if (search) query = query.ilike("name", `%${search}%`)
+  if (search) query = query.ilike("name", `%${escapeLikePattern(search)}%`)
 
   const { data, error } = await query
   if (error) {

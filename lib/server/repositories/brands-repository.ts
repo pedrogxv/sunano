@@ -1,7 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
+import { clampPage, clampPageSize, escapeLikePattern, publicDbErrorMessage, rangeFor } from "@/lib/server/repositories/_shared"
 
 /**
  * Repositório de marcas de periféricos (`brands`). Fonte da verdade para o
@@ -61,7 +61,7 @@ export async function listBrandsPaginated(filters: BrandListFilters): Promise<{ 
 
   const search = filters.search?.trim()
   if (search) {
-    query = query.ilike("name", `%${search}%`)
+    query = query.ilike("name", `%${escapeLikePattern(search)}%`)
   }
 
   const [from, to] = rangeFor(page, pageSize)
@@ -85,7 +85,7 @@ export async function createBrand(name: string): Promise<BrandResult> {
       return { ok: false, error: "Já existe uma marca com este nome.", status: 409 }
     }
     console.error("[brands-repository] createBrand:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível criar a marca."), status: 400 }
   }
   return { ok: true, brand: toBrand(data) }
 }
@@ -101,7 +101,7 @@ export async function updateBrand(id: string, name: string): Promise<BrandResult
       return { ok: false, error: "Já existe uma marca com este nome.", status: 409 }
     }
     console.error("[brands-repository] updateBrand:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível salvar a marca."), status: 400 }
   }
   if (!data) return { ok: false, error: "Marca não encontrada.", status: 404 }
   return { ok: true, brand: toBrand(data) }
@@ -131,7 +131,7 @@ export async function deleteBrand(id: string): Promise<{ ok: true } | { ok: fals
   const { error } = await db.from("brands").delete().eq("id", id)
   if (error) {
     console.error("[brands-repository] deleteBrand:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível excluir a marca."), status: 400 }
   }
   return { ok: true }
 }

@@ -76,7 +76,10 @@ export async function POST(request: NextRequest) {
       upsert: false,
     })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error("[admin/store/upload-image] upload no storage falhou:", error)
+    return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
+  }
 
   const {
     data: { publicUrl },

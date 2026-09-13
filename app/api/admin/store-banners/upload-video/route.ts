@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
     })
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error("[admin/store-banners/upload-video] upload no storage falhou:", error)
+    return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
   }
 
   const {

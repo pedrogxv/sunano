@@ -45,6 +45,9 @@ const securityHeaders = [
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+	// Tira o `X-Powered-By: Next.js` das respostas: não muda nada para o site
+	// e só entrega a stack de graça para quem faz reconhecimento.
+	poweredByHeader: false,
 	experimental: {
 		// `proxy.ts` casa com `/api/*`, e o Next bufferiza em memória o corpo de
 		// toda request que passa por proxy. No padrão (10MB) um upload maior não

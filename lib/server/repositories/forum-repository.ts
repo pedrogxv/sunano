@@ -5,6 +5,7 @@ import type { AccountTier } from "@/lib/account-tier"
 import { canEditComment } from "@/lib/comment-edit"
 import type { CommentMention } from "@/components/comments/types"
 import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
+import { escapeLikePattern, escapeOrFilterValue, publicDbErrorMessage } from "@/lib/server/repositories/_shared"
 import { creditCommentCreationAura, creditForumPostCreationAura } from "@/lib/server/repositories/aura-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { checkTrackAchievements, completeDailyMission } from "@/lib/server/repositories/achievements-repository"
@@ -897,7 +898,7 @@ export async function createForumPost(params: {
 
   if (error || !created) {
     console.error("[forum-repository] createForumPost:", error)
-    return { ok: false, error: error?.message ?? "Erro ao criar post.", status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Erro ao criar post."), status: 400 }
   }
 
   // +10 de aura por criar post, 1x/dia — best-effort, não bloqueia a criação do post.
@@ -989,7 +990,7 @@ export async function addForumComment(params: {
 
   if (error) {
     console.error("[forum-repository] addForumComment:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível publicar o comentário."), status: 400 }
   }
 
   // +5 de aura por comentar, 1x por post — best-effort, não bloqueia o comentário.
@@ -1066,7 +1067,7 @@ export async function updateForumComment(params: {
 
   if (error) {
     console.error("[forum-repository] updateForumComment:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível editar o comentário."), status: 400 }
   }
 
   return { ok: true }
@@ -1112,7 +1113,7 @@ export async function deleteOwnForumComment(params: {
   const { error } = await db.from("forum_comments").update({ is_hidden: true }).eq("id", comment.id)
   if (error) {
     console.error("[forum-repository] deleteOwnForumComment:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível excluir o comentário."), status: 400 }
   }
 
   return { ok: true }
@@ -1156,7 +1157,7 @@ export async function setOwnForumPostHidden(params: {
   const { error } = await db.from("forum_posts").update({ is_hidden: params.hidden }).eq("id", post.id)
   if (error) {
     console.error("[forum-repository] setOwnForumPostHidden:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível alterar a visibilidade do post."), status: 400 }
   }
 
   return { ok: true }
@@ -1248,7 +1249,7 @@ export async function listForumPostsForModeration(params: {
     // Escapa aspas/backslash e envolve em aspas duplas — sintaxe do PostgREST
     // para valores de filtro que podem conter vírgula/ponto (delimitadores
     // do `.or()`), evitando que `q` injete condições extras no filtro.
-    const escapedQ = params.q.replace(/\\/g, "\\\\").replace(/"/g, '\\"')
+    const escapedQ = escapeOrFilterValue(escapeLikePattern(params.q))
     query = query.or(`body.ilike."%${escapedQ}%",author_name.ilike."%${escapedQ}%"`)
   }
 
@@ -1382,7 +1383,7 @@ export async function updateForumPost(
 
   if (error) {
     console.error("[forum-repository] updateForumPost:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível salvar o post."), status: 400 }
   }
   return { ok: true }
 }
@@ -1415,7 +1416,7 @@ export async function deleteForumPost(postId: string): Promise<RepositoryResult>
   const { error } = await db.from("forum_posts").delete().eq("id", postId)
   if (error) {
     console.error("[forum-repository] deleteForumPost:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível excluir o post."), status: 400 }
   }
   return { ok: true }
 }
@@ -1471,7 +1472,7 @@ export async function createForumReport(params: {
       return { ok: false, error: "Você já denunciou isso.", status: 409 }
     }
     console.error("[forum-repository] createForumReport:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível enviar a denúncia."), status: 400 }
   }
   return { ok: true }
 }

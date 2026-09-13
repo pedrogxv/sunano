@@ -1,6 +1,7 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { publicDbErrorMessage } from "@/lib/server/repositories/_shared"
 
 /**
  * Repositório das categorias do fórum (`forum_categories`) — hierarquia de
@@ -110,7 +111,7 @@ export async function createForumCategory(input: {
 
   if (error) {
     console.error("[forum-categories-repository] createForumCategory:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível criar a categoria."), status: 400 }
   }
   return { ok: true, category: toForumCategory(data) }
 }
@@ -134,7 +135,7 @@ export async function updateForumCategory(
 
   if (error) {
     console.error("[forum-categories-repository] updateForumCategory:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível salvar a categoria."), status: 400 }
   }
   if (!data) return { ok: false, error: "Categoria não encontrada.", status: 404 }
   return { ok: true, category: toForumCategory(data) }
@@ -194,7 +195,7 @@ export async function deleteForumCategory(id: string): Promise<RepositoryResult>
   const { error } = await db.from("forum_categories").delete().eq("id", id)
   if (error) {
     console.error("[forum-categories-repository] deleteForumCategory:", error)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível excluir a categoria."), status: 400 }
   }
   return { ok: true }
 }

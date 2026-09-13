@@ -5,6 +5,7 @@ import { coerceAccountTier, profileMediaProxyUrl, type AccountTier } from "@/lib
 import { canEditComment } from "@/lib/comment-edit"
 import type { CommentMention } from "@/components/comments/types"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { publicDbErrorMessage } from "@/lib/server/repositories/_shared"
 import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
 import { creditCommentCreationAura } from "@/lib/server/repositories/aura-repository"
 
@@ -750,7 +751,7 @@ export async function addBlogComment(params: {
 
   if (error) {
     console.error("[blog-repository] addBlogComment:", error.message)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível publicar o comentário."), status: 400 }
   }
 
   // +5 de aura por comentar, 1x por notícia — best-effort, não bloqueia o comentário.
@@ -818,7 +819,7 @@ export async function updateBlogComment(params: {
 
   if (error) {
     console.error("[blog-repository] updateBlogComment:", error.message)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível editar o comentário."), status: 400 }
   }
 
   return { ok: true }
@@ -863,7 +864,7 @@ export async function deleteOwnBlogComment(params: {
   const { error } = await db.from("blog_comments").update({ is_hidden: true }).eq("id", comment.id)
   if (error) {
     console.error("[blog-repository] deleteOwnBlogComment:", error.message)
-    return { ok: false, error: error.message, status: 400 }
+    return { ok: false, error: publicDbErrorMessage(error, "Não foi possível excluir o comentário."), status: 400 }
   }
 
   return { ok: true }

@@ -3,7 +3,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { coercePeripheralId, slugToSearchPattern } from "@/lib/peripheral-slug"
-import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
+import { clampPage, clampPageSize, escapeLikePattern, rangeFor } from "@/lib/server/repositories/_shared"
 import { slimTierlistSpecs } from "@/lib/tierlist-specs"
 import {
   PERIPHERAL_INDEX_SIGNAL_COLUMNS,
@@ -341,7 +341,7 @@ export async function queryPeripherals(options: PeripheralQueryOptions): Promise
     query = query.eq("category", options.category as never)
   }
   if (options.search && options.search.trim().length >= 2) {
-    query = query.ilike("name", `%${options.search.trim()}%`)
+    query = query.ilike("name", `%${escapeLikePattern(options.search.trim())}%`)
   }
   const validExcludeIds = options.excludeIds?.filter((id) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
@@ -399,7 +399,7 @@ export async function listPeripheralsPaginated(
 
   if (filters.category) query = query.eq("category", filters.category)
   if (filters.categories?.length) query = query.in("category", filters.categories)
-  if (filters.search?.trim()) query = query.ilike("name", `%${filters.search.trim()}%`)
+  if (filters.search?.trim()) query = query.ilike("name", `%${escapeLikePattern(filters.search.trim())}%`)
   if (filters.brandIds?.length) query = query.in("brand_id", filters.brandIds)
   if (filters.priceMin != null) query = query.gte("price", filters.priceMin)
   if (filters.priceMax != null) query = query.lte("price", filters.priceMax)

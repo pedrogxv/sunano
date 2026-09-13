@@ -7,7 +7,7 @@ import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
-import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
+import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 import { computeEffectivePrice } from "@/lib/store-pricing"
 
 /** Extrai o dono do pedido a partir de `metadata->>user_id` (null em pedidos de convidado). */
@@ -442,7 +442,7 @@ export async function listOrdersForAdmin(filters?: {
 
   if (filters?.status) query = query.eq("status", filters.status)
   if (filters?.userQuery?.trim()) {
-    const term = escapeOrFilterValue(filters.userQuery.trim())
+    const term = escapeOrFilterValue(escapeLikePattern(filters.userQuery.trim()))
     query = query.or(`customer_name.ilike."%${term}%",customer_email.ilike."%${term}%"`)
   }
   if (filters?.userId) query = query.eq("metadata->>user_id", filters.userId)
@@ -585,7 +585,7 @@ export async function searchOrderCustomers(
 
   const term = query.trim()
   if (term) {
-    const escaped = escapeOrFilterValue(term)
+    const escaped = escapeOrFilterValue(escapeLikePattern(term))
     dbQuery = dbQuery.or(`customer_name.ilike."%${escaped}%",customer_email.ilike."%${escaped}%"`)
   }
 
@@ -632,7 +632,7 @@ export async function searchOrderProducts(query: string, limit = 20): Promise<Or
 
   const term = query.trim()
   if (term) {
-    dbQuery = dbQuery.ilike("name", `%${escapeOrFilterValue(term)}%`)
+    dbQuery = dbQuery.ilike("name", `%${escapeLikePattern(term)}%`)
   }
 
   const { data, error } = await dbQuery

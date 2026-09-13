@@ -2,7 +2,7 @@ import "server-only"
 
 import { cache } from "react"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { clampPage, clampPageSize, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
+import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 import { getPeripheralRankById, type PeripheralRank } from "@/lib/server/repositories/peripherals-repository"
 import { computeEffectivePrice } from "@/lib/store-pricing"
 
@@ -233,7 +233,7 @@ export async function listStoreProductsPaginated(
   if (filters.categories?.length) query = query.in("category", filters.categories)
   if (filters.brands?.length) query = query.in("brand", filters.brands)
   if (filters.search?.trim()) {
-    const term = escapeOrFilterValue(filters.search.trim())
+    const term = escapeOrFilterValue(escapeLikePattern(filters.search.trim()))
     query = query.or(`name.ilike."%${term}%",brand.ilike."%${term}%"`)
   }
   if (filters.priceMinCents != null) query = query.or(effectivePriceOr("gte", filters.priceMinCents))
@@ -367,7 +367,7 @@ export async function searchStoreProductsTop(
   if (trimmed.length < 2) return []
 
   const db = createSupabaseAdminClient()
-  const term = escapeOrFilterValue(trimmed)
+  const term = escapeOrFilterValue(escapeLikePattern(trimmed))
   const { data, error } = await db
     .from("store_products")
     .select(CARD_COLUMNS)

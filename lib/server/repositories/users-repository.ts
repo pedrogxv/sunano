@@ -7,6 +7,7 @@ import { slugifyDisplayName, validateDisplayName } from "@/lib/profile-name"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { isProfileIndexable } from "@/lib/indexability"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { escapeLikePattern } from "@/lib/server/repositories/_shared"
 import { removeReplacedStorageObjects } from "@/lib/server/storage-cleanup"
 import {
   coerceMediaAdjustments,
@@ -408,7 +409,7 @@ export async function searchUserProfiles(
   const db = createSupabaseAdminClient()
   const base = db.from("user_profiles").select(DIRECTORY_COLUMNS)
   const { data, error } = await (includeOwner ? base.is("account_banned_at", null) : excludeFromPublicListings(base))
-    .ilike("display_name", `%${trimmed}%`)
+    .ilike("display_name", `%${escapeLikePattern(trimmed)}%`)
     .order("profile_views", { ascending: false })
     .limit(limit)
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { checkRateLimit } from "@/lib/server/rate-limit"
+import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { validateImageUpload } from "@/lib/server/upload-validation"
 import {
@@ -13,8 +14,10 @@ import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 /**
  * Upload de imagem para post do fórum. Diferente do upload de capa do blog
  * (app/api/admin/blog/upload-cover/route.ts), aqui quem envia é o próprio
- * usuário comum (não-admin) — a RLS de storage.objects restringe o nome do
- * arquivo ao prefixo `forum-post-<uid>-*` (20260809_forum_media_storage_rls.sql).
+ * usuário comum (não-admin). O upload usa o admin client porque
+ * storage.objects não tem policy para cliente (20261104000000); o nome do
+ * arquivo é montado aqui com o id da sessão (`forum-post-<uid>-*`), nunca vem
+ * do corpo.
  */
 
 const ALLOWED_MIME_TYPES = [
@@ -78,7 +81,8 @@ export async function POST(request: Request) {
 
     const fileName = `forum-post-${authData.user.id}-${Date.now()}.${compressed.extension}`
 
-    const { error: uploadError } = await supabase.storage
+    const db = createSupabaseAdminClient()
+    const { error: uploadError } = await db.storage
       .from("peripherals")
       .upload(fileName, compressed.bytes, {
         upsert: false,
@@ -91,7 +95,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
     }
 
-    const { data: publicData } = supabase.storage
+    const { data: publicData } = db.storage
       .from("peripherals")
       .getPublicUrl(fileName)
 

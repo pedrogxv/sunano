@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { validateImageUpload } from "@/lib/server/upload-validation"
 import {
@@ -88,7 +89,10 @@ export async function POST(request: Request) {
 
     const fileName = `blog-cover-${variant}-${slug}-${Date.now()}.${compressed.extension}`
 
-    const { error: uploadError } = await supabase.storage
+    // Admin client: storage.objects não tem policy para cliente
+    // (20261104000000); a permissão blog_write já foi conferida acima.
+    const db = createSupabaseAdminClient()
+    const { error: uploadError } = await db.storage
       .from("peripherals")
       .upload(fileName, compressed.bytes, {
         upsert: false,
@@ -101,7 +105,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Falha ao enviar o arquivo." }, { status: 500 })
     }
 
-    const { data: publicData } = supabase.storage
+    const { data: publicData } = db.storage
       .from("peripherals")
       .getPublicUrl(fileName)
 

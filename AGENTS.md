@@ -41,3 +41,24 @@ migrations que **já rodaram** no banco (schema já existe lá).
 3. Para colisão de prefixo: `git mv` o arquivo em conflito para um timestamp
    livre e faça `repair --status applied` do novo prefixo.
 4. Valide: `npx supabase db push --dry-run` deve dizer `Remote database is up to date`.
+
+# Banco: cliente só lê conteúdo público
+
+Todo dado de negócio passa por rota do Next com `service_role`. A chave anon e a
+sessão do usuário não escrevem em tabela nenhuma e só leem as tabelas de
+conteúdo público listadas em `supabase/tests/security_invariants.sql`.
+
+- Tabela nova em `public` nasce sem grant para `anon`/`authenticated` (default
+  revogado em `20261113000000`). Não crie grant nem policy de
+  INSERT/UPDATE/DELETE para eles. Se a tabela é conteúdo público: `grant select`,
+  policy de SELECT e a tabela na allowlist do script, no mesmo commit.
+- Leitura "do próprio usuário" também é pela rota. Policy `auth.uid() = user_id`
+  deixa um token sem o segundo fator (aal1) ler o dado direto na REST.
+- Função `SECURITY DEFINER` nova: `set search_path` e
+  `revoke execute ... from public` (revogar só de `anon, authenticated` não tira
+  o grant que veio de PUBLIC).
+- Storage: upload e assinatura de URL sempre pelo admin client dentro da rota.
+  `storage.objects` não tem policy de cliente.
+- Depois de qualquer migration:
+  `npx supabase db query --linked -f supabase/tests/security_invariants.sql`
+  tem que voltar sem nenhuma linha.

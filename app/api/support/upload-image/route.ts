@@ -5,6 +5,7 @@ import {
   MAX_SUPPORT_IMAGE_BYTES,
 } from "@/lib/server/support-media"
 import { checkRateLimit } from "@/lib/server/rate-limit"
+import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { validateImageUpload } from "@/lib/server/upload-validation"
 import {
@@ -72,7 +73,10 @@ export async function POST(request: Request) {
 
     const fileName = `support-${authData.user.id}-${Date.now()}.${compressed.extension}`
 
-    const { error: uploadError } = await supabase.storage
+    // Admin client: storage.objects não tem policy para cliente
+    // (20261104000000). O nome do arquivo vem da sessão, nunca do corpo.
+    const db = createSupabaseAdminClient()
+    const { error: uploadError } = await db.storage
       .from("support")
       .upload(fileName, compressed.bytes, {
         upsert: false,
@@ -89,7 +93,7 @@ export async function POST(request: Request) {
     // devolve uma signed URL só para o preview imediato no formulário; a
     // exibição depois de enviada a mensagem é sempre re-assinada na leitura
     // (support-repository.ts, via signSupportImageUrls).
-    const { data: signedData, error: signError } = await supabase.storage
+    const { data: signedData, error: signError } = await db.storage
       .from("support")
       .createSignedUrl(fileName, 600)
 

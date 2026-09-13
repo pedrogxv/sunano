@@ -5,6 +5,7 @@ import { NextResponse } from "next/server"
 import type { Database } from "@/lib/database.types"
 import type { AdminProfile } from "@/lib/admin-permissions"
 import type { AssuranceLevel } from "@/lib/auth-mfa"
+import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 type UpdateSessionOptions = {
   /**
@@ -126,8 +127,10 @@ export async function updateSession(
   // basta. Sem a checagem de admin_profiles abaixo, um admin cujo
   // `lgpd_consent_at` nunca foi preenchido ficava trancado fora do próprio
   // painel ao navegar para o site público ("Ver Site" virava beco sem saída).
-  // Usa o mesmo client autenticado da sessão (RLS: "auth.uid() = id" cobre a
-  // leitura do próprio registro), sem precisar do client de service-role.
+  // Lê com service_role, filtrando pelo id que o getUser() acima validou: a
+  // sessão não tem grant em `user_profiles` desde a 20261113000000. Com o
+  // client da sessão a query voltava 42501, `userProfile` virava null e o ban,
+  // o consentimento LGPD e o store_access deixavam de valer sem erro nenhum.
   let needsLgpdConsent = false
   let isAccountBanned = false
   let hasStoreAccess = false
@@ -135,7 +138,7 @@ export async function updateSession(
     // Mesma query que já buscava lgpd_consent_at — ban geral entra de graça
     // no round-trip existente (ver account-ban-repository.ts para o resto do
     // enforcement: aqui só precisamos saber se expulsa a sessão ou não).
-    const { data: userProfile } = await supabase
+    const { data: userProfile } = await createSupabaseAdminClient()
       .from("user_profiles")
       .select("lgpd_consent_at, account_banned_at, store_access")
       .eq("id", data.user.id)

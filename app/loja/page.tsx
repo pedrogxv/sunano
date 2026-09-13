@@ -7,37 +7,46 @@ import { listActiveBannersBySection } from "@/lib/server/repositories/store-bann
 import { StoreContent } from "@/components/store/StoreContent"
 import { ItemListJsonLd } from "@/components/seo/JsonLd"
 import { ComingSoon } from "@/components/store/ComingSoon"
-import { canUseStoreNow } from "@/lib/server/auth/store-access"
-import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
+import {
+  isStoreBrowsingBlocked,
+  storeMaintenanceMetadata,
+} from "@/lib/server/auth/store-maintenance-gate"
+import { getStoreLaunchAt } from "@/lib/store-maintenance"
 
 export const revalidate = 60
 
-export const metadata: Metadata = buildMetadata({
-  title: "Loja",
-  socialTitle: "Loja: periféricos novos e usados",
-  description: "Loja Sunano: periféricos novos e usados testados antes de anunciar, com filtros de marca, categoria, estado e preço.",
-  path: "/loja",
-  eyebrow: "Loja",
-  subtitle: "Periféricos novos e usados",
-})
+// Em manutenção a página é a mesma tela "Coming soon" de todo `/loja/**`, e
+// sai do índice (noindex, follow) para não competir com nada nem virar
+// conteúdo fino. Fora dela, a metadata completa de sempre.
+export function generateMetadata(): Metadata {
+  return (
+    storeMaintenanceMetadata({ title: "Loja", path: "/loja" }) ??
+    buildMetadata({
+      title: "Loja",
+      socialTitle: "Loja: periféricos novos e usados",
+      description: "Loja Sunano: periféricos novos e usados testados antes de anunciar, com filtros de marca, categoria, estado e preço.",
+      path: "/loja",
+      eyebrow: "Loja",
+      subtitle: "Periféricos novos e usados",
+    })
+  )
+}
 
 const PAGE_SIZE = 24
 
 export default async function LojaPage() {
-  if (isStoreMaintenanceEnabled()) {
-    // WEB MASTER e quem tem a liberação individual do "pacote Loja"
-    // (user_profiles.store_access) ignoram a manutenção e continuam vendo tudo.
-    if (!(await canUseStoreNow())) {
-      return (
-        <ComingSoon
-          icon={ShoppingBag}
-          title="Loja"
-          description="A Loja, com produtos selecionados pelo Sunano, está sendo preparada. Fique de olho nas redes para o lançamento."
-          accent="emerald"
-          launchAt={getStoreLaunchAt()}
-        />
-      )
-    }
+  // WEB MASTER e quem tem a liberação individual do "pacote Loja"
+  // (user_profiles.store_access) ignoram a manutenção e continuam vendo tudo.
+  if (await isStoreBrowsingBlocked()) {
+    return (
+      <ComingSoon
+        icon={ShoppingBag}
+        title="Loja"
+        description="A Loja, com produtos selecionados pelo Sunano, está sendo preparada. Fique de olho nas redes para o lançamento."
+        accent="emerald"
+        launchAt={getStoreLaunchAt()}
+      />
+    )
   }
 
   const [

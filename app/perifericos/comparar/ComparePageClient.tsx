@@ -696,7 +696,7 @@ export function ComparePageClient() {
                       <div className="size-10 shrink-0 overflow-hidden rounded-lg border border-border bg-muted/20">
                         {result.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={result.image_url} alt={result.name} className="h-full w-full object-contain p-1" />
+                          <img src={result.image_url} alt={result.name} className="h-full w-full object-contain p-1" loading="lazy" decoding="async" />
                         ) : (
                           <div className="flex h-full w-full items-center justify-center text-[9px] font-bold text-muted-foreground">
                             {result.brand.slice(0, 2).toUpperCase()}

@@ -1,5 +1,6 @@
 import "server-only"
 
+import { cookies } from "next/headers"
 import type { NextRequest } from "next/server"
 
 import { IMPERSONATION_ORIGIN_COOKIE } from "@/lib/impersonation-shared"
@@ -44,4 +45,19 @@ export async function getRequestUser(request: NextRequest): Promise<SessionUser 
  */
 export function isImpersonating(request: NextRequest): boolean {
   return Boolean(request.cookies.get(IMPERSONATION_ORIGIN_COOKIE)?.value)
+}
+
+/**
+ * Mesma checagem de `isImpersonating`, para rotas cujo handler recebe um
+ * `Request` puro (sem `NextRequest`) e portanto não tem `request.cookies`.
+ *
+ * Lê o cookie por `next/headers`, o que a torna assíncrona — essa é a única
+ * diferença. Vale a mesma nota da outra: detecta só a PRESENÇA do cookie
+ * assinado, porque para NEGAR escrita a presença basta; um cookie forjado não
+ * concede nada, no máximo faz quem o enviou perder o próprio acesso de
+ * escrita.
+ */
+export async function isImpersonatingFromCookies(): Promise<boolean> {
+  const cookieStore = await cookies()
+  return Boolean(cookieStore.get(IMPERSONATION_ORIGIN_COOKIE)?.value)
 }

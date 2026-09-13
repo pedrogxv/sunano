@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
-import { getRequestUser } from "@/lib/server/auth/current-user"
+import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import {
   countFollowers,
   followUser,
@@ -15,6 +15,21 @@ export const dynamic = "force-dynamic"
 const bodySchema = z.object({ userId: z.string().uuid("Perfil inválido.") })
 
 async function resolveTarget(request: NextRequest) {
+  // Guarda no ponto comum de POST e DELETE: seguir/deixar de seguir em nome de
+  // outra pessoa é escrita visível no perfil dela (e notifica quem foi
+  // seguido). Uma trava aqui cobre os dois métodos de uma vez.
+  if (isImpersonating(request)) {
+    return {
+      error: NextResponse.json(
+        {
+          error: "impersonation_read_only",
+          message: "Sessão de acesso é somente leitura; não é possível seguir ou deixar de seguir.",
+        },
+        { status: 403 }
+      ),
+    }
+  }
+
   const user = await getRequestUser(request)
   if (!user) {
     return { error: NextResponse.json({ error: "Entre para seguir perfis." }, { status: 401 }) }

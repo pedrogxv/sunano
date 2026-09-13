@@ -7,6 +7,7 @@ import { Clock, Flame, Plus, Tag, User, X } from "lucide-react"
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
 import { CategoryPickerCompact } from "@/components/forum/CategoryPicker"
 import { PostMediaField } from "@/components/forum/PostMediaField"
+import { PeripheralMentionField } from "@/components/forum/PeripheralMentionField"
 import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { ForumSidebar, ForumSidebarMobileTrigger } from "@/components/forum/ForumSidebar"
 import { InfiniteScrollSentinel } from "@/components/forum/InfiniteScrollSentinel"
@@ -80,6 +81,7 @@ export function ForumContent({
   const [categoryId, setCategoryId] = useState("")
   const [mediaImageUrls, setMediaImageUrls] = useState<string[]>([])
   const [mediaVideoUrl, setMediaVideoUrl] = useState<string | null>(null)
+  const [peripheralIds, setPeripheralIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const bodyTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -187,6 +189,7 @@ export function ForumContent({
           category_id: categoryId,
           media_image_urls: mediaImageUrls.length > 0 ? mediaImageUrls : undefined,
           media_video_url: mediaVideoUrl ?? undefined,
+          peripheral_ids: peripheralIds.length > 0 ? peripheralIds : undefined,
         }),
       })
       const data = await res.json().catch(() => null)
@@ -196,6 +199,7 @@ export function ForumContent({
       setCategoryId("")
       setMediaImageUrls([])
       setMediaVideoUrl(null)
+      setPeripheralIds([])
       setShowForm(false)
       setOwnPostsOverride(true)
       await loadPosts(activeTab, activeCategoryId, 1, true)
@@ -426,6 +430,13 @@ export function ForumContent({
               onVideoChange={setMediaVideoUrl}
             />
           </div>
+
+          <PeripheralMentionField
+            title={title}
+            body={body}
+            selectedIds={peripheralIds}
+            onChange={setPeripheralIds}
+          />
 
           <div className="flex items-center justify-end gap-2 pt-1">
             {!canSubmit && (

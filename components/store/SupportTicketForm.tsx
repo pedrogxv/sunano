@@ -233,7 +233,7 @@ export function SupportTicketForm() {
               <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-background">
                 {selectedProduct.images?.[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={selectedProduct.images[0]} alt="" className="size-full object-cover" />
+                  <img src={selectedProduct.images[0]} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                 ) : (
                   <Search className="size-4 text-muted-foreground" />
                 )}
@@ -292,7 +292,7 @@ export function SupportTicketForm() {
                           <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-md border border-border bg-background">
                             {product.images?.[0] ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={product.images[0]} alt="" className="size-full object-cover" />
+                              <img src={product.images[0]} alt="" className="size-full object-cover" loading="lazy" decoding="async" />
                             ) : (
                               <Search className="size-4 text-muted-foreground" />
                             )}
@@ -341,7 +341,7 @@ export function SupportTicketForm() {
           {imageUrls.map((url) => (
             <div key={url} className="relative animate-in fade-in-0 zoom-in-95 duration-200">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="Anexo" className="size-16 rounded-lg border border-border object-cover" />
+              <img src={url} alt="Anexo" className="size-16 rounded-lg border border-border object-cover" loading="lazy" decoding="async" />
               <button
                 type="button"
                 onClick={() => setImageUrls((prev) => prev.filter((u) => u !== url))}

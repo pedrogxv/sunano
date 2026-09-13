@@ -491,7 +491,7 @@ export default function CheckoutPage() {
             >
               {item.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1" />
+                <img src={item.image} alt={item.name} className="h-full w-full object-contain p-1" loading="lazy" decoding="async" />
               ) : (
                 <Package className="size-5 text-muted-foreground" />
               )}

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import * as z from "zod"
 
 import { isLocalhostHost, validatePassword } from "@/lib/password-policy"
+import { isImpersonatingFromCookies } from "@/lib/server/auth/current-user"
 import { verifyCurrentPassword } from "@/lib/server/auth/verify-current-password"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
@@ -13,6 +14,19 @@ const passwordSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    // Segunda trava do modo somente-leitura da impersonation (a primeira é o
+    // proxy). Handler recebe `Request` puro, então a checagem lê o cookie por
+    // `next/headers` — ver isImpersonatingFromCookies.
+    if (await isImpersonatingFromCookies()) {
+      return NextResponse.json(
+        {
+          error: "impersonation_read_only",
+          message: "Sessão de acesso é somente leitura; não é possível alterar a senha.",
+        },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const parsed = passwordSchema.safeParse(body)
 

@@ -3,12 +3,19 @@
 // isStoreMaintenanceEnabled() — o countdown em getStoreLaunchAt() é
 // puramente informativo para a UI, nunca decide sozinho se a loja abre.
 //
-// IMPORTANTE: há consumidores client-side (`components/auth/auth-user.tsx` e
-// `components/account/AccountSection.tsx`, que escondem o item "Programa de
-// Afiliados"). No browser a variante sem NEXT_PUBLIC_ não existe, então
-// STORE_MAINTENANCE_MODE sozinha faz esta função retornar false no client e a
-// UI vaza. Sempre defina NEXT_PUBLIC_STORE_MAINTENANCE_MODE com o mesmo valor,
-// em TODOS os ambientes (local e Vercel). Ver .env.example.
+// ESTA FUNÇÃO É SERVER-SIDE. Não a chame de um Client Component: no browser a
+// variante sem NEXT_PUBLIC_ não existe e ela responderia `false`, vazando a UI
+// que deveria estar escondida.
+//
+// Quem precisa do estado no cliente recebe por PROP, resolvido no servidor —
+// `authUser.canUseStore`, de /api/auth/me (ver `components/auth/auth-user.tsx`
+// e `components/account/AccountSection.tsx`, que escondem "Programa de
+// Afiliados"). Isso é melhor que uma env `NEXT_PUBLIC_`: a resposta já embute
+// os bypasses por usuário (WEB MASTER e `store_access`), que uma env não tem
+// como expressar.
+//
+// O fallback para NEXT_PUBLIC_STORE_MAINTENANCE_MODE abaixo é só rede de
+// segurança para leitura em client legado; não dependa dele em código novo.
 
 export function isStoreMaintenanceEnabled() {
   const value = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE

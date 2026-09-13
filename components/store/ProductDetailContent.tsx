@@ -298,7 +298,7 @@ export function ProductDetailContent({
                 >
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={img} alt="" className="h-full w-full object-contain p-1.5" />
+                    <img src={img} alt="" className="h-full w-full object-contain p-1.5" loading="lazy" decoding="async" />
                   ) : (
                     <div className="flex h-full items-center justify-center">
                       <CategoryIcon className="size-8 opacity-40" style={{ color: categoryTint }} strokeWidth={1.2} />

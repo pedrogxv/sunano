@@ -8,6 +8,18 @@ import { isMfaStepUpRequired, sanitizeNextPath, TRUSTED_DEVICE_COOKIE_NAME } fro
 import { isTrustedDevice } from "@/lib/server/repositories/mfa-trusted-devices-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
+import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
+
+// Tela de autenticação: fora do índice. O robots.txt já barra o rastreio,
+// mas sem `noIndex` uma URL linkada de fora ainda entra no índice.
+export const metadata: Metadata = buildMetadata({
+  title: "Verificação em duas etapas",
+  description: "Confirme o código de verificação para entrar na sua conta Sunano.",
+  path: "/2fa",
+  noIndex: true,
+})
+
 export const dynamic = "force-dynamic"
 
 export default async function TwoFactorPage({

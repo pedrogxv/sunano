@@ -6,8 +6,11 @@ import { getReviewAggregate } from "@/lib/server/repositories/store-reviews-repo
 import { JsonLd } from "@/components/seo/JsonLd"
 import { ProductDetailContent } from "@/components/store/ProductDetailContent"
 import { ComingSoon } from "@/components/store/ComingSoon"
-import { canUseStoreNow } from "@/lib/server/auth/store-access"
-import { isStoreMaintenanceEnabled, getStoreLaunchAt } from "@/lib/store-maintenance"
+import {
+  isStoreBrowsingBlocked,
+  storeMaintenanceMetadata,
+} from "@/lib/server/auth/store-maintenance-gate"
+import { getStoreLaunchAt } from "@/lib/store-maintenance"
 import { buildDescription, buildMetadata } from "@/lib/seo"
 import { getCategoryLabel } from "@/lib/store-category-icons"
 import { SITE_URL } from "@/lib/site-url"
@@ -25,9 +28,18 @@ const CONDITION_LABEL: Record<string, string> = {
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  if (isStoreMaintenanceEnabled()) return {}
-
   const { slug } = await params
+
+  // Em manutenção esta rota renderiza a tela "Coming soon", igual a todas as
+  // outras de `/loja/**`. `return {}` (o que havia aqui) herdava o
+  // `index, follow` do layout raiz e oferecia ao Google uma URL por produto
+  // com conteúdo idêntico. Sai do índice mantendo o `follow`.
+  const maintenance = storeMaintenanceMetadata({
+    title: "Loja",
+    path: `/loja/${slug}`,
+  })
+  if (maintenance) return maintenance
+
   const detail = await getStoreProductDetail(slug)
   if (!detail) return {}
 
@@ -60,20 +72,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ProductPage({ params }: PageProps) {
-  if (isStoreMaintenanceEnabled()) {
-    // WEB MASTER e quem tem a liberação individual do "pacote Loja"
-    // (user_profiles.store_access) ignoram a manutenção e continuam vendo tudo.
-    if (!(await canUseStoreNow())) {
-      return (
-        <ComingSoon
-          icon={ShoppingBag}
-          title="Loja"
-          description="A Loja, com produtos selecionados pelo Sunano, está sendo preparada. Fique de olho nas redes para o lançamento."
-          accent="emerald"
-          launchAt={getStoreLaunchAt()}
-        />
-      )
-    }
+  // WEB MASTER e quem tem a liberação individual do "pacote Loja"
+  // (user_profiles.store_access) ignoram a manutenção e continuam vendo tudo.
+  if (await isStoreBrowsingBlocked()) {
+    return (
+      <ComingSoon
+        icon={ShoppingBag}
+        title="Loja"
+        description="A Loja, com produtos selecionados pelo Sunano, está sendo preparada. Fique de olho nas redes para o lançamento."
+        accent="emerald"
+        launchAt={getStoreLaunchAt()}
+      />
+    )
   }
 
   const { slug } = await params

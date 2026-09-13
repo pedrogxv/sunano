@@ -229,7 +229,7 @@ function ItemThumb({ image, className }: { image?: string | null; className?: st
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={image} alt="" className={cn("object-cover", className)} />
+    <img src={image} alt="" className={cn("object-cover", className)} loading="lazy" decoding="async" />
   )
 }
 

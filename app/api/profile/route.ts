@@ -14,6 +14,7 @@ import {
   resolveAvailableDisplayName,
   updateUserProfileSettings,
 } from "@/lib/server/repositories/users-repository"
+import { isImpersonatingFromCookies } from "@/lib/server/auth/current-user"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"
@@ -136,6 +137,19 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    // Segunda trava do modo somente-leitura da impersonation (a primeira é o
+    // proxy). Handler recebe `Request` puro, então a checagem lê o cookie por
+    // `next/headers` — ver isImpersonatingFromCookies.
+    if (await isImpersonatingFromCookies()) {
+      return NextResponse.json(
+        {
+          error: "impersonation_read_only",
+          message: "Sessão de acesso é somente leitura; não é possível editar o perfil.",
+        },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const parsed = profileSchema.safeParse(body)
 

@@ -9,6 +9,7 @@ import {
   getForumPostBySlug,
   updateForumPost,
 } from "@/lib/server/repositories/forum-repository"
+import { syncPostPeripherals } from "@/lib/server/repositories/forum-peripherals-repository"
 
 const patchSchema = z
   .object({
@@ -74,6 +75,24 @@ export async function PATCH(
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
+
+  // Editar o texto pode ter introduzido ou removido a citação de um
+  // periférico — recalcula sobre o post já salvo. Só quando título/corpo
+  // mudaram: alternar `is_pinned` não precisa varrer nada.
+  if (parsed.data.title !== undefined || parsed.data.body !== undefined) {
+    try {
+      const updated = await getForumPostBySlug(slug)
+      if (updated) {
+        await syncPostPeripherals({
+          postId: updated.post.id,
+          text: `${updated.post.title}\n${updated.post.body ?? ""}`,
+        })
+      }
+    } catch (error) {
+      console.error("[forum/posts/[slug]] syncPostPeripherals:", error)
+    }
+  }
+
   return NextResponse.json({ ok: true })
 }
 

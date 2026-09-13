@@ -4,7 +4,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Award, Eye, Flame, MessageCircle, MessagesSquare, Tag, User, Users } from "lucide-react"
+import { Award, ChevronRight, Eye, Flame, MessageCircle, MessagesSquare, Tag, User, Users } from "lucide-react"
 
 import { CollapsibleSidebarCard } from "@/components/forum/CollapsibleSidebarCard"
 import { useFollowSticky } from "@/lib/hooks/use-follow-sticky"
@@ -17,6 +17,10 @@ import { getSpecialTag } from "@/lib/special-tag"
 import { MEDAL_RARITY_STYLES } from "@/lib/profile-showcase"
 import type { ProfileShowcase } from "@/lib/profile-showcase"
 import type { ForumCategoryInfo, ForumSidebarData } from "@/lib/server/repositories/forum-repository"
+import type { MentionedPeripheral } from "@/lib/server/repositories/forum-peripherals-repository"
+import { buildPeripheralDisplayName } from "@/lib/peripheral-slug"
+import { getCategoryLabel } from "@/lib/store-category-icons"
+import { TIER_BASE_COLORS } from "@/lib/tierlist-theme"
 
 function formatCount(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
@@ -44,6 +48,7 @@ export function ForumPostSidebar({
   author,
   authorProfile,
   stats,
+  peripherals,
 }: {
   category: ForumCategoryInfo | null
   author: {
@@ -55,6 +60,8 @@ export function ForumPostSidebar({
   /** Vitrine completa do autor (aura, seguidores, medalhas) — `null` em posts de convidado. */
   authorProfile: ProfileShowcase | null
   stats: ForumSidebarData
+  /** Periféricos citados no post — vazio quando nenhum foi detectado/vinculado. */
+  peripherals: MentionedPeripheral[]
 }) {
   const specialTag = getSpecialTag(author.display_slug)
   const categoryLabel = category ? (category.parent ? `${category.parent.name} / ${category.name}` : category.name) : null
@@ -213,6 +220,63 @@ export function ForumPostSidebar({
           </Button>
         )}
       </CollapsibleSidebarCard>
+
+      {/* Periféricos citados no post — ponte fórum -> catálogo. Vem antes dos
+          tópicos relacionados porque é o link mais específico da página. */}
+      {peripherals.length > 0 && (
+        <CollapsibleSidebarCard
+          id="post-perifericos"
+          header={
+            <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <Tag className="size-3.5" />
+              Periféricos citados
+            </span>
+          }
+        >
+          <ul className="space-y-2.5">
+            {peripherals.map((peripheral) => (
+              <li key={peripheral.id}>
+                <Link
+                  href={`/perifericos/${peripheral.slug}`}
+                  className="group/periph -mx-1.5 flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition-all duration-200 hover:bg-muted/50"
+                >
+                  {peripheral.image_url ? (
+                    <Image
+                      src={peripheral.image_url}
+                      alt=""
+                      width={36}
+                      height={36}
+                      className="size-9 shrink-0 rounded-lg object-cover transition-transform duration-200 group-hover/periph:scale-105"
+                    />
+                  ) : (
+                    <span className="size-9 shrink-0 rounded-lg bg-muted" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium text-foreground transition-colors group-hover/periph:text-primary">
+                      {buildPeripheralDisplayName(peripheral.brand, peripheral.name)}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {getCategoryLabel(peripheral.category)}
+                    </p>
+                  </div>
+                  {peripheral.tier && (
+                    <span
+                      className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                      style={{
+                        backgroundColor:
+                          TIER_BASE_COLORS[peripheral.tier as keyof typeof TIER_BASE_COLORS] ?? "#6B7280",
+                      }}
+                    >
+                      {peripheral.tier}
+                    </span>
+                  )}
+                  <ChevronRight className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-all duration-200 group-hover/periph:translate-x-0.5 group-hover/periph:text-primary group-hover/periph:opacity-100" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </CollapsibleSidebarCard>
+      )}
 
       {/* Tópicos recentes da mesma categoria */}
       {stats.relatedPosts.length > 0 && (

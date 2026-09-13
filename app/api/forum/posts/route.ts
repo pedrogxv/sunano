@@ -10,6 +10,8 @@ import {
   type ForumTab,
 } from "@/lib/server/repositories/forum-repository"
 import { getUserProfile } from "@/lib/server/repositories/users-repository"
+import { syncPostPeripherals } from "@/lib/server/repositories/forum-peripherals-repository"
+import { MAX_PERIPHERAL_MENTIONS } from "@/lib/peripheral-mentions"
 
 /**
  * Endpoint do fórum. Toda a lógica de banco vive no `forum-repository`;
@@ -31,6 +33,10 @@ const postSchema = z
         message: "O link de vídeo precisa ser do YouTube.",
       })
       .optional(),
+    // Periféricos que o autor confirmou no formulário. O servidor roda o
+    // detector de novo sobre o texto salvo e valida contra o catálogo, então
+    // isto é uma sugestão do cliente, nunca a fonte de verdade.
+    peripheral_ids: z.array(z.string().uuid()).max(MAX_PERIPHERAL_MENTIONS).optional(),
   })
   .refine((data) => !(data.media_image_urls?.length && data.media_video_url), {
     message: "Escolha apenas um tipo de mídia: imagem ou vídeo.",
@@ -123,6 +129,20 @@ export async function POST(request: NextRequest) {
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status })
     }
+
+    // Vínculo com os periféricos citados — best-effort, na mesma postura da
+    // aura/missões acima: falhar aqui não pode derrubar um post já criado.
+    try {
+      await syncPostPeripherals({
+        postId: result.id,
+        text: `${parsed.data.title}\n${parsed.data.body ?? ""}`,
+        confirmedIds: parsed.data.peripheral_ids,
+        source: parsed.data.peripheral_ids?.length ? "manual" : "auto",
+      })
+    } catch (error) {
+      console.error("[forum/posts] syncPostPeripherals:", error)
+    }
+
     return NextResponse.json({ ok: true, slug: result.slug })
   } catch {
     return NextResponse.json({ error: "Erro ao criar post." }, { status: 500 })

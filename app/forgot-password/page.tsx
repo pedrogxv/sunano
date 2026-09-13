@@ -3,6 +3,18 @@ import Link from "next/link"
 import { AuthBackground } from "@/components/auth/AuthBackground"
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm"
 
+import type { Metadata } from "next"
+import { buildMetadata } from "@/lib/seo"
+
+// Tela de autenticação: fora do índice. O robots.txt já barra o rastreio,
+// mas sem `noIndex` uma URL linkada de fora ainda entra no índice.
+export const metadata: Metadata = buildMetadata({
+  title: "Recuperar senha",
+  description: "Receba um link para redefinir a senha da sua conta Sunano.",
+  path: "/forgot-password",
+  noIndex: true,
+})
+
 export default async function ForgotPasswordPage({
   searchParams,
 }: {

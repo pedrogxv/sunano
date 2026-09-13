@@ -3,6 +3,8 @@ import { notFound } from "next/navigation"
 
 import { getForumPostBySlug, getForumSidebarData } from "@/lib/server/repositories/forum-repository"
 import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-repository"
+import { getPeripheralsForPost } from "@/lib/server/repositories/forum-peripherals-repository"
+import { buildPeripheralDisplayName } from "@/lib/peripheral-slug"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { ForumPostContent } from "./forum-post-content"
@@ -95,9 +97,10 @@ export default async function ForumPostPage({
 
   const { post, comments, hasMoreComments } = result
   const url = `${SITE_URL}/forum/${post.slug}`
-  const [sidebarData, authorProfile] = await Promise.all([
+  const [sidebarData, authorProfile, peripherals] = await Promise.all([
     getForumSidebarData({ postId: post.id, categoryId: post.category?.id ?? null }),
     post.user_id ? getProfileShowcase(post.user_id) : Promise.resolve(null),
+    getPeripheralsForPost(post.id),
   ])
 
   const jsonLd = {
@@ -115,7 +118,24 @@ export default async function ForumPostPage({
       // clicável no resultado. Só existe quando o perfil tem slug público.
       ...(post.author_display_slug ? { url: `${SITE_URL}${profilePath(post.author_display_slug)}` } : {}),
     },
-    ...(post.category ? { about: post.category.name } : {}),
+    // `about` descreve o assunto do tópico: a categoria e, quando há,
+    // os periféricos citados como entidades `Product`. É o que liga a
+    // discussão ao produto nos dados estruturados — o equivalente
+    // semântico do link que os chips já dão em HTML.
+    ...(post.category || peripherals.length > 0
+      ? {
+          about: [
+            ...(post.category ? [post.category.name] : []),
+            ...peripherals.map((peripheral) => ({
+              "@type": "Product",
+              name: buildPeripheralDisplayName(peripheral.brand, peripheral.name),
+              url: `${SITE_URL}/perifericos/${peripheral.slug}`,
+              ...(peripheral.brand ? { brand: { "@type": "Brand", name: peripheral.brand } } : {}),
+              ...(peripheral.image_url ? { image: peripheral.image_url } : {}),
+            })),
+          ],
+        }
+      : {}),
     ...(post.media_image_urls.length > 0 ? { image: post.media_image_urls } : {}),
     interactionStatistic: {
       "@type": "InteractionCounter",
@@ -147,6 +167,7 @@ export default async function ForumPostPage({
         initialHasMoreComments={hasMoreComments}
         sidebarData={sidebarData}
         authorProfile={authorProfile}
+        peripherals={peripherals}
       />
     </>
   )

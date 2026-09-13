@@ -247,7 +247,7 @@ export default function TicketDetailPage() {
                   {message.image_urls.map((url) => (
                     <a key={url} href={url} target="_blank" rel="noreferrer">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt="Anexo" className="size-20 rounded-lg border border-border object-cover" />
+                      <img src={url} alt="Anexo" className="size-20 rounded-lg border border-border object-cover" loading="lazy" decoding="async" />
                     </a>
                   ))}
                 </div>
@@ -273,7 +273,7 @@ export default function TicketDetailPage() {
                     {imageUrls.map((url) => (
                       <div key={url} className="relative">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={url} alt="Anexo" className="size-14 rounded-lg border border-border object-cover" />
+                        <img src={url} alt="Anexo" className="size-14 rounded-lg border border-border object-cover" loading="lazy" decoding="async" />
                         <button
                           type="button"
                           onClick={() => setImageUrls((prev) => prev.filter((u) => u !== url))}

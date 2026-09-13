@@ -53,7 +53,6 @@ function PixCheckoutContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const orderId = searchParams.get("orderId")
-  const token = searchParams.get("token")
   const { clear } = useCart()
 
   const [order, setOrder] = useState<OrderStatus | null>(null)
@@ -68,7 +67,6 @@ function PixCheckoutContent() {
     if (!orderId) return
     try {
       const params = new URLSearchParams()
-      if (token) params.set("token", token)
       // `slim` omite QR, copia-e-cola e itens — ~8 KB por resposta que a tela
       // já tem desde a primeira carga e que não mudam.
       if (slim) params.set("slim", "1")
@@ -94,7 +92,7 @@ function PixCheckoutContent() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao consultar o pedido.")
     }
-  }, [orderId, token])
+  }, [orderId])
 
   useEffect(() => {
     if (!orderId) {

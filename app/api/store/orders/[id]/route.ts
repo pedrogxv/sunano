@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser } from "@/lib/server/auth/current-user"
@@ -8,22 +7,18 @@ import { dbErrorResponse } from "@/lib/db-errors"
  * Usada pela página de checkout PIX para fazer polling do status do
  * pagamento enquanto aguarda o webhook do Asaas confirmar.
  *
- * Posse do pedido é provada por sessão (pedidos logados) OU pelo
- * `access_token` opaco — comparado com timingSafeEqual para não vazar o token
- * por diferença de tempo de resposta.
+ * Posse do pedido é provada SÓ pela sessão: o pedido tem que ser do usuário
+ * logado (`metadata.user_id`), e qualquer outro caso responde 404 — sem
+ * distinguir "não existe" de "não é seu", para não confirmar a existência de
+ * um pedido alheio.
  *
- * O caminho do token é LEGADO: o guest checkout foi removido e nenhum fluxo
- * gera `access_token` novo hoje (o checkout exige login). Ele continua aqui
- * porque pedidos antigos de convidado ainda têm o token gravado, e o link
- * que essas pessoas receberam precisa continuar abrindo. Não remover sem
- * antes confirmar que não há mais pedidos com `access_token` não nulo.
+ * Havia aqui um segundo caminho, por `access_token` opaco na query, herdado
+ * do guest checkout. Ele foi removido em 13/09/2026: o guest checkout já não
+ * existe, nenhum fluxo gera token novo e a varredura confirmou ZERO pedidos
+ * com `access_token` não nulo no banco — era autenticação alternativa viva
+ * numa rota que devolve item, valor e QR code do pedido, sem nada a servir.
+ * A coluna segue no banco (sem uso) para não exigir migration destrutiva.
  */
-function safeTokenMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
-}
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -32,7 +27,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { data: order, error } = await db
     .from("store_orders")
     .select(
-      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, access_token, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at"
+      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at"
     )
     .eq("id", id)
     // Pedido de sandbox não existe para o cliente — nem por link direto
@@ -47,13 +42,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const user = await getRequestUser(request)
-  const providedToken = request.nextUrl.searchParams.get("token")
 
-  const ownsAsUser = user && order.metadata?.user_id === user.id
-  const ownsAsGuest =
-    !ownsAsUser && order.access_token && providedToken && safeTokenMatch(providedToken, order.access_token)
-
-  if (!ownsAsUser && !ownsAsGuest) {
+  if (!user || order.metadata?.user_id !== user.id) {
     return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 })
   }
 

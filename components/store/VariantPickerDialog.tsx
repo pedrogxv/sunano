@@ -164,7 +164,7 @@ export function VariantPickerDialog({ slug, name, category, fallbackImage, open,
               <div className="relative size-16 shrink-0 overflow-hidden rounded-xl border border-border bg-[var(--card-image-bg)]">
                 {image ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img key={image} src={image} alt={name} className="h-full w-full object-contain p-1.5" />
+                  <img key={image} src={image} alt={name} className="h-full w-full object-contain p-1.5" loading="lazy" decoding="async" />
                 ) : (
                   <div
                     className="flex h-full items-center justify-center"

@@ -7,10 +7,12 @@ import { ArrowLeft, EyeOff } from "lucide-react"
 
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
 import { ForumPostSidebar } from "@/components/forum/ForumPostSidebar"
+import { PeripheralMentionChips } from "@/components/forum/PeripheralMentionChips"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { CommentsSection } from "@/components/comments/CommentsSection"
 import type { CommentItem } from "@/components/comments/types"
 import type { ForumPostDetail, ForumSidebarData } from "@/lib/server/repositories/forum-repository"
+import type { MentionedPeripheral } from "@/lib/server/repositories/forum-peripherals-repository"
 import type { ProfileShowcase } from "@/lib/profile-showcase"
 
 /**
@@ -24,6 +26,7 @@ export function ForumPostContent({
   initialHasMoreComments,
   sidebarData,
   authorProfile,
+  peripherals,
 }: {
   post: ForumPostDetail
   initialComments: CommentItem[]
@@ -31,6 +34,8 @@ export function ForumPostContent({
   sidebarData: ForumSidebarData
   /** `null` para posts de convidado (sem `user_id`) — a sidebar cai pros dados básicos do post. */
   authorProfile: ProfileShowcase | null
+  /** Periféricos citados, já resolvidos no servidor. */
+  peripherals: MentionedPeripheral[]
 }) {
   const params = useParams<{ slug: string }>()
   const router = useRouter()
@@ -74,6 +79,8 @@ export function ForumPostContent({
             onOwnPostVisibilityChange={() => router.refresh()}
           />
 
+          <PeripheralMentionChips peripherals={peripherals} />
+
           <CommentsSection
             apiBasePath={`/api/forum/posts/${params.slug}`}
             auraLookupPath="/api/forum/aura"
@@ -99,6 +106,7 @@ export function ForumPostContent({
           }}
           authorProfile={authorProfile}
           stats={sidebarData}
+          peripherals={peripherals}
         />
       </div>
     </div>

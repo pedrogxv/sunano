@@ -65,7 +65,7 @@ export function RemoveCartItemDialog({
             <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-[var(--card-image-bg)]">
               {pending.image ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={pending.image} alt="" className="h-full w-full object-contain p-1" />
+                <img src={pending.image} alt="" className="h-full w-full object-contain p-1" loading="lazy" decoding="async" />
               ) : (
                 <Package className="size-5 text-muted-foreground" />
               )}

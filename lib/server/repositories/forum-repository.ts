@@ -861,7 +861,7 @@ export async function createForumPost(params: {
   categoryId: string
   mediaImageUrls?: string[]
   mediaVideoUrl?: string | null
-}): Promise<{ ok: true; slug: string } | { ok: false; error: string; status: number }> {
+}): Promise<{ ok: true; slug: string; id: string } | { ok: false; error: string; status: number }> {
   const db = createSupabaseAdminClient()
 
   const mediaError = validateMedia(params.mediaImageUrls, params.mediaVideoUrl)
@@ -908,7 +908,7 @@ export async function createForumPost(params: {
   const { posts } = await countForumActivity(params.userId)
   await checkTrackAchievements(params.userId, "posts", posts)
 
-  return { ok: true, slug }
+  return { ok: true, slug, id: created.id }
 }
 
 /** Adiciona um comentário a um post (respeitando o lock). */

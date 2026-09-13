@@ -4,6 +4,13 @@ import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { StoreContent } from "@/components/store/StoreContent"
+import { ShoppingBag } from "lucide-react"
+import { ComingSoon } from "@/components/store/ComingSoon"
+import {
+  isStoreBrowsingBlocked,
+  storeMaintenanceMetadata,
+} from "@/lib/server/auth/store-maintenance-gate"
+import { getStoreLaunchAt } from "@/lib/store-maintenance"
 
 export const revalidate = 60
 
@@ -17,6 +24,13 @@ interface MarcaPageProps {
 export async function generateMetadata({ params }: MarcaPageProps): Promise<Metadata> {
   const { marca } = await params
   const brand = decodeURIComponent(marca)
+
+  const maintenance = storeMaintenanceMetadata({
+    title: "Loja",
+    path: `/loja/marca/${encodeURIComponent(brand)}`,
+  })
+  if (maintenance) return maintenance
+
   return buildMetadata({
     title: `${brand} - Loja`,
     description: `Todos os produtos da marca ${brand} na Loja Sunano: periféricos novos e usados testados antes de anunciar, com PIX na hora e envio para todo o Brasil.`,
@@ -27,6 +41,20 @@ export async function generateMetadata({ params }: MarcaPageProps): Promise<Meta
 }
 
 export default async function LojaMarcaPage({ params, searchParams }: MarcaPageProps) {
+  // Ver `/loja/categoria`: sem esta guarda a rota expunha o catálogo da marca
+  // durante a manutenção.
+  if (await isStoreBrowsingBlocked()) {
+    return (
+      <ComingSoon
+        icon={ShoppingBag}
+        title="Loja"
+        description="A Loja, com produtos selecionados pelo Sunano, está sendo preparada. Fique de olho nas redes para o lançamento."
+        accent="emerald"
+        launchAt={getStoreLaunchAt()}
+      />
+    )
+  }
+
   const { marca } = await params
   const { categoria } = await searchParams
   const brand = decodeURIComponent(marca)

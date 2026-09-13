@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
-import { getRequestUser } from "@/lib/server/auth/current-user"
+import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import { auraPriceForVip } from "@/lib/aura-pricing"
 import { DISPLAY_NAME_MAX_LENGTH } from "@/lib/profile-name"
 import { getUserAuraBalance } from "@/lib/server/repositories/aura-repository"
@@ -56,6 +56,18 @@ export async function POST(request: NextRequest) {
   const user = await getRequestUser(request)
   if (!user) {
     return NextResponse.json({ error: "Não autenticado." }, { status: 401 })
+  }
+
+  // Segunda trava do modo somente-leitura da impersonation (a primeira é o
+  // proxy, que recusa toda escrita). Trocar o apelido de outra pessoa gasta a Aura dela e queima o cooldown.
+  if (isImpersonating(request)) {
+    return NextResponse.json(
+      {
+        error: "impersonation_read_only",
+        message: "Sessão de acesso é somente leitura; não é possível alterar o nome de exibição.",
+      },
+      { status: 403 }
+    )
   }
 
   const body = await request.json().catch(() => null)

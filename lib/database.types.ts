@@ -712,6 +712,19 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["forum_saved_posts"]["Row"], "id" | "created_at">
         Update: Partial<Database["public"]["Tables"]["forum_saved_posts"]["Insert"]>
       }
+      forum_post_peripherals: {
+        Relationships: []
+        Row: {
+          post_id: string
+          peripheral_id: string
+          /** 'auto' = detectado ao publicar/editar; 'manual' = confirmado pelo autor; 'backfill' = script one-off. */
+          source: "auto" | "manual" | "backfill"
+          created_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["forum_post_peripherals"]["Row"], "source" | "created_at"> &
+          Partial<Pick<Database["public"]["Tables"]["forum_post_peripherals"]["Row"], "source">>
+        Update: Partial<Database["public"]["Tables"]["forum_post_peripherals"]["Insert"]>
+      }
       forum_categories: {
         Relationships: []
         Row: {

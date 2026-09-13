@@ -8,6 +8,7 @@ import { SITE_URL } from "@/lib/site-url"
 import { getPeripheralByIdOrSlug, listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 import { listProductsByPeripheral } from "@/lib/server/repositories/store-repository"
 import { listPublishedPostsByPeripheral } from "@/lib/server/repositories/blog-repository"
+import { getPostsForPeripheral } from "@/lib/server/repositories/forum-peripherals-repository"
 import {
   countPeripheralReviews,
   getPeripheralReviewsWithStats,
@@ -111,7 +112,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   // As quatro buscas abaixo só dependem de `data`/`details`, não umas das
   // outras — rodam em paralelo em vez de em série para não empilhar 4
   // round-trips sequenciais numa página com revalidate=30.
-  const [linkedSwitch, linkedProducts, relatedPosts, allPeripherals, reviewStats] = await Promise.all([
+  const [linkedSwitch, linkedProducts, relatedPosts, allPeripherals, reviewStats, forumPosts] = await Promise.all([
     // Switch vinculado: se o admin apontou este teclado/mouse a um Switch
     // cadastrado, a linha "Switch" vira um link para a página daquele switch.
     details.switchPeripheralId
@@ -124,6 +125,9 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
     // do JSON-LD; a lista paginada de reviews é carregada pelo próprio
     // componente de detalhe.
     getPeripheralReviewsWithStats(data.id, { limit: 1 }),
+    // Tópicos do fórum que citam este periférico — o link reverso do vínculo
+    // criado ao publicar/editar um post.
+    getPostsForPeripheral(data.id),
   ])
 
   // Todos os anúncios ativos deste periférico (venda normal primeiro — ver
@@ -244,6 +248,7 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
         data={data}
         rankBadge={rankBadge}
         relatedPosts={relatedPosts}
+        forumPosts={forumPosts}
         linkedStore={linkedStore}
         linkedStores={linkedStores}
         linkedSwitch={linkedSwitch ? { id: linkedSwitch.id, name: linkedSwitch.name } : null}

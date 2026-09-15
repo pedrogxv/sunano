@@ -1167,7 +1167,7 @@ export function getMostActiveProfilesByPeriod(
  * Ids fixos dos moderadores da comunidade, exibidos na sidebar do Fórum.
  *
  * Não é o mesmo conceito do `role` de `admin_profiles` (que controla acesso
- * ao painel admin): Ryantech, por exemplo, tem `role: "admin"` ali, não
+ * ao painel admin): Ryantech, por exemplo, tem `role: "editor"` ali, não
  * "moderator". Lista mantida à mão até existir um flag próprio para
  * "moderador da comunidade".
  */

@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { sanitizeNextPath } from "@/lib/auth-mfa"
-import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { resolveChannelId } from "@/lib/server/integrations/youtube"
 import { confirmYoutubeSubscription } from "@/lib/server/repositories/youtube-subscription-repository"
+import { exchangeScopedOAuthCode } from "@/lib/server/scoped-oauth-exchange"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 
 /**
- * Callback dedicado do fluxo "Confirmar inscrição no YouTube" — separado de
+ * Callback dedicado do fluxo "Confirmar inscrição no YouTube", separado de
  * app/auth/callback/route.ts (login/cadastro) porque aqui o OAuth pede um
  * scope extra (youtube.readonly) só usado para checar a inscrição, e não
  * deve se misturar com a lógica de criar perfil/sessão do login normal.
  *
+ * Nunca troca a conta logada: mesma guarda do callback do Discord, ver
+ * lib/server/scoped-oauth-exchange.ts.
+ *
  * `session.provider_token` (access token do Google) só é lido aqui, na
- * própria requisição — nunca persistido.
+ * própria requisição, e nunca persistido.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
@@ -24,18 +27,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}${next}?youtube=error`)
   }
 
+  // `linkIdentity` recusou: essa conta Google já é identidade de outro perfil.
+  if (searchParams.get("error_code") === "identity_already_exists" || searchParams.get("error") === "identity_already_exists") {
+    return NextResponse.redirect(`${origin}${next}?youtube=account_in_use`)
+  }
+
   if (!code) {
     return NextResponse.redirect(`${origin}${next}?youtube=error`)
   }
 
-  const supabase = await createSupabaseServerClient()
-  const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-
-  if (exchangeError || !sessionData.session || !sessionData.user) {
-    return NextResponse.redirect(`${origin}${next}?youtube=error`)
+  const exchange = await exchangeScopedOAuthCode({
+    code,
+    provider: "google",
+    requestHeaders: request.headers,
+  })
+  if (!exchange.ok) {
+    return NextResponse.redirect(`${origin}${next}?youtube=${exchange.reason}`)
   }
 
-  const providerToken = sessionData.session.provider_token
+  const providerToken = exchange.providerToken
   if (!providerToken) {
     // Google não devolveu o access token (ex.: usuário já tinha consentido
     // antes e o prompt não forçou re-consentimento) — pede para tentar de novo.
@@ -76,7 +86,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${origin}${next}?youtube=not_subscribed`)
     }
 
-    await confirmYoutubeSubscription(sessionData.user.id)
+    await confirmYoutubeSubscription(exchange.userId)
     return NextResponse.redirect(`${origin}${next}?youtube=confirmed`)
   } catch (error) {
     console.error("[auth/youtube/callback] falha ao verificar inscrição:", error)

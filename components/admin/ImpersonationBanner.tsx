@@ -4,31 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Eye, LogOut } from "lucide-react"
 import { toast } from "sonner"
 
-import { IMPERSONATION_ACTIVE_COOKIE } from "@/lib/impersonation-shared"
-
-type ActiveState = { target: string; expiresAt: number }
+import {
+  readImpersonationActiveCookie as readActiveCookie,
+  type ImpersonationActiveState as ActiveState,
+} from "@/lib/client/impersonation"
 
 /** Altura da barra do topo e espessura da moldura, em px. Usadas tanto no
  *  layout (padding do body) quanto no desenho da moldura. */
 const BAR_HEIGHT = 44
 const FRAME_WIDTH = 3
-
-function readActiveCookie(): ActiveState | null {
-  if (typeof document === "undefined") return null
-  const match = document.cookie
-    .split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith(`${IMPERSONATION_ACTIVE_COOKIE}=`))
-  if (!match) return null
-  try {
-    const raw = decodeURIComponent(match.slice(IMPERSONATION_ACTIVE_COOKIE.length + 1))
-    const parsed = JSON.parse(raw) as ActiveState
-    if (!parsed || typeof parsed.expiresAt !== "number") return null
-    return parsed
-  } catch {
-    return null
-  }
-}
 
 function formatRemaining(ms: number): string {
   if (ms <= 0) return "expirando…"

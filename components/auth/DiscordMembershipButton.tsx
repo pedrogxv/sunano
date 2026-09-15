@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "sonner"
 
 import { DiscordIcon } from "@/components/auth/provider-icons"
-import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { DISCORD_MEMBERSHIP_OAUTH, startScopedOAuth } from "@/lib/client/start-scoped-oauth"
 import { cn } from "@/lib/utils"
 
 interface DiscordMembershipButtonProps {
@@ -17,14 +18,10 @@ interface DiscordMembershipButtonProps {
  * dedicado (app/auth/discord/callback/route.ts) que confere a participação no
  * servidor e credita a recompensa.
  *
- * `prompt: "consent"` força o Discord a sempre devolver o access token, mesmo
- * que a conta já tenha autorizado o app antes só com os scopes básicos do
- * login — sem isso o callback recebe `provider_token` nulo e não tem como
- * consultar `/users/@me/guilds`. Mesmo motivo do YoutubeSubscribeButton.
- *
  * Vale para os dois casos, e é por isso que é UM botão só: quem ainda não tem
  * Discord vinculado sai daqui com a conta conectada (aparece em /conta >
- * Contas vinculadas); quem já tem só confirma a participação.
+ * Contas vinculadas); quem já tem só confirma a participação. A escolha entre
+ * vincular e reautenticar fica em lib/client/start-scoped-oauth.ts.
  */
 export function DiscordMembershipButton({ requireLogin, className }: DiscordMembershipButtonProps) {
   const [loading, setLoading] = useState(false)
@@ -33,19 +30,9 @@ export function DiscordMembershipButton({ requireLogin, className }: DiscordMemb
     if (requireLogin && !requireLogin()) return
     setLoading(true)
 
-    const redirectTo = `${window.location.origin}/auth/discord/callback?next=${encodeURIComponent(window.location.pathname)}`
-
-    const { error } = await supabaseAuth.auth.signInWithOAuth({
-      provider: "discord",
-      options: {
-        redirectTo,
-        scopes: "identify guilds",
-        queryParams: { prompt: "consent" },
-      },
-    })
-
-    if (error) {
-      console.error("[DiscordMembershipButton] signInWithOAuth falhou:", error.message)
+    const errorMessage = await startScopedOAuth(DISCORD_MEMBERSHIP_OAUTH, window.location.pathname)
+    if (errorMessage) {
+      toast.error(errorMessage)
       setLoading(false)
     }
   }

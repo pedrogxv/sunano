@@ -24,7 +24,13 @@ export const metadata: Metadata = buildMetadata({
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ password_updated?: string; error?: string; deleted?: string; confirmed?: string }>
+  searchParams: Promise<{
+    password_updated?: string
+    error?: string
+    deleted?: string
+    confirmed?: string
+    discarded?: string
+  }>
 }) {
   const params = await searchParams
   const passwordUpdated = params.password_updated === "1"
@@ -36,6 +42,7 @@ export default async function LoginPage({
   const isTooManyAttempts = params.error === "too_many_attempts"
   const isEmailNotVerified = params.error === "email_not_verified"
   const accountDeleted = params.deleted === "1"
+  const newAccountDiscarded = params.discarded === "1"
   const emailConfirmed = params.confirmed === "1"
 
   return (
@@ -58,6 +65,15 @@ export default async function LoginPage({
             <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
               Sua conta foi excluída com sucesso. Nenhum e-mail de confirmação é enviado; a
               exclusão é imediata.
+            </div>
+          </AuthMotionBanner>
+        )}
+
+        {newAccountDiscarded && (
+          <AuthMotionBanner>
+            <div className="mb-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-foreground">
+              A conta nova foi cancelada. Entre pelo jeito que você já usa e, se quiser, vincule o
+              Discord ou o Google em Conta &gt; Conexões.
             </div>
           </AuthMotionBanner>
         )}

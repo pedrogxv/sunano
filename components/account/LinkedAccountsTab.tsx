@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DiscordIcon, GoogleIcon } from "@/components/auth/provider-icons"
+import { denyDuringImpersonation } from "@/lib/client/impersonation"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
@@ -83,6 +84,9 @@ export function LinkedAccountsTab({ onIdentitiesChange }: LinkedAccountsTabProps
   const totalIdentities = identities?.length ?? 0
 
   async function link(provider: ProviderKey) {
+    // `linkIdentity`/`unlinkIdentity` falam direto com o Supabase Auth, fora do
+    // proxy que deixa a sessão de acesso somente leitura.
+    if (denyDuringImpersonation()) return
     try {
       setBusy(provider)
       const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent("/conta#conexoes")}`
@@ -99,6 +103,7 @@ export function LinkedAccountsTab({ onIdentitiesChange }: LinkedAccountsTabProps
   async function unlink(provider: ProviderKey) {
     const identity = identities?.find((i) => i.provider === provider)
     if (!identity) return
+    if (denyDuringImpersonation()) return
     if (totalIdentities <= 1) {
       toast.error("Não é possível desvincular", {
         description: "Você precisa de pelo menos um método de login ativo.",

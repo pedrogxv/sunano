@@ -46,6 +46,7 @@ import { MiniProfileBgSection } from "@/components/aura/MiniProfileBgSection"
 import { AuraPeripheralSection } from "@/components/aura/AuraPeripheralSection"
 import type { PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
+import { getDiscordMembershipFeedback } from "@/lib/discord-membership"
 
 type AuraUsage = {
   balance: number
@@ -202,25 +203,15 @@ export function AuraCenterContent({
   // do YouTube acima: mostra o toast uma vez e limpa o query param.
   useEffect(() => {
     if (!discordStatus) return
+    const feedback = getDiscordMembershipFeedback(discordStatus)
+    toast[feedback.tone](feedback.message)
     if (discordStatus === "confirmed") {
-      toast.success("Discord conectado! +50 de Aura e a conquista No Discord.")
       setCurrentBalance((prev) => prev + 50)
       setDiscordOk(true)
     } else if (discordStatus === "already") {
-      // Membro confirmado, mas a recompensa já tinha sido creditada antes —
+      // Membro confirmado, mas a recompensa já tinha sido creditada antes:
       // não somar de novo no saldo, só refletir o estado da conquista.
-      toast.info("Você já tinha resgatado essa conquista.")
       setDiscordOk(true)
-    } else if (discordStatus === "not_member") {
-      toast.error("Não encontramos você no nosso servidor do Discord. Entre no servidor e tente de novo.")
-    } else if (discordStatus === "account_in_use") {
-      toast.error("Essa conta do Discord já foi usada por outro usuário.")
-    } else if (discordStatus === "canceled") {
-      toast.error("Você cancelou a autorização do Discord.")
-    } else if (discordStatus === "no_token") {
-      toast.error("O Discord não devolveu a autorização. Tente novamente.")
-    } else {
-      toast.error("Não foi possível confirmar seu Discord. Tente novamente.")
     }
     router.replace("/aura", { scroll: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "sonner"
 import { Youtube } from "lucide-react"
 
-import { supabaseAuth } from "@/lib/client/supabase-auth"
+import { startScopedOAuth, YOUTUBE_SUBSCRIPTION_OAUTH } from "@/lib/client/start-scoped-oauth"
 import { cn } from "@/lib/utils"
 
 interface YoutubeSubscribeButtonProps {
@@ -15,9 +16,8 @@ interface YoutubeSubscribeButtonProps {
  * Dispara o OAuth do Google pedindo o scope extra `youtube.readonly` (não
  * usado no login normal, ver components/auth/OAuthButton.tsx) e volta para
  * um callback dedicado (app/auth/youtube/callback/route.ts) que confere a
- * inscrição e credita a recompensa. `prompt: "consent"` força o Google a
- * sempre devolver o access token, mesmo que a conta já tenha autorizado o
- * app antes só com os scopes básicos do login.
+ * inscrição e credita a recompensa. Vincular ou reautenticar sem trocar de
+ * conta: ver lib/client/start-scoped-oauth.ts.
  */
 export function YoutubeSubscribeButton({ requireLogin, className }: YoutubeSubscribeButtonProps) {
   const [loading, setLoading] = useState(false)
@@ -26,19 +26,9 @@ export function YoutubeSubscribeButton({ requireLogin, className }: YoutubeSubsc
     if (requireLogin && !requireLogin()) return
     setLoading(true)
 
-    const redirectTo = `${window.location.origin}/auth/youtube/callback?next=${encodeURIComponent(window.location.pathname)}`
-
-    const { error } = await supabaseAuth.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo,
-        scopes: "https://www.googleapis.com/auth/youtube.readonly",
-        queryParams: { access_type: "offline", prompt: "consent" },
-      },
-    })
-
-    if (error) {
-      console.error("[YoutubeSubscribeButton] signInWithOAuth falhou:", error.message)
+    const errorMessage = await startScopedOAuth(YOUTUBE_SUBSCRIPTION_OAUTH, window.location.pathname)
+    if (errorMessage) {
+      toast.error(errorMessage)
       setLoading(false)
     }
   }

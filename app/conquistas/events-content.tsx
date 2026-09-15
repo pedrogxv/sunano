@@ -10,6 +10,7 @@ import { AchievementsGrid } from "@/components/profile/AchievementsGrid"
 import { YoutubeSubscribeButton } from "@/components/auth/YoutubeSubscribeButton"
 import { DiscordMembershipButton } from "@/components/auth/DiscordMembershipButton"
 import { notifyAuraChanged } from "@/lib/client/aura-events"
+import { getDiscordMembershipFeedback } from "@/lib/discord-membership"
 import { auraPriceForVip } from "@/lib/aura-pricing"
 import type { EventDisplay } from "@/lib/events"
 import type { AchievementTrack, ShowcaseAchievement } from "@/lib/achievements"
@@ -86,22 +87,14 @@ export function EventsContent({
     if (!discordEnabled) return
     const discordStatus = searchParams.get("discord")
     if (!discordStatus) return
+    const feedback = getDiscordMembershipFeedback(discordStatus)
+    toast[feedback.tone](feedback.message)
     if (discordStatus === "confirmed") {
-      toast.success("Discord conectado! +50 de Aura e a conquista No Discord.")
       setDiscordConfirmed(true)
       setAuraBalance((prev) => prev + 50)
       notifyAuraChanged()
     } else if (discordStatus === "already") {
-      toast.info("Você já tinha resgatado essa conquista.")
       setDiscordConfirmed(true)
-    } else if (discordStatus === "not_member") {
-      toast.error("Não encontramos você no nosso servidor do Discord. Entre no servidor e tente de novo.")
-    } else if (discordStatus === "account_in_use") {
-      toast.error("Essa conta do Discord já foi usada por outro usuário.")
-    } else if (discordStatus === "canceled") {
-      toast.error("Você cancelou a autorização do Discord.")
-    } else {
-      toast.error("Não foi possível confirmar seu Discord. Tente novamente.")
     }
     router.replace("/conquistas", { scroll: false })
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -3,12 +3,17 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, Bird, Check, Flame, MessageSquare, Sparkles, SquarePen, Youtube } from "lucide-react"
+import { toast } from "sonner"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { AURA_CHANGED_EVENT } from "@/lib/client/aura-events"
-import { supabaseAuth } from "@/lib/client/supabase-auth"
+import {
+  DISCORD_MEMBERSHIP_OAUTH,
+  startScopedOAuth,
+  YOUTUBE_SUBSCRIPTION_OAUTH,
+} from "@/lib/client/start-scoped-oauth"
 import {
   DAILY_MISSION_KEYS,
   DAILY_MISSION_REWARDS,
@@ -126,36 +131,23 @@ export function AuraMissionsBadge() {
     void loadDiscordStatus()
   }, [loadBadge, loadYoutubeStatus, loadDiscordStatus])
 
+  // O popover existe em todas as páginas, mas só /aura e /conquistas mostram o
+  // `?youtube=`/`?discord=` que o callback devolve. Voltar para a página atual
+  // (como era) terminava o fluxo sem aviso nenhum fora dessas duas.
   async function handleYoutubeConfirm() {
     setYoutubeLoading(true)
-    const redirectTo = `${window.location.origin}/auth/youtube/callback?next=${encodeURIComponent(window.location.pathname)}`
-    const { error } = await supabaseAuth.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo,
-        scopes: "https://www.googleapis.com/auth/youtube.readonly",
-        queryParams: { access_type: "offline", prompt: "consent" },
-      },
-    })
-    if (error) {
-      console.error("[AuraMissionsBadge] signInWithOAuth falhou:", error.message)
+    const errorMessage = await startScopedOAuth(YOUTUBE_SUBSCRIPTION_OAUTH, "/aura")
+    if (errorMessage) {
+      toast.error(errorMessage)
       setYoutubeLoading(false)
     }
   }
 
   async function handleDiscordConfirm() {
     setDiscordLoading(true)
-    const redirectTo = `${window.location.origin}/auth/discord/callback?next=${encodeURIComponent(window.location.pathname)}`
-    const { error } = await supabaseAuth.auth.signInWithOAuth({
-      provider: "discord",
-      options: {
-        redirectTo,
-        scopes: "identify guilds",
-        queryParams: { prompt: "consent" },
-      },
-    })
-    if (error) {
-      console.error("[AuraMissionsBadge] signInWithOAuth (discord) falhou:", error.message)
+    const errorMessage = await startScopedOAuth(DISCORD_MEMBERSHIP_OAUTH, "/aura")
+    if (errorMessage) {
+      toast.error(errorMessage)
       setDiscordLoading(false)
     }
   }

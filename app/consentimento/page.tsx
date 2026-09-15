@@ -7,6 +7,7 @@ import { ShieldCheck } from "lucide-react"
 import { AuthBackground } from "@/components/auth/AuthBackground"
 import { LgpdConsentForm } from "@/components/auth/LgpdConsentForm"
 import { sanitizeNextPath } from "@/lib/auth-mfa"
+import { freshSocialProviderLabel, isFreshSocialAccount } from "@/lib/server/auth/fresh-social-account"
 import { hasRecordedLgpdConsent } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
@@ -49,6 +50,11 @@ export default async function ConsentimentoPage({
     redirect(next)
   }
 
+  // Conta que acabou de nascer de um login social: pode ser alguém que já tem
+  // conta com outro e-mail e entrou pelo Discord/Google sem querer. Ver
+  // lib/server/auth/fresh-social-account.ts.
+  const freshSocialProvider = isFreshSocialAccount(user) ? freshSocialProviderLabel(user) : null
+
   return (
     <div className="relative isolate flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
       <AuthBackground />
@@ -68,8 +74,19 @@ export default async function ConsentimentoPage({
           </p>
         </div>
 
+        {freshSocialProvider && (
+          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+            <p className="font-semibold">Esta é uma conta nova.</p>
+            <p className="mt-1 text-muted-foreground">
+              Ela foi criada agora pelo login com {freshSocialProvider}. Se você já tem conta no
+              Sunano com outro e-mail, não continue: cancele esta conta nova, entre pela conta que
+              já existe e vincule o {freshSocialProvider} em Conta &gt; Conexões.
+            </p>
+          </div>
+        )}
+
         <div className="rounded-2xl border border-border bg-card p-8 shadow-xl shadow-black/30">
-          <LgpdConsentForm next={next} />
+          <LgpdConsentForm next={next} isFreshSocialAccount={Boolean(freshSocialProvider)} />
         </div>
       </div>
     </div>

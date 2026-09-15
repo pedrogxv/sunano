@@ -18,7 +18,7 @@ function AcceptButton({ disabled }: { disabled: boolean }) {
   )
 }
 
-function DeclineButton() {
+function DeclineButton({ label }: { label: string }) {
   const { pending } = useFormStatus()
   return (
     <button
@@ -26,12 +26,21 @@ function DeclineButton() {
       disabled={pending}
       className="text-xs text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
     >
-      Não aceito, sair
+      {label}
     </button>
   )
 }
 
-export function LgpdConsentForm({ next }: { next: string }) {
+interface LgpdConsentFormProps {
+  next: string
+  /**
+   * Conta recém-criada por login social: recusar apaga a conta em vez de só
+   * sair (ver app/consentimento/actions.ts), e o botão diz isso.
+   */
+  isFreshSocialAccount?: boolean
+}
+
+export function LgpdConsentForm({ next, isFreshSocialAccount = false }: LgpdConsentFormProps) {
   const [state, action] = useActionState(acceptLgpdConsentAction, { error: null })
   const [checked, setChecked] = useState(false)
 
@@ -71,7 +80,7 @@ export function LgpdConsentForm({ next }: { next: string }) {
       </form>
 
       <form action={declineLgpdConsentAction} className="flex justify-center">
-        <DeclineButton />
+        <DeclineButton label={isFreshSocialAccount ? "Não aceito ou já tenho conta: cancelar esta conta nova" : "Não aceito, sair"} />
       </form>
     </div>
   )

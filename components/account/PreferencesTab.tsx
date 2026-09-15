@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useLocale } from "@/components/providers/locale-context"
+import { denyDuringImpersonation } from "@/lib/client/impersonation"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 import { LANGUAGE_OPTIONS, type LocaleCode } from "@/lib/i18n"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
@@ -45,6 +46,10 @@ export function PreferencesTab() {
   }
 
   async function signOutEverywhere() {
+    // `scope: "global"` na sessão de acesso derrubaria todas as sessões da
+    // pessoa real, em todos os aparelhos. Fala direto com o Supabase Auth,
+    // então o proxy não barra.
+    if (denyDuringImpersonation()) return
     try {
       setSigningOut(true)
       await supabaseAuth.auth.signOut({ scope: "global" })

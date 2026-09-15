@@ -19,6 +19,7 @@ import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { denyDuringImpersonation } from "@/lib/client/impersonation"
 import { supabaseAuth } from "@/lib/client/supabase-auth"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
@@ -124,8 +125,12 @@ export function SecurityTab({ email, onFactorsChange }: SecurityTabProps) {
     }
   }
 
+  // As ações abaixo falam direto com o Supabase Auth pelo navegador, fora do
+  // proxy que deixa a sessão de acesso somente leitura. Sem a trava, o WEB
+  // MASTER "logado como" alguém cadastraria ou removeria o 2FA dessa pessoa.
   async function sendResetEmail() {
     if (!email) return
+    if (denyDuringImpersonation()) return
     try {
       setSendingReset(true)
       const redirectTo = `${window.location.origin}/auth/callback?type=recovery`
@@ -140,6 +145,7 @@ export function SecurityTab({ email, onFactorsChange }: SecurityTabProps) {
   }
 
   async function startEnroll() {
+    if (denyDuringImpersonation()) return
     try {
       setBusyMfa(true)
       // Remove fatores TOTP não verificados que tenham sobrado de tentativas anteriores.
@@ -161,6 +167,7 @@ export function SecurityTab({ email, onFactorsChange }: SecurityTabProps) {
 
   async function confirmEnroll() {
     if (!enroll) return
+    if (denyDuringImpersonation()) return
     try {
       setBusyMfa(true)
       const challenge = await supabaseAuth.auth.mfa.challenge({ factorId: enroll.factorId })
@@ -194,6 +201,7 @@ export function SecurityTab({ email, onFactorsChange }: SecurityTabProps) {
 
   async function disable2fa() {
     if (!verifiedFactorId) return
+    if (denyDuringImpersonation()) return
     try {
       setBusyMfa(true)
       const { error } = await supabaseAuth.auth.mfa.unenroll({ factorId: verifiedFactorId })

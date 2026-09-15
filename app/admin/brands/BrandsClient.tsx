@@ -274,8 +274,8 @@ export function BrandsClient({
                                   Excluir marca &quot;{brand.name}&quot;?
                                 </AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Essa ação não pode ser desfeita. Se houver periféricos cadastrados com esta
-                                  marca, a exclusão será bloqueada.
+                                  Essa ação não pode ser desfeita. Se houver periféricos ou um software
+                                  cadastrados com esta marca, a exclusão será bloqueada.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <div className="space-y-1.5">

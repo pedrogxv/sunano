@@ -138,6 +138,7 @@ type Translations = {
   nav: {
     home: string
     peripherals: string
+    softwares: string
     content: string
     shop: string
     news: string
@@ -1161,6 +1162,7 @@ export const translations: Record<LocaleCode, Translations> = {
     nav: {
       home: "Início",
       peripherals: "Periféricos",
+      softwares: "Softwares",
       content: "Comunidade",
       shop: "Loja",
       news: "Notícias",
@@ -2624,6 +2626,7 @@ export const translations: Record<LocaleCode, Translations> = {
     nav: {
       home: "Home",
       peripherals: "Peripherals",
+      softwares: "Software",
       content: "Community",
       shop: "Store",
       news: "News",

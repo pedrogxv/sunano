@@ -88,6 +88,49 @@ export type Database = {
         Insert: Omit<Database["public"]["Tables"]["brands"]["Row"], "id" | "created_at" | "updated_at">
         Update: Partial<Database["public"]["Tables"]["brands"]["Insert"]>
       }
+      softwares: {
+        Relationships: []
+        Row: {
+          id: string
+          brand_id: string
+          logo_url: string
+          hub_url: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: Omit<Database["public"]["Tables"]["softwares"]["Row"], "id" | "created_at" | "updated_at">
+        Update: Partial<Database["public"]["Tables"]["softwares"]["Insert"]>
+      }
+      user_favorite_softwares: {
+        Relationships: []
+        Row: {
+          user_id: string
+          software_id: string
+          position: number
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          software_id: string
+          position?: number
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_favorite_softwares"]["Insert"]>
+      }
+      software_clicks: {
+        Relationships: []
+        Row: {
+          software_id: string
+          visitor_hash: string
+          clicked_on: string
+        }
+        Insert: {
+          software_id: string
+          visitor_hash: string
+          clicked_on?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["software_clicks"]["Insert"]>
+      }
       user_profiles: {
         Relationships: []
         Row: {
@@ -435,6 +478,7 @@ export type Database = {
           awarded_at: string
           pinned: boolean
           pinned_order: number | null
+          granted_by: string | null
         }
         Insert: {
           user_id: string
@@ -442,6 +486,7 @@ export type Database = {
           awarded_at?: string
           pinned?: boolean
           pinned_order?: number | null
+          granted_by?: string | null
         }
         Update: Partial<Database["public"]["Tables"]["user_medals"]["Insert"]>
       }
@@ -477,10 +522,11 @@ export type Database = {
           id: string
           slug: string
           medal_id: string
-          criteria_type: "first_n_signups" | "manual_opt_in" | "aura_redeem"
+          criteria_type: "first_n_signups" | "manual_opt_in" | "aura_redeem" | "staff_grant"
           max_participants: number | null
           current_count: number
           aura_cost: number | null
+          requires_vip: boolean
           active: boolean
           start_date: string
           end_date: string | null
@@ -2410,12 +2456,24 @@ export type Database = {
         Args: { p_user_id: string; p_peripheral_id: string; p_limit: number }
         Returns: "liked" | "already_liked" | "limit_reached"
       }
+      add_favorite_software: {
+        Args: { p_user_id: string; p_software_id: string; p_limit: number }
+        Returns: "favorited" | "already_favorited" | "limit_reached"
+      }
+      software_click_ranking: {
+        Args: { p_days: number; p_limit: number }
+        Returns: { software_id: string; clicks: number }[]
+      }
       increment_profile_views: {
         Args: { p_user_id: string }
         Returns: undefined
       }
       claim_event_medal: {
         Args: { p_event_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      grant_event_medal: {
+        Args: { p_event_id: string; p_user_id: string; p_granted_by: string }
         Returns: boolean
       }
       redeem_aura_item: {

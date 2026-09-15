@@ -1419,6 +1419,23 @@ button:not(:disabled):hover .aura-icon-holder {
   }
 }
 
+/* Ícone de chama do card "Aura atual" — mesmo tremular de escala/rotação do
+   ícone hero acima, mais o glow pulsante de .nav-fire-icon, pra um ícone
+   pequeno que também "se mexe" e não só brilha. */
+.aura-balance-flame {
+  color: #ff6a1f;
+  animation:
+    aura-hero-flame-flicker 1.8s ease-in-out infinite,
+    fire-icon-glow-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-balance-flame {
+    animation: none;
+    filter: drop-shadow(0 0 3px oklch(0.7 0.2 40 / 0.7));
+  }
+}
+
 /* ==========================================================================
    Toasts (Sonner) — deck empilhado
    --------------------------------------------------------------------------

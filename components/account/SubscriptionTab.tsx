@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { Crown, Loader2, ShieldX } from "lucide-react"
 import { toast } from "sonner"
 
@@ -134,6 +134,22 @@ export function SubscriptionTab() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Agradecimento quando o VIP passa de inativo pra ativo — cobre tanto o
+  // PIX (confirmado pelo polling abaixo) quanto o cartão (confirmado pelo
+  // reload de `vip=success`, mais adiante). `null` no início é "ainda não
+  // sabemos": só dispara numa transição false -> true de fato, nunca no
+  // primeiro load de quem já chega VIP.
+  const wasVipActiveRef = useRef<boolean | null>(null)
+  useEffect(() => {
+    if (!state) return
+    if (wasVipActiveRef.current === false && state.vipActive) {
+      toast.success("Obrigado por assinar o VIP", {
+        description: "Seu apoio nos ajuda demais a manter o projeto.",
+      })
+    }
+    wasVipActiveRef.current = state.vipActive
+  }, [state])
 
   // Enquanto houver uma cobrança PIX em aberto, reconsulta o estado: a
   // confirmação chega pelo webhook (fora desta aba), então sem polling o

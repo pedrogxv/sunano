@@ -12,13 +12,14 @@ const createEventSchema = z
     rarity: z.enum(["common", "rare", "epic", "legendary"]).optional().default("legendary"),
     maxParticipants: z.number().int().positive().optional().nullable(),
     criteriaType: z
-      .enum(["first_n_signups", "manual_opt_in", "aura_redeem"])
+      .enum(["first_n_signups", "manual_opt_in", "aura_redeem", "staff_grant"])
       .optional()
       .default("first_n_signups"),
     auraCost: z.number().int().positive().optional().nullable(),
+    requiresVip: z.boolean().optional().default(false),
   })
   .superRefine((data, ctx) => {
-    if (data.criteriaType !== "aura_redeem" && !data.maxParticipants) {
+    if (data.criteriaType !== "aura_redeem" && data.criteriaType !== "staff_grant" && !data.maxParticipants) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["maxParticipants"],
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
       maxParticipants: parsed.data.maxParticipants ?? null,
       criteriaType: parsed.data.criteriaType,
       auraCost: parsed.data.auraCost ?? null,
+      requiresVip: parsed.data.requiresVip,
     })
     return NextResponse.json({ event })
   } catch (err) {

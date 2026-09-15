@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
 import { EventForm } from "../form"
+import { StaffGrantPanel } from "../StaffGrantPanel"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import type { EventDisplay } from "@/lib/events"
@@ -16,22 +17,24 @@ export default function EditEventPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/admin/events/${id}`)
-        const data = (await res.json()) as { event?: EventDisplay; error?: string }
-        if (!res.ok || !data.event) throw new Error(data.error ?? "Conquista não encontrada")
-        setEvent(data.event)
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Erro ao carregar"
-        setError(message)
-        toast.error("Erro ao carregar conquista", { description: message })
-      } finally {
-        setLoading(false)
-      }
+  async function loadEvent() {
+    try {
+      const res = await fetch(`/api/admin/events/${id}`)
+      const data = (await res.json()) as { event?: EventDisplay; error?: string }
+      if (!res.ok || !data.event) throw new Error(data.error ?? "Conquista não encontrada")
+      setEvent(data.event)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao carregar"
+      setError(message)
+      toast.error("Erro ao carregar conquista", { description: message })
+    } finally {
+      setLoading(false)
     }
-    load()
+  }
+
+  useEffect(() => {
+    loadEvent()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   usePageHeader("Editar conquista", event ? event.name : "Atualize os dados da conquista e da medalha.")
@@ -74,6 +77,9 @@ export default function EditEventPage() {
           onCancel={() => router.push("/admin/eventos")}
         />
       </div>
+      {event.criteriaType === "staff_grant" && (
+        <StaffGrantPanel eventId={event.id} onGranted={loadEvent} />
+      )}
     </div>
   )
 }

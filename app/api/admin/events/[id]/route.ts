@@ -11,6 +11,7 @@ const updateEventSchema = z.object({
   rarity: z.enum(["common", "rare", "epic", "legendary"]).optional(),
   maxParticipants: z.number().int().positive().optional().nullable(),
   auraCost: z.number().int().positive().optional().nullable(),
+  requiresVip: z.boolean().optional(),
   active: z.boolean().optional(),
 })
 

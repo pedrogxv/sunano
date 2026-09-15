@@ -139,7 +139,7 @@ export function MedalCard({
                 alt={event.name}
                 width={128}
                 height={128}
-                className="size-[72%] object-contain"
+                className="size-[85%] object-contain"
               />
             ) : (
               <Award className="size-12" />
@@ -147,11 +147,21 @@ export function MedalCard({
           </div>
 
           <div className="flex items-center justify-between gap-2">
-            <span
-              className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-              style={{ backgroundColor: `color-mix(in oklch, ${accent} 18%, transparent)`, color: accent }}
-            >
-              {EVENT_CRITERIA_SHORT_LABEL[event.criteriaType]}
+            <span className="flex items-center gap-1">
+              <span
+                className="rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                style={{ backgroundColor: `color-mix(in oklch, ${accent} 18%, transparent)`, color: accent }}
+              >
+                {EVENT_CRITERIA_SHORT_LABEL[event.criteriaType]}
+              </span>
+              {event.requiresVip && (
+                <span
+                  className="aura-vip-discount-badge flex items-center gap-0.5 rounded-full px-1.5 py-[3px] text-[9px] font-black uppercase leading-none tracking-wide"
+                  title="Exclusiva para VIP"
+                >
+                  <Crown className="size-2.5" strokeWidth={2.5} />
+                </span>
+              )}
             </span>
             {auraPrice.discounted && !claimed && (
               <span className="aura-vip-discount-badge flex items-center gap-0.5 rounded-full px-1.5 py-[3px] text-[9px] font-black uppercase leading-none tracking-wide">

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { CheckCircle2, Crown, Loader2, Lock } from "lucide-react"
+import { CheckCircle2, Crown, Flame, Loader2, Lock } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
@@ -53,11 +53,21 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, 
     )
   }
 
+  if (event.criteriaType === "staff_grant") {
+    return (
+      <p className="text-center text-[10px] leading-snug text-muted-foreground/80">
+        Concedida apenas pela equipe, como premiação.
+      </p>
+    )
+  }
+
   if (event.criteriaType === "first_n_signups") {
     return (
       <p className="text-center text-[10px] leading-snug text-muted-foreground/80">
         {isLoggedIn ? (
-          "Concedida automaticamente enquanto houver vagas."
+          event.requiresVip
+            ? "Concedida automaticamente a VIPs, enquanto houver vagas."
+            : "Concedida automaticamente enquanto houver vagas."
         ) : (
           <>
             Concedida no cadastro.{" "}
@@ -77,6 +87,15 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, 
       <Button size="sm" variant="outline" disabled className="w-full gap-1.5 text-xs">
         <Lock className="size-3.5" />
         Sem vagas
+      </Button>
+    )
+  }
+
+  if (event.requiresVip && isLoggedIn && !isVip) {
+    return (
+      <Button size="sm" variant="outline" disabled className="w-full gap-1.5 text-xs">
+        <Crown className="size-3.5" />
+        Exclusiva para VIP
       </Button>
     )
   }
@@ -115,10 +134,21 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, 
                 e.stopPropagation()
               }}
               disabled={pending}
-              className="w-full gap-1.5 text-xs"
+              className="w-full gap-1.5 border-none bg-gradient-to-b from-orange-500 to-red-600 py-2.5 text-white shadow-sm shadow-orange-500/20 hover:brightness-110 disabled:opacity-60"
             >
-              {pending ? <Loader2 className="size-3.5 animate-spin" /> : null}
-              {pending ? "Resgatando..." : label}
+              {pending ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Resgatando...
+                </>
+              ) : (
+                <>
+                  <Flame className="size-4" fill="currentColor" strokeWidth={1.5} />
+                  <span className="text-lg font-black leading-none tabular-nums">
+                    {price.finalPrice} Aura
+                  </span>
+                </>
+              )}
             </Button>
           </AlertDialogTrigger>
           {!pending && (
@@ -129,11 +159,10 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, 
         </div>
         <AlertDialogContent onClick={(e) => e.stopPropagation()}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Gastar {price.finalPrice} Aura para resgatar?</AlertDialogTitle>
+            <AlertDialogTitle>Use {price.finalPrice} Aura para resgatar essa conquista</AlertDialogTitle>
             <AlertDialogDescription>
-              Você vai <strong className="text-foreground">perder {price.finalPrice} de Aura</strong> do
-              seu saldo para pegar a medalha &quot;{event.name}&quot;. Seu saldo atual é {auraBalance}{" "}
-              Aura. Deseja continuar?
+              {price.finalPrice} Aura serão consumidas para adquirir essa Conquista. Aura é farmável, as
+              conquistas são ETERNAS 🔥🔥🔥
             </AlertDialogDescription>
           </AlertDialogHeader>
           {price.discounted && (

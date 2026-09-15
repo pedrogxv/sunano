@@ -108,22 +108,30 @@ export async function updateBrand(id: string, name: string): Promise<BrandResult
 }
 
 /**
- * Exclui uma marca. Bloqueia se houver periféricos vinculados — evita deixar
- * o `on delete restrict` do banco estourar como erro cru e permite informar
- * quantos periféricos dependem da marca.
+ * Exclui uma marca. Bloqueia se houver periféricos ou card de Softwares
+ * vinculados: evita deixar o `on delete restrict` do banco estourar como
+ * erro cru e permite informar o que depende da marca.
  */
 export async function deleteBrand(id: string): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
   const db = createSupabaseAdminClient()
 
-  const { count } = await db
-    .from("peripherals")
-    .select("id", { count: "exact", head: true })
-    .eq("brand_id", id)
+  const [{ count }, { count: softwareCount }] = await Promise.all([
+    db.from("peripherals").select("id", { count: "exact", head: true }).eq("brand_id", id),
+    db.from("softwares").select("id", { count: "exact", head: true }).eq("brand_id", id),
+  ])
 
   if ((count ?? 0) > 0) {
     return {
       ok: false,
       error: `Não é possível excluir: ${count} periférico(s) usam esta marca.`,
+      status: 409,
+    }
+  }
+
+  if ((softwareCount ?? 0) > 0) {
+    return {
+      ok: false,
+      error: "Não é possível excluir: esta marca tem um card em Softwares. Exclua o software primeiro.",
       status: 409,
     }
   }

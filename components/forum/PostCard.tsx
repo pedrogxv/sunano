@@ -368,6 +368,7 @@ export function PostCard({
           size={9}
           onClick={(event) => event.stopPropagation()}
           className="pointer-events-auto relative z-10"
+          isVip={isVipActive(post.author_account_tier, post.author_vip_expires_at)}
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -375,6 +376,7 @@ export function PostCard({
               author={{ userId: post.user_id, displayName: post.author_display_name, displaySlug: post.author_display_slug }}
               onClick={(event) => event.stopPropagation()}
               className="pointer-events-auto relative z-10 font-semibold"
+              isVip={isVipActive(post.author_account_tier, post.author_vip_expires_at)}
             />
             <AuthorTierBadge tier={post.author_account_tier} vipExpiresAt={post.author_vip_expires_at} />
             <AuthorSpecialTagBadge slug={post.author_display_slug} />

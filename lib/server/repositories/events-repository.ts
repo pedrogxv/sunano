@@ -4,6 +4,9 @@ import { revalidateTag, unstable_cache } from "next/cache"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { parseSlug } from "@/lib/format"
+import { isVipActive, profileMediaProxyUrl } from "@/lib/account-tier"
+import { escapeLikePattern, escapeOrFilterValue } from "@/lib/server/repositories/_shared"
+import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 import type { MedalRarity } from "@/lib/profile-showcase"
 import type { EventCriteriaType, EventDisplay } from "@/lib/events"
 
@@ -16,7 +19,7 @@ import type { EventCriteriaType, EventDisplay } from "@/lib/events"
  */
 
 const EVENT_SELECT =
-  "id, slug, medal_id, criteria_type, max_participants, current_count, aura_cost, active, start_date, end_date, medals ( name, description, icon_url, rarity )"
+  "id, slug, medal_id, criteria_type, max_participants, current_count, aura_cost, requires_vip, active, start_date, end_date, sort_order, medals ( name, description, icon_url, rarity )"
 
 type MedalJoin = {
   name: string
@@ -33,9 +36,11 @@ type EventRow = {
   max_participants: number | null
   current_count: number
   aura_cost: number | null
+  requires_vip: boolean
   active: boolean
   start_date: string
   end_date: string | null
+  sort_order: number
   medals: MedalJoin | MedalJoin[] | null
 }
 
@@ -54,9 +59,11 @@ function toEventDisplay(row: EventRow): EventDisplay | null {
     maxParticipants: row.max_participants,
     currentCount: row.current_count,
     auraCost: row.aura_cost,
+    requiresVip: row.requires_vip,
     active: row.active,
     startDate: row.start_date,
     endDate: row.end_date,
+    sortOrder: row.sort_order,
   }
 }
 
@@ -66,6 +73,7 @@ async function fetchActiveEventsForDisplay(): Promise<EventDisplay[]> {
   const { data, error } = await db
     .from("events")
     .select(EVENT_SELECT)
+    .order("sort_order", { ascending: true })
     .order("start_date", { ascending: false })
 
   if (error) {
@@ -145,11 +153,17 @@ export type EventInput = {
   maxParticipants: number | null
   criteriaType: EventCriteriaType
   auraCost: number | null
+  requiresVip: boolean
+}
+
+/** Vagas viram teto opcional pra aura_redeem (custo dita quem pode) e staff_grant (a Staff que decide). */
+function requiresMaxParticipants(criteriaType: EventCriteriaType): boolean {
+  return criteriaType !== "aura_redeem" && criteriaType !== "staff_grant"
 }
 
 /** Cria a medalha do evento e o evento em si (nessa ordem, por causa da FK). */
 export async function createEvent(input: EventInput): Promise<EventDisplay> {
-  if (input.criteriaType !== "aura_redeem" && !input.maxParticipants) {
+  if (requiresMaxParticipants(input.criteriaType) && !input.maxParticipants) {
     throw new Error("Informe o número de vagas.")
   }
   if (input.criteriaType === "aura_redeem" && !input.auraCost) {
@@ -175,6 +189,15 @@ export async function createEvent(input: EventInput): Promise<EventDisplay> {
     throw medalError ?? new Error("Erro ao criar a medalha do evento.")
   }
 
+  // Fim da fila: maior sort_order existente + 1, mesmo padrão de
+  // store-banners-repository.ts.
+  const { data: last } = await db
+    .from("events")
+    .select("sort_order")
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
   const eventSlug = await uniqueSlug("events", input.name)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: event, error: eventError } = await (db.from("events") as any)
@@ -186,7 +209,10 @@ export async function createEvent(input: EventInput): Promise<EventDisplay> {
       // Nunca persiste custo de aura fora do tipo aura_redeem, mesmo que o
       // payload informe um por engano.
       aura_cost: input.criteriaType === "aura_redeem" ? input.auraCost : null,
+      // staff_grant já é escolha a dedo da Staff — requires_vip não se aplica.
+      requires_vip: input.criteriaType === "staff_grant" ? false : input.requiresVip,
       active: true,
+      sort_order: ((last as { sort_order: number } | null)?.sort_order ?? -1) + 1,
     })
     .select(EVENT_SELECT)
     .single()
@@ -219,7 +245,7 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
     return null
   }
 
-  if (current.criteria_type !== "aura_redeem" && input.maxParticipants === null) {
+  if (requiresMaxParticipants(current.criteria_type) && input.maxParticipants === null) {
     throw new Error("Informe o número de vagas.")
   }
   if (current.criteria_type === "aura_redeem" && input.auraCost === null) {
@@ -241,6 +267,10 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
   const eventUpdate: Record<string, unknown> = {}
   if (input.maxParticipants !== undefined) eventUpdate.max_participants = input.maxParticipants
   if (input.auraCost !== undefined) eventUpdate.aura_cost = input.auraCost
+  // staff_grant já é escolha a dedo da Staff — requires_vip não se aplica.
+  if (input.requiresVip !== undefined) {
+    eventUpdate.requires_vip = current.criteria_type === "staff_grant" ? false : input.requiresVip
+  }
   if (input.active !== undefined) eventUpdate.active = input.active
   eventUpdate.updated_at = new Date().toISOString()
 
@@ -250,6 +280,26 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
 
   revalidateTag(EVENTS_LIST_TAG, { expire: 0 })
   return getEventForAdmin(id)
+}
+
+/** Recebe todos os ids na ordem desejada e regrava `sort_order` com o índice de cada um. */
+export async function reorderEvents(orderedIds: string[]): Promise<void> {
+  const db = createSupabaseAdminClient()
+
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (db.from("events") as any).update({ sort_order: index }).eq("id", id)
+    )
+  )
+
+  const failed = results.find((result) => result.error)
+  if (failed?.error) {
+    console.error("[events-repository] reorderEvents:", failed.error)
+    throw failed.error
+  }
+
+  revalidateTag(EVENTS_LIST_TAG, { expire: 0 })
 }
 
 export async function deleteEvent(id: string): Promise<void> {
@@ -269,13 +319,14 @@ export async function getClaimedMedalIds(userId: string): Promise<string[]> {
 
 export type ClaimEventResult =
   | { ok: true; event: EventDisplay }
-  | { ok: false; reason: "not_found" | "not_manual" | "unavailable" | "insufficient_aura" }
+  | { ok: false; reason: "not_found" | "not_manual" | "unavailable" | "insufficient_aura" | "vip_required" }
 
 /**
  * Resgate manual, disparado pelo clique do usuário em `/eventos`
  * (`POST /api/eventos/[id]/claim`). Só eventos `manual_opt_in` e
  * `aura_redeem` podem ser resgatados assim — `first_n_signups` continua
- * exclusivo de `awardEligibleEventMedals`, chamado no login/cadastro.
+ * exclusivo de `awardEligibleEventMedals`, chamado no login/cadastro, e
+ * `staff_grant` exclusivo de `grantEventMedalToUser`.
  *
  * A concessão em si reaproveita `claim_event_medal`: a função já é atômica
  * (trava a linha do evento) e idempotente (clique duplicado não conta vaga
@@ -288,13 +339,27 @@ export async function claimEventManually(userId: string, eventId: string): Promi
 
   const { data: row, error } = await db
     .from("events")
-    .select("criteria_type")
+    .select("criteria_type, requires_vip")
     .eq("id", eventId)
     .maybeSingle()
 
   if (error || !row) return { ok: false, reason: "not_found" }
   if (row.criteria_type !== "manual_opt_in" && row.criteria_type !== "aura_redeem") {
     return { ok: false, reason: "not_manual" }
+  }
+
+  // Checagem só pra devolver um motivo específico ("precisa ser VIP" em vez
+  // de "indisponível") — quem realmente barra é o gate dentro de
+  // claim_event_medal, que roda de novo logo abaixo.
+  if (row.requires_vip) {
+    const { data: profile } = await db
+      .from("user_profiles")
+      .select("account_tier, vip_expires_at")
+      .eq("id", userId)
+      .maybeSingle()
+    if (!profile || !isVipActive(profile.account_tier, profile.vip_expires_at)) {
+      return { ok: false, reason: "vip_required" }
+    }
   }
 
   const { data: claimed, error: rpcError } = await db.rpc("claim_event_medal", {
@@ -334,4 +399,125 @@ export async function awardEligibleEventMedals(userId: string): Promise<void> {
   } catch (err) {
     console.error("[events-repository] awardEligibleEventMedals:", err)
   }
+}
+
+export type GrantEventResult =
+  | { ok: true; event: EventDisplay }
+  | { ok: false; reason: "not_found" | "not_staff_grant" | "unavailable" }
+
+/**
+ * Concessão manual de um evento `staff_grant` — a Staff escolhe o usuário na
+ * tela de edição da conquista (`StaffGrantPanel`), ninguém resgata sozinho.
+ * Reaproveita o mesmo esqueleto atômico/idempotente de `claim_event_medal`,
+ * só que na RPC `grant_event_medal` (sem gate de VIP: quem concede já está
+ * escolhendo a dedo).
+ */
+export async function grantEventMedalToUser(
+  eventId: string,
+  userId: string,
+  grantedBy: string
+): Promise<GrantEventResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: row, error } = await db
+    .from("events")
+    .select("criteria_type")
+    .eq("id", eventId)
+    .maybeSingle()
+
+  if (error || !row) return { ok: false, reason: "not_found" }
+  if (row.criteria_type !== "staff_grant") return { ok: false, reason: "not_staff_grant" }
+
+  const { data: granted, error: rpcError } = await db.rpc("grant_event_medal", {
+    p_event_id: eventId,
+    p_user_id: userId,
+    p_granted_by: grantedBy,
+  })
+  if (rpcError) throw rpcError
+  if (!granted) return { ok: false, reason: "unavailable" }
+
+  const event = await getEventForAdmin(eventId)
+  if (!event) return { ok: false, reason: "not_found" }
+  return { ok: true, event }
+}
+
+export type GrantableUser = {
+  id: string
+  displayName: string | null
+  displaySlug: string
+  avatarUrl: string | null
+}
+
+/**
+ * Candidatos a receber uma medalha `staff_grant` — busca por nome/slug em
+ * `user_profiles`, excluindo quem já tem essa medalha. Mesmo padrão de
+ * `searchOrderCustomers` (orders-repository.ts): `ilike` escapado nos dois
+ * campos via `.or()`.
+ */
+export async function searchGrantableUsers(
+  query: string,
+  medalId: string,
+  limit = 20
+): Promise<GrantableUser[]> {
+  const term = query.trim()
+  if (!term) return []
+
+  const db = createSupabaseAdminClient()
+
+  const { data: alreadyGranted } = await db.from("user_medals").select("user_id").eq("medal_id", medalId)
+  const excludeIds = new Set((alreadyGranted ?? []).map((row) => row.user_id))
+
+  const escaped = escapeOrFilterValue(escapeLikePattern(term))
+  const { data, error } = await db
+    .from("user_profiles")
+    .select("id, display_name, display_slug, avatar_url")
+    .or(`display_name.ilike."%${escaped}%",display_slug.ilike."%${escaped}%"`)
+    .limit(limit + excludeIds.size)
+
+  if (error || !data) {
+    console.error("[events-repository] searchGrantableUsers:", error)
+    return []
+  }
+
+  return (data as Array<{ id: string; display_name: string | null; display_slug: string; avatar_url: string | null }>)
+    .filter((row) => !excludeIds.has(row.id))
+    .slice(0, limit)
+    .map((row) => ({
+      id: row.id,
+      displayName: row.display_name,
+      displaySlug: row.display_slug,
+      // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
+      avatarUrl: row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null,
+    }))
+}
+
+export type EventRecipient = {
+  userId: string
+  displayName: string | null
+  avatarUrl: string | null
+  awardedAt: string
+  grantedBy: string | null
+}
+
+/** Quem já recebeu a medalha de um evento `staff_grant`, mais recente primeiro. */
+export async function listEventRecipients(medalId: string): Promise<EventRecipient[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_medals")
+    .select("user_id, awarded_at, granted_by")
+    .eq("medal_id", medalId)
+    .order("awarded_at", { ascending: false })
+
+  if (error || !data) return []
+
+  const rows = data as Array<{ user_id: string; awarded_at: string; granted_by: string | null }>
+  const profiles = await getUserProfiles(rows.map((row) => row.user_id))
+
+  return rows.map((row) => ({
+    userId: row.user_id,
+    displayName: profiles[row.user_id]?.display_name ?? null,
+    avatarUrl: profiles[row.user_id]?.avatar_url ?? null,
+    awardedAt: row.awarded_at,
+    grantedBy: row.granted_by,
+  }))
 }

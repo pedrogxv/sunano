@@ -3,7 +3,6 @@ import { Suspense } from "react"
 import {
   getUserAuraBalance,
   getUserAuraRank,
-  getUserAuraTotalEarned,
   getUserAuraUsage,
 } from "@/lib/server/repositories/aura-repository"
 import { getDailyMissionsToday, getUserStreak } from "@/lib/server/repositories/achievements-repository"
@@ -35,7 +34,6 @@ export default async function AuraCenterPage() {
 
   const [
     balance,
-    totalEarned,
     rank,
     streak,
     usage,
@@ -54,7 +52,6 @@ export default async function AuraCenterPage() {
     shippingPrefill,
   ] = await Promise.all([
     userId ? getUserAuraBalance(userId) : Promise.resolve(0),
-    userId ? getUserAuraTotalEarned(userId) : Promise.resolve(0),
     userId ? getUserAuraRank(userId) : Promise.resolve(null),
     userId
       ? getUserStreak(userId)
@@ -98,7 +95,6 @@ export default async function AuraCenterPage() {
       <AuraCenterContent
         isLoggedIn={Boolean(userId)}
         balance={balance}
-        totalEarned={totalEarned}
         rank={rank}
         streak={streak}
         usage={usage}

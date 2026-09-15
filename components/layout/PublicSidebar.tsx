@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  AppWindow,
   BadgePercent,
   BarChart2,
   BookOpen,
@@ -124,6 +125,7 @@ export function PublicSidebar() {
   const peripheralItems: NavItem[] = [
     { href: "/tierlist",    label: "Tierlist",           icon: Trophy },
     { href: "/perifericos", label: t.nav.peripherals,    icon: Mouse },
+    { href: "/softwares",   label: t.nav.softwares,      icon: AppWindow },
     { href: "/ranking",     label: "Ranking",            icon: BarChart2 },
   ]
 

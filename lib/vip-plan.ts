@@ -79,17 +79,21 @@ export function vipPlanPriceCents(period: unknown): number {
 }
 
 export const VIP_SUBSCRIPTION_BENEFITS = [
+  "Crie sua própria tierlist pessoal de periféricos",
   "Selo VIP em destaque no perfil, comentários e posts",
   "Mídia animada (GIF/vídeo) exclusiva no banner e avatar",
   "Até 8 medalhas e 8 favoritos em destaque no perfil",
+  "Favorite até 8 softwares e escolha a ordem de exibição",
   "10% de desconto em tudo que custa Aura (molduras, troca de nome, Proteção de Ofensiva e medalhas de evento)",
   "Limite diário de reações dobrado (100/dia)",
   "Bônus passivo de Aura: +0,4% sempre, ou +0,25% adicional com ofensiva ativa",
-  "Crie sua própria tierlist pessoal de periféricos",
 ] as const
 
+/** Primeiro item de `VIP_SUBSCRIPTION_BENEFITS` — o modal de upsell dá destaque visual a ele. */
+export const VIP_FEATURED_BENEFIT: (typeof VIP_SUBSCRIPTION_BENEFITS)[number] = VIP_SUBSCRIPTION_BENEFITS[0]
+
 export const VIP_SUPPORT_MESSAGE =
-  "Assinando o VIP, você ajuda a manter o site no ar e em constante melhoria."
+  "Assinando o VIP, além dos benefícios, você ajuda a manter e melhorar o site."
 
 /** Formata centavos em BRL, ex.: "R$ 8,90". */
 export function formatBrlCents(cents: number): string {

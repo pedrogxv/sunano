@@ -8,7 +8,7 @@
 
 import type { MedalRarity } from "@/lib/profile-showcase"
 
-export type EventCriteriaType = "first_n_signups" | "manual_opt_in" | "aura_redeem"
+export type EventCriteriaType = "first_n_signups" | "manual_opt_in" | "aura_redeem" | "staff_grant"
 
 /**
  * Evento com os dados da medalha já resolvidos (join com `medals`) — é o que
@@ -29,9 +29,13 @@ export type EventDisplay = {
   currentCount: number
   /** Custo em Aura pra resgatar — só usado por `aura_redeem`. */
   auraCost: number | null
+  /** Só usuários com VIP ativo recebem/podem resgatar — vale para os outros 3 critérios. */
+  requiresVip: boolean
   active: boolean
   startDate: string
   endDate: string | null
+  /** Ordem de exibição em `/conquistas` e na Home — menor aparece primeiro. */
+  sortOrder: number
 }
 
 /**
@@ -43,6 +47,7 @@ export const EVENT_CRITERIA_SHORT_LABEL: Record<EventCriteriaType, string> = {
   first_n_signups: "Cadastro",
   manual_opt_in: "Resgate",
   aura_redeem: "Aura",
+  staff_grant: "Staff",
 }
 
 /** Rótulo curto do critério, usado no admin e na página pública. */
@@ -50,4 +55,5 @@ export const EVENT_CRITERIA_LABEL: Record<EventCriteriaType, string> = {
   first_n_signups: "Primeiros N usuários cadastrados no site",
   manual_opt_in: "Resgate manual (usuário clica em Resgatar)",
   aura_redeem: "Resgate com Aura (desconta do saldo do usuário)",
+  staff_grant: "Premiação da Staff (a equipe escolhe quem recebe)",
 }

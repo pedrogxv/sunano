@@ -1,14 +1,14 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Flame, MessageCircle, ShoppingCart, Crown } from "lucide-react"
+import { Flame, MessageCircle, ShoppingCart, Crown, Mouse, Users } from "lucide-react"
 
 /**
  * Réplicas visuais estáticas (não os componentes reais) dos cards de
- * fórum/loja/tierlist — decorativas, sem link/fetch/tooltip, só pra dar uma
- * prévia do site atrás do card de login. Usar os componentes reais dispararia
- * efeitos colaterais (fetch de aura, useCart, Radix tooltip) sem propósito
- * numa tela puramente ilustrativa.
+ * fórum/loja/tierlist/periférico/perfil — decorativas, sem link/fetch/tooltip,
+ * só pra dar uma prévia do site atrás do card de login. Usar os componentes
+ * reais dispararia efeitos colaterais (fetch de aura, useCart, Radix tooltip)
+ * sem propósito numa tela puramente ilustrativa.
  */
 function ForumCardPreview() {
   return (
@@ -83,6 +83,51 @@ function TierlistCardPreview() {
   )
 }
 
+function PeripheralCardPreview() {
+  return (
+    <div className="w-52 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+      <div className="flex h-24 items-center justify-center bg-background/40 p-4">
+        <Mouse className="size-10 text-sky-400" />
+      </div>
+      <div className="space-y-1 p-3">
+        <p className="truncate text-[10px] font-bold uppercase tracking-wide text-foreground">
+          Viper V3 Pro
+        </p>
+        <p className="text-[10px] text-muted-foreground">Razer</p>
+        <span className="mt-1 inline-block rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+          R$ 899,90
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function ProfileCardPreview() {
+  return (
+    <div className="w-56 rounded-2xl border border-border bg-card p-3.5 shadow-xl">
+      <div className="flex items-center gap-3">
+        <div className="size-12 shrink-0 rounded-full bg-gradient-to-br from-fuchsia-400 to-purple-600 ring-4 ring-amber-400/50" />
+        <div className="min-w-0">
+          <div className="flex items-center gap-1">
+            <p className="truncate text-xs font-bold text-foreground">kaze_gg</p>
+            <Crown className="size-3 shrink-0 text-amber-400" />
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-0.5 text-orange-400">
+              <Flame className="size-2.5" fill="currentColor" />
+              2.4k
+            </span>
+            <span className="flex items-center gap-0.5">
+              <Users className="size-2.5" />
+              812
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function AuthBackground() {
   return (
     <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden bg-background">
@@ -117,32 +162,17 @@ export function AuthBackground() {
           animate={{ y: [0, 14, 0] }}
           transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 1 }}
         >
-          <StoreCardPreview />
+          <PeripheralCardPreview />
+        </motion.div>
+
+        <motion.div
+          className="absolute left-[1%] top-[42%] hidden scale-110 sm:block"
+          animate={{ y: [0, -10, 0] }}
+          transition={{ duration: 13, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+        >
+          <ProfileCardPreview />
         </motion.div>
       </div>
-
-      {/* Grid de pontos sutil por cima, para textura */}
-      <div
-        className="absolute inset-0 text-foreground/[0.06] dark:text-foreground/[0.16]"
-        style={{
-          backgroundImage: "radial-gradient(currentColor 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-          maskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, black 45%, transparent 100%)",
-          WebkitMaskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, black 45%, transparent 100%)",
-        }}
-      />
-
-      {/* Blobs de brilho, deriva contínua */}
-      <motion.div
-        className="absolute -top-24 -left-16 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(34,211,238,0.20),transparent_70%)] blur-3xl"
-        animate={{ x: [0, 24, 0], y: [0, 16, 0], scale: [1, 1.1, 1] }}
-        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        className="absolute -bottom-28 -right-16 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(139,92,246,0.20),transparent_70%)] blur-3xl"
-        animate={{ x: [0, -24, 0], y: [0, -16, 0], scale: [1, 1.1, 1] }}
-        transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
-      />
 
       {/* Vinheta bem leve só nas bordas da viewport (não no centro), pra manter contraste sem apagar os cards */}
       <div className="absolute inset-0 bg-gradient-to-b from-background/15 via-transparent to-background/20" />

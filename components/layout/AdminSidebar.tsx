@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  AppWindow,
   BarChart2,
   BookOpen,
   ChevronDown,
@@ -96,6 +97,7 @@ export function AdminSidebar() {
         { href: "/admin/perifericos", label: t.admin.sidebar.peripherals,      icon: Mouse,      permission: "peripherals_read" },
         { href: "/admin/ranking",     label: "Ranking",                        icon: BarChart2,  permission: "peripherals_read" },
         { href: "/admin/brands",      label: "Marcas",                         icon: Tag,        permission: "brands_read" },
+        { href: "/admin/softwares",   label: "Softwares",                      icon: AppWindow,  permission: "brands_read" },
       ],
     },
     {

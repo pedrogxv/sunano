@@ -34,6 +34,8 @@ export function AuthorAvatarLink({
   align = "start",
   className,
   onClick,
+  /** Flair de VIP no fórum: anel colorido no avatar, distinto do selo "VIP" que já fica ao lado do nome. */
+  isVip = false,
 }: {
   author: AuthorIdentity
   avatarUrl: string | null
@@ -42,9 +44,12 @@ export function AuthorAvatarLink({
   align?: "start" | "center" | "end"
   className?: string
   onClick?: (event: React.MouseEvent) => void
+  isVip?: boolean
 }) {
   const removed = isRemovedAuthor(author)
-  const avatar = <UserAvatar name={author.displayName} avatarUrl={avatarUrl} size={size} removed={removed} />
+  const avatar = (
+    <UserAvatar name={author.displayName} avatarUrl={avatarUrl} size={size} removed={removed} isVip={isVip} />
+  )
 
   return (
     <MiniProfileHoverCard slug={author.displaySlug} side={side} align={align}>
@@ -67,12 +72,15 @@ export function AuthorNameLink({
   align = "start",
   className,
   onClick,
+  /** Flair de VIP no fórum: nome com o mesmo gradiente animado usado no título "Vantagens do VIP", em vez do texto padrão. */
+  isVip = false,
 }: {
   author: AuthorIdentity
   side?: "top" | "right" | "bottom" | "left"
   align?: "start" | "center" | "end"
   className?: string
   onClick?: (event: React.MouseEvent) => void
+  isVip?: boolean
 }) {
   const removed = isRemovedAuthor(author)
   const label = removed ? "Usuário removido" : author.displayName
@@ -83,7 +91,7 @@ export function AuthorNameLink({
         <Link
           href={profilePath(author.displaySlug)}
           onClick={onClick}
-          className={cn("font-medium text-foreground hover:underline", className)}
+          className={cn("font-medium hover:underline", isVip ? "vip-badge-text" : "text-foreground", className)}
         >
           {label}
         </Link>
@@ -92,7 +100,7 @@ export function AuthorNameLink({
           onClick={onClick}
           className={cn(
             "font-medium",
-            removed ? "text-destructive/90 italic" : "text-foreground",
+            removed ? "text-destructive/90 italic" : isVip ? "vip-badge-text" : "text-foreground",
             className
           )}
         >

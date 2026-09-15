@@ -28,11 +28,15 @@ export type TierCapabilities = {
   auraDiscountBps: number
   /** Quantas reações (like/dislike) o usuário pode dar por dia. */
   dailyAuraGiveLimit: number
+  /** Máximo de softwares favoritos em /softwares. */
+  maxFavoriteSoftwares: number
+  /** Se escolhe a ordem dos softwares favoritos (senão, ordem alfabética). */
+  reorderFavoriteSoftwares: boolean
 }
 
 export const TIER_CAPABILITIES: Record<AccountTier, TierCapabilities> = {
-  common: { label: "Membro", maxMedals: 3, maxFavorites: 3, animatedMedia: false, auraDiscountBps: 0, dailyAuraGiveLimit: 50 },
-  vip:    { label: "VIP",    maxMedals: 8, maxFavorites: 8, animatedMedia: true, auraDiscountBps: 1000, dailyAuraGiveLimit: 100 },
+  common: { label: "Membro", maxMedals: 3, maxFavorites: 3, animatedMedia: false, auraDiscountBps: 0, dailyAuraGiveLimit: 50, maxFavoriteSoftwares: 3, reorderFavoriteSoftwares: false },
+  vip:    { label: "VIP",    maxMedals: 8, maxFavorites: 8, animatedMedia: true, auraDiscountBps: 1000, dailyAuraGiveLimit: 100, maxFavoriteSoftwares: 8, reorderFavoriteSoftwares: true },
 }
 
 /**
@@ -73,6 +77,16 @@ export function getFavoriteLimit(tier: AccountTier): number {
 /** Se o tier pode exibir mídia animada (GIF) no banner e na foto. */
 export function canUseAnimatedMedia(tier: AccountTier): boolean {
   return TIER_CAPABILITIES[tier].animatedMedia
+}
+
+/** Quantos softwares este tier pode favoritar em /softwares. */
+export function getFavoriteSoftwareLimit(tier: AccountTier): number {
+  return TIER_CAPABILITIES[tier].maxFavoriteSoftwares
+}
+
+/** Se o tier escolhe a ordem dos softwares favoritos. */
+export function canReorderFavoriteSoftwares(tier: AccountTier): boolean {
+  return TIER_CAPABILITIES[tier].reorderFavoriteSoftwares
 }
 
 /**

@@ -19,6 +19,7 @@ import { BR_STATES } from "@/lib/br-states"
 import {
   VIP_PLANS,
   VIP_SUBSCRIPTION_BENEFITS,
+  VIP_FEATURED_BENEFIT,
   VIP_SUPPORT_MESSAGE,
   formatBrlCents,
   vipYearlyMonthlyEquivalentCents,
@@ -488,7 +489,7 @@ export function VipUpsellModal({
                 </div>
               </div>
 
-              <DialogDescription className="text-xs leading-relaxed">
+              <DialogDescription className="text-sm leading-relaxed">
                 {/* Reativar NÃO cobra nada: a 1ª cobrança da assinatura é
                     agendada para o fim do período que já foi pago. O texto
                     anterior ("o mês que você pagar agora é somado ao que já
@@ -503,12 +504,38 @@ export function VipUpsellModal({
             </DialogHeader>
 
             <ul className="space-y-2">
-              {VIP_SUBSCRIPTION_BENEFITS.map((benefit) => (
-                <li key={benefit} className="flex items-start gap-2 text-xs leading-relaxed text-foreground">
-                  <Check className="mt-0.5 size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />
-                  <span>{benefit}</span>
-                </li>
-              ))}
+              {VIP_SUBSCRIPTION_BENEFITS.map((benefit) => {
+                // O primeiro item é o "carro-chefe" (tierlist pessoal) — ganha
+                // caixa destacada + selo pra puxar o olho antes dos outros,
+                // que só têm o check.
+                const isFeatured = benefit === VIP_FEATURED_BENEFIT
+                return (
+                  <li
+                    key={benefit}
+                    className={
+                      isFeatured
+                        ? "flex items-start gap-2 rounded-lg border px-2.5 py-2 text-xs font-semibold leading-relaxed text-foreground"
+                        : "flex items-start gap-2 text-xs leading-relaxed text-foreground"
+                    }
+                    style={
+                      isFeatured
+                        ? { borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)" }
+                        : undefined
+                    }
+                  >
+                    <Check className="mt-0.5 size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />
+                    <span>{benefit}</span>
+                    {isFeatured && (
+                      <span
+                        className="ml-auto shrink-0 self-center rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-black"
+                        style={{ backgroundColor: "var(--vip-accent)" }}
+                      >
+                        Exclusivo
+                      </span>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
 
             {/* Ações ficam nesta coluna enquanto o formulário está fechado; com

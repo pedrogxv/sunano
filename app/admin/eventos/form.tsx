@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -47,6 +48,11 @@ const CRITERIA_OPTIONS: Array<{ value: EventCriteriaType; label: string; hint: s
     label: "Resgatável com Aura",
     hint: "O usuário clica em \"Resgatar\" e a medalha desconta Aura do saldo dele. Vagas são opcionais (em branco = ilimitado, enquanto tiver Aura suficiente).",
   },
+  {
+    value: "staff_grant",
+    label: "Premiação: só a Staff concede",
+    hint: "Ninguém resgata sozinho. Depois de criar, a equipe escolhe manualmente quem recebe, um usuário por vez, na tela de edição desta conquista.",
+  },
 ]
 
 export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
@@ -62,6 +68,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
     auraCost: event?.auraCost?.toString() ?? "",
     active: event?.active !== false,
     criteriaType: event?.criteriaType ?? ("first_n_signups" as EventCriteriaType),
+    requiresVip: event?.requiresVip ?? false,
   })
 
   const criteriaType = event?.criteriaType ?? formData.criteriaType
@@ -113,7 +120,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         if (isNaN(maxParticipants) || maxParticipants <= 0) {
           throw new Error("Número de vagas inválido. Use um inteiro maior que zero ou deixe em branco.")
         }
-      } else if (criteriaType !== "aura_redeem") {
+      } else if (criteriaType !== "aura_redeem" && criteriaType !== "staff_grant") {
         throw new Error("Informe o número de vagas.")
       }
 
@@ -132,6 +139,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         rarity: formData.rarity,
         maxParticipants,
         auraCost,
+        requiresVip: criteriaType === "staff_grant" ? false : formData.requiresVip,
         ...(event ? { active: formData.active } : { criteriaType }),
       }
 
@@ -252,19 +260,25 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
       {/* Vagas + Custo em Aura */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label>Número de vagas {criteriaType === "aura_redeem" ? "" : "*"}</Label>
+          <Label>
+            Número de vagas {criteriaType === "aura_redeem" || criteriaType === "staff_grant" ? "" : "*"}
+          </Label>
           <Input
-            required={criteriaType !== "aura_redeem"}
+            required={criteriaType !== "aura_redeem" && criteriaType !== "staff_grant"}
             type="number"
             min={1}
             step={1}
             value={formData.maxParticipants}
             onChange={(e) => set("maxParticipants", e.target.value)}
-            placeholder={criteriaType === "aura_redeem" ? "Deixe em branco para ilimitado" : "1000"}
+            placeholder={
+              criteriaType === "aura_redeem" || criteriaType === "staff_grant"
+                ? "Deixe em branco para sem limite"
+                : "1000"
+            }
           />
           {event && (
             <p className="text-[10px] text-muted-foreground/60">
-              {event.currentCount} já resgataram
+              {event.currentCount} já {criteriaType === "staff_grant" ? "receberam" : "resgataram"}
               {formData.maxParticipants.trim() ? ` de ${formData.maxParticipants}` : " (vagas ilimitadas)"}.
             </p>
           )}
@@ -285,6 +299,25 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
           </div>
         )}
       </div>
+
+      {/* VIP */}
+      {criteriaType !== "staff_grant" && (
+        <label className="flex items-start gap-2.5 rounded-xl border border-border bg-muted/20 px-4 py-3">
+          <Checkbox
+            className="mt-0.5"
+            checked={formData.requiresVip}
+            onCheckedChange={(checked) => set("requiresVip", checked === true)}
+          />
+          <span>
+            <span className="block text-sm font-medium text-foreground">Precisa ser VIP para resgatar</span>
+            <span className="mt-0.5 block text-[10px] text-muted-foreground/70">
+              Só usuários com VIP ativo recebem/podem resgatar esta medalha.
+              {criteriaType === "first_n_signups" &&
+                " Combinado com \"Automático: primeiros N cadastros\", vira algo como \"primeiros N VIPs do site\" — a medalha vai sendo concedida a cada VIP que logar, enquanto houver vagas."}
+            </span>
+          </span>
+        </label>
+      )}
 
       {/* Status */}
       {event && (

@@ -39,6 +39,7 @@ const STATIC_ROUTES: { path: string; priority: number; changeFrequency: Metadata
   { path: "/blog", priority: 0.8, changeFrequency: "daily" },
   { path: "/noticias", priority: 0.8, changeFrequency: "daily" },
   { path: "/perifericos", priority: 0.8, changeFrequency: "daily" },
+  { path: "/softwares", priority: 0.5, changeFrequency: "weekly" },
   { path: "/tierlist", priority: 0.7, changeFrequency: "weekly" },
   { path: "/tierlist/comunidade", priority: 0.5, changeFrequency: "daily" },
   { path: "/videos", priority: 0.6, changeFrequency: "weekly" },

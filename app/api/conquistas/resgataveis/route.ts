@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 
 import { getUserAuraBalance } from "@/lib/server/repositories/aura-repository"
 import { getClaimedMedalIds, listActiveEventsForDisplay } from "@/lib/server/repositories/events-repository"
+import { getVipStatus } from "@/lib/server/repositories/aura-store-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 
 export const dynamic = "force-dynamic"
@@ -26,15 +27,17 @@ export async function GET() {
     return NextResponse.json({ count: 0, claimedMedalIds: [] })
   }
 
-  const [events, claimedMedalIds, auraBalance] = await Promise.all([
+  const [events, claimedMedalIds, auraBalance, vipStatus] = await Promise.all([
     listActiveEventsForDisplay(),
     getClaimedMedalIds(userId),
     getUserAuraBalance(userId),
+    getVipStatus(userId),
   ])
 
   const claimedSet = new Set(claimedMedalIds)
   const count = events.filter((event) => {
     if (!event.active || claimedSet.has(event.medalId)) return false
+    if (event.requiresVip && !vipStatus.active) return false
     const hasSlot = event.maxParticipants === null || event.currentCount < event.maxParticipants
     if (event.criteriaType === "manual_opt_in") return hasSlot
     if (event.criteriaType === "aura_redeem") return hasSlot && auraBalance >= (event.auraCost ?? 0)

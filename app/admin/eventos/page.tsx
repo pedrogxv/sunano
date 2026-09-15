@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertCircle, Edit, Medal, Plus, Trash2 } from "lucide-react"
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers"
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+import { AlertCircle, Edit, GripVertical, Medal, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -21,12 +32,112 @@ import { cn } from "@/lib/utils"
 import { MEDAL_RARITY_STYLES } from "@/lib/profile-showcase"
 import type { EventDisplay } from "@/lib/events"
 
+/** Linha arrastável de uma conquista — mesmo padrão de app/admin/banners/page.tsx. */
+function SortableEventRow({
+  event,
+  position,
+  onDelete,
+}: {
+  event: EventDisplay
+  position: number
+  onDelete: (id: string) => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: event.id,
+  })
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(
+        "flex items-center gap-3 rounded-xl border border-border bg-card p-3 transition-colors",
+        isDragging && "z-10 border-primary/40 shadow-lg"
+      )}
+    >
+      <button
+        type="button"
+        aria-label={`Reordenar conquista ${position}`}
+        className="cursor-grab touch-none rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-4" />
+      </button>
+
+      <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">
+        {position}
+      </span>
+
+      <div
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border",
+          MEDAL_RARITY_STYLES[event.rarity]
+        )}
+      >
+        {event.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={event.imageUrl} alt={event.name} className="h-full w-full object-contain p-0.5" />
+        ) : (
+          <Medal className="size-5" />
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-foreground">{event.name}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {event.criteriaType === "manual_opt_in"
+            ? "Resgate manual"
+            : event.criteriaType === "aura_redeem"
+              ? `${event.auraCost?.toLocaleString("pt-BR")} Aura${event.maxParticipants ? ` · ${event.maxParticipants.toLocaleString("pt-BR")} vagas` : " · ilimitado"}`
+              : event.criteriaType === "staff_grant"
+                ? "Premiação da Staff"
+                : `Primeiros ${event.maxParticipants?.toLocaleString("pt-BR")} cadastros`}
+          {event.requiresVip && " · VIP"}
+          {" · "}
+          {event.maxParticipants !== null
+            ? `${event.currentCount} / ${event.maxParticipants}`
+            : `${event.currentCount} resgates`}
+        </p>
+      </div>
+
+      <Badge
+        variant="secondary"
+        className={cn(
+          "shrink-0 text-[10px]",
+          event.active ? "bg-emerald-500/10 text-emerald-400" : "bg-slate-500/10 text-muted-foreground"
+        )}
+      >
+        {event.active ? "Ativo" : "Encerrado"}
+      </Badge>
+
+      <div className="flex shrink-0 items-center gap-1">
+        <Link href={`/admin/eventos/${event.id}`}>
+          <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
+            <Edit className="size-3.5" />
+          </Button>
+        </Link>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="size-8 text-red-500/60 hover:text-red-400"
+          onClick={() => onDelete(event.id)}
+        >
+          <Trash2 className="size-3.5" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminEventsPage() {
   const [events, setEvents] = useState<EventDisplay[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
   const [deleting, setDeleting] = useState(false)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -46,6 +157,35 @@ export default function AdminEventsPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  async function handleDragEnd(dragEvent: DragEndEvent) {
+    const { active, over } = dragEvent
+    if (!over || active.id === over.id) return
+
+    const oldIndex = events.findIndex((e) => e.id === active.id)
+    const newIndex = events.findIndex((e) => e.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const previous = events
+    const reordered = arrayMove(events, oldIndex, newIndex)
+    setEvents(reordered)
+
+    try {
+      const res = await fetch("/api/admin/events/reorder", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: reordered.map((e) => e.id) }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(data?.error ?? "Erro ao reordenar.")
+      }
+    } catch (err) {
+      setEvents(previous)
+      const message = err instanceof Error ? err.message : "Erro ao reordenar."
+      toast.error("Não foi possível reordenar", { description: message })
+    }
+  }
 
   async function handleDelete() {
     if (!deleteDialog.id) return
@@ -102,85 +242,25 @@ export default function AdminEventsPage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[720px]">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Medalha</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Critério</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Progresso</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {events.map((e) => (
-                <tr key={e.id} className="transition-colors hover:bg-muted/40">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border",
-                        MEDAL_RARITY_STYLES[e.rarity]
-                      )}>
-                        {e.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={e.imageUrl} alt={e.name} className="h-full w-full object-contain p-0.5" />
-                        ) : (
-                          <Medal className="size-5" />
-                        )}
-                      </div>
-                      <p className="text-sm font-semibold text-foreground">{e.name}</p>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-xs text-muted-foreground">
-                      {e.criteriaType === "manual_opt_in"
-                        ? "Resgate manual"
-                        : e.criteriaType === "aura_redeem"
-                          ? `${e.auraCost?.toLocaleString("pt-BR")} Aura${e.maxParticipants ? ` · ${e.maxParticipants.toLocaleString("pt-BR")} vagas` : " · ilimitado"}`
-                          : `Primeiros ${e.maxParticipants?.toLocaleString("pt-BR")} cadastros`}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-medium text-foreground">
-                      {e.maxParticipants !== null ? `${e.currentCount} / ${e.maxParticipants}` : `${e.currentCount} resgates`}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge
-                      variant="secondary"
-                      className={cn(
-                        "text-[10px]",
-                        e.active
-                          ? "bg-emerald-500/10 text-emerald-400"
-                          : "bg-slate-500/10 text-muted-foreground"
-                      )}
-                    >
-                      {e.active ? "Ativo" : "Encerrado"}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      <Link href={`/admin/eventos/${e.id}`}>
-                        <Button size="icon" variant="ghost" className="size-8 text-muted-foreground hover:text-foreground">
-                          <Edit className="size-3.5" />
-                        </Button>
-                      </Link>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-8 text-red-500/60 hover:text-red-400"
-                        onClick={() => setDeleteDialog({ open: true, id: e.id })}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={events.map((e) => e.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {events.map((e, index) => (
+                <SortableEventRow
+                  key={e.id}
+                  event={e}
+                  position={index + 1}
+                  onDelete={(id) => setDeleteDialog({ open: true, id })}
+                />
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ ...deleteDialog, open })}>

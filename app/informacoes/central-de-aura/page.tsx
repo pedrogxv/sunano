@@ -1,5 +1,6 @@
 import Link from "next/link"
 import type { Metadata } from "next"
+import { ArrowLeft } from "lucide-react"
 import { buildMetadata } from "@/lib/seo"
 import { AuraFaqSection } from "@/components/aura/AuraFaqSection"
 
@@ -21,6 +22,14 @@ export const metadata: Metadata = buildMetadata({
 export default function CentralDeAuraInfoPage() {
   return (
     <article className="mx-auto max-w-3xl px-2 py-10 sm:px-4 md:px-6">
+      <Link
+        href="/aura"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        Voltar à Central de Aura
+      </Link>
+
       <header className="mb-8 border-b border-border pb-6">
         <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-primary">
           Central de Aura

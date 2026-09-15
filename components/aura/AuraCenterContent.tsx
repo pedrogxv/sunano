@@ -69,7 +69,6 @@ export type PeripheralOwnerEntry = {
 interface AuraCenterContentProps {
   isLoggedIn: boolean
   balance: number
-  totalEarned: number
   rank: number | null
   streak: UserStreak
   usage: AuraUsage
@@ -132,7 +131,6 @@ const EMBERS: Array<{ left: string; style: EmberStyle }> = [
 export function AuraCenterContent({
   isLoggedIn,
   balance,
-  totalEarned,
   rank,
   streak,
   usage,
@@ -293,14 +291,15 @@ export function AuraCenterContent({
       <div className="grid gap-4 sm:grid-cols-3">
         <div className={cn("flex flex-col gap-2 rounded-2xl border p-5", CARD_SURFACE)}>
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Flame className="size-4 text-orange-500" fill="currentColor" strokeWidth={1.5} />
-            <span className="text-xs font-semibold uppercase tracking-wider">Saldo atual</span>
+            <Flame className="aura-balance-flame size-4" fill="currentColor" strokeWidth={1.5} />
+            <span className="text-xs font-semibold uppercase tracking-wider">Aura atual</span>
           </div>
           <p className="font-display text-3xl font-bold text-foreground tabular-nums">{currentBalance.toLocaleString("pt-BR")}</p>
-          <p className="text-xs text-muted-foreground">
-            {totalEarned.toLocaleString("pt-BR")} ganhos ao todo
-            {rank && <> · <span className="font-semibold text-foreground">#{rank}</span> no ranking</>}
-          </p>
+          {rank && (
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground">#{rank}</span> no ranking
+            </p>
+          )}
         </div>
 
         {/* Ofensiva + multiplicador — os dois números vêm da mesma fonte

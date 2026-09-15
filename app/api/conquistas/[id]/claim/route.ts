@@ -9,11 +9,15 @@ export const runtime = "nodejs"
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-const ERROR_MESSAGES: Record<"not_found" | "not_manual" | "unavailable" | "insufficient_aura", string> = {
+const ERROR_MESSAGES: Record<
+  "not_found" | "not_manual" | "unavailable" | "insufficient_aura" | "vip_required",
+  string
+> = {
   not_found: "Conquista não encontrada.",
   not_manual: "Essa conquista é concedida automaticamente, não precisa resgatar.",
   unavailable: "As vagas acabaram ou a conquista foi encerrada.",
   insufficient_aura: "Saldo de Aura insuficiente.",
+  vip_required: "Essa conquista é exclusiva para membros VIP.",
 }
 
 /**

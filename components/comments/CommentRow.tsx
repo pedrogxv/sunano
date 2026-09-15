@@ -22,6 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { isVipActive } from "@/lib/account-tier"
 import { canEditComment, commentEditDeadline } from "@/lib/comment-edit"
 import { cn } from "@/lib/utils"
 import { CommentBody } from "./CommentBody"
@@ -174,11 +175,13 @@ export function CommentRow({
         author={{ userId: comment.user_id, displayName: comment.author_display_name, displaySlug: comment.author_display_slug }}
         avatarUrl={comment.author_avatar_url}
         size={compactAvatar ? 7 : 8}
+        isVip={isVipActive(comment.author_account_tier, comment.author_vip_expires_at)}
       />
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <AuthorNameLink
             author={{ userId: comment.user_id, displayName: comment.author_display_name, displaySlug: comment.author_display_slug }}
+            isVip={isVipActive(comment.author_account_tier, comment.author_vip_expires_at)}
           />
           <AuthorTierBadge tier={comment.author_account_tier} vipExpiresAt={comment.author_vip_expires_at} />
           <AuthorSpecialTagBadge slug={comment.author_display_slug} />

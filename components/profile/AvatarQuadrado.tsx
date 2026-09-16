@@ -1,20 +1,16 @@
-import { Crown } from "lucide-react"
-
-import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { isVipActive, type AccountTier } from "@/lib/account-tier"
-import {
-  DEFAULT_ADJUST,
-  mediaAdjustStyle,
-  type MediaAdjust,
-} from "@/lib/profile-media-adjust"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
+import type { AccountTier } from "@/lib/account-tier"
+import type { ProfileFrameIdentity } from "@/lib/profile-frames"
+import { DEFAULT_ADJUST, type MediaAdjust } from "@/lib/profile-media-adjust"
 import { buildProfileMediaItems, indexOfMedia } from "@/lib/profile-media-items"
-import { cn } from "@/lib/utils"
 import { ProfileImageLightbox } from "./ProfileImageLightbox"
 
 interface AvatarQuadradoProps {
   avatarUrl: string | null
   name: string
-  tier: AccountTier
+  /** Moldura da pessoa em um objeto só (`profileFrameOf`) — forma preferida. */
+  frame?: ProfileFrameIdentity
+  tier?: AccountTier
   /** Quando expira o VIP (`null` = sem expiração) — decide o selo de coroa. */
   vipExpiresAt?: string | null
   /** Enquadramento escolhido pelo dono no editor de perfil. */
@@ -22,6 +18,10 @@ interface AvatarQuadradoProps {
   className?: string
   /** Moldura cosmética equipada (Central de Aura), sobreposta à foto — `null`/ausente = nenhuma. */
   frameUrl?: string | null
+  /** Slug da moldura equipada — identifica as de arte em código, que não têm asset. */
+  frameSlug?: string | null
+  /** Se possui a Moldura de Fundador (permanente, independe de VIP ativo). */
+  isFounder?: boolean
   /**
    * Capa do perfil, só para o visualizador poder oferecer a aba "Capa" ao lado
    * da foto. Não é renderizada aqui (quem desenha a capa é `Banner`).
@@ -30,28 +30,15 @@ interface AvatarQuadradoProps {
 }
 
 /**
- * Cor da moldura por tier. VIP recebe o dourado da referência; conta comum
- * fica numa borda neutra, para a moldura continuar sendo um sinal de tier e
- * não decoração de todo mundo.
- */
-const TIER_FRAME: Record<AccountTier, string> = {
-  common: "border-border",
-  vip: "border-[var(--vip-accent)]",
-}
-
-/** Brilho externo — só para quem tem tier, senão vira ruído na grade. */
-const TIER_GLOW: Record<AccountTier, string> = {
-  common: "",
-  vip: "shadow-[0_0_22px_-3px_var(--vip-accent-soft)]",
-}
-
-/**
- * Foto de perfil quadrada com cantos arredondados, ancorada no canto inferior
- * esquerdo do banner (ver `ProfileShowcase`).
+ * Foto grande do perfil público — o MESMO `ProfileAvatar` do resto do site,
+ * com `shape="rounded"` e o lightbox por cima.
  *
- * Substitui o círculo centralizado: com a foto no canto, o nome ocupa a faixa
- * ao lado dela em vez de descer para baixo do banner, e some a tira vazia que
- * o layout centralizado obrigava a existir sob a capa.
+ * Este arquivo não desenha moldura, anel, brilho nem selo: tudo isso vem do
+ * componente central. Ele já tentou desenhar o próprio anel com
+ * `border-image`, que **ignora `border-radius` por especificação** — o
+ * gradiente saía como um retângulo de canto vivo sobre a foto arredondada,
+ * exatamente o desencontro de borda que aparecia no perfil. Qualquer ajuste
+ * de moldura vai em `lib/profile-frames.ts` / `ProfileAvatar`, nunca aqui.
  *
  * `avatarUrl` já chega como `profileMediaProxyUrl` (nunca a coluna crua) —
  * quem resolve tier/VIP e decide se o GIF anima ou congela é a rota, com
@@ -61,72 +48,39 @@ const TIER_GLOW: Record<AccountTier, string> = {
 export function AvatarQuadrado({
   avatarUrl,
   name,
+  frame,
   tier,
   vipExpiresAt = null,
   adjust = DEFAULT_ADJUST,
   className,
   frameUrl,
+  frameSlug,
+  isFounder = false,
   bannerUrl = null,
 }: AvatarQuadradoProps) {
-  const src = avatarUrl
-  const initials = name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2)
-  const isVip = isVipActive(tier, vipExpiresAt)
-
-  const frame = (
-    <div className="relative shrink-0">
-      <div
-        className={cn(
-          "relative size-24 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-28 md:size-32",
-          TIER_FRAME[tier],
-          TIER_GLOW[tier],
-          className
-        )}
-      >
-        <ImageWithFallback
-          src={src}
-          alt={name}
-          fill
-          priority
-          sizes="128px"
-          style={mediaAdjustStyle(adjust)}
-          className="object-cover"
-          fallback={
-            <div className="flex size-full items-center justify-center bg-primary/15 text-2xl font-bold text-primary">
-              {initials || "?"}
-            </div>
-          }
-        />
-        {/* Moldura cosmética da Central de Aura — camada por cima da foto,
-            fora do `overflow-hidden` do próprio elemento (ela costuma extrapolar
-            levemente a borda de propósito, como um efeito de moldura). */}
-        {frameUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={frameUrl}
-            alt=""
-            aria-hidden
-            className="pointer-events-none absolute inset-0 z-10 size-full scale-110 object-contain"
-          />
-        )}
-      </div>
-
-      {/* Selo VIP — mesma técnica do PersonAvatar, ancorado na base da
-          moldura quadrada em vez do canto (aqui a moldura é maior e
-          centralizada, o canto ficaria longe demais do centro visual). */}
-      {isVip && (
-        <span
-          className="absolute -bottom-1.5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border-2 border-background px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-black shadow-sm"
-          style={{ backgroundColor: "var(--vip-accent)" }}
-        >
-          <Crown className="size-3 vip-badge-crown" />
-          VIP
-        </span>
-      )}
-    </div>
+  const avatarEl = (
+    <ProfileAvatar
+      name={name}
+      avatarUrl={avatarUrl}
+      size="2xl"
+      shape="rounded"
+      frame={frame}
+      tier={tier}
+      vipExpiresAt={vipExpiresAt}
+      adjust={adjust}
+      frameUrl={frameUrl}
+      frameSlug={frameSlug}
+      isFounder={isFounder}
+      priority
+      // Só aqui a pastilha do selo mostra o texto ("VIP"): é a única foto
+      // grande o bastante para caber sem cobrir o rosto.
+      showBadgeText
+      className={className}
+    />
   )
 
   // Sem foto enviada, o fallback de iniciais não tem o que ampliar.
-  if (!src) return frame
+  if (!avatarUrl) return avatarEl
 
   const { items, kinds } = buildProfileMediaItems({
     bannerUrl,
@@ -142,7 +96,7 @@ export function AvatarQuadrado({
       // aqui ela vem centralizada sobre o rosto.
       hintPosition="center"
     >
-      {frame}
+      {avatarEl}
     </ProfileImageLightbox>
   )
 }

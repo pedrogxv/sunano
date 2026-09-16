@@ -1,6 +1,7 @@
 "use client"
 
 import { Crown, Loader2 } from "lucide-react"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 
 import { auraPriceForVip } from "@/lib/aura-pricing"
 
@@ -32,8 +33,6 @@ interface PurchaseConfirmDialogProps {
   onConfirm: () => void
 }
 
-// A moeda é sempre Aura (🔥) — o 🧊 do card de escudo é só a arte, não a moeda.
-const AURA_ICON = "🔥"
 
 export function PurchaseConfirmDialog({
   open,
@@ -57,7 +56,7 @@ export function PurchaseConfirmDialog({
           <AlertDialogDescription>
             Você vai gastar{" "}
             <span className="font-semibold text-foreground">
-              {AURA_ICON} {price.finalPrice.toLocaleString("pt-BR")}
+              <AuraAmount value={price.finalPrice} />
             </span>{" "}
             de Aura em <span className="font-semibold text-foreground">{itemName}</span>.
           </AlertDialogDescription>
@@ -71,7 +70,7 @@ export function PurchaseConfirmDialog({
               <div className="flex items-center justify-between px-3 py-2">
                 <span className="text-muted-foreground">Preço do item</span>
                 <span className="font-display font-bold tabular-nums text-muted-foreground line-through">
-                  {AURA_ICON} {price.listPrice.toLocaleString("pt-BR")}
+                  <AuraAmount value={price.listPrice} />
                 </span>
               </div>
               <div
@@ -83,7 +82,7 @@ export function PurchaseConfirmDialog({
                   Desconto VIP ({price.discountPercent}%)
                 </span>
                 <span className="font-display font-bold tabular-nums">
-                  −{AURA_ICON} {price.savings.toLocaleString("pt-BR")}
+                  <AuraAmount value={price.savings} prefix="−" />
                 </span>
               </div>
             </>
@@ -91,7 +90,7 @@ export function PurchaseConfirmDialog({
           <div className="flex items-center justify-between border-t border-border/60 px-3 py-2">
             <span className="text-muted-foreground">Saldo após a compra</span>
             <span className="font-display font-bold tabular-nums text-foreground">
-              {AURA_ICON} {remaining.toLocaleString("pt-BR")}
+              <AuraAmount value={remaining} />
             </span>
           </div>
         </div>

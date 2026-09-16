@@ -231,6 +231,8 @@ export { TIERLIST_NOTE_MAX_LENGTH } from "@/lib/personal-tierlist"
 export type { TierlistMeta } from "@/lib/personal-tierlist"
 
 import type { TierlistMeta } from "@/lib/personal-tierlist"
+import type { ProfileFrameIdentity } from "@/lib/profile-frames"
+import { getProfileFramesByUser } from "@/lib/server/repositories/vip-founder-repository"
 
 /**
  * Meta pública da tierlist de um usuário.
@@ -376,6 +378,12 @@ export type CommunityTierlistSummary = {
     avatarUrl: string | null
     accountTier: AccountTier
     vipExpiresAt: string | null
+    /**
+     * Moldura pronta para `ProfileAvatar` — o card da comunidade desenha a
+     * MESMA moldura que o perfil da pessoa. Vem montada porque a origem é uma
+     * RPC: a moldura não está na linha e é buscada em lote logo abaixo.
+     */
+    frame: ProfileFrameIdentity
   }
   itemCount: number
   heartsCount: number
@@ -453,6 +461,10 @@ async function listCommunityTierlistsUncached(opts: {
 
   const rawRows = ((data as unknown as Row[]) ?? []).filter((row) => Boolean(row.display_slug))
 
+  // Moldura equipada + Fundador da página inteira em duas consultas, fora do
+  // `map` abaixo — dentro dele seriam duas por card.
+  const frameByUser = await getProfileFramesByUser(rawRows.map((row) => row.user_id))
+
   const enriched = await Promise.all(
     rawRows.map(async (row) => {
       const [tiers, items] = await Promise.all([
@@ -468,6 +480,7 @@ async function listCommunityTierlistsUncached(opts: {
           avatarUrl: row.avatar_url ? profileMediaProxyUrl(row.user_id, "avatar") : null,
           accountTier: coerceAccountTier(row.account_tier),
           vipExpiresAt: row.vip_expires_at,
+          frame: frameByUser(row.user_id, row.account_tier, row.vip_expires_at),
         },
         itemCount: row.item_count,
         heartsCount: row.hearts_count,

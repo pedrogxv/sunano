@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { Crown, Loader2 } from "lucide-react"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -124,7 +125,7 @@ export function VipMonthCard({ item, balance, vipActive, vipExpiresAt, requireLo
         )}
 
         <div className="mt-auto space-y-1.5 pt-1">
-          <p className="font-display text-[15px] font-bold text-orange-400">🔥 {item.auraCost.toLocaleString("pt-BR")}</p>
+          <AuraAmount value={item.auraCost} size="md" className="font-display text-[15px] font-bold text-orange-400" />
 
           {vipActive ? (
             // VIP ativo: nem "Ativar com Aura" nem "Assinar" servem aqui — a RPC

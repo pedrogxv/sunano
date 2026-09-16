@@ -1,4 +1,5 @@
-import { Activity, Crown, Flame, Sparkles } from "lucide-react"
+import { Activity, Crown, Sparkles } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
 import { getTierCapabilities, isVipActive, type AccountTier } from "@/lib/account-tier"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -100,7 +101,7 @@ export function InfoBasica({
             coisa e a badge vira ruído. */}
         {auraRank != null && (
           <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-[11px] font-semibold text-orange-400">
-            <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />#{auraRank}
+            <AuraIcon size="sm" tone="inherit" />#{auraRank}
           </span>
         )}
 

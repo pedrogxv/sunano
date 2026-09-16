@@ -3,7 +3,7 @@ import "server-only"
 import type { AccountTier } from "@/lib/account-tier"
 import { canEditComment } from "@/lib/comment-edit"
 import type { CommentMention } from "@/components/comments/types"
-import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
+import { authorFrameFields, buildProfileMap, type AuthorFrameFields } from "@/lib/server/repositories/profile-enrichment"
 import { publicDbErrorMessage } from "@/lib/server/repositories/_shared"
 import { creditPeripheralCommentCreationAura } from "@/lib/server/repositories/aura-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -33,7 +33,7 @@ export type PeripheralCommentDetail = {
   author_account_tier: AccountTier
   author_display_slug: string | null
   author_streak: number
-}
+} & AuthorFrameFields
 
 export type CommentSort = "recent" | "aura"
 export const PERIPHERAL_COMMENTS_PAGE_SIZE = 20
@@ -71,6 +71,7 @@ function mapPeripheralCommentRows(rows: any[], profileMap: Awaited<ReturnType<ty
     author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
     author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
+    ...authorFrameFields(c.user_id ? profileMap[c.user_id] : undefined),
     author_streak: c.user_id ? profileMap[c.user_id]?.streak ?? 0 : 0,
   }))
 }

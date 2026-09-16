@@ -26,6 +26,8 @@ export type NotificationType =
   | "support_status"
   | "store_restock"
   | "affiliate_payout"
+  // Moldura de pódio concedida (cron `/api/cron/rank-frames`).
+  | "rank_frame"
 
 export type NotificationEntityType =
   | "forum_post"
@@ -210,6 +212,13 @@ export type Database = {
           asaas_customer_id: string | null
           /** Item (kind=avatar_frame) equipado — deve estar em `user_aura_items` do mesmo usuário, reforçado na aplicação. */
           equipped_avatar_frame_id: string | null
+          /**
+           * O dono escolheu NÃO exibir moldura nenhuma. Diferente de
+           * `equipped_avatar_frame_id` null (= nunca escolheu), que ainda cai
+           * no fallback de honraria (Fundador/VIP/Ofensiva) em
+           * `resolveProfileFrame`. Ver migration `20261122000000`.
+           */
+          avatar_frame_opt_out: boolean
           /** Item (kind=mini_profile_bg) equipado como tema animado do cartão de Mini Perfil. Slot independente de `equipped_avatar_frame_id`. */
           equipped_mini_profile_bg_id: string | null
           /** Timestamp da última troca paga de nome — usado para o cooldown de 3 dias em `change_display_name_with_aura`. */
@@ -274,6 +283,13 @@ export type Database = {
             | "streak_shield"
             | "mini_profile_bg"
             | "peripheral"
+          /**
+           * Como o item é obtido. Só `purchase` passa por `redeem_aura_item`
+           * (a RPC recusa os demais). `vip`/`rank` são concedidos pelo
+           * sistema e `grant` pelo admin. Default `purchase`.
+           * Ver `lib/profile-frames.ts`.
+           */
+          acquisition: "purchase" | "vip" | "rank" | "grant"
           image_url: string | null
           frame_asset_url: string | null
           aura_cost: number
@@ -283,8 +299,8 @@ export type Database = {
           stock: number
           created_at: string
         }
-        Insert: Omit<Database["public"]["Tables"]["aura_items"]["Row"], "id" | "created_at" | "kind" | "active" | "sort_order" | "stock"> &
-          Partial<Pick<Database["public"]["Tables"]["aura_items"]["Row"], "kind" | "active" | "sort_order" | "stock">>
+        Insert: Omit<Database["public"]["Tables"]["aura_items"]["Row"], "id" | "created_at" | "kind" | "acquisition" | "active" | "sort_order" | "stock"> &
+          Partial<Pick<Database["public"]["Tables"]["aura_items"]["Row"], "kind" | "acquisition" | "active" | "sort_order" | "stock">>
         Update: Partial<Database["public"]["Tables"]["aura_items"]["Insert"]>
       }
       user_aura_items: {
@@ -2411,6 +2427,15 @@ export type Database = {
       broadcast_system_notification: {
         Args: { p_title: string; p_body: string; p_link?: string | null; p_user_id?: string | null }
         Returns: number
+      }
+      /**
+       * Concede uma moldura de ranking. Devolve o `item_id` quando concedeu
+       * AGORA e `null` quando a pessoa já tinha — é o que separa "entrou no
+       * pódio" (notifica) de "continua no pódio" (silêncio).
+       */
+      grant_rank_frame: {
+        Args: { p_user_id: string; p_slug: string }
+        Returns: string | null
       }
       decrement_store_stock: {
         Args: { p_product_id: string; p_quantity: number }

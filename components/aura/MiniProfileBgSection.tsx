@@ -1,6 +1,7 @@
 "use client"
 
 import { Layers } from "lucide-react"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 
 import { cn } from "@/lib/utils"
 import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
@@ -84,7 +85,7 @@ export function MiniProfileBgSection({
                 {MINI_PROFILE_BG_TIER_LABEL[tier]}
               </span>
               <span className="font-display text-sm font-bold text-orange-400">
-                🔥 {MINI_PROFILE_BG_TIER_COST[tier].toLocaleString("pt-BR")}
+                <AuraAmount value={MINI_PROFILE_BG_TIER_COST[tier]} />
               </span>
               {/* Linha até a borda: separa as faixas sem virar mais um título. */}
               <span

@@ -5,8 +5,9 @@ import { Bookmark, Crown, Handshake, LayoutDashboard, LifeBuoy, LogIn, LogOut, M
 
 import { useState } from "react"
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
+import { profileFrameOf } from "@/lib/profile-frames"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,10 +26,6 @@ import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import { vipCtaLabel, vipCtaShortLabel } from "@/lib/vip-status"
-
-function getInitials(name: string) {
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
-}
 
 interface AuthUserProps {
   isCollapsed?: boolean
@@ -69,6 +66,17 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   // navegando de verdade, já que aquele login não é o alvo deste modal.
   const useModal = variant === "public" && layout === "topbar"
   const user = authUser ? { name: authUser.displayName, email: authUser.email, avatar: authUser.avatarUrl || "" } : null
+  // A moldura da sessão em um objeto só: a topbar desenha a MESMA que o resto
+  // do site. Montada uma vez porque três avatares desta tela a usam.
+  const sessionFrame = profileFrameOf({
+    equippedFrameSlug: authUser?.equippedFrameSlug,
+    equippedFrameUrl: authUser?.equippedFrameUrl,
+    accountTier: authUser?.accountTier,
+    vipExpiresAt: authUser?.vipExpiresAt,
+    isFounder: authUser?.isFounder,
+    longestStreak: authUser?.longestStreak,
+    frameOptOut: authUser?.frameOptOut,
+  })
   // Vitrine pública do próprio usuário. `/perfil/[handle]` resolve UUID e
   // redireciona para o slug canônico quando existir (ver app/perfil/[handle]/page.tsx).
   const myProfileHref = authUser ? `/perfil/${authUser.id}` : "/perfil"
@@ -132,8 +140,6 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
     )
   }
 
-  const initials = getInitials(user.name)
-
   return (
     <>
     <DropdownMenu>
@@ -144,27 +150,16 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
             aria-label={user.name}
             className="animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center rounded-lg transition-all hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 md:size-8"
           >
-            <Avatar
-              className={cn(
-                "size-8 rounded-lg",
-                authUser?.isVip
-                  ? "ring-2 ring-[var(--vip-accent)] shadow-[0_0_10px_-2px_var(--vip-accent-soft)]"
-                  : "ring-1 ring-border"
-              )}
-            >
-              <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback className="rounded-lg bg-primary/15 text-xs font-semibold text-primary">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            {authUser?.isVip && (
-              <span
-                className="absolute -bottom-1 -right-1 z-10 flex size-3.5 items-center justify-center rounded-full border-2 border-background"
-                style={{ backgroundColor: "var(--vip-accent)" }}
-              >
-                <Crown className="size-2 vip-badge-crown text-black" />
-              </span>
-            )}
+            {/* Mesmo componente (e mesma moldura) do avatar do perfil, do
+                fórum e dos rankings — ver `components/ui/ProfileAvatar.tsx`.
+                O anel VIP e a coroa vinham escritos à mão aqui; agora saem da
+                moldura resolvida em `lib/profile-frames.ts`. */}
+            <ProfileAvatar
+              name={user.name}
+              avatarUrl={user.avatar || null}
+              size="sm"
+              frame={sessionFrame}
+            />
           </button>
         ) : (
           <button
@@ -174,12 +169,12 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
               isCollapsed ? "justify-center px-0" : "gap-3"
             )}
           >
-            <Avatar className="size-8 shrink-0 rounded-lg">
-              <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback className="rounded-lg bg-primary/15 text-xs font-semibold text-primary">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <ProfileAvatar
+              name={user.name}
+              avatarUrl={user.avatar || null}
+              size="sm"
+              frame={sessionFrame}
+            />
             {!isCollapsed && (
               <>
                 <div className="flex min-w-0 flex-1 flex-col text-left">
@@ -201,12 +196,12 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
       >
         <DropdownMenuLabel className="p-0 font-normal">
           <div className="flex items-center gap-2.5 px-2 py-2.5">
-            <Avatar className="size-8 rounded-lg">
-              <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback className="rounded-lg bg-primary/15 text-xs font-semibold text-primary">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+            <ProfileAvatar
+              name={user.name}
+              avatarUrl={user.avatar || null}
+              size="sm"
+              frame={sessionFrame}
+            />
             <div className="flex min-w-0 flex-col">
               <span className="truncate text-sm font-medium text-foreground">{user.name}</span>
               <span className="truncate text-xs text-muted-foreground">{user.email}</span>

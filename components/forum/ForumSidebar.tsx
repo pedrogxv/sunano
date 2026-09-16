@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Activity, Flame, ShieldCheck, UserCog } from "lucide-react"
+import { Activity, ShieldCheck, UserCog } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
 import { DiscordIcon } from "@/components/auth/provider-icons"
 import { CollapsibleSidebarCard } from "@/components/forum/CollapsibleSidebarCard"
@@ -31,7 +32,7 @@ function DescriptionCard() {
       id="lista-descricao"
       header={
         <span className="flex items-center gap-2">
-          <Flame className="size-4 shrink-0 text-orange-500" fill="currentColor" strokeWidth={1.5} aria-hidden="true" />
+          <AuraIcon size="lg" className="shrink-0" />
           <h2 className="font-display text-sm font-bold tracking-tight text-foreground">Fórum</h2>
         </span>
       }

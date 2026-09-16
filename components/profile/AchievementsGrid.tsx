@@ -1,6 +1,7 @@
 "use client"
 
 import { FileText, Flame, MessageSquare, Users, Youtube } from "lucide-react"
+import { AuraFlameIcon } from "@/components/ui/AuraIcon"
 
 import {
   ACHIEVEMENT_THRESHOLDS,
@@ -21,7 +22,7 @@ const TRACK_ICONS: Record<AchievementTrack, React.ElementType> = {
   posts: FileText,
   comments: MessageSquare,
   followers: Users,
-  aura_earned: Flame,
+  aura_earned: AuraFlameIcon,
 }
 
 const RING_RADIUS = 26

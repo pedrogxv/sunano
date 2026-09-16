@@ -1,5 +1,4 @@
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { isVipActive, type AccountTier } from "@/lib/account-tier"
 import {
   DEFAULT_ADJUST,
   mediaAdjustStyle,
@@ -11,9 +10,6 @@ import { ProfileImageLightbox } from "./ProfileImageLightbox"
 
 interface BannerProps {
   bannerUrl: string | null
-  tier: AccountTier
-  /** Quando expira o VIP (`null` = sem expiração) — decide a moldura roxa. */
-  vipExpiresAt?: string | null
   /** Enquadramento escolhido pelo dono no editor de perfil. */
   adjust?: MediaAdjust
   className?: string
@@ -30,39 +26,34 @@ interface BannerProps {
 
 /**
  * Capa do perfil. Ocupa a largura total do card e reserva espaço embaixo
- * para a foto sobreposta (ver `AvatarFoto`).
+ * para a foto sobreposta (ver `AvatarQuadrado`).
  *
  * `bannerUrl` já chega como `profileMediaProxyUrl` (nunca a coluna crua) —
  * quem resolve tier/VIP e decide se o GIF anima ou congela é a rota, com
  * dado fresco do banco (ver `resolveProfileMedia`/`profileMediaProxyUrl` em
  * `lib/account-tier.ts` e `profile-showcase-repository.ts`).
  *
- * VIP também ganha o mesmo brilho roxo da foto (`AvatarQuadrado`), com a
- * borda no rodapé da capa — as duas marcas formam um conjunto só, em vez da
- * capa ficar sem nenhum sinal de tier enquanto só a foto o exibe.
+ * A capa não desenha sinal de tier nenhum: a borda roxa que o VIP tinha no
+ * rodapé costurava a capa ao corpo do cartão e virava uma faixa atravessando o
+ * perfil inteiro. O sinal de tier mora na foto (`AvatarQuadrado`/
+ * `ProfileAvatar`), como em todas as outras telas — por isso a capa nem recebe
+ * mais `tier`/`vipExpiresAt`.
  */
 export function Banner({
   bannerUrl,
-  tier,
-  vipExpiresAt = null,
   adjust = DEFAULT_ADJUST,
   className,
   name = "",
   avatarUrl = null,
 }: BannerProps) {
   const src = bannerUrl
-  const isVip = isVipActive(tier, vipExpiresAt)
 
   const image = (
     <div
       className={cn(
         // O gradiente fica sempre no fundo: capa ausente — ou que falhe ao
         // carregar — descobre ele em vez de deixar uma faixa vazia.
-        "relative h-32 w-full overflow-hidden bg-gradient-to-br from-primary/20 via-muted/40 to-background sm:h-44 md:h-56",
-        // Borda VIP só embaixo: no perfil a capa é o topo de um cartão que já
-        // tem borda própria nos outros três lados (ver `ProfileShowcase`) —
-        // moldura fechada aqui virava linha dupla.
-        isVip && "border-b-[3px] border-[var(--vip-accent)] shadow-[0_0_22px_-3px_var(--vip-accent-soft)]",
+        "relative h-32 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-primary/20 via-muted/40 to-background sm:h-44 md:h-56",
         className
       )}
     >

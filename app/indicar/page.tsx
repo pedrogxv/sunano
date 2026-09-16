@@ -191,7 +191,7 @@ export default async function IndicarPage() {
                 const StatusIcon = status.icon
                 return (
                   <li key={item.userId} className="flex items-center gap-3 py-3">
-                    <UserAvatar name={item.displayName} avatarUrl={item.avatarUrl} size={9} />
+                    <UserAvatar name={item.displayName} avatarUrl={item.avatarUrl} size={9} frame={item.frame} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">
                         {item.displayName}

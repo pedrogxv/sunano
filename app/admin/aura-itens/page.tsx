@@ -18,6 +18,7 @@ import {
   Trash2,
   X,
 } from "lucide-react"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
 import { usePageHeader } from "@/components/providers/page-header-context"
@@ -263,7 +264,7 @@ function ItemCard({
           <div className="rounded-lg border border-border/60 bg-muted/20 px-2.5 py-2">
             <p className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Preço</p>
             <p className="mt-0.5 text-sm font-bold tabular-nums text-foreground">
-              🔥 {fmt(item.auraCost)}
+              <AuraAmount value={item.auraCost} />
             </p>
             {/* Prêmio físico é o único que não recebe o desconto VIP, então só
                 nele o preço de tabela é o preço final para todo mundo. */}

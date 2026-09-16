@@ -195,26 +195,48 @@ export async function getUserStreak(userId: string): Promise<UserStreak> {
 }
 
 /**
- * Mesma regra de expiração de `getUserStreak`, em lote — usado para exibir a
- * ofensiva de vários autores (comentários, mini-perfil). Retorna só o número
- * de dias (o visual "congelado" é detalhe do perfil completo, não da lista).
+ * Ofensiva de uma pessoa nos dois eixos que o site usa.
+ *
+ * São coisas DIFERENTES e nenhuma se deriva da outra: `current` expira (um
+ * dia perdido zera), `longest` não. A badge ao lado do nome mostra `current`;
+ * a moldura de marco (`STREAK_FRAMES` em `lib/profile-frames.ts`) usa
+ * `longest`, porque um marco alcançado não se desfaz.
  */
-export async function getUserStreaksByUser(userIds: string[]): Promise<Record<string, number>> {
+export type UserStreakPair = {
+  /** Dias da sequência VIVA — já zerada quando expirou. */
+  current: number
+  /** RECORDE histórico (`user_streaks.longest_streak`), nunca expira. */
+  longest: number
+}
+
+/**
+ * Mesma regra de expiração de `getUserStreak`, em lote — usado para exibir a
+ * ofensiva de vários autores (comentários, mini-perfil) e para decidir a
+ * moldura de marco deles.
+ *
+ * Traz os DOIS números na mesma consulta de propósito: a moldura precisa do
+ * recorde e a badge precisa da atual, e buscá-los em dois lugares faria toda
+ * listagem nova lembrar de um e esquecer do outro — que é como a moldura
+ * ficava de fora do fórum e dos comentários.
+ */
+export async function getUserStreakPairsByUser(
+  userIds: string[]
+): Promise<Record<string, UserStreakPair>> {
   const ids = [...new Set(userIds)]
-  const map: Record<string, number> = {}
+  const map: Record<string, UserStreakPair> = {}
   if (ids.length === 0) return map
 
   const db = createSupabaseAdminClient()
   const [{ data, error }, { data: shieldRows }] = await Promise.all([
     db
       .from("user_streaks")
-      .select("user_id, current_streak, last_completed_date")
+      .select("user_id, current_streak, longest_streak, last_completed_date")
       .in("user_id", ids),
     db.from("user_streak_shields").select("user_id, grace_days, consumed_at").in("user_id", ids),
   ])
 
   if (error) {
-    console.error("[achievements-repository] getUserStreaksByUser:", error)
+    console.error("[achievements-repository] getUserStreakPairsByUser:", error)
     return map
   }
 
@@ -227,8 +249,25 @@ export async function getUserStreaksByUser(userIds: string[]): Promise<Record<st
     const { shield } = shieldFromRow(shieldByUser.get(row.user_id) ?? null)
     const alive =
       isStreakActive(row.last_completed_date) || shieldCoversGap(row.last_completed_date, shield)
-    map[row.user_id] = alive ? row.current_streak : 0
+    map[row.user_id] = {
+      current: alive ? row.current_streak : 0,
+      // O recorde nunca passa pela regra de expiração: é o que a pessoa já
+      // fez, não o que ela está fazendo.
+      longest: row.longest_streak,
+    }
   }
+  return map
+}
+
+/**
+ * Só a ofensiva VIVA, por id — a forma que as listagens já consumiam. Casca
+ * fina sobre `getUserStreakPairsByUser` para não duplicar a regra de
+ * expiração nem a consulta de escudos.
+ */
+export async function getUserStreaksByUser(userIds: string[]): Promise<Record<string, number>> {
+  const pairs = await getUserStreakPairsByUser(userIds)
+  const map: Record<string, number> = {}
+  for (const [userId, pair] of Object.entries(pairs)) map[userId] = pair.current
   return map
 }
 

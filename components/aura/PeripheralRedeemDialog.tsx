@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Crown, Loader2, Package, Sparkles, Truck } from "lucide-react"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 
 import { auraPriceForVip } from "@/lib/aura-pricing"
 import {
@@ -21,7 +22,6 @@ import {
 } from "@/components/store/ShippingAddressFields"
 import { formatCepInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
 
-const AURA_ICON = "🔥"
 
 export type PrefillShipping = {
   recipient: string | null
@@ -112,7 +112,7 @@ export function PeripheralRedeemDialog({
               <div className="flex items-center justify-between px-3 py-2">
                 <span className="text-muted-foreground">Preço do item</span>
                 <span className="font-display font-bold tabular-nums text-muted-foreground line-through">
-                  {AURA_ICON} {price.listPrice.toLocaleString("pt-BR")}
+                  <AuraAmount value={price.listPrice} />
                 </span>
               </div>
               <div
@@ -124,7 +124,7 @@ export function PeripheralRedeemDialog({
                   Desconto VIP ({price.discountPercent}%)
                 </span>
                 <span className="font-display font-bold tabular-nums">
-                  −{AURA_ICON} {price.savings.toLocaleString("pt-BR")}
+                  <AuraAmount value={price.savings} prefix="−" />
                 </span>
               </div>
             </>
@@ -132,13 +132,13 @@ export function PeripheralRedeemDialog({
           <div className="flex items-center justify-between px-3 py-2">
             <span className="text-muted-foreground">Custo do resgate</span>
             <span className="font-display font-bold tabular-nums text-amber-400">
-              {AURA_ICON} {price.finalPrice.toLocaleString("pt-BR")}
+              <AuraAmount value={price.finalPrice} />
             </span>
           </div>
           <div className="flex items-center justify-between border-t border-amber-500/20 px-3 py-2">
             <span className="text-muted-foreground">Saldo após o resgate</span>
             <span className="font-display font-bold tabular-nums text-foreground">
-              {AURA_ICON} {remaining.toLocaleString("pt-BR")}
+              <AuraAmount value={remaining} />
             </span>
           </div>
         </div>

@@ -1,15 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { Crown, Heart } from "lucide-react"
+import { Heart } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE, CARD_SURFACE_HOVER } from "@/lib/ui-styles"
 import { profilePath } from "@/lib/profile-name"
-import { profileAccentHue } from "@/lib/user-directory"
-import { isVipActive, resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
+import { resolveProfileMedia, type AccountTier } from "@/lib/account-tier"
 import { sortTiers } from "@/lib/personal-tierlist-theme"
-import { ImageWithFallback } from "@/components/ui/image-with-fallback"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
+import type { ProfileFrameIdentity } from "@/lib/profile-frames"
 import { PersonalTierlistPublicView } from "@/components/tierlist-pessoal/PersonalTierlistPublicView"
 import { useT } from "@/lib/use-t"
 import type { TierlistItem, TierlistTierDef } from "@/lib/personal-tierlist"
@@ -22,6 +22,7 @@ export type CommunityTierlistCardData = {
     avatarUrl: string | null
     accountTier: AccountTier
     vipExpiresAt: string | null
+    frame: ProfileFrameIdentity
   }
   itemCount: number
   heartsCount: number
@@ -43,17 +44,7 @@ export function CommunityTierlistCard({ data }: { data: CommunityTierlistCardDat
   const { user } = data
   const href = `${profilePath(user.displaySlug)}/tierlist`
   const orderedTiers = sortTiers(data.tiers)
-  const isVip = isVipActive(user.accountTier, user.vipExpiresAt)
   const avatar = resolveProfileMedia(user.avatarUrl, user.accountTier, user.vipExpiresAt)
-  const accentHue = profileAccentHue(user.id)
-  const initials =
-    user.displayName
-      .trim()
-      .split(/\s+/)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2) || "?"
 
   return (
     <article
@@ -72,29 +63,14 @@ export function CommunityTierlistCard({ data }: { data: CommunityTierlistCardDat
       </div>
 
       <div className="flex items-center gap-3 p-4">
-        <Link
-          href={profilePath(user.displaySlug)}
-          className="relative size-11 shrink-0 overflow-hidden rounded-full border-2"
-          style={{ borderColor: isVip ? "var(--vip-accent)" : "var(--border)" }}
-        >
-          <ImageWithFallback
-            src={avatar.src}
-            alt={user.displayName}
-            fill
-            unoptimized={avatar.animated}
+        <Link href={profilePath(user.displaySlug)} className="shrink-0">
+          <ProfileAvatar
+            name={user.displayName}
+            avatarUrl={avatar.src}
+            size="md"
+            frame={user.frame}
+            animated={avatar.animated}
             freeze={avatar.needsFreeze}
-            sizes="44px"
-            className="object-cover"
-            fallback={
-              <div
-                className="flex size-full items-center justify-center text-sm font-bold text-white/90"
-                style={{
-                  backgroundImage: `linear-gradient(135deg, hsl(${accentHue} 55% 40%), hsl(${(accentHue + 45) % 360} 50% 28%))`,
-                }}
-              >
-                {initials}
-              </div>
-            }
           />
         </Link>
 
@@ -106,9 +82,8 @@ export function CommunityTierlistCard({ data }: { data: CommunityTierlistCardDat
               href={href}
               className="flex items-center gap-1.5 truncate text-foreground hover:underline"
             >
-              {isVip && (
-                <Crown className="size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />
-              )}
+              {/* Sem coroa: o selo de VIP vem na moldura do avatar ao lado
+                  (`ProfileAvatar`). */}
               <span className="truncate">Tierlist de {user.displayName}</span>
             </Link>
           </h2>

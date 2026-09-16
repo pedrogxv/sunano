@@ -1,20 +1,24 @@
 import { NextResponse } from "next/server"
 import * as z from "zod"
 
-import { coerceAccountTier } from "@/lib/account-tier"
 import {
+  ADMIN_ROLE_ORDER,
   type AdminProfile,
+  type AdminRole,
   getRolePermissions,
   isWebMaster,
 } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
-
-type AdminProfileRow = AdminProfile & {
-  created_at: string
-  updated_at: string
-}
+import {
+  ADMIN_USER_SORTS,
+  ADMIN_USER_STATUSES,
+  getAdminUserStats,
+  listAdminUsersPaginated,
+  type AdminUserSort,
+  type AdminUserStatus,
+} from "@/lib/server/repositories/users-repository"
 
 const userUpdateSchema = z.object({
   id: z.string().uuid(),
@@ -51,7 +55,16 @@ function getClientIp(request: Request): string | null {
   )
 }
 
-export async function GET() {
+/**
+ * Listagem paginada de usuários.
+ *
+ * Antes esta rota varria `auth.users` de 1000 em 1000 até o fim, lia
+ * `admin_profiles` e `user_profiles` inteiras, juntava tudo em memória e
+ * devolvia o array completo — a tela não tinha paginação nenhuma. Busca,
+ * filtro e ordenação agora vivem no banco (RPC `admin_list_users`) e só uma
+ * página trafega.
+ */
+export async function GET(request: Request) {
   try {
     const supabase = await createSupabaseServerClient()
     const { data: authData } = await supabase.auth.getUser()
@@ -72,91 +85,60 @@ export async function GET() {
       return NextResponse.json({ error: "Apenas o WEB Master pode ver usuários." }, { status: 403 })
     }
 
-    // Lista TODOS os usuários cadastrados (auth.users) e combina com os perfis
-    // administrativos e públicos. Quem não tem linha em admin_profiles é um
-    // usuário comum (role "user"). Usa o admin client (service role) para
-    // enxergar todas as linhas, sem depender de RLS.
-    const admin = createSupabaseAdminClient()
+    const { searchParams } = new URL(request.url)
 
-    const authUsers: { id: string; email: string | null; created_at: string }[] = []
-    for (let page = 1; ; page++) {
-      const { data: pageData, error: listError } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
-      if (listError) {
-        return NextResponse.json({ error: "Erro ao listar usuários." }, { status: 500 })
-      }
-      authUsers.push(
-        ...pageData.users.map((u) => ({ id: u.id, email: u.email ?? null, created_at: u.created_at }))
-      )
-      if (pageData.users.length < 1000) break
-    }
+    const roleParam = searchParams.get("role") ?? "all"
+    const role = roleParam === "all" || roleParam === "user" || ADMIN_ROLE_ORDER.includes(roleParam as AdminRole)
+      ? roleParam
+      : "all"
 
-    const [{ data: adminRows }, { data: profileRows }] = await Promise.all([
-      admin.from("admin_profiles").select("id, email, display_name, avatar_url, role, permissions, updated_at"),
-      admin
-        .from("user_profiles")
-        .select("id, display_name, avatar_url, account_tier, display_slug, account_banned_at, account_ban_reason, store_access"),
+    const statusParam = searchParams.get("status") as AdminUserStatus | null
+    const status = statusParam && ADMIN_USER_STATUSES.includes(statusParam) ? statusParam : "all"
+
+    const sortParam = searchParams.get("sort") as AdminUserSort | null
+    const sort = sortParam && ADMIN_USER_SORTS.includes(sortParam) ? sortParam : "recent"
+
+    const pageParam = Number(searchParams.get("page"))
+    const page = Number.isFinite(pageParam) && pageParam > 0 ? Math.trunc(pageParam) : 1
+
+    const pageSizeParam = Number(searchParams.get("pageSize"))
+    const pageSize = Number.isFinite(pageSizeParam) && pageSizeParam > 0 ? Math.trunc(pageSizeParam) : 24
+
+    // Os contadores descrevem a base inteira, então não acompanham o filtro.
+    // Só são recalculados quando o cliente pede (primeira carga e após uma
+    // escrita) — virar de página não precisa deles.
+    const wantStats = searchParams.get("stats") !== "0"
+
+    const [list, stats] = await Promise.all([
+      listAdminUsersPaginated({
+        search: searchParams.get("search"),
+        role,
+        status,
+        sort,
+        page,
+        pageSize,
+      }),
+      wantStats ? getAdminUserStats() : Promise.resolve(null),
     ])
 
-    const adminMap = new Map<string, AdminProfileRow>()
-    for (const row of (adminRows ?? []) as AdminProfileRow[]) adminMap.set(row.id, row)
-    const profileMap = new Map<
-      string,
-      {
-        display_name: string | null
-        avatar_url: string | null
-        account_tier: string | null
-        display_slug: string | null
-        account_banned_at: string | null
-        account_ban_reason: string | null
-        store_access: boolean | null
-      }
-    >()
-    for (const row of (profileRows ?? []) as {
-      id: string
-      display_name: string | null
-      avatar_url: string | null
-      account_tier: string | null
-      display_slug: string | null
-      account_banned_at: string | null
-      account_ban_reason: string | null
-      store_access: boolean | null
-    }[]) {
-      profileMap.set(row.id, {
-        display_name: row.display_name,
-        avatar_url: row.avatar_url,
-        account_tier: row.account_tier,
-        display_slug: row.display_slug,
-        account_banned_at: row.account_banned_at,
-        account_ban_reason: row.account_ban_reason,
-        store_access: row.store_access,
-      })
-    }
+    const users = list.users.map((u) => ({
+      ...u,
+      permissions: getRolePermissions(u.role as AdminRole | "user"),
+    }))
 
-    const users = authUsers
-      .map((u) => {
-        const ap = adminMap.get(u.id)
-        const up = profileMap.get(u.id)
-        const role = ap?.role ?? "user"
-        const email = u.email ?? ap?.email ?? null
-        return {
-          id: u.id,
-          email,
-          display_name: ap?.display_name?.trim() || up?.display_name?.trim() || defaultNameFromEmail(email),
-          avatar_url: ap?.avatar_url ?? up?.avatar_url ?? null,
-          account_tier: coerceAccountTier(up?.account_tier),
-          display_slug: up?.display_slug ?? null,
-          account_banned_at: up?.account_banned_at ?? null,
-          account_ban_reason: up?.account_ban_reason ?? null,
-          store_access: Boolean(up?.store_access),
-          role,
-          permissions: getRolePermissions(role),
-          created_at: u.created_at,
-          updated_at: ap?.updated_at ?? u.created_at,
-        }
-      })
-      .sort((a, b) => a.created_at.localeCompare(b.created_at))
-
-    return NextResponse.json({ ok: true, current_user_id: authData.user.id, users })
+    return NextResponse.json({
+      ok: true,
+      current_user_id: authData.user.id,
+      // O cargo de quem está olhando não pode sair da página listada: com
+      // paginação o próprio WEB Master quase nunca está nela, e a UI usa isto
+      // pra liberar banir/excluir/logar-como.
+      current_user_role: typedCurrentProfile.role,
+      users,
+      total: list.total,
+      page,
+      pageSize,
+      ...(stats ? { stats } : {}),
+    })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar usuários." }, { status: 500 })
   }

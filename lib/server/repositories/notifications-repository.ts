@@ -396,3 +396,51 @@ export async function listNotificationTargets(): Promise<NotificationTarget[]> {
     name: row.display_name ?? "Sem nome",
   }))
 }
+
+/**
+ * Avisa quem acabou de entrar no pódio que ganhou a moldura do lugar.
+ *
+ * Chamada só para concessões NOVAS (`grant_rank_frame` devolve o id do item
+ * apenas na primeira vez) — o cron reconcede o mesmo top 3 de hora em hora, e
+ * sem esse corte a pessoa receberia o mesmo aviso para sempre.
+ *
+ * O LINK É O PONTO. Uma moldura concedida não aparece em lugar nenhum até
+ * ser EQUIPADA (é o slot que todas as telas leem), então avisar sem levar ao
+ * seletor é prometer algo que a pessoa não vai achar: o caminho é
+ * /perfil → rolar até o card de moldura. `/perfil#moldura` cai direto nele.
+ *
+ * Best-effort, como as outras: nunca lança. Falhar o aviso não pode derrubar
+ * o cron que já concedeu a posse — a moldura está no inventário de qualquer
+ * jeito, e a próxima varredura não repete a notificação (ela só notifica o
+ * que é novo).
+ */
+export async function notifyRankFrameGranted(params: {
+  userId: string
+  itemId: string
+  frameName: string
+  boardLabel: string
+  place: number
+}): Promise<void> {
+  const db = createSupabaseAdminClient()
+
+  const { error } = await db.from("notifications").insert({
+    user_id: params.userId,
+    type: "rank_frame",
+    entity_id: params.itemId,
+    link: "/perfil#moldura",
+    title: `Você desbloqueou a moldura ${params.frameName}`,
+    // Diz as três coisas que a pessoa precisa saber: por que ganhou, que a
+    // posse é dela para sempre (senão "pódio" soa como algo que expira) e que
+    // falta um passo para ela aparecer.
+    body:
+      `Você está em ${params.place}º lugar no ranking de ${params.boardLabel}. ` +
+      `A moldura é sua para sempre, mesmo que saia do pódio — ` +
+      `toque para equipar e usar no seu avatar.`,
+  })
+
+  // 23505 = já existe (índice `uniq_notifications_rank_frame_once`). Não é
+  // erro: é a trava contra aviso duplicado fazendo o trabalho dela.
+  if (error && error.code !== "23505") {
+    console.error("[notifications-repository] notifyRankFrameGranted:", error)
+  }
+}

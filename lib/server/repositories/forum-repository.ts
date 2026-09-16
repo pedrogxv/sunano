@@ -4,7 +4,7 @@ import { cache } from "react"
 import type { AccountTier } from "@/lib/account-tier"
 import { canEditComment } from "@/lib/comment-edit"
 import type { CommentMention } from "@/components/comments/types"
-import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
+import { authorFrameFields, buildProfileMap, type AuthorFrameFields } from "@/lib/server/repositories/profile-enrichment"
 import { escapeLikePattern, escapeOrFilterValue, publicDbErrorMessage } from "@/lib/server/repositories/_shared"
 import { creditCommentCreationAura, creditForumPostCreationAura } from "@/lib/server/repositories/aura-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -75,7 +75,7 @@ export type ForumListPost = {
   author_vip_expires_at: string | null
   /** Slug do autor — resolve tag especial (ex: SUNANO) junto do badge de tier. */
   author_display_slug: string | null
-}
+} & AuthorFrameFields
 
 export type ForumPostDetail = ForumListPost
 export type ForumCommentDetail = {
@@ -97,7 +97,7 @@ export type ForumCommentDetail = {
   author_vip_expires_at: string | null
   author_display_slug: string | null
   author_streak: number
-}
+} & AuthorFrameFields
 
 export type ForumTab = "recent" | "hot" | "category" | "mine" | "user"
 
@@ -264,6 +264,7 @@ export async function enrichForumPostRows(rows: ForumPostRow[]): Promise<ForumLi
     author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? "common" : "common",
     author_vip_expires_at: p.user_id ? profileMap[p.user_id]?.vip_expires_at ?? null : null,
     author_display_slug: p.user_id ? profileMap[p.user_id]?.display_slug ?? null : null,
+    ...authorFrameFields(p.user_id ? profileMap[p.user_id] : undefined),
   }))
 }
 
@@ -593,6 +594,7 @@ function mapForumCommentRows(
     author_vip_expires_at: c.user_id ? profileMap[c.user_id]?.vip_expires_at ?? null : null,
     author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
     author_streak: c.user_id ? profileMap[c.user_id]?.streak ?? 0 : 0,
+    ...authorFrameFields(c.user_id ? profileMap[c.user_id] : undefined),
   }))
 }
 
@@ -789,6 +791,7 @@ export const getForumPostBySlug = cache(async (
     author_account_tier: post.user_id ? profileMap[post.user_id]?.account_tier ?? "common" : "common",
     author_vip_expires_at: post.user_id ? profileMap[post.user_id]?.vip_expires_at ?? null : null,
     author_display_slug: post.user_id ? profileMap[post.user_id]?.display_slug ?? null : null,
+    ...authorFrameFields(post.user_id ? profileMap[post.user_id] : undefined),
   }
 
   return { post: enrichedPost, comments: commentsPage.comments, hasMoreComments: commentsPage.hasMore }
@@ -1191,13 +1194,15 @@ export async function deleteOwnForumPost(params: { postSlug: string; userId: str
 
 export type ModerationFilter = "all" | "visible" | "hidden" | "locked" | "pinned"
 
-export type ModerationPost = {
+export type ModerationPost = AuthorFrameFields & {
   id: string
   slug: string
   title: string
   body_preview: string
   author_name: string
   author_avatar_url: string | null
+  author_account_tier: string | null
+  author_vip_expires_at: string | null
   category: ForumCategoryInfo | null
   media_image_urls: string[]
   media_video_url: string | null
@@ -1208,12 +1213,14 @@ export type ModerationPost = {
   comment_count: number
 }
 
-export type ModerationComment = {
+export type ModerationComment = AuthorFrameFields & {
   id: string
   post_id: string
   body: string
   author_name: string
   author_avatar_url: string | null
+  author_account_tier: string | null
+  author_vip_expires_at: string | null
   is_hidden: boolean
   created_at: string
 }
@@ -1294,6 +1301,9 @@ export async function listForumPostsForModeration(params: {
       body: c.body,
       author_name: c.author_name,
       author_avatar_url: c.user_id ? profileMap[c.user_id]?.avatar_url ?? null : null,
+      author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? null : null,
+      author_vip_expires_at: c.user_id ? profileMap[c.user_id]?.vip_expires_at ?? null : null,
+      ...authorFrameFields(c.user_id ? profileMap[c.user_id] : undefined),
       is_hidden: c.is_hidden,
       created_at: c.created_at,
     })
@@ -1306,6 +1316,9 @@ export async function listForumPostsForModeration(params: {
     body_preview: p.body_preview ?? "",
     author_name: p.author_name,
     author_avatar_url: p.user_id ? profileMap[p.user_id]?.avatar_url ?? null : null,
+    author_account_tier: p.user_id ? profileMap[p.user_id]?.account_tier ?? null : null,
+    author_vip_expires_at: p.user_id ? profileMap[p.user_id]?.vip_expires_at ?? null : null,
+    ...authorFrameFields(p.user_id ? profileMap[p.user_id] : undefined),
     category: resolveCategoryInfo(p.category_id, categoryMap),
     media_image_urls: p.media_image_urls ?? [],
     media_video_url: p.media_video_url,

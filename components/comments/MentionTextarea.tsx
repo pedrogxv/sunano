@@ -74,7 +74,10 @@ export function MentionTextarea({
     if (!shouldSearch || !mentionRange) return
     const controller = new AbortController()
     const timer = setTimeout(() => {
-      fetch(`/api/users/search?q=${encodeURIComponent(mentionRange.query)}&limit=6`, {
+      // `forMention=1`: a busca pública esconde o dono do site dos rankings de
+      // /pessoas, e a menção herdava esse filtro — ninguém conseguia citar o
+      // principal usuário do site. Ver o comentário da rota.
+      fetch(`/api/users/search?q=${encodeURIComponent(mentionRange.query)}&limit=6&forMention=1`, {
         signal: controller.signal,
       })
         .then((res) => res.json())

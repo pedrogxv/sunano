@@ -11,7 +11,7 @@ import {
   toShowcasePeripheral,
   type PeripheralShowcaseRow,
 } from "@/lib/server/repositories/peripheral-showcase-mapping"
-import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
+import { authorFrameFields, buildProfileMap, type AuthorFrameFields } from "@/lib/server/repositories/profile-enrichment"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -278,7 +278,7 @@ export type PeripheralReviewDetail = {
   score: number
   /** Voto do usuário autenticado atual nesta review, ou `null` se não votou (ou anônimo). */
   my_vote: "like" | "dislike" | null
-}
+} & AuthorFrameFields
 
 export type PeripheralReviewStats = {
   reviews: PeripheralReviewDetail[]
@@ -338,6 +338,7 @@ export async function getPeripheralReviewById(
     author_account_tier: profile?.account_tier ?? "common",
     author_vip_expires_at: profile?.vip_expires_at ?? null,
     author_display_slug: profile?.display_slug ?? null,
+    ...authorFrameFields(profile),
     author_streak: profile?.streak ?? 0,
     score: row.score ?? 0,
     my_vote: myVote.get(row.id) ?? null,
@@ -553,6 +554,7 @@ export async function getPeripheralReviewsWithStats(
       author_account_tier: profileMap[r.user_id]?.account_tier ?? "common",
       author_vip_expires_at: profileMap[r.user_id]?.vip_expires_at ?? null,
       author_display_slug: profileMap[r.user_id]?.display_slug ?? null,
+      ...authorFrameFields(profileMap[r.user_id]),
       author_streak: profileMap[r.user_id]?.streak ?? 0,
       score: r.score ?? 0,
       my_vote: myVotes.get(r.id) ?? null,

@@ -18,8 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { BR_STATES } from "@/lib/br-states"
 import {
   VIP_PLANS,
-  VIP_SUBSCRIPTION_BENEFITS,
-  VIP_FEATURED_BENEFIT,
+  vipSubscriptionBenefits,
   VIP_SUPPORT_MESSAGE,
   formatBrlCents,
   vipYearlyMonthlyEquivalentCents,
@@ -28,6 +27,8 @@ import {
 } from "@/lib/vip-plan"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import { useAuthUser } from "@/components/providers/auth-context"
+import { useAuthModal } from "@/components/providers/auth-modal-context"
+import { rememberVipIntent } from "@/lib/client/vip-intent"
 import { VipPixCharge, type VipPixPayment } from "@/components/account/VipPixCharge"
 
 interface VipUpsellModalProps {
@@ -105,7 +106,24 @@ export function VipUpsellModal({
   currentAccessUntil,
   onSubscribeStarted,
 }: VipUpsellModalProps) {
-  const { user: authUser } = useAuthUser()
+  const { user: authUser, loading: authLoading } = useAuthUser()
+  const { openLogin, openRegister } = useAuthModal()
+  /**
+   * Visitante sem sessão confirmada pelo servidor.
+   *
+   * Este modal é aberto de vários lugares (sidebar, Central de Aura, gate da
+   * tierlist, menu da conta) e nem todos checavam login antes: a pessoa
+   * deslogada via a oferta inteira, escolhia plano e método, clicava em
+   * "Confirmar assinatura" e só então o POST devolvia 401 — que chegava como
+   * um toast vermelho de erro, sem caminho nenhum para sair dele. Nenhuma tela
+   * consumidora precisa mais fazer essa checagem: o modal se apresenta no modo
+   * certo sozinho (mesma ideia de `isResubscribe` logo abaixo).
+   *
+   * `loading` e não `pending`: enquanto o servidor não respondeu, esconder as
+   * ações de pagamento é o erro barato — mostrá-las a quem não pode usá-las é
+   * o caro (é o bug que esta tela corrige).
+   */
+  const isGuest = !authLoading && !authUser
   // O estado REAL do usuário decide o modo; a prop só sobrescreve quando o
   // chamador tem informação mais fresca. Foi a inversão disso (prop primeiro,
   // sem fallback) que deixou o modal com texto de assinatura nova em todos os
@@ -168,7 +186,9 @@ export function VipUpsellModal({
   const checked = requirements != null
 
   useEffect(() => {
-    if (!open || !subscriptionEnabled) return
+    // Visitante não tem perfil para consultar, e o GET responderia 401 — a
+    // checagem de dados de cobrança só faz sentido depois do login.
+    if (!open || !subscriptionEnabled || isGuest || authLoading) return
     setRequirements(null)
     setFormOpen(false)
     setPixPayment(null)
@@ -211,7 +231,7 @@ export function VipUpsellModal({
     return () => {
       cancelled = true
     }
-  }, [open, subscriptionEnabled])
+  }, [open, subscriptionEnabled, isGuest, authLoading])
 
   function handleMethodChange(next: "pix" | "credit_card") {
     setMethod(next)
@@ -251,6 +271,11 @@ export function VipUpsellModal({
   }
 
   function handleSubscribeClick() {
+    // Rede de segurança: a interface de visitante já não mostra este botão
+    // (ver `GuestActions`), mas um clique que escape enquanto a sessão ainda
+    // não foi confirmada deve virar o convite a entrar, nunca o 401 do
+    // servidor traduzido em toast vermelho.
+    if (isGuest) return
     if (needsAnything && !formOpen) {
       setFormOpen(true)
       requestAnimationFrame(() => firstFieldRef.current?.focus())
@@ -479,12 +504,27 @@ export function VipUpsellModal({
                   </DialogTitle>
                   {/* Acompanha o plano selecionado: com o anual marcado, um
                       "R$ 8,90/mês" fixo aqui contradiria o botão de confirmar
-                      logo abaixo, que cobra R$ 89,90. */}
+                      logo abaixo, que cobra R$ 89,90.
+
+                      O visitante não tem seletor de plano (ele só aparece
+                      depois do login), então aqui cita os DOIS preços: citar
+                      só o mensal esconderia o anual de quem ainda está
+                      decidindo se vale a pena criar conta. */}
                   <p className="text-xs text-muted-foreground">
                     <span className="font-bold text-foreground">
-                      {formatBrlCents(selectedPlan.priceCents)}
+                      {formatBrlCents(isGuest ? VIP_PLANS.monthly.priceCents : selectedPlan.priceCents)}
                     </span>
-                    {selectedPlan.unitLabel} · cancele quando quiser
+                    {isGuest ? VIP_PLANS.monthly.unitLabel : selectedPlan.unitLabel}
+                    {isGuest ? (
+                      <>
+                        {" ou "}
+                        <span className="font-bold text-foreground">
+                          {formatBrlCents(VIP_PLANS.yearly.priceCents)}
+                        </span>
+                        {VIP_PLANS.yearly.unitLabel}
+                      </>
+                    ) : null}
+                    {" · cancele quando quiser"}
                   </p>
                 </div>
               </div>
@@ -504,11 +544,12 @@ export function VipUpsellModal({
             </DialogHeader>
 
             <ul className="space-y-2">
-              {VIP_SUBSCRIPTION_BENEFITS.map((benefit) => {
-                // O primeiro item é o "carro-chefe" (tierlist pessoal) — ganha
-                // caixa destacada + selo pra puxar o olho antes dos outros,
-                // que só têm o check.
-                const isFeatured = benefit === VIP_FEATURED_BENEFIT
+              {vipSubscriptionBenefits().map((benefit, i) => {
+                // O primeiro item é o "carro-chefe" — ganha caixa destacada +
+                // selo pra puxar o olho antes dos outros, que só têm o check.
+                // Qual é ele sai da própria ordem da lista, não de uma
+                // constante: com a janela de Fundador aberta o destaque é dela.
+                const isFeatured = i === 0
                 return (
                   <li
                     key={benefit}
@@ -815,11 +856,69 @@ export function VipUpsellModal({
   }
 
   /**
+   * O que um visitante deslogado vê no lugar de plano, método e do botão de
+   * cobrança: a oferta continua inteira (é ela que convence), mas as ações que
+   * exigem sessão saem de cena e dão lugar aos dois caminhos de entrada.
+   *
+   * Os botões abrem o MESMO modal de login/cadastro do resto do site
+   * (`useAuthModal`), nunca uma tela própria — ver components/auth/AuthModal.
+   * Antes de abrir, guardam a intenção: terminado o login, o
+   * `VipIntentWatcher` do layout traz este popup de volta, já no modo de quem
+   * tem sessão, para a pessoa seguir de onde parou.
+   */
+  function GuestActions() {
+    function startAuth(open: (next?: string) => void) {
+      rememberVipIntent()
+      // `next` só é usado pelo OAuth (que sai do site e precisa saber para
+      // onde voltar). O login por e-mail resolve na própria página, sem
+      // navegar. Em ambos os casos o popup do VIP é reaberto pelo watcher, não
+      // por esta rota.
+      open(typeof window !== "undefined" ? window.location.pathname : undefined)
+      // Fecha a oferta para o modal de login não abrir por cima dela; o
+      // watcher reabre depois, com a sessão já valendo.
+      onOpenChange(false)
+    }
+
+    // Fragmento, não um wrapper próprio: o espaçamento já vem do bloco que
+    // chama `SubscribeActions`.
+    return (
+      <>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Entre na sua conta para assinar. Você volta direto para cá.
+        </p>
+        <button
+          type="button"
+          onClick={() => startAuth(openLogin)}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-bold text-black transition-opacity hover:opacity-90"
+          style={{ backgroundColor: "var(--vip-accent)" }}
+        >
+          Entrar
+          <ArrowRight className="size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => startAuth(openRegister)}
+          className="flex w-full items-center justify-center rounded-lg border px-4 py-2.5 text-sm font-bold transition-colors hover:bg-[var(--vip-accent-soft)]"
+          style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
+        >
+          Criar conta
+        </button>
+      </>
+    )
+  }
+
+  /**
    * Botões de ação — renderizados na coluna da oferta enquanto o formulário
    * está fechado e no rodapé da coluna de cobrança quando ele abre, para o
    * CTA ficar sempre ao lado do que a pessoa acabou de preencher.
    */
   function SubscribeActions() {
+    // Sem sessão não há o que escolher: plano, método e o botão de cobrar
+    // dependem todos de um perfil. Trocar o bloco inteiro (em vez de
+    // desabilitar os controles) é o que evita a tela do bug — a pessoa
+    // configurando uma compra que o servidor vai recusar.
+    if (isGuest) return <GuestActions />
+
     return (
       <>
         {subscriptionEnabled && (

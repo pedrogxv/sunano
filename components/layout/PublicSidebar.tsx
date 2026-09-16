@@ -9,7 +9,6 @@ import {
   BookOpen,
   Clock3,
   Crown,
-  Flame,
   Home,
   Info,
   Medal,
@@ -22,13 +21,13 @@ import {
   Trophy,
   Users,
 } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 import { useEffect, useState } from "react"
 
 import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
 import { vipCtaLabel } from "@/lib/vip-status"
-import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { useCart } from "@/components/providers/cart-context"
@@ -103,7 +102,6 @@ export function PublicSidebar() {
   const pathname = usePathname()
   const { count: cartCount, setOpen: openCart } = useCart()
   const { user: authUser } = useAuthUser()
-  const { openLogin } = useAuthModal()
 
   const [claimableEvents, setClaimableEvents] = useState(0)
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
@@ -283,9 +281,10 @@ export function PublicSidebar() {
                   : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
               )}
             >
-              <Flame
+              <AuraIcon
+                tone="inherit"
+                outline={!isActive("/aura")}
                 className={cn("size-[18px] shrink-0", !isActive("/aura") && "nav-fire-icon")}
-                fill={isActive("/aura") ? "currentColor" : "none"}
               />
               <span className={cn(isCollapsed && "hidden", !isActive("/aura") && "nav-fire-text")}>
                 Central de Aura
@@ -310,8 +309,12 @@ export function PublicSidebar() {
               type="button"
               onClick={() => {
                 close()
-                if (authUser) setVipUpsellOpen(true)
-                else openLogin()
+                // Deslogado também abre a OFERTA, não o login: o popup se
+                // apresenta no modo de visitante (vantagens + "Entrar"/"Criar
+                // conta") e retoma a assinatura sozinho depois. Mandar direto
+                // para o login perdia o motivo do clique — a pessoa
+                // autenticava e caía no fórum, sem nada sobre VIP.
+                setVipUpsellOpen(true)
               }}
               className={cn(
                 "flex w-full items-center gap-3 rounded-lg border border-[var(--vip-accent-soft)] px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--vip-accent-soft)]",

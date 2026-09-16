@@ -6,7 +6,9 @@ import { Crown, Sparkles } from "lucide-react"
 import { FollowButton } from "@/components/people/FollowButton"
 import { ProfileMetrics } from "@/components/people/ProfileCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia, isVipActive } from "@/lib/account-tier"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
+import { profileFrameOf } from "@/lib/profile-frames"
+import { resolveProfileMedia } from "@/lib/account-tier"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
@@ -109,10 +111,6 @@ function PodiumCard({
     profile.account_tier,
     profile.vip_expires_at
   )
-  const initials =
-    profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
-    "?"
-  const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
   const specialTag = getSpecialTag(profile.display_slug)
   const hue = profileAccentHue(profile.id)
 
@@ -156,7 +154,7 @@ function PodiumCard({
               `absolute` — um elemento posicionado sem z-index pintaria por
               cima do avatar/nome mesmo vindo antes no DOM. */}
           <div
-            className={cn("relative w-full overflow-hidden rounded-t-2xl", layout.banner)}
+            className={cn("relative w-full overflow-hidden rounded-2xl", layout.banner)}
             style={{
               backgroundImage: `linear-gradient(135deg, hsl(${hue} 65% 45% / 0.85), hsl(${(hue + 45) % 360} 60% 30% / 0.55))`,
             }}
@@ -179,40 +177,23 @@ function PodiumCard({
             href={profilePath(profile.display_slug)}
             className={cn("flex flex-col items-center px-2", layout.avatarOffset)}
           >
-            {/* O anel metálico é um elemento atrás do avatar, não um `ring`:
-                gradiente animado não cabe numa borda, e mantê-lo por baixo
-                impede que o lustro do metal passe por cima da foto. */}
-            <div className={cn("group relative", isFirst ? "size-20" : "size-16")}>
-              <span
-                aria-hidden
-                className="podium-metal absolute -inset-[5px] rounded-full transition-transform duration-200 group-hover:scale-105"
+            {/* O pódio NÃO dá moldura: o lugar já é dito pelo pedestal, pelo
+                número e pela coroa do 1º. O avatar mostra só a moldura que a
+                pessoa de fato tem (equipada, ou a de VIP) — a mesma que ela
+                leva para o fórum e para o perfil. */}
+            <div className="group transition-transform duration-200 hover:scale-105">
+              <ProfileAvatar
+                name={profile.display_name}
+                avatarUrl={avatar.src}
+                size={isFirst ? "xl" : "lg"}
+                frame={profileFrameOf(profile)}
+                animated={avatar.animated}
+                freeze={avatar.needsFreeze}
               />
-              <div className="relative size-full overflow-hidden rounded-full bg-muted transition-transform duration-200 group-hover:scale-105">
-                <ImageWithFallback
-                  src={avatar.src}
-                  alt={profile.display_name}
-                  fill
-                  unoptimized={avatar.animated}
-                  freeze={avatar.needsFreeze}
-                  sizes={isFirst ? "80px" : "64px"}
-                  className="object-cover"
-                  fallback={
-                    <div
-                      className="flex size-full items-center justify-center text-lg font-bold text-white/90"
-                      style={{
-                        backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
-                      }}
-                    >
-                      {initials}
-                    </div>
-                  }
-                />
-              </div>
             </div>
 
             <p className="mt-2 flex w-full items-center justify-center gap-1 text-[13px] font-bold leading-tight text-foreground">
               <span className="truncate">{profile.display_name}</span>
-              {isVip && <Crown className="size-3 shrink-0" style={{ color: "var(--vip-accent)" }} />}
               {specialTag && <Sparkles className="size-3 shrink-0 text-cyan-400" />}
             </p>
 

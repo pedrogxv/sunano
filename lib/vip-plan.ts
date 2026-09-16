@@ -19,6 +19,11 @@
  * diz "este pagamento foi confirmado", nunca "conceda 12 meses".
  */
 
+import {
+  VIP_FOUNDER_DEADLINE_LABEL,
+  isVipFounderWindowOpen,
+} from "@/lib/profile-frames"
+
 export type VipBillingPeriod = "monthly" | "yearly"
 
 export type VipPlan = {
@@ -78,7 +83,7 @@ export function vipPlanPriceCents(period: unknown): number {
   return getVipPlan(period).priceCents
 }
 
-export const VIP_SUBSCRIPTION_BENEFITS = [
+const VIP_PERMANENT_BENEFITS = [
   "Crie sua própria tierlist pessoal de periféricos",
   "Selo VIP em destaque no perfil, comentários e posts",
   "Mídia animada (GIF/vídeo) exclusiva no banner e avatar",
@@ -89,8 +94,26 @@ export const VIP_SUBSCRIPTION_BENEFITS = [
   "Bônus passivo de Aura: +0,4% sempre, ou +0,25% adicional com ofensiva ativa",
 ] as const
 
-/** Primeiro item de `VIP_SUBSCRIPTION_BENEFITS` — o modal de upsell dá destaque visual a ele. */
-export const VIP_FEATURED_BENEFIT: (typeof VIP_SUBSCRIPTION_BENEFITS)[number] = VIP_SUBSCRIPTION_BENEFITS[0]
+/**
+ * Benefícios do VIP, incluindo os por tempo limitado que ainda valem AGORA.
+ *
+ * É função, e não constante, por causa da Moldura de Fundador: ela só é
+ * concedida a quem assina dentro da janela (ver `VIP_FOUNDER_DEADLINE` em
+ * `lib/profile-frames.ts`). Numa lista fixa, ela continuaria prometida nas
+ * telas de assinatura depois de fechada a janela — o site cobraria por um
+ * benefício que o banco recusa conceder, que é a pior forma de errar isso.
+ *
+ * A janela entra no TOPO enquanto está aberta: é o argumento mais forte e o
+ * único com prazo.
+ */
+export function vipSubscriptionBenefits(now: Date = new Date()): string[] {
+  if (!isVipFounderWindowOpen(now)) return [...VIP_PERMANENT_BENEFITS]
+
+  return [
+    `Moldura de Fundador exclusiva, só para quem assinar até ${VIP_FOUNDER_DEADLINE_LABEL} — depois disso não é mais concedida, e fica com você para sempre`,
+    ...VIP_PERMANENT_BENEFITS,
+  ]
+}
 
 export const VIP_SUPPORT_MESSAGE =
   "Assinando o VIP, além dos benefícios, você ajuda a manter e melhorar o site."

@@ -14,6 +14,7 @@ import {
   Users,
   X,
 } from "lucide-react"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
@@ -466,7 +467,7 @@ function PurchasesContent() {
                             <span className="text-xs text-muted-foreground/60 line-through">{fmt(r.listPrice)}</span>
                           )}
                           <span className="text-sm font-semibold tabular-nums text-foreground">
-                            🔥 {fmt(r.amountPaid)}
+                            <AuraAmount value={r.amountPaid} />
                           </span>
                           {discounted && (
                             <span className="rounded bg-amber-500/15 px-1 py-0.5 text-[9px] font-bold text-amber-300">

@@ -3,6 +3,7 @@
 import { Crown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 import { auraPriceForVip } from "@/lib/aura-pricing"
 
 interface AuraPriceTagProps {
@@ -11,8 +12,9 @@ interface AuraPriceTagProps {
   /** VIP ativo agora — decide se o desconto aparece. */
   isVip: boolean
   /**
-   * Ícone da moeda. Os cards usam 🔥 (Aura); o card do escudo usa 🧊 como
-   * arte própria — a moeda é a mesma, só o emoji muda.
+   * Substitui a chama da Aura por uma ARTE própria do card (o escudo usa 🧊).
+   * A moeda continua sendo Aura; só o desenho muda. Omitido = a chama do
+   * componente central (`AuraIcon`), que é o certo em qualquer preço normal.
    */
   icon?: string
   /** Classe de cor do preço em destaque, para o card casar com sua paleta. */
@@ -33,16 +35,25 @@ interface AuraPriceTagProps {
 export function AuraPriceTag({
   listPrice,
   isVip,
-  icon = "🔥",
+  icon,
   priceClassName = "text-orange-400",
   className,
 }: AuraPriceTagProps) {
   const price = auraPriceForVip(listPrice, isVip)
 
+  // Arte própria do card vira texto; sem ela, a chama do componente central.
+  const coin = icon ? <span>{icon}</span> : <AuraIcon size="lg" tone="inherit" />
+
   if (!price.discounted) {
     return (
-      <p className={cn("font-display text-lg font-bold", priceClassName, className)}>
-        {icon} {price.listPrice.toLocaleString("pt-BR")}
+      <p
+        className={cn(
+          "flex items-center gap-1 font-display text-lg font-bold",
+          priceClassName,
+          className
+        )}
+      >
+        {coin} {price.listPrice.toLocaleString("pt-BR")}
       </p>
     )
   }
@@ -52,8 +63,8 @@ export function AuraPriceTag({
       <span className="font-display text-[11px] font-bold text-muted-foreground/70 line-through decoration-[1.5px]">
         {price.listPrice.toLocaleString("pt-BR")}
       </span>
-      <p className={cn("font-display text-lg font-bold", priceClassName)}>
-        {icon} {price.finalPrice.toLocaleString("pt-BR")}
+      <p className={cn("flex items-center gap-1 font-display text-lg font-bold", priceClassName)}>
+        {coin} {price.finalPrice.toLocaleString("pt-BR")}
       </p>
       <span className="aura-vip-discount-badge flex items-center gap-0.5 rounded-full px-1.5 py-[2px] text-[9px] font-black uppercase leading-none tracking-wide">
         <Crown className="size-2.5" strokeWidth={2.5} />−{price.discountPercent}%

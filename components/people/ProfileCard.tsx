@@ -1,12 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { Activity, Bird, Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
+import { Activity, Bird, Eye, Flame, Sparkles, Users } from "lucide-react"
+import { AuraFlameIcon } from "@/components/ui/AuraIcon"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { resolveProfileMedia, isVipActive } from "@/lib/account-tier"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
+import { profileFrameOf } from "@/lib/profile-frames"
+import { resolveProfileMedia } from "@/lib/account-tier"
 import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -18,18 +21,6 @@ import {
   type DirectoryPeriod,
   type PublicProfileSummary,
 } from "@/lib/user-directory"
-
-const TIER_RING = {
-  common: "ring-background",
-  vip: "ring-[var(--vip-accent-soft)]",
-} as const
-
-/**
- * Matiz do neon. Contas VIP acendem na cor única do selo VIP (roxo/púrpura,
- * hue 320 em `--vip-accent`); as demais acendem na cor que o card já usa na
- * faixa e nas iniciais, então a luz parece emitida pelo próprio card.
- */
-const TIER_GLOW_HUE: Record<string, number> = { vip: 320 }
 
 /**
  * Ouro, prata e bronze do badge de posição. Só aparecem quando a lista é curta
@@ -51,7 +42,7 @@ const METRIC_META: Record<
   // Laranja de fogo (o mesmo tom das partículas do AuraButton) em vez de
   // `text-primary`: no tema escuro `primary` é branco, e uma chama branca não
   // diz "aura" nenhuma.
-  aura: { icon: Flame, filled: true, tone: "text-orange-500", label: () => "aura" },
+  aura: { icon: AuraFlameIcon, tone: "text-orange-500", label: () => "aura" },
   views: { icon: Eye, label: (n) => (n === 1 ? "visita" : "visitas") },
   followers: { icon: Users, label: (n) => (n === 1 ? "seguidor" : "seguidores") },
   activity: { icon: Activity, tone: "text-emerald-400", label: () => "atividade" },
@@ -170,14 +161,14 @@ export function ProfileCard({
     profile.account_tier,
     profile.vip_expires_at
   )
-  const initials =
-    profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
-    "?"
-  const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
-  const effectiveTier = isVip ? "vip" : "common"
   const specialTag = getSpecialTag(profile.display_slug)
   const hue = profileAccentHue(profile.id)
-  const glowHue = TIER_GLOW_HUE[effectiveTier] ?? hue
+  // O neon do CARD acende sempre na cor do próprio perfil. Antes o VIP puxava
+  // o roxo de `--vip-accent`, e esse halo em volta da foto virava um segundo
+  // "anel" competindo com a moldura — era o que fazia o card de VIP parecer
+  // ter uma moldura roxa fora do padrão do resto do site. Tier agora só se
+  // manifesta pela moldura, que é a mesma em toda tela.
+  const glowHue = hue
 
   // A cor do neon é dinâmica (vem do perfil), então o Tailwind não consegue
   // gerar a classe no build: as intensidades ficam em classes estáticas que
@@ -246,37 +237,29 @@ export function ProfileCard({
           )}
 
           <div className={cn("-mt-10 flex flex-col items-center px-2 sm:-mt-11 sm:px-3", !showFollowButton && "pb-4")}>
-            <div
-              className={cn(
-                "relative size-16 overflow-hidden rounded-full bg-muted ring-4 transition-transform duration-200 group-hover:scale-105 sm:size-[86px]",
-                TIER_RING[effectiveTier]
-              )}
-            >
-              <ImageWithFallback
-                src={avatar.src}
-                alt={profile.display_name}
-                fill
-                unoptimized={avatar.animated}
+            {/* A moldura vem toda de `ProfileAvatar` (equipada ou VIP) — este
+                card não desenha anel próprio, e a colocação no ranking NÃO
+                concede moldura: quem diz o lugar é o badge numérico. */}
+            <div className="transition-transform duration-200 group-hover:scale-105">
+              <ProfileAvatar
+                name={profile.display_name}
+                avatarUrl={avatar.src}
+                size="xl"
+                frame={profileFrameOf(profile)}
+                adjust={profile.media_adjustments.avatar}
+                animated={avatar.animated}
                 freeze={avatar.needsFreeze}
-                sizes="(max-width: 640px) 64px, 86px"
-                style={mediaAdjustStyle(profile.media_adjustments.avatar)}
-                className="object-cover"
-                fallback={
-                  <div
-                    className="flex size-full items-center justify-center text-2xl font-bold text-white/90"
-                    style={{
-                      backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
-                    }}
-                  >
-                    {initials}
-                  </div>
-                }
+                wrapperClassName="size-16 sm:size-[86px]"
               />
             </div>
 
             <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
               <span className="truncate">{profile.display_name}</span>
-              {isVip && <Crown className="size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />}
+              {/* Sem coroa aqui: o selo de VIP já vem na moldura do avatar
+                  (`ProfileAvatar`). Repetir os dois dobrava o sinal e ainda
+                  divergia — a coroa do nome não seguia a regra de precedência
+                  de moldura, então um VIP com moldura de rank equipada
+                  aparecia com as duas coisas. */}
               {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
             </p>
 

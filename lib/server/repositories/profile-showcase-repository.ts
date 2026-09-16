@@ -14,6 +14,7 @@ import { hasConfirmedYoutubeSubscription } from "@/lib/server/repositories/youtu
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { hasConfirmedDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
 import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
+import { ownsVipFounderFrame } from "@/lib/server/repositories/vip-founder-repository"
 import {
   getUserTierlistItemCount,
   isUserTierlistHidden,
@@ -64,7 +65,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at, equipped_avatar_frame_id, aura_items!user_profiles_equipped_avatar_frame_id_fkey ( frame_asset_url )"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at, avatar_frame_opt_out, equipped_avatar_frame_id, aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
 
 const PERIPHERAL_COLUMNS = PERIPHERAL_SHOWCASE_COLUMNS
 type PeripheralRow = PeripheralShowcaseRow
@@ -116,7 +117,8 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     profile_views: number | null
     reviews_integrity_accepted_at: string | null
     equipped_avatar_frame_id: string | null
-    aura_items: { frame_asset_url: string } | { frame_asset_url: string }[] | null
+    avatar_frame_opt_out: boolean | null
+    aura_items: { slug: string; frame_asset_url: string | null } | { slug: string; frame_asset_url: string | null }[] | null
   }
 
   const equippedFrame = Array.isArray(row.aura_items) ? row.aura_items[0] : row.aura_items
@@ -143,6 +145,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     discordMember,
     tierlistItemCount,
     tierlistHidden,
+    isFounder,
   ] = await Promise.all([
     getUserSetup(userId),
     getUserMedals(userId),
@@ -172,6 +175,12 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
       console.error("[profile-showcase-repository] isUserTierlistHidden:", err)
       return false
     }),
+    // Moldura de Fundador: honraria permanente, não derivável do tier — quem
+    // cancelou o VIP continua fundador (ver `lib/profile-frames.ts`).
+    ownsVipFounderFrame(userId).catch((err) => {
+      console.error("[profile-showcase-repository] ownsVipFounderFrame:", err)
+      return false
+    }),
   ])
 
   return {
@@ -191,6 +200,9 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     youtube_subscribed: youtubeSubscribed,
     discord_member: discordMember,
     equipped_avatar_frame_url: equippedFrame?.frame_asset_url ?? null,
+    equipped_avatar_frame_slug: equippedFrame?.slug ?? null,
+    is_founder: isFounder,
+    avatar_frame_opt_out: Boolean(profile.avatar_frame_opt_out),
     member_since: row.created_at,
     profile_views: row.profile_views ?? 0,
     followers,
@@ -205,6 +217,10 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     medals_total: medals.length,
     achievements,
     streak,
+    // Achatado para a raiz: `profileFrameOf` procura `longest_streak` aqui,
+    // não dentro de `streak` (ver o comentário do campo em
+    // `lib/profile-showcase.ts`).
+    longest_streak: streak.longest,
     favorites: selectVisibleFavorites(favorites, tier).map((f) => f.peripheral),
     favorites_total: favorites.length,
     reviewsByCategory,

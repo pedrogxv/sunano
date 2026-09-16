@@ -37,5 +37,17 @@ export type MiniProfile = {
    * cartão nunca precisa do id do item.
    */
   equipped_mini_profile_bg: string | null
+  /**
+   * Asset da moldura de avatar equipada (item `avatar_frame`), ou `null`.
+   * Aqui é a URL e não o slug — ao contrário do fundo, cuja arte mora no
+   * código, a moldura cosmética É o arquivo que o admin subiu.
+   */
+  equipped_avatar_frame_url: string | null
+  /** Slug do mesmo item — só para identificar a moldura (ver `lib/profile-frames.ts`). */
+  equipped_avatar_frame_slug: string | null
+  /** Se possui a Moldura de Fundador. Permanente: vale mesmo sem VIP ativo. */
+  is_founder: boolean
+  /** O dono escolheu não exibir moldura nenhuma. */
+  avatar_frame_opt_out: boolean
   created_at: string
 }

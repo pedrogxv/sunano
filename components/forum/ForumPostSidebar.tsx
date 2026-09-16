@@ -4,7 +4,8 @@ import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Award, ChevronRight, Eye, Flame, MessageCircle, MessagesSquare, Tag, User, Users } from "lucide-react"
+import { Award, ChevronRight, Eye, MessageCircle, MessagesSquare, Tag, User, Users } from "lucide-react"
+import { AuraIcon, AuraIconHolder } from "@/components/ui/AuraIcon"
 
 import { CollapsibleSidebarCard } from "@/components/forum/CollapsibleSidebarCard"
 import { useFollowSticky } from "@/lib/hooks/use-follow-sticky"
@@ -21,6 +22,7 @@ import type { MentionedPeripheral } from "@/lib/server/repositories/forum-periph
 import { buildPeripheralDisplayName } from "@/lib/peripheral-slug"
 import { getCategoryLabel } from "@/lib/store-category-icons"
 import { TIER_BASE_COLORS } from "@/lib/tierlist-theme"
+import { profileFrameOf } from "@/lib/profile-frames"
 
 function formatCount(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
@@ -123,7 +125,20 @@ export function ForumPostSidebar({
           href={author.display_slug ? `/perfil/${author.display_slug}` : "#"}
           className="flex items-center gap-2.5 group"
         >
-          <UserAvatar name={author.display_name} avatarUrl={author.avatar_url} size={9} />
+          <UserAvatar
+            name={author.display_name}
+            avatarUrl={author.avatar_url}
+            size={9}
+            frame={profileFrameOf({
+              equipped_avatar_frame_slug: authorProfile?.equipped_avatar_frame_slug,
+              equipped_avatar_frame_url: authorProfile?.equipped_avatar_frame_url,
+              account_tier: author.account_tier,
+              vip_expires_at: authorProfile?.vip_expires_at,
+              is_founder: authorProfile?.is_founder,
+              longest_streak: authorProfile?.longest_streak,
+              avatar_frame_opt_out: authorProfile?.avatar_frame_opt_out,
+            })}
+          />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-foreground group-hover:text-primary">
               {author.display_name}
@@ -154,9 +169,9 @@ export function ForumPostSidebar({
             <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/60 pt-3 text-center">
               <div>
                 <p className="flex items-center justify-center gap-1 text-sm font-bold text-orange-400">
-                  <span className="aura-stat-icon-holder inline-flex">
-                    <Flame className="aura-stat-icon size-3" fill="currentColor" strokeWidth={1.5} />
-                  </span>
+                  <AuraIconHolder className="shrink-0">
+                    <AuraIcon size="sm" tone="inherit" glow />
+                  </AuraIconHolder>
                   {formatCount(authorProfile.aura)}
                 </p>
                 <p className="text-[10px] text-muted-foreground">Aura</p>

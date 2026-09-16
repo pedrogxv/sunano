@@ -1,7 +1,9 @@
 import "server-only"
 
 import { isVipActive } from "@/lib/account-tier"
+import type { ProfileFrameIdentity } from "@/lib/profile-frames"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { getProfileFramesByUser } from "@/lib/server/repositories/vip-founder-repository"
 import type {
   VipPaymentMethod,
   VipSubscriptionStatus,
@@ -37,6 +39,11 @@ export type VipAdminRow = {
   displayName: string
   displaySlug: string | null
   avatarUrl: string | null
+  /**
+   * Moldura do membro — a MESMA do perfil e do fórum. O admin precisa
+   * reconhecer quem é Fundador sem abrir o perfil.
+   */
+  frame: ProfileFrameIdentity
   email: string | null
   /** VIP valendo AGORA (`isVipActive`), não "já foi VIP algum dia". */
   vipActive: boolean
@@ -129,11 +136,18 @@ function displayNameOf(profile: ProfileRow | undefined, userId: string): string 
   return profile?.display_name?.trim() || `Membro ${userId.slice(0, 6)}`
 }
 
+/**
+ * `frame` é parâmetro OBRIGATÓRIO de propósito: como campo opcional, toda
+ * listagem nova esquecia de passá-lo e o VIP Fundador saía com a coroa comum
+ * (ver `AGENTS.md`). Obrigatório, o compilador cobra a busca em LOTE
+ * (`getProfileFramesByUser`) de quem monta a linha.
+ */
 function buildRow(
   userId: string,
   profile: ProfileRow | undefined,
   subscription: SubscriptionRow | undefined,
-  email: string | null
+  email: string | null,
+  frame: ProfileFrameIdentity
 ): VipAdminRow {
   const vipActive = isVipActive(profile?.account_tier, profile?.vip_expires_at)
   // Origem é o que EXPLICA o VIP atual, não o que existe no histórico: uma
@@ -147,6 +161,7 @@ function buildRow(
     displayName: displayNameOf(profile, userId),
     displaySlug: profile?.display_slug ?? null,
     avatarUrl: profile?.avatar_url ?? null,
+    frame,
     email,
     vipActive,
     vipExpiresAt: profile?.vip_expires_at ?? null,
@@ -292,9 +307,19 @@ export async function listVipsForAdmin(params: {
     for (const profile of vipProfiles) userIds.add(profile.id)
   }
 
-  let rows = Array.from(userIds).map((userId) =>
-    buildRow(userId, profileById.get(userId), subscriptionByUser.get(userId), null)
-  )
+  // Moldura em LOTE para a página inteira — nunca uma consulta por linha.
+  const frameOf = await getProfileFramesByUser([...userIds])
+
+  let rows = Array.from(userIds).map((userId) => {
+    const profile = profileById.get(userId)
+    return buildRow(
+      userId,
+      profile,
+      subscriptionByUser.get(userId),
+      null,
+      frameOf(userId, profile?.account_tier ?? null, profile?.vip_expires_at ?? null)
+    )
+  })
 
   // ── 5. Recortes que só podem ser decididos com a linha montada ────────
   if (params.filter === "active_vips") {
@@ -417,12 +442,17 @@ export async function getVipAdminDetail(userId: string): Promise<VipAdminRow | n
   if (error) throw error
   if (!profile) return null
 
-  const emails = await fetchEmails([userId])
+  const [emails, frameOf] = await Promise.all([
+    fetchEmails([userId]),
+    getProfileFramesByUser([userId]),
+  ])
+  const profileRow = profile as ProfileRow
   return buildRow(
     userId,
-    profile as ProfileRow,
+    profileRow,
     ((subscriptions ?? []) as SubscriptionRow[])[0],
-    emails.get(userId) ?? null
+    emails.get(userId) ?? null,
+    frameOf(userId, profileRow.account_tier, profileRow.vip_expires_at)
   )
 }
 

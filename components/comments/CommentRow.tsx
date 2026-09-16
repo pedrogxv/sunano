@@ -8,7 +8,7 @@ import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostC
 import { ReportMenu } from "@/components/forum/ReportMenu"
 import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
 import { SCROLL_TO_COMMENT_EVENT } from "@/components/notifications/notification-row"
-import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
+import { AuthorAvatarLink, AuthorNameLink, authorFrom } from "@/components/profile/AuthorLink"
 import { StreakBadge } from "@/components/profile/StreakBadge"
 import {
   AlertDialog,
@@ -172,15 +172,14 @@ export function CommentRow({
       )}
     >
       <AuthorAvatarLink
-        author={{ userId: comment.user_id, displayName: comment.author_display_name, displaySlug: comment.author_display_slug }}
+        author={authorFrom(comment)}
         avatarUrl={comment.author_avatar_url}
-        size={compactAvatar ? 7 : 8}
-        isVip={isVipActive(comment.author_account_tier, comment.author_vip_expires_at)}
+        size={compactAvatar ? "xs" : "sm"}
       />
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <AuthorNameLink
-            author={{ userId: comment.user_id, displayName: comment.author_display_name, displaySlug: comment.author_display_slug }}
+            author={authorFrom(comment)}
             isVip={isVipActive(comment.author_account_tier, comment.author_vip_expires_at)}
           />
           <AuthorTierBadge tier={comment.author_account_tier} vipExpiresAt={comment.author_vip_expires_at} />

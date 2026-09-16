@@ -1,6 +1,7 @@
 "use client"
 
-import { Ban, Coins, Flame, HelpCircle, ShieldCheck, Sparkles } from "lucide-react"
+import { Ban, Coins, HelpCircle, ShieldCheck, Sparkles } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
@@ -83,7 +84,7 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
         {/* Boost — números concretos do usuário, não só a regra genérica */}
         <div className="px-4 pt-4 pb-1 sm:px-5">
           <div className="flex items-center gap-2 pb-1">
-            <Flame className="size-3.5 text-amber-400" strokeWidth={2} />
+            <AuraIcon outline />
             <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Boost ativo</span>
           </div>
           <div className="space-y-3 pb-4 text-sm text-muted-foreground">

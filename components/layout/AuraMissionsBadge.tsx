@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Bird, Check, Flame, MessageSquare, Sparkles, SquarePen, Youtube } from "lucide-react"
+import { ArrowRight, Bird, Check, MessageSquare, Sparkles, SquarePen, Youtube } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -210,7 +211,7 @@ export function AuraMissionsBadge() {
           onMouseLeave={() => setOpen(false)}
           className="animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card/70 text-sm font-semibold tabular-nums text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
         >
-          <Flame className="size-[15px] shrink-0 text-orange-500" fill="currentColor" strokeWidth={1.5} />
+          <AuraIcon className="size-[15px] shrink-0" />
           <span className="hidden leading-none sm:inline">{usage.balance}</span>
           {!allDone && (
             <span className="absolute -right-1 -top-1 flex size-2.5 items-center justify-center rounded-full bg-primary sm:hidden" />

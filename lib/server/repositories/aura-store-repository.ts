@@ -24,12 +24,21 @@ export type AuraItemKind =
   | "mini_profile_bg"
   | "peripheral"
 
+/**
+ * Como o item é obtido — espelha `aura_items.acquisition` (migration
+ * 20261116000000). Só `purchase` passa pela RPC de resgate; os demais são
+ * concedidos pelo sistema (VIP, ranking) ou pelo admin. Ver
+ * `lib/profile-frames.ts`.
+ */
+export type AuraItemAcquisition = "purchase" | "vip" | "rank" | "grant"
+
 export type AuraItem = {
   id: string
   slug: string
   name: string
   description: string | null
   kind: AuraItemKind
+  acquisition: AuraItemAcquisition
   imageUrl: string | null
   /** Asset sobreposto ao avatar (só molduras). `null` para kinds sem asset, ex. periférico. */
   frameAssetUrl: string | null
@@ -42,7 +51,7 @@ export type AuraItem = {
 export type AuraItemAdmin = AuraItem & { sortOrder: number }
 
 const ADMIN_SELECT =
-  "id, slug, name, description, kind, image_url, frame_asset_url, aura_cost, active, sort_order, stock"
+  "id, slug, name, description, kind, acquisition, image_url, frame_asset_url, aura_cost, active, sort_order, stock"
 
 function toAuraItemAdmin(row: {
   id: string
@@ -50,6 +59,7 @@ function toAuraItemAdmin(row: {
   name: string
   description: string | null
   kind: string
+  acquisition: string | null
   image_url: string | null
   frame_asset_url: string | null
   aura_cost: number
@@ -63,6 +73,7 @@ function toAuraItemAdmin(row: {
     name: row.name,
     description: row.description,
     kind: row.kind as AuraItemKind,
+    acquisition: (row.acquisition ?? "purchase") as AuraItemAcquisition,
     imageUrl: row.image_url,
     frameAssetUrl: row.frame_asset_url,
     auraCost: row.aura_cost,
@@ -77,7 +88,9 @@ export async function listActiveAuraItems(): Promise<AuraItem[]> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("aura_items")
-    .select("id, slug, name, description, kind, image_url, frame_asset_url, aura_cost, active, stock")
+    .select(
+      "id, slug, name, description, kind, acquisition, image_url, frame_asset_url, aura_cost, active, stock"
+    )
     .eq("active", true)
     .order("sort_order", { ascending: true })
 
@@ -92,6 +105,7 @@ export async function listActiveAuraItems(): Promise<AuraItem[]> {
     name: row.name,
     description: row.description,
     kind: row.kind as AuraItemKind,
+    acquisition: (row.acquisition ?? "purchase") as AuraItemAcquisition,
     imageUrl: row.image_url,
     frameAssetUrl: row.frame_asset_url,
     auraCost: row.aura_cost,
@@ -111,6 +125,23 @@ export async function getUserAuraItemIds(userId: string): Promise<Set<string>> {
   }
 
   return new Set((data ?? []).map((row) => row.item_id))
+}
+
+/**
+ * Se o dono escolheu NÃO exibir moldura nenhuma.
+ *
+ * Distinto de "slot vazio": sem esta flag, `resolveProfileFrame` cai no
+ * fallback de honraria (Fundador/VIP/Ofensiva) e desenha uma moldura em quem
+ * pediu para não ter nenhuma.
+ */
+export async function getAvatarFrameOptOut(userId: string): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data } = await db
+    .from("user_profiles")
+    .select("avatar_frame_opt_out")
+    .eq("id", userId)
+    .maybeSingle()
+  return Boolean(data?.avatar_frame_opt_out)
 }
 
 /** Item atualmente equipado como moldura de avatar, se houver. */
@@ -441,6 +472,22 @@ export async function equipAvatarFrame(userId: string, itemId: string | null): P
   const db = createSupabaseAdminClient()
 
   if (itemId) {
+    // Checagem de KIND, igual à de `equipMiniProfileBg`. Sem ela, um POST com
+    // o id de um item possuído de outro kind (um Fundo de Mini Perfil, um
+    // escudo de ofensiva) gravava esse item no slot de MOLDURA: a pessoa
+    // possui a linha, então a checagem de posse abaixo passava. O avatar não
+    // chegava a desenhar nada (o slug não casa com arte nenhuma), mas o slot
+    // ficava ocupado por lixo e o Fundo sumia do cartão.
+    const { data: item } = await db
+      .from("aura_items")
+      .select("id, kind")
+      .eq("id", itemId)
+      .maybeSingle()
+
+    if (!item || item.kind !== "avatar_frame") {
+      return { ok: false, error: "Este item não é uma moldura de avatar.", status: 400 }
+    }
+
     const { data: owned } = await db
       .from("user_aura_items")
       .select("item_id")
@@ -455,12 +502,54 @@ export async function equipAvatarFrame(userId: string, itemId: string | null): P
 
   const { error } = await db
     .from("user_profiles")
-    .update({ equipped_avatar_frame_id: itemId })
+    .update({
+      equipped_avatar_frame_id: itemId,
+      // Equipar é a escolha oposta de "nenhuma": limpa o opt-out junto, senão
+      // a pessoa equiparia uma moldura e o avatar continuaria limpo. O trigger
+      // `trg_clear_frame_opt_out` (migration 20261122000000) faz o mesmo no
+      // banco, para os backfills; aqui é explícito para a intenção ficar legível.
+      ...(itemId ? { avatar_frame_opt_out: false } : {}),
+    })
     .eq("id", userId)
 
   if (error) {
     console.error("[aura-store-repository] equipAvatarFrame:", error)
     return { ok: false, error: "Erro ao equipar item.", status: 400 }
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Liga/desliga o "não quero moldura nenhuma".
+ *
+ * Existe porque `equipAvatarFrame(userId, null)` só esvazia o SLOT, e slot
+ * vazio cai no fallback de honraria (`resolveProfileFrame`): quem é Fundador
+ * clicava em "Nenhuma", a rota respondia ok e o avatar continuava com a
+ * moldura no site inteiro. São duas decisões distintas — "qual eu exibo" e
+ * "eu exibo alguma" —, então são duas colunas e duas chamadas.
+ *
+ * Ligar o opt-out também esvazia o slot: manter uma moldura equipada por trás
+ * de "nenhuma" deixaria a tela mostrando duas escolhas contraditórias, e
+ * desligar o opt-out ressuscitaria uma moldura que a pessoa já tinha tirado.
+ */
+export async function setAvatarFrameOptOut(
+  userId: string,
+  optOut: boolean
+): Promise<EquipAvatarFrameResult> {
+  const db = createSupabaseAdminClient()
+
+  const { error } = await db
+    .from("user_profiles")
+    .update({
+      avatar_frame_opt_out: optOut,
+      ...(optOut ? { equipped_avatar_frame_id: null } : {}),
+    })
+    .eq("id", userId)
+
+  if (error) {
+    console.error("[aura-store-repository] setAvatarFrameOptOut:", error)
+    return { ok: false, error: "Erro ao salvar a preferência.", status: 400 }
   }
 
   return { ok: true }

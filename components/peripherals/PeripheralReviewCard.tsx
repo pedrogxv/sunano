@@ -8,7 +8,7 @@ import { ChevronDown, ChevronUp } from "lucide-react"
 import { toast } from "sonner"
 
 import { AuthorSpecialTagBadge, AuthorTierBadge } from "@/components/forum/PostCard"
-import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
+import { AuthorAvatarLink, AuthorNameLink, authorFrom } from "@/components/profile/AuthorLink"
 import { StreakBadge } from "@/components/profile/StreakBadge"
 import { StarRating } from "@/components/ui/star-rating"
 import { cn } from "@/lib/utils"
@@ -77,14 +77,14 @@ export function PeripheralReviewCard({
       />
 
       <AuthorAvatarLink
-        author={{ userId: review.user_id, displayName: review.author_display_name, displaySlug: review.author_display_slug }}
+        author={authorFrom(review)}
         avatarUrl={review.author_avatar_url}
-        size={8}
+        size="sm"
       />
       <div className="min-w-0 flex-1 space-y-1">
         <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
           <AuthorNameLink
-            author={{ userId: review.user_id, displayName: review.author_display_name, displaySlug: review.author_display_slug }}
+            author={authorFrom(review)}
           />
           <AuthorTierBadge tier={review.author_account_tier} vipExpiresAt={review.author_vip_expires_at} />
           <AuthorSpecialTagBadge slug={review.author_display_slug} />

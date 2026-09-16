@@ -24,6 +24,7 @@ import { getDiscordInviteUrl, isDiscordMembershipEnabled } from "@/lib/discord-m
 import { getProfileShippingPrefill, getUserProfileSettings } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { AuraCenterContent } from "@/components/aura/AuraCenterContent"
+import { getStreakFrameItemIds, getVipFounderItemId } from "@/lib/server/repositories/vip-founder-repository"
 
 export const dynamic = "force-dynamic"
 
@@ -50,6 +51,8 @@ export default async function AuraCenterPage() {
     streakShield,
     peripheralOwners,
     shippingPrefill,
+    founderItemId,
+    streakFrameItemIds,
   ] = await Promise.all([
     userId ? getUserAuraBalance(userId) : Promise.resolve(0),
     userId ? getUserAuraRank(userId) : Promise.resolve(null),
@@ -88,6 +91,13 @@ export default async function AuraCenterPage() {
       : Promise.resolve({ armed: false, graceDays: null }),
     getPeripheralOwners(),
     userId ? getProfileShippingPrefill(userId) : Promise.resolve(null),
+    // A Moldura de Fundador não vem em `listActiveAuraItems()` (linha
+    // `active = false`), então o id dela é buscado à parte — é o que liga a
+    // posse em `ownedItemIds` à vitrine.
+    getVipFounderItemId(),
+    // Idem para as molduras de Ofensiva: `active = false`, então não vêm em
+    // `listActiveAuraItems()` e a vitrine precisa dos ids à parte.
+    getStreakFrameItemIds(),
   ])
 
   return (
@@ -115,6 +125,8 @@ export default async function AuraCenterPage() {
         streakShield={streakShield}
         peripheralOwners={[...peripheralOwners.entries()]}
         shippingPrefill={shippingPrefill}
+        founderItemId={founderItemId}
+        streakFrameItemIds={streakFrameItemIds}
       />
     </Suspense>
   )

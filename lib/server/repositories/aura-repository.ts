@@ -6,6 +6,9 @@ import type { Database } from "@/lib/database.types"
 import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { completeDailyMission } from "@/lib/server/repositories/achievements-repository"
 import { getTierCapabilities, isVipActive, profileMediaProxyUrl } from "@/lib/account-tier"
+import { profileFrameOf, type ProfileFrameIdentity } from "@/lib/profile-frames"
+import { getVipFounderOwners } from "@/lib/server/repositories/vip-founder-repository"
+import { getUserStreakPairsByUser } from "@/lib/server/repositories/achievements-repository"
 
 type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reason"]
 
@@ -579,12 +582,21 @@ export type AuraRankingEntry = {
   displaySlug: string
   avatarUrl: string | null
   isVip: boolean
+  /**
+   * Moldura da pessoa, pronta para `ProfileAvatar` — o ranking desenha a
+   * MESMA que ela leva para o perfil e para o fórum. Antes daqui a modal só
+   * tinha `isVip`, então uma moldura equipada (ou a de Fundador) sumia no
+   * placar.
+   */
+  frame: ProfileFrameIdentity
   /** Saldo total (janela "all") ou Aura ganha na janela (today/week). */
   value: number
 }
 
 const AURA_RANKING_LIMIT = 10
-const RANKING_PROFILE_COLUMNS = "id, display_name, display_slug, avatar_url, account_tier, vip_expires_at"
+const RANKING_PROFILE_COLUMNS =
+  "id, display_name, display_slug, avatar_url, account_tier, vip_expires_at, avatar_frame_opt_out," +
+  " equipped_avatar_frame:aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
 
 type RankingProfileRow = {
   id: string
@@ -593,6 +605,13 @@ type RankingProfileRow = {
   avatar_url: string | null
   account_tier: string | null
   vip_expires_at: string | null
+  /** O dono escolheu não exibir moldura nenhuma. */
+  avatar_frame_opt_out?: boolean | null
+  /** Join não tipado (`Relationships` vazio em `database.types.ts`). */
+  equipped_avatar_frame?:
+    | { slug: string; frame_asset_url: string | null }
+    | { slug: string; frame_asset_url: string | null }[]
+    | null
 }
 
 /** Perfis públicos (exclui dono do site e contas banidas), na ordem dos ids pedidos. */
@@ -615,10 +634,21 @@ async function hydrateRankingProfiles(
     return []
   }
 
-  const bySlug = new Map((data as RankingProfileRow[]).map((row) => [row.id, row]))
+  const bySlug = new Map((data as unknown as RankingProfileRow[]).map((row) => [row.id, row]))
+  // Posse de Fundador e recorde de ofensiva em lote — o top 10 inteiro numa
+  // consulta cada, nunca por linha.
+  const [founders, streaks] = await Promise.all([
+    getVipFounderOwners([...bySlug.keys()]),
+    getUserStreakPairsByUser([...bySlug.keys()]),
+  ])
+
   return orderedIds.flatMap((id) => {
     const profile = bySlug.get(id)
     if (!profile) return []
+    const equippedFrame = Array.isArray(profile.equipped_avatar_frame)
+      ? profile.equipped_avatar_frame[0]
+      : profile.equipped_avatar_frame
+
     return [
       {
         userId: profile.id,
@@ -626,6 +656,15 @@ async function hydrateRankingProfiles(
         displaySlug: profile.display_slug,
         avatarUrl: profile.avatar_url ? profileMediaProxyUrl(profile.id, "avatar") : null,
         isVip: isVipActive(profile.account_tier, profile.vip_expires_at),
+        frame: profileFrameOf({
+          equipped_avatar_frame_slug: equippedFrame?.slug ?? null,
+          equipped_avatar_frame_url: equippedFrame?.frame_asset_url ?? null,
+          account_tier: profile.account_tier,
+          vip_expires_at: profile.vip_expires_at,
+          is_founder: founders.has(profile.id),
+          longest_streak: streaks[profile.id]?.longest ?? 0,
+          avatar_frame_opt_out: profile.avatar_frame_opt_out,
+        }),
         value: valueByUser.get(id) ?? 0,
       },
     ]

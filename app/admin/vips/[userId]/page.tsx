@@ -220,7 +220,7 @@ export default function AdminVipDetailPage() {
 
       {/* Cabeçalho do membro */}
       <div className="flex flex-wrap items-center gap-4 rounded-xl border border-border bg-card p-5">
-        <UserAvatar name={vip.displayName} avatarUrl={vip.avatarUrl} size={14} />
+        <UserAvatar name={vip.displayName} avatarUrl={vip.avatarUrl} size={14} frame={vip.frame} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h2 className="truncate text-lg font-semibold text-foreground">{vip.displayName}</h2>

@@ -10,20 +10,16 @@ import { Badge } from "@/components/ui/badge"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import type { AdminReferralItem } from "@/lib/server/repositories/referrals-repository"
 import { cn } from "@/lib/utils"
 
-type AdminReferral = {
-  userId: string
-  displayName: string
-  avatarUrl: string | null
-  status: "pending" | "validated" | "rejected" | "expired"
-  validatedVia: string | null
-  expiresAt: string
-  createdAt: string
-  referrerId: string
-  referrerName: string
-  rejectedReason: string | null
-}
+/**
+ * O MESMO tipo do repositório, não uma cópia. Enquanto era um tipo à parte
+ * redigitado aqui, cada campo novo da linha (a moldura, por exemplo) ficava de
+ * fora sem o compilador reclamar — que é como o avatar do admin voltava a sair
+ * sem a moldura do usuário.
+ */
+type AdminReferral = AdminReferralItem
 
 /**
  * A aba padrão é "Para revisar": as indicações barradas por teto de rede/IP.
@@ -147,7 +143,7 @@ export default function AdminIndicacoesPage() {
               key={item.userId}
               className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-4"
             >
-              <UserAvatar name={item.displayName} avatarUrl={item.avatarUrl} size={10} />
+              <UserAvatar name={item.displayName} avatarUrl={item.avatarUrl} size={10} frame={item.frame} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">{item.displayName}</p>
                 <p className="text-xs text-muted-foreground">

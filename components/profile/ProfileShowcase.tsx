@@ -16,6 +16,7 @@ import { profilePath } from "@/lib/profile-name"
 import type { ProfileShowcase as ProfileShowcaseData } from "@/lib/profile-showcase"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
+import { profileFrameOf } from "@/lib/profile-frames"
 
 /**
  * Altura da capa. Fica isolada aqui porque é o número que estamos calibrando
@@ -107,12 +108,10 @@ export function ProfileShowcase({
           com cantos próprios e, abaixo, texto no fundo da página — e a faixa
           entre eles ficava visualmente órfã. Agora a capa é o topo do cartão e
           nome/badges/stats moram dentro dele, como num perfil de rede social. */}
-      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <div className="overflow-hidden rounded-2xl">
         <div className="relative">
           <Banner
             bannerUrl={profile.banner_url}
-            tier={profile.account_tier}
-            vipExpiresAt={profile.vip_expires_at}
             adjust={profile.media_adjustments.banner}
             className={BANNER_HEIGHT}
             name={profile.display_name}
@@ -120,9 +119,11 @@ export function ProfileShowcase({
           />
 
           {/* Véu na base da capa: a foto e as medalhas encostam nela, e sem
-              esse degradê uma capa clara apagava a moldura das duas. */}
+              esse degradê uma capa clara apagava a moldura das duas. Herda o
+              `rounded-2xl` da capa para não pintar quadrado por cima dos
+              cantos arredondados dela. */}
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-card via-card/50 to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 rounded-b-2xl bg-gradient-to-t from-card via-card/50 to-transparent"
             aria-hidden
           />
 
@@ -141,10 +142,8 @@ export function ProfileShowcase({
             <AvatarQuadrado
               avatarUrl={profile.avatar_url}
               name={profile.display_name}
-              tier={profile.account_tier}
-              vipExpiresAt={profile.vip_expires_at}
+              frame={profileFrameOf(profile)}
               adjust={profile.media_adjustments.avatar}
-              frameUrl={profile.equipped_avatar_frame_url}
               bannerUrl={profile.banner_url}
             />
           </div>
@@ -189,7 +188,7 @@ export function ProfileShowcase({
           {/* Stats entram no mesmo cartão, separadas por um filete: são parte
               da identidade ("quem é essa pessoa aqui dentro"), não uma seção
               de conteúdo como setup/favoritos. */}
-          <div className="mt-6 w-full border-t border-border/60 pt-5">
+          <div className="mt-6 w-full">
             <EstatisticasGrid
               userId={profile.id}
               aura={profile.aura}

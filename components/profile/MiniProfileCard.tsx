@@ -1,10 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { Bird, Crown, Eye, Flame, Sparkles, Users } from "lucide-react"
+import { Bird, Eye, Sparkles, Users } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
 import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { isVipActive } from "@/lib/account-tier"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
 import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
@@ -12,16 +13,12 @@ import { profileAccentHue } from "@/lib/user-directory"
 import { cn } from "@/lib/utils"
 import type { MiniProfile } from "@/lib/mini-profile"
 import { getMiniProfileBgTheme } from "@/lib/mini-profile-backgrounds"
+import { profileFrameOf } from "@/lib/profile-frames"
 import {
   MiniProfileBackground,
   miniProfileBgBorderClass,
   miniProfileBgVars,
 } from "@/components/profile/MiniProfileBackground"
-
-const TIER_RING = {
-  common: "ring-background",
-  vip: "ring-[var(--vip-accent-soft)]",
-} as const
 
 function formatCount(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
@@ -52,13 +49,8 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
   const avatarSrc = profile.avatar_url
   const backgroundSrc = profile.mini_banner_url
   const hue = profileAccentHue(profile.id)
-  const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
   const bgTheme = getMiniProfileBgTheme(profile.equipped_mini_profile_bg)
-  const effectiveTier = isVip ? "vip" : "common"
   const specialTag = getSpecialTag(profile.display_slug)
-  const initials =
-    profile.display_name.trim().split(/\s+/).map((p) => p[0]).join("").toUpperCase().slice(0, 2) ||
-    "?"
 
   return (
     <Link
@@ -121,33 +113,16 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
       />
 
       <div className="relative z-[1] flex flex-col items-center px-3 pb-3 pt-5">
-        <div
-          className={cn(
-            "relative size-[72px] overflow-hidden rounded-full bg-muted ring-4 ring-offset-0",
-            // Sobre uma imagem qualquer, o anel de conta comum precisa de uma
-            // cor própria: `ring-background` sumiria no fundo escuro.
-            effectiveTier === "common" ? "ring-white/50" : TIER_RING[effectiveTier]
-          )}
-        >
-          <ImageWithFallback
-            src={avatarSrc}
-            alt={profile.display_name}
-            fill
-            sizes="72px"
-            style={mediaAdjustStyle(profile.media_adjustments.avatar)}
-            className="object-cover"
-            fallback={
-              <div
-                className="flex size-full items-center justify-center text-xl font-bold text-white/90"
-                style={{
-                  backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
-                }}
-              >
-                {initials}
-              </div>
-            }
-          />
-        </div>
+        {/* Mesmo componente (e mesma moldura) que o avatar do perfil completo,
+            do fórum e dos rankings — ver `components/ui/ProfileAvatar.tsx`. */}
+        <ProfileAvatar
+          name={profile.display_name}
+          avatarUrl={avatarSrc}
+          size="xl"
+          frame={profileFrameOf(profile)}
+          adjust={profile.media_adjustments.avatar}
+          wrapperClassName="size-[72px]"
+        />
 
         {/* Branco fixo, e não `text-foreground`: o texto agora se apoia numa
             imagem enviada pelo usuário, não no fundo do tema — no tema claro a
@@ -155,7 +130,6 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
             o caso da imagem clara. */}
         <p className="mt-2 flex w-full items-center justify-center gap-1 text-sm font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
           <span className="truncate">{profile.display_name}</span>
-          {isVip && <Crown className="size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />}
           {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-300" />}
         </p>
 
@@ -167,7 +141,7 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
 
         <div className="mt-2.5 flex items-center gap-3 text-[11px] text-white/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           <span className="flex items-center gap-1">
-            <Flame className="size-3 text-orange-400" fill="currentColor" strokeWidth={1.5} />
+            <AuraIcon size="sm" tone="inherit" />
             <span className="font-semibold text-orange-300">{formatCount(profile.aura)}</span>
           </span>
           <span className="flex items-center gap-1">

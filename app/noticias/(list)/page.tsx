@@ -72,6 +72,9 @@ function AuthorByline({ post, size = "sm" }: { post: BlogListPost; size?: "xs" |
     account_tier: post.author_profile?.account_tier ?? ("common" as const),
     vip_expires_at: post.author_profile?.vip_expires_at ?? null,
     display_slug: post.author_profile?.display_slug ?? null,
+    equipped_avatar_frame_slug: post.author_profile?.equipped_avatar_frame_slug ?? null,
+    equipped_avatar_frame_url: post.author_profile?.equipped_avatar_frame_url ?? null,
+    is_founder: post.author_profile?.is_founder ?? false,
   }
   const role = post.admin_profiles?.role
   const slug = avatarProfile.display_slug

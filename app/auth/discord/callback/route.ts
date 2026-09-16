@@ -21,6 +21,11 @@ import { exchangeScopedOAuthCode } from "@/lib/server/scoped-oauth-exchange"
  *
  * `provider_token` (access token do Discord) só é lido aqui, na própria
  * requisição, e nunca persistido.
+ *
+ * Efeito colateral desejado: como o fluxo é `linkIdentity` (ver
+ * lib/client/start-scoped-oauth.ts), ao final o Discord também fica VINCULADO à
+ * conta (aparece em /conta > Contas vinculadas) — "confirmar que está no
+ * servidor" e "conectar o Discord à conta" são a mesma ação, num clique só.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)

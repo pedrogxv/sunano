@@ -4,7 +4,8 @@ import type { ComponentType, ReactNode } from "react"
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Activity, AudioLines, Flame, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
+import { Activity, AudioLines, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { FaAmazon } from "react-icons/fa"
@@ -33,6 +34,8 @@ import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
 import { CATEGORY_PLURAL_LABELS, getTagLabel, type Category, type Tag } from "@/lib/tag-options"
 import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
 import { parseExpertAuthor } from "@/lib/peripheral-expert"
+import { profileFrameOf } from "@/lib/profile-frames"
+import type { ForumPostMention } from "@/lib/server/repositories/forum-peripherals-repository"
 import {
   formatPsuBoolean,
   hasPsuReadings,
@@ -88,16 +91,12 @@ export interface PeripheralDetailViewRelatedPost {
   cover_image_url?: string | null
 }
 
-export interface PeripheralDetailViewForumPost {
-  slug: string
-  title: string
-  created_at: string
-  aura_count: number
-  comment_count: number
-  author_display_name: string
-  author_avatar_url: string | null
-  author_display_slug: string | null
-}
+/**
+ * O post de fórum que esta tela exibe — o MESMO tipo do repositório
+ * (`ForumPostMention`), e não uma cópia: redeclarar aqui era o que deixava o
+ * avatar do autor sem tier e sem moldura enquanto a consulta já os trazia.
+ */
+export type PeripheralDetailViewForumPost = ForumPostMention
 
 export interface PeripheralDetailViewLinkedSwitch {
   id: string
@@ -1627,6 +1626,15 @@ export function PeripheralDetailView({
                               name={post.author_display_name}
                               avatarUrl={post.author_avatar_url}
                               size={8}
+                              frame={profileFrameOf({
+                                equipped_avatar_frame_slug: post.author_equipped_frame_slug,
+                                equipped_avatar_frame_url: post.author_equipped_frame_url,
+                                account_tier: post.author_account_tier,
+                                vip_expires_at: post.author_vip_expires_at,
+                                is_founder: post.author_is_founder,
+                                longest_streak: post.author_longest_streak,
+                                avatar_frame_opt_out: post.author_frame_opt_out,
+                              })}
                             />
                             <div className="min-w-0 flex-1">
                               <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground transition-colors group-hover/topic:text-violet-400">
@@ -1644,7 +1652,7 @@ export function PeripheralDetailView({
                           <div className="mt-2 flex items-center gap-3 pl-[42px] text-[11px] text-muted-foreground">
                             {post.aura_count > 0 && (
                               <span className="flex items-center gap-1 font-semibold text-orange-500">
-                                <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
+                                <AuraIcon size="sm" tone="inherit" />
                                 {post.aura_count}
                               </span>
                             )}
@@ -1715,7 +1723,7 @@ export function PeripheralDetailView({
                       <AuthorAvatarLink
                         author={{ userId: expertAuthor.userId, displayName: expertAuthor.displayName, displaySlug: expertAuthor.displaySlug }}
                         avatarUrl={expertAuthor.avatarUrl}
-                        size={7}
+                        size="sm"
                       />
                       <span className="text-xs">
                         por{" "}

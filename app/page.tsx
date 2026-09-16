@@ -3,13 +3,14 @@ import Link from "next/link"
 import {
   ArrowRight,
   Crown,
-  Flame,
   MessageCircle,
   Package,
   PlayCircle,
   ShoppingBag,
 } from "lucide-react"
 
+import { AuraIcon, AuraIconHolder } from "@/components/ui/AuraIcon"
+import { AuraSpotlight } from "@/components/home/AuraSpotlight"
 import BannerCarousel from "@/components/home/BannerCarousel"
 import DefaultHero from "@/components/home/DefaultHero"
 import { EventsShowcase } from "@/components/home/EventsShowcase"
@@ -94,7 +95,8 @@ function SectionHeader({
 }
 
 export default async function HomePage() {
-  const { banners, peripherals, products, forum, trendingForum, videos, events, counts } = await getHomeData()
+  const { banners, peripherals, products, auraPeripherals, forum, trendingForum, videos, events, counts } =
+    await getHomeData()
 
   return (
     <div className="mx-auto max-w-6xl space-y-12 px-2 py-6 sm:px-4 md:px-6 lg:px-8 md:py-10">
@@ -192,6 +194,13 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* ============ CENTRAL DE AURA ============ */}
+      {/* Logo abaixo de "Em Alta": é a seção que explica ao visitante por que
+          vale participar (prêmio físico de verdade) e como o site se sustenta
+          (VIP). Some sozinha se não houver nenhum produto cadastrado — sem
+          prêmio para mostrar, sobraria só o anúncio do VIP. */}
+      {auraPeripherals.length > 0 && <AuraSpotlight peripherals={auraPeripherals} />}
+
       {/* ============ CONQUISTAS EM DESTAQUE ============ */}
       {events.length > 0 && <EventsShowcase events={events} />}
 
@@ -278,13 +287,18 @@ export default async function HomePage() {
                         />
                       </div>
                     ) : (
-                      <UserAvatar name={post.author_name} avatarUrl={post.author_avatar_url} size={10} />
+                      <UserAvatar
+                        name={post.author_name}
+                        avatarUrl={post.author_avatar_url}
+                        size={10}
+                        frame={post.author_frame}
+                      />
                     )}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
-                        <span className="aura-stat-icon-holder inline-flex shrink-0">
-                          <Flame className="aura-stat-icon size-3.5 text-primary" fill="currentColor" strokeWidth={1.5} />
-                        </span>
+                        <AuraIconHolder>
+                          <AuraIcon glow />
+                        </AuraIconHolder>
                         <span className="text-[11px] font-semibold uppercase tracking-wide text-primary">
                           Em alta
                         </span>
@@ -297,8 +311,8 @@ export default async function HomePage() {
                         <span>·</span>
                         <span>{formatTimeAgo(post.created_at)}</span>
                         <span>·</span>
-                        <span className="flex items-center gap-1 font-medium text-primary/80">
-                          <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
+                        <span className="flex items-center gap-1 font-medium text-orange-400">
+                          <AuraIcon size="sm" tone="inherit" />
                           {post.aura_count}
                         </span>
                       </div>
@@ -326,7 +340,12 @@ export default async function HomePage() {
                         />
                       </div>
                     ) : (
-                      <UserAvatar name={post.author_name} avatarUrl={post.author_avatar_url} size={10} />
+                      <UserAvatar
+                        name={post.author_name}
+                        avatarUrl={post.author_avatar_url}
+                        size={10}
+                        frame={post.author_frame}
+                      />
                     )}
                     <div className="min-w-0 flex-1">
                       <p className="line-clamp-1 text-sm font-semibold text-foreground/90 group-hover:text-foreground">

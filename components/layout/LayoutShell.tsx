@@ -9,6 +9,7 @@ import { PublicSidebar } from "@/components/layout/PublicSidebar"
 import { AdminSidebar } from "@/components/layout/AdminSidebar"
 import { CartDrawer } from "@/components/store/CartDrawer"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
+import { VipIntentWatcher } from "@/components/aura/VipIntentWatcher"
 
 // Code-split: o AuthModal puxa UserLoginForm/UserRegisterForm, que por sua
 // vez puxam @supabase/ssr — pesado e só relevante para quem realmente abre o
@@ -96,6 +97,10 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
 
       {!isAdmin && !isCheckout && <CartDrawer />}
       {hasOpenedAuthModal && <AuthModal />}
+      {/* Retoma o popup do VIP para quem acabou de logar por causa dele. Fica
+          no layout porque o login pode terminar em OUTRA página: o OAuth sai
+          do site e volta em `/auth/callback?next=…`. Ver VipIntentWatcher. */}
+      {!isAdmin && <VipIntentWatcher />}
     </div>
   )
 }

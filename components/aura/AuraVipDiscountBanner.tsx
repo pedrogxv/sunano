@@ -1,6 +1,7 @@
 "use client"
 
 import { Crown, Sparkles } from "lucide-react"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
@@ -74,7 +75,7 @@ export function AuraVipDiscountBanner({ isVip, listPrices, onShowBenefits }: Aur
               {totalSavings > 0 && (
                 <>
                   Levando a loja inteira hoje, você economizaria{" "}
-                  <span className="font-bold text-foreground">🔥 {totalSavings.toLocaleString("pt-BR")}</span>.
+                  <AuraAmount value={totalSavings} className="font-bold text-foreground" />.
                 </>
               )}
             </>
@@ -84,7 +85,7 @@ export function AuraVipDiscountBanner({ isVip, listPrices, onShowBenefits }: Aur
               {totalSavings > 0 && (
                 <>
                   Na loja de hoje isso seria{" "}
-                  <span className="font-bold text-foreground">🔥 {totalSavings.toLocaleString("pt-BR")}</span> de
+                  <AuraAmount value={totalSavings} className="font-bold text-foreground" /> de
                   volta no seu bolso.
                 </>
               )}

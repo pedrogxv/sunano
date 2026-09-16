@@ -4,7 +4,9 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState, type CSSProperties } from "react"
 import { toast } from "sonner"
-import { Bird, Check, ChevronRight, Flame, HelpCircle, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
+import { Bird, Check, ChevronRight, HelpCircle, MessageSquare, Snowflake, Sparkles, SquarePen, Trophy } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
+import { AuraFlame, AuraFlameDefs } from "@/components/ui/AuraFlame"
 
 import { AuraRankingModal } from "@/components/aura/AuraRankingModal"
 import { AuraVipDiscountBanner } from "@/components/aura/AuraVipDiscountBanner"
@@ -43,6 +45,7 @@ import { DisplayNameChangeCard } from "@/components/aura/DisplayNameChangeCard"
 import { CommunityAchievements } from "@/components/aura/CommunityAchievements"
 import { ReferralAuraCard } from "@/components/referrals/ReferralAuraCard"
 import { MiniProfileBgSection } from "@/components/aura/MiniProfileBgSection"
+import { AvatarFrameSection } from "@/components/aura/AvatarFrameSection"
 import { AuraPeripheralSection } from "@/components/aura/AuraPeripheralSection"
 import type { PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
@@ -94,6 +97,10 @@ interface AuraCenterContentProps {
   peripheralOwners: Array<[string, PeripheralOwnerEntry[]]>
   /** Último endereço de entrega conhecido do usuário — pré-preenche o resgate de produto físico. */
   shippingPrefill: PrefillShipping
+  /** Id do item `vip:founder` — `null` enquanto a migration não rodou. */
+  founderItemId: string | null
+  /** Ids das molduras de Ofensiva por slug — vazio enquanto a migration não rodou. */
+  streakFrameItemIds: Record<string, string>
 }
 
 /**
@@ -151,6 +158,8 @@ export function AuraCenterContent({
   streakShield,
   peripheralOwners,
   shippingPrefill,
+  founderItemId,
+  streakFrameItemIds,
 }: AuraCenterContentProps) {
   // `initial*` só muda entre navegações de página inteira (novo render do
   // Server Component), nunca em re-render do client — então o valor inicial
@@ -169,6 +178,14 @@ export function AuraCenterContent({
   const [rankingOpen, setRankingOpen] = useState(false)
   const [shield, setShield] = useState(streakShield)
   const [discordOk, setDiscordOk] = useState(discordConfirmed)
+
+  // Intensidade do fogo do card de Aura. Faixas largas e poucas (4) de
+  // propósito: o fogo tem que dizer "você tem bastante" de relance, não virar
+  // um medidor que a pessoa precise decifrar. Os degraus acompanham os preços
+  // reais do catálogo — a maior faixa começa perto do que custa um produto
+  // físico, então ver a fogueira cheia coincide com poder resgatar algo.
+  const balanceHeat =
+    currentBalance >= 50_000 ? "4" : currentBalance >= 10_000 ? "3" : currentBalance >= 1_000 ? "2" : "1"
   const [peripheralOwnerMap, setPeripheralOwnerMap] = useState(
     () => new Map<string, PeripheralOwnerEntry[]>(peripheralOwners)
   )
@@ -235,11 +252,23 @@ export function AuraCenterContent({
   // prêmio mais especial da Central: estoque limitado, trava de nível
   // verificado, 1 por pessoa. Ficam fora da grade genérica de cosméticos.
   const peripheralItems = items.filter((it) => it.kind === "peripheral")
+  // Molduras também saem da grade genérica: a seção própria mostra, junto das
+  // compráveis, as de VIP e de ranking — que não são itens do banco, mas são
+  // molduras que o usuário vê por aí e precisa entender como conseguir (ver
+  // `lib/profile-frames.ts`).
+  // Só as COMPRÁVEIS entram na grade: as de VIP/rank existem em `aura_items`
+  // (migration 20261116000000) para a posse ter onde apontar, mas nascem
+  // `active = false` e `acquisition <> 'purchase'` — a vitrine delas é o
+  // catálogo em código, dentro da própria seção.
+  const frameItems = items.filter(
+    (it) => it.kind === "avatar_frame" && it.acquisition === "purchase"
+  )
   const nonShieldItems = items.filter(
     (it) =>
       it.kind !== "streak_shield" &&
       it.kind !== "mini_profile_bg" &&
-      it.kind !== "peripheral"
+      it.kind !== "peripheral" &&
+      it.kind !== "avatar_frame"
   )
 
   // Preços que o desconto VIP de fato alcança — alimentam o "quanto você
@@ -261,10 +290,12 @@ export function AuraCenterContent({
   return (
     <>
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:py-12">
+      {/* Gradientes das chamas, uma vez para a página toda (ver AuraFlame.tsx). */}
+      <AuraFlameDefs />
       {/* Título "banner de fogueira": texto em brasa correndo + fagulhas subindo */}
       <div className="aura-title-banner relative flex flex-wrap items-center gap-4 overflow-visible pb-2">
         <span className="aura-hero-icon-holder relative flex size-14 shrink-0 items-center justify-center sm:size-16">
-          <Flame className="aura-hero-icon-flame size-8 text-orange-500 sm:size-9" fill="currentColor" strokeWidth={1.2} />
+          <AuraFlame size="2xl" sparks />
         </span>
         <div className="min-w-0 flex-1 space-y-1">
           <h1 className="aura-title-text font-display text-3xl font-black leading-tight sm:text-4xl">
@@ -289,14 +320,27 @@ export function AuraCenterContent({
 
       {/* Cards de status */}
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className={cn("flex flex-col gap-2 rounded-2xl border p-5", CARD_SURFACE)}>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Flame className="aura-balance-flame size-4" fill="currentColor" strokeWidth={1.5} />
+        {/* Aura atual — o card "aceso": a chama do rótulo queima de verdade
+            (ver `.aura-balance-*` no globals.css) e a intensidade do fogo
+            responde ao saldo, então quem tem mais Aura vê uma fogueira maior.
+            É o único card com fogo; os outros dois ficam sóbrios de propósito,
+            senão o destaque se dilui. */}
+        <div
+          className={cn(
+            "aura-balance-card relative flex flex-col gap-2 overflow-hidden rounded-2xl border p-5",
+            CARD_SURFACE
+          )}
+          data-heat={balanceHeat}
+        >
+          <div className="relative z-[1] flex items-center gap-2 text-muted-foreground">
+            <AuraFlame size="lg" />
             <span className="text-xs font-semibold uppercase tracking-wider">Aura atual</span>
           </div>
-          <p className="font-display text-3xl font-bold text-foreground tabular-nums">{currentBalance.toLocaleString("pt-BR")}</p>
+          <p className="relative z-[1] font-display text-3xl font-bold text-foreground tabular-nums">
+            {currentBalance.toLocaleString("pt-BR")}
+          </p>
           {rank && (
-            <p className="text-xs text-muted-foreground">
+            <p className="relative z-[1] text-xs text-muted-foreground">
               <span className="font-semibold text-foreground">#{rank}</span> no ranking
             </p>
           )}
@@ -355,7 +399,7 @@ export function AuraCenterContent({
 
         <div className={cn("flex flex-col gap-2 rounded-2xl border p-5", CARD_SURFACE)}>
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Flame className="size-4" strokeWidth={1.5} />
+            <AuraIcon size="lg" tone="inherit" outline />
             <span className="text-xs font-semibold uppercase tracking-wider">Próxima aura liberada</span>
           </div>
           {usage.limitReached && usage.nextSlotAt ? (
@@ -394,8 +438,8 @@ export function AuraCenterContent({
         }}
       />
 
-      {/* Loja de itens — cosméticos genéricos (molduras, VIP, troca de nome).
-          Escudo, Fundos de Mini Perfil e Produtos têm seção própria.
+      {/* Loja de itens — vantagens genéricas (VIP, troca de nome).
+          Escudo, Molduras, Fundos de Mini Perfil e Produtos têm seção própria.
           `id="vip"`: alvo do link "Assinar" vindo das configurações da conta. */}
       <div id="vip" className="scroll-mt-20 space-y-3">
         <div className="space-y-1">
@@ -504,6 +548,31 @@ export function AuraCenterContent({
         )}
       </div>
 
+      {/* Molduras — seção própria: além das compráveis, mostra a de VIP e as
+          de ranking, que não se compram mas aparecem no site inteiro. */}
+      <AvatarFrameSection
+        items={frameItems}
+        balance={currentBalance}
+        isVip={vip.active}
+        ownedItemIds={ownedItemIds}
+        equippedItemId={equippedItemId}
+        currentUserAvatarUrl={currentUserAvatarUrl}
+        currentUserName={currentName}
+        requireLogin={requireLogin}
+        onRedeemed={(itemId, cost) => {
+          setOwnedItemIds((prev) => new Set(prev).add(itemId))
+          setCurrentBalance((prev) => prev - cost)
+        }}
+        onEquipChange={setEquippedItemId}
+        onShowVipBenefits={() => setVipUpsellOpen(true)}
+        founderItemId={founderItemId}
+        streakFrameItemIds={streakFrameItemIds}
+        // O RECORDE, nunca `streak.current`: o marco alcançado é permanente,
+        // e a vitrine tem de mostrar as molduras já conquistadas mesmo com a
+        // ofensiva quebrada.
+        longestStreak={streak.longest}
+      />
+
       {/* Fundos de Mini Perfil — seção própria, fora da grade genérica: o
           preview de cada um é o efeito rodando, e os cards precisam de mais
           espaço do que uma célula de moldura. */}
@@ -521,8 +590,13 @@ export function AuraCenterContent({
         onEquipChange={setEquippedMiniBgId}
       />
 
-      {/* Tarefas diárias reais — mesmo estado de daily_missions, feito/pendente hoje */}
-      <div className="space-y-3">
+      {/* Tarefas diárias reais — mesmo estado de daily_missions, feito/pendente hoje.
+
+          `id="tarefas"`: alvo do botão "Ver tarefas de hoje" da vitrine de
+          Molduras de Ofensiva, que fica ACIMA nesta mesma página. Antes ele
+          apontava para /conquistas, que não tem missão nenhuma — a pessoa
+          clicava e caía numa tela sem o que o botão prometia. */}
+      <div id="tarefas" className="scroll-mt-20 space-y-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-display text-lg font-bold text-foreground">Tarefas de hoje</h2>
           <span className="text-xs font-semibold text-muted-foreground">

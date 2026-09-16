@@ -15,6 +15,8 @@ import {
   hasAnySupportTicket,
 } from "@/lib/server/repositories/support-repository"
 import { hasForumPostsByUser } from "@/lib/server/repositories/forum-repository"
+import { ownsVipFounderFrame } from "@/lib/server/repositories/vip-founder-repository"
+import { getUserStreakPairsByUser } from "@/lib/server/repositories/achievements-repository"
 import { getLatestSubscriptionForUser } from "@/lib/server/repositories/vip-subscription-repository"
 
 /**
@@ -43,6 +45,28 @@ export type AuthUserPayload = {
   vipExpiresAt: string | null
   subscriptionStatus: string | null
   canUseStore: boolean
+  /** Asset da moldura de avatar equipada — a topbar desenha a mesma moldura do resto do site. */
+  equippedFrameUrl: string | null
+  /** Slug do mesmo item (ver `lib/profile-frames.ts`). */
+  equippedFrameSlug: string | null
+  /**
+   * Se possui a Moldura de Fundador. Honraria permanente (vale sem VIP
+   * ativo), então não dá para derivar de `accountTier` — precisa vir do
+   * banco junto com o resto da sessão, senão a topbar desenharia a moldura
+   * de VIP comum em cima de um fundador.
+   */
+  isFounder: boolean
+  /**
+   * RECORDE de ofensiva — decide a moldura de marco da topbar. Nunca a
+   * ofensiva atual: o marco alcançado é permanente.
+   */
+  longestStreak: number
+  /**
+   * O dono escolheu não exibir moldura nenhuma. Sem este campo na sessão, a
+   * topbar e o preview do editor de perfil voltariam a desenhar a honraria de
+   * quem pediu para não ter moldura.
+   */
+  frameOptOut: boolean
 }
 
 /** Resposta para quem não está autenticado (ou ainda não concluiu o 2FA). */
@@ -58,6 +82,11 @@ function anonymousPayload(): AuthUserPayload {
     vipExpiresAt: null,
     subscriptionStatus: null,
     canUseStore: !isStoreMaintenanceEnabled(),
+    equippedFrameUrl: null,
+    equippedFrameSlug: null,
+    isFounder: false,
+    longestStreak: 0,
+    frameOptOut: false,
   }
 }
 
@@ -125,6 +154,8 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     hasForumPost,
     subscription,
     canUseStore,
+    isFounder,
+    streaks,
   ] = await Promise.all([
     // Perfil e status do VIP numa consulta só: são a mesma linha da mesma
     // tabela, e antes custavam dois round-trips ao banco por visita.
@@ -142,6 +173,15 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     // env de manutenção não existe no browser e a liberação individual mora no
     // banco.
     canUseStoreNow().catch(() => false),
+    // Posse da Moldura de Fundador: honraria permanente, não derivável do
+    // tier (ver `AuthUserPayload.isFounder`). Entra no mesmo `Promise.all`
+    // para não devolver ao caminho crítico o round-trip extra.
+    ownsVipFounderFrame(user.id).catch(() => false),
+    // Recorde de ofensiva, pelo mesmo motivo do Fundador: a moldura de marco
+    // é permanente e a topbar precisa desenhar a MESMA que o resto do site.
+    getUserStreakPairsByUser([user.id]).catch(
+      () => ({}) as Awaited<ReturnType<typeof getUserStreakPairsByUser>>
+    ),
   ])
 
   return {
@@ -155,5 +195,10 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     vipExpiresAt: profileAndVip.vip?.vip_expires_at ?? null,
     subscriptionStatus: subscription?.status ?? null,
     canUseStore,
+    equippedFrameUrl: profileAndVip.equippedFrame?.frameAssetUrl ?? null,
+    equippedFrameSlug: profileAndVip.equippedFrame?.slug ?? null,
+    isFounder,
+    longestStreak: streaks[user.id]?.longest ?? 0,
+    frameOptOut: profileAndVip.frameOptOut,
   }
 })

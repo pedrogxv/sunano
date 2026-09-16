@@ -8,6 +8,8 @@ import { ArrowLeft, Clock, MessageCircle, Newspaper } from "lucide-react"
 import { CommentsSection } from "@/components/comments/CommentsSection"
 import type { CommentItem } from "@/components/comments/types"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { profileFrameOf } from "@/lib/profile-frames"
+import type { AuthorPublicProfile } from "@/lib/server/repositories/blog-repository"
 import { MiniProfileHoverCard } from "@/components/profile/MiniProfileHoverCard"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { getBlogImageWithFallback } from "@/lib/blog-images"
@@ -33,7 +35,12 @@ export type NewsPost = {
   post_type?: "news" | "review"
   comment_count?: number
   admin_profiles?: { display_name: string | null; avatar_url: string | null; email: string | null } | null
-  author_profile?: { display_slug: string | null } | null
+  /**
+   * O perfil público do autor, no MESMO tipo do repositório — redeclarar só
+   * `display_slug` aqui era o que deixava a byline sem tier e sem moldura
+   * (o avatar do autor saía cru enquanto o perfil dele mostrava a moldura).
+   */
+  author_profile?: AuthorPublicProfile
   peripherals?: PeripheralRef[] | null
 }
 
@@ -206,10 +213,20 @@ export function NoticiasPostContent({
         <MiniProfileHoverCard slug={post.author_profile?.display_slug ?? null} side="right" align="start">
           {post.author_profile?.display_slug ? (
             <Link href={profilePath(post.author_profile.display_slug)} className="shrink-0">
-              <UserAvatar name={authorName} avatarUrl={post.admin_profiles?.avatar_url} size={8} />
+              <UserAvatar
+                name={authorName}
+                avatarUrl={post.author_profile?.avatar_url ?? post.admin_profiles?.avatar_url}
+                size={8}
+                frame={profileFrameOf(post.author_profile ?? {})}
+              />
             </Link>
           ) : (
-            <UserAvatar name={authorName} avatarUrl={post.admin_profiles?.avatar_url} size={8} />
+            <UserAvatar
+                name={authorName}
+                avatarUrl={post.author_profile?.avatar_url ?? post.admin_profiles?.avatar_url}
+                size={8}
+                frame={profileFrameOf(post.author_profile ?? {})}
+              />
           )}
         </MiniProfileHoverCard>
         <div className="flex flex-col">

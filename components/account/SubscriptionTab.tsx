@@ -24,7 +24,7 @@ import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import { VipPixCharge, type VipPixPayment } from "@/components/account/VipPixCharge"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { cn } from "@/lib/utils"
-import { VIP_SUBSCRIPTION_BENEFITS, type VipBillingPeriod } from "@/lib/vip-plan"
+import { vipSubscriptionBenefits, type VipBillingPeriod } from "@/lib/vip-plan"
 import { resolveVipStatus } from "@/lib/vip-status"
 
 type SubscriptionStatus = "pending" | "active" | "past_due" | "canceled" | "expired"
@@ -601,7 +601,7 @@ export function SubscriptionTab() {
 function BenefitsList() {
   return (
     <ul className="space-y-1.5">
-      {VIP_SUBSCRIPTION_BENEFITS.map((benefit) => (
+      {vipSubscriptionBenefits().map((benefit) => (
         <li key={benefit} className="flex items-start gap-2 text-xs text-muted-foreground">
           <Crown className="mt-0.5 size-3 shrink-0" style={{ color: "var(--vip-accent)" }} />
           <span>{benefit}</span>

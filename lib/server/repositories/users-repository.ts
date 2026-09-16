@@ -19,7 +19,8 @@ import type {
   DirectoryPeriod,
   PublicProfileSummary,
 } from "@/lib/user-directory"
-import { getUserStreaksByUser } from "@/lib/server/repositories/achievements-repository"
+import { getUserStreakPairsByUser } from "@/lib/server/repositories/achievements-repository"
+import { getVipFounderOwners } from "@/lib/server/repositories/vip-founder-repository"
 
 export type { PublicProfileSummary } from "@/lib/user-directory"
 export type { MiniProfile } from "@/lib/mini-profile"
@@ -82,20 +83,46 @@ export async function getUserVipStatus(
  */
 export async function getUserProfileWithVipStatus(
   userId: string
-): Promise<{ profile: UserProfile | null; vip: UserVipStatus | null }> {
+): Promise<{
+  profile: UserProfile | null
+  vip: UserVipStatus | null
+  /** Moldura de avatar equipada — a topbar desenha a mesma do resto do site. */
+  equippedFrame: { slug: string; frameAssetUrl: string | null } | null
+  /** O dono escolheu não exibir moldura nenhuma. */
+  frameOptOut: boolean
+}> {
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("user_profiles")
-    .select("display_name, avatar_url, account_tier, vip_expires_at")
+    .select(
+      "display_name, avatar_url, account_tier, vip_expires_at, avatar_frame_opt_out," +
+        " equipped_avatar_frame:aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
+    )
     .eq("id", userId)
     .maybeSingle()
 
-  if (!data) return { profile: null, vip: null }
+  if (!data) return { profile: null, vip: null, equippedFrame: null, frameOptOut: false }
 
-  const row = data as UserProfile & UserVipStatus
+  // `as unknown as`: `Relationships` está vazio em `database.types.ts` (o
+  // arquivo é mantido à mão), então o join embutido não é tipado — mesmo
+  // padrão de `getProfileShowcase`/`getMiniProfileBySlug`.
+  const row = data as unknown as UserProfile &
+    UserVipStatus & {
+      avatar_frame_opt_out: boolean | null
+      equipped_avatar_frame:
+        | { slug: string; frame_asset_url: string | null }
+        | { slug: string; frame_asset_url: string | null }[]
+        | null
+    }
+  const frame = Array.isArray(row.equipped_avatar_frame)
+    ? row.equipped_avatar_frame[0]
+    : row.equipped_avatar_frame
+
   return {
     profile: { display_name: row.display_name, avatar_url: row.avatar_url },
     vip: { account_tier: row.account_tier, vip_expires_at: row.vip_expires_at },
+    equippedFrame: frame ? { slug: frame.slug, frameAssetUrl: frame.frame_asset_url } : null,
+    frameOptOut: Boolean(row.avatar_frame_opt_out),
   }
 }
 
@@ -120,8 +147,13 @@ export async function getUserProfiles(
   return map
 }
 
+// A moldura equipada entra por JOIN no MESMO select: o diretório, o pódio e
+// os rankings desenham a moldura da pessoa, e buscá-la à parte seria uma
+// consulta por card. A posse de Fundador não cabe aqui (é outra tabela) e vem
+// em lote, por `withCounters`.
 const DIRECTORY_COLUMNS =
-  "id, display_name, display_slug, avatar_url, mini_banner_url, account_tier, vip_expires_at, profile_views, created_at"
+  "id, display_name, display_slug, avatar_url, mini_banner_url, account_tier, vip_expires_at, profile_views, created_at, avatar_frame_opt_out," +
+  " equipped_avatar_frame:aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
 
 type DirectoryRow = {
   id: string
@@ -133,16 +165,65 @@ type DirectoryRow = {
   vip_expires_at: string | null
   profile_views: number | null
   created_at: string
+  /** O dono escolheu não exibir moldura nenhuma. */
+  avatar_frame_opt_out?: boolean | null
+  /** Join não tipado (`Relationships` vazio em `database.types.ts`). */
+  equipped_avatar_frame?:
+    | { slug: string; frame_asset_url: string | null }
+    | { slug: string; frame_asset_url: string | null }[]
+    | null
+}
+
+/**
+ * Contadores e posse que não vêm na linha de `user_profiles`.
+ *
+ * **`isFounder` é obrigatório de propósito.** Enquanto era o último parâmetro
+ * posicional com default `false`, três listagens (moderadores do fórum, Mais
+ * Seguidos e Mais Ativos) simplesmente paravam de passá-lo e o TypeScript não
+ * reclamava: quem tinha a Moldura de Fundador aparecia nessas telas com a
+ * coroa de VIP comum. Um objeto com o campo obrigatório faz o compilador
+ * cobrar a busca em lote (`getVipFounderOwners`) de toda listagem nova.
+ */
+type ProfileSummaryExtras = {
+  followers?: number
+  aura?: number
+  mediaAdjustments?: ProfileMediaAdjustments
+  activity?: number
+  streak?: number
+  /** Posse da Moldura de Fundador — SEMPRE de `getVipFounderOwners`, em lote. */
+  isFounder: boolean
+  /**
+   * RECORDE de ofensiva — decide a moldura de marco.
+   *
+   * **Obrigatório pelo mesmo motivo que `isFounder`.** Como campo opcional
+   * com default 0, toda listagem compilaria sem buscar o dado e o avatar
+   * sairia sem a moldura de ofensiva — exatamente o que já aconteceu com o
+   * Fundador em três telas. Obrigatório, o compilador cobra a busca em lote
+   * (`getUserStreakPairsByUser`) de cada listagem nova.
+   *
+   * Note que ele NÃO é o `streak` acima: aquele é a sequência viva, que a
+   * aba "Ofensiva" pede e as outras deixam em 0. A moldura tem de aparecer
+   * em TODA aba, então o recorde é buscado sempre.
+   */
+  longestStreak: number
 }
 
 function toProfileSummary(
   row: DirectoryRow,
-  followers = 0,
-  aura = 0,
-  mediaAdjustments: ProfileMediaAdjustments = DEFAULT_ADJUSTMENTS,
-  activity = 0,
-  streak = 0
+  {
+    followers = 0,
+    aura = 0,
+    mediaAdjustments = DEFAULT_ADJUSTMENTS,
+    activity = 0,
+    streak = 0,
+    isFounder,
+    longestStreak,
+  }: ProfileSummaryExtras
 ): PublicProfileSummary {
+  const equippedFrame = Array.isArray(row.equipped_avatar_frame)
+    ? row.equipped_avatar_frame[0]
+    : row.equipped_avatar_frame
+
   return {
     id: row.id,
     media_adjustments: mediaAdjustments,
@@ -158,6 +239,13 @@ function toProfileSummary(
     aura,
     activity,
     streak,
+    equipped_avatar_frame_slug: equippedFrame?.slug ?? null,
+    equipped_avatar_frame_url: equippedFrame?.frame_asset_url ?? null,
+    is_founder: isFounder,
+    longest_streak: longestStreak,
+    // Vem da própria linha (`DIRECTORY_COLUMNS`), não de `extras`: é coluna
+    // de `user_profiles`, então nenhuma listagem precisa buscá-la à parte.
+    avatar_frame_opt_out: Boolean(row.avatar_frame_opt_out),
     created_at: row.created_at,
   }
 }
@@ -368,22 +456,29 @@ async function withCounters(
   const need = new Set(want)
   const empty: Record<string, number> = {}
 
-  const [followers, aura, adjustments, activity, streaks] = await Promise.all([
+  const [followers, aura, adjustments, activity, streaks, founders] = await Promise.all([
     need.has("followers") ? countFollowersByUser(ids) : Promise.resolve(empty),
     need.has("aura") ? getAuraByUser(ids) : Promise.resolve(empty),
     getMediaAdjustmentsByUser(ids),
     need.has("activity") ? countActivityByUser(ids) : Promise.resolve(empty),
-    need.has("streaks") ? getUserStreaksByUser(ids) : Promise.resolve(empty),
+    // SEMPRE, e não só quando a aba pede "streaks": o número em destaque do
+    // card é condicional, mas a MOLDURA aparece em toda aba, e ela sai do
+    // recorde. Sob `need.has(...)` a moldura de ofensiva sumiria de
+    // `/pessoas` em todas as abas menos a de Ofensiva.
+    getUserStreakPairsByUser(ids),
+    // Uma consulta para a página inteira — nunca por card.
+    getVipFounderOwners(ids),
   ])
   return rows.map((row) =>
-    toProfileSummary(
-      row,
-      followers[row.id] ?? 0,
-      aura[row.id] ?? 0,
-      adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
-      activity[row.id] ?? 0,
-      streaks[row.id] ?? 0
-    )
+    toProfileSummary(row, {
+      followers: followers[row.id] ?? 0,
+      aura: aura[row.id] ?? 0,
+      mediaAdjustments: adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+      activity: activity[row.id] ?? 0,
+      streak: streaks[row.id]?.current ?? 0,
+      isFounder: founders.has(row.id),
+      longestStreak: streaks[row.id]?.longest ?? 0,
+    })
   )
 }
 
@@ -417,7 +512,7 @@ export async function searchUserProfiles(
     console.error("[users-repository] searchUserProfiles:", error)
     return []
   }
-  return withCounters((data ?? []) as DirectoryRow[])
+  return withCounters((data ?? []) as unknown as DirectoryRow[])
 }
 
 /**
@@ -444,7 +539,7 @@ const getCachedMostVisitedProfiles = unstable_cache(
       console.error("[users-repository] getMostVisitedProfiles:", error)
       return []
     }
-    return withCounters((data ?? []) as DirectoryRow[], [])
+    return withCounters((data ?? []) as unknown as DirectoryRow[], [])
   },
   ["users-repository:mostVisitedProfiles"],
   { revalidate: 300 }
@@ -508,7 +603,7 @@ async function fetchTopAuraProfiles(
 
   // A carteira pode apontar para uma conta sem perfil (perfil excluído): o
   // ranking é o que voltou de user_profiles, não o que voltou da carteira.
-  const ranked = ((rankedRows ?? []) as DirectoryRow[])
+  const ranked = ((rankedRows ?? []) as unknown as DirectoryRow[])
     .sort((a, b) => (balances.get(b.id) ?? 0) - (balances.get(a.id) ?? 0))
     .slice(0, limit)
 
@@ -529,7 +624,7 @@ async function fetchTopAuraProfiles(
     if (error) {
       console.error("[users-repository] getTopAuraProfiles fillers:", error)
     }
-    fillers = (data ?? []) as DirectoryRow[]
+    fillers = (data ?? []) as unknown as DirectoryRow[]
   }
 
   // `withCounters` preserva a ordem que chega — ranqueados por aura, depois o
@@ -630,7 +725,7 @@ const getCachedTopStreakProfiles = unstable_cache(
     const streakByUser = new Map(
       active.map((r) => [r.user_id, r.current_streak])
     )
-    const ranked = ((rankedRows ?? []) as DirectoryRow[]).sort(
+    const ranked = ((rankedRows ?? []) as unknown as DirectoryRow[]).sort(
       (a, b) => (streakByUser.get(b.id) ?? 0) - (streakByUser.get(a.id) ?? 0)
     )
 
@@ -651,7 +746,7 @@ const getCachedTopStreakProfiles = unstable_cache(
       if (error) {
         console.error("[users-repository] getTopStreakProfiles fillers:", error)
       }
-      fillers = (data ?? []) as DirectoryRow[]
+      fillers = (data ?? []) as unknown as DirectoryRow[]
     }
 
     // O card desta aba só mostra a ofensiva.
@@ -682,7 +777,7 @@ export async function getNewestProfiles(
     console.error("[users-repository] getNewestProfiles:", error)
     return []
   }
-  return withCounters((data ?? []) as DirectoryRow[])
+  return withCounters((data ?? []) as unknown as DirectoryRow[])
 }
 
 /**
@@ -800,7 +895,7 @@ export async function getFollowingProfiles(
 
   // O `in` volta em ordem arbitrária — restaura a ordem de quando seguiu.
   const rank = new Map(ids.map((id, index) => [id, index]))
-  const profiles = await withCounters((data ?? []) as DirectoryRow[])
+  const profiles = await withCounters((data ?? []) as unknown as DirectoryRow[])
   return profiles.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
 }
 
@@ -838,7 +933,7 @@ export async function getFollowerProfiles(
 
   // O `in` volta em ordem arbitrária — restaura a ordem de quando passou a seguir.
   const rank = new Map(ids.map((id, index) => [id, index]))
-  const profiles = await withCounters((data ?? []) as DirectoryRow[])
+  const profiles = await withCounters((data ?? []) as unknown as DirectoryRow[])
   return profiles.sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
 }
 
@@ -909,21 +1004,26 @@ const getCachedMostFollowedProfiles = unstable_cache(
       return []
     }
 
-    // Os seguidores já foram contados; o card desta aba só mostra esse número,
-    // então só falta o enquadramento de imagem.
-    const rows = (data ?? []) as DirectoryRow[]
-    const adjustments = await getMediaAdjustmentsByUser(rows.map((r) => r.id))
+    // Os seguidores já foram contados; falta o enquadramento de imagem, a
+    // posse de Fundador e o recorde de ofensiva — os dois últimos em UMA
+    // consulta para a lista toda, nunca por card.
+    const rows = (data ?? []) as unknown as DirectoryRow[]
+    const ids = rows.map((r) => r.id)
+    const [adjustments, founders, streaks] = await Promise.all([
+      getMediaAdjustmentsByUser(ids),
+      getVipFounderOwners(ids),
+      getUserStreakPairsByUser(ids),
+    ])
 
     // O `in` volta em ordem arbitrária — reordena pelo ranking de seguidores.
     return rows
       .map((row) =>
-        toProfileSummary(
-          row,
-          counts[row.id] ?? 0,
-          0,
-          adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
-          0
-        )
+        toProfileSummary(row, {
+          followers: counts[row.id] ?? 0,
+          mediaAdjustments: adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+          isFounder: founders.has(row.id),
+          longestStreak: streaks[row.id]?.longest ?? 0,
+        })
       )
       .sort((a, b) => b.followers - a.followers)
       .slice(0, limit)
@@ -968,21 +1068,26 @@ const getCachedMostActiveProfiles = unstable_cache(
       return []
     }
 
-    // A atividade já foi contada; o card desta aba só mostra esse número, então
-    // só falta o enquadramento de imagem.
-    const rows = (data ?? []) as DirectoryRow[]
-    const adjustments = await getMediaAdjustmentsByUser(rows.map((r) => r.id))
+    // A atividade já foi contada; falta o enquadramento de imagem, a posse de
+    // Fundador e o recorde de ofensiva — os dois últimos em UMA consulta para
+    // a lista toda.
+    const rows = (data ?? []) as unknown as DirectoryRow[]
+    const ids = rows.map((r) => r.id)
+    const [adjustments, founders, streaks] = await Promise.all([
+      getMediaAdjustmentsByUser(ids),
+      getVipFounderOwners(ids),
+      getUserStreakPairsByUser(ids),
+    ])
 
     // O `in` volta em ordem arbitrária — reordena pela contagem de atividade.
     return rows
       .map((row) =>
-        toProfileSummary(
-          row,
-          0,
-          0,
-          adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
-          counts[row.id] ?? 0
-        )
+        toProfileSummary(row, {
+          mediaAdjustments: adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+          activity: counts[row.id] ?? 0,
+          isFounder: founders.has(row.id),
+          longestStreak: streaks[row.id]?.longest ?? 0,
+        })
       )
       .sort((a, b) => b.activity - a.activity)
       .slice(0, limit)
@@ -1030,7 +1135,7 @@ async function hydratePeriodRanking(
     console.error("[users-repository] hydratePeriodRanking:", error)
   }
 
-  const topRows = ((rankedRows ?? []) as DirectoryRow[])
+  const topRows = ((rankedRows ?? []) as unknown as DirectoryRow[])
     .sort((a, b) => (valueById.get(b.id) ?? 0) - (valueById.get(a.id) ?? 0))
     .slice(0, limit)
 
@@ -1053,7 +1158,7 @@ async function hydratePeriodRanking(
         fillerError
       )
     }
-    fillers = (data ?? []) as DirectoryRow[]
+    fillers = (data ?? []) as unknown as DirectoryRow[]
   }
 
   // A métrica em destaque é sobrescrita logo abaixo pelo valor da janela, então
@@ -1192,11 +1297,22 @@ export async function getForumModeratorProfiles(): Promise<
     return []
   }
 
-  const rows = (data ?? []) as DirectoryRow[]
+  const rows = (data ?? []) as unknown as DirectoryRow[]
+  const [adjustments, founders, streaks] = await Promise.all([
+    getMediaAdjustmentsByUser(rows.map((r) => r.id)),
+    getVipFounderOwners(rows.map((r) => r.id)),
+    getUserStreakPairsByUser(rows.map((r) => r.id)),
+  ])
   const byId = new Map(rows.map((row) => [row.id, row]))
   return FORUM_MODERATOR_IDS.map((id) => byId.get(id))
     .filter((row): row is DirectoryRow => Boolean(row))
-    .map((row) => toProfileSummary(row))
+    .map((row) =>
+      toProfileSummary(row, {
+        mediaAdjustments: adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+        isFounder: founders.has(row.id),
+        longestStreak: streaks[row.id]?.longest ?? 0,
+      })
+    )
 }
 
 const ACTIVITY_RANK_TOP_CUTOFF = 100
@@ -1420,7 +1536,11 @@ export async function getMiniProfileBySlug(
   // um join por linha da listagem por causa dele.
   const { data, error } = await db
     .from("user_profiles")
-    .select(`${DIRECTORY_COLUMNS}, bio, equipped_mini_profile_bg:aura_items!user_profiles_equipped_mini_profile_bg_id_fkey ( slug )`)
+    .select(
+      `${DIRECTORY_COLUMNS}, bio,` +
+        ` equipped_mini_profile_bg:aura_items!user_profiles_equipped_mini_profile_bg_id_fkey ( slug ),` +
+        ` equipped_avatar_frame:aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )`
+    )
     .eq("display_slug", normalized)
     .maybeSingle()
 
@@ -1435,30 +1555,42 @@ export async function getMiniProfileBySlug(
   const row = data as unknown as DirectoryRow & {
     bio: string | null
     equipped_mini_profile_bg: { slug: string } | { slug: string }[] | null
+    equipped_avatar_frame:
+      | { slug: string; frame_asset_url: string | null }
+      | { slug: string; frame_asset_url: string | null }[]
+      | null
   }
   const equippedBg = Array.isArray(row.equipped_mini_profile_bg)
     ? row.equipped_mini_profile_bg[0]
     : row.equipped_mini_profile_bg
-  const [followers, aura, adjustments, activity, streaks] = await Promise.all([
+  const equippedFrame = Array.isArray(row.equipped_avatar_frame)
+    ? row.equipped_avatar_frame[0]
+    : row.equipped_avatar_frame
+  const [followers, aura, adjustments, activity, streaks, founders] = await Promise.all([
     countFollowersByUser([row.id]),
     getAuraByUser([row.id]),
     getMediaAdjustmentsByUser([row.id]),
     countActivityByUser([row.id]),
-    getUserStreaksByUser([row.id]),
+    getUserStreakPairsByUser([row.id]),
+    getVipFounderOwners([row.id]),
   ])
-  const summary = toProfileSummary(
-    row,
-    followers[row.id] ?? 0,
-    aura[row.id] ?? 0,
-    adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
-    activity[row.id] ?? 0
-  )
+  const summary = toProfileSummary(row, {
+    followers: followers[row.id] ?? 0,
+    aura: aura[row.id] ?? 0,
+    mediaAdjustments: adjustments[row.id] ?? DEFAULT_ADJUSTMENTS,
+    activity: activity[row.id] ?? 0,
+    isFounder: founders.has(row.id),
+    longestStreak: streaks[row.id]?.longest ?? 0,
+  })
 
   return {
     ...summary,
     bio: row.bio,
-    streak: streaks[row.id] ?? 0,
+    streak: streaks[row.id]?.current ?? 0,
     equipped_mini_profile_bg: equippedBg?.slug ?? null,
+    equipped_avatar_frame_url: equippedFrame?.frame_asset_url ?? null,
+    equipped_avatar_frame_slug: equippedFrame?.slug ?? null,
+    is_founder: founders.has(row.id),
   }
 }
 
@@ -2134,5 +2266,140 @@ export async function getUserDataExport(
     favorite_peripherals: (favoritesRes.data as any[]) ?? [],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     medals: (medalsRes.data as any[]) ?? [],
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+ * Listagem administrativa de usuários (/admin/users)
+ *
+ * Paginada NO BANCO. A versão anterior desta tela lia auth.users inteira
+ * (páginas de 1000) mais as duas tabelas de perfil completas, e mandava tudo
+ * pro navegador pra filtrar em JavaScript. Aqui só sai uma página.
+ *
+ * A fonte é `auth.users` (via RPC security definer), não `user_profiles`:
+ * existem contas autenticáveis sem linha de perfil, e são exatamente as que o
+ * admin precisa enxergar. Ver o comentário da migration
+ * 20261115000000_admin_list_users_paginated.sql.
+ * ──────────────────────────────────────────────────────────── */
+
+export const ADMIN_USER_SORTS = ["recent", "oldest", "name-asc", "name-desc", "email-asc"] as const
+export type AdminUserSort = (typeof ADMIN_USER_SORTS)[number]
+
+export const ADMIN_USER_STATUSES = ["all", "banned", "vip", "store_access", "no_profile"] as const
+export type AdminUserStatus = (typeof ADMIN_USER_STATUSES)[number]
+
+export type AdminUserListFilters = {
+  search?: string | null
+  /** 'all' | 'user' | cargo de admin_profiles */
+  role?: string
+  status?: AdminUserStatus
+  sort?: AdminUserSort
+  page?: number
+  pageSize?: number
+}
+
+export type AdminUserListItem = {
+  id: string
+  email: string | null
+  display_name: string
+  avatar_url: string | null
+  role: string
+  account_tier: string
+  vip_expires_at: string | null
+  display_slug: string | null
+  account_banned_at: string | null
+  account_ban_reason: string | null
+  store_access: boolean
+  /** false = conta sem linha em `user_profiles` (órfã). */
+  has_profile: boolean
+  last_sign_in_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type AdminUserStats = {
+  total: number
+  regular: number
+  banned: number
+  vip: number
+  store_access: number
+  no_profile: number
+  new_30d: number
+  active_30d: number
+  by_role: Record<string, number>
+}
+
+const ADMIN_USERS_MAX_PAGE_SIZE = 100
+
+export async function listAdminUsersPaginated(
+  filters: AdminUserListFilters = {}
+): Promise<{ users: AdminUserListItem[]; total: number }> {
+  const db = createSupabaseAdminClient()
+
+  const pageSize = Math.min(
+    Math.max(1, Math.trunc(filters.pageSize ?? 24)),
+    ADMIN_USERS_MAX_PAGE_SIZE
+  )
+  const page = Math.max(1, Math.trunc(filters.page ?? 1))
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (db as any).rpc("admin_list_users", {
+    p_search: filters.search?.trim() || null,
+    p_role: filters.role && filters.role !== "" ? filters.role : "all",
+    p_status: filters.status ?? "all",
+    p_sort: filters.sort ?? "recent",
+    p_limit: pageSize,
+    p_offset: (page - 1) * pageSize,
+  })
+
+  if (error) {
+    console.error("[users-repository] listAdminUsersPaginated:", error)
+    throw new Error("Erro ao listar usuários.")
+  }
+
+  const rows = (data ?? []) as (AdminUserListItem & { total_count: number | string })[]
+
+  return {
+    // `total_count` é uma window function: vem repetida em toda linha e some
+    // quando a página é vazia — daí o 0 do fallback.
+    total: rows.length > 0 ? Number(rows[0].total_count) : 0,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    users: rows.map(({ total_count, ...u }) => ({
+      ...u,
+      account_tier: coerceAccountTier(u.account_tier),
+      store_access: Boolean(u.store_access),
+      has_profile: Boolean(u.has_profile),
+    })),
+  }
+}
+
+/**
+ * Contadores do topo da tela. Descrevem a base inteira de propósito: não
+ * podem mudar quando o admin filtra ou vira de página.
+ */
+export async function getAdminUserStats(): Promise<AdminUserStats> {
+  const db = createSupabaseAdminClient()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (db as any).rpc("admin_user_stats")
+
+  if (error) {
+    console.error("[users-repository] getAdminUserStats:", error)
+    throw new Error("Erro ao carregar estatísticas de usuários.")
+  }
+
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null
+  const num = (v: unknown) => Number(v ?? 0) || 0
+
+  return {
+    total: num(row?.total),
+    regular: num(row?.regular),
+    banned: num(row?.banned),
+    vip: num(row?.vip),
+    store_access: num(row?.store_access),
+    no_profile: num(row?.no_profile),
+    new_30d: num(row?.new_30d),
+    active_30d: num(row?.active_30d),
+    by_role: (row?.by_role as Record<string, number>) ?? {},
   }
 }

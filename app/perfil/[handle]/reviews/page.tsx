@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation"
-import Image from "next/image"
 import Link from "next/link"
 import type { Metadata } from "next"
 import { buildMetadata } from "@/lib/seo"
@@ -10,6 +9,8 @@ import { getProfileShowcase } from "@/lib/server/repositories/profile-showcase-r
 import { getUserReviewsByCategory, getReviewedPeripheralIds } from "@/lib/server/repositories/peripheral-reviews-repository"
 import { findUserIdByDisplaySlug } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
+import { profileFrameOf } from "@/lib/profile-frames"
 
 export const dynamic = "force-dynamic"
 
@@ -72,12 +73,13 @@ export default async function PerfilReviewsPage({
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-6 md:py-8">
       <div className="mb-6 flex items-center gap-3">
-        <Link href={profilePath(profile.display_slug ?? profile.id)} className="relative size-10 shrink-0 overflow-hidden rounded-full border border-border">
-          {profile.avatar_url ? (
-            <Image src={profile.avatar_url} alt={profile.display_name} fill sizes="40px" className="object-cover" />
-          ) : (
-            <div className="size-full bg-muted/40" />
-          )}
+        <Link href={profilePath(profile.display_slug ?? profile.id)} className="shrink-0">
+          <ProfileAvatar
+            name={profile.display_name}
+            avatarUrl={profile.avatar_url}
+            size="md"
+            frame={profileFrameOf(profile)}
+          />
         </Link>
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold text-foreground">Reviews de {profile.display_name}</h1>

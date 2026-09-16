@@ -6,7 +6,8 @@ import { canEditComment } from "@/lib/comment-edit"
 import type { CommentMention } from "@/components/comments/types"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { publicDbErrorMessage } from "@/lib/server/repositories/_shared"
-import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
+import { authorFrameFields, buildProfileMap, type AuthorFrameFields } from "@/lib/server/repositories/profile-enrichment"
+import { getVipFounderOwners } from "@/lib/server/repositories/vip-founder-repository"
 import { creditCommentCreationAura } from "@/lib/server/repositories/aura-repository"
 
 /**
@@ -35,6 +36,10 @@ export type AuthorPublicProfile = {
   account_tier: AccountTier
   vip_expires_at: string | null
   display_slug: string | null
+  /** Moldura da assinatura do autor — a byline desenha a mesma do perfil dele. */
+  equipped_avatar_frame_slug: string | null
+  equipped_avatar_frame_url: string | null
+  is_founder: boolean
 } | null
 
 export type BlogPeripheralRef = {
@@ -116,7 +121,7 @@ export type BlogCommentDetail = {
   author_vip_expires_at: string | null
   author_display_slug: string | null
   author_streak: number
-}
+} & AuthorFrameFields
 
 // `/blog` (post_type "review") só exibe `excerpt` no card — `content` (corpo
 // inteiro do artigo) não é usado ali e sai da query. `/noticias` (post_type
@@ -218,16 +223,26 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
   const ids = [...new Set(authorIds.filter(Boolean))]
   if (ids.length === 0) return map
   const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("user_profiles")
-    .select("id, avatar_url, account_tier, vip_expires_at, display_slug")
-    .in("id", ids)
+  const [{ data, error }, founders] = await Promise.all([
+    db
+      .from("user_profiles")
+      .select(
+        "id, avatar_url, account_tier, vip_expires_at, display_slug," +
+          " equipped_avatar_frame:aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
+      )
+      .in("id", ids),
+    getVipFounderOwners(ids),
+  ])
   if (error) {
     console.error("[blog-repository] getAuthorProfiles:", error.message)
     return map
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   for (const row of (data ?? []) as any[]) {
+    const frame = Array.isArray(row.equipped_avatar_frame)
+      ? row.equipped_avatar_frame[0]
+      : row.equipped_avatar_frame
+
     map[row.id] = {
       // Nunca a coluna crua — ver o mesmo comentário em `buildProfileMap`
       // (`profile-enrichment.ts`).
@@ -235,6 +250,9 @@ async function getAuthorProfiles(authorIds: string[]): Promise<Record<string, Au
       account_tier: coerceAccountTier(row.account_tier),
       vip_expires_at: row.vip_expires_at ?? null,
       display_slug: row.display_slug ?? null,
+      equipped_avatar_frame_slug: frame?.slug ?? null,
+      equipped_avatar_frame_url: frame?.frame_asset_url ?? null,
+      is_founder: founders.has(row.id),
     }
   }
   return map
@@ -547,6 +565,7 @@ function mapCommentRows(
     author_account_tier: c.user_id ? profileMap[c.user_id]?.account_tier ?? "common" : "common",
     author_vip_expires_at: c.user_id ? profileMap[c.user_id]?.vip_expires_at ?? null : null,
     author_display_slug: c.user_id ? profileMap[c.user_id]?.display_slug ?? null : null,
+    ...authorFrameFields(c.user_id ? profileMap[c.user_id] : undefined),
     author_streak: c.user_id ? profileMap[c.user_id]?.streak ?? 0 : 0,
   }))
 }

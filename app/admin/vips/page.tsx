@@ -465,7 +465,7 @@ function VipsContent() {
                       {/* Membro */}
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2.5">
-                          <UserAvatar name={row.displayName} avatarUrl={row.avatarUrl} size={8} />
+                          <UserAvatar name={row.displayName} avatarUrl={row.avatarUrl} size={8} frame={row.frame} />
                           <div className="min-w-0">
                             <p className="truncate text-sm font-medium text-foreground">
                               {row.displayName}

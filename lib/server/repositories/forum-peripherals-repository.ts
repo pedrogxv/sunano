@@ -10,7 +10,7 @@ import {
 } from "@/lib/peripheral-mentions"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { buildProfileMap } from "@/lib/server/repositories/profile-enrichment"
+import { authorFrameFields, buildProfileMap, type AuthorFrameFields } from "@/lib/server/repositories/profile-enrichment"
 import { listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
 
 /**
@@ -43,7 +43,10 @@ export type ForumPostMention = {
   author_display_name: string
   author_avatar_url: string | null
   author_display_slug: string | null
-}
+  /** Tier/validade do autor — junto da moldura, completam o que `ProfileAvatar` precisa. */
+  author_account_tier: string | null
+  author_vip_expires_at: string | null
+} & AuthorFrameFields
 
 /**
  * Índice de menções montado a partir do catálogo inteiro.
@@ -229,6 +232,9 @@ export async function getPostsForPeripheral(
       // `buildProfileMap` já devolve a URL pelo proxy — nunca a do Storage.
       author_avatar_url: profile?.avatar_url ?? null,
       author_display_slug: profile?.display_slug ?? null,
+      author_account_tier: profile?.account_tier ?? null,
+      author_vip_expires_at: profile?.vip_expires_at ?? null,
+      ...authorFrameFields(profile),
     }
   })
 }

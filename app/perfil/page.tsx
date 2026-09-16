@@ -21,9 +21,13 @@ export default function ProfilePage() {
 
   return (
     <div className="pb-16">
-      <AccountPageHeader profile={profile} />
+      <AccountPageHeader profile={profile} width="max-w-7xl" />
 
-      <div className="mx-auto max-w-4xl px-2 py-8 sm:px-4 md:px-6">
+      {/* `max-w-7xl`: o editor virou duas colunas (previews presos de um lado,
+          abas do outro) e num `max-w-4xl` as duas ficavam estreitas demais
+          para valer — a coluna de controles não comportava dois campos lado a
+          lado, que é o que tirava a tela da rolagem infinita. */}
+      <div className="mx-auto max-w-7xl px-3 py-6 sm:px-4 md:px-6 md:py-8">
         <ProfileSection profile={profile} onProfileChange={setProfile} />
       </div>
     </div>

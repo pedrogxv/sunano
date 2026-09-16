@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, type CSSProperties } from "react"
-import { Flame, Snowflake } from "lucide-react"
+import { Snowflake } from "lucide-react"
+
+import { AURA_BRAND_COLOR_CLASS, AuraFlameIcon } from "@/components/ui/AuraIcon"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -54,10 +56,12 @@ function ReactionIcon({
   onClick: () => void
 }) {
   const [bursting, setBursting] = useState(false)
-  const Icon = kind === "like" ? Flame : Snowflake
+  const Icon = kind === "like" ? AuraFlameIcon : Snowflake
   const colors = kind === "like" ? LIKE_PARTICLE_COLORS : DISLIKE_PARTICLE_COLORS
   const floatLabel = kind === "like" ? "+1" : "-1"
-  const activeClass = kind === "like" ? "text-primary" : "text-sky-400"
+  // Laranja da moeda, nunca `text-primary`: `--primary` é branco puro no
+  // tema, e a chama ativa saía sem cor (ver AuraIcon.tsx).
+  const activeClass = kind === "like" ? AURA_BRAND_COLOR_CLASS : "text-sky-400"
 
   function handleClick(event: React.MouseEvent) {
     event.preventDefault()

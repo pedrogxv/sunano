@@ -5,8 +5,16 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getYouTubeChannelFeed } from "@/lib/server/integrations/youtube"
 import { listActiveBanners, type HomeBanner } from "@/lib/server/repositories/banners-repository"
 import { listFeaturedProducts, type FeaturedProduct } from "@/lib/server/repositories/store-repository"
+import {
+  getPeripheralOwners,
+  listActiveAuraItems,
+  type AuraItem,
+  type PeripheralOwner,
+} from "@/lib/server/repositories/aura-store-repository"
 import { listActiveEventsForDisplay } from "@/lib/server/repositories/events-repository"
 import type { EventDisplay } from "@/lib/events"
+import { profileFrameOf, type ProfileFrameIdentity } from "@/lib/profile-frames"
+import { getProfileFramesByUser } from "@/lib/server/repositories/vip-founder-repository"
 
 /**
  * Read model da Home — compõe, num único lugar, todas as consultas que a
@@ -40,12 +48,31 @@ export type HomeForumPost = {
   body_preview: string
   author_name: string
   author_avatar_url: string | null
+  /** Moldura do autor, pronta para `ProfileAvatar` — a home desenha a mesma do resto do site. */
+  author_frame: ProfileFrameIdentity
   media_image_urls: string[]
   created_at: string
 }
 
 export type HomeTrendingPost = HomeForumPost & {
   aura_count: number
+}
+
+/**
+ * Produto físico da Central de Aura em destaque na Home — o item de maior
+ * apelo da Central, e a razão de a pessoa juntar Aura. Só o que a vitrine
+ * precisa: nada por usuário, para a Home continuar cacheável (ISR).
+ */
+export type HomeAuraPeripheral = {
+  id: string
+  name: string
+  description: string | null
+  imageUrl: string | null
+  auraCost: number
+  /** Unidades cadastradas. */
+  stock: number
+  /** Unidades ainda disponíveis (estoque − resgatados). Zero = esgotado. */
+  unitsLeft: number
 }
 
 export type HomeVideo = {
@@ -61,6 +88,8 @@ export type HomeData = {
   peripherals: HomeTopPeripheral[]
   blog: HomeBlogPost[]
   products: FeaturedProduct[]
+  /** Produtos físicos da Central de Aura, os de maior apelo primeiro. */
+  auraPeripherals: HomeAuraPeripheral[]
   forum: HomeForumPost[]
   /** Post(s) "em alta" (maior aura nos últimos 7 dias) — até 2, vazio se nada se destacar. */
   trendingForum: HomeTrendingPost[]
@@ -88,6 +117,8 @@ export async function getHomeData(): Promise<HomeData> {
     ytFeed,
     countsRes,
     activeEvents,
+    auraItems,
+    auraPeripheralOwners,
   ] = await Promise.all([
     // Banner é conteúdo de vitrine: se a consulta falhar, a Home cai no hero
     // padrão em vez de derrubar a página inteira.
@@ -134,6 +165,11 @@ export async function getHomeData(): Promise<HomeData> {
     // Sem estado por usuário aqui de propósito: manter a Home cacheável (ISR).
     // "Já resgatei essa?" é resolvido no client por `EventsShowcase`.
     listActiveEventsForDisplay().catch(() => [] as EventDisplay[]),
+    // Vitrine da Central de Aura. Tudo aqui é conteúdo público (catálogo e
+    // quantas unidades restam), sem nada por usuário — a Home segue cacheável.
+    // Se qualquer uma falhar, a seção some em vez de derrubar a página.
+    listActiveAuraItems().catch(() => [] as AuraItem[]),
+    getPeripheralOwners().catch(() => new Map<string, PeripheralOwner[]>()),
   ])
 
   const forumRows = forumPostsRes.data ?? []
@@ -144,12 +180,30 @@ export async function getHomeData(): Promise<HomeData> {
     ),
   ]
   const avatarMap: Record<string, string | null> = {}
+  // Tier e validade do VIP entram junto do avatar: sem eles a home não
+  // conseguia montar a moldura do autor, e o avatar saía cru enquanto o
+  // perfil da pessoa mostrava a moldura dela.
+  const tierMap: Record<string, { tier: string | null; expiresAt: string | null }> = {}
+  let frameOf: Awaited<ReturnType<typeof getProfileFramesByUser>> | null = null
+
   if (authorIds.length > 0) {
-    const { data: profiles } = await db.from("user_profiles").select("id, avatar_url").in("id", authorIds)
+    const [{ data: profiles }, resolver] = await Promise.all([
+      db.from("user_profiles").select("id, avatar_url, account_tier, vip_expires_at").in("id", authorIds),
+      getProfileFramesByUser(authorIds),
+    ])
+    frameOf = resolver
     // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
     for (const row of profiles ?? []) {
       avatarMap[row.id] = row.avatar_url ? profileMediaProxyUrl(row.id, "avatar") : null
+      tierMap[row.id] = { tier: row.account_tier, expiresAt: row.vip_expires_at }
     }
+  }
+
+  /** Moldura do autor de um post da home (convidado = sem moldura). */
+  const authorFrame = (userId: string | null): ProfileFrameIdentity => {
+    if (!userId || !frameOf) return profileFrameOf({})
+    const t = tierMap[userId]
+    return frameOf(userId, t?.tier ?? null, t?.expiresAt ?? null)
   }
 
   const topPeripheralRows = (topPeripheralsRes.data ?? []) as unknown as Array<{
@@ -161,6 +215,29 @@ export async function getHomeData(): Promise<HomeData> {
     category: string
     tier: string | null
   }>
+
+  // Produtos físicos da Central, com o estoque restante já descontado. A
+  // ordem é a de maior apelo: disponível antes de esgotado e, dentro disso,
+  // o mais caro primeiro — é o item que justifica juntar Aura. Esgotado
+  // continua aparecendo (prova de que alguém levou), mas nunca na frente.
+  const auraPeripherals: HomeAuraPeripheral[] = auraItems
+    .filter((item) => item.kind === "peripheral")
+    .map((item) => {
+      const claimed = auraPeripheralOwners.get(item.id)?.length ?? 0
+      return {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        imageUrl: item.imageUrl,
+        auraCost: item.auraCost,
+        stock: item.stock,
+        unitsLeft: Math.max(item.stock - claimed, 0),
+      }
+    })
+    .sort((a, b) => {
+      const availability = Number(b.unitsLeft > 0) - Number(a.unitsLeft > 0)
+      return availability !== 0 ? availability : b.auraCost - a.auraCost
+    })
 
   return {
     banners,
@@ -174,12 +251,14 @@ export async function getHomeData(): Promise<HomeData> {
     })),
     blog: (latestBlogRes.data ?? []) as unknown as HomeBlogPost[],
     products: featuredProducts,
+    auraPeripherals,
     forum: forumRows.map((p) => ({
       id: p.id,
       slug: p.slug,
       body_preview: p.body_preview,
       author_name: p.author_name,
       author_avatar_url: p.user_id ? avatarMap[p.user_id] ?? null : null,
+      author_frame: authorFrame(p.user_id),
       media_image_urls: p.media_image_urls ?? [],
       created_at: p.created_at,
     })),
@@ -189,6 +268,7 @@ export async function getHomeData(): Promise<HomeData> {
       body_preview: p.body_preview,
       author_name: p.author_name,
       author_avatar_url: p.user_id ? avatarMap[p.user_id] ?? null : null,
+      author_frame: authorFrame(p.user_id),
       media_image_urls: p.media_image_urls ?? [],
       created_at: p.created_at,
       aura_count: p.aura_count ?? 0,

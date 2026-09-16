@@ -13,19 +13,24 @@ import {
   Newspaper,
   Package,
   PackageCheck,
+  Medal,
   Reply,
   UserPlus,
   Wallet,
   X,
 } from "lucide-react"
+import { AuraFlameIcon } from "@/components/ui/AuraIcon"
 
 import type { Notification } from "@/lib/hooks/use-notifications"
 import type { NotificationType } from "@/lib/database.types"
 import type { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 
-export const ICONS: Record<NotificationType, typeof Bell> = {
-  aura_received: Flame,
+// `React.ElementType` e não `typeof Bell`: o ícone de Aura é o componente
+// central do site (`AuraFlameIcon`), não um ícone do lucide — amarrar o mapa
+// ao tipo da lib impedia justamente a troca do símbolo da moeda.
+export const ICONS: Record<NotificationType, React.ElementType> = {
+  aura_received: AuraFlameIcon,
   post_comment: MessageSquare,
   comment_reply: Reply,
   new_follower: UserPlus,
@@ -39,6 +44,7 @@ export const ICONS: Record<NotificationType, typeof Bell> = {
   support_status: CircleCheck,
   store_restock: PackageCheck,
   affiliate_payout: Wallet,
+  rank_frame: Medal,
 }
 
 export const ICON_TONE: Record<NotificationType, string> = {
@@ -56,6 +62,7 @@ export const ICON_TONE: Record<NotificationType, string> = {
   support_status: "bg-cyan-500/15 text-cyan-400",
   store_restock: "bg-emerald-500/15 text-emerald-400",
   affiliate_payout: "bg-green-500/15 text-green-400",
+  rank_frame: "bg-fuchsia-500/15 text-fuchsia-400",
 }
 
 export function fill(template: string, values: Record<string, string | number>) {
@@ -134,6 +141,10 @@ export function buildMessage(n: Notification, t: ReturnType<typeof useT>): strin
     // do saque faz parte da frase e não cabe num template bilíngue.
     case "affiliate_payout":
       return n.title ?? t.notifications.affiliatePayoutFallback
+    // Também grava `title` pronto: o nome da moldura e a colocação entram na
+    // frase, e ambos vêm do catálogo em pt-BR (ver `notifyRankFrameGranted`).
+    case "rank_frame":
+      return n.title ?? t.notifications.rankFrameFallback
   }
 }
 

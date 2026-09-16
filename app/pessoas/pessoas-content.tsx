@@ -10,6 +10,7 @@ import {
   UserPlus,
   Users,
 } from "lucide-react"
+import { AuraFlameIcon } from "@/components/ui/AuraIcon"
 import { useEffect, useRef, useState } from "react"
 
 import { PeriodFilter, periodLabel } from "@/components/people/PeriodFilter"
@@ -34,7 +35,7 @@ const TABS: {
   {
     key: "aura",
     label: "Mais Aura",
-    icon: Flame,
+    icon: AuraFlameIcon,
     description:
       "Top 100 usuários por Aura, reputação ganha com curtidas da comunidade.",
   },

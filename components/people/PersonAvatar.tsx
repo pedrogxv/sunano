@@ -1,73 +1,81 @@
-import { Crown, Sparkles } from "lucide-react"
+import { Sparkles } from "lucide-react"
 
-import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { isVipActive } from "@/lib/account-tier"
+import {
+  ProfileAvatar,
+  AVATAR_SIZES,
+  avatarBadgeGeometry,
+  type ProfileAvatarSize,
+} from "@/components/ui/ProfileAvatar"
 import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
+import { profileFrameOf, type ProfileFrameIdentity } from "@/lib/profile-frames"
 import type { PublicProfileSummary } from "@/lib/user-directory"
 
-const SIZE_CLASSES = {
-  xs: "size-5 text-[8px]",
-  sm: "size-8 text-[10px]",
-  md: "size-10 text-xs",
-  lg: "size-14 text-base",
-} as const
-
-const CROWN_SIZE = {
-  xs: "size-2",
-  sm: "size-2.5",
-  md: "size-3",
-  lg: "size-3.5",
-} as const
-
-/** Avatar circular com iniciais de fallback e coroa para contas VIP. */
+/**
+ * Avatar de um perfil do diretório de pessoas.
+ *
+ * Só desenha o que é específico DESTE contexto: a faísca da tag especial
+ * (`lib/special-tag.ts`), que depende do slug e não é moldura. Círculo,
+ * borda, moldura e coroa VIP vêm todos de `ProfileAvatar` — o
+ * componente único de foto de usuário do site.
+ */
 export function PersonAvatar({
   profile,
   size = "md",
   className,
+  frame,
 }: {
   profile: Pick<PublicProfileSummary, "display_name" | "avatar_url" | "account_tier" | "vip_expires_at"> & {
     /** Pode ser `null` fora do diretório de pessoas (ex: byline de notícia). */
     display_slug: string | null
+    /** Moldura equipada + VIP + Fundador, quando a consulta os traz. */
+    equipped_avatar_frame_slug?: string | null
+    equipped_avatar_frame_url?: string | null
+    is_founder?: boolean | null
   }
-  size?: keyof typeof SIZE_CLASSES
+  size?: ProfileAvatarSize
   className?: string
+  /**
+   * Moldura pronta. Só para quando o chamador já a tem montada; por padrão
+   * ela sai do próprio `profile`, que é o que evita a tela esquecer de passar.
+   */
+  frame?: ProfileFrameIdentity
 }) {
-  const src = profile.avatar_url
-  const initials =
-    profile.display_name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2) || "?"
-  const isVip = isVipActive(profile.account_tier, profile.vip_expires_at)
   const specialTag = getSpecialTag(profile.display_slug)
 
   return (
-    <div className={cn("relative shrink-0", SIZE_CLASSES[size], className)}>
-      <div className="relative size-full overflow-hidden rounded-full border border-border bg-primary/15">
-        <ImageWithFallback
-          src={src}
-          alt={profile.display_name}
-          fill
-          sizes="56px"
-          className="object-cover"
-          fallback={
-            <div className="flex size-full items-center justify-center font-bold text-primary">
-              {initials}
-            </div>
-          }
-        />
-      </div>
-      {isVip && (
-        <span
-          className="absolute -bottom-0.5 -right-0.5 flex items-center justify-center rounded-full border border-background p-[3px]"
-          style={{ backgroundColor: "var(--vip-accent)" }}
-        >
-          <Crown className={cn(CROWN_SIZE[size], "text-black")} />
-        </span>
-      )}
-      {specialTag && (
-        <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center rounded-full border border-background bg-cyan-400 p-[3px]">
-          <Sparkles className={cn(CROWN_SIZE[size], "text-cyan-950")} />
-        </span>
-      )}
+    // `isolate` pelo mesmo motivo de `ProfileAvatar`: a faísca abaixo é
+    // `absolute z-20`, e num `relative` sem `z-index` ela empilharia contra a
+    // página inteira — passando por cima da topbar e dos menus.
+    <div className={cn("relative isolate shrink-0", AVATAR_SIZES[size].box, className)}>
+      <ProfileAvatar
+        name={profile.display_name}
+        avatarUrl={profile.avatar_url}
+        size={size}
+        frame={frame ?? profileFrameOf(profile)}
+      />
+      {specialTag && <SpecialTagBadge label={specialTag.label} size={size} />}
     </div>
+  )
+}
+
+/**
+ * A faísca da tag especial. Mora no canto SUPERIOR direito de propósito: o
+ * emblema da moldura já ocupa o centro da base, e empilhar os dois lá
+ * esconderia um atrás do outro. O tamanho sai de `avatarBadgeGeometry` — o
+ * mesmo do emblema de moldura — para não voltar a ser um selo de chrome fixo
+ * ocupando meia foto nos avatares pequenos.
+ */
+function SpecialTagBadge({ label, size }: { label: string; size: ProfileAvatarSize }) {
+  const { icon, pillStyle } = avatarBadgeGeometry(size, true)
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className="pointer-events-none absolute top-0 right-0 z-20 flex items-center justify-center rounded-full border-background bg-cyan-400 -translate-y-1/4 translate-x-1/4"
+      style={pillStyle ?? undefined}
+    >
+      <Sparkles className="text-cyan-950" width={icon} height={icon} style={{ width: icon, height: icon }} />
+    </span>
   )
 }

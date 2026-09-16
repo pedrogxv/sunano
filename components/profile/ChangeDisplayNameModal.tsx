@@ -1,7 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Crown, Flame, Loader2 } from "lucide-react"
+import { Crown, Loader2 } from "lucide-react"
+import { AuraAmount, AuraIcon } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
 
 import type { AuraPrice } from "@/lib/aura-pricing"
@@ -200,7 +201,7 @@ export function ChangeDisplayNameModal({
                   </span>
                 )}{" "}
                 <span className="font-semibold text-orange-400">
-                  🔥 {price.finalPrice.toLocaleString("pt-BR")} Aura
+                  <AuraAmount value={price.finalPrice} /> Aura
                 </span>
                 {price.discounted && (
                   <span className="aura-vip-discount-badge ml-1.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-[2px] align-middle text-[9px] font-black uppercase leading-none tracking-wide">
@@ -263,7 +264,7 @@ export function ChangeDisplayNameModal({
           {!status.onCooldown && !unavailable && (
             <Button type="button" onClick={handleConfirm} disabled={!canConfirm}>
               {submitting && <Loader2 className="size-3.5 animate-spin" />}
-              <Flame className="size-3.5" />
+              <AuraIcon tone="inherit" outline />
               Confirmar ({cost.toLocaleString("pt-BR")} Aura)
             </Button>
           )}

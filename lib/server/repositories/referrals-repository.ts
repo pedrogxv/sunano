@@ -1,7 +1,9 @@
 import "server-only"
 
 import { profileMediaProxyUrl } from "@/lib/account-tier"
+import type { ProfileFrameIdentity } from "@/lib/profile-frames"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { getProfileFramesByUser } from "@/lib/server/repositories/vip-founder-repository"
 import { normalizeReferralCode, validateReferralCode } from "@/lib/referral-code"
 
 /**
@@ -34,6 +36,12 @@ export type ReferralListItem = {
   userId: string
   displayName: string
   avatarUrl: string | null
+  /**
+   * Moldura de quem foi indicado — a MESMA que a pessoa leva para o perfil e
+   * para o fórum. Sem ela a lista desenhava um avatar cru, que é como cada
+   * tela nova voltava a "esquecer" a moldura (ver `AGENTS.md`).
+   */
+  frame: ProfileFrameIdentity
   status: ReferralStatus
   validatedVia: ReferralVia | null
   expiresAt: string
@@ -268,13 +276,16 @@ export async function listMyReferrals(userId: string, limit = 100): Promise<Refe
   const rows = data ?? []
   if (rows.length === 0) return []
 
-  const { data: profiles } = await db
-    .from("user_profiles")
-    .select("id, display_name, avatar_url")
-    .in(
-      "id",
-      rows.map((r) => r.referred_user_id)
-    )
+  const referredIds = rows.map((r) => r.referred_user_id)
+
+  // Moldura em LOTE para a lista inteira — uma consulta por avatar seria N+1.
+  const [{ data: profiles }, frameOf] = await Promise.all([
+    db
+      .from("user_profiles")
+      .select("id, display_name, avatar_url, account_tier, vip_expires_at")
+      .in("id", referredIds),
+    getProfileFramesByUser(referredIds),
+  ])
 
   const byId = new Map((profiles ?? []).map((p) => [p.id, p]))
 
@@ -285,6 +296,11 @@ export async function listMyReferrals(userId: string, limit = 100): Promise<Refe
       displayName: profile?.display_name ?? "Usuário",
       // Nunca a coluna crua — ver `profileMediaProxyUrl` em `lib/account-tier.ts`.
       avatarUrl: profile?.avatar_url ? profileMediaProxyUrl(row.referred_user_id, "avatar") : null,
+      frame: frameOf(
+        row.referred_user_id,
+        profile?.account_tier ?? null,
+        profile?.vip_expires_at ?? null
+      ),
       status: row.status as ReferralStatus,
       validatedVia: row.validated_via as ReferralVia | null,
       expiresAt: row.expires_at,
@@ -333,10 +349,14 @@ export async function listReferralsForAdmin(params: {
   if (rows.length === 0) return []
 
   const ids = [...new Set(rows.flatMap((r) => [r.referred_user_id, r.referrer_user_id]))]
-  const { data: profiles } = await db
-    .from("user_profiles")
-    .select("id, display_name, avatar_url")
-    .in("id", ids)
+  // Moldura em LOTE para a fila inteira — nunca uma consulta por linha.
+  const [{ data: profiles }, frameOf] = await Promise.all([
+    db
+      .from("user_profiles")
+      .select("id, display_name, avatar_url, account_tier, vip_expires_at")
+      .in("id", ids),
+    getProfileFramesByUser(ids),
+  ])
 
   const byId = new Map((profiles ?? []).map((p) => [p.id, p]))
 
@@ -347,6 +367,11 @@ export async function listReferralsForAdmin(params: {
     avatarUrl: byId.get(row.referred_user_id)?.avatar_url
       ? profileMediaProxyUrl(row.referred_user_id, "avatar")
       : null,
+    frame: frameOf(
+      row.referred_user_id,
+      byId.get(row.referred_user_id)?.account_tier ?? null,
+      byId.get(row.referred_user_id)?.vip_expires_at ?? null
+    ),
     status: row.status as ReferralStatus,
     validatedVia: row.validated_via as ReferralVia | null,
     expiresAt: row.expires_at,

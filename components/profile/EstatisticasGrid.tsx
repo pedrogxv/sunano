@@ -1,5 +1,7 @@
 import { Flame } from "lucide-react"
 
+import { AURA_BRAND_BG_CLASS, AURA_BRAND_COLOR_CLASS, AuraFlameIcon } from "@/components/ui/AuraIcon"
+
 import { Contador, type Estatistica } from "@/components/profile/EstatisticasContador"
 import { FollowersStatTrigger, PostsStatTrigger } from "@/components/profile/ProfileStatsDialogs"
 import { cn } from "@/lib/utils"
@@ -30,14 +32,15 @@ export function EstatisticasGrid({
   seguidores: number
   className?: string
 }) {
-  // Laranja de fogo: no tema escuro `primary` é branco, e uma chama branca
-  // não diz "aura" nenhuma (mesma escolha do card de /pessoas).
+  // Cor e símbolo vêm do componente central da Aura — aqui o ícone entra como
+  // VALOR numa config genérica de estatística, então não dá para usar
+  // `<AuraIcon>` direto; o que não pode é redigitar a cor (ver AuraIcon.tsx).
   const auraItem: Estatistica = {
-    icone: Flame,
+    icone: AuraFlameIcon,
     rotulo: "Aura",
     valor: aura,
-    tom: "text-orange-500",
-    fundo: "bg-orange-500/10",
+    tom: AURA_BRAND_COLOR_CLASS,
+    fundo: AURA_BRAND_BG_CLASS,
     preenchido: true,
   }
 

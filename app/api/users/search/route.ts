@@ -18,11 +18,18 @@ export const dynamic = "force-dynamic"
  * `/api/users/directory`, devolve também quais dos resultados o usuário
  * logado já segue.
  *
- * `includeOwner=1` desliga o filtro que esconde o dono do site — é o que os
- * seletores de perfil do admin usam (ver `ExpertAuthorPicker` em
- * app/admin/tierlist/form.tsx). O parâmetro só é honrado para quem tem
- * `peripherals_write`; para os demais é ignorado em silêncio, mantendo a
- * resposta pública idêntica à de antes.
+ * Dois parâmetros desligam o filtro que esconde o dono do site
+ * (`SITE_OWNER_SLUG`), cada um com um motivo diferente:
+ *
+ * - `includeOwner=1` — seletores de perfil do admin (ver `ExpertAuthorPicker`
+ *   em app/admin/tierlist/form.tsx). Só é honrado para quem tem
+ *   `peripherals_write`; para os demais é ignorado em silêncio.
+ * - `forMention=1` — autocomplete de @menção (`MentionTextarea`). Vale para
+ *   qualquer um: o dono é o principal usuário do site e precisa ser citável,
+ *   e o perfil dele já é público por link direto. Esconder da busca serve pra
+ *   ele não dominar os rankings de /pessoas, o que não se aplica aqui.
+ *
+ * Contas banidas continuam fora em todos os casos.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -40,11 +47,14 @@ export async function GET(request: NextRequest) {
   }
 
   const includeOwner = searchParams.get("includeOwner") === "1"
+  const forMention = searchParams.get("forMention") === "1"
 
   try {
-    const canIncludeOwner = includeOwner
-      ? await getAuthorizedProfile().then((auth) => hasAdminPermission(auth.profile, "peripherals_write"))
-      : false
+    const canIncludeOwner =
+      forMention ||
+      (includeOwner
+        ? await getAuthorizedProfile().then((auth) => hasAdminPermission(auth.profile, "peripherals_write"))
+        : false)
 
     const profiles = await searchUserProfiles(query, limit, { includeOwner: canIncludeOwner })
 

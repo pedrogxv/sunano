@@ -22,6 +22,7 @@ import Link from "next/link"
 import type { ModerationComment, ModerationPost } from "@/lib/server/repositories/forum-repository"
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
 import { ImageLightbox } from "@/components/forum/ImageLightbox"
+import { profileFrameOf } from "@/lib/profile-frames"
 import { UserAvatar } from "@/components/ui/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -284,7 +285,20 @@ export function ForumModerationClient({
             >
               <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start">
                 <div className="flex min-w-0 flex-1 items-start gap-3">
-                  <UserAvatar name={post.author_name} avatarUrl={post.author_avatar_url} size={9} />
+                  <UserAvatar
+                    name={post.author_name}
+                    avatarUrl={post.author_avatar_url}
+                    size={9}
+                    frame={profileFrameOf({
+                      equipped_avatar_frame_slug: post.author_equipped_frame_slug,
+                      equipped_avatar_frame_url: post.author_equipped_frame_url,
+                      account_tier: post.author_account_tier,
+                      vip_expires_at: post.author_vip_expires_at,
+                      is_founder: post.author_is_founder,
+                      longest_streak: post.author_longest_streak,
+                      avatar_frame_opt_out: post.author_frame_opt_out,
+                    })}
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="text-sm font-semibold text-foreground">{post.author_name}</span>
@@ -412,7 +426,20 @@ export function ForumModerationClient({
                           comment.is_hidden ? "border-border/30 bg-muted/10 opacity-60" : "border-border/30 bg-muted/5"
                         }`}
                       >
-                        <UserAvatar name={comment.author_name} avatarUrl={comment.author_avatar_url} size={6} />
+                        <UserAvatar
+                          name={comment.author_name}
+                          avatarUrl={comment.author_avatar_url}
+                          size={6}
+                          frame={profileFrameOf({
+                            equipped_avatar_frame_slug: comment.author_equipped_frame_slug,
+                            equipped_avatar_frame_url: comment.author_equipped_frame_url,
+                            account_tier: comment.author_account_tier,
+                            vip_expires_at: comment.author_vip_expires_at,
+                            is_founder: comment.author_is_founder,
+                            longest_streak: comment.author_longest_streak,
+                            avatar_frame_opt_out: comment.author_frame_opt_out,
+                          })}
+                        />
                         <div className="min-w-0 flex-1">
                           <p className="text-[11px] text-muted-foreground">
                             <span className="font-medium text-foreground">{comment.author_name}</span>

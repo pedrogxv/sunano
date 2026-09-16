@@ -20,11 +20,10 @@ import {
 import { findUserIdByDisplaySlug } from "@/lib/server/repositories/users-repository"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { resolveProfileMedia } from "@/lib/account-tier"
-import { profileAccentHue } from "@/lib/user-directory"
-import { mediaAdjustStyle } from "@/lib/profile-media-adjust"
-import { ImageWithFallback } from "@/components/ui/image-with-fallback"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import { PersonalTierlistPublicView } from "@/components/tierlist-pessoal/PersonalTierlistPublicView"
 import { TierlistNoteCard } from "@/components/tierlist-pessoal/TierlistNoteCard"
+import { profileFrameOf } from "@/lib/profile-frames"
 import {
   TierlistHeartButton,
   TierlistHeartCount,
@@ -105,10 +104,6 @@ export default async function PerfilTierlistPage({
   const canHeart = Boolean(viewerId)
 
   const avatar = resolveProfileMedia(profile.avatar_url, profile.account_tier, profile.vip_expires_at)
-  const accentHue = profileAccentHue(profile.id)
-  const initials =
-    profile.display_name.trim().split(/\s+/).map((part) => part[0]).join("").toUpperCase().slice(0, 2) ||
-    "?"
 
   const profileHref = profilePath(profile.display_slug ?? profile.id)
   // Mesmo caminho do canonical em `generateMetadata` — compartilhar sempre leva
@@ -145,34 +140,17 @@ export default async function PerfilTierlistPage({
         </div>
 
         <div className="flex items-center gap-4">
-          <Link
-            href={profileHref}
-            className="relative size-14 shrink-0 overflow-hidden rounded-full border-2"
-            style={{ borderColor: "var(--vip-accent)" }}
-          >
-            {/* Mesmo avatar do resto do site: iniciais sobre o gradiente do
-                perfil quando não há foto (antes ficava um círculo vazio), com
-                `ImageWithFallback` para cobrir também a imagem que existe mas
-                falha ao carregar. */}
-            <ImageWithFallback
-              src={avatar.src}
-              alt={profile.display_name}
-              fill
-              unoptimized={avatar.animated}
+          {/* Mesmo avatar (e mesma moldura) do resto do site — ver
+              `components/ui/ProfileAvatar.tsx`. */}
+          <Link href={profileHref} className="shrink-0">
+            <ProfileAvatar
+              name={profile.display_name}
+              avatarUrl={avatar.src}
+              size="lg"
+              frame={profileFrameOf(profile)}
+              adjust={profile.media_adjustments.avatar}
+              animated={avatar.animated}
               freeze={avatar.needsFreeze}
-              sizes="56px"
-              style={mediaAdjustStyle(profile.media_adjustments.avatar)}
-              className="object-cover"
-              fallback={
-                <div
-                  className="flex size-full items-center justify-center text-lg font-bold text-white/90"
-                  style={{
-                    backgroundImage: `linear-gradient(135deg, hsl(${accentHue} 55% 40%), hsl(${(accentHue + 45) % 360} 50% 28%))`,
-                  }}
-                >
-                  {initials}
-                </div>
-              }
             />
           </Link>
 

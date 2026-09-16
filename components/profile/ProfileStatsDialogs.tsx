@@ -4,7 +4,8 @@ import Link from "next/link"
 import { useState } from "react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { FileText, Flame, Loader2, MessageSquare, Users } from "lucide-react"
+import { FileText, Loader2, MessageSquare, Users } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
 import { FollowButton } from "@/components/people/FollowButton"
 import { PostCard, type PostCardData } from "@/components/forum/PostCard"
@@ -24,6 +25,7 @@ import { profilePath } from "@/lib/profile-name"
 import { getSpecialTag } from "@/lib/special-tag"
 import type { ForumUserComment } from "@/lib/server/repositories/forum-repository"
 import type { PublicProfileSummary } from "@/lib/user-directory"
+import { profileFrameOf } from "@/lib/profile-frames"
 
 function DialogListState({
   loading,
@@ -64,7 +66,12 @@ function FollowerRow({
         href={profilePath(profile.display_slug)}
         className="flex min-w-0 flex-1 items-center gap-3"
       >
-        <UserAvatar name={profile.display_name} avatarUrl={profile.avatar_url} size={10} />
+        <UserAvatar
+          name={profile.display_name}
+          avatarUrl={profile.avatar_url}
+          size={10}
+          frame={profileFrameOf(profile)}
+        />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-foreground">{profile.display_name}</p>
           {(profile.account_tier !== "common" || tag) && (
@@ -183,7 +190,7 @@ function CommentRow({ comment }: { comment: ForumUserComment }) {
           <>
             <span>·</span>
             <span className="inline-flex items-center gap-1 text-orange-500">
-              <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
+              <AuraIcon size="sm" tone="inherit" />
               {comment.aura_count}
             </span>
           </>

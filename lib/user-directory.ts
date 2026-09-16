@@ -25,6 +25,22 @@ export type PublicProfileSummary = {
   activity: number
   /** Ofensiva ativa em dias consecutivos (0 se expirada) — ver `user_streaks`. */
   streak: number
+  /**
+   * Moldura equipada e posse de Fundador — o diretório, o pódio e os rankings
+   * desenham a MESMA moldura do perfil da pessoa. Sem estes campos aqui, o
+   * avatar de `/pessoas` saía sem a moldura que o perfil mostrava.
+   */
+  equipped_avatar_frame_slug: string | null
+  equipped_avatar_frame_url: string | null
+  is_founder: boolean
+  /**
+   * RECORDE de ofensiva — decide a moldura de marco (`STREAK_FRAMES`).
+   * Distinto de `streak`, que é a sequência VIVA e zera quando expira: um
+   * marco alcançado não se desfaz, então a moldura não pode depender dela.
+   */
+  longest_streak: number
+  /** O dono escolheu não exibir moldura nenhuma. */
+  avatar_frame_opt_out: boolean
   created_at: string
 }
 

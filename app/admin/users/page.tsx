@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import {
   ShieldCheck,
   Users as UsersIcon,
@@ -23,11 +23,19 @@ import {
   Store,
   Headset,
   Eye,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  SlidersHorizontal,
+  UserX,
+  X,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { AnimatedCounter } from "@/components/animated-counter"
 import BoxLoader from "@/components/ui/box-loader"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { getTierCapabilities, type AccountTier } from "@/lib/account-tier"
 import {
@@ -66,6 +74,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RoleBadge, adminRoleLabel } from "@/components/people/RoleBadge"
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/use-t"
+import { useLocale } from "@/components/providers/locale-context"
+import { formatRelativeTime } from "@/lib/format-tierlist-date"
+import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 
 type UserRole = AdminProfile["role"] | "user"
 
@@ -79,16 +90,41 @@ type AdminUser = Omit<AdminProfile, "role"> & {
   account_ban_reason: string | null
   /** Liberação individual do "pacote Loja" (Loja + Afiliados) mesmo com a manutenção ligada. */
   store_access: boolean
+  /** false = conta sem linha em `user_profiles` (órfã de OAuth). */
+  has_profile: boolean
+  last_sign_in_at: string | null
   created_at: string
   updated_at: string
+}
+
+type UserStats = {
+  total: number
+  regular: number
+  banned: number
+  vip: number
+  store_access: number
+  no_profile: number
+  new_30d: number
+  active_30d: number
+  by_role: Record<string, number>
 }
 
 type UsersResponse = {
   ok?: boolean
   error?: string
   current_user_id?: string
+  current_user_role?: string
   users?: AdminUser[]
+  total?: number
+  page?: number
+  pageSize?: number
+  stats?: UserStats
 }
+
+type StatusFilter = "all" | "banned" | "vip" | "store_access" | "no_profile"
+type SortOption = "recent" | "oldest" | "name-asc" | "name-desc" | "email-asc"
+
+const PAGE_SIZE_OPTIONS = [12, 24, 48, 96] as const
 
 // Web Master exige a promoção com confirmação dedicada; "user" não se convida, é o estado sem cargo.
 type CreatableRole = Exclude<AdminRole, "webmaster">
@@ -200,6 +236,23 @@ function BannedBadge({ reason }: { reason: string | null }) {
   )
 }
 
+/* ── Conta sem linha em user_profiles ───────────────────────
+ * Não é cosmético: a conta loga mas não existe no /pessoas, no ranking nem
+ * em nada que leia o perfil. Só esta tela consegue mostrá-la. */
+function NoProfileBadge({ hint }: { hint: string }) {
+  const t = useT()
+  return (
+    <Badge
+      variant="outline"
+      className="gap-1 border-orange-500/40 text-orange-400"
+      title={hint}
+    >
+      <UserX className="size-3" />
+      {t.admin.users.noProfileBadge}
+    </Badge>
+  )
+}
+
 /* ── Special tag badge (ex: SUNANO) — aglutina com o TierBadge ─ */
 function SpecialTagBadge({ slug }: { slug: string | null }) {
   const tag = getSpecialTag(slug)
@@ -247,6 +300,7 @@ function UserCard({
   onUnban: (user: AdminUser) => Promise<void>
 }) {
   const t = useT()
+  const { locale } = useLocale()
   const [expanded, setExpanded] = useState(false)
   const [showPasswordForm, setShowPasswordForm] = useState(false)
   const [newPassword, setNewPassword] = useState("")
@@ -377,11 +431,20 @@ function UserCard({
       {/* Header row */}
       <div className="flex items-center gap-3 p-4">
         {/* Avatar */}
-        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-bold text-muted-foreground", ROLE_RING[user.role])}>
-          {user.avatar_url
-            // eslint-disable-next-line @next/next/no-img-element
-            ? <img src={user.avatar_url} alt={initials} className="size-full rounded-full object-cover" />
-            : initials}
+        {/* O anel aqui é de CARGO administrativo, eixo diferente da moldura de
+            perfil (`lib/profile-frames.ts`): ele responde "que poder esta
+            conta tem no painel", não "o que o usuário conquistou". Por isso
+            fica no wrapper e a foto em si vem do componente único. */}
+        <div className={cn("shrink-0 rounded-full", ROLE_RING[user.role])}>
+          <ProfileAvatar
+            name={user.display_name || user.email || "?"}
+            avatarUrl={user.avatar_url}
+            size="md"
+            // Sem moldura na tabela do painel: aqui o sinal que importa é o
+            // cargo (anel do wrapper), e duas molduras concorrentes no mesmo
+            // avatar só confundem quem está moderando.
+            frameOverride={null}
+          />
         </div>
 
         {/* Info */}
@@ -392,9 +455,17 @@ function UserCard({
             <TierBadge tier={user.account_tier} />
             <SpecialTagBadge slug={user.display_slug} />
             {isBanned && <BannedBadge reason={user.account_ban_reason} />}
+            {!user.has_profile && <NoProfileBadge hint={t.admin.users.noProfileHint} />}
             {isCurrentUser && <Badge variant="outline" className="border-primary/30 text-primary text-[10px]">Você</Badge>}
           </div>
-          <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+          <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+            <span className="truncate">{user.email}</span>
+            <span className="text-muted-foreground/50">
+              {user.last_sign_in_at
+                ? t.admin.users.lastSeen(formatRelativeTime(user.last_sign_in_at, locale))
+                : t.admin.users.neverSignedIn}
+            </span>
+          </p>
         </div>
 
         {/* Actions */}
@@ -834,6 +905,8 @@ function UserListSection({
   title,
   icon: Icon,
   users,
+  total,
+  rangeLabel,
   emptyLabel,
   currentUserId,
   isCurrentUserWebMaster,
@@ -853,6 +926,9 @@ function UserListSection({
   title: string
   icon: React.ElementType
   users: AdminUser[]
+  /** Total da consulta inteira, não só desta página. */
+  total: number
+  rangeLabel: string
   emptyLabel: string
   currentUserId: string | null
   isCurrentUserWebMaster: boolean
@@ -875,7 +951,8 @@ function UserListSection({
         <CardTitle className="flex items-center gap-2 text-base">
           <Icon className="size-4 text-primary" />
           {title}
-          <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">{users.length}</span>
+          <span className="ml-1 rounded-full bg-muted px-2 py-0.5 text-xs font-normal tabular-nums text-muted-foreground">{total}</span>
+          <span className="ml-auto text-xs font-normal tabular-nums text-muted-foreground">{rangeLabel}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
@@ -968,16 +1045,34 @@ export default function AdminUsersPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [showCreateForm, setShowCreateForm] = useState(false)
+
+  // ── Estado da listagem: TUDO isto é resolvido no servidor ──────────
+  // A tela antes carregava a base inteira e filtrava no navegador. Agora cada
+  // mudança aqui vira uma query paginada.
   const [search, setSearch] = useState("")
+  const debouncedSearch = useDebouncedValue(search, 350)
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all")
-  const isCurrentUserWebMaster = users.find((u) => u.id === currentUserId)?.role === "webmaster"
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [sort, setSort] = useState<SortOption>("recent")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState<number>(24)
+  const [total, setTotal] = useState(0)
+  const [stats, setStats] = useState<UserStats | null>(null)
+
+  // O cargo do próprio WEB Master não pode depender de ele estar na página
+  // atual — com paginação ele quase nunca está. Vem do servidor.
+  const [isCurrentUserWebMaster, setIsCurrentUserWebMaster] = useState(false)
   const [newUser, setNewUser] = useState<NewUserForm>({
     email: "",
     displayName: "",
     role: "admin",
   })
 
-  useEffect(() => { loadUsers() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const rangeFrom = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const rangeTo = Math.min(page * pageSize, total)
+  const hasActiveFilters =
+    search.trim() !== "" || roleFilter !== "all" || statusFilter !== "all" || sort !== "recent"
 
   // Volta de uma sessão "logado como" que expirou (o proxy redireciona pra cá).
   useEffect(() => {
@@ -988,15 +1083,31 @@ export default function AdminUsersPage() {
     }
   }, [])
 
-  async function loadUsers() {
+  const loadUsers = useCallback(async (opts?: { withStats?: boolean }) => {
     try {
       setLoading(true)
       setError(null)
-      const res = await fetch("/api/admin/users")
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+        role: roleFilter,
+        status: statusFilter,
+        sort,
+      })
+      if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim())
+      // Os contadores valem pra base inteira: não mudam ao virar de página
+      // nem ao filtrar, então só são pedidos quando podem ter mudado.
+      if (opts?.withStats === false) params.set("stats", "0")
+
+      const res = await fetch(`/api/admin/users?${params}`)
       const data = await res.json().catch(() => null) as UsersResponse | null
       if (!res.ok || !data?.users) throw new Error(data?.error ?? t.admin.users.failedToLoad)
+
       setCurrentUserId(data.current_user_id ?? null)
+      setIsCurrentUserWebMaster(data.current_user_role === "webmaster")
       setUsers(data.users.map((u) => ({ ...u, permissions: normalizePermissions(u.permissions), originalRole: u.role })))
+      setTotal(data.total ?? 0)
+      if (data.stats) setStats(data.stats)
     } catch (err) {
       const message = err instanceof Error ? err.message : t.admin.users.failedToLoad
       setError(message)
@@ -1004,35 +1115,15 @@ export default function AdminUsersPage() {
     } finally {
       setLoading(false)
     }
-  }
+  // `t` é estável o suficiente aqui; recriar o callback a cada render dispararia refetch em loop.
+  }, [page, pageSize, roleFilter, statusFilter, sort, debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const stats = useMemo(() => ({
-    total: users.length,
-    byRole: ADMIN_ROLE_ORDER.reduce<Record<AdminRole, number>>((acc, r) => {
-      acc[r] = users.filter((u) => u.role === r).length
-      return acc
-    }, {} as Record<AdminRole, number>),
-    regular: users.filter((u) => u.role === "user").length,
-  }), [users])
+  useEffect(() => { loadUsers() }, [loadUsers])
 
-  const filteredUsers = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return users.filter((u) => {
-      if (roleFilter !== "all" && u.role !== roleFilter) return false
-      if (!q) return true
-      return (u.display_name ?? "").toLowerCase().includes(q) || (u.email ?? "").toLowerCase().includes(q)
-    })
-  }, [users, search, roleFilter])
+  // Qualquer mudança de filtro volta pra primeira página — senão o admin fica
+  // olhando uma página 7 que não existe mais no resultado novo.
+  useEffect(() => { setPage(1) }, [debouncedSearch, roleFilter, statusFilter, sort, pageSize])
 
-  // Staff (qualquer cargo administrativo) vs. Membros (Usuário comum) — mesmo filtro/busca acima.
-  const staffUsers = useMemo(
-    () => filteredUsers.filter((u) => u.role !== "user"),
-    [filteredUsers]
-  )
-  const memberUsers = useMemo(
-    () => filteredUsers.filter((u) => u.role === "user"),
-    [filteredUsers]
-  )
 
   function updateUserRole(userId: string, nextRole: UserRole) {
     setUsers((prev) => prev.map((u) => u.id === userId ? { ...u, role: nextRole } : u))
@@ -1156,8 +1247,10 @@ export default function AdminUsersPage() {
       const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" })
       const data = await res.json().catch(() => null) as { error?: string; ok?: boolean } | null
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? t.admin.users.failedToDelete)
-      setUsers((prev) => prev.filter((u) => u.id !== user.id))
       toast.success(t.admin.users.userDeleted, { description: user.display_name || user.email || undefined })
+      // Recarrega em vez de só tirar a linha do array: com paginação, remover
+      // um item muda o total e puxa um usuário da página seguinte pra cá.
+      await loadUsers()
     } catch (err) {
       const message = err instanceof Error ? err.message : t.admin.users.failedToDelete
       toast.error(t.admin.users.failedToDelete, { description: message })
@@ -1219,16 +1312,17 @@ export default function AdminUsersPage() {
           </Button>
         </div>
 
-        {/* Stats — visão rápida da composição do time, na ordem de hierarquia */}
+        {/* Stats — descrevem a BASE INTEIRA (vêm do banco), não a página
+            exibida. Cada chip também é um atalho de filtro. */}
         <div className="relative mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
           <StatChip
             icon={UsersIcon}
-            value={stats.total}
+            value={stats?.total ?? 0}
             label={t.admin.users.statTotal}
             colorClass="bg-primary/15 text-primary"
-            active={roleFilter === "all"}
+            active={roleFilter === "all" && statusFilter === "all"}
             hoverClass="hover:border-primary/40 hover:bg-primary/5"
-            onClick={() => setRoleFilter("all")}
+            onClick={() => { setRoleFilter("all"); setStatusFilter("all") }}
           />
           {ADMIN_ROLE_ORDER.map((r) => {
             const meta = ROLE_STAT_META[r]
@@ -1236,7 +1330,7 @@ export default function AdminUsersPage() {
               <StatChip
                 key={r}
                 icon={meta.icon}
-                value={stats.byRole[r]}
+                value={stats?.by_role?.[r] ?? 0}
                 label={t.admin.users[meta.labelKey]}
                 colorClass={meta.colorClass}
                 active={roleFilter === r}
@@ -1245,6 +1339,57 @@ export default function AdminUsersPage() {
               />
             )
           })}
+        </div>
+
+        {/* Segunda faixa: recortes que não são cargo. "Sem perfil" é o único
+            lugar do painel que enxerga conta autenticável sem linha em
+            user_profiles — ela não aparece no /pessoas nem em lugar nenhum. */}
+        <div className="relative mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+          <StatChip
+            icon={UserIcon}
+            value={stats?.regular ?? 0}
+            label={t.admin.users.statRegular}
+            colorClass="bg-slate-500/15 text-slate-300"
+            active={roleFilter === "user"}
+            hoverClass="hover:border-slate-400/40 hover:bg-slate-500/5"
+            onClick={() => setRoleFilter((prev) => (prev === "user" ? "all" : "user"))}
+          />
+          <StatChip
+            icon={Crown}
+            value={stats?.vip ?? 0}
+            label={t.admin.users.statVip}
+            colorClass="bg-amber-500/15 text-amber-300"
+            active={statusFilter === "vip"}
+            hoverClass="hover:border-amber-400/40 hover:bg-amber-500/5"
+            onClick={() => setStatusFilter((prev) => (prev === "vip" ? "all" : "vip"))}
+          />
+          <StatChip
+            icon={ShieldBan}
+            value={stats?.banned ?? 0}
+            label={t.admin.users.statBanned}
+            colorClass="bg-red-500/15 text-red-300"
+            active={statusFilter === "banned"}
+            hoverClass="hover:border-red-400/40 hover:bg-red-500/5"
+            onClick={() => setStatusFilter((prev) => (prev === "banned" ? "all" : "banned"))}
+          />
+          <StatChip
+            icon={UserPlus}
+            value={stats?.new_30d ?? 0}
+            label={t.admin.users.statNew30d}
+            colorClass="bg-emerald-500/15 text-emerald-300"
+            active={sort === "recent"}
+            hoverClass="hover:border-emerald-400/40 hover:bg-emerald-500/5"
+            onClick={() => setSort("recent")}
+          />
+          <StatChip
+            icon={UserX}
+            value={stats?.no_profile ?? 0}
+            label={t.admin.users.statNoProfile}
+            colorClass="bg-orange-500/15 text-orange-300"
+            active={statusFilter === "no_profile"}
+            hoverClass="hover:border-orange-400/40 hover:bg-orange-500/5"
+            onClick={() => setStatusFilter((prev) => (prev === "no_profile" ? "all" : "no_profile"))}
+          />
         </div>
       </div>
 
@@ -1317,69 +1462,116 @@ export default function AdminUsersPage() {
         </Card>
       )}
 
-      {/* Toolbar — busca + filtro por cargo */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t.admin.users.searchPlaceholder}
-            className="border-border bg-card/50 pl-9"
-          />
+      {/* Toolbar — busca, filtros e ordenação. Todos resolvidos no servidor. */}
+      <div className="space-y-2">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t.admin.users.searchPlaceholder}
+              className="border-border bg-card/50 pl-9 pr-9"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                aria-label={t.admin.users.clearFilters}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as RoleFilter)}>
+            <SelectTrigger className="w-full border-border bg-card/50 lg:w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t.common.all}</SelectItem>
+              {ADMIN_ROLE_ORDER.map((r) => (
+                <SelectItem key={r} value={r}>{adminRoleLabel(t, r)}</SelectItem>
+              ))}
+              <SelectItem value="user">{t.admin.users.user}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
+            <SelectTrigger className="w-full border-border bg-card/50 lg:w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t.admin.users.filterStatusAll}</SelectItem>
+              <SelectItem value="banned">{t.admin.users.filterStatusBanned}</SelectItem>
+              <SelectItem value="vip">{t.admin.users.filterStatusVip}</SelectItem>
+              <SelectItem value="store_access">{t.admin.users.filterStatusStoreAccess}</SelectItem>
+              <SelectItem value="no_profile">{t.admin.users.filterStatusNoProfile}</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={sort} onValueChange={(v) => setSort(v as SortOption)}>
+            <SelectTrigger className="w-full border-border bg-card/50 lg:w-44">
+              <SlidersHorizontal className="mr-1 size-3.5 shrink-0 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">{t.admin.users.sortRecent}</SelectItem>
+              <SelectItem value="oldest">{t.admin.users.sortOldest}</SelectItem>
+              <SelectItem value="name-asc">{t.admin.users.sortNameAsc}</SelectItem>
+              <SelectItem value="name-desc">{t.admin.users.sortNameDesc}</SelectItem>
+              <SelectItem value="email-asc">{t.admin.users.sortEmailAsc}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-        <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as RoleFilter)}>
-          <SelectTrigger className="w-full border-border bg-card/50 sm:w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t.common.all}</SelectItem>
-            {ADMIN_ROLE_ORDER.map((r) => (
-              <SelectItem key={r} value={r}>{adminRoleLabel(t, r)}</SelectItem>
-            ))}
-            <SelectItem value="user">{t.admin.users.user}</SelectItem>
-          </SelectContent>
-        </Select>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>{t.admin.users.searchHint}</span>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={() => { setSearch(""); setRoleFilter("all"); setStatusFilter("all"); setSort("recent") }}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+            >
+              <X className="size-3" />
+              {t.admin.users.clearFilters}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Users list — separado em Staff e Membros, mesmo filtro/busca da toolbar acima */}
+      {/* Lista — UMA página vinda do servidor. Não há mais separação Staff /
+          Membros: com paginação a página é um recorte de um único conjunto
+          ordenado, e o filtro de cargo faz esse papel melhor. */}
       {loading ? (
         <div className="flex items-center justify-center py-10">
           <BoxLoader />
         </div>
       ) : users.length === 0 ? (
-        <p className="py-6 text-center text-sm text-muted-foreground">{t.admin.users.noUsersFound}</p>
-      ) : filteredUsers.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-10 text-center">
           <UserIcon className="size-6 text-muted-foreground/50" />
-          <p className="text-sm text-muted-foreground">{t.admin.users.noResultsFiltered}</p>
+          <p className="text-sm text-muted-foreground">
+            {hasActiveFilters ? t.admin.users.noResultsFiltered : t.admin.users.noUsersFound}
+          </p>
+          {hasActiveFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setSearch(""); setRoleFilter("all"); setStatusFilter("all"); setSort("recent") }}
+            >
+              {t.admin.users.clearFilters}
+            </Button>
+          )}
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-4">
           <UserListSection
-            title={t.admin.users.staffSectionTitle}
-            icon={ShieldCheck}
-            users={staffUsers}
-            emptyLabel={t.admin.users.noResultsFiltered}
-            currentUserId={currentUserId}
-            isCurrentUserWebMaster={isCurrentUserWebMaster}
-            savingId={savingId}
-            deletingId={deletingId}
-            vipSavingId={vipSavingId}
-            storeAccessSavingId={storeAccessSavingId}
-            banningId={banningId}
-            onRoleChange={updateUserRole}
-            onSave={saveUser}
-            onDelete={deleteUser}
-            onVipToggle={toggleVip}
-            onStoreAccessToggle={toggleStoreAccess}
-            onBan={banUser}
-            onUnban={unbanUser}
-          />
-          <UserListSection
-            title={t.admin.users.membersSectionTitle}
+            title={t.admin.users.pageTitle}
             icon={UsersIcon}
-            users={memberUsers}
+            users={users}
+            total={total}
+            rangeLabel={t.admin.users.showingRange(rangeFrom, rangeTo, total)}
             emptyLabel={t.admin.users.noResultsFiltered}
             currentUserId={currentUserId}
             isCurrentUserWebMaster={isCurrentUserWebMaster}
@@ -1396,8 +1588,76 @@ export default function AdminUsersPage() {
             onBan={banUser}
             onUnban={unbanUser}
           />
+
+          {/* Paginação */}
+          <div className="flex flex-col items-center justify-between gap-3 rounded-2xl border border-border bg-card/60 px-4 py-3 sm:flex-row">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="tabular-nums">{t.admin.users.showingRange(rangeFrom, rangeTo, total)}</span>
+              <span className="hidden sm:inline">·</span>
+              <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+                <SelectTrigger className="h-7 w-[4.5rem] border-border bg-background text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAGE_SIZE_OPTIONS.map((n) => (
+                    <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="hidden sm:inline">{t.admin.users.perPage}</span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="size-8 p-0"
+                disabled={page <= 1}
+                onClick={() => setPage(1)}
+                aria-label={t.admin.users.prevPage}
+              >
+                <ChevronsLeft className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 text-xs"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+              >
+                <ChevronLeft className="size-4" />
+                <span className="hidden sm:inline">{t.admin.users.prevPage}</span>
+              </Button>
+
+              <span className="px-2 text-xs tabular-nums text-muted-foreground">
+                {t.admin.users.pageOf(page, totalPages)}
+              </span>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 text-xs"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              >
+                <span className="hidden sm:inline">{t.admin.users.nextPage}</span>
+                <ChevronRight className="size-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="size-8 p-0"
+                disabled={page >= totalPages}
+                onClick={() => setPage(totalPages)}
+                aria-label={t.admin.users.nextPage}
+              >
+                <ChevronsRight className="size-4" />
+              </Button>
+            </div>
+          </div>
         </div>
       )}
+
     </div>
   )
 }

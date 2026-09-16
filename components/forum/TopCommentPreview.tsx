@@ -2,9 +2,10 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { Flame, ImageIcon, Quote } from "lucide-react"
+import { ImageIcon, Quote } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
-import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
+import { AuthorAvatarLink, AuthorNameLink, authorFrom } from "@/components/profile/AuthorLink"
 import { CommentBody } from "@/components/comments/CommentBody"
 import type { ForumTopComment } from "@/lib/server/repositories/forum-repository"
 
@@ -54,30 +55,22 @@ export function TopCommentPreview({ comment, postSlug }: { comment: ForumTopComm
           <Quote className="size-3 shrink-0 text-orange-500/70" fill="currentColor" strokeWidth={0} />
           <span className="font-medium text-orange-500/90">Destaque dos comentários</span>
           <span className="ml-auto inline-flex shrink-0 items-center gap-1 font-semibold text-orange-500">
-            <Flame className="size-3" fill="currentColor" strokeWidth={1.5} />
+            <AuraIcon size="sm" tone="inherit" />
             {comment.aura_count}
           </span>
         </div>
 
         <div className="mt-1.5 flex items-start gap-2">
           <AuthorAvatarLink
-            author={{
-              userId: comment.user_id,
-              displayName: comment.author_display_name,
-              displaySlug: comment.author_display_slug,
-            }}
+            author={authorFrom(comment)}
             avatarUrl={comment.author_avatar_url}
-            size={6}
+            size="xs"
             onClick={(event) => event.stopPropagation()}
             className="pointer-events-auto mt-0.5"
           />
           <div className="min-w-0 flex-1">
             <AuthorNameLink
-              author={{
-                userId: comment.user_id,
-                displayName: comment.author_display_name,
-                displaySlug: comment.author_display_slug,
-              }}
+              author={authorFrom(comment)}
               onClick={(event) => event.stopPropagation()}
               className="pointer-events-auto text-xs font-semibold"
             />

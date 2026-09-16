@@ -201,6 +201,21 @@ export type ProfileShowcase = {
   discord_member: boolean
   /** Moldura de avatar equipada (Central de Aura), sobreposta à foto de perfil — `null` quando nenhuma está equipada. */
   equipped_avatar_frame_url: string | null
+  /** Slug da moldura equipada — identifica as de arte em código, que não têm asset (ver `lib/profile-frames.ts`). */
+  equipped_avatar_frame_slug: string | null
+  /** Se possui a Moldura de Fundador. Permanente, independe de VIP ativo. */
+  is_founder: boolean
+  /** O dono escolheu não exibir moldura nenhuma (`avatar_frame_opt_out`). */
+  avatar_frame_opt_out: boolean
+  /**
+   * RECORDE de ofensiva, achatado para o topo do objeto.
+   *
+   * É o MESMO número de `streak.longest`. Existe duplicado porque
+   * `profileFrameOf(profile)` lê o perfil inteiro e procura `longest_streak`
+   * na raiz — aninhado em `streak`, ele não chegaria, e a foto grande do
+   * perfil sairia sem a moldura de marco enquanto o resto do site a mostra.
+   */
+  longest_streak: number
   /**
    * Quantos periféricos a tierlist pessoal (VIP) tem — só a contagem, para o
    * perfil decidir se mostra o link "Ver tierlist". Os itens em si ficam de

@@ -1,7 +1,8 @@
 "use client"
 
 import { motion } from "framer-motion"
-import { Flame, MessageCircle, ShoppingCart, Crown, Mouse, Users } from "lucide-react"
+import { MessageCircle, ShoppingCart, Crown, Mouse, Users } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
 /**
  * Réplicas visuais estáticas (não os componentes reais) dos cards de
@@ -25,7 +26,7 @@ function ForumCardPreview() {
       </p>
       <div className="mt-2 flex items-center gap-2">
         <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-[10px] font-semibold text-orange-500">
-          <Flame className="size-2.5" fill="currentColor" />
+          <AuraIcon size="xs" tone="inherit" />
           128
         </span>
         <span className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
@@ -114,7 +115,7 @@ function ProfileCardPreview() {
           </div>
           <div className="mt-1 flex items-center gap-2 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-0.5 text-orange-400">
-              <Flame className="size-2.5" fill="currentColor" />
+              <AuraIcon size="xs" tone="inherit" />
               2.4k
             </span>
             <span className="flex items-center gap-0.5">

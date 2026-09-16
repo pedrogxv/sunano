@@ -1,25 +1,27 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Crown, Flame, Loader2, Trophy } from "lucide-react"
+import { Loader2, Trophy } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
 import { cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ImageWithFallback } from "@/components/ui/image-with-fallback"
-import { profileAccentHue } from "@/lib/user-directory"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import { profilePath } from "@/lib/profile-name"
+import type { AuraRankingEntry } from "@/lib/server/repositories/aura-repository"
 
 type RankingWindow = "all" | "today" | "week"
 
-type RankingEntry = {
-  userId: string
-  displayName: string
-  displaySlug: string
-  avatarUrl: string | null
-  isVip: boolean
-  value: number
-}
+/**
+ * O que `/api/aura/ranking` devolve — o MESMO objeto de
+ * `AuraRankingEntry` (aura-repository), reaproveitado como `import type` para
+ * que a modal não redeclare a forma à mão. Redeclarar era como a moldura
+ * ficava de fora: o servidor passou a mandar `frame` e a cópia local não
+ * sabia dele. `import type` some na compilação, então o `server-only` do
+ * repositório não entra no bundle do cliente.
+ */
+type RankingEntry = AuraRankingEntry
 
 const WINDOW_TABS: Array<{ key: RankingWindow; label: string; empty: string }> = [
   { key: "all", label: "Tudo", empty: "Ninguém tem Aura ainda, seja o primeiro." },
@@ -27,23 +29,16 @@ const WINDOW_TABS: Array<{ key: RankingWindow; label: string; empty: string }> =
   { key: "week", label: "Semana", empty: "Ninguém ganhou Aura nesta semana ainda." },
 ]
 
+/**
+ * Cor do NÚMERO do lugar (1/2/3). A moldura do avatar não sai daqui — vem de
+ * `ProfileAvatar`, que desenha só a moldura que a pessoa tem (equipada ou
+ * VIP) — colocação não concede moldura.
+ */
 const MEDAL_STYLES = [
-  { bg: "bg-amber-400/15", text: "text-amber-300", ring: "ring-amber-400/40" },
-  { bg: "bg-slate-300/15", text: "text-slate-200", ring: "ring-slate-300/40" },
-  { bg: "bg-amber-700/15", text: "text-amber-600", ring: "ring-amber-700/40" },
+  { bg: "bg-amber-400/15", text: "text-amber-300" },
+  { bg: "bg-slate-300/15", text: "text-slate-200" },
+  { bg: "bg-amber-700/15", text: "text-amber-600" },
 ]
-
-function initialsOf(name: string): string {
-  return (
-    name
-      .trim()
-      .split(/\s+/)
-      .map((p) => p[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2) || "?"
-  )
-}
 
 interface AuraRankingModalProps {
   open: boolean
@@ -112,7 +107,7 @@ export function AuraRankingModal({ open, onOpenChange }: AuraRankingModalProps) 
 
           {WINDOW_TABS.map((tab) => (
             <TabsContent key={tab.key} value={tab.key} className="pt-3">
-              <RankingList entries={cache[tab.key]} emptyMessage={tab.empty} showsGained={tab.key !== "all"} />
+              <RankingList entries={cache[tab.key]} emptyMessage={tab.empty} window={tab.key} />
             </TabsContent>
           ))}
         </Tabs>
@@ -124,12 +119,15 @@ export function AuraRankingModal({ open, onOpenChange }: AuraRankingModalProps) 
 function RankingList({
   entries,
   emptyMessage,
-  showsGained,
+  window,
 }: {
   entries: RankingEntry[] | undefined
   emptyMessage: string
-  showsGained: boolean
+  /** Janela ativa — decide o rótulo "ganhos". Não influencia moldura: colocação não concede nenhuma. */
+  window: RankingWindow
 }) {
+  const showsGained = window !== "all"
+
   if (entries === undefined) {
     return (
       <div className="flex items-center justify-center py-12 text-muted-foreground">
@@ -151,7 +149,6 @@ function RankingList({
       {entries.map((entry, index) => {
         const place = index + 1
         const medal = MEDAL_STYLES[index]
-        const hue = profileAccentHue(entry.userId)
         return (
           <li key={entry.userId}>
             <a
@@ -170,40 +167,20 @@ function RankingList({
                 {place}
               </span>
 
-              <div
-                className={cn(
-                  "relative size-8 shrink-0 overflow-hidden rounded-full bg-muted",
-                  medal && `ring-2 ${medal.ring}`
-                )}
-              >
-                <ImageWithFallback
-                  src={entry.avatarUrl}
-                  alt={entry.displayName}
-                  fill
-                  sizes="32px"
-                  className="object-cover"
-                  fallback={
-                    <div
-                      className="flex size-full items-center justify-center text-[10px] font-bold text-white/90"
-                      style={{
-                        backgroundImage: `linear-gradient(135deg, hsl(${hue} 55% 40%), hsl(${(hue + 45) % 360} 50% 28%))`,
-                      }}
-                    >
-                      {initialsOf(entry.displayName)}
-                    </div>
-                  }
-                />
-              </div>
+              <ProfileAvatar
+                name={entry.displayName}
+                avatarUrl={entry.avatarUrl}
+                size="sm"
+                frame={entry.frame}
+              />
 
               <span className="flex-1 truncate text-sm font-semibold text-foreground">
+                {/* Sem coroa: o avatar à esquerda já vem com a moldura VIP. */}
                 {entry.displayName}
-                {entry.isVip && (
-                  <Crown className="ml-1 inline-block size-3 -translate-y-px" style={{ color: "var(--vip-accent)" }} />
-                )}
               </span>
 
               <span className="flex shrink-0 items-center gap-1 text-sm font-bold text-orange-400 tabular-nums">
-                <Flame className="size-3.5" fill="currentColor" strokeWidth={0} />
+                <AuraIcon tone="inherit" />
                 {entry.value.toLocaleString("pt-BR")}
                 {showsGained && <span className="text-[10px] font-medium text-muted-foreground">ganhos</span>}
               </span>

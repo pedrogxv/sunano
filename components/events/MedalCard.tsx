@@ -1,7 +1,8 @@
 "use client"
 
 import Image from "next/image"
-import { Award, CheckCircle2, Crown, Flame } from "lucide-react"
+import { Award, CheckCircle2, Crown } from "lucide-react"
+import { AuraIcon } from "@/components/ui/AuraIcon"
 
 import {
   MEDAL_RARITY_BAR,
@@ -118,7 +119,7 @@ export function MedalCard({
                 <span className="text-[15px] font-black leading-none" style={{ color: accent }}>
                   {auraPrice.finalPrice}
                 </span>
-                <Flame className="size-3 shrink-0 text-orange-400" fill="currentColor" strokeWidth={1.5} />
+                <AuraIcon size="sm" tone="inherit" className="shrink-0" />
               </span>
             )}
           </header>

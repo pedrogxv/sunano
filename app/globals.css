@@ -1394,46 +1394,12 @@ button:not(:disabled):hover .aura-icon-holder {
   }
 }
 
-/* Ícone hero de Aura (topo da Central de Aura) — mesmo halo giratório de
-   .aura-icon-holder[data-given], só maior/mais lento pra um ícone grande
-   parado em vez de um botão pequeno reagindo a clique. */
-@keyframes aura-hero-flame-flicker {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  25%      { transform: scale(1.05) rotate(-3deg); }
-  50%      { transform: scale(0.97) rotate(2deg); }
-  75%      { transform: scale(1.03) rotate(-1deg); }
-}
-
+/* Holder do ícone hero da Central de Aura. O tremor que existia aqui
+   (`aura-hero-icon-flame`) saiu quando o hero passou a usar a chama viva de
+   `components/ui/AuraFlame.tsx`, que anima as camadas por dentro — girar o
+   ícone inteiro por fora, junto, só embaralhava as duas animações. */
 .aura-hero-icon-holder {
   isolation: isolate;
-}
-
-.aura-hero-icon-flame {
-  animation: aura-hero-flame-flicker 2.2s ease-in-out infinite;
-  filter: drop-shadow(0 0 2px oklch(0.7 0.2 40 / 0.6));
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aura-hero-icon-flame {
-    animation: none;
-  }
-}
-
-/* Ícone de chama do card "Aura atual" — mesmo tremular de escala/rotação do
-   ícone hero acima, mais o glow pulsante de .nav-fire-icon, pra um ícone
-   pequeno que também "se mexe" e não só brilha. */
-.aura-balance-flame {
-  color: #ff6a1f;
-  animation:
-    aura-hero-flame-flicker 1.8s ease-in-out infinite,
-    fire-icon-glow-pulse 1.8s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aura-balance-flame {
-    animation: none;
-    filter: drop-shadow(0 0 3px oklch(0.7 0.2 40 / 0.7));
-  }
 }
 
 /* ==========================================================================
@@ -2604,4 +2570,226 @@ button:not(:disabled):hover .aura-icon-holder {
     linear-gradient(-45deg, transparent 75%, color-mix(in oklab, var(--muted) 70%, transparent) 75%);
   background-size: 10px 10px;
   background-position: 0 0, 0 5px, 5px -5px, -5px 0;
+}
+
+/* ==========================================================================
+   CHAMA VIVA DA AURA (.aura-flame) — componente `AuraFlame`
+   --------------------------------------------------------------------------
+   Fogo de verdade não pisca inteiro: ele tem camadas que se movem em ritmos
+   diferentes. São três corpos sobrepostos, cada um com o SEU ciclo, e os
+   ciclos são PRIMOS entre si (1.7s / 2.3s / 3.1s) de propósito — assim eles
+   nunca reencontram a mesma combinação e o olho não acha o ponto onde o loop
+   recomeça. Foi essa escolha que tirou a cara de "gif piscando".
+
+   As deformações usam `scale` + `translate` + `skew` em vez de `filter` ou
+   `d` animado: `transform` roda na GPU (composite), então dá para ter três
+   camadas + fagulhas rodando sem custo de layout/paint por frame.
+
+   `transform-origin: bottom center` em tudo — fogo cresce PARA CIMA a partir
+   da base fixa; animar a partir do centro faz a chama "flutuar" e é o erro
+   clássico que denuncia a animação.
+   ========================================================================== */
+
+.aura-flame {
+  position: relative;
+  display: inline-block;
+  isolation: isolate;
+  /* O halo pulsante que vaza da chama, atrás de tudo. */
+  filter: drop-shadow(0 0 3px oklch(0.7 0.2 45 / 0.55));
+  animation: aura-flame-halo 3.1s ease-in-out infinite;
+}
+
+.aura-flame-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.aura-flame-body {
+  transform-origin: bottom center;
+  transform-box: fill-box;
+}
+
+/* Língua externa — a mais lenta e a que mais se deforma: é ela que dá a
+   silhueta bruxuleante. O leve `skewX` alternado é o que faz a ponta tombar
+   para um lado e voltar, como fogo pegando corrente de ar. */
+.aura-flame-outer {
+  fill: url(#aura-flame-grad-outer);
+  animation: aura-flame-sway-outer 2.3s ease-in-out infinite;
+}
+
+/* Corpo interno — ciclo mais curto e em contratempo (delay negativo), o que
+   cria a profundidade. Sem a defasagem, as duas camadas subiriam juntas e a
+   chama pareceria um único bloco esticando. */
+.aura-flame-inner {
+  fill: url(#aura-flame-grad-inner);
+  animation: aura-flame-sway-inner 1.7s ease-in-out -0.6s infinite;
+}
+
+/* Núcleo — quase parado; só a opacidade respira. É o detalhe que o olho lê
+   como brasa, e é justamente por NÃO se mexer que ele ancora a chama. */
+.aura-flame-core {
+  fill: url(#aura-flame-grad-core);
+  transform-origin: bottom center;
+  transform-box: fill-box;
+  animation: aura-flame-core-breathe 1.7s ease-in-out infinite;
+}
+
+@keyframes aura-flame-sway-outer {
+  0%, 100% { transform: scale(1, 1) skewX(0deg) translateX(0); }
+  25%      { transform: scale(0.94, 1.08) skewX(-3.5deg) translateX(-0.4px); }
+  50%      { transform: scale(1.05, 0.95) skewX(1.5deg) translateX(0.3px); }
+  75%      { transform: scale(0.97, 1.05) skewX(3deg) translateX(0.5px); }
+}
+
+@keyframes aura-flame-sway-inner {
+  0%, 100% { transform: scale(1, 1) skewX(0deg); opacity: 0.95; }
+  30%      { transform: scale(1.08, 0.9) skewX(3deg); opacity: 0.8; }
+  60%      { transform: scale(0.9, 1.12) skewX(-2.5deg); opacity: 1; }
+}
+
+@keyframes aura-flame-core-breathe {
+  0%, 100% { opacity: 0.9; transform: scaleY(1); }
+  50%      { opacity: 0.55; transform: scaleY(0.88); }
+}
+
+@keyframes aura-flame-halo {
+  0%, 100% { filter: drop-shadow(0 0 3px oklch(0.7 0.2 45 / 0.5)); }
+  50%      { filter: drop-shadow(0 0 7px oklch(0.75 0.21 50 / 0.85)); }
+}
+
+/* Fagulhas — sobem da ponta e apagam. Cada uma tem trajetória, tamanho e
+   atraso próprios (via --spark), senão saem em fila e viram "chuvisco". */
+.aura-flame-spark {
+  position: absolute;
+  left: 50%;
+  bottom: 55%;
+  width: 2px;
+  height: 2px;
+  border-radius: 9999px;
+  background: oklch(0.85 0.17 70);
+  box-shadow: 0 0 5px 1px oklch(0.8 0.19 55 / 0.9);
+  opacity: 0;
+  pointer-events: none;
+  animation: aura-flame-spark-rise 2.6s ease-out infinite;
+}
+
+.aura-flame-spark:nth-child(1) { animation-delay: 0s;    --spark-drift: -6px; }
+.aura-flame-spark:nth-child(2) { animation-delay: 0.9s;  --spark-drift: 5px; }
+.aura-flame-spark:nth-child(3) { animation-delay: 1.7s;  --spark-drift: -2px; }
+
+@keyframes aura-flame-spark-rise {
+  0%   { transform: translate(-50%, 0) scale(1); opacity: 0; }
+  12%  { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--spark-drift, 0px)), -26px) scale(0.2); opacity: 0; }
+}
+
+/* Parado, mas ainda bonito: a chama fica no frame mais "cheio", com o halo
+   aceso — quem pediu menos movimento não perde o símbolo. */
+@media (prefers-reduced-motion: reduce) {
+  .aura-flame,
+  .aura-flame-outer,
+  .aura-flame-inner,
+  .aura-flame-core {
+    animation: none;
+  }
+  .aura-flame {
+    filter: drop-shadow(0 0 5px oklch(0.72 0.2 45 / 0.7));
+  }
+  .aura-flame-spark {
+    display: none;
+  }
+}
+
+/* ==========================================================================
+   Card "Aura atual" (.aura-balance-card) — a fogueira de fundo
+   --------------------------------------------------------------------------
+   O card não ganha um ícone maior: ele ACENDE. A brasa mora no rodapé do
+   card (é de baixo que o fogo vem) e a intensidade sobe com o saldo, via
+   `data-heat` (1→4). A escolha de amarrar ao saldo é o que torna a animação
+   informativa em vez de enfeite: quem tem muita Aura vê a fogueira cheia.
+
+   Duas camadas, ambas em `::before`/`::after` do próprio card para não custar
+   um nó a mais no DOM:
+     • `::before` — o clarão quente subindo do rodapé, respirando de opacidade;
+     • `::after`  — uma faixa de luz que corre na horizontal, lenta, como o
+                    fogo lambendo a base. É `transform: translateX`, na GPU.
+
+   `overflow: hidden` no card (já aplicado na classe utilitária) recorta as
+   duas no raio da borda.
+   ========================================================================== */
+
+.aura-balance-card {
+  --heat: 0.35;
+}
+
+.aura-balance-card[data-heat="2"] { --heat: 0.55; }
+.aura-balance-card[data-heat="3"] { --heat: 0.78; }
+.aura-balance-card[data-heat="4"] { --heat: 1; }
+
+/* Clarão subindo do rodapé. A altura também cresce com o calor — numa conta
+   zerada é só um fio de brasa, no topo da escala é uma fogueira. */
+.aura-balance-card::before {
+  content: "";
+  position: absolute;
+  inset-inline: -10%;
+  bottom: -30%;
+  height: calc(45% + var(--heat) * 45%);
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 70% 100% at 50% 100%,
+    oklch(0.7 0.22 42 / calc(var(--heat) * 0.5)),
+    oklch(0.65 0.2 30 / calc(var(--heat) * 0.2)) 45%,
+    transparent 75%
+  );
+  filter: blur(6px);
+  pointer-events: none;
+  animation: aura-balance-blaze 3.1s ease-in-out infinite;
+}
+
+/* Lambida de luz correndo na base. Mais sutil que o clarão (é o detalhe que
+   se percebe no segundo olhar, não no primeiro). */
+.aura-balance-card::after {
+  content: "";
+  position: absolute;
+  left: -40%;
+  right: -40%;
+  bottom: -12%;
+  height: 32%;
+  z-index: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    oklch(0.78 0.2 60 / calc(var(--heat) * 0.28)),
+    oklch(0.72 0.22 38 / calc(var(--heat) * 0.16)),
+    transparent
+  );
+  filter: blur(10px);
+  pointer-events: none;
+  animation: aura-balance-lick 7.3s ease-in-out infinite;
+}
+
+@keyframes aura-balance-blaze {
+  0%, 100% { opacity: 0.75; transform: scaleY(1); }
+  50%      { opacity: 1;    transform: scaleY(1.12); }
+}
+
+@keyframes aura-balance-lick {
+  0%, 100% { transform: translateX(-12%); }
+  50%      { transform: translateX(12%); }
+}
+
+/* A borda do card também esquenta, para o fogo não parecer colado por cima
+   de um card frio. */
+.aura-balance-card[data-heat="3"],
+.aura-balance-card[data-heat="4"] {
+  border-color: oklch(0.62 0.16 45 / calc(var(--heat) * 0.45));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-balance-card::before,
+  .aura-balance-card::after {
+    animation: none;
+  }
 }

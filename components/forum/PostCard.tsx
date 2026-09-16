@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Bookmark, Crown, EyeOff, Flame, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
+import { Bookmark, Crown, EyeOff, Lock, MessageCircle, Pin, Sparkles } from "lucide-react"
+import { AuraIcon, AuraIconHolder } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
 
 import { CategoryBadge } from "@/components/forum/CategoryBadge"
@@ -14,7 +15,7 @@ import { ImageLightbox } from "@/components/forum/ImageLightbox"
 import { ReportMenu } from "@/components/forum/ReportMenu"
 import { TopCommentPreview } from "@/components/forum/TopCommentPreview"
 import { ShareMenu } from "@/components/forum/ShareMenu"
-import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
+import { AuthorAvatarLink, AuthorNameLink, authorFrom } from "@/components/profile/AuthorLink"
 import { CommentBody } from "@/components/comments/CommentBody"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAuthUser } from "@/components/providers/auth-context"
@@ -193,9 +194,9 @@ function PostAuraButton({
               canReact && "hover:border-orange-500/40 hover:bg-orange-500/5"
             )}
           >
-            <span className="aura-stat-icon-holder inline-flex">
-              <Flame className="aura-stat-icon size-4 text-orange-500" fill="currentColor" strokeWidth={1.5} />
-            </span>
+            <AuraIconHolder>
+              <AuraIcon size="lg" glow />
+            </AuraIconHolder>
             {count}
           </button>
         </span>
@@ -363,17 +364,16 @@ export function PostCard({
             clique — mas a foto do autor precisa continuar reagindo ao cursor
             para abrir o Mini Perfil. */}
         <AuthorAvatarLink
-          author={{ userId: post.user_id, displayName: post.author_display_name, displaySlug: post.author_display_slug }}
+          author={authorFrom(post)}
           avatarUrl={post.author_avatar_url}
-          size={9}
+          size="md"
           onClick={(event) => event.stopPropagation()}
           className="pointer-events-auto relative z-10"
-          isVip={isVipActive(post.author_account_tier, post.author_vip_expires_at)}
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <AuthorNameLink
-              author={{ userId: post.user_id, displayName: post.author_display_name, displaySlug: post.author_display_slug }}
+              author={authorFrom(post)}
               onClick={(event) => event.stopPropagation()}
               className="pointer-events-auto relative z-10 font-semibold"
               isVip={isVipActive(post.author_account_tier, post.author_vip_expires_at)}

@@ -2,7 +2,17 @@
 
 import Image from "next/image"
 import { useEffect, useState } from "react"
-import { Camera, Crown, Pencil, Sparkles, Youtube } from "lucide-react"
+import {
+  Camera,
+  Crown,
+  ImagePlus,
+  LayoutGrid,
+  Palette,
+  Pencil,
+  Sparkles,
+  UserRound,
+  Youtube,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { FavoritosEditor, MedalhasEditor, SetupEditor } from "./showcase-editors"
@@ -19,7 +29,6 @@ import {
   type MediaAdjust,
   type ProfileMediaAdjustments,
 } from "@/lib/profile-media-adjust"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { FrozenFrame } from "@/components/ui/image-with-fallback"
 import { TikTokIcon } from "@/components/icons/social-icons"
 import { resolveProfileMedia, type ProfileMedia } from "@/lib/account-tier"
@@ -27,12 +36,15 @@ import { getSpecialTag } from "@/lib/special-tag"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import BoxLoader from "@/components/ui/box-loader"
 import { useAccountTier } from "@/lib/hooks/use-account-tier"
 import { slugifyDisplayName } from "@/lib/profile-name"
 import { ChangeDisplayNameModal } from "@/components/profile/ChangeDisplayNameModal"
 import { useAuthUser } from "@/components/providers/auth-context"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
+import { profileFrameOf, type ProfileFrameIdentity } from "@/lib/profile-frames"
 import {
   BIO_MAX_LENGTH,
   normalizeSocialHandle,
@@ -43,6 +55,7 @@ import {
   type ShowcasePeripheral,
 } from "@/lib/profile-showcase"
 import { MiniProfileBgPicker } from "@/components/account/MiniProfileBgPicker"
+import { ProfileFramePicker } from "@/components/account/ProfileFramePicker"
 import { MINI_PROFILE_BG_THEMES } from "@/lib/mini-profile-backgrounds"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { profileAccentHue } from "@/lib/user-directory"
@@ -90,7 +103,7 @@ const COVER_IMAGE_COMPRESS_OPTIONS = {
   skipBelowBytes: 200 * 1024,
 }
 
-// O avatar nunca é exibido acima de ~128px (`AvatarFoto`, `UserAvatar`), então
+// O avatar nunca é exibido acima de ~128px (`AvatarQuadrado`, `ProfileAvatar`), então
 // não há motivo pra subir a foto original da câmera: 512px cobre tela 2x com
 // folga. Sem isso o navegador enviava o arquivo cru — o servidor recomprimia
 // no finalize, mas o upload gastava banda à toa e, se o passo de confirmação
@@ -188,6 +201,24 @@ async function importKlipyGif(
 }
 
 /**
+ * As três abas do editor, na ordem em que a pessoa costuma mexer: primeiro
+ * quem ela é (nome, bio, links), depois como isso se veste (enquadramento,
+ * moldura, efeito) e por fim o que ela expõe no perfil público.
+ *
+ * Abas e não uma rolagem só porque os três grupos não se leem juntos: quem
+ * veio trocar a bio não precisa passar por 4 slots de setup e pela lista
+ * inteira de medalhas para chegar nela. O estado de todos vive no componente
+ * pai, então trocar de aba nunca descarta rascunho.
+ */
+const EDITOR_TABS = [
+  { id: "identidade", label: "Identidade", Icon: UserRound },
+  { id: "aparencia", label: "Aparência", Icon: Palette },
+  { id: "espaco", label: "Meu Espaço", Icon: LayoutGrid },
+] as const
+
+type EditorTab = (typeof EDITOR_TABS)[number]["id"]
+
+/**
  * Perfil e vitrine em uma seção só: identidade (banner, avatar, nome, bio) e o
  * que aparece no perfil público (setup, favoritos, medalhas). Os dois grupos
  * batem em endpoints diferentes, mas são salvos pelo mesmo botão.
@@ -197,7 +228,25 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   // Salvar aqui não mexe no cookie de sessão nem dispara evento de auth, então
   // nenhum dos gatilhos do provider percebe a mudança sozinho — sem este
   // `refresh()` o avatar e o nome lá em cima ficam velhos até um F5.
-  const { refresh: refreshAuthUser } = useAuthUser()
+  // A moldura equipada vem do contexto de sessão (`/api/auth/me`), para o
+  // preview mostrar exatamente a mesma moldura do perfil público.
+  const { user: authUser, refresh: refreshAuthUser } = useAuthUser()
+  // A moldura inteira (equipada + VIP + Fundador), e não só a URL: o preview
+  // precisa mostrar a MESMA que o público vê, e uma moldura de arte em código
+  // (Fundador) não tem URL nenhuma — só a URL fazia o preview sair vazio.
+  const previewFrame = profileFrameOf({
+    equippedFrameSlug: authUser?.equippedFrameSlug,
+    equippedFrameUrl: authUser?.equippedFrameUrl,
+    accountTier: authUser?.accountTier,
+    vipExpiresAt: authUser?.vipExpiresAt,
+    isFounder: authUser?.isFounder,
+    longestStreak: authUser?.longestStreak,
+    // Sem ele o preview ignorava o "Nenhuma" do seletor logo abaixo: como
+    // `profileFrameOf` resolve o campo ausente para `false`, o fallback de
+    // honraria voltava a desenhar a moldura de Fundador/VIP — o botão
+    // parecia não fazer nada, justo na tela onde ele vive.
+    frameOptOut: authUser?.frameOptOut,
+  })
   const { tier, favoriteLimit, medalLimit, capabilities, animatedMedia, isVip } = useAccountTier(
     profile.account_tier,
     profile.vip_expires_at ?? null
@@ -243,6 +292,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   // Troca de nome saiu do fluxo de "Salvar alterações": agora é uma compra
   // paga com Aura, feita pelo modal reutilizável (ver ChangeDisplayNameModal).
   const [nameModalOpen, setNameModalOpen] = useState(false)
+  const [tab, setTab] = useState<EditorTab>("identidade")
 
   const previewName = displayName.trim() || (profile.email?.split("@")[0] ?? "Usuário")
   const specialTag = getSpecialTag(profile.display_slug)
@@ -501,258 +551,398 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
     }
   }
 
+  // Aba aberta. O estado inteiro do formulário vive AQUI no pai, então trocar
+  // de aba não perde rascunho nenhum — e os painéis ainda são montados com
+  // `forceMount` para o estado LOCAL de cada editor (o `PeripheralPicker`
+  // aberto num slot, o acordeão de molduras bloqueadas) sobreviver à troca.
+  const busy = uploading || uploadingBanner || uploadingMiniBanner
+  const hasAnyMedia = Boolean(bannerPreview.src || miniBannerPreview.src || avatarPreview)
+
   return (
-    <div className="space-y-8">
-      {/* ── Identidade ── */}
-      <section className="space-y-4">
-        <Card className={cn(CARD_SURFACE, "overflow-hidden")}>
-          <CardContent className="space-y-6 pt-6">
-            {/* Banner grande: preview da página de perfil inteira — a capa
-                aparece no contexto real, com a foto sobreposta. */}
-            <div className="space-y-2">
-              <PreviewLabel
-                label="Banner do perfil"
-                hint="Capa do topo do seu perfil público."
-              />
+    <div className="space-y-6">
+      {/* Duas colunas a partir de `xl`: os previews de um lado, sempre à
+          vista, e os controles do outro.
 
-              <ProfilePagePreview
-                banner={bannerPreview}
-                bannerAdjust={adjustments.banner}
-                avatarAdjust={adjustments.avatar}
-                avatarSrc={avatarPreview}
-                name={previewName}
-                tierLabel={capabilities.label}
-                isVip={isVip}
-                specialTag={specialTag}
-                uploadingAvatar={uploading}
-                onEditAvatar={() => setPicker("avatar")}
-                uploadingBanner={uploadingBanner}
-                onEditBanner={() => setPicker("banner")}
-              />
+          Era tudo uma coluna só dentro de um `max-w-4xl`, e a consequência não
+          era estética: o preview ficava no topo e os campos que ele reflete
+          (bio, sociais) uns 800px abaixo, então quem digitava a bio não via o
+          resultado sem rolar de volta. Com a coluna esquerda `sticky`, cada
+          tecla aparece no mesmo enquadramento em que o público vai ver. */}
+      <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[26rem_minmax(0,1fr)]">
+        {/* ── Coluna de previews ── */}
+        {/* `top-20` e não `top-6`: a TopBar é `sticky top-0` com `min-h-16`
+            (64px), então qualquer valor menor prenderia o preview PARCIALMENTE
+            atrás dela — a capa ficaria cortada justo enquanto a pessoa a
+            enquadra. Os 80px são a barra mais um respiro. */}
+        <aside className="xl:sticky xl:top-20 xl:self-start">
+          {/* Rolagem própria: os dois previews somados passam de 800px, e uma
+              coluna mais alta que a viewport simplesmente NÃO gruda — o
+              `sticky` só segura enquanto o elemento cabe na tela. Sem isto o
+              preview voltaria a sumir ao rolar, que é o problema que esta
+              coluna existe para resolver. `-mx-1 px-1` dá folga lateral para o
+              anel de foco dos botões não ser cortado pelo `overflow`. */}
+          <div className="-mx-1 space-y-4 px-1 xl:pb-2">
+            <PreviewLabel
+              label="Como você aparece"
+              hint="Passe o mouse em qualquer imagem para trocá-la. É assim que o site inteiro vê você."
+            />
 
-              {bannerPreview.src && (
-                <MediaAdjuster
-                  src={bannerPreview.src}
-                  animated={bannerPreview.animated}
-                  freeze={bannerPreview.needsFreeze}
-                  value={adjustments.banner}
-                  onChange={(next) => setAdjust("banner", next)}
-                  aspect="banner"
-                  disabled={uploadingBanner}
+            {/* Os dois previews empilhados dentro da coluna estreita, e lado a
+                lado enquanto ela não existe (abaixo de `xl`, onde a página
+                volta a ser uma coluna só). A foto é COMPARTILHADA pelos dois:
+                mantê-los na mesma vista é o que faz um clique na foto ser
+                visível nos dois lugares ao mesmo tempo. */}
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+              <PreviewFrame label="Perfil público" hint="sunano.com.br/perfil">
+                <ProfilePagePreview
+                  banner={bannerPreview}
+                  bannerAdjust={adjustments.banner}
+                  avatarAdjust={adjustments.avatar}
+                  avatarSrc={avatarPreview}
+                  name={previewName}
+                  tierLabel={capabilities.label}
+                  isVip={isVip}
+                  previewFrame={previewFrame}
+                  specialTag={specialTag}
+                  bio={bio}
+                  youtubeHandle={youtubeHandle}
+                  tiktokHandle={tiktokHandle}
+                  uploadingAvatar={uploading}
+                  onEditAvatar={() => setPicker("avatar")}
+                  uploadingBanner={uploadingBanner}
+                  onEditBanner={() => setPicker("banner")}
                 />
-              )}
+              </PreviewFrame>
+
+              <PreviewFrame label="Mini Perfil" hint="hover no fórum e em /pessoas">
+                <MiniBannerCardPreview
+                  miniBanner={miniBannerPreview}
+                  miniBannerAdjust={adjustments.mini_banner}
+                  avatarAdjust={adjustments.avatar}
+                  avatarSrc={avatarPreview}
+                  name={previewName}
+                  previewFrame={previewFrame}
+                  specialTag={specialTag}
+                  accentHue={accentHue}
+                  uploadingAvatar={uploading}
+                  onEditAvatar={() => setPicker("avatar")}
+                  uploadingMiniBanner={uploadingMiniBanner}
+                  onEditMiniBanner={() => setPicker("mini_banner")}
+                />
+              </PreviewFrame>
             </div>
 
-            {/* Fundo do Mini Perfil: imagem separada da capa, usada só no
-                cartão de preview rápido (hover na foto em /pessoas e no autor
-                de um post do fórum). */}
-            <div className="space-y-2">
-              <PreviewLabel
-                label="Fundo do Mini Perfil"
-                hint="Aparece no cartão que abre ao passar o mouse na sua foto, em /pessoas e no fórum."
+            {/* Atalho para as três imagens. Antes a única forma de trocar uma
+                foto era descobrir que o preview era clicável — o que é
+                elegante mas invisível; aqui os mesmos três destinos ficam
+                escritos, e o botão diz se já existe imagem ou não. */}
+            <div className="grid grid-cols-3 gap-2">
+              <MediaShortcut
+                label="Foto"
+                filled={Boolean(avatarPreview)}
+                busy={uploading}
+                onClick={() => setPicker("avatar")}
               />
-
-              <MiniBannerCardPreview
-                miniBanner={miniBannerPreview}
-                miniBannerAdjust={adjustments.mini_banner}
-                avatarAdjust={adjustments.avatar}
-                avatarSrc={avatarPreview}
-                name={previewName}
-                isVip={isVip}
-                specialTag={specialTag}
-                accentHue={accentHue}
-                uploadingAvatar={uploading}
-                onEditAvatar={() => setPicker("avatar")}
-                uploadingMiniBanner={uploadingMiniBanner}
-                onEditMiniBanner={() => setPicker("mini_banner")}
+              <MediaShortcut
+                label="Capa"
+                filled={Boolean(bannerPreview.src)}
+                busy={uploadingBanner}
+                onClick={() => setPicker("banner")}
               />
+              <MediaShortcut
+                label="Fundo mini"
+                filled={Boolean(miniBannerPreview.src)}
+                busy={uploadingMiniBanner}
+                onClick={() => setPicker("mini_banner")}
+              />
+            </div>
+          </div>
+        </aside>
 
-              {miniBannerPreview.src && (
-                <MediaAdjuster
-                  src={miniBannerPreview.src}
-                  animated={miniBannerPreview.animated}
-                  freeze={miniBannerPreview.needsFreeze}
-                  value={adjustments.mini_banner}
-                  onChange={(next) => setAdjust("mini_banner", next)}
-                  aspect="mini"
-                  disabled={uploadingMiniBanner}
+        {/* ── Coluna de controles ── */}
+        <Tabs value={tab} onValueChange={(next) => setTab(next as EditorTab)} className="gap-4">
+          <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+            {EDITOR_TABS.map(({ id, label, Icon }) => (
+              <TabsTrigger key={id} value={id} className="flex-none gap-1.5 px-3">
+                <Icon className="size-3.5" />
+                {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {/* ── Identidade: os campos de texto ── */}
+          <TabsContent value="identidade" forceMount hidden={tab !== "identidade"}>
+            <Card className={cn(CARD_SURFACE)}>
+              <CardContent className="space-y-5">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Nome de exibição
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={displayName}
+                        readOnly
+                        className="border-border bg-muted/20 text-muted-foreground"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setNameModalOpen(true)}
+                        title="Trocar nome"
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                    </div>
+                    <p className="truncate text-[10px] text-muted-foreground/60">
+                      sunano.com.br/perfil/
+                      <span className="text-muted-foreground">{slugPreview}</span>
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60">
+                      {/* O valor exato (com o desconto VIP) aparece no modal, que
+                          o busca do servidor — repetir um número aqui só criava
+                          duas fontes de verdade pro mesmo preço. */}
+                      Trocar nome custa Aura e tem cooldown de 3 dias.
+                    </p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Email da conta
+                    </label>
+                    <Input
+                      value={profile.email ?? "-"}
+                      readOnly
+                      className="border-border bg-muted/20 text-muted-foreground"
+                    />
+                    <p className="text-[10px] text-muted-foreground/60">Não pode ser alterado.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline justify-between">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Bio
+                    </label>
+                    <span
+                      className={cn(
+                        "text-[10px] tabular-nums",
+                        bio.length >= BIO_MAX_LENGTH
+                          ? "font-semibold text-primary"
+                          : "text-muted-foreground/60"
+                      )}
+                    >
+                      {bio.length}/{BIO_MAX_LENGTH}
+                    </span>
+                  </div>
+                  <Textarea
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX_LENGTH))}
+                    className="border-border bg-background min-h-24 resize-none"
+                    placeholder="Uma linha sobre você: aparece no seu perfil público."
+                    maxLength={BIO_MAX_LENGTH}
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <Youtube className="size-3.5" />
+                      YouTube
+                    </label>
+                    <Input
+                      value={youtubeHandle}
+                      onChange={(e) => setYoutubeHandle(normalizeSocialHandle(e.target.value))}
+                      className="border-border bg-background"
+                      placeholder="@seucanal"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      <TikTokIcon className="size-3.5" />
+                      TikTok
+                    </label>
+                    <Input
+                      value={tiktokHandle}
+                      onChange={(e) => setTiktokHandle(normalizeSocialHandle(e.target.value))}
+                      className="border-border bg-background"
+                      placeholder="@seuusuario"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Aparência: enquadramento, moldura e efeito ── */}
+          <TabsContent
+            value="aparencia"
+            forceMount
+            hidden={tab !== "aparencia"}
+            className="space-y-4"
+          >
+            {/* Enquadramentos juntos, num painel só, e só para as imagens que
+                existem. Antes cada ajustador ficava colado ao seu preview,
+                empurrando o de baixo para longe; e o da foto, que muda os DOIS
+                previews, aparecia por último, longe de ambos. O painel inteiro
+                some quando não há imagem nenhuma, em vez de deixar rótulos
+                órfãos. */}
+            <Card className={cn(CARD_SURFACE)}>
+              <CardContent className="space-y-4">
+                <PreviewLabel
+                  label="Enquadramento"
+                  hint="Arraste para escolher o que fica visível; o zoom aproxima. Nada recorta o arquivo enviado."
                 />
-              )}
 
-              {/* Tema animado do cartão, comprado na Central de Aura. Equipar
-                  aqui é imediato (POST próprio) e NÃO depende do "Salvar" do
-                  formulário — é posse de item, não campo do perfil.
+                {hasAnyMedia ? (
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    {bannerPreview.src && (
+                      <AdjusterField label="Banner do perfil">
+                        <MediaAdjuster
+                          src={bannerPreview.src}
+                          animated={bannerPreview.animated}
+                          freeze={bannerPreview.needsFreeze}
+                          value={adjustments.banner}
+                          onChange={(next) => setAdjust("banner", next)}
+                          aspect="banner"
+                          disabled={uploadingBanner}
+                        />
+                      </AdjusterField>
+                    )}
 
-                  Sai de cena junto com o seletor enquanto não houver fundo
-                  nenhum à venda: rótulo sem nada embaixo é pior que ausência. */}
-              {MINI_PROFILE_BG_THEMES.length > 0 && (
-                <div className="space-y-2 pt-1">
+                    {miniBannerPreview.src && (
+                      <AdjusterField label="Fundo do Mini Perfil">
+                        <MediaAdjuster
+                          src={miniBannerPreview.src}
+                          animated={miniBannerPreview.animated}
+                          freeze={miniBannerPreview.needsFreeze}
+                          value={adjustments.mini_banner}
+                          onChange={(next) => setAdjust("mini_banner", next)}
+                          aspect="mini"
+                          disabled={uploadingMiniBanner}
+                        />
+                      </AdjusterField>
+                    )}
+
+                    {avatarPreview && (
+                      <AdjusterField
+                        label="Foto de perfil"
+                        hint="Vale nos dois previews e em todo o site."
+                      >
+                        <div className="w-32">
+                          <MediaAdjuster
+                            src={avatarPreview}
+                            animated={avatarMediaPreview.animated}
+                            freeze={avatarMediaPreview.needsFreeze}
+                            value={adjustments.avatar}
+                            onChange={(next) => setAdjust("avatar", next)}
+                            aspect="avatar"
+                            disabled={uploading}
+                          />
+                        </div>
+                      </AdjusterField>
+                    )}
+                  </div>
+                ) : (
+                  <EmptyHint
+                    Icon={ImagePlus}
+                    title="Nenhuma imagem enviada ainda"
+                    description="Envie uma foto, uma capa ou um fundo de Mini Perfil e o enquadramento aparece aqui."
+                    action={
+                      <Button type="button" variant="outline" size="sm" onClick={() => setPicker("avatar")}>
+                        Enviar foto de perfil
+                      </Button>
+                    }
+                  />
+                )}
+              </CardContent>
+            </Card>
+
+            {/* A moldura do avatar. Fica ANTES do efeito de Mini Perfil
+                porque aparece no site inteiro (fórum, comentários, ranking),
+                enquanto o fundo só aparece no cartão de hover.
+
+                Equipar aqui é imediato (POST próprio) e NÃO depende do
+                "Salvar" do formulário — é posse de item, não campo do perfil.
+                O `refreshAuthUser` é o que faz a escolha aparecer na hora nos
+                dois previews ao lado e na topbar: a moldura viaja pelo contexto
+                de sessão, que nenhum gatilho do provider revalida sozinho. */}
+            {/* `id` é o destino do link da notificação de moldura nova
+                (`notifyRankFrameGranted`): quem acabou de ganhar chega já
+                com o seletor na tela, em vez de cair no topo do editor de
+                perfil e ter de procurar. `scroll-mt` compensa o cabeçalho
+                fixo, senão a âncora para com o card por baixo dele. */}
+            <Card id="moldura" className={cn(CARD_SURFACE, "scroll-mt-24")}>
+              <CardContent className="space-y-3 pt-6">
+                <PreviewLabel
+                  label="Moldura do avatar"
+                  hint="O anel em volta da sua foto, em todo o site. Conquistadas na Ofensiva, no pódio dos rankings, com o VIP ou na Central de Aura."
+                />
+                <ProfileFramePicker onEquipChange={refreshAuthUser} />
+              </CardContent>
+            </Card>
+
+            {/* Tema animado do cartão, comprado na Central de Aura. Equipar
+                aqui também é imediato, pelo mesmo motivo da moldura.
+
+                Sai de cena junto com o seletor enquanto não houver fundo
+                nenhum à venda: rótulo sem nada embaixo é pior que ausência. */}
+            {MINI_PROFILE_BG_THEMES.length > 0 && (
+              <Card className={cn(CARD_SURFACE)}>
+                <CardContent className="space-y-3 pt-6">
                   <PreviewLabel
                     label="Efeito do Mini Perfil"
                     hint="Temas animados comprados na Central de Aura. Equipe um para o seu cartão ganhar borda com brilho, raios e partículas."
                   />
                   <MiniProfileBgPicker />
-                </div>
-              )}
-            </div>
-
-            {/* Foto: o mesmo enquadramento vale em todo lugar onde ela aparece
-                — perfil, card de /pessoas e Mini Perfil. */}
-            {avatarPreview && (
-              <div className="space-y-2">
-                <PreviewLabel
-                  label="Enquadramento da foto"
-                  hint="Arraste para escolher o que fica dentro do círculo."
-                />
-                <div className="flex justify-center">
-                  <div className="w-32">
-                    <MediaAdjuster
-                      src={avatarPreview}
-                      animated={avatarMediaPreview.animated}
-                      freeze={avatarMediaPreview.needsFreeze}
-                      value={adjustments.avatar}
-                      onChange={(next) => setAdjust("avatar", next)}
-                      aspect="avatar"
-                      disabled={uploading}
-                    />
-                  </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             )}
+          </TabsContent>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Email da conta
-                </label>
-                <Input
-                  value={profile.email ?? "-"}
-                  readOnly
-                  className="border-border bg-muted/20 text-muted-foreground"
-                />
-                <p className="text-[10px] text-muted-foreground/60">Não pode ser alterado.</p>
+          {/* ── Meu Espaço: a vitrine do perfil público ── */}
+          <TabsContent value="espaco" forceMount hidden={tab !== "espaco"} className="space-y-4">
+            {loadingShowcase ? (
+              <div className="flex min-h-64 items-center justify-center">
+                <BoxLoader />
               </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Nome de exibição
-                </label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={displayName}
-                    readOnly
-                    className="border-border bg-muted/20 text-muted-foreground"
+            ) : (
+              <>
+                {/* Setup e favoritos lado a lado: são duas listas curtas, e em
+                    coluna única a segunda nascia fora da tela. Medalhas ficam
+                    na largura inteira porque a lista é a mais longa das três. */}
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <SetupEditor setup={setup} onChange={updateSlot} />
+                  <FavoritosEditor
+                    favorites={favorites}
+                    limit={favoriteLimit}
+                    tierLabel={capabilities.label}
+                    onChange={setFavorites}
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setNameModalOpen(true)}
-                    title="Trocar nome"
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
                 </div>
-                <p className="truncate text-[10px] text-muted-foreground/60">
-                  sunano.com.br/perfil/<span className="text-muted-foreground">{slugPreview}</span>
-                </p>
-                <p className="text-[10px] text-muted-foreground/60">
-                  {/* O valor exato (com o desconto VIP) aparece no modal, que
-                      o busca do servidor — repetir um número aqui só criava
-                      duas fontes de verdade pro mesmo preço. */}
-                  Trocar nome custa Aura e tem cooldown de 3 dias.
-                </p>
-              </div>
-            </div>
-
-            <ChangeDisplayNameModal
-              open={nameModalOpen}
-              onOpenChange={setNameModalOpen}
-              currentName={displayName}
-              onChanged={(newName, newSlug) => {
-                setDisplayName(newName)
-                onProfileChange({ ...profile, display_name: newName, display_slug: newSlug })
-                refreshAuthUser()
-              }}
-            />
-
-            <div className="space-y-1.5">
-              <div className="flex items-baseline justify-between">
-                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Bio
-                </label>
-                <span className="text-[10px] text-muted-foreground/60">
-                  {bio.length}/{BIO_MAX_LENGTH}
-                </span>
-              </div>
-              <Textarea
-                value={bio}
-                onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX_LENGTH))}
-                className="border-border bg-background min-h-20 resize-none"
-                placeholder="Uma linha sobre você: aparece no seu perfil público."
-                maxLength={BIO_MAX_LENGTH}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <Youtube className="size-3.5" />
-                  YouTube
-                </label>
-                <Input
-                  value={youtubeHandle}
-                  onChange={(e) => setYoutubeHandle(normalizeSocialHandle(e.target.value))}
-                  className="border-border bg-background"
-                  placeholder="@seucanal"
+                <MedalhasEditor
+                  medals={allMedals}
+                  pinnedIds={pinnedIds}
+                  limit={medalLimit}
+                  onChange={setPinnedIds}
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  <TikTokIcon className="size-3.5" />
-                  TikTok
-                </label>
-                <Input
-                  value={tiktokHandle}
-                  onChange={(e) => setTiktokHandle(normalizeSocialHandle(e.target.value))}
-                  className="border-border bg-background"
-                  placeholder="@seuusuario"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </section>
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
 
-      {/* ── Vitrine ── */}
-      <section className="space-y-4">
-        <SectionHeading
-          title="Meu Espaço"
-          description="Setup, favoritos e medalhas em destaque no seu perfil público."
-        />
-
-        {loadingShowcase ? (
-          <div className="flex min-h-64 items-center justify-center">
-            <BoxLoader />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <SetupEditor setup={setup} onChange={updateSlot} />
-            <FavoritosEditor
-              favorites={favorites}
-              limit={favoriteLimit}
-              tierLabel={capabilities.label}
-              onChange={setFavorites}
-            />
-            <MedalhasEditor
-              medals={allMedals}
-              pinnedIds={pinnedIds}
-              limit={medalLimit}
-              onChange={setPinnedIds}
-            />
-          </div>
-        )}
-      </section>
+      <ChangeDisplayNameModal
+        open={nameModalOpen}
+        onOpenChange={setNameModalOpen}
+        currentName={displayName}
+        onChanged={(newName, newSlug) => {
+          setDisplayName(newName)
+          onProfileChange({ ...profile, display_name: newName, display_slug: newSlug })
+          refreshAuthUser()
+        }}
+      />
 
       {/* Um seletor para as três mídias: arrastar-e-soltar, explorador de
           arquivos ou GIF do KLIPY. O que muda por mídia é só o destino. */}
@@ -765,7 +955,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
         description={picker ? MEDIA_PICKER_COPY[picker].description : undefined}
         accept={imageAccept}
         allowGif={animatedMedia}
-        busy={uploading || uploadingBanner || uploadingMiniBanner}
+        busy={busy}
         onPickFile={(file) => {
           if (picker === "avatar") handleAvatarFile(file)
           else if (picker === "banner") handleBannerFile(file)
@@ -778,14 +968,16 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
         }}
       />
 
-      {/* Barra de salvamento — identidade e vitrine vão juntas. */}
+      {/* Barra de salvamento — identidade e vitrine vão juntas. Fica fora do
+          grid e presa ao rodapé: com as abas, o botão precisa alcançar as três
+          de uma vez, e o que se salva não muda com a aba aberta. */}
       <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-xl border border-border bg-secondary/90 p-3 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:p-4">
         <p className="text-xs text-muted-foreground">
-          Identidade e vitrine são salvas de uma vez só.
+          Identidade e vitrine são salvas de uma vez só. Molduras e efeitos são aplicados na hora.
         </p>
         <Button
           onClick={save}
-          disabled={saving || uploading || uploadingBanner || uploadingMiniBanner || loadingShowcase}
+          disabled={saving || busy || loadingShowcase}
           className="min-w-40"
         >
           {saving ? "Salvando..." : "Salvar alterações"}
@@ -795,11 +987,62 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
   )
 }
 
-function SectionHeading({ title, description }: { title: string; description: string }) {
+/**
+ * Atalho escrito para trocar uma das três imagens.
+ *
+ * O preview já é clicável, mas isso é descoberta por acaso: quem não passa o
+ * mouse em cima de uma capa vazia nunca descobre que ela abre o seletor. O
+ * ponto aqui é dizer em palavras o que existe e se já está preenchido.
+ */
+function MediaShortcut({
+  label,
+  filled,
+  busy,
+  onClick,
+}: {
+  label: string
+  filled: boolean
+  busy: boolean
+  onClick: () => void
+}) {
   return (
-    <div className="space-y-1">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-foreground">{title}</h2>
-      <p className="text-xs text-muted-foreground">{description}</p>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className={cn(
+        "flex flex-col items-center gap-1 rounded-lg border px-2 py-2.5 text-center transition-colors",
+        "hover:border-border hover:bg-muted/40 disabled:opacity-60",
+        filled ? "border-border/60 bg-muted/20" : "border-dashed border-border/60"
+      )}
+    >
+      <Camera className={cn("size-3.5", busy && "animate-pulse")} />
+      <span className="text-[11px] font-medium leading-none text-foreground">{label}</span>
+      <span className="text-[10px] leading-none text-muted-foreground/60">
+        {busy ? "Enviando..." : filled ? "Trocar" : "Adicionar"}
+      </span>
+    </button>
+  )
+}
+
+/** Estado vazio de um painel: ícone, frase e a ação que o preenche. */
+function EmptyHint({
+  Icon,
+  title,
+  description,
+  action,
+}: {
+  Icon: typeof ImagePlus
+  title: string
+  description: string
+  action?: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border/60 bg-background/40 px-4 py-8 text-center">
+      <Icon className="size-5 text-muted-foreground/50" />
+      <p className="text-sm font-semibold text-foreground">{title}</p>
+      <p className="max-w-sm text-xs text-muted-foreground">{description}</p>
+      {action && <div className="mt-1">{action}</div>}
     </div>
   )
 }
@@ -816,10 +1059,126 @@ function PreviewLabel({ label, hint }: { label: string; hint?: string }) {
 }
 
 /**
- * Miniatura da página de perfil: capa, foto sobreposta e o resto do perfil em
- * cinza. Espelha `components/profile/ProfileShowcase` — mexer lá pede ajustar
- * aqui, senão o preview mente. Sem o fundo do Mini Perfil: ele é outra
+ * Um preview e o seu rótulo. Cada preview é a réplica de uma tela real, e
+ * sem dizer QUAL tela ele fica sendo "um quadradinho com a sua foto" — o
+ * rótulo é o que transforma o par em uma comparação legível.
+ */
+function PreviewFrame({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/80">
+          {label}
+        </span>
+        <span className="truncate text-[10px] text-muted-foreground/60">{hint}</span>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+/** Um enquadramento dentro do painel de ajustes. */
+function AdjusterField({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      {children}
+      {hint && <p className="text-[10px] text-muted-foreground/60">{hint}</p>}
+    </div>
+  )
+}
+
+/**
+ * Botão de trocar a imagem, sobreposto à mídia que ele edita.
+ *
+ * Centralizado nela, não colado num canto: o canto inferior da foto é onde o
+ * emblema da moldura mora (`BADGE_ANCHOR` em `ProfileAvatar`), e os dois
+ * disputavam o mesmo pixel — a câmera aparecia por cima da pastilha de
+ * Fundador. Sobre a capa ele também sai do caminho do véu.
+ *
+ * Só ganha fundo no hover/foco: em repouso o preview precisa mostrar a
+ * imagem, não o chrome do editor.
+ */
+function MediaEditButton({
+  onClick,
+  busy,
+  label,
+  size = "md",
+  className,
+}: {
+  onClick: () => void
+  busy: boolean
+  label: string
+  size?: "sm" | "md"
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      title={label}
+      aria-label={label}
+      className={cn(
+        "group/edit absolute inset-0 z-30 flex cursor-pointer items-center justify-center rounded-[inherit] transition-colors",
+        busy ? "bg-background/60" : "bg-transparent hover:bg-background/45 focus-visible:bg-background/45",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        className
+      )}
+    >
+      <span
+        className={cn(
+          "flex items-center justify-center rounded-full border border-border/70 bg-background/90 text-foreground shadow-sm transition-all",
+          size === "sm" ? "size-7" : "size-9",
+          busy
+            ? "animate-pulse opacity-100"
+            : "opacity-0 group-hover/edit:opacity-100 group-focus-visible/edit:opacity-100"
+        )}
+      >
+        <Camera className={size === "sm" ? "size-3.5" : "size-4"} />
+      </span>
+    </button>
+  )
+}
+
+/**
+ * Miniatura da página de perfil: capa, foto sobreposta, nome, badges, bio e
+ * links sociais. Espelha `components/profile/ProfileShowcase` — mexer lá pede
+ * ajustar aqui, senão o preview mente. Sem o fundo do Mini Perfil: ele é outra
  * feature, e não aparece na página completa.
+ *
+ * O que este preview aprendeu a não fazer:
+ *
+ * - **Não espremer o token do avatar.** A foto é `size="2xl"` porque é a mesma
+ *   do perfil real (`AvatarQuadrado`), e o token calibra anel, emblema e
+ *   `sizes` para ~128px. Forçar `size-20` por `wrapperClassName` mantinha o
+ *   emblema de 26px sobre uma foto de 80px — era a pastilha "FUNDADOR"
+ *   ocupando metade do rosto e cobrindo o nome. Quem encolhe agora é o
+ *   container inteiro, por `scale`, então a proporção do conjunto se mantém.
+ * - **Não pintar sinal de tier na capa.** O `Banner` real tirou a borda VIP do
+ *   rodapé de propósito (ver o comentário lá): ela costurava capa e corpo numa
+ *   faixa roxa atravessando o perfil. Aqui ela tinha sobrevivido.
+ * - **Não velar a capa.** O `Banner` real não tem degradê: o texto fica abaixo
+ *   dela, não há o que proteger. O véu só apagava o terço de baixo da imagem
+ *   que a pessoa está justamente tentando enquadrar.
  */
 function ProfilePagePreview({
   banner,
@@ -829,7 +1188,11 @@ function ProfilePagePreview({
   name,
   tierLabel,
   isVip,
+  previewFrame,
   specialTag,
+  bio,
+  youtubeHandle,
+  tiktokHandle,
   uploadingAvatar,
   onEditAvatar,
   uploadingBanner,
@@ -842,7 +1205,13 @@ function ProfilePagePreview({
   name: string
   tierLabel: string
   isVip: boolean
+  /** Moldura cosmética equipada — o preview desenha a mesma do perfil real. */
+  previewFrame: ProfileFrameIdentity
   specialTag: ReturnType<typeof getSpecialTag>
+  /** Bio e handles em edição: o preview mostra o rascunho, não o salvo. */
+  bio: string
+  youtubeHandle: string
+  tiktokHandle: string
   uploadingAvatar: boolean
   onEditAvatar: () => void
   uploadingBanner: boolean
@@ -853,12 +1222,10 @@ function ProfilePagePreview({
       <div
         className={cn(
           // Mesma proporção da capa real (ver BANNER_HEIGHT em ProfileShowcase),
-          // reduzida para caber no editor.
-          "relative h-36 w-full overflow-hidden sm:h-48",
-          !banner.src && "bg-gradient-to-br from-primary/20 via-muted/40 to-background",
-          // Espelha o `Banner` real: borda VIP só no rodapé da capa, porque o
-          // cartão do perfil já fecha os outros três lados.
-          isVip && "border-b-[3px] border-[var(--vip-accent)]"
+          // reduzida para caber no editor. Sem borda de tier: a capa real não
+          // desenha sinal nenhum (ver `Banner`).
+          "relative h-32 w-full overflow-hidden sm:h-40",
+          !banner.src && "bg-gradient-to-br from-primary/20 via-muted/40 to-background"
         )}
       >
         {banner.src && (
@@ -883,105 +1250,124 @@ function ProfilePagePreview({
             />
           )
         )}
-        {/* Mesmo véu do perfil público: a foto encosta na base da capa e
-            precisa de contraste sob ela (ver `ProfileShowcase`). */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-card via-card/50 to-transparent"
-          aria-hidden
-        />
-        <button
-          type="button"
+        <MediaEditButton
           onClick={onEditBanner}
-          disabled={uploadingBanner}
-          className={cn(
-            "absolute bottom-2 right-2 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
-            uploadingBanner ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
-          )}
-          title="Trocar banner"
-        >
-          <Camera className="size-3.5 text-primary-foreground" />
-        </button>
+          busy={uploadingBanner}
+          label={banner.src ? "Trocar banner" : "Adicionar banner"}
+        />
+        {!banner.src && (
+          <span className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[10px] font-medium uppercase tracking-wider text-muted-foreground/70">
+            Sem capa
+          </span>
+        )}
       </div>
 
       {/* Foto quadrada centralizada, invadindo a capa pela metade — igual ao
           header público (`ProfileShowcase`), que a centraliza para o bloco de
-          nome/badges também poder ficar centralizado abaixo dela. */}
+          nome/badges também poder ficar centralizado abaixo dela.
+
+          O avatar mantém o token `2xl` inteiro e é o WRAPPER que encolhe, por
+          `scale`: assim anel, emblema e pastilha do badge continuam na
+          proporção que o componente calibrou — espremer o token por
+          `wrapperClassName` mantinha o emblema no tamanho de uma foto de
+          128px sobre uma de 80px, e era o que punha a pastilha "FUNDADOR"
+          por cima do rosto e do nome.
+
+          `scale` não muda o espaço que o elemento ocupa, então a geometria é
+          feita à mão: o token vale 96px (`size-24`) / 112px em `sm`, e a
+          escala o deixa em ~60px / ~78px. `origin-top` fixa o topo, e o
+          `-top-*` é metade da altura JÁ ESCALADA — é assim que a foto invade
+          a capa pela metade, como no perfil real. */}
       <div className="relative px-4 pb-4">
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 sm:-top-12">
-          <div className="relative">
-            <div
-              className={cn("relative size-20 overflow-hidden rounded-xl border-[3px] bg-muted sm:size-24", !isVip && "border-border")}
-              style={isVip ? { borderColor: "var(--vip-accent)" } : undefined}
-            >
-              {avatarSrc ? (
-                <Image
-                  src={avatarSrc}
-                  alt={name}
-                  fill
-                  sizes="96px"
-                  style={mediaAdjustStyle(avatarAdjust)}
-                  className="object-cover"
-                />
-              ) : (
-                <div className="flex size-full items-center justify-center bg-primary/15 text-2xl font-bold text-primary">
-                  {name.slice(0, 1).toUpperCase()}
-                </div>
-              )}
-            </div>
-            {isVip && (
-              <span
-                className="absolute -bottom-1.5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-full border-2 border-background px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-black shadow-sm"
-                style={{ backgroundColor: "var(--vip-accent)" }}
-              >
-                <Crown className="size-2.5" />
-                VIP
-              </span>
-            )}
-            <button
-              type="button"
+        <div className="absolute -top-[30px] left-1/2 -translate-x-1/2 sm:-top-[39px]">
+          <div className="relative origin-top scale-[0.62] sm:scale-[0.7]">
+            {/* Mesmo componente do perfil real (`AvatarQuadrado` também o usa):
+                o preview precisa mostrar a MESMA moldura que o público vai
+                ver, senão ele mente sobre o resultado. */}
+            <ProfileAvatar
+              name={name}
+              avatarUrl={avatarSrc}
+              size="2xl"
+              shape="rounded"
+              frame={previewFrame}
+              adjust={avatarAdjust}
+              showBadgeText
+            />
+            {/* O `scale` do wrapper encolhe este botão junto — sem o
+                contra-escala o ícone sairia em ~9px, menor que o do mini
+                perfil ao lado. `[&>span]` porque quem precisa voltar ao
+                tamanho é a pastilha, não a área clicável. */}
+            <MediaEditButton
               onClick={onEditAvatar}
-              disabled={uploadingAvatar}
-              className={cn(
-                "absolute -bottom-1 -right-1 flex size-8 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
-                uploadingAvatar ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
-              )}
-              title="Trocar foto de perfil"
-            >
-              <Camera className="size-3.5 text-primary-foreground" />
-            </button>
+              busy={uploadingAvatar}
+              label={avatarSrc ? "Trocar foto de perfil" : "Adicionar foto de perfil"}
+              className="rounded-xl [&>span]:scale-[1.6] sm:[&>span]:scale-[1.43]"
+            />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-2 pt-12 text-center sm:pt-14">
-          <p className="text-base font-bold text-foreground">{name}</p>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-              !isVip && "border-border bg-muted/40 text-muted-foreground"
-            )}
-            style={isVip ? { borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" } : undefined}
-          >
-            {isVip && <Crown className="size-2.5" />}
-            {tierLabel}
-          </span>
-          {specialTag && (
+        {/* Espaço reservado = a metade da foto (escalada) que desce no corpo,
+            mais a pastilha do emblema, que ainda cai um terço abaixo dela. */}
+        <div className="flex flex-col items-center pt-11 text-center sm:pt-14">
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <p className="text-base font-bold text-foreground">{name}</p>
             <span
               className={cn(
                 "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
-                specialTag.className
+                !isVip && "border-border bg-muted/40 text-muted-foreground"
               )}
+              style={isVip ? { borderColor: "var(--vip-accent-soft)", backgroundColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" } : undefined}
             >
-              <Sparkles className="size-2.5" />
-              {specialTag.label}
+              {isVip && <Crown className="size-2.5" />}
+              {tierLabel}
             </span>
-          )}
-        </div>
+            {specialTag && (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+                  specialTag.className
+                )}
+              >
+                <Sparkles className="size-2.5" />
+                {specialTag.label}
+              </span>
+            )}
+          </div>
 
-        {/* Setup, medalhas e favoritos entram em cinza: aqui eles só situam a
-            capa — quem edita esses blocos é a seção Vitrine, mais abaixo. */}
-        <div className="mt-4 w-full space-y-3 opacity-40" aria-hidden>
-          <PreviewSkeletonRow columns={5} />
-          <PreviewSkeletonRow columns={4} />
+          {/* Bio e sociais em tempo real, do rascunho: são os dois campos que
+              a pessoa digita mais abaixo nesta mesma tela, e ver onde eles
+              caem é o que faz o preview valer algo. O placeholder em itálico
+              ocupa o mesmo espaço para o layout não pular ao digitar. */}
+          <p
+            className={cn(
+              "mt-2 line-clamp-2 max-w-xs text-xs leading-relaxed",
+              bio.trim() ? "text-muted-foreground" : "italic text-muted-foreground/40"
+            )}
+          >
+            {bio.trim() || "Sua bio aparece aqui."}
+          </p>
+
+          {(youtubeHandle || tiktokHandle) && (
+            <div className="mt-2.5 flex items-center gap-2">
+              {youtubeHandle && (
+                <span className="flex size-7 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground">
+                  <Youtube className="size-3.5" />
+                </span>
+              )}
+              {tiktokHandle && (
+                <span className="flex size-7 items-center justify-center rounded-lg border border-border bg-card/60 text-muted-foreground">
+                  <TikTokIcon className="size-3.5" />
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Setup, medalhas e favoritos entram em cinza: aqui eles só situam a
+              capa — quem edita esses blocos é a seção Meu Espaço, mais abaixo. */}
+          <div className="mt-4 w-full space-y-3 opacity-40" aria-hidden>
+            <PreviewSkeletonRow columns={5} />
+            <PreviewSkeletonRow columns={4} />
+          </div>
         </div>
       </div>
     </div>
@@ -1014,7 +1400,7 @@ function MiniBannerCardPreview({
   avatarAdjust,
   avatarSrc,
   name,
-  isVip,
+  previewFrame,
   specialTag,
   accentHue,
   uploadingAvatar,
@@ -1027,7 +1413,12 @@ function MiniBannerCardPreview({
   avatarAdjust: MediaAdjust
   avatarSrc: string | null
   name: string
-  isVip: boolean
+  /**
+   * Moldura cosmética equipada — o preview desenha a mesma do perfil real, e
+   * é ela que carrega o sinal de VIP. O card não recebe `isVip`: repetir o
+   * sinal ao lado do nome é exatamente o que `ProfileCard` já evita.
+   */
+  previewFrame: ProfileFrameIdentity
   specialTag: ReturnType<typeof getSpecialTag>
   accentHue: number
   uploadingAvatar: boolean
@@ -1070,53 +1461,40 @@ function MiniBannerCardPreview({
               />
             )
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
-          <button
-            type="button"
+          {/* Mesmo véu do card real (`ProfileCard`): a foto sobe por cima da
+              faixa e precisa de contraste sob ela. */}
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
+          <MediaEditButton
             onClick={onEditMiniBanner}
-            disabled={uploadingMiniBanner}
-            className={cn(
-              "absolute bottom-2 right-2 flex size-7 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
-              uploadingMiniBanner ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
-            )}
-            title="Trocar mini banner"
-          >
-            <Camera className="size-3 text-primary-foreground" />
-          </button>
+            busy={uploadingMiniBanner}
+            label={miniBanner.src ? "Trocar fundo do Mini Perfil" : "Adicionar fundo do Mini Perfil"}
+            size="sm"
+          />
         </div>
 
         <div className="-mt-11 flex flex-col items-center px-3 pb-3">
           <div className="relative">
-            <Avatar
-              className={cn("size-[86px] ring-4", isVip ? "ring-[var(--vip-accent-soft)]" : "ring-background")}
-            >
-              <AvatarImage
-                src={avatarSrc ?? undefined}
-                alt={name}
-                style={mediaAdjustStyle(avatarAdjust)}
-                className="object-cover"
-              />
-              <AvatarFallback className="text-xl font-bold">
-                {name.slice(0, 1).toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <button
-              type="button"
+            {/* Mesmo componente do Mini Perfil real (`MiniProfileCard`). */}
+            <ProfileAvatar
+              name={name}
+              avatarUrl={avatarSrc}
+              size="xl"
+              frame={previewFrame}
+              adjust={avatarAdjust}
+              wrapperClassName="size-[86px]"
+            />
+            <MediaEditButton
               onClick={onEditAvatar}
-              disabled={uploadingAvatar}
-              className={cn(
-                "absolute -bottom-1 -right-1 flex size-7 cursor-pointer items-center justify-center rounded-full border-2 border-background shadow-md transition-colors",
-                uploadingAvatar ? "animate-pulse bg-muted" : "bg-primary hover:bg-primary/90"
-              )}
-              title="Trocar foto de perfil"
-            >
-              <Camera className="size-3 text-primary-foreground" />
-            </button>
+              busy={uploadingAvatar}
+              label={avatarSrc ? "Trocar foto de perfil" : "Adicionar foto de perfil"}
+              size="sm"
+            />
           </div>
 
           <p className="mt-2.5 flex w-full items-center justify-center gap-1 text-[15px] font-bold leading-tight text-foreground">
             <span className="truncate">{name}</span>
-            {isVip && <Crown className="size-3.5 shrink-0" style={{ color: "var(--vip-accent)" }} />}
+            {/* Sem coroa: o selo de VIP vem na moldura do avatar, igual ao
+                `MiniProfileCard` real — o preview tem que bater com ele. */}
             {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-400" />}
           </p>
 

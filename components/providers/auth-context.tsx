@@ -48,6 +48,26 @@ export type AuthContextUser = {
   /** Status cru da assinatura recorrente (null = nunca assinou). Base de `vip`. */
   subscriptionStatus: string | null
   /**
+   * Moldura de avatar equipada. A topbar a desenha pelo mesmo
+   * `ProfileAvatar` do resto do site — sem isso o próprio usuário era o único
+   * que não via a moldura que comprou.
+   */
+  equippedFrameUrl: string | null
+  equippedFrameSlug: string | null
+  /**
+   * Se possui a Moldura de Fundador (assinou o VIP na janela de lançamento).
+   * Permanente: continua `true` depois de a assinatura acabar, então NÃO se
+   * deriva de `isVip`.
+   */
+  isFounder: boolean
+  /**
+   * RECORDE de ofensiva — decide a moldura de marco do próprio avatar.
+   * Permanente, como o Fundador: não é a ofensiva viva.
+   */
+  longestStreak: number
+  /** O dono escolheu não exibir moldura nenhuma. */
+  frameOptOut: boolean
+  /**
    * ESTADO RESOLVIDO do VIP e da assinatura — o que toda UI deve consumir.
    *
    * Substitui o antigo booleano `subscriptionCanceled`, que não distinguia
@@ -154,6 +174,11 @@ type MeResponse = {
   vipExpiresAt?: string | null
   subscriptionStatus?: string | null
   canUseStore?: boolean
+  equippedFrameUrl?: string | null
+  equippedFrameSlug?: string | null
+  isFounder?: boolean
+  longestStreak?: number | null
+  frameOptOut?: boolean | null
 }
 
 /**
@@ -165,7 +190,7 @@ type MeResponse = {
  * lib/client/auth-snapshot.ts sobre por que isso ainda não é possível).
  */
 export function buildAuthUser(data: MeResponse): AuthContextUser | null {
-  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore } = data
+  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut } = data
   if (!user) return null
 
   return {
@@ -187,6 +212,11 @@ export function buildAuthUser(data: MeResponse): AuthContextUser | null {
     vipExpiresAt: vipExpiresAt ?? null,
     subscriptionStatus: subscriptionStatus ?? null,
     vip: resolveVipStatus({ accountTier, vipExpiresAt, subscriptionStatus }),
+    equippedFrameUrl: equippedFrameUrl ?? null,
+    equippedFrameSlug: equippedFrameSlug ?? null,
+    isFounder: Boolean(isFounder),
+    longestStreak: longestStreak ?? 0,
+    frameOptOut: Boolean(frameOptOut),
     hasForumPost: Boolean(hasForumPost),
   }
 }

@@ -123,6 +123,7 @@ type Translations = {
     /** `{product}` = nome do produto que voltou ao estoque. */
     storeRestock: string
     affiliatePayoutFallback: string
+    rankFrameFallback: string
     viewAll: string
     historyTitle: string
     historySubtitle: string
@@ -745,6 +746,34 @@ type Translations = {
       statVendedores: string
       statSuportes: string
       statRegular: string
+      statBanned: string
+      statVip: string
+      statNew30d: string
+      statActive30d: string
+      statNoProfile: string
+      filterStatusLabel: string
+      filterStatusAll: string
+      filterStatusBanned: string
+      filterStatusVip: string
+      filterStatusStoreAccess: string
+      filterStatusNoProfile: string
+      sortLabel: string
+      sortRecent: string
+      sortOldest: string
+      sortNameAsc: string
+      sortNameDesc: string
+      sortEmailAsc: string
+      perPage: string
+      pageOf: (page: number, total: number) => string
+      showingRange: (from: number, to: number, total: number) => string
+      prevPage: string
+      nextPage: string
+      clearFilters: string
+      noProfileBadge: string
+      noProfileHint: string
+      neverSignedIn: string
+      lastSeen: (when: string) => string
+      searchHint: string
       deleteUser: string
       deleteUserTitle: (name: string) => string
       deleteUserDesc: string
@@ -1147,6 +1176,7 @@ export const translations: Record<LocaleCode, Translations> = {
       supportStatusReopened: "Reaberto",
       storeRestock: "{product} voltou ao estoque!",
       affiliatePayoutFallback: "Seu saque foi atualizado",
+      rankFrameFallback: "Você desbloqueou uma moldura de ranking",
       viewAll: "Ver histórico completo",
       historyTitle: "Histórico de notificações",
       historySubtitle: "Todas as suas notificações, das mais recentes às mais antigas.",
@@ -1833,6 +1863,34 @@ export const translations: Record<LocaleCode, Translations> = {
         statVendedores: "Vendedores",
         statSuportes: "Suportes",
         statRegular: "Comuns",
+        statBanned: "Banidos",
+        statVip: "VIPs",
+        statNew30d: "Novos (30d)",
+        statActive30d: "Ativos (30d)",
+        statNoProfile: "Sem perfil",
+        filterStatusLabel: "Situação",
+        filterStatusAll: "Todas as situações",
+        filterStatusBanned: "Banidos",
+        filterStatusVip: "VIPs",
+        filterStatusStoreAccess: "Com acesso à Loja",
+        filterStatusNoProfile: "Sem perfil",
+        sortLabel: "Ordenar",
+        sortRecent: "Mais recentes",
+        sortOldest: "Mais antigos",
+        sortNameAsc: "Nome (A–Z)",
+        sortNameDesc: "Nome (Z–A)",
+        sortEmailAsc: "E-mail (A–Z)",
+        perPage: "por página",
+        pageOf: (page: number, total: number) => `Página ${page} de ${total}`,
+        showingRange: (from: number, to: number, total: number) => `${from}–${to} de ${total}`,
+        prevPage: "Anterior",
+        nextPage: "Próxima",
+        clearFilters: "Limpar filtros",
+        noProfileBadge: "Sem perfil",
+        noProfileHint: "Conta existe no login mas não tem linha em user_profiles — não aparece no /pessoas.",
+        neverSignedIn: "Nunca entrou",
+        lastSeen: (when: string) => `Visto ${when}`,
+        searchHint: "Busque por nome, e-mail, slug ou cole o ID da conta.",
         deleteUser: "Excluir usuário",
         deleteUserTitle: (name: string) => `Excluir ${name} permanentemente?`,
         deleteUserDesc: "Esta ação é irreversível. A conta será removida do login, o perfil apagado e o histórico no fórum/loja anonimizado. A exclusão fica registrada no log de auditoria com o seu usuário como responsável.",
@@ -2611,6 +2669,7 @@ export const translations: Record<LocaleCode, Translations> = {
       supportStatusReopened: "Reopened",
       storeRestock: "{product} is back in stock!",
       affiliatePayoutFallback: "Your withdrawal was updated",
+      rankFrameFallback: "You unlocked a ranking frame",
       viewAll: "View full history",
       historyTitle: "Notification history",
       historySubtitle: "All your notifications, from newest to oldest.",
@@ -3297,6 +3356,34 @@ export const translations: Record<LocaleCode, Translations> = {
         statVendedores: "Vendors",
         statSuportes: "Support",
         statRegular: "Regular",
+        statBanned: "Banned",
+        statVip: "VIPs",
+        statNew30d: "New (30d)",
+        statActive30d: "Active (30d)",
+        statNoProfile: "No profile",
+        filterStatusLabel: "Status",
+        filterStatusAll: "All statuses",
+        filterStatusBanned: "Banned",
+        filterStatusVip: "VIPs",
+        filterStatusStoreAccess: "Store access",
+        filterStatusNoProfile: "No profile",
+        sortLabel: "Sort",
+        sortRecent: "Newest first",
+        sortOldest: "Oldest first",
+        sortNameAsc: "Name (A–Z)",
+        sortNameDesc: "Name (Z–A)",
+        sortEmailAsc: "Email (A–Z)",
+        perPage: "per page",
+        pageOf: (page: number, total: number) => `Page ${page} of ${total}`,
+        showingRange: (from: number, to: number, total: number) => `${from}–${to} of ${total}`,
+        prevPage: "Previous",
+        nextPage: "Next",
+        clearFilters: "Clear filters",
+        noProfileBadge: "No profile",
+        noProfileHint: "Account exists in auth but has no user_profiles row — it never shows up in /pessoas.",
+        neverSignedIn: "Never signed in",
+        lastSeen: (when: string) => `Seen ${when}`,
+        searchHint: "Search by name, email, slug, or paste an account ID.",
         deleteUser: "Delete user",
         deleteUserTitle: (name: string) => `Permanently delete ${name}?`,
         deleteUserDesc: "This action cannot be undone. The account will be removed from login, the profile deleted, and forum/store history anonymized. The deletion is logged in the audit trail with your user as the actor.",

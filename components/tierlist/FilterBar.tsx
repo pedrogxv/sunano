@@ -29,7 +29,7 @@ import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 
-type MouseShape = "symmetrical" | "ergonomic"
+type MouseShape = "symmetrical" | "ergonomic" | "asymmetrical"
 type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
 type PriceBand = "all" | "budget" | "mid" | "premium" | "golpe"
 type Category = "all" | "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | "iem" | "headset" | "feet" | "chairs" | "monitors" | "switches" | "dac_amp" | "psu"
@@ -296,6 +296,7 @@ export function FilterBar({
                         <SelectItem value="all">{t.common.all}</SelectItem>
                         <SelectItem value="symmetrical">{t.filters.symmetrical}</SelectItem>
                         <SelectItem value="ergonomic">{t.filters.ergonomic}</SelectItem>
+                        <SelectItem value="asymmetrical">{t.filters.asymmetrical}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

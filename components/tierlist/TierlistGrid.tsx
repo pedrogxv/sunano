@@ -50,7 +50,7 @@ interface Peripheral {
     adminTier_pcb?: TierValue
     adminTier_ips_va?: TierValue
     adminTier_competitive?: TierValue
-    mouseShape?: "symmetrical" | "ergonomic"
+    mouseShape?: "symmetrical" | "ergonomic" | "asymmetrical"
     keyboardLayout?: string
     connectivity?: "wired" | "wireless"
     size?: "small" | "medium" | "large"
@@ -578,16 +578,29 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
               >
                 <td
                   className={cn(
-                    "border-r border-border w-20 align-middle text-center bg-gradient-to-b",
+                    "border-r border-border w-20 bg-gradient-to-b p-0",
                     tierRow.gradient
                   )}
                 >
-                  <div className={cn("py-3 text-2xl font-black", tierRow.textColor)}>{tierRow.label}</div>
-                  {tierRow.subtitle && (
-                    <div className={cn("pb-1 text-[10px] font-medium opacity-75", tierRow.textColor)}>
-                      {tierRow.subtitle}
-                    </div>
-                  )}
+                  {/* h-full centra pela altura real da linha (não pela `td` inteira) — com
+                      `align-middle` o rótulo só respirava quando a linha era alta o bastante;
+                      faixas de preço com poucas linhas de cards ficavam com o texto espremido. */}
+                  <div className="flex h-full flex-col items-center justify-center gap-0.5 py-2 text-center">
+                    <span
+                      className={cn(
+                        "font-black leading-tight",
+                        isPriceBandMode ? "text-lg sm:text-xl" : "text-2xl",
+                        tierRow.textColor,
+                      )}
+                    >
+                      {tierRow.label}
+                    </span>
+                    {tierRow.subtitle && (
+                      <span className={cn("text-[10px] font-medium opacity-75", tierRow.textColor)}>
+                        {tierRow.subtitle}
+                      </span>
+                    )}
+                  </div>
                 </td>
 
                 <td className="align-middle bg-muted/20">

@@ -831,6 +831,11 @@ export function PeripheralDetailView({
   const formatKeyboardType = (v?: string) =>
     v === "mechanical" ? t.peripheralDetail.value.mechanical : v === "optical" ? t.peripheralDetail.value.optical : v === "magnetic" ? t.peripheralDetail.value.magnetic : v
 
+  // O switch de mouse é enum ("optical", "spdt"...); o de teclado é texto livre
+  // ("Linear, Tátil"), então o que não bate com a lista passa direto.
+  const formatSwitchType = (v?: string) =>
+    v === "spdt" ? t.peripheralDetail.value.spdt : formatKeyboardType(v)
+
   // Campos guardados como "yes"/"no" (Trimode, Microfone...).
   const formatYesNo = (v?: string) =>
     v === "yes" ? t.peripheralDetail.value.yes : v === "no" ? t.peripheralDetail.value.no : v
@@ -844,7 +849,7 @@ export function PeripheralDetailView({
   const switchRow = (group: "specs" | "performance") =>
     switchLabel
       ? { label: t.peripheralDetail.spec.switch, value: switchLabel, href: switchHref, group }
-      : { label: t.peripheralDetail.spec.switch, value: details.switchType ?? specs.switchType, group }
+      : { label: t.peripheralDetail.spec.switch, value: formatSwitchType((details.switchType ?? specs.switchType) as string | undefined), group }
 
   const specsTable: { label: string; value: unknown; group: "specs" | "performance"; href?: string }[] = (() => {
     switch (data.category) {

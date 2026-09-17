@@ -62,7 +62,7 @@ export async function PerifericosCategoryView({ category }: { category: Category
           adminValueBand?: string
           adminRecommendedBand?: string
         }),
-        mouseShape: (p.mouseShape ?? rawSpecs.mouseShape) as "symmetrical" | "ergonomic" | undefined,
+        mouseShape: (p.mouseShape ?? rawSpecs.mouseShape) as "symmetrical" | "ergonomic" | "asymmetrical" | undefined,
         keyboardLayout: (p.keyboardLayout ?? rawSpecs.keyboardLayout) as string | undefined,
         connectivity: (p.connectivity ?? rawSpecs.connectivity) as "wired" | "wireless" | undefined,
         surface: (p.surface ?? rawSpecs.surface) as "cloth" | "hybrid" | "glass" | undefined,

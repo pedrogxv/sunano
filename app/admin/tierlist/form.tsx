@@ -14,7 +14,7 @@ import {
 import { restrictToParentElement } from "@dnd-kit/modifiers"
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag as TagIcon, Layers, FileText, ShoppingCart, Info, Link2, Search, X, GripVertical, Plus, Trash2, Loader2, Eye } from "lucide-react"
+import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag as TagIcon, Layers, FileText, ShoppingCart, Info, Link2, Search, X, GripVertical, Plus, Trash2, Loader2, Eye, UserRound } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { RichTextEditor } from "@/components/ui/rich-text-editor"
 import { Badge } from "@/components/ui/badge"
 import { Combobox } from "@/components/ui/combobox"
 import {
@@ -499,6 +500,43 @@ function buildPeripheralColumnsPayload(data: PeripheralFormData) {
   }
 }
 
+// Sensores mais usados em mouse gamer, agrupados por fabricante e em ordem de
+// geração (mais novo primeiro). A lista é só um atalho de digitação: o campo
+// aceita qualquer texto pela ação "Usar ..." do combobox, então um sensor fora
+// da lista (ou um valor antigo, tipo "HERO 2, PMW 3395") continua válido.
+const MOUSE_SENSOR_OPTIONS = [
+  "PixArt PAW3955",
+  "PixArt PAW3955MAX",
+  "PixArt PAW3950",
+  "PixArt PAW3950MAX",
+  "PixArt PAW3950HS",
+  "PixArt PAW3395",
+  "PixArt PAW3395SE",
+  "PixArt PAW3395PRO",
+  "PixArt PAW3370",
+  "PixArt PAW3335",
+  "PixArt PAW3311",
+  "PixArt PMW3389",
+  "PixArt PMW3360",
+  "PixArt PMW3330",
+  "PixArt PMW3327",
+  "PixArt PMW3325",
+  "PixArt PMW3320",
+  "PixArt PMW3050",
+  "Logitech HERO 2",
+  "Logitech HERO",
+  "Razer Focus Pro 35K Gen-2",
+  "Razer Focus Pro 30K",
+  "Razer Focus X 26K",
+  "SteelSeries TrueMove Air",
+  "SteelSeries TrueMove Pro",
+  "SteelSeries TrueMove Core",
+]
+
+// Taxas de report que aparecem na ficha; valor fora da escala (125Hz, 500Hz de
+// mouse antigo) continua sendo mostrado, entra na lista como item extra.
+const POLLING_RATE_OPTIONS = ["1000Hz", "2000Hz", "4000Hz", "8000Hz"]
+
 const COATING_OPTIONS = [
   "Emborrachado",
   "Plastico",
@@ -881,6 +919,27 @@ function ExpertAuthorPicker({
   const [query, setQuery] = useState("")
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<PeripheralExpertAuthor[]>([])
+  const [ownProfile, setOwnProfile] = useState<PeripheralExpertAuthor | null>(null)
+
+  // Retrato do próprio admin logado, carregado uma vez — vira o atalho
+  // "Assinar como eu" ao lado da busca, pra não precisar digitar o próprio
+  // nome toda vez que abre um periférico novo pra comentar.
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/profile", { cache: "no-store" })
+      .then((res) => res.json().catch(() => null))
+      .then((json: { profile?: { id?: string; display_name: string; display_slug?: string | null; avatar_url: string | null } } | null) => {
+        if (cancelled || !json?.profile?.id) return
+        setOwnProfile({
+          userId: json.profile.id,
+          displayName: json.profile.display_name,
+          displaySlug: json.profile.display_slug ?? null,
+          avatarUrl: json.profile.avatar_url,
+        })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
 
   // A busca é por nome, então só faz sentido consultar depois que o admin digitou
   // algo — e com um respiro entre teclas, já que a rota é limitada por taxa.
@@ -932,10 +991,31 @@ function ExpertAuthorPicker({
           </Button>
         </div>
       ) : (
-        <Button type="button" variant="outline" onClick={() => setOpen(true)} className="w-full justify-start gap-2 text-muted-foreground">
-          <Search className="size-4" />
-          {"Escolher quem assina os comentários"}
-        </Button>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={() => setOpen(true)} className="flex-1 justify-start gap-2 text-muted-foreground">
+            <Search className="size-4" />
+            {"Escolher quem assina os comentários"}
+          </Button>
+          {ownProfile && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onChange(ownProfile)}
+              className="shrink-0 gap-2 text-muted-foreground hover:text-foreground"
+              title={`Assinar como ${ownProfile.displayName}`}
+            >
+              <span className="size-4 shrink-0 overflow-hidden rounded-full bg-muted/40">
+                {ownProfile.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={ownProfile.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <UserRound className="size-4" />
+                )}
+              </span>
+              {"Assinar como eu"}
+            </Button>
+          )}
+        </div>
       )}
 
       {open && (
@@ -1364,6 +1444,25 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     () => brands.map((brand) => ({ value: brand.id, label: brand.name })),
     [brands]
   )
+
+  // O sensor gravado antes desta lista (ou digitado à mão) não pode sumir do
+  // campo só por não estar entre os principais: ele entra como primeira opção.
+  const watchedSensor = form.watch("driver") || ""
+  const sensorComboboxOptions = useMemo(() => {
+    const options = MOUSE_SENSOR_OPTIONS.map((sensor) => ({ value: sensor, label: sensor }))
+    if (watchedSensor && !MOUSE_SENSOR_OPTIONS.includes(watchedSensor)) {
+      options.unshift({ value: watchedSensor, label: watchedSensor })
+    }
+    return options
+  }, [watchedSensor])
+
+  const watchedPollingRate = form.watch("pollingRate") || ""
+  const pollingRateOptions = useMemo(() => {
+    if (watchedPollingRate && !POLLING_RATE_OPTIONS.includes(watchedPollingRate)) {
+      return [watchedPollingRate, ...POLLING_RATE_OPTIONS]
+    }
+    return POLLING_RATE_OPTIONS
+  }, [watchedPollingRate])
 
   async function handleCreateBrand(name: string) {
     setCreatingBrand(true)
@@ -2313,8 +2412,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       <SelectValue placeholder={"Selecione"} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="symmetrical">Symmetrical</SelectItem>
-                      <SelectItem value="ergonomic">Ergonomic</SelectItem>
+                      <SelectItem value="symmetrical">{t.filters.symmetrical}</SelectItem>
+                      <SelectItem value="ergonomic">{t.filters.ergonomic}</SelectItem>
+                      <SelectItem value="asymmetrical">{t.filters.asymmetrical}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2358,7 +2458,17 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sensor</label>
-                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="HERO 2, PMW 3395" {...form.register("driver")} />
+                  <Combobox
+                    options={sensorComboboxOptions}
+                    value={watchedSensor}
+                    onValueChange={(v) => form.setValue("driver", v)}
+                    onCreateOption={(label) => form.setValue("driver", label)}
+                    createOptionLabel={(label) => `Usar "${label}"`}
+                    placeholder="Selecione"
+                    searchPlaceholder="Buscar sensor..."
+                    emptyText="Nenhum sensor encontrado."
+                    className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]"
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Peso"}</label>
@@ -2378,6 +2488,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       <SelectItem value="magnetic">{"Magnético"}</SelectItem>
                       <SelectItem value="optical">{"Óptico"}</SelectItem>
                       <SelectItem value="mechanical">{"Mecânico"}</SelectItem>
+                      <SelectItem value="spdt">SPDT</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -2403,7 +2514,18 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Polling Rate"}</label>
-                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="8000Hz" {...form.register("pollingRate")} />
+                  <Select value={watchedPollingRate} onValueChange={(v) => form.setValue("pollingRate", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder={"Selecione"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {pollingRateOptions.map((rate) => (
+                        <SelectItem key={rate} value={rate}>
+                          {rate}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Bateria"}</label>
@@ -3468,9 +3590,14 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
 
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground">{"Comentários"}</label>
-              <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Opinião geral e recomendação sobre o produto"} rows={3} {...form.register("summary")} />
+              <RichTextEditor
+                className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-within:bg-[#202024]"
+                placeholder={"Opinião geral e recomendação sobre o produto"}
+                value={form.watch("summary") ?? ""}
+                onChange={(value) => form.setValue("summary", value, { shouldDirty: true })}
+              />
               <p className="text-[10px] text-muted-foreground">
-                {"Aceita a formatação do fórum: **negrito**, *itálico*, __sublinhado__, ==destaque==, [texto](url), \"- \" para lista e \"## \" para título."}
+                {"Selecione um trecho e use os botões (ou Ctrl+B/I/U/K) pra negrito, itálico, sublinhado, destaque e link. Pra linkar outro periférico ou produto da loja, cole a URL da página dele."}
               </p>
             </div>
 

@@ -201,7 +201,7 @@ export function SoftwaresClient({
                   <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted/30">
                     {form.logoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={form.logoUrl} alt="" className="size-full object-contain grayscale" />
+                      <img src={form.logoUrl} alt="" className="size-full object-contain" />
                     ) : (
                       <ImagePlus className="size-5 text-muted-foreground" />
                     )}
@@ -217,7 +217,7 @@ export function SoftwaresClient({
                       {uploading ? "Enviando..." : form.logoUrl ? "Trocar logo" : "Enviar logo"}
                     </Button>
                     <p className="text-[11px] leading-snug text-muted-foreground">
-                      PNG, WebP ou JPG, de preferência quadrada e sem margem sobrando. No site aparece em preto e branco.
+                      PNG, WebP ou JPG, de preferência quadrada e sem margem sobrando.
                     </p>
                   </div>
                   <input
@@ -259,7 +259,7 @@ export function SoftwaresClient({
                 <li key={software.id} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="size-11 shrink-0 overflow-hidden rounded-lg bg-muted/30">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={software.logoUrl} alt="" className="size-full object-contain grayscale" />
+                    <img src={software.logoUrl} alt="" className="size-full object-contain" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-foreground">{software.name}</p>

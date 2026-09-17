@@ -47,7 +47,7 @@ export default async function AdminPerifericosPage({ searchParams }: AdminPerife
       surface: p.surface ?? (p.specs?.surface as string | undefined),
       profile: p.profile ?? (p.specs?.profile as string | undefined),
     } as {
-      mouseShape?: "symmetrical" | "ergonomic"
+      mouseShape?: "symmetrical" | "ergonomic" | "asymmetrical"
       keyboardLayout?: string
       connectivity?: "wired" | "wireless"
       size?: "small" | "medium" | "large"

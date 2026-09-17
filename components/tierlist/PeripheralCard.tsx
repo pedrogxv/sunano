@@ -33,7 +33,7 @@ interface PeripheralCardProps {
   priceGroup?: PriceGroupKey | null
   golpeMotivo?: string
   specs: {
-    mouseShape?: "symmetrical" | "ergonomic"
+    mouseShape?: "symmetrical" | "ergonomic" | "asymmetrical"
     keyboardLayout?: string
     connectivity?: "wired" | "wireless"
     size?: "small" | "medium" | "large"

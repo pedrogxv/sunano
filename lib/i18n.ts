@@ -215,6 +215,7 @@ type Translations = {
     category: string
     symmetrical: string
     ergonomic: string
+    asymmetrical: string
     mechanical: string
     magnetic: string
     optical: string
@@ -408,6 +409,7 @@ type Translations = {
       mechanical: string
       optical: string
       magnetic: string
+      spdt: string
       yes: string
       no: string
     }
@@ -1295,6 +1297,7 @@ export const translations: Record<LocaleCode, Translations> = {
       category: "Categoria",
       symmetrical: "Simétrico",
       ergonomic: "Ergonômico",
+      asymmetrical: "Assimétrico",
       mechanical: "Mecânico",
       magnetic: "Magnético",
       optical: "Óptico",
@@ -1511,6 +1514,7 @@ export const translations: Record<LocaleCode, Translations> = {
         mechanical: "Mecânico",
         optical: "Óptico",
         magnetic: "Magnético",
+        spdt: "SPDT",
         yes: "Sim",
         no: "Não",
       },
@@ -2788,6 +2792,7 @@ export const translations: Record<LocaleCode, Translations> = {
       category: "Category",
       symmetrical: "Symmetrical",
       ergonomic: "Ergonomic",
+      asymmetrical: "Asymmetric",
       mechanical: "Mechanical",
       magnetic: "Magnetic",
       optical: "Optical",
@@ -3004,6 +3009,7 @@ export const translations: Record<LocaleCode, Translations> = {
         mechanical: "Mechanical",
         optical: "Optical",
         magnetic: "Magnetic",
+        spdt: "SPDT",
         yes: "Yes",
         no: "No",
       },

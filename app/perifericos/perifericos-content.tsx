@@ -80,7 +80,7 @@ const CATEGORY_CARD_STYLE: Record<Category, { icon: typeof Mouse; text: string; 
 }
 type SortKey = "recent" | "rank" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
-type MouseShape = "symmetrical" | "ergonomic"
+type MouseShape = "symmetrical" | "ergonomic" | "asymmetrical"
 type KeyboardLayout = "60%" | "75%" | "tkl" | "full-size"
 type KeyboardType = "mechanical" | "magnetic" | "optical"
 type PadType = "speed" | "control" | "hybrid"
@@ -101,7 +101,7 @@ type Peripheral = {
   hasYoutubeReview?: boolean
   tags: Tag[]
   specs: {
-    mouseShape?: "symmetrical" | "ergonomic"
+    mouseShape?: "symmetrical" | "ergonomic" | "asymmetrical"
     keyboardLayout?: string
     keyboardType?: KeyboardType
     connectivity?: "wired" | "wireless"
@@ -745,7 +745,7 @@ export function PerifericosContent({
               <SelectItem value="all">{t.common.any}</SelectItem>
               {filterOptions.mouseShapes.map((shape) => (
                 <SelectItem key={shape} value={shape}>
-                  {shape === "symmetrical" ? t.filters.symmetrical : shape === "ergonomic" ? t.filters.ergonomic : formatLabel(shape)}
+                  {shape === "symmetrical" ? t.filters.symmetrical : shape === "ergonomic" ? t.filters.ergonomic : shape === "asymmetrical" ? t.filters.asymmetrical : formatLabel(shape)}
                 </SelectItem>
               ))}
             </SelectContent>

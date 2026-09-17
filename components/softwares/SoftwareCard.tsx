@@ -22,8 +22,7 @@ export type SoftwareCardProps = {
 
 /**
  * Card de /softwares: nome da marca em cima e a logo ocupando o resto, sem
- * margem interna. A logo sai em preto e branco (`grayscale`) para combinar
- * com o fundo do site; o arquivo no bucket continua colorido.
+ * margem interna.
  *
  * Link e coração são irmãos, não aninhados: botão dentro de `<a>` é HTML
  * inválido e o clique no coração abriria o Web Hub junto.
@@ -63,7 +62,7 @@ export function SoftwareCard({
             alt=""
             loading="lazy"
             draggable={false}
-            className="size-full object-contain grayscale"
+            className="size-full object-contain"
           />
         </div>
       </a>

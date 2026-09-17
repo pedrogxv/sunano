@@ -7,12 +7,12 @@
 // board admin e pela página de detalhe do periférico.
 
 export const PRICE_BANDS = [
-  { key: "1000", label: "R$1000+", min: 1000 },
-  { key: "750", label: "R$750+", min: 750 },
-  { key: "500", label: "R$500+", min: 500 },
-  { key: "300", label: "R$300+", min: 300 },
-  { key: "200", label: "R$200+", min: 200 },
-  { key: "100", label: "R$100+", min: 100 },
+  { key: "1000", label: "R$1000", min: 1000 },
+  { key: "750", label: "R$750", min: 750 },
+  { key: "500", label: "R$500", min: 500 },
+  { key: "300", label: "R$300", min: 300 },
+  { key: "200", label: "R$200", min: 200 },
+  { key: "100", label: "R$100", min: 100 },
 ] as const
 
 export type PriceBandKey = (typeof PRICE_BANDS)[number]["key"]

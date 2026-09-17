@@ -21,6 +21,7 @@ import { toast } from "sonner"
 import * as z from "zod"
 
 import { Label } from "@/components/ui/label"
+import { Checkbox } from "@/components/ui/checkbox"
 import { cn } from "@/lib/utils"
 import { compressImageFile } from "@/lib/client/compress-image"
 import { formatBRL } from "@/lib/format"
@@ -1231,8 +1232,10 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   }, [loadingPeripheral, focusTarget])
 
   // Fotos principais do anúncio: a primeira é a "Principal". Cada foto já sobe
-  // com o fundo removido automaticamente (ver handleImageAdd).
+  // com o fundo removido automaticamente (ver handleImageAdd), a menos que
+  // disableBackgroundRemoval esteja marcado.
   const [images, setImages] = useState<string[]>([])
+  const [disableBackgroundRemoval, setDisableBackgroundRemoval] = useState(false)
   const [selectedTag, setSelectedTag] = useState<Tag[]>([])
   const [selectedTierlistCategories, setSelectedTierlistCategories] = useState<TierlistMode[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -1805,13 +1808,18 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     setUploading(true)
     setError(null)
     try {
-      // Remove o fundo automaticamente (mesmo comportamento em toda foto adicionada).
+      // Remove o fundo automaticamente, a menos que o admin tenha marcado
+      // para manter a foto original (disableBackgroundRemoval).
       let prepared: File
-      try {
-        prepared = await removeBackground(file)
-      } catch (err) {
-        console.error("Falha ao remover o fundo:", err)
+      if (disableBackgroundRemoval) {
         prepared = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
+      } else {
+        try {
+          prepared = await removeBackground(file)
+        } catch (err) {
+          console.error("Falha ao remover o fundo:", err)
+          prepared = await compressImageFile(file, IMAGE_COMPRESS_OPTIONS)
+        }
       }
 
       if (prepared.size > UPLOAD_LIMITS.image) {
@@ -1989,6 +1997,13 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               reordenar. A primeira imagem é a principal. Até {MAX_IMAGES} imagens,{" "}
               {formatUploadLimit(UPLOAD_LIMITS.image)} cada.
             </p>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Checkbox
+                checked={disableBackgroundRemoval}
+                onCheckedChange={(checked) => setDisableBackgroundRemoval(checked === true)}
+              />
+              Desativar remoção automática de fundo
+            </label>
           </div>
         </FormSection>
 

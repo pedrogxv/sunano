@@ -6,7 +6,7 @@ import { PeripheralCard } from "./PeripheralCard"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { TIER_THEMES, PRICE_BAND_THEMES } from "@/lib/tierlist-theme"
-import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, resolvePriceGroupKey, type PriceGroupKey } from "@/lib/price-band"
+import { PRICE_BANDS, GOLPE_KEY, PRICE_BAND_LABEL, resolvePriceGroupKey, isPriceBandMode as isPriceBandTab, type PriceGroupKey } from "@/lib/price-band"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { tierLabel, tiersForCategory } from "@/lib/tier-utils"
 import { getTierScore } from "@/lib/tierlist-score"
@@ -304,11 +304,9 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
   const tierKey = TIER_KEY_BY_MODE[ratingMode] ?? null
   const isComingSoon = COMING_SOON_CATEGORIES.includes(category)
 
-  // Modo Custo Benefício (value) agrupa por faixa de preço em vez de tier — exceto em
-  // mousepad/glasspad, onde "value" significa "Nacional" (conceito diferente, sem relação
-  // com preço) e o modo realmente rotulado "Custo Benefício" lá é "recommended" (score
-  // ponderado, compartilhado com iem/headset, fora de escopo deste modo).
-  const isPriceBandMode = ratingMode === "value" && category !== "mousepad" && category !== "glasspad"
+  // A aba Custo Benefício agrupa por faixa de preço em vez de tier. Em mousepad/glasspad ela
+  // é o modo "recommended" (lá "value" significa "Nacional", sem relação com preço).
+  const isPriceBandMode = isPriceBandTab(ratingMode, category)
   const allowedTiers = tiersForCategory(category)
 
   // tierRows depende só de category+t: sem memo, uma nova referência a cada
@@ -414,7 +412,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
     [category]
   )
 
-  const localizedModeDescription = t.tierlist.modeDescriptions[ratingMode]
+  const localizedModeDescription = t.tierlist.modeDescriptions[isPriceBandMode ? "value" : ratingMode]
 
   const visibleItems = useMemo(
     () => filtered.filter((item) => participatesInMode(item, ratingMode)),
@@ -586,15 +584,22 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
                       `align-middle` o rótulo só respirava quando a linha era alta o bastante;
                       faixas de preço com poucas linhas de cards ficavam com o texto espremido. */}
                   <div className="flex h-full flex-col items-center justify-center gap-0.5 py-2 text-center">
-                    <span
-                      className={cn(
-                        "font-black leading-tight",
-                        isPriceBandMode ? "text-lg sm:text-xl" : "text-2xl",
-                        tierRow.textColor,
-                      )}
-                    >
-                      {tierRow.label}
-                    </span>
+                    {isPriceBandMode && tierRow.label.startsWith("R$") ? (
+                      <span className={cn("flex flex-col items-center font-black leading-none", tierRow.textColor)}>
+                        <span className="text-xs font-bold opacity-80">R$</span>
+                        <span className="mt-0.5 text-2xl">{tierRow.label.slice(2)}</span>
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          "font-black leading-tight",
+                          isPriceBandMode ? "text-lg sm:text-xl" : "text-2xl",
+                          tierRow.textColor,
+                        )}
+                      >
+                        {tierRow.label}
+                      </span>
+                    )}
                     {tierRow.subtitle && (
                       <span className={cn("text-[10px] font-medium opacity-75", tierRow.textColor)}>
                         {tierRow.subtitle}

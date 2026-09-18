@@ -56,9 +56,8 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   const ready = !pending
   const isAdmin = authUser?.isAdmin ?? false
   // Afiliados acompanha a manutenção da Loja (ver lib/server/auth/affiliate-access.ts).
-  // O WEB MASTER continua vendo o item, igual ao que faz na Loja.
-  // Resolvido no servidor (ver /api/auth/me): manutenção desligada, WEB MASTER,
-  // ou liberação individual do "pacote Loja". Ler a env aqui não funcionaria —
+  // Resolvido no servidor (ver /api/auth/me): manutenção desligada ou
+  // liberação individual do "pacote Loja". Ler a env aqui não funcionaria —
   // no browser a variante sem NEXT_PUBLIC_ não existe.
   const showAffiliates = authUser?.canUseStore ?? false
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)

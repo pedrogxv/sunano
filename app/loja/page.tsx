@@ -35,8 +35,8 @@ export function generateMetadata(): Metadata {
 const PAGE_SIZE = 24
 
 export default async function LojaPage() {
-  // WEB MASTER e quem tem a liberação individual do "pacote Loja"
-  // (user_profiles.store_access) ignoram a manutenção e continuam vendo tudo.
+  // Só quem tem a liberação individual do "pacote Loja"
+  // (user_profiles.store_access) ignora a manutenção e continua vendo tudo.
   if (await isStoreBrowsingBlocked()) {
     return (
       <ComingSoon

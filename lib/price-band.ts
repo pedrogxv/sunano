@@ -61,3 +61,15 @@ export function resolvePriceGroupKey(
   if (isPriceBandKey(manualGroup)) return manualGroup
   return getPriceBandKey(price)
 }
+
+// Qual aba vira faixa de preço em cada categoria. Em mousepad/glasspad "value" significa
+// "Nacional" (sem relação com preço) e a aba rotulada "Custo Benefício" é "recommended";
+// nas demais categorias é o próprio "value". Fonte única do board admin, da Tierlist
+// pública e do formulário.
+export function priceBandModeFor(category: string): "value" | "recommended" {
+  return category === "mousepad" || category === "glasspad" ? "recommended" : "value"
+}
+
+export function isPriceBandMode(mode: string, category: string): boolean {
+  return mode === priceBandModeFor(category)
+}

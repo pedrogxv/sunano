@@ -301,9 +301,9 @@ export default function CheckoutPage() {
   // Loja fechada para novos pedidos. A recusa de verdade é do servidor
   // (proxy.ts + a própria rota de checkout); aqui é só para DIZER isso antes
   // do clique — deixar o botão "Pagar com cartão" vivo numa loja fechada faz
-  // a pessoa preencher tudo e levar um erro genérico no final. Passam, igual
-  // ao servidor, o WEB MASTER e quem tem a liberação individual do "pacote
-  // Loja" — `canUseStore` já chega resolvido de /api/auth/me.
+  // a pessoa preencher tudo e levar um erro genérico no final. Passa, igual
+  // ao servidor, só quem tem a liberação individual do "pacote Loja".
+  // `canUseStore` já chega resolvido de /api/auth/me.
   //
   // Enquanto a auth carrega não afirmamos "fechada": `canUseStore` só existe
   // depois do /api/auth/me, e assumir fechado nesse intervalo faria a faixa de

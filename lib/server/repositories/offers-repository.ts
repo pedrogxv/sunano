@@ -137,6 +137,21 @@ export async function saveOffersToCache(offers: CachedOffer[]): Promise<void> {
 }
 
 /**
+ * Apaga do histórico mensagens que o scraping descartou (recado sem link,
+ * resposta que antes era lida pela citação). Mesma política de falha de
+ * `saveOffersToCache`: loga e segue, a página não cai por causa do cache.
+ */
+export async function removeOffersFromCache(ids: string[]): Promise<void> {
+  if (ids.length === 0) return
+
+  const db = createSupabaseAdminClient()
+  const { error } = await db.from("offers_cache").delete().in("id", ids)
+  if (error) {
+    console.error("[offers-repository] removeOffersFromCache:", error)
+  }
+}
+
+/**
  * Quando o scraping gravou pela última vez, ou `null` se a tabela está vazia.
  *
  * `last_seen_at` é tocado em todas as linhas a cada `saveOffersToCache`, então

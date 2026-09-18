@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { storeApiMaintenanceResponse } from "@/lib/server/auth/store-maintenance-gate"
 import { getStoreProductDetail } from "@/lib/server/repositories/store-repository"
 
 export const dynamic = "force-dynamic"
@@ -14,6 +15,9 @@ export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ slug: string }> }
 ) {
+  const blocked = await storeApiMaintenanceResponse()
+  if (blocked) return blocked
+
   const { slug } = await context.params
 
   try {

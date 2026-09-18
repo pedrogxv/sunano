@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { storeApiMaintenanceResponse } from "@/lib/server/auth/store-maintenance-gate"
 import { listStoreProductsPaginated, type StoreCondition, type StoreProductListFilters } from "@/lib/server/repositories/store-repository"
 
 export const dynamic = "force-dynamic"
@@ -33,6 +34,9 @@ function parseNumber(value: string | null): number | undefined {
 }
 
 export async function GET(request: NextRequest) {
+  const blocked = await storeApiMaintenanceResponse()
+  if (blocked) return blocked
+
   const { searchParams } = new URL(request.url)
 
   const conditionParam = searchParams.get("condition")?.trim()

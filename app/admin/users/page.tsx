@@ -341,10 +341,10 @@ function UserCard({
     isPersistedRegular &&
     !Boolean(user.account_banned_at)
   const isBanned = Boolean(user.account_banned_at)
-  // "Pacote Loja" — exclusivo do WEB Master. Não se concede a outro WEB Master
-  // (que já fura a manutenção por cargo, então o toggle não teria efeito) nem
-  // à própria conta. Espelha a trava do endpoint (PATCH /api/admin/users).
-  const canEditStoreAccess = isCurrentUserWebMaster && !isPersistedWebMaster && !isCurrentUser
+  // "Pacote Loja": exclusivo do WEB Master, para qualquer conta, inclusive a
+  // própria. O cargo não fura mais a manutenção sozinho, então é assim que o
+  // WEB Master liga a Loja para si quando precisa testar.
+  const canEditStoreAccess = isCurrentUserWebMaster
   const hasStoreAccess = Boolean(user.store_access)
   const isSavingStoreAccess = storeAccessSavingId === user.id
   const isBanning = banningId === user.id

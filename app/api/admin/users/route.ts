@@ -204,16 +204,10 @@ export async function PATCH(request: Request) {
     // isto, um PATCH que mande só `store_access` cairia num branch que retorna
     // cedo sem gravar nada.
     if (parsed.data.store_access !== undefined) {
-      // Outro WEB Master já fura a manutenção pelo cargo — o flag não teria
-      // efeito e só criaria estado contraditório. A própria conta também fica
-      // de fora, espelhando as outras travas desta rota.
-      if (isTargetWebMaster || isTargetCurrentUser) {
-        return NextResponse.json(
-          { error: "O WEB Master já tem acesso completo à Loja e aos Afiliados." },
-          { status: 400 }
-        )
-      }
-
+      // Vale para qualquer conta, inclusive a própria e a de outro WEB
+      // Master: o cargo não fura mais a manutenção sozinho (ver
+      // lib/server/auth/store-access.ts), então este flag é o único jeito de
+      // alguém da equipe ver a Loja antes de ela abrir.
       const { error: storeAccessError } = await admin
         .from("user_profiles")
         .update({ store_access: parsed.data.store_access })

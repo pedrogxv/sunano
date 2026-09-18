@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
+import { storeApiMaintenanceResponse } from "@/lib/server/auth/store-maintenance-gate"
 import { validateCartLines } from "@/lib/server/repositories/store-repository"
 
 export const runtime = "nodejs"
@@ -32,6 +33,12 @@ type RequestLine = {
 }
 
 export async function POST(request: NextRequest) {
+  // Com a Loja fechada a vitrine não é pública, então preço e disponibilidade
+  // também não. O /checkout já trata a recusa como "sem divergência" e mostra
+  // a faixa de loja fechada.
+  const blocked = await storeApiMaintenanceResponse()
+  if (blocked) return blocked
+
   // Sem autenticação: são dados públicos da vitrine (preço e disponibilidade
   // do que já está listado na loja), e o carrinho existe antes do login.
   //

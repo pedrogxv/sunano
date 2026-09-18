@@ -48,7 +48,8 @@ export function StoreCountdown({ launchAt, accentClassName }: StoreCountdownProp
 
       // O timer só provoca um refresh — quem decide se a Loja abre de fato é
       // o servidor, relendo STORE_MAINTENANCE_MODE. Se a env continuar true,
-      // esta mesma tela volta a aparecer (com o countdown já zerado).
+      // esta mesma tela volta a aparecer, já sem contador (`getStoreLaunchAt`
+      // devolve null para data que passou).
       if (next.days === 0 && next.hours === 0 && next.minutes === 0 && next.seconds === 0) {
         clearInterval(interval)
         router.refresh()

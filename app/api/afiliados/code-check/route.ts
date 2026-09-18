@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic"
 export async function GET(request: Request) {
   // Segunda checagem da mesma regra que o proxy já aplica (proxy.ts) — fechado
   // por padrão, caso o matcher/lógica do proxy mude e esta rota deixe de passar
-  // por lá. WEB MASTER ignora a manutenção, igual na Loja.
+  // por lá. Só quem tem `store_access` ignora a manutenção, igual na Loja.
   if (await isAffiliatesBlockedByMaintenance()) {
     return NextResponse.json({ error: AFFILIATES_MAINTENANCE_MESSAGE }, { status: 503 })
   }

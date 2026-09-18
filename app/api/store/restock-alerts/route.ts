@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
+import { storeApiMaintenanceResponse } from "@/lib/server/auth/store-maintenance-gate"
 import {
   getRestockAlertState,
   subscribeRestockAlert,
@@ -23,6 +24,9 @@ const bodySchema = z.object({
 
 /** Estado atual das inscrições do usuário nesse produto. */
 export async function GET(request: NextRequest) {
+  const blocked = await storeApiMaintenanceResponse()
+  if (blocked) return blocked
+
   const user = await getRequestUser(request)
   if (!user) return NextResponse.json({ product: false, variantIds: [] })
 
@@ -34,6 +38,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = await storeApiMaintenanceResponse()
+  if (blocked) return blocked
+
   const user = await getRequestUser(request)
   if (!user) return NextResponse.json({ error: "Faça login para ativar o aviso." }, { status: 401 })
 

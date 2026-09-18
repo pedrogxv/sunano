@@ -19,6 +19,24 @@
  * uma oferta que fuja do padrão.
  */
 
+/**
+ * O que aquele valor em reais significa dentro da mensagem.
+ *
+ * O canal escreve o preço e o desconto do cupom com a mesma cara ("R$ 30"),
+ * em linhas diferentes. Sem essa distinção o abatimento do cupom, por ser o
+ * menor número da mensagem, virava o preço em destaque do card: o teclado de
+ * R$ 199 com "Cupom especial R$ 30 off" aparecia anunciado como "R$ 30".
+ */
+export type OfferPriceKind =
+  /** Preço que se paga pelo produto. É o único que vira destaque e ordenação. */
+  | "current"
+  /** Preço "de" riscado, quando a linha traz "de X por Y". */
+  | "original"
+  /** Abatimento do cupom ("R$ 30 off") ou piso pra ele valer ("off em R$ 79"). */
+  | "discount"
+  /** Valor de frete. */
+  | "shipping"
+
 export type OfferPrice = {
   /** Valor formatado como veio na mensagem, ex.: "R$ 609". */
   label: string
@@ -30,6 +48,8 @@ export type OfferPrice = {
   isPix: boolean
   /** Número de parcelas quando a linha é de parcelamento ("12x" → 12). */
   installments: number | null
+  /** O papel do valor na mensagem. Ver `OfferPriceKind`. */
+  kind: OfferPriceKind
 }
 
 export type ParsedOffer = {
@@ -110,8 +130,37 @@ const COUPON_LABEL_LINE_RE = /(?:cupom|cupon|coupon|c[óo]digo|code|off\s+em|des
 /** Código sozinho numa linha, em caixa alta — só vale logo após um rótulo. */
 const STANDALONE_CODE_RE = /^\s*([A-Z0-9][A-Z0-9_-]{2,31})\s*$/
 
-/** Linha de preço: "R$ 1.234,56", "R$ 609", "RS 609", "609 reais". */
-const PRICE_RE = /(?:R\$|RS|\bBRL\b)\s*([\d.]+(?:,\d{1,2})?)/i
+/**
+ * Valor em reais: "R$ 1.234,56", "R$ 609", "RS 609". Global porque uma linha
+ * pode trazer mais de um ("de R$ 299 por R$ 199").
+ */
+const PRICE_ALL_RE = /(?:R\$|RS|\bBRL\b)\s*([\d.]+(?:,\d{1,2})?)/gi
+
+/**
+ * Emoji de dinheiro (💵 💰 💲 🤑 💸) com que o canal abre a linha do preço do
+ * produto. É o sinal mais confiável que existe na mensagem: quando ele está
+ * presente, o valor da linha é o preço, mesmo que a linha também fale de
+ * cupom.
+ */
+const MONEY_MARKER_RE = /[\u{1F4B5}\u{1F4B0}\u{1F4B2}\u{1F911}\u{1F4B8}]/u
+
+/**
+ * Rótulo de desconto ANTES do valor: "Cupom especial R$ 30 off",
+ * "R$ 15 OFF em R$ 79" (o segundo valor é o piso de compra, não o preço).
+ * A janela de 24 caracteres existe pra não capturar a palavra "cupom" que
+ * apareceu lá no começo de uma linha longa.
+ */
+const DISCOUNT_BEFORE_RE =
+  /(?:cupom|cupon|coupon|c[óo]digo|code|desconto|abate|promo|off\s+em)\b[^\n]{0,24}$/i
+
+/** Rótulo de desconto DEPOIS do valor: "R$ 30 off", "R$ 30 de desconto". */
+const DISCOUNT_AFTER_RE = /^\s*(?:de\s+)?(?:off\b|desconto\b|abatimento\b)/i
+
+/** Preço riscado: "de R$ 299 por R$ 199", "era R$ 299". */
+const OLD_PRICE_BEFORE_RE = /(?:\bde|\bera|\bantes(?:\s+de)?|\bpor)\s*$/i
+
+/** Linha de frete: o valor é o envio, não o produto. */
+const SHIPPING_RE = /\bfrete\b|\benvio\b|\bshipping\b/i
 
 /** "12x", "em 10 x", "10 vezes". */
 const INSTALLMENTS_RE = /(\d{1,2})\s*(?:x\b|vezes\b)/i
@@ -127,6 +176,15 @@ const TRAILING_DECORATION_RE = /[\s*_~`]+$/u
 /** Remove emoji/markdown das pontas de uma linha, preservando o miolo. */
 function stripDecoration(line: string) {
   return line.replace(LEADING_DECORATION_RE, "").replace(TRAILING_DECORATION_RE, "").trim()
+}
+
+/**
+ * Nota do preço: o que sobra da linha depois de tirar o valor. Tirar o valor
+ * do meio deixa buraco ("Cupom especial    off") e pontuação órfã (": 994M4"),
+ * então aqui as duas coisas somem.
+ */
+function cleanPriceNote(raw: string) {
+  return stripDecoration(raw.replace(/\s+/g, " ").replace(/^\s*[:;,\-–]\s*/, ""))
 }
 
 /** Converte "1.234,56" (pt-BR) ou "1234.56" para número. */
@@ -261,21 +319,52 @@ function extractCoupons(lines: string[]): CouponScan {
   return { coupons, consumedLines }
 }
 
-function parsePriceLine(line: string): OfferPrice | null {
-  const match = line.match(PRICE_RE)
-  if (!match) return null
+/**
+ * Lê TODOS os valores de uma linha e diz o que cada um é.
+ *
+ * Uma linha só já trouxe três coisas diferentes no canal: o preço
+ * ("💵 R$ 199"), o abatimento do cupom ("🏷 Cupom especial R$ 30 off") e o
+ * piso pro cupom valer ("R$ 15 OFF em R$ 79"). Todos são "R$ <número>"; o que
+ * separa um do outro é o que está em volta.
+ */
+function parsePriceLine(line: string): OfferPrice[] {
+  PRICE_ALL_RE.lastIndex = 0
+  const matches = [...line.matchAll(PRICE_ALL_RE)]
+  if (matches.length === 0) return []
 
-  const label = `R$ ${match[1]}`
-  const rest = stripDecoration(line.slice(0, match.index ?? 0) + line.slice((match.index ?? 0) + match[0].length))
+  // O emoji de dinheiro ganha de qualquer palavra: é assim que o canal marca
+  // o preço, e "R$ 609 com cupom" continua sendo preço.
+  const hasMoneyMarker = MONEY_MARKER_RE.test(line)
+  const isShipping = !hasMoneyMarker && SHIPPING_RE.test(line)
   const installmentsMatch = line.match(INSTALLMENTS_RE)
+  const isPix = PIX_RE.test(line)
 
-  return {
-    label,
-    value: parseBrlNumber(match[1]),
-    note: rest || null,
-    isPix: PIX_RE.test(line),
-    installments: installmentsMatch ? Number.parseInt(installmentsMatch[1], 10) : null,
-  }
+  return matches.map((match, index) => {
+    const start = match.index ?? 0
+    const before = line.slice(0, start)
+    const after = line.slice(start + match[0].length)
+    const hasLater = index < matches.length - 1
+
+    let kind: OfferPriceKind = "current"
+    if (isShipping) kind = "shipping"
+    else if (hasLater && OLD_PRICE_BEFORE_RE.test(before)) kind = "original"
+    else if (!hasMoneyMarker && (DISCOUNT_AFTER_RE.test(after) || DISCOUNT_BEFORE_RE.test(before)))
+      kind = "discount"
+
+    // Com um valor só, a nota é o resto da linha inteiro ("no Pix"). Com
+    // vários, só o que sobra depois do último — senão "de R$ 299 por R$ 199
+    // no Pix" viraria a nota "de por no Pix".
+    const noteSource = matches.length === 1 ? `${before} ${after}` : hasLater ? "" : after
+
+    return {
+      label: `R$ ${match[1]}`,
+      value: parseBrlNumber(match[1]),
+      note: cleanPriceNote(noteSource) || null,
+      isPix,
+      installments: installmentsMatch ? Number.parseInt(installmentsMatch[1], 10) : null,
+      kind,
+    }
+  })
 }
 
 /**
@@ -305,14 +394,15 @@ export function parseOffer(text: string): ParsedOffer {
 
     const urls = line.match(URL_RE)
     if (urls) {
-      link ??= urls[0]
+      // "Ver oferta" leva à loja; link do canal/YouTube no meio do texto não serve.
+      link ??= urls.find(isStoreLink) ?? null
       // Linha que é só o link não precisa aparecer duas vezes.
       if (stripDecoration(line.replace(URL_RE, "")).length === 0) continue
     }
 
-    const price = parsePriceLine(line)
-    if (price) {
-      prices.push(price)
+    const linePrices = parsePriceLine(line)
+    if (linePrices.length > 0) {
+      prices.push(...linePrices)
       continue
     }
 
@@ -336,9 +426,71 @@ export function parseOffer(text: string): ParsedOffer {
   }
 }
 
-/** Menor preço da oferta — usado para ordenar e para o selo de destaque. */
+/**
+ * Menor preço DO PRODUTO, usado para ordenar e para o destaque do card.
+ *
+ * Desconto, piso de cupom e frete ficam de fora: eles são sempre menores que
+ * o preço e roubavam o destaque (o cupom de "R$ 30 off" anunciando um teclado
+ * de R$ 199). Se a mensagem não tiver nenhum valor classificado como preço,
+ * cai no conjunto inteiro em vez de ficar sem preço nenhum.
+ */
 export function getLowestPrice(prices: OfferPrice[]): OfferPrice | null {
-  const withValue = prices.filter((p) => p.value !== null)
-  if (withValue.length === 0) return prices[0] ?? null
+  const current = prices.filter((p) => p.kind === "current")
+  const pool = current.length > 0 ? current : prices
+  const withValue = pool.filter((p) => p.value !== null)
+  if (withValue.length === 0) return pool[0] ?? null
   return withValue.reduce((min, p) => ((p.value as number) < (min.value as number) ? p : min))
+}
+
+/**
+ * Domínios que NÃO são loja: o próprio site e as redes do canal.
+ *
+ * Aviso do canal também tem link ("Terminei os ajustes dos Softwares" →
+ * sunano.com.br/softwares, "vídeo novo" → YouTube). Contar qualquer URL como
+ * oferta deixava esses recados virarem card na grade, com botão "Ver oferta"
+ * levando pro próprio site.
+ */
+const NON_STORE_HOSTS = [
+  "sunano.com.br",
+  "youtube.com",
+  "youtu.be",
+  "t.me",
+  "telegram.me",
+  "telegram.org",
+  "instagram.com",
+  "tiktok.com",
+  "discord.gg",
+  "discord.com",
+  "twitter.com",
+  "x.com",
+  "twitch.tv",
+  "kick.com",
+]
+
+function isStoreLink(url: string): boolean {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+  return !NON_STORE_HOSTS.some((blocked) => host === blocked || host.endsWith(`.${blocked}`))
+}
+
+/** Todas as URLs da mensagem, na ordem em que aparecem. */
+function findUrls(text: string): string[] {
+  URL_RE.lastIndex = 0
+  const urls = text.match(URL_RE) ?? []
+  URL_RE.lastIndex = 0
+  return urls
+}
+
+/**
+ * `true` quando a mensagem traz link de LOJA.
+ *
+ * O canal também é usado pra recado ("Bom dia", enquete, aviso do site): sem
+ * link de loja não há oferta pra abrir, e o card só ocuparia espaço na grade.
+ */
+export function hasOfferLink(text: string): boolean {
+  return findUrls(text).some(isStoreLink)
 }

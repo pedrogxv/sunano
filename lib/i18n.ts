@@ -942,6 +942,7 @@ type Translations = {
       removeFromCategoryAction: string
       removedFromCategory: string
       removeFromCategoryFailed: string
+      addToRowAction: string
     }
     tierlistReview: {
       pageTitle: string
@@ -1083,10 +1084,10 @@ type Translations = {
     statLive: string
     statWithCoupon: string
     statNewToday: string
-    statCheapest: string
     lastUpdated: string
     howItWorks: string
     howItWorksBody: string
+    aliexpressAppHint: string
     showingCount: string
     oldOffer: string
     oldOfferHint: string
@@ -2061,6 +2062,7 @@ export const translations: Record<LocaleCode, Translations> = {
         removeFromCategoryAction: "Remover desta categoria",
         removedFromCategory: "Removido desta categoria",
         removeFromCategoryFailed: "Erro ao remover da categoria",
+        addToRowAction: "Adicionar periférico aqui",
       },
       tierlistReview: {
         pageTitle: "Revisão de Periféricos",
@@ -2202,10 +2204,10 @@ export const translations: Record<LocaleCode, Translations> = {
       statLive: "Ofertas no ar",
       statWithCoupon: "Com cupom",
       statNewToday: "Novas hoje",
-      statCheapest: "Menor preço",
       lastUpdated: "Atualizado",
       howItWorks: "Como funciona",
       howItWorksBody: "As ofertas são publicadas no nosso canal do Telegram e aparecem aqui automaticamente. Copie o cupom, abra o link e confira o preço final no carrinho.",
+      aliexpressAppHint: "Link do AliExpress: abra pelo aplicativo do celular. É só dentro do app que o cupom e as moedas entram e o desconto máximo aparece; pelo navegador o preço sai mais caro.",
       showingCount: "ofertas",
       oldOffer: "Oferta antiga",
       oldOfferHint: "Esta oferta tem mais de 48h: o preço pode ter mudado ou o estoque acabado. Confira na loja antes de comprar.",
@@ -3556,6 +3558,7 @@ export const translations: Record<LocaleCode, Translations> = {
         removeFromCategoryAction: "Remove from this category",
         removedFromCategory: "Removed from this category",
         removeFromCategoryFailed: "Failed to remove from category",
+        addToRowAction: "Add peripheral here",
       },
       tierlistReview: {
         pageTitle: "Peripheral Review",
@@ -3697,10 +3700,10 @@ export const translations: Record<LocaleCode, Translations> = {
       statLive: "Live offers",
       statWithCoupon: "With coupon",
       statNewToday: "New today",
-      statCheapest: "Lowest price",
       lastUpdated: "Updated",
       howItWorks: "How it works",
       howItWorksBody: "Offers are posted on our Telegram channel and show up here automatically. Copy the coupon, open the link, and check the final price at checkout.",
+      aliexpressAppHint: "AliExpress links: open them in the mobile app. Coupons and coins only stack inside the app, where the full discount shows up; in the browser the price comes out higher.",
       showingCount: "offers",
       oldOffer: "Old offer",
       oldOfferHint: "This offer is more than 48h old: the price may have changed or stock may have run out. Double-check on the store before buying.",

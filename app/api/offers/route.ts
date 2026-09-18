@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
-import { getTelegramOffers, SCRAPE_LIMIT } from "@/lib/server/integrations/telegram-offers"
+import {
+  getTelegramOffers,
+  OFFER_AVATAR_PROXY_PATH,
+  offerImageProxyPath,
+  SCRAPE_LIMIT,
+} from "@/lib/server/integrations/telegram-offers"
 import { getOfferVoteSummary } from "@/lib/server/repositories/offers-repository"
 
 /**
@@ -24,6 +29,12 @@ export async function GET(request: NextRequest) {
 
     const offersWithVotes = offers.map((offer) => ({
       ...offer,
+      // Nunca a URL gravada do CDN: ela expira em horas e a imagem de toda
+      // oferta mais antiga que a última sincronização quebrava.
+      // `getTelegramOffers` só devolve oferta com foto confirmada.
+      image: offer.image ? { ...offer.image, url: offerImageProxyPath(offer.messageId) } : null,
+      // Mesmo motivo: a foto do canal gravada em cada oferta também expira.
+      authorAvatar: offer.authorAvatar ? { ...offer.authorAvatar, url: OFFER_AVATAR_PROXY_PATH } : null,
       chatTitle: null,
       votes_working: workingCounts[offer.id] ?? 0,
       user_voted: userVoted.has(offer.id),

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 import { getRequestUser } from "@/lib/server/auth/current-user"
+import { storeApiMaintenanceResponse } from "@/lib/server/auth/store-maintenance-gate"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   createReview,
@@ -24,6 +25,9 @@ async function resolveProductId(slug: string): Promise<string | null> {
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ slug: string }> }) {
+  const blocked = await storeApiMaintenanceResponse()
+  if (blocked) return blocked
+
   const { slug } = await context.params
   const productId = await resolveProductId(slug)
   if (!productId) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
@@ -48,6 +52,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ slu
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ slug: string }> }) {
+  const blocked = await storeApiMaintenanceResponse()
+  if (blocked) return blocked
+
   const { slug } = await context.params
   const productId = await resolveProductId(slug)
   if (!productId) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })

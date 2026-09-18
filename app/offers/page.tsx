@@ -11,9 +11,9 @@ import {
   Clock,
   ExternalLink,
   Info,
-  MessageCircle,
   RefreshCw,
   Search,
+  Smartphone,
   Sparkles,
   Ticket,
   X,
@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 
 import BoxLoader from "@/components/ui/box-loader"
+import { TelegramIcon } from "@/components/icons/social-icons"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CouponChip } from "@/components/offers/CouponChip"
 import { useLocale } from "@/components/providers/locale-context"
@@ -59,6 +60,7 @@ type TelegramOffer = {
   authorAvatar: TelegramOfferImage | null
   chatTitle: string | null
   url: string | null
+  /** Sempre presente: a API só devolve oferta com foto confirmada. */
   image: TelegramOfferImage | null
 }
 
@@ -157,60 +159,59 @@ function OfferCard({
   dateLocale: Locale
 }) {
   const { parsed } = offer
+  // Falhas de carregamento da foto. A 1ª tenta de novo com outra URL (o 502
+  // do proxy fica 1 min no cache da CDN, a mesma URL devolveria o mesmo erro).
+  const [imageErrors, setImageErrors] = useState(0)
+  const [avatarFailed, setAvatarFailed] = useState(false)
   const relTime = formatDistanceToNow(new Date(offer.date), { locale: dateLocale, addSuffix: true })
   const fullDate = format(new Date(offer.date), t.offers.dateFormat, { locale: dateLocale })
   const lowest = getLowestPrice(parsed.prices)
-  const secondary = parsed.prices.filter((price) => price !== lowest)
+  // Desconto de cupom e preço riscado saem da lista de preços: o primeiro não
+  // é o que se paga, o segundo vai colado no destaque.
+  const original = parsed.prices.find((price) => price.kind === "original") ?? null
+  const discounts = parsed.prices.filter((price) => price.kind === "discount")
+  const secondary = parsed.prices.filter(
+    (price) => price !== lowest && price.kind !== "original" && price.kind !== "discount"
+  )
+
+  // Oferta não aparece sem foto. A API já só manda as que têm; isto cobre a
+  // foto que não carregou nem na segunda tentativa (mensagem apagada do canal
+  // depois da última leitura, Telegram fora do ar).
+  if (!offer.image || imageErrors >= 2) return null
+  const imageSrc = imageErrors === 0 ? offer.image.url : `${offer.image.url}?retry=1`
 
   return (
     <article className="group flex flex-col overflow-hidden rounded-2xl border border-border/50 bg-card/50 transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-500/40 hover:bg-card/70 hover:shadow-xl hover:shadow-sky-950/30">
       {/* Imagem */}
-      {offer.image ? (
-        <div className="relative aspect-[16/10] overflow-hidden border-b border-border/30 bg-black/20">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={offer.image.url}
-            alt={parsed.title ?? t.offers.offerImage}
-            className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-            loading="lazy"
-          />
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent" />
-          {offer.isNew && (
-            <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-950/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-300 backdrop-blur">
-              <Zap className="size-2.5" fill="currentColor" />
-              {t.offers.new}
-            </span>
-          )}
-          {offer.isOld && (
-            <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-950/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-300 backdrop-blur">
-              <Clock className="size-2.5" />
-              {t.offers.oldOffer}
-            </span>
-          )}
-          {parsed.coupons.length > 0 && (
-            <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-950/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-300 backdrop-blur">
-              <Ticket className="size-2.5" />
-              {t.offers.coupon}
-            </span>
-          )}
-        </div>
-      ) : (
-        (offer.isNew || offer.isOld) && (
-          <div className="px-5 pt-5">
-            {offer.isNew ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-400">
-                <Zap className="size-2.5" fill="currentColor" />
-                {t.offers.new}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 rounded-full border border-orange-500/30 bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-orange-400">
-                <Clock className="size-2.5" />
-                {t.offers.oldOffer}
-              </span>
-            )}
-          </div>
-        )
-      )}
+      <div className="relative aspect-[16/10] overflow-hidden border-b border-border/30 bg-black/20">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageSrc}
+          alt={parsed.title ?? t.offers.offerImage}
+          className="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+          loading="lazy"
+          onError={() => setImageErrors((count) => count + 1)}
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent" />
+        {offer.isNew && (
+          <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-950/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-300 backdrop-blur">
+            <Zap className="size-2.5" fill="currentColor" />
+            {t.offers.new}
+          </span>
+        )}
+        {offer.isOld && (
+          <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-950/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-300 backdrop-blur">
+            <Clock className="size-2.5" />
+            {t.offers.oldOffer}
+          </span>
+        )}
+        {parsed.coupons.length > 0 && (
+          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full border border-amber-400/40 bg-amber-950/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-300 backdrop-blur">
+            <Ticket className="size-2.5" />
+            {t.offers.coupon}
+          </span>
+        )}
+      </div>
 
       <div className="flex flex-1 flex-col gap-3 p-5">
         {/* Título */}
@@ -226,6 +227,11 @@ function OfferCard({
             <span className="text-2xl font-black tracking-tight text-emerald-400">
               {lowest.value !== null ? formatBrl(lowest.value, locale) : lowest.label}
             </span>
+            {original && (
+              <span className="text-xs font-medium text-muted-foreground line-through">
+                {original.value !== null ? formatBrl(original.value, locale) : original.label}
+              </span>
+            )}
             {lowest.note && (
               <span className="text-xs font-medium text-emerald-500/70">{lowest.note}</span>
             )}
@@ -237,6 +243,24 @@ function OfferCard({
               <span key={i} className="text-xs text-muted-foreground">
                 {price.value !== null ? formatBrl(price.value, locale) : price.label}
                 {price.note ? ` ${price.note}` : ""}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Abatimento do cupom. Fica fora do destaque de propósito: é o quanto
+            sai do preço, não o preço. */}
+        {discounts.length > 0 && (
+          <div className="flex flex-col gap-0.5">
+            {discounts.map((price, i) => (
+              <span key={i} className="flex items-start gap-1.5 text-xs text-amber-300/80">
+                <Ticket className="mt-0.5 size-3 shrink-0" />
+                <span>
+                  <span className="font-semibold">
+                    {price.value !== null ? formatBrl(price.value, locale) : price.label}
+                  </span>
+                  {price.note ? ` ${price.note}` : ""}
+                </span>
               </span>
             ))}
           </div>
@@ -294,7 +318,7 @@ function OfferCard({
                 !parsed.link && "flex-1"
               )}
             >
-              <MessageCircle className="size-3.5" />
+              <TelegramIcon className="size-3.5 shrink-0" />
               {!parsed.link && t.offers.openInTelegram}
             </a>
           )}
@@ -302,7 +326,7 @@ function OfferCard({
 
         {/* Rodapé: autor + tempo */}
         <div className="flex items-center gap-2 border-t border-border/30 pt-3">
-          {offer.authorAvatar ? (
+          {offer.authorAvatar && !avatarFailed ? (
             <Image
               src={offer.authorAvatar.url}
               alt={offer.author ?? ""}
@@ -311,6 +335,7 @@ function OfferCard({
               sizes="20px"
               className="size-5 rounded-full border border-white/10 object-cover"
               unoptimized
+              onError={() => setAvatarFailed(true)}
             />
           ) : (
             <div className="flex size-5 items-center justify-center rounded-full border border-white/10 bg-muted/40 text-[8px] font-bold uppercase text-muted-foreground">
@@ -385,12 +410,10 @@ export default function OffersPage() {
   const stats = useMemo(() => {
     const withCoupon = enriched.filter((o) => o.parsed.coupons.length > 0).length
     const newToday = enriched.filter((o) => isToday(new Date(o.date))).length
-    const values = enriched.map((o) => o.lowestValue).filter((v): v is number => v !== null)
     return {
       total: enriched.length,
       withCoupon,
       newToday,
-      cheapest: values.length > 0 ? Math.min(...values) : null,
     }
   }, [enriched])
 
@@ -476,7 +499,7 @@ export default function OffersPage() {
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-400 transition-all hover:border-sky-500/50 hover:bg-sky-500/[0.16] hover:text-sky-300"
             >
-              <MessageCircle className="size-3.5" />
+              <TelegramIcon className="size-3.5 shrink-0" />
               {t.offers.join}
               <ExternalLink className="size-3" />
             </a>
@@ -509,6 +532,21 @@ export default function OffersPage() {
           {/* Coluna lateral */}
           <aside className="lg:sticky lg:top-[calc(var(--sticky-header-h)+1.25rem)] lg:self-start">
             <div className="space-y-4">
+              {/* Como funciona: primeiro item da coluna, por ser a instrução de
+                  uso da página (cupom, carrinho, app do AliExpress). No fim da
+                  barra lateral ela caía abaixo da dobra, depois de tudo. */}
+              <div className="rounded-2xl border border-sky-500/15 bg-sky-500/[0.04] p-4">
+                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-300/80">
+                  <Info className="size-3.5" />
+                  {t.offers.howItWorks}
+                </p>
+                <p className="text-xs leading-relaxed text-sky-200/60">{t.offers.howItWorksBody}</p>
+                <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-500/20 bg-amber-500/[0.07] px-2 py-1.5 text-[11px] leading-relaxed text-amber-200/80">
+                  <Smartphone className="mt-px size-3 shrink-0" />
+                  <span>{t.offers.aliexpressAppHint}</span>
+                </p>
+              </div>
+
               {/* Busca */}
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -598,14 +636,6 @@ export default function OffersPage() {
                     value={String(stats.newToday)}
                     accent="text-sky-400"
                   />
-                  {stats.cheapest !== null && (
-                    <StatRow
-                      icon={<ArrowUpRight className="size-3.5" />}
-                      label={t.offers.statCheapest}
-                      value={formatBrl(stats.cheapest, locale)}
-                      accent="text-emerald-400"
-                    />
-                  )}
                 </div>
                 {updatedAt && (
                   <p className="mt-2 border-t border-border/30 pt-2 text-[10px] text-muted-foreground">
@@ -613,15 +643,6 @@ export default function OffersPage() {
                     {formatDistanceToNow(updatedAt, { locale: dateLocale, addSuffix: true })}
                   </p>
                 )}
-              </div>
-
-              {/* Como funciona */}
-              <div className="rounded-2xl border border-sky-500/15 bg-sky-500/[0.04] p-4">
-                <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-sky-300/80">
-                  <Info className="size-3.5" />
-                  {t.offers.howItWorks}
-                </p>
-                <p className="text-xs leading-relaxed text-sky-200/60">{t.offers.howItWorksBody}</p>
               </div>
 
               {/* Aviso legal */}

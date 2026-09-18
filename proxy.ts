@@ -15,9 +15,10 @@ import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
 
 
 // Bloqueia SOMENTE a Loja pública — admin, login/cadastro e o resto do site
-// continuam normais. As páginas /loja mostram "em breve" sozinhas (ver
-// app/loja/page.tsx e app/loja/[slug]/page.tsx); aqui só falta recusar,
-// fechado por padrão, qualquer requisição que crie um pedido novo.
+// continuam normais. As páginas /loja mostram "em breve" sozinhas e as APIs
+// de catálogo recusam sozinhas (ver lib/server/auth/store-maintenance-gate.ts);
+// aqui só falta recusar, fechado por padrão, qualquer requisição que crie um
+// pedido novo.
 //
 // Match EXATO, sem prefixo: as sub-rotas de /api/store/checkout são leitura
 // (`/payer-info` só devolve nome/CPF/endereço do próprio perfil, para o card
@@ -30,7 +31,7 @@ const STORE_ORDER_WRITE_PATHS = ["/api/store/checkout"]
 
 // O Programa de Afiliados acompanha a manutenção da Loja: sem loja aberta não
 // existe venda para comissionar, então a área inteira (páginas e API) fecha
-// para todo mundo que não é WEB MASTER. Diferente da Loja, aqui não é só a
+// para todo mundo que não tem `store_access`. Diferente da Loja, aqui não é só a
 // escrita: `/afiliados` não deve nem abrir, porque a proposta da página é
 // justamente indicar a loja.
 const AFFILIATE_PATHS = ["/afiliados", "/api/afiliados"]
@@ -438,8 +439,8 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // sozinho já não seria suficiente pra passar). Navegação/admin/cadastro
   // seguem liberados; /loja mostra "em breve" sozinha (ver app/loja/**).
   // Anônimo (sem cookie de sessão) é recusado aqui mesmo, sem consultar o
-  // banco — só quando existe sessão a checagem espera o perfil ser resolvido
-  // abaixo, para que um WEB MASTER logado possa passar direto.
+  // banco. Só quando existe sessão a checagem espera o perfil ser resolvido
+  // abaixo, para que quem tem `store_access` possa passar.
   if (storeMaintenanceMode && !hasSupabaseSession(request)) {
     return storeMaintenanceResponse(request, isAffiliatePath)
   }
@@ -585,15 +586,15 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
-  // Loja em manutenção, mas há sessão: passam o WEB MASTER e quem tem a
-  // liberação individual do "pacote Loja" (`user_profiles.store_access`,
-  // concedida em /admin/users). Qualquer outro usuário logado (ou perfil
-  // ausente) continua recusado.
+  // Loja em manutenção, mas há sessão: passa só quem tem a liberação
+  // individual do "pacote Loja" (`user_profiles.store_access`, concedida em
+  // /admin/users). Qualquer outro usuário logado continua recusado, WEB
+  // MASTER incluído: o cargo sozinho não fura mais a manutenção.
   //
   // `hasStoreAccess` vem da query de `user_profiles` que o updateSession já
-  // faz — a regra equivalente no lado server-only vive em
+  // faz. A regra equivalente no lado server-only vive em
   // lib/server/auth/store-access.ts; as duas precisam concordar.
-  if (storeMaintenanceMode && !isWebMaster(profile) && !hasStoreAccess) {
+  if (storeMaintenanceMode && !hasStoreAccess) {
     const blockedResponse = storeMaintenanceResponse(request, isAffiliatePath)
     copyCookies(response, blockedResponse)
     return blockedResponse

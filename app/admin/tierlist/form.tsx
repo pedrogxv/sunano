@@ -68,6 +68,7 @@ import type { PeripheralExpertAuthor } from "@/lib/peripheral-expert"
 import { parseExpertAuthor } from "@/lib/peripheral-expert"
 import { getTagOptionsForCategory, hasScoreRanking, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
+import { priceBandModeFor } from "@/lib/price-band"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
@@ -2120,9 +2121,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               )}
             </div>
 
-            {/* GOLPE — só faz sentido pra faixa de preço (Custo Benefício), e não existe
-                nas categorias onde "value" significa "Nacional" (mousepad/glasspad). */}
-            {selectedTierlistCategories.includes("value") && watchedCategory !== "mousepad" && watchedCategory !== "glasspad" && (
+            {/* GOLPE — só faz sentido pra faixa de preço (Custo Benefício), que em
+                mousepad/glasspad é o modo "recommended" (lá "value" é "Nacional"). */}
+            {selectedTierlistCategories.includes(priceBandModeFor(watchedCategory)) && (
               <div className="space-y-2 rounded-xl border border-white/10 px-4 py-3" style={{ backgroundColor: "#1c1c1f" }}>
                 <div className="flex items-start justify-between gap-3">
                   <div>

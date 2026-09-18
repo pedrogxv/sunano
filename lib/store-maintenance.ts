@@ -11,7 +11,7 @@
 // `authUser.canUseStore`, de /api/auth/me (ver `components/auth/auth-user.tsx`
 // e `components/account/AccountSection.tsx`, que escondem "Programa de
 // Afiliados"). Isso é melhor que uma env `NEXT_PUBLIC_`: a resposta já embute
-// os bypasses por usuário (WEB MASTER e `store_access`), que uma env não tem
+// o bypass por usuário (`store_access`), que uma env não tem
 // como expressar.
 //
 // O fallback para NEXT_PUBLIC_STORE_MAINTENANCE_MODE abaixo é só rede de
@@ -22,23 +22,32 @@ export function isStoreMaintenanceEnabled() {
   return value === "true"
 }
 
+// Lançamento marcado: segunda, 21/09/2026, 10h de Brasília (13h UTC). Fica
+// no código para o contador entrar no ar junto com o deploy, sem depender de
+// configurar env na Vercel.
+const STORE_LAUNCH_AT_DEFAULT = "2026-09-21T10:00:00-03:00"
+
 // ISO string do horário-alvo de lançamento da Loja, ou null quando não há
-// data definida. Configurável via STORE_LAUNCH_AT (ex.:
-// "2026-08-22T23:00:00.000Z" — já em UTC) para permitir adiar o lançamento só
-// trocando a env, sem novo deploy.
+// contador para mostrar. STORE_LAUNCH_AT (ex.: "2026-09-21T13:00:00.000Z")
+// sobrescreve a data acima: para adiar, troque a env e faça redeploy.
 //
-// Sem a env (ou com valor inválido) o retorno é null e o countdown some da
-// tela de "Coming soon": um contador só faz sentido apontando para uma data
-// que alguém realmente escolheu. Havia aqui um fallback de "próximo sábado às
-// 20h de Brasília" que anunciava uma data de lançamento que ninguém tinha
-// marcado — e, por ser relativa a agora, se empurrava sozinha para a frente
-// toda semana.
+// O padrão é uma data FIXA que alguém escolheu. Havia aqui um fallback de
+// "próximo sábado às 20h de Brasília" que anunciava um lançamento que ninguém
+// tinha marcado e, por ser relativo a agora, se empurrava sozinho para a
+// frente toda semana.
+//
+// Data que já passou devolve null: se a loja ainda estiver em manutenção
+// depois do horário, a tela "Coming soon" fica sem contador em vez de
+// mostrar 00:00:00:00 para sempre.
 export function getStoreLaunchAt(): string | null {
-  const configured = process.env.STORE_LAUNCH_AT ?? process.env.NEXT_PUBLIC_STORE_LAUNCH_AT
-  if (!configured) return null
+  // `||` e não `??`: o .env.example traz `STORE_LAUNCH_AT=` vazio, e string
+  // vazia tem de cair na data padrão.
+  const configured =
+    process.env.STORE_LAUNCH_AT || process.env.NEXT_PUBLIC_STORE_LAUNCH_AT || STORE_LAUNCH_AT_DEFAULT
 
   const parsed = new Date(configured)
   if (Number.isNaN(parsed.getTime())) return null
+  if (parsed.getTime() <= Date.now()) return null
 
   return parsed.toISOString()
 }

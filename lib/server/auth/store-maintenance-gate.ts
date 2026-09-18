@@ -1,6 +1,7 @@
 import "server-only"
 
 import type { Metadata } from "next"
+import { NextResponse } from "next/server"
 
 import { canUseStoreNow } from "@/lib/server/auth/store-access"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
@@ -22,21 +23,41 @@ import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
  * nova de navegação da Loja deve chamar `isStoreBrowsingBlocked()` e
  * `storeMaintenanceMetadata()` em vez de repetir a condição.
  *
+ * O mesmo buraco existia uma camada abaixo (18/09/2026): com as páginas
+ * fechadas, `/api/store/products`, `/search`, `/filter-options` e o detalhe
+ * do produto continuavam devolvendo o catálogo inteiro, com preço e promoção,
+ * para qualquer anônimo. Toda rota de API que devolve catálogo ou prepara
+ * compra chama `storeApiMaintenanceResponse()`.
+ *
  * NÃO cobre o caminho de escrita — checkout, cancelamento e afins continuam
- * com as próprias travas (proxy + a checagem dentro da rota).
+ * com as próprias travas (proxy + a checagem dentro da rota). Também não
+ * cobre os pedidos da própria pessoa (`/api/store/orders/**`): são dados
+ * dela, e quem já comprou precisa acompanhar o pedido com a loja fechada.
  */
 
 /**
  * A navegação da Loja deve mostrar "Coming soon" para ESTE visitante?
  *
- * `true` quando há manutenção e a pessoa não fura (WEB MASTER ou
- * `user_profiles.store_access`). Mesmo critério do checkout, via
- * `canUseStoreNow` — as duas respostas precisam concordar, senão o usuário
- * navega na loja e toma 503 ao comprar.
+ * `true` quando há manutenção e a pessoa não tem `user_profiles.store_access`.
+ * Mesmo critério do checkout, via `canUseStoreNow`. As duas respostas
+ * precisam concordar, senão o usuário navega na loja e toma 503 ao comprar.
  */
 export async function isStoreBrowsingBlocked(): Promise<boolean> {
   if (!isStoreMaintenanceEnabled()) return false
   return !(await canUseStoreNow())
+}
+
+/**
+ * Recusa das rotas de API da Loja enquanto ela estiver fechada para ESTE
+ * visitante, pelo mesmo critério das páginas. Devolve `null` quando a rota
+ * pode seguir:
+ *
+ *   const blocked = await storeApiMaintenanceResponse()
+ *   if (blocked) return blocked
+ */
+export async function storeApiMaintenanceResponse(): Promise<NextResponse | null> {
+  if (!(await isStoreBrowsingBlocked())) return null
+  return NextResponse.json({ error: "A Loja está temporariamente indisponível." }, { status: 503 })
 }
 
 /**

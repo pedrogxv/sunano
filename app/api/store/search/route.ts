@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { storeApiMaintenanceResponse } from "@/lib/server/auth/store-maintenance-gate"
 import { searchStoreProductsTop } from "@/lib/server/repositories/store-repository"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 
@@ -12,8 +13,13 @@ export const runtime = "nodejs"
  * `/api/store/products`, consumida por `/loja?q=`.
  */
 export async function GET(request: NextRequest) {
+  // Também atende o campo "produto" do formulário de /suporte, que trata a
+  // recusa como "nenhum produto encontrado".
+  const blocked = await storeApiMaintenanceResponse()
+  if (blocked) return blocked
+
   const { searchParams } = new URL(request.url)
-  const q = searchParams.get("q")?.trim() ?? ""
+  const q =searchParams.get("q")?.trim() ?? ""
   const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 5, 1), 10)
 
   if (q.length < 2) {

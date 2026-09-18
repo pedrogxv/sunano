@@ -374,7 +374,7 @@ export async function POST(request: NextRequest) {
 
   // Segunda checagem da mesma flag que o proxy já aplica (proxy.ts) — fechado
   // por padrão, caso o matcher/lógica do proxy mude e essa rota deixe de
-  // passar por lá. Ignoram a manutenção, igual no proxy, o WEB MASTER e quem
+  // passar por lá. Ignora a manutenção, igual no proxy, só quem
   // tem a liberação individual do "pacote Loja" (user_profiles.store_access).
   if (isStoreMaintenanceEnabled() && !(await canUseStoreNow())) {
     return NextResponse.json(

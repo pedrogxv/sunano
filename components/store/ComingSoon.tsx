@@ -29,6 +29,17 @@ const ACCENT_STYLE = {
   },
 } as const
 
+// Fuso fixo: o lançamento é marcado no horário de Brasília, e o texto não
+// pode mudar de dia conforme o fuso do servidor que renderizou.
+const LAUNCH_DATE_FORMAT = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  hour: "2-digit",
+  minute: "2-digit",
+})
+
 export function ComingSoon({ icon: Icon, title, description, accent = "emerald", launchAt }: ComingSoonProps) {
   const style = ACCENT_STYLE[accent]
 
@@ -62,7 +73,15 @@ export function ComingSoon({ icon: Icon, title, description, accent = "emerald",
           </span>
         </div>
         <p className="max-w-sm text-sm text-muted-foreground">{description}</p>
-        {launchAt ? <StoreCountdown launchAt={launchAt} accentClassName={style.countdown} /> : null}
+        {launchAt ? (
+          <div className="flex flex-col items-center gap-3 pt-2">
+            <p className="text-sm font-semibold text-foreground">
+              Abre {LAUNCH_DATE_FORMAT.format(new Date(launchAt))}{" "}
+              <span className="font-normal text-muted-foreground">(horário de Brasília)</span>
+            </p>
+            <StoreCountdown launchAt={launchAt} accentClassName={style.countdown} />
+          </div>
+        ) : null}
       </div>
     </div>
   )

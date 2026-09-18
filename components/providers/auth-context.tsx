@@ -14,13 +14,13 @@ export type AuthContextUser = {
   displayName: string
   avatarUrl: string | null
   isAdmin: boolean
-  /** WEB MASTER — ignora o modo de manutenção da Loja e do Programa de Afiliados. */
+  /** Cargo WEB MASTER. NÃO fura a manutenção da Loja: quem decide é `canUseStore`. */
   isWebMaster: boolean
   /**
    * A Loja e o Programa de Afiliados estão abertos PARA ESTE usuário agora.
    *
-   * Já vem RESOLVIDO pelo servidor (`/api/auth/me`), que combina os três
-   * fatores: manutenção desligada, ser WEB MASTER, ou ter a liberação
+   * Já vem RESOLVIDO pelo servidor (`/api/auth/me`), que combina os dois
+   * fatores: manutenção desligada ou ter a liberação
    * individual do "pacote Loja" (`user_profiles.store_access`, concedida em
    * /admin/users). O client não recalcula nada — a env de manutenção nem
    * existe no browser sem a variante NEXT_PUBLIC_, que foi justamente a

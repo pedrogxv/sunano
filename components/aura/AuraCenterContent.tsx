@@ -49,6 +49,7 @@ import { AvatarFrameSection } from "@/components/aura/AvatarFrameSection"
 import { AuraPeripheralSection } from "@/components/aura/AuraPeripheralSection"
 import type { PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
+import type { TrustSummary } from "@/lib/server/repositories/trust-repository"
 import { getDiscordMembershipFeedback } from "@/lib/discord-membership"
 
 type AuraUsage = {
@@ -57,7 +58,11 @@ type AuraUsage = {
   limit: number
   limitReached: boolean
   nextSlotAt: string | null
-  /** Nível de confiança — trava o resgate de periféricos (só `verified`). */
+  /**
+   * Tier anti-farm dos LIMITES de reação (15/50/100 por dia, 1/3/5 por
+   * pessoa). Hoje derivado do Trust Factor no banco (`get_giver_trust_tier`).
+   * NÃO é mais o que trava o prêmio físico — quem faz isso é `trust`.
+   */
   trustTier: "new" | "normal" | "verified"
 }
 
@@ -101,6 +106,12 @@ interface AuraCenterContentProps {
   founderItemId: string | null
   /** Ids das molduras de Ofensiva por slug — vazio enquanto a migration não rodou. */
   streakFrameItemIds: Record<string, string>
+  /**
+   * Trust Factor da conta. Substituiu o antigo "nível verificado" como trava
+   * do prêmio FÍSICO: agora exige faixa "Muito Bom" e status sem restrição
+   * (ver `can_redeem_physical_item`).
+   */
+  trust: TrustSummary
 }
 
 /**
@@ -160,6 +171,7 @@ export function AuraCenterContent({
   shippingPrefill,
   founderItemId,
   streakFrameItemIds,
+  trust,
 }: AuraCenterContentProps) {
   // `initial*` só muda entre navegações de página inteira (novo render do
   // Server Component), nunca em re-render do client — então o valor inicial
@@ -413,7 +425,33 @@ export function AuraCenterContent({
         </div>
       </div>
 
-      {/* Produtos — prêmio físico, estoque limitado, só nível verificado.
+      {/* "Como funciona a Aura" mora na Central de Informações
+          (/informacoes/central-de-aura) — texto de referência, sem duplicar.
+          Aqui fica só a chamada, logo abaixo dos cards de status: quem chega
+          sem entender a moeda lê a regra antes de descer pela loja. */}
+      <Link
+        href="/informacoes/central-de-aura"
+        className={cn(
+          "group flex items-center gap-4 rounded-2xl border p-5 transition-colors hover:border-orange-500/40",
+          CARD_SURFACE
+        )}
+      >
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400">
+          <HelpCircle className="size-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="font-display text-base font-bold text-foreground group-hover:text-orange-400">
+            Como funciona a Aura
+          </h2>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Todas as formas de ganhar e gastar Aura, o multiplicador de Ofensiva e VIP, e os
+            limites de reações — na Central de Informações.
+          </p>
+        </div>
+        <ChevronRight className="size-5 shrink-0 text-muted-foreground group-hover:text-orange-400" />
+      </Link>
+
+      {/* Produtos — prêmio físico, estoque limitado, só Trust "Muito Bom".
           Fica logo abaixo do saldo: é o item mais cobiçado da Central, então
           abre a área de troca em vez de ficar no rodapé da página. */}
       <AuraPeripheralSection
@@ -422,7 +460,7 @@ export function AuraCenterContent({
         balance={currentBalance}
         isLoggedIn={isLoggedIn}
         isVip={vip.active}
-        trustTier={usage.trustTier}
+        trust={trust}
         currentUserSlug={currentUserSlug}
         currentUserAvatarUrl={currentUserAvatarUrl}
         currentUserName={currentName}
@@ -689,31 +727,6 @@ export function AuraCenterContent({
           posts/comentários, mesma família das conquistas acima. Só o resumo —
           a mecânica inteira é explicada em /indicar. */}
       <ReferralAuraCard />
-
-      {/* "Como funciona a Aura" agora mora na Central de Informações
-          (/informacoes/central-de-aura) — texto de referência, sem duplicar.
-          Aqui fica só a chamada, por último, depois do contexto prático. */}
-      <Link
-        href="/informacoes/central-de-aura"
-        className={cn(
-          "group flex items-center gap-4 rounded-2xl border p-5 transition-colors hover:border-orange-500/40",
-          CARD_SURFACE
-        )}
-      >
-        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-orange-500/30 bg-orange-500/10 text-orange-400">
-          <HelpCircle className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-display text-base font-bold text-foreground group-hover:text-orange-400">
-            Como funciona a Aura
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Todas as formas de ganhar e gastar Aura, o multiplicador de Ofensiva e VIP, e os
-            limites de reações — na Central de Informações.
-          </p>
-        </div>
-        <ChevronRight className="size-5 shrink-0 text-muted-foreground group-hover:text-orange-400" />
-      </Link>
     </div>
     <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />
     <AuraRankingModal open={rankingOpen} onOpenChange={setRankingOpen} />

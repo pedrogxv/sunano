@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import type { MiniProfile } from "@/lib/mini-profile"
 import { getMiniProfileBgTheme } from "@/lib/mini-profile-backgrounds"
 import { profileFrameOf } from "@/lib/profile-frames"
+import { TrustBadge } from "@/components/ui/TrustBadge"
 import {
   MiniProfileBackground,
   miniProfileBgBorderClass,
@@ -132,6 +133,16 @@ export function MiniProfileCard({ profile }: { profile: MiniProfile }) {
           <span className="truncate">{profile.display_name}</span>
           {specialTag && <Sparkles className="size-3.5 shrink-0 text-cyan-300" />}
         </p>
+
+        {/* Trust Factor — logo abaixo do nome, junto da identidade. Sem link
+            aqui: o cartão inteiro já é um `<Link>` para o perfil, e um link
+            dentro de outro é HTML inválido. */}
+        <TrustBadge
+          level={profile.trust_level}
+          status={profile.trust_status}
+          size="sm"
+          className="mt-1.5 backdrop-blur-sm"
+        />
 
         {profile.bio && (
           <p className="mt-1 line-clamp-2 text-center text-[11px] leading-snug text-white/80 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">

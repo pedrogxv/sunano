@@ -34,7 +34,7 @@ interface AuraSpotlightProps {
  * clica e vê tudo em `/aura`; a Home tem um único tiro para convencer.
  *
  * Nada aqui resgata nem cobra: todo caminho leva para `/aura` (resgate, que
- * exige nível verificado e endereço) ou para o `VipUpsellModal` — o MESMO
+ * exige Trust Factor "Muito Bom" e endereço) ou para o `VipUpsellModal` — o MESMO
  * popup da sidebar, do menu da conta e da tierlist, para o verbo do VIP não
  * divergir mais uma vez por tela (ver `lib/vip-status.ts`).
  */
@@ -104,7 +104,7 @@ export function AuraSpotlight({ peripherals }: AuraSpotlightProps) {
 
 /**
  * Card de um produto físico. É um LINK para `/aura`, nunca um botão de
- * resgate: o resgate real exige nível verificado, saldo e endereço de entrega
+ * resgate: o resgate real exige Trust Factor "Muito Bom", saldo e endereço de entrega
  * — replicar isso aqui seria uma segunda porta divergindo da Central.
  */
 function PeripheralTeaser({ item }: { item: HomeAuraPeripheral }) {

@@ -182,6 +182,13 @@ export type ProfileShowcase = {
   achievements: ShowcaseAchievement[]
   /** Ofensiva de missões diárias. */
   streak: UserStreak
+  /**
+   * Faixa pública do Trust Factor — a confiança da conta. NUNCA a pontuação:
+   * o perfil é tela pública, e o número é interno (ver `lib/trust-factor.ts`).
+   */
+  trust_level: import("./trust-factor").TrustLevel
+  /** Estado administrativo — conta restrita mostra o estado no lugar da faixa. */
+  trust_status: import("./trust-factor").TrustStatus
   /** Favoritos já filtrados pelo limite do tier. */
   favorites: ShowcasePeripheral[]
   favorites_total: number

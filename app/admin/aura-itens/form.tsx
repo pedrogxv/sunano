@@ -349,7 +349,7 @@ export function AuraItemForm({ item, onSuccess, onCancel }: AuraItemFormProps) {
             </li>
             <li className="flex items-start gap-2">
               <Lock className="mt-0.5 size-3 shrink-0 text-amber-400/80" />
-              Só membros de nível verificado resgatam, no máximo 1 unidade por pessoa.
+              Só quem tem Trust Factor &quot;Muito Bom&quot; ou superior resgata, no máximo 1 unidade por pessoa.
             </li>
             <li className="flex items-start gap-2">
               <Boxes className="mt-0.5 size-3 shrink-0 text-amber-400/80" />

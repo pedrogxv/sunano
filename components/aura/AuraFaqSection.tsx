@@ -1,6 +1,7 @@
 "use client"
 
-import { Ban, Coins, HelpCircle, ShieldCheck, Sparkles } from "lucide-react"
+import Link from "next/link"
+import { Ban, Bird, Coins, HelpCircle, Sparkles } from "lucide-react"
 import { AuraIcon } from "@/components/ui/AuraIcon"
 
 import { cn } from "@/lib/utils"
@@ -117,17 +118,25 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
           </div>
         </div>
 
-        {/* Trust tier — anti-farm, explica por que o limite de reações varia por conta */}
+        {/* Limites de reação — derivam do Trust Factor. A explicação COMPLETA
+            da confiança mora em /informacoes/trust-factor; aqui fica só o
+            recorte que responde "por que meu limite é diferente?", com link
+            para lá. Duplicar a regra inteira nos dois lugares é como o site
+            acumulou versões divergentes da mesma coisa. */}
         <div className="px-4 pt-4 pb-4 sm:px-5">
           <div className="flex items-center gap-2 pb-2">
-            <ShieldCheck className="size-3.5 text-sky-400" strokeWidth={2} />
+            <Bird className="size-3.5 text-sky-400" strokeWidth={2} />
             <span className="text-xs font-bold uppercase tracking-wider text-sky-400">
               Por que meu limite de reações é diferente do de outra pessoa?
             </span>
           </div>
           <p className="pb-3 text-sm text-muted-foreground">
-            Cada conta tem um nível de confiança que decide quantas reações ela pode dar por dia (no total, e para a
-            mesma pessoa), uma defesa contra contas descartáveis usadas para farmar Aura.
+            O limite vem do seu{" "}
+            <Link href="/informacoes/trust-factor" className="text-primary hover:underline">
+              Trust Factor
+            </Link>
+            , a medida de confiança da conta: quanto melhor a sua faixa, mais reações você pode dar por dia (no total, e
+            para a mesma pessoa). É uma defesa contra contas descartáveis usadas para farmar Aura.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[420px] text-left text-xs">
@@ -153,7 +162,11 @@ export function AuraFaqSection({ streak, isVip, youtubeEnabled = false, hideHead
           </div>
           <p className="pt-3 text-xs text-muted-foreground">
             Isso é sobre suas reações dadas, não sobre a Aura que você recebe; o limite não afeta quanto você ganha
-            ao postar, comentar ou avaliar. As tarefas diárias reiniciam à meia-noite UTC (21h em Brasília).
+            ao postar, comentar ou avaliar. As tarefas diárias reiniciam à meia-noite UTC (21h em Brasília).{" "}
+            <Link href="/informacoes/trust-factor" className="text-primary hover:underline">
+              Entenda o Trust Factor
+            </Link>
+            .
           </p>
         </div>
       </div>

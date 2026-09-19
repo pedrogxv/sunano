@@ -2,9 +2,7 @@
 
 import { PanelLeft } from "lucide-react"
 import { usePathname } from "next/navigation"
-import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Skeleton } from "@/components/ui/skeleton"
 
 // Code-split: o AuthUser puxa o cliente Supabase (@supabase/ssr), pesado e
@@ -63,36 +61,6 @@ const ADMIN_PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
   "/admin/notificacoes":{ title: "Avisos do sistema", description: "Envie um recado que aparece no sino de quem usa o site." },
   "/admin/login":       { title: "Login" },
-}
-
-/**
- * Selo permanente de fase Beta — visível em toda página (via `TopBar`,
- * renderizado globalmente pelo `LayoutShell`), independente do título da
- * rota. Leva pro changelog: é o lugar que explica o que "beta" significa
- * e o que já mudou.
- */
-function AlphaBadge() {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Link
-          href="/changelog"
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-violet-400/40 bg-gradient-to-r from-violet-500/15 to-fuchsia-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-violet-300 transition-colors hover:from-violet-500/25 hover:to-fuchsia-500/25"
-        >
-          <span className="relative flex size-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
-            <span className="relative inline-flex size-1.5 rounded-full bg-violet-400" />
-          </span>
-          Beta
-        </Link>
-      </TooltipTrigger>
-      <TooltipContent>
-        <p className="max-w-[220px] text-xs">
-          O Sunano está em fase Beta: em construção ativa. Clique pra ver o changelog.
-        </p>
-      </TooltipContent>
-    </Tooltip>
-  )
 }
 
 type Dict = ReturnType<typeof useT>
@@ -206,10 +174,7 @@ export function TopBar() {
           </button>
           <div className="h-8 w-px shrink-0 bg-border" />
           <div className="min-w-0 flex flex-col justify-center leading-tight">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-sm font-semibold tracking-tight text-foreground">{pageTitle}</span>
-              <AlphaBadge />
-            </div>
+            <span className="truncate text-sm font-semibold tracking-tight text-foreground">{pageTitle}</span>
             {pageDescription && (
               <span className="truncate text-xs text-muted-foreground">{pageDescription}</span>
             )}

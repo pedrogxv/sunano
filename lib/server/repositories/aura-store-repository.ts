@@ -284,7 +284,8 @@ export async function redeemAuraPeripheral(
     case "not_verified":
       return {
         ok: false,
-        error: "Você precisa ser nível verificado para resgatar periféricos.",
+        error:
+          "Seu Trust Factor ainda não alcançou a faixa \"Muito Bom\", ou sua conta está em análise. Participe de forma legítima e mantenha a conta sem punições.",
         code: "not_verified",
         status: 403,
       }

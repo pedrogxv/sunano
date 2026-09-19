@@ -125,7 +125,7 @@ export const AURA_SPEND_ENTRIES: AuraFaqEntry[] = [
     id: "peripheral",
     question: "Resgatar um periférico com Aura",
     answer:
-      "Periféricos são prêmios físicos e de unidade única: o primeiro membro que resgatar leva, e o item aparece como esgotado para todo mundo, com o perfil de quem levou. Só quem é nível verificado (Discord/YouTube confirmado, ou VIP ativo, ou conta com 14+ dias) pode resgatar. Não tem desconto VIP: é produto físico.",
+      "Periféricos são prêmios físicos e de estoque limitado: quando as unidades acabam, o item aparece como esgotado para todo mundo, com o perfil de quem levou. Uma unidade por pessoa. Só quem tem Trust Factor \"Muito Bom\" ou superior, e nenhuma restrição ativa na conta, pode resgatar — o Trust Factor mede comportamento e integridade, sobe com participação legítima e sem punições, e leva tempo de casa.",
   },
   {
     id: "dislike",
@@ -173,44 +173,171 @@ export type TrustTierRow = {
 }
 
 /**
- * Linhas da tabela de trust tier do FAQ. O sinal de "conta verificada" é ser
- * MEMBRO DO DISCORD (conquista sempre ativa); a inscrição no YouTube também
- * vale — `get_giver_trust_tier` checa as duas — mas só aparece no texto quando
- * a conquista do YouTube está ligada (`isYoutubeSubscriptionEnabled()`), que
- * hoje está desativada por env. Passe a flag de quem renderiza (Server
- * Component) para não acoplar este módulo à env.
+ * Linhas da tabela de LIMITES DE REAÇÃO do FAQ.
+ *
+ * O degrau deixou de ser "conta verificada" (Discord/YouTube/VIP/14 dias) e
+ * passou a derivar do Trust Factor: `get_giver_trust_tier` lê a faixa da conta
+ * (ver a migration `20261129000000`). O critério de conta com menos de 3 dias
+ * continua valendo por cima de tudo — é o anti-farm de conta descartável, e
+ * nenhuma nota inicial deve furá-lo.
+ *
+ * A tabela NÃO cita pontuação: o usuário vê só a faixa, nunca o número.
+ *
+ * O parâmetro `youtubeEnabled` deixou de influenciar o texto (o sinal social
+ * não decide mais o degrau), mas continua na assinatura para não quebrar quem
+ * chama — `AuraFaqSection` passa a flag da env.
  */
-export function buildTrustTierRows(youtubeEnabled = false): TrustTierRow[] {
-  const socialText = youtubeEnabled
-    ? "Discord verificado (membro do servidor) ou YouTube confirmado"
-    : "Discord verificado (membro do servidor)"
-
+export function buildTrustTierRows(_youtubeEnabled = false): TrustTierRow[] {
   return [
     {
       tier: "new",
-      label: "Nova",
-      criteria: "Conta com menos de 3 dias",
+      label: "Nova ou Baixa",
+      criteria: "Conta com menos de 3 dias, ou Trust Factor Baixo, ou conta com restrição ativa",
       dailyLimit: "15 reações/dia (VIP não aumenta)",
       pairLimit: "1 por pessoa/dia",
     },
     {
       tier: "normal",
-      label: "Normal",
-      criteria: `Conta com 3+ dias, sem ${
-        youtubeEnabled ? "Discord/YouTube verificado" : "Discord verificado"
-      } nem VIP, e com menos de 14 dias`,
+      label: "Regular",
+      criteria: "Conta com 3+ dias e Trust Factor Regular",
       dailyLimit: "50 reações/dia (100 se VIP)",
       pairLimit: "3 por pessoa/dia",
     },
     {
       tier: "verified",
-      label: "Verificada",
-      criteria: `${socialText}, ou VIP ativo, ou conta com 14+ dias`,
+      label: "Bom ou superior",
+      criteria: "Conta com 3+ dias e Trust Factor Bom, Muito Bom ou Excelente",
       dailyLimit: "50 reações/dia (100 se VIP)",
       pairLimit: "5 por pessoa/dia",
     },
   ]
 }
 
-/** Linhas com o texto padrão (só Discord). Preferir `buildTrustTierRows`. */
+/** Linhas da tabela de limites. Preferir `buildTrustTierRows`. */
 export const TRUST_TIER_ROWS: TrustTierRow[] = buildTrustTierRows(false)
+
+/* ────────────────────────────────────────────────────────────────────────
+ * Trust Factor — conteúdo educativo
+ *
+ * Aura mede PARTICIPAÇÃO; Trust Factor mede COMPORTAMENTO. O texto abaixo é
+ * o que explica isso ao usuário, e mora aqui (módulo puro) pelo mesmo motivo
+ * do resto do FAQ: é lido pela Central de Informações (texto genérico) e pela
+ * Central de Aura (ao lado dos números reais), e um texto duplicado entre as
+ * duas divergiria na primeira correção.
+ *
+ * REGRA: nenhuma frase daqui cita a PONTUAÇÃO. O usuário vê só a faixa — os
+ * números (50 de base, +3/dia, 80 para item físico) são internos, e publicá-los
+ * entrega a régua para quem quer calibrar farm. Por isso o texto fala em
+ * "faixa", "sobe", "leva tempo", nunca em "80 pontos".
+ * ──────────────────────────────────────────────────────────────────────── */
+
+export const TRUST_FAQ_INTRO =
+  "O Trust Factor é a medida de confiança da sua conta no Sunano. Enquanto a Aura mede o quanto você PARTICIPA (e some quando você gasta), o Trust Factor mede como você se COMPORTA: ele não se compra, não se troca e não sobe por farmar. Toda conta começa no meio da escala, sem histórico suficiente para ser considerada confiável nem problemática, e caminha a partir do que você faz."
+
+/** As cinco faixas, para a tabela do FAQ. Espelha `TRUST_LEVELS` em `lib/trust-factor.ts`. */
+export const TRUST_FAQ_LEVEL_ROWS: Array<{ label: string; meaning: string }> = [
+  { label: "Baixo", meaning: "Infrações recentes no histórico. Funções sensíveis ficam limitadas." },
+  { label: "Regular", meaning: "Conta ainda sem histórico suficiente, ou se recuperando de uma infração." },
+  { label: "Bom", meaning: "Participação legítima e nenhuma punição ativa." },
+  { label: "Muito Bom", meaning: "Histórico consistente e contribuições úteis ao longo do tempo. É a faixa exigida para resgatar produto físico." },
+  { label: "Excelente", meaning: "Referência da comunidade: tempo de casa, contribuição e zero problemas." },
+]
+
+export const TRUST_FAQ_UP_ENTRIES: AuraFaqEntry[] = [
+  {
+    id: "trust-up-clean",
+    question: "Manter a conta sem punições",
+    answer:
+      "É o que mais pesa. Uma conta que participa e não coleciona advertências sobe sozinha com o tempo — você não precisa fazer nada de especial além de usar o site normalmente.",
+  },
+  {
+    id: "trust-up-contribute",
+    question: "Escrever posts, comentários e reviews úteis",
+    answer:
+      "Contribuição de verdade conta. Reviews de periférico, que são o conteúdo de maior esforço do site, entram nesse eixo.",
+  },
+  {
+    id: "trust-up-missions",
+    question: "Cumprir as missões diárias e manter a Ofensiva",
+    answer:
+      "Completar as tarefas do dia é a prova mais direta de participação contínua e legítima, então avança o Trust junto com a Ofensiva.",
+  },
+  {
+    id: "trust-up-limit",
+    question: "Existe um limite de quanto sobe por dia?",
+    answer:
+      "Sim, e é baixo de propósito: atividade normal rende pouco por dia, e ações repetitivas ou artificiais podem não render nada. O Trust é construído ao longo de semanas, não numa tarde — é exatamente isso que o torna difícil de manipular. Penalidades não seguem esse limite.",
+  },
+]
+
+export const TRUST_FAQ_DOWN_ENTRIES: AuraFaqEntry[] = [
+  {
+    id: "trust-down-content",
+    question: "Ter conteúdo removido por infração",
+    answer:
+      "Post ou comentário retirado pela moderação por quebrar as regras desconta Trust. Apagar o próprio conteúdo, por vontade própria, NÃO desconta nada.",
+  },
+  {
+    id: "trust-down-warning",
+    question: "Levar advertência, mute ou suspensão",
+    answer:
+      "Cada punição desconta, e quanto mais grave, maior o desconto e mais tempo leva para se recuperar. Uma suspensão pesa bem mais que uma advertência.",
+  },
+  {
+    id: "trust-down-spam",
+    question: "Spam, farming ou informação falsa",
+    answer:
+      "Publicação repetitiva, ganho artificial de Aura (como reações trocadas entre as mesmas contas) e informação deliberadamente falsa descontam Trust e podem levantar uma flag de segurança na conta.",
+  },
+  {
+    id: "trust-down-fraud",
+    question: "Fraude, manipulação ou furto",
+    answer:
+      "É o caso mais grave. Fraude zera o Trust Factor e bloqueia a conta, sem recuperação automática: só análise manual da equipe reverte.",
+  },
+]
+
+export const TRUST_FAQ_GENERAL_ENTRIES: AuraFaqEntry[] = [
+  {
+    id: "trust-why-not-score",
+    question: "Por que eu não vejo minha pontuação exata?",
+    answer:
+      "Você vê a faixa (Bom, Muito Bom…), e não um número. A pontuação exata, os pesos de cada evento e as regras detalhadas são internos de propósito: publicar a régua exata é entregar o mapa para quem quer manipular o sistema. A faixa te diz tudo o que muda na prática.",
+  },
+  {
+    id: "trust-new-account",
+    question: "Sou novo aqui. Consigo chegar na faixa mais alta rápido?",
+    answer:
+      "Não, e isso é intencional. Contas novas têm um teto temporário que sobe conforme a conta amadurece (nos primeiros dias, depois de uma semana, de um mês e de três meses). Mesmo fazendo tudo certo, uma conta recém-criada não alcança as faixas de cima — é o que impede alguém de criar contas descartáveis para pegar os prêmios mais disputados.",
+  },
+  {
+    id: "trust-recovery",
+    question: "Levei uma punição. Fico marcado para sempre?",
+    answer:
+      "Não. As penalidades perdem peso com o tempo: uma infração leve começa a aliviar depois de cerca de um mês e some ao longo dos meses seguintes; as médias e graves levam proporcionalmente mais. O registro continua no seu histórico para a equipe, mas para de pesar na sua faixa. A única exceção é fraude crítica, que não se recupera sozinha.",
+  },
+  {
+    id: "trust-inactivity",
+    question: "Se eu ficar um tempo sem entrar, meu Trust cai?",
+    answer:
+      "Não. Inatividade por si só não reduz o Trust Factor. Você só perde por comportamento, nunca por ausência.",
+  },
+  {
+    id: "trust-physical",
+    question: "O que o Trust Factor libera?",
+    answer:
+      "O principal é o resgate dos produtos FÍSICOS e limitados da Central de Aura, que exige a faixa \"Muito Bom\" ou superior e a conta sem nenhuma restrição ativa. São os prêmios de maior valor do site, então a trava é alta: é preciso tempo de casa e histórico limpo. O Trust também define quantas reações você pode dar por dia, e é um dos requisitos para o Sunano Tester.",
+  },
+  {
+    id: "trust-flag",
+    question: "Minha conta está \"em análise\". O que isso significa?",
+    answer:
+      "Uma flag de segurança foi levantada na sua conta (por suspeita de fraude, múltiplas contas ou identidade em verificação). Enquanto ela estiver aberta, funções sensíveis ficam bloqueadas mesmo que sua faixa esteja alta — a flag é independente da pontuação. Abra um chamado no Suporte para entender o caso.",
+  },
+  {
+    id: "trust-vs-aura",
+    question: "Comprar VIP ou ter muita Aura aumenta meu Trust Factor?",
+    answer:
+      "Não. São sistemas separados de propósito: Aura e VIP medem participação e assinatura, o Trust Factor mede comportamento. Nenhum valor em dinheiro ou em Aura compra confiança.",
+  },
+]

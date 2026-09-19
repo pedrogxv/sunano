@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Sparkles,
   UserCheck,
+  Bird,
   LifeBuoy,
 } from "lucide-react"
 import { buildMetadata } from "@/lib/seo"
@@ -73,7 +74,14 @@ const DOCUMENTS: InfoCard[] = [
     icon: Sparkles,
     title: "Central de Aura",
     description:
-      "Como funciona a Aura: todas as formas de ganhar e gastar, o multiplicador de Ofensiva e VIP, e os limites de reações por nível de confiança.",
+      "Como funciona a Aura: todas as formas de ganhar e gastar, o multiplicador de Ofensiva e VIP, e os limites de reações.",
+  },
+  {
+    href: "/informacoes/trust-factor",
+    icon: Bird,
+    title: "Trust Factor",
+    description:
+      "A medida de confiança da sua conta: o que aumenta, o que diminui, as cinco faixas, como uma penalidade se recupera e o que ela libera — como os produtos físicos da Central de Aura.",
   },
   {
     href: "/quem-somos",

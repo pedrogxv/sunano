@@ -223,6 +223,21 @@ export type Database = {
           equipped_mini_profile_bg_id: string | null
           /** Timestamp da última troca paga de nome — usado para o cooldown de 3 dias em `change_display_name_with_aura`. */
           display_name_changed_at: string | null
+          /**
+           * Trust Factor 0–100 — CACHE derivado de `trust_events` por
+           * `recalc_trust_score()`. Nunca escrever direto: a rotina diária
+           * recalcula a partir do extrato e apagaria a alteração. Ver
+           * `lib/trust-factor.ts` e a migration `20261129000000`.
+           */
+          trust_score: number
+          /** Faixa pública (é o único recorte que o usuário vê). Derivada de `trust_score`. */
+          trust_level: "low" | "regular" | "good" | "very_good" | "excellent"
+          /**
+           * Estado administrativo, INDEPENDENTE da nota: uma conta pode ser
+           * `restricted` com 95 (flag de segurança) e `active` com 20.
+           */
+          trust_status: "active" | "watch" | "restricted" | "blocked"
+          trust_updated_at: string
           created_at: string
           updated_at: string
         }
@@ -230,7 +245,16 @@ export type Database = {
           Database["public"]["Tables"]["user_profiles"]["Row"],
           // `store_access` tem default no banco e só o WEB MASTER concede
           // (ver /admin/users) — nunca faz parte da criação do perfil.
-          "created_at" | "updated_at" | "display_slug" | "profile_views" | "store_access"
+          // As colunas de Trust têm default e são escritas só pelas RPCs.
+          | "created_at"
+          | "updated_at"
+          | "display_slug"
+          | "profile_views"
+          | "store_access"
+          | "trust_score"
+          | "trust_level"
+          | "trust_status"
+          | "trust_updated_at"
         >
         // `store_access` não entra no Insert (tem default no banco), mas É
         // atualizável — é exatamente assim que o WEB MASTER concede/revoga o
@@ -612,6 +636,90 @@ export type Database = {
           created_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["audit_log"]["Insert"]>
+      }
+      /**
+       * Extrato do Trust Factor — FONTE DA VERDADE da nota.
+       * `user_profiles.trust_score` é cache derivado daqui. Escrever só via
+       * `apply_trust_event`; INSERT direto pula o teto diário e o dedupe.
+       */
+      trust_events: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          event_type: string
+          /** Impacto BRUTO. Quanto ainda vale hoje sai de `trust_event_weight`. */
+          points: number
+          /** Governa a RECUPERAÇÃO, não o tamanho do impacto. */
+          severity: "positive" | "light" | "medium" | "heavy" | "critical"
+          reason: string | null
+          source: "system" | "moderation" | "admin" | "tester" | "cron" | "security"
+          /** Único global quando preenchido — é o que torna o evento idempotente. */
+          dedupe_key: string | null
+          actor_id: string | null
+          metadata: Record<string, unknown>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          event_type: string
+          points: number
+          severity?: "positive" | "light" | "medium" | "heavy" | "critical"
+          reason?: string | null
+          source?: "system" | "moderation" | "admin" | "tester" | "cron" | "security"
+          dedupe_key?: string | null
+          actor_id?: string | null
+          metadata?: Record<string, unknown>
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["trust_events"]["Insert"]>
+      }
+      /**
+       * Flags de segurança. Uma flag ATIVA bloqueia funções mesmo com nota
+       * alta — por isso o bloqueio passa por `trust_status`, não por uma
+       * comparação de pontuação.
+       */
+      trust_flags: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          flag:
+            | "AURA_FARMING"
+            | "MULTI_ACCOUNT"
+            | "SPAM"
+            | "FRAUD_SUSPECTED"
+            | "TESTER_DISPUTE"
+            | "IDENTITY_REVIEW"
+          reason: string | null
+          /** `null` = detecção automática do cron; preenchido = decisão da equipe. */
+          raised_by: string | null
+          raised_at: string
+          resolved_at: string | null
+          resolved_by: string | null
+          resolution: string | null
+          metadata: Record<string, unknown>
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          flag:
+            | "AURA_FARMING"
+            | "MULTI_ACCOUNT"
+            | "SPAM"
+            | "FRAUD_SUSPECTED"
+            | "TESTER_DISPUTE"
+            | "IDENTITY_REVIEW"
+          reason?: string | null
+          raised_by?: string | null
+          raised_at?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolution?: string | null
+          metadata?: Record<string, unknown>
+        }
+        Update: Partial<Database["public"]["Tables"]["trust_flags"]["Insert"]>
       }
       blog_posts: {
         Relationships: []
@@ -2545,6 +2653,54 @@ export type Database = {
       get_giver_trust_tier: {
         Args: { p_giver_id: string }
         Returns: string
+      }
+      /** Gate do prêmio FÍSICO da Central: Trust >= 80 e status 'active' (20261129000000). */
+      can_redeem_physical_item: {
+        Args: { p_user_id: string }
+        Returns: boolean
+      }
+      /** Único caminho de entrada do Trust Factor. Devolve a nota já recalculada. */
+      apply_trust_event: {
+        Args: {
+          p_user_id: string
+          p_event_type: string
+          p_points: number
+          p_severity?: string
+          p_reason?: string | null
+          p_source?: string
+          p_dedupe_key?: string | null
+          p_actor_id?: string | null
+          p_metadata?: Record<string, unknown>
+        }
+        Returns: number | null
+      }
+      set_trust_status: {
+        Args: {
+          p_user_id: string
+          p_status: string
+          p_reason?: string | null
+          p_actor_id?: string | null
+        }
+        Returns: number | null
+      }
+      raise_trust_flag: {
+        Args: {
+          p_user_id: string
+          p_flag: string
+          p_reason?: string | null
+          p_raised_by?: string | null
+          p_metadata?: Record<string, unknown>
+        }
+        Returns: string | null
+      }
+      resolve_trust_flag: {
+        Args: { p_flag_id: string; p_resolved_by?: string | null; p_resolution?: string | null }
+        Returns: undefined
+      }
+      /** Rotina diária: recuperação + maturidade + detecção de padrões. */
+      trust_daily_job: {
+        Args: Record<string, never>
+        Returns: { recalculated: number; flagged: number }
       }
       get_aura_trust_limits: {
         Args: { p_giver_id: string }

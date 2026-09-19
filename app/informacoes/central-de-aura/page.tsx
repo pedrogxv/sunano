@@ -7,7 +7,7 @@ import { AuraFaqSection } from "@/components/aura/AuraFaqSection"
 export const metadata: Metadata = buildMetadata({
   title: "Central de Aura",
   description:
-    "Como o sistema de Aura funciona no Sunano: todas as formas de ganhar e gastar Aura, o multiplicador de Ofensiva e VIP, o que não gera Aura e os limites de reações por nível de confiança.",
+    "Como o sistema de Aura funciona no Sunano: todas as formas de ganhar e gastar Aura, o multiplicador de Ofensiva e VIP, o que não gera Aura e os limites de reações.",
   path: "/informacoes/central-de-aura",
   eyebrow: "Comunidade",
   subtitle: "Como a Aura funciona",
@@ -55,6 +55,10 @@ export default function CentralDeAuraInfoPage() {
         <p>
           <Link href="/informacoes" className="text-primary hover:underline">
             Central de Informações
+          </Link>
+          {" · "}
+          <Link href="/informacoes/trust-factor" className="text-primary hover:underline">
+            Como funciona o Trust Factor
           </Link>
         </p>
       </footer>

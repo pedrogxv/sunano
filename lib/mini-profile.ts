@@ -49,5 +49,12 @@ export type MiniProfile = {
   is_founder: boolean
   /** O dono escolheu não exibir moldura nenhuma. */
   avatar_frame_opt_out: boolean
+  /**
+   * Faixa pública do Trust Factor. Chega de graça: `getMiniProfileBySlug`
+   * espalha o `PublicProfileSummary`, que já traz a coluna via
+   * `DIRECTORY_COLUMNS` — nenhuma consulta a mais por cartão.
+   */
+  trust_level: import("./trust-factor").TrustLevel
+  trust_status: import("./trust-factor").TrustStatus
   created_at: string
 }

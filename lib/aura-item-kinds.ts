@@ -21,7 +21,7 @@ import type { AuraItemKind } from "@/lib/server/repositories/aura-store-reposito
  * A distinção que o catálogo precisa deixar óbvia é `group`:
  *
  * - `physical` — sai do estoque do mundo real. Cada resgate tira uma unidade,
- *   o item some da Central quando zera, exige nível verificado e endereço de
+ *   o item some da Central quando zera, exige Trust Factor "Muito Bom" e endereço de
  *   entrega, e vira linha em `store_orders`. Erro aqui custa dinheiro.
  * - `cosmetic` — bem digital, ilimitado. Resgate só concede posse.
  * - `system` — benefício com RPC e slug próprios (VIP, escudo, troca de nome).
@@ -123,7 +123,7 @@ export const AURA_ITEM_GROUP_META: Record<
   physical: {
     label: "Prêmios físicos",
     description:
-      "Estoque real e finito. Cada resgate reserva uma unidade, gera pedido de entrega e só nível verificado pode pegar — 1 por pessoa.",
+      "Estoque real e finito. Cada resgate reserva uma unidade, gera pedido de entrega e só quem tem Trust Factor \"Muito Bom\" pode pegar — 1 por pessoa.",
     icon: Keyboard,
   },
   cosmetic: {

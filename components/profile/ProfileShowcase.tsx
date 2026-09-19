@@ -166,6 +166,8 @@ export function ProfileShowcase({
             displaySlug={profile.display_slug}
             auraRank={profile.aura_rank}
             activityRank={profile.activity_rank}
+            trustLevel={profile.trust_level}
+            trustStatus={profile.trust_status}
             streak={profile.streak.current}
             streakFrozen={profile.streak.frozen}
             streakFrozenUntil={profile.streak.frozenUntil}

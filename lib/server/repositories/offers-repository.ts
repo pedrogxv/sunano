@@ -175,7 +175,16 @@ export async function getLastSyncedAt(): Promise<Date | null> {
   return data?.last_seen_at ? new Date(data.last_seen_at) : null
 }
 
-/** Lê o histórico guardado, mais recente primeiro, já dentro da retenção. */
+/**
+ * Lê o histórico guardado, mais recente primeiro, já dentro da retenção.
+ *
+ * O `text ~ 'https?://'` repete no SELECT o filtro que o scraping já aplica
+ * (ver `MESSAGE_URL_RE` em `telegram-offers`): sem link não é oferta, é recado
+ * do canal. Precisa estar aqui também porque a tabela é histórico — as
+ * mensagens gravadas ANTES do filtro existir continuariam na Central até a
+ * retenção expirar. E precisa ser no banco, não em JS depois: filtrar
+ * pós-`limit` deixaria o teto ser consumido por linha que será descartada.
+ */
 export async function getCachedOffers(limit: number): Promise<CachedOffer[]> {
   const db = createSupabaseAdminClient()
   const cutoff = new Date(Date.now() - OFFERS_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString()
@@ -184,6 +193,7 @@ export async function getCachedOffers(limit: number): Promise<CachedOffer[]> {
     .from("offers_cache")
     .select("id, message_id, text, posted_at, author, author_avatar, chat_title, url, image")
     .gte("posted_at", cutoff)
+    .filter("text", "match", "https?://")
     .order("posted_at", { ascending: false })
     .limit(limit)
 

@@ -6,6 +6,8 @@ import { getSpecialTag } from "@/lib/special-tag"
 import { cn } from "@/lib/utils"
 import { StreakBadge } from "./StreakBadge"
 import { EditNameButton } from "./EditNameButton"
+import { TrustSealButton } from "@/components/ui/TrustSealButton"
+import type { TrustLevel, TrustStatus } from "@/lib/trust-factor"
 
 interface InfoBasicaProps {
   name: string
@@ -18,6 +20,13 @@ interface InfoBasicaProps {
   auraRank?: number | null
   /** Posição no ranking de atividade (posts + comentários). Idem, Top 100. */
   activityRank?: number | null
+  /**
+   * Faixa pública do Trust Factor. Só a FAIXA aparece — nunca a pontuação
+   * (ver `components/ui/TrustSealButton`). `undefined` esconde o selo, para
+   * chamadas antigas que ainda não passam o dado.
+   */
+  trustLevel?: TrustLevel
+  trustStatus?: TrustStatus
   /** Dias de ofensiva atual — some da badge quando zerada (ver `StreakBadge`). */
   streak?: number
   /** Ofensiva sustentada hoje por uma "Proteção de Ofensiva" (escudo). */
@@ -42,6 +51,10 @@ const TIER_BADGE_STYLES: Record<AccountTier, string> = {
  * central: colados na mesma linha, um nome curto ("end") deixava as badges
  * grudadas nele em vez de formarem uma segunda fileira equilibrada.
  *
+ * O selo do Trust Factor acompanha o NOME, não a fileira de pílulas: ele é o
+ * único sinal que fala de COMPORTAMENTO (os outros são participação), e
+ * misturado às badges virava só mais um contador.
+ *
  * A bio entra por último, dentro do mesmo bloco centralizado — sem card
  * próprio, para não duplicar a moldura que já envolve nome e badges.
  */
@@ -53,6 +66,8 @@ export function InfoBasica({
   displaySlug,
   auraRank,
   activityRank,
+  trustLevel,
+  trustStatus = "active",
   streak = 0,
   streakFrozen = false,
   streakFrozenUntil = null,
@@ -69,7 +84,18 @@ export function InfoBasica({
 
   return (
     <div className="flex flex-col items-center gap-1.5">
+      {/* Trust Factor ao lado do NOME, não na fileira de badges: ele é o
+          único sinal que fala de COMPORTAMENTO (os outros medem
+          participação), e no meio das pílulas virava mais um contador. O
+          desenho é o do explicativo (disco com anel), na escala do
+          `EditNameButton` — grande o bastante para se ler, pequeno o bastante
+          para não competir com o nome nem com a foto. Só o ícone: quem nomeia
+          a faixa é o balão, e a ida para o FAQ é uma ação explícita lá dentro
+          (clicar por curiosidade não tira ninguém do perfil). */}
       <div className="flex items-center gap-1.5">
+        {trustLevel && (
+          <TrustSealButton level={trustLevel} status={trustStatus} size="xs" />
+        )}
         <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{name}</h1>
         {isOwner && <EditNameButton currentName={name} />}
       </div>

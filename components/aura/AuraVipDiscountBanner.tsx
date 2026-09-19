@@ -1,18 +1,16 @@
 "use client"
 
 import { Crown, Sparkles } from "lucide-react"
-import { AuraAmount } from "@/components/ui/AuraIcon"
 
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
-import { VIP_AURA_DISCOUNT_PERCENT, auraPriceForVip } from "@/lib/aura-pricing"
+import { VIP_AURA_DISCOUNT_PERCENT } from "@/lib/aura-pricing"
 
 interface AuraVipDiscountBannerProps {
   isVip: boolean
   /**
-   * Preços de tabela do que está à venda agora. Só serve para dizer quanto o
-   * desconto vale em Aura de verdade — "10%" sozinho é abstrato, "você
-   * economiza 47 comprando os dois escudos" não é.
+   * Preços de tabela do que está à venda agora. Serve só de presença: a faixa
+   * some quando não há nada à venda (ver o `return null` abaixo).
    */
   listPrices: number[]
   /** Abre o modal de vantagens do VIP — só faz sentido para quem não é VIP. */
@@ -23,9 +21,8 @@ interface AuraVipDiscountBannerProps {
  * Faixa acima da loja explicando o desconto de Aura do VIP.
  *
  * Dois estados, mesma faixa:
- *   • VIP     → confirma que os preços da grade abaixo JÁ estão com desconto,
- *               e soma quanto ele economizaria levando o catálogo inteiro.
- *   • Comum   → mostra o mesmo número como o que ele está deixando na mesa,
+ *   • VIP     → confirma que os preços da grade abaixo JÁ estão com desconto.
+ *   • Comum   → mostra o mesmo desconto como o que ele está deixando na mesa,
  *               com atalho para as vantagens.
  *
  * Some quando não há nada à venda (`listPrices` vazio) — uma faixa
@@ -33,11 +30,6 @@ interface AuraVipDiscountBannerProps {
  */
 export function AuraVipDiscountBanner({ isVip, listPrices, onShowBenefits }: AuraVipDiscountBannerProps) {
   if (listPrices.length === 0) return null
-
-  // Economia somando o catálogo item a item: o arredondamento acontece por
-  // item nas RPCs, então somar os preços antes daria um total diferente do
-  // que o usuário de fato pagaria comprando tudo.
-  const totalSavings = listPrices.reduce((sum, price) => sum + auraPriceForVip(price, true).savings, 0)
 
   return (
     <div
@@ -53,8 +45,8 @@ export function AuraVipDiscountBanner({ isVip, listPrices, onShowBenefits }: Aur
         <Crown className={cn("size-4.5", isVip && "vip-badge-crown")} strokeWidth={1.8} />
       </span>
 
-      <div className="min-w-0 flex-1 space-y-0.5">
-        <p className="text-[13px] font-bold leading-tight text-foreground">
+      <div className="min-w-0 flex-1">
+        <p className="text-[15px] font-bold leading-snug text-foreground">
           {isVip ? (
             <>
               Seu desconto VIP de{" "}
@@ -64,31 +56,6 @@ export function AuraVipDiscountBanner({ isVip, listPrices, onShowBenefits }: Aur
             <>
               VIP paga <span className="vip-badge-text">{VIP_AURA_DISCOUNT_PERCENT}% a menos</span> em tudo
               que custa Aura
-            </>
-          )}
-        </p>
-        <p className="text-[11px] leading-snug text-muted-foreground">
-          {isVip ? (
-            <>
-              Os preços abaixo são os seus: vale em molduras, troca de nome, Proteção de Ofensiva e
-              medalhas de evento.{" "}
-              {totalSavings > 0 && (
-                <>
-                  Levando a loja inteira hoje, você economizaria{" "}
-                  <AuraAmount value={totalSavings} className="font-bold text-foreground" />.
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              Molduras, troca de nome, Proteção de Ofensiva e medalhas de evento.{" "}
-              {totalSavings > 0 && (
-                <>
-                  Na loja de hoje isso seria{" "}
-                  <AuraAmount value={totalSavings} className="font-bold text-foreground" /> de
-                  volta no seu bolso.
-                </>
-              )}
             </>
           )}
         </p>

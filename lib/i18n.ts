@@ -2241,6 +2241,19 @@ export const translations: Record<LocaleCode, Translations> = {
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
         {
+          version: "v0.4.0",
+          date: "19 de setembro",
+          title: "Trust Factor: a confiança da sua conta agora é visível",
+          description: "Chegou o Trust Factor, o sistema que mede o comportamento da conta — separado da Aura, que mede participação. Farmar Aura não compra confiança: são dois eixos independentes.",
+          items: [
+            "Novo selo ao lado do nome no perfil, com cinco faixas: Baixo, Regular, Bom, Muito Bom e Excelente. Toda conta começa em \"Regular\". Clique nele para ver o que significa",
+            "A faixa sobe com o uso normal do site (postar, comentar, review aprovada, missões, tempo sem punição) e cai com infração. Quanto mais grave, mais tempo leva pra se recuperar",
+            "Resgate de periférico físico na Central de Aura agora exige a faixa \"Muito Bom\": a Aura continua sendo o preço, o Trust Factor é a porta",
+            "Você vê sempre a faixa, nunca a pontuação exata — mostrar o número entregaria o mapa para quem quer burlar o sistema",
+            "Nova página /informacoes/trust-factor com as regras completas; substitui o antigo \"nível verificado\"",
+          ],
+        },
+        {
           version: "v0.3.9",
           date: "11 de setembro",
           title: "Tierlist pessoal ganha tiers personalizáveis e exportação em imagem",
@@ -3736,6 +3749,19 @@ export const translations: Record<LocaleCode, Translations> = {
       title: "Changelog",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.4.0",
+          date: "September 19",
+          title: "Trust Factor: your account's trustworthiness is now visible",
+          description: "Trust Factor is here — the system that measures your account's behavior, separate from Aura, which measures participation. Farming Aura doesn't buy trust: they're two independent axes.",
+          items: [
+            "New seal next to your profile name, with five tiers: Low, Regular, Good, Very Good, and Excellent. Every account starts at \"Regular\". Click it to see what it means",
+            "Your tier rises through normal use (posting, commenting, approved reviews, missions, time without penalties) and drops with infractions. The more serious it is, the longer it takes to recover",
+            "Redeeming a physical peripheral in the Aura Center now requires the \"Very Good\" tier: Aura is still the price, Trust Factor is the door",
+            "You always see the tier, never the exact score — revealing the number would hand the map to anyone trying to game the system",
+            "New /informacoes/trust-factor page with the full rules; it replaces the old \"verified level\"",
+          ],
+        },
         {
           version: "v0.3.9",
           date: "September 11",

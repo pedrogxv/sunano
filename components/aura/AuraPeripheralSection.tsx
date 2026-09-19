@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Check, Keyboard, Loader2, Lock, PackageCheck } from "lucide-react"
+import { ArrowRight, Check, Keyboard, Loader2, Lock, PackageCheck } from "lucide-react"
 import { toast } from "sonner"
 
 import { cn } from "@/lib/utils"
@@ -15,6 +15,9 @@ import type { PeripheralOwnerEntry } from "@/components/aura/AuraCenterContent"
 import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { PeripheralRedeemDialog, type PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
 import type { ShippingForm } from "@/components/store/ShippingAddressFields"
+import type { TrustSummary } from "@/lib/server/repositories/trust-repository"
+import { TrustSeal } from "@/components/ui/TrustBadge"
+import { TRUST_PHYSICAL_REDEEM_LEVEL, trustLevelLabel } from "@/lib/trust-factor"
 
 interface AuraPeripheralSectionProps {
   /** Itens de kind `peripheral` vindos do catálogo. */
@@ -25,7 +28,8 @@ interface AuraPeripheralSectionProps {
   isLoggedIn: boolean
   /** VIP ativo agora — 10% off no custo, igual ao resto da Central (a RPC desconta o real). */
   isVip: boolean
-  trustTier: "new" | "normal" | "verified"
+  /** Trust Factor da conta — trava o resgate (ver `can_redeem_physical_item`). */
+  trust: TrustSummary
   currentUserSlug: string | null
   currentUserAvatarUrl: string | null
   currentUserName: string
@@ -40,9 +44,16 @@ interface AuraPeripheralSectionProps {
  *
  * O prêmio mais especial da Central: item FÍSICO, com ESTOQUE limitado. Cada
  * pessoa resgata no máximo 1 unidade; quando as unidades acabam o card vira
- * "Esgotado" com quem levou, para todo mundo. Só quem é nível `verified`
- * (`get_giver_trust_tier`) pode resgatar — o card fica visível para todos, mas
- * o botão trava para os demais.
+ * "Esgotado" com quem levou, para todo mundo.
+ *
+ * A TRAVA é o Trust Factor: só quem está na faixa "Muito Bom" (ou acima) e
+ * sem restrição ativa resgata — `can_redeem_physical_item` no banco é quem
+ * decide de fato; aqui a tela só evita oferecer o que seria recusado. O card
+ * fica visível para todos, com o botão travado e a faixa exigida explicada.
+ *
+ * Por que tão alto: é o item de maior valor real do site e o de maior
+ * incentivo a fraude. Com o teto de maturidade (59/69/79), nenhuma conta com
+ * menos de 90 dias alcança a faixa — a trava anti-multi-conta sai de graça.
  */
 export function AuraPeripheralSection({
   items,
@@ -50,7 +61,7 @@ export function AuraPeripheralSection({
   balance,
   isLoggedIn,
   isVip,
-  trustTier,
+  trust,
   currentUserSlug,
   currentUserAvatarUrl,
   currentUserName,
@@ -60,15 +71,70 @@ export function AuraPeripheralSection({
 }: AuraPeripheralSectionProps) {
   if (items.length === 0) return null
 
+  const canRedeemAny = trust.canRedeemPhysical
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h2 className="font-display text-lg font-bold text-foreground">Produtos</h2>
         <span className="flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
           <Lock className="size-2.5" />
-          Estoque limitado · precisa ser nível verificado
+          Estoque limitado
         </span>
       </div>
+
+      {/* Painel da trava — o Trust Factor é o ASSUNTO desta área (é o que
+          separa quem resgata de quem não resgata), então aqui ele aparece
+          como SELO grande, não como pílula. Os dois selos lado a lado dizem
+          a história inteira sem texto: "você está aqui" → "precisa chegar
+          aqui". Quem já pode ver só o próprio, com o aviso de liberado. */}
+      <div className={cn(
+        "flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center",
+        canRedeemAny
+          ? "border-emerald-500/30 bg-emerald-500/[0.04]"
+          : "border-amber-500/25 bg-amber-500/[0.04]"
+      )}>
+        <div className="flex items-center gap-3 sm:gap-4">
+          <TrustSeal level={trust.level} status={trust.status} size="md" />
+          {!canRedeemAny && (
+            <>
+              <ArrowRight className="size-4 shrink-0 text-muted-foreground/50" />
+              <TrustSeal level={TRUST_PHYSICAL_REDEEM_LEVEL} size="md" />
+            </>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-sm font-semibold text-foreground">
+            {canRedeemAny
+              ? "Você pode resgatar produtos físicos"
+              : `Resgate exige Trust Factor "${trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}"`}
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {canRedeemAny ? (
+              <>
+                Sua conta está na faixa{" "}
+                <strong className="text-foreground">{trustLevelLabel(trust.level)}</strong> e sem
+                restrições. Cada produto tem poucas unidades e uma por pessoa.
+              </>
+            ) : trust.status === "active" ? (
+              <>
+                Sua conta está na faixa{" "}
+                <strong className="text-foreground">{trustLevelLabel(trust.level)}</strong>. O Trust
+                Factor mede comportamento e integridade: sobe com participação legítima e sem
+                punições, e leva tempo de casa — não se compra nem se acelera com Aura.
+              </>
+            ) : (
+              "Sua conta está em análise pela equipe. O resgate fica indisponível até a revisão terminar."
+            )}{" "}
+            <Link href="/informacoes/trust-factor" className="text-primary hover:underline">
+              Como funciona o Trust Factor
+            </Link>
+            .
+          </p>
+        </div>
+      </div>
+
       <p className="text-xs text-muted-foreground">
         Prêmios físicos resgatáveis com Aura. Cada um tem poucas unidades: quando acabam, o
         produto continua aqui marcado como esgotado, com o perfil de quem levou. Uma unidade por pessoa.
@@ -83,7 +149,7 @@ export function AuraPeripheralSection({
             balance={balance}
             isLoggedIn={isLoggedIn}
             isVip={isVip}
-            trustTier={trustTier}
+            trust={trust}
             currentUserSlug={currentUserSlug}
             currentUserAvatarUrl={currentUserAvatarUrl}
             currentUserName={currentUserName}
@@ -103,7 +169,7 @@ interface AuraPeripheralCardProps {
   balance: number
   isLoggedIn: boolean
   isVip: boolean
-  trustTier: "new" | "normal" | "verified"
+  trust: TrustSummary
   currentUserSlug: string | null
   currentUserAvatarUrl: string | null
   currentUserName: string
@@ -118,7 +184,7 @@ function AuraPeripheralCard({
   balance,
   isLoggedIn,
   isVip,
-  trustTier,
+  trust,
   currentUserSlug,
   currentUserAvatarUrl,
   currentUserName,
@@ -137,7 +203,7 @@ function AuraPeripheralCard({
   const ownedByMe = owners.some(
     (o) => o.userId === "me" || (currentUserSlug !== null && o.displaySlug === currentUserSlug)
   )
-  const isVerified = trustTier === "verified"
+  const canRedeem = trust.canRedeemPhysical
   // Preço com o desconto VIP já aplicado — a RPC desconta o valor real; aqui é
   // só prévia. Afford e custo otimista usam o `finalPrice`.
   const price = auraPriceForVip(item.auraCost, isVip)
@@ -255,20 +321,16 @@ function AuraPeripheralCard({
             >
               Entrar para resgatar
             </button>
-          ) : !isVerified ? (
-            <div className="space-y-1">
-              <button
-                type="button"
-                disabled
-                className="flex w-full cursor-not-allowed items-center justify-center gap-1.5 rounded-lg bg-muted/40 px-3 py-1.5 text-[11px] font-bold text-muted-foreground"
-              >
-                <Lock className="size-3" />
-                Nível verificado
-              </button>
-              <p className="text-[9px] leading-snug text-muted-foreground/70">
-                Confirme o Discord ou o YouTube, seja VIP, ou tenha 14+ dias de conta.
-              </p>
-            </div>
+          ) : !canRedeem ? (
+            <button
+              type="button"
+              disabled
+              title={`Requer Trust Factor "${trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}" — veja o painel acima`}
+              className="flex w-full cursor-not-allowed items-center justify-center gap-1.5 rounded-lg bg-muted/40 px-3 py-1.5 text-[11px] font-bold text-muted-foreground"
+            >
+              <Lock className="size-3" />
+              Trust {trustLevelLabel(TRUST_PHYSICAL_REDEEM_LEVEL)}
+            </button>
           ) : (
             <button
               type="button"

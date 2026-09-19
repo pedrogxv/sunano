@@ -354,3 +354,138 @@ avatar não tem moldura nenhuma.
   quente (vermelho→laranja→amarelo). Não repita nenhum dos dois em outro
   ranking: Ofensiva já saiu idêntica a Aura uma vez justamente assim, e
   ninguém conseguia dizer de qual placar a moldura era.
+
+# Trust Factor — confiança da conta
+
+Aura mede PARTICIPAÇÃO. **Trust Factor mede COMPORTAMENTO.** São eixos
+independentes: farmar Aura não compra confiança. Substituiu o antigo "nível
+verificado" (`get_giver_trust_tier` por idade+Discord/YouTube+VIP), que dizia
+se a conta era descartável mas não se a pessoa se comporta bem.
+
+Faixas (o usuário vê **só a faixa**, nunca o número): Baixo 0–39, Regular
+40–59, Bom 60–79, Muito Bom 80–89, Excelente 90–100. Toda conta começa em 50.
+
+- **`trust_score` é CACHE, nunca fonte.** A nota é DERIVADA de `trust_events`
+  por `recalc_trust_score` (base 50 + soma dos eventos com o peso já decaído +
+  teto de maturidade). Nunca faça `update user_profiles set trust_score` — a
+  rotina diária recalcula a partir do extrato e apaga a alteração sem deixar
+  rastro do porquê. Somar in-place também impossibilitaria a recuperação
+  (que precisa saber quanto cada evento antigo ainda pesa).
+- **Escrita só por RPC.** `apply_trust_event`, `set_trust_status`,
+  `raise_trust_flag`, `resolve_trust_flag` — todas `service_role`. O
+  `points`/`severity`/`source` saem do catálogo em `lib/trust-factor.ts`;
+  chamada nova que inventa peso próprio faz a mesma infração valer coisas
+  diferentes em telas diferentes.
+- **NUNCA exiba a pontuação ao usuário.** Só a faixa, via
+  `components/ui/TrustBadge.tsx` (`showScore` existe e é SOMENTE para
+  `/admin/trust`). Vazar o número entrega o gradiente que um farmador precisa
+  para calibrar. Vale também para API: `can_redeem_physical_item` é
+  `service_role` por isso — exposta ao cliente, viraria oráculo para sondar o
+  Trust alheio uma conta por vez.
+- **Teto de +3/dia no ganho; penalidade não tem teto.** Aplicado NO BANCO
+  (`apply_trust_event`), não em TS: rota, trigger e cron chamam caminhos
+  distintos, e um teto em TS só valeria para quem passou pelo repositório.
+- **Severidade governa a RECUPERAÇÃO, não o impacto.** A penalidade não é
+  apagada: perde peso em rampa linear após 30 dias de carência (leve 60d,
+  média 90d, grave 180d). `critical` e `positive` nunca decaem. Apagar a linha
+  destruiria o histórico que a moderação lê; zerar de uma vez faria a nota dar
+  um salto inexplicável num dia arbitrário.
+- **Automação em TRIGGER, nunca no corpo da RPC de Aura.** Mesmo motivo das
+  molduras de Ofensiva: as RPCs de missão/aura foram recriadas meia dúzia de
+  vezes, e a próxima recriação que esquecer o trecho quebra a concessão em
+  silêncio. O `dedupe_key` amarra o evento a um fato único (o dia, a review, a
+  denúncia) — retry de rota e duplo clique não contam duas vezes.
+- **Penalizar remoção de conteúdo exige DENÚNCIA REVISADA.** `is_hidden` é a
+  mesma coluna que o dono usa para ocultar o que escreveu e que
+  `admin_ban_account` usa em massa. Sem esse filtro, a pessoa perderia Trust
+  por apagar o próprio post, e um ban geraria dezenas de eventos.
+- **Flag bloqueia função MESMO com nota alta.** É o ponto central do §9: o
+  bloqueio passa por `trust_status` (`restricted`/`blocked`), nunca por uma
+  comparação de pontuação. Resolver uma flag só devolve `active` quando não
+  sobra nenhuma outra aberta.
+- **Produto FÍSICO exige "Muito Bom" (80+) e status `active`.** Decidido em
+  `can_redeem_physical_item` — a tela só evita oferecer o que o banco
+  recusaria. Com o teto de maturidade (59/69/79), NENHUMA conta com menos de
+  90 dias alcança 80: a trava anti-multi-conta sai de graça, sem uma regra de
+  idade à parte que pudesse divergir.
+- **Ban deixa evento crítico E status.** O status zera a nota enquanto durar;
+  o evento `-40 critical` (que nunca decai) é o que sobrevive ao
+  desbanimento. Sem ele, quem foi banido e perdoado voltaria com a nota
+  intacta e elegível a produto físico no mesmo instante.
+- **Os números vivem nos DOIS lados e precisam bater** — `lib/trust-factor.ts`
+  (TS, decide o que a tela mostra) e as funções SQL `trust_level_of`,
+  `trust_maturity_cap`, `trust_event_weight` (decidem quem de fato resgata). A
+  do banco é a que vale; mudar uma sem a outra faz a tela prometer o que o
+  banco recusa — o mesmo erro de `VIP_FOUNDER_DEADLINE`.
+
+## Selo do Trust Factor — SEMPRE o componente central
+
+**Toda** referência nova à faixa de confiança (perfil, mini perfil, Central de
+Aura, painel, listagem, comentário) desenha por `components/ui/TrustBadge.tsx`.
+Mesma régua de `AuraIcon` e `ProfileAvatar`.
+
+```tsx
+import { TrustBadge, TrustBadgeLabeled, TrustSeal } from "@/components/ui/TrustBadge"
+
+<TrustBadge level={profile.trust_level} status={profile.trust_status} />
+<TrustSeal level={trust.level} size="md" />                     // selo canônico
+
+// cabeçalho de perfil: selo + balão explicando + link "Ver sobre"
+import { TrustSealButton } from "@/components/ui/TrustSealButton"
+<TrustSealButton level={profile.trust_level} status={profile.trust_status} size="xs" />
+```
+
+**NUNCA** monte a pílula à mão. Se você está prestes a escrever
+`rounded-full` com um `<Bird>` e uma cor de faixa, ou a colar
+`text-emerald-400` porque "Muito Bom é verde" — **pare**: já existe no
+componente, e é exatamente assim que a mesma chama da Aura apareceu em cinco
+cores diferentes.
+
+- **O desenho canônico é o SELO, não a pílula.** O disco com anel e a
+  calopsita preenchida é o que a página explicativa usa na escala das cinco
+  faixas — então é ele que tem de aparecer onde a pessoa vê a própria
+  confiança. Enquanto o cabeçalho do perfil usava a pílula de contorno, o site
+  tinha DOIS símbolos para o mesmo sistema e ninguém ligava o selo do FAQ ao
+  do seu perfil.
+- **Quatro formas, um sistema.** `TrustSeal` é o disco (FAQ, trava do prêmio
+  físico, ficha do painel); `TrustSealButton` é esse mesmo disco com balão de
+  explicação e link "Ver sobre" — a forma do CABEÇALHO DE PERFIL; `TrustBadge`
+  é a pílula, para onde não há eixo próprio para o selo (linha de listagem,
+  tabela do painel, mini perfil); `TrustBadgeLabeled` acrescenta o rótulo
+  "Trust Factor" onde falta contexto.
+- **O selo acompanha o NOME, não a fileira de badges.** No cabeçalho do perfil
+  ele fica ao lado do nome, na escala do `EditNameButton` (`size="xs"`, disco
+  de 24px). Junto das pílulas ele vira mais um contador, e as outras medem
+  PARTICIPAÇÃO — o Trust mede comportamento. Em tamanho grande ali ele compete
+  com a foto logo acima: `md` (64px) é para onde o Trust é o assunto da área,
+  não para cabeçalho.
+- **Clique no selo NÃO navega.** Quem clica num selo de perfil está com
+  curiosidade, não pedindo para sair da página — ser teleportado para o FAQ é
+  hostil. A explicação abre num balão (hover no desktop, toque no mobile) e a
+  ida para `/informacoes/trust-factor` é uma ação explícita lá dentro
+  ("Ver sobre o Trust Factor"). O `href` de `TrustBadge` continua existindo
+  para onde a pílula É o link (linha de tabela do painel, por exemplo).
+- **O símbolo é o pássaro (calopsita)**, o mesmo do `StreakBadge` — é a
+  identidade da casa. O que separa os dois é a COR: Ofensiva usa a rampa quente
+  (âmbar→vermelho, que é o eixo da Aura) e o Trust usa a rampa fria→nobre
+  (vermelho→âmbar→sky→esmeralda→violeta), em `TRUST_LEVEL_STYLE`. Trocar a
+  paleta faz o selo de confiança virar selo de ofensiva.
+- **Cor é token, nunca literal.** `TRUST_LEVEL_STYLE` / `TRUST_LEVEL_CLASS` em
+  `lib/trust-factor.ts`. `TRUST_LEVEL_CLASS` é DERIVADO de `TRUST_LEVEL_STYLE`
+  — uma lista só de cor, não duas.
+- **O anel do `TrustSeal` é um elemento ATRÁS do disco.** Nunca desenhe com
+  `border-image`: ela ignora `border-radius` por especificação e o gradiente
+  sai como retângulo de canto vivo por cima — o mesmo bug de "moldura fora da
+  borda" de `ProfileAvatar`.
+- **Conta restrita mostra o ESTADO, não a faixa.** Dizer "Excelente" numa conta
+  sob análise de fraude é o sinal errado, mesmo com a nota alta — é o caso do
+  §9. O componente já resolve; não contorne passando `level` sozinho.
+- **A faixa viaja na linha do perfil, nunca em consulta própria.**
+  `trust_level`/`trust_status` estão em `DIRECTORY_COLUMNS` e no select de
+  `getProfileShowcase`: diretório, pódio, mini perfil e rankings recebem de
+  graça. Uma consulta por card seria N+1 em cima da listagem, o mesmo erro que
+  `getVipFounderOwners` existe para evitar.
+- **Explicação mora em `/informacoes/trust-factor`, e só lá.** Tela que precisa
+  explicar o Trust LINKA para essa página (`TrustFactorFaqSection` é a fonte
+  única, usada por ela e pela Central de Aura). Reescrever o texto na tela é
+  como o site acumulou versões divergentes da mesma regra.

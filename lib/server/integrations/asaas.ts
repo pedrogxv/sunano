@@ -183,19 +183,43 @@ export interface AsaasCustomer {
  * esses dados agora (checkout de cartão), atualiza o cadastro na Asaas via
  * PUT — senão o createCheckout falha com "campo X deve existir para o
  * customer informado" mesmo com os dados corretos sendo enviados aqui.
+ *
+ * **Todo** customer nasce com a mensageria DESLIGADA (`notificationDisabled`).
+ * Cada notificação que a Asaas dispara (e-mail/SMS de cobrança criada,
+ * lembrete, confirmação) vira uma "Taxa de mensageria" de R$ 0,99 no
+ * extrato — o MESMO valor da taxa do PIX, ou seja, ela DOBRAVA o custo de
+ * cada venda: R$ 1,98 de taxa numa cobrança de R$ 8,90 (~22%).
+ *
+ * O aviso ao comprador é redundante aqui: o QR code aparece na hora no
+ * checkout, a tela faz polling do status e a confirmação chega pelo nosso
+ * webhook. Quem paga nunca dependeu do e-mail da Asaas.
+ *
+ * A flag é por CUSTOMER — `POST /v3/payments` não aceita desligar por
+ * cobrança. Por isso ela também entra no PUT do cadastro já existente:
+ * senão todo cliente criado antes desta mudança continuaria gerando a taxa
+ * para sempre, e a correção só valeria para quem comprasse pela primeira
+ * vez.
  */
 export async function findOrCreateCustomer(params: FindOrCreateCustomerParams): Promise<AsaasCustomer> {
-  const existing = await asaasFetch<{ data: (AsaasCustomer & { phone?: string; address?: string })[] }>(
-    `/customers?cpfCnpj=${encodeURIComponent(params.cpfCnpj)}`
-  )
+  const existing = await asaasFetch<{
+    data: (AsaasCustomer & { phone?: string; address?: string; notificationDisabled?: boolean })[]
+  }>(`/customers?cpfCnpj=${encodeURIComponent(params.cpfCnpj)}`)
   if (existing.data.length > 0) {
     const customer = existing.data[0]
     const needsAddressUpdate =
       params.phone && params.address && (!customer.phone || !customer.address)
-    if (needsAddressUpdate) {
+    // Cadastro antigo, criado antes de desligarmos a mensageria: continua
+    // gerando R$ 0,99 por cobrança até alguém corrigir. Como já estamos na
+    // rota do checkout com o customer em mãos, corrige aqui — é a única
+    // passagem garantida por cliente recorrente.
+    const needsNotificationUpdate = customer.notificationDisabled !== true
+    if (needsAddressUpdate || needsNotificationUpdate) {
       return asaasFetch<AsaasCustomer>(`/customers/${encodeURIComponent(customer.id)}`, {
         method: "PUT",
         body: JSON.stringify({
+          // Num update só-de-mensageria o chamador pode não ter endereço
+          // nenhum (checkout PIX). Mandar `undefined` não apaga campo na
+          // Asaas, então o cadastro existente é preservado.
           name: sanitizeAsaasText(params.name, "Cliente"),
           email: params.email ?? undefined,
           phone: params.phone ?? undefined,
@@ -206,6 +230,7 @@ export async function findOrCreateCustomer(params: FindOrCreateCustomerParams): 
           province: params.province ?? undefined,
           city: params.city ?? undefined,
           state: params.state ?? undefined,
+          notificationDisabled: true,
         }),
       })
     }
@@ -226,6 +251,7 @@ export async function findOrCreateCustomer(params: FindOrCreateCustomerParams): 
       province: params.province ?? undefined,
       city: params.city ?? undefined,
       state: params.state ?? undefined,
+      notificationDisabled: true,
     }),
   })
 }

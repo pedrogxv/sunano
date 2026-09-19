@@ -244,13 +244,27 @@ type ParsedPage = {
   rejectedIds: number[]
 }
 
+/**
+ * Mensagem de serviço do canal — "X pinned a photo", "canal criado", foto de
+ * perfil trocada. O Telegram marca com `service_message`, e o texto dela é o
+ * nome do canal seguido da ação. Sem esse filtro, fixar um post no grupo
+ * fazia aparecer um card vazio na Central (era o "pinned a photo", que não tem
+ * preço, cupom nem link pra desenhar).
+ */
+const SERVICE_MESSAGE_CLASS_RE = /\bservice_message\b/
+
 function parseChannelPage(html: string, username: string): ParsedPage {
-  const startRe = /<div class="tgme_widget_message[^"]*"\s+data-post="([a-zA-Z0-9_]+)\/(\d+)"/g
-  const starts: { index: number; username: string; messageId: number }[] = []
+  const startRe = /<div class="(tgme_widget_message[^"]*)"\s+data-post="([a-zA-Z0-9_]+)\/(\d+)"/g
+  const starts: { index: number; className: string; username: string; messageId: number }[] = []
 
   let match: RegExpExecArray | null
   while ((match = startRe.exec(html))) {
-    starts.push({ index: match.index, username: match[1], messageId: Number(match[2]) })
+    starts.push({
+      index: match.index,
+      className: match[1],
+      username: match[2],
+      messageId: Number(match[3]),
+    })
   }
 
   const messages: ParsedMessage[] = []
@@ -259,6 +273,13 @@ function parseChannelPage(html: string, username: string): ParsedPage {
   for (let i = 0; i < starts.length; i++) {
     const current = starts[i]
     if (current.username !== username) continue
+
+    // Mensagem de serviço nem chega a ser avaliada como oferta, mas conta como
+    // vista: o cursor de paginação sai de `rejectedIds` junto com o resto.
+    if (SERVICE_MESSAGE_CLASS_RE.test(current.className)) {
+      rejectedIds.push(current.messageId)
+      continue
+    }
 
     const end = i + 1 < starts.length ? starts[i + 1].index : html.length
     const chunk = html.slice(current.index, end)

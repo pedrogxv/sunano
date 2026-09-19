@@ -7,6 +7,7 @@ import {
   getMediaAdjustmentsByUser,
 } from "@/lib/server/repositories/users-repository"
 import { DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
+import { TRUST_BASE_SCORE, trustLevelOf } from "@/lib/trust-factor"
 import { getUserAuraBalance, getUserAuraRank, getUserAuraTotalEarned } from "@/lib/server/repositories/aura-repository"
 import { getUserActivityRank } from "@/lib/server/repositories/users-repository"
 import { getUserAchievements, getUserStreak } from "@/lib/server/repositories/achievements-repository"
@@ -65,7 +66,7 @@ export {
 } from "@/lib/profile-showcase"
 
 const PUBLIC_PROFILE_COLUMNS =
-  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at, avatar_frame_opt_out, equipped_avatar_frame_id, aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
+  "id, display_name, display_slug, avatar_url, banner_url, mini_banner_url, bio, account_tier, vip_expires_at, youtube_handle, tiktok_handle, created_at, profile_views, reviews_integrity_accepted_at, avatar_frame_opt_out, equipped_avatar_frame_id, trust_level, trust_status, aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
 
 const PERIPHERAL_COLUMNS = PERIPHERAL_SHOWCASE_COLUMNS
 type PeripheralRow = PeripheralShowcaseRow
@@ -111,6 +112,8 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     bio: string | null
     account_tier: string | null
     vip_expires_at: string | null
+    trust_level: string | null
+    trust_status: string | null
     youtube_handle: string | null
     tiktok_handle: string | null
     created_at: string
@@ -195,6 +198,10 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     bio: row.bio,
     account_tier: tier,
     vip_expires_at: row.vip_expires_at,
+    // Faixa e estado vêm prontos do banco (colunas cache de `trust_events`).
+    // O fallback cobre o intervalo entre o deploy e a migration rodar.
+    trust_level: (row.trust_level as ProfileShowcase["trust_level"]) ?? trustLevelOf(TRUST_BASE_SCORE),
+    trust_status: (row.trust_status as ProfileShowcase["trust_status"]) ?? "active",
     youtube_handle: row.youtube_handle,
     tiktok_handle: row.tiktok_handle,
     youtube_subscribed: youtubeSubscribed,

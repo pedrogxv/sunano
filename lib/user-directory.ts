@@ -41,6 +41,13 @@ export type PublicProfileSummary = {
   longest_streak: number
   /** O dono escolheu não exibir moldura nenhuma. */
   avatar_frame_opt_out: boolean
+  /**
+   * Faixa pública do Trust Factor. Vem da MESMA linha de `user_profiles`
+   * (`DIRECTORY_COLUMNS`), sem consulta extra — nunca a pontuação, que é
+   * interna. Ver `lib/trust-factor.ts`.
+   */
+  trust_level: import("./trust-factor").TrustLevel
+  trust_status: import("./trust-factor").TrustStatus
   created_at: string
 }
 

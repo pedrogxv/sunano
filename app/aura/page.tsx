@@ -25,6 +25,8 @@ import { getProfileShippingPrefill, getUserProfileSettings } from "@/lib/server/
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { AuraCenterContent } from "@/components/aura/AuraCenterContent"
 import { getStreakFrameItemIds, getVipFounderItemId } from "@/lib/server/repositories/vip-founder-repository"
+import { getTrustSummary } from "@/lib/server/repositories/trust-repository"
+import { TRUST_BASE_SCORE, canRedeemPhysicalItem, testerEligibility, trustLevelOf } from "@/lib/trust-factor"
 
 export const dynamic = "force-dynamic"
 
@@ -53,6 +55,7 @@ export default async function AuraCenterPage() {
     shippingPrefill,
     founderItemId,
     streakFrameItemIds,
+    trust,
   ] = await Promise.all([
     userId ? getUserAuraBalance(userId) : Promise.resolve(0),
     userId ? getUserAuraRank(userId) : Promise.resolve(null),
@@ -98,6 +101,20 @@ export default async function AuraCenterPage() {
     // Idem para as molduras de Ofensiva: `active = false`, então não vêm em
     // `listActiveAuraItems()` e a vitrine precisa dos ids à parte.
     getStreakFrameItemIds(),
+    // Trust Factor — quem SUBSTITUIU o antigo "nível verificado" como trava
+    // do prêmio físico. Visitante deslogado recebe a base (50), que não
+    // resgata nada: o card fica visível, o botão travado.
+    userId
+      ? getTrustSummary(userId)
+      : Promise.resolve({
+          score: TRUST_BASE_SCORE,
+          level: trustLevelOf(TRUST_BASE_SCORE),
+          status: "active" as const,
+          updatedAt: null,
+          canRedeemPhysical: canRedeemPhysicalItem(TRUST_BASE_SCORE, "active"),
+          tester: testerEligibility(TRUST_BASE_SCORE, "active"),
+          flags: [],
+        }),
   ])
 
   return (
@@ -127,6 +144,7 @@ export default async function AuraCenterPage() {
         shippingPrefill={shippingPrefill}
         founderItemId={founderItemId}
         streakFrameItemIds={streakFrameItemIds}
+        trust={trust}
       />
     </Suspense>
   )

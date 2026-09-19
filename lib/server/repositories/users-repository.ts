@@ -21,6 +21,7 @@ import type {
 } from "@/lib/user-directory"
 import { getUserStreakPairsByUser } from "@/lib/server/repositories/achievements-repository"
 import { getVipFounderOwners } from "@/lib/server/repositories/vip-founder-repository"
+import { TRUST_BASE_SCORE, trustLevelOf } from "@/lib/trust-factor"
 
 export type { PublicProfileSummary } from "@/lib/user-directory"
 export type { MiniProfile } from "@/lib/mini-profile"
@@ -152,7 +153,7 @@ export async function getUserProfiles(
 // consulta por card. A posse de Fundador não cabe aqui (é outra tabela) e vem
 // em lote, por `withCounters`.
 const DIRECTORY_COLUMNS =
-  "id, display_name, display_slug, avatar_url, mini_banner_url, account_tier, vip_expires_at, profile_views, created_at, avatar_frame_opt_out," +
+  "id, display_name, display_slug, avatar_url, mini_banner_url, account_tier, vip_expires_at, profile_views, created_at, avatar_frame_opt_out, trust_level, trust_status," +
   " equipped_avatar_frame:aura_items!user_profiles_equipped_avatar_frame_id_fkey ( slug, frame_asset_url )"
 
 type DirectoryRow = {
@@ -167,6 +168,8 @@ type DirectoryRow = {
   created_at: string
   /** O dono escolheu não exibir moldura nenhuma. */
   avatar_frame_opt_out?: boolean | null
+  trust_level?: string | null
+  trust_status?: string | null
   /** Join não tipado (`Relationships` vazio em `database.types.ts`). */
   equipped_avatar_frame?:
     | { slug: string; frame_asset_url: string | null }
@@ -246,6 +249,11 @@ function toProfileSummary(
     // Vem da própria linha (`DIRECTORY_COLUMNS`), não de `extras`: é coluna
     // de `user_profiles`, então nenhuma listagem precisa buscá-la à parte.
     avatar_frame_opt_out: Boolean(row.avatar_frame_opt_out),
+    // Coluna da própria linha, como `avatar_frame_opt_out` — nenhuma listagem
+    // precisa buscar à parte. O fallback cobre o intervalo entre o deploy e a
+    // migration rodar.
+    trust_level: (row.trust_level as PublicProfileSummary["trust_level"]) ?? trustLevelOf(TRUST_BASE_SCORE),
+    trust_status: (row.trust_status as PublicProfileSummary["trust_status"]) ?? "active",
     created_at: row.created_at,
   }
 }

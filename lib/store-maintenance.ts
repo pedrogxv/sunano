@@ -22,10 +22,10 @@ export function isStoreMaintenanceEnabled() {
   return value === "true"
 }
 
-// Lançamento marcado: segunda, 21/09/2026, 10h de Brasília (13h UTC). Fica
+// Lançamento marcado: sábado, 19/09/2026, 9h de Brasília (12h UTC). Fica
 // no código para o contador entrar no ar junto com o deploy, sem depender de
 // configurar env na Vercel.
-const STORE_LAUNCH_AT_DEFAULT = "2026-09-21T10:00:00-03:00"
+const STORE_LAUNCH_AT_DEFAULT = "2026-09-19T09:00:00-03:00"
 
 // ISO string do horário-alvo de lançamento da Loja, ou null quando não há
 // contador para mostrar. STORE_LAUNCH_AT (ex.: "2026-09-21T13:00:00.000Z")

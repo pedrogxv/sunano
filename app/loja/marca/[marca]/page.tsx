@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { StoreContent } from "@/components/store/StoreContent"
+import { BreadcrumbJsonLd, ItemListJsonLd } from "@/components/seo/JsonLd"
 import { ShoppingBag } from "lucide-react"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import {
@@ -87,6 +88,18 @@ export default async function LojaMarcaPage({ params, searchParams }: MarcaPageP
 
   return (
     <Suspense>
+      {/* Ver `/loja/categoria`: a grade monta no cliente, então o `ItemList` é
+          a única âncora rastreável para os produtos desta marca. */}
+      <ItemListJsonLd
+        name={`${brand} - Loja Sunano`}
+        items={items.map((item) => ({ name: item.name, url: `/loja/${item.slug}` }))}
+      />
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Loja", item: "/loja" },
+          { name: brand, item: `/loja/marca/${encodeURIComponent(brand)}` },
+        ]}
+      />
       <StoreContent
         initialItems={items}
         initialTotal={total}

@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { StoreContent } from "@/components/store/StoreContent"
+import { BreadcrumbJsonLd, ItemListJsonLd } from "@/components/seo/JsonLd"
 import { getCategoryLabel } from "@/lib/store-category-icons"
 import { ShoppingBag } from "lucide-react"
 import { ComingSoon } from "@/components/store/ComingSoon"
@@ -81,6 +82,19 @@ export default async function LojaCategoriaPage({ params }: CategoriaPageProps) 
 
   return (
     <Suspense>
+      {/* A grade é filtrada e paginada no cliente: sem `ItemList` o Google não
+          tem âncora rastreável para os produtos desta categoria — o mesmo
+          motivo pelo qual `/loja` emite o bloco. */}
+      <ItemListJsonLd
+        name={`${getCategoryLabel(category)} - Loja Sunano`}
+        items={items.map((item) => ({ name: item.name, url: `/loja/${item.slug}` }))}
+      />
+      <BreadcrumbJsonLd
+        items={[
+          { name: "Loja", item: "/loja" },
+          { name: getCategoryLabel(category), item: `/loja/categoria/${encodeURIComponent(category)}` },
+        ]}
+      />
       <StoreContent
         initialItems={items}
         initialTotal={total}

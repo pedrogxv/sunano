@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next"
 import { listAllForumSlugsForSitemap } from "@/lib/server/repositories/forum-repository"
 import { listForumCategoriesPublic } from "@/lib/server/repositories/forum-categories-repository"
 import { listAllBlogSlugsForSitemap } from "@/lib/server/repositories/blog-repository"
-import { listAllStoreSlugsForSitemap } from "@/lib/server/repositories/store-repository"
+import { listAllStoreSlugsForSitemap, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { listAllPeripheralSlugsForSitemap } from "@/lib/server/repositories/peripherals-repository"
 import { listProfileSlugsForSitemap } from "@/lib/server/repositories/users-repository"
 import { isMaintenanceEnabled } from "@/lib/maintenance"
@@ -77,7 +77,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // têm o conteúdo prometido.
   const storeEnabled = !isStoreMaintenanceEnabled()
 
-  const [forumPosts, categories, blogPosts, newsPosts, storeProducts, peripherals, profiles] = await Promise.all([
+  const [
+    forumPosts,
+    categories,
+    blogPosts,
+    newsPosts,
+    storeProducts,
+    storeFilterOptions,
+    peripherals,
+    profiles,
+  ] = await Promise.all([
     listAllForumSlugsForSitemap(),
     listForumCategoriesPublic(),
     // Separados por tipo: `/blog` e `/noticias` são rotas distintas, e
@@ -85,6 +94,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     listAllBlogSlugsForSitemap("review"),
     listAllBlogSlugsForSitemap("news"),
     storeEnabled ? listAllStoreSlugsForSitemap() : Promise.resolve([]),
+    // Mesma query que as próprias landings já usam — é de onde saem as
+    // categorias e marcas que de fato têm produto ativo. Não invente a lista:
+    // uma URL de categoria vazia é 404 (as páginas checam `includes`), e
+    // anunciar 404 no sitemap é o pior sinal possível de crawl budget.
+    storeEnabled ? getStoreFilterOptions("store") : Promise.resolve(null),
     listAllPeripheralSlugsForSitemap(),
     listProfileSlugsForSitemap(),
   ])
@@ -194,12 +208,62 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }))
 
   const storeRootEntries: MetadataRoute.Sitemap = storeEnabled
-    ? [{ url: `${SITE_URL}/loja`, changeFrequency: "daily" as const, priority: 0.9 }]
+    ? [
+        { url: `${SITE_URL}/loja`, changeFrequency: "daily" as const, priority: 0.9 },
+        // Prova social da loja, e a única página de `/loja/**` que ranqueia
+        // para busca por reputação ("loja sunano é confiável").
+        {
+          url: `${SITE_URL}/loja/avaliacoes`,
+          changeFrequency: "weekly" as const,
+          priority: 0.5,
+        },
+      ]
     : []
+
+  /**
+   * Landings de categoria e marca da Loja.
+   *
+   * Elas já tinham metadata completa e canonical próprio, mas eram ÓRFÃS: a
+   * navegação só linka `/loja` e a filtragem dentro de `StoreContent` é
+   * client-side, então não havia link rastreável para nenhuma delas nem
+   * entrada aqui. Mesmo motivo pelo qual `/perifericos/categoria/*` e
+   * `/tierlist/*` estão no sitemap — o sitemap é o único jeito de o Google
+   * saber que existem.
+   *
+   * A lista sai de `getStoreFilterOptions`, que só devolve categoria/marca
+   * COM produto ativo. Isso já é o filtro que importa: as duas páginas fazem
+   * `notFound()` no que não está nessa lista, então anunciar qualquer outra
+   * coisa seria anunciar 404.
+   *
+   * Sem limiar de contagem, de propósito. `/perifericos/categoria/*` também
+   * não tem, e o risco de "conteúdo fino" que pôs 732 URLs em "Detectada, mas
+   * não indexada" vinha de ~1000 URLs de perfil e ficha vazios; aqui são ~20
+   * landings sobre um catálogo de dezenas de produtos, cada uma com nome,
+   * preço e foto reais. Cortar as de um produto só tiraria justamente as
+   * categorias de nicho (headset, IEM, glasspad), que são onde a busca de
+   * cauda longa tem menos concorrência.
+   */
+  const storeCategoryEntries: MetadataRoute.Sitemap = (storeFilterOptions?.categories ?? []).map(
+    (category) => ({
+      url: `${SITE_URL}/loja/categoria/${encodeURIComponent(category)}`,
+      changeFrequency: "daily" as const,
+      priority: 0.7,
+    })
+  )
+
+  const storeBrandEntries: MetadataRoute.Sitemap = (storeFilterOptions?.brands ?? []).map((brand) => ({
+    url: `${SITE_URL}/loja/marca/${encodeURIComponent(brand)}`,
+    changeFrequency: "daily" as const,
+    // Abaixo da categoria: a busca por marca é mais genérica ("WLMouse") e
+    // compete com o site do próprio fabricante.
+    priority: 0.6,
+  }))
 
   return [
     ...staticEntries,
     ...storeRootEntries,
+    ...storeCategoryEntries,
+    ...storeBrandEntries,
     ...categoryEntries,
     ...peripheralCategoryEntries,
     ...tierlistCategoryEntries,

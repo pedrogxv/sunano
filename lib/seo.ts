@@ -267,7 +267,25 @@ export function buildMetadata(input: BuildMetadataInput): Metadata {
   ]
 
   return {
-    title: input.titleSuffix === false ? title : input.title,
+    /**
+     * Sufixo EXPLÍCITO (string customizada ou `false`) manda o título já
+     * montado como `absolute`; sem sufixo vai o título cru e o template do
+     * layout (`%s | Sunano`) põe a marca.
+     *
+     * `absolute` é obrigatório nos dois casos de sufixo explícito: uma string
+     * simples aqui AINDA passa pelo template do layout. Era o que fazia a
+     * página de produto sair como "X | Loja Sunano | Sunano", com a marca
+     * duas vezes — e é o mesmo motivo pelo qual `titleSuffix: false` precisa
+     * de `absolute` para de fato ficar sem sufixo nenhum.
+     *
+     * A condição antes era só `titleSuffix === false`, então um sufixo
+     * customizado caía no ramo do cru e era descartado em silêncio: a ficha
+     * de periférico pedia " - Mouse | Sunano" e a aba saía " | Sunano",
+     * perdendo a categoria — a palavra-chave da busca de cauda longa. Pior,
+     * `openGraph.title`/`twitter.title` abaixo sempre usaram `title`, então
+     * o card social e a aba divergiam entre si na mesma página.
+     */
+    title: input.titleSuffix !== undefined ? { absolute: title } : input.title,
     description,
     keywords: input.keywords,
     alternates: { canonical: input.path },

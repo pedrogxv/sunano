@@ -17,7 +17,7 @@ import {
 } from "@/lib/tierlist-categories"
 import { TierlistPageHeader } from "@/components/tierlist/TierlistPageHeader"
 import { TierlistContent } from "@/components/tierlist/TierlistContent"
-import { TierlistSeoBlock, TIERLIST_CATEGORY_UI_LABELS } from "@/components/tierlist/TierlistSeoBlock"
+import { TierlistSeoBlock } from "@/components/tierlist/TierlistSeoBlock"
 
 export const revalidate = 120
 
@@ -76,6 +76,7 @@ export default async function TierlistCategoriaPage({ params }: PageProps) {
         active="oficial"
         latestUpdate={tierlistMeta}
         heading={`Tierlist de ${label}`}
+        sharePath={tierlistCategoryPath(category)}
       />
 
       <TierlistSeoBlock
@@ -90,7 +91,6 @@ export default async function TierlistCategoriaPage({ params }: PageProps) {
       <Suspense fallback={null}>
         <TierlistContent
           initialData={items as never}
-          categoryLabels={TIERLIST_CATEGORY_UI_LABELS}
           initialCategory={category}
         />
       </Suspense>

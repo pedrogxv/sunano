@@ -13,6 +13,7 @@ import {
   Gift,
   Handshake,
   Home,
+  Inbox,
   LifeBuoy,
   Medal,
   Sparkles,
@@ -83,6 +84,7 @@ export function AdminSidebar() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [expandedHref, setExpandedHref] = useState<string | null>(null)
   const [supportAwaitingCount, setSupportAwaitingCount] = useState(0)
+  const [peripheralRequestsPendingCount, setPeripheralRequestsPendingCount] = useState(0)
 
   const navGroups: NavGroup[] = [
     {
@@ -96,6 +98,7 @@ export function AdminSidebar() {
       items: [
         { href: "/admin/tierlist",    label: "Tierlist",                       icon: Trophy,     permission: "peripherals_read" },
         { href: "/admin/perifericos", label: t.admin.sidebar.peripherals,      icon: Mouse,      permission: "peripherals_read" },
+        { href: "/admin/perifericos/pedidos", label: "Pedidos",                  icon: Inbox,      permission: "peripherals_read", badgeCount: peripheralRequestsPendingCount },
         { href: "/admin/ranking",     label: "Ranking",                        icon: BarChart2,  permission: "peripherals_read" },
         { href: "/admin/brands",      label: "Marcas",                         icon: Tag,        permission: "brands_read" },
         { href: "/admin/softwares",   label: "Softwares",                      icon: AppWindow,  permission: "brands_read" },
@@ -179,11 +182,12 @@ export function AdminSidebar() {
           return
         }
         const data = (await res.json().catch(() => null)) as
-          | { profile?: AdminProfile; supportAwaitingCount?: number }
+          | { profile?: AdminProfile; supportAwaitingCount?: number; peripheralRequestsPendingCount?: number }
           | null
         if (!mounted) return
         setProfile(data?.profile ?? null)
         setSupportAwaitingCount(data?.supportAwaitingCount ?? 0)
+        setPeripheralRequestsPendingCount(data?.peripheralRequestsPendingCount ?? 0)
       } catch {
         if (mounted) setProfile(null)
       } finally {
@@ -358,7 +362,13 @@ export function AdminSidebar() {
                         )
                       }
 
-                      const active = isActive(item.href)
+                      // "/admin/perifericos" é prefixo de "/admin/perifericos/pedidos":
+                      // sem isto, os dois itens acendem juntos na fila de pedidos.
+                      const active =
+                        isActive(item.href) &&
+                        !visible.some(
+                          (other) => other !== item && other.href.length > item.href.length && isActive(other.href)
+                        )
                       return (
                         <Link
                           key={item.href}

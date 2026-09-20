@@ -52,7 +52,6 @@ type Peripheral = {
 
 interface TierlistContentProps {
   initialData: Peripheral[]
-  categoryLabels: Record<string, string>
   /**
    * Categoria da rota `/tierlist/[categoria]` (SSR). Usada como padrão quando
    * a URL ainda não tem `?categoria=` — mantém o grid do cliente coerente com
@@ -73,7 +72,7 @@ const CATEGORY_VALUES: Category[] = [
   "all", "keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp", "psu",
 ]
 
-export function TierlistContent({ initialData, categoryLabels, initialCategory }: TierlistContentProps) {
+export function TierlistContent({ initialData, initialCategory }: TierlistContentProps) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -98,8 +97,6 @@ export function TierlistContent({ initialData, categoryLabels, initialCategory }
   const [selectedPriceBand, setSelectedPriceBand] = useState<PriceBand>("all")
   const [selectedMouseShape, setSelectedMouseShape] = useState<MouseShape | "all">("all")
   const [selectedKeyboardLayout, setSelectedKeyboardLayout] = useState<KeyboardLayout | "all">("all")
-
-  const categoryLabel = categoryLabels[selectedCategory]
 
   // Numa rota de categoria (`/tierlist/[categoria]`) trocar de aba navega para
   // a rota irmã — cada categoria é uma página real, indexável, com seu próprio
@@ -193,10 +190,6 @@ export function TierlistContent({ initialData, categoryLabels, initialCategory }
     setSelectedKeyboardLayout("all")
   }
 
-  const shareQueryString = searchParams.toString()
-  const sharePath = shareQueryString ? `${pathname}?${shareQueryString}` : pathname
-  const shareTitle = `Tierlist de ${categoryLabel} - Sunano`
-
   return (
     <>
       <FilterBar
@@ -218,8 +211,6 @@ export function TierlistContent({ initialData, categoryLabels, initialCategory }
         onReset={resetFilters}
         showMouseShapeFilter={selectedCategory === "mouse"}
         showKeyboardLayoutFilter={selectedCategory === "keyboard"}
-        shareTitle={shareTitle}
-        sharePath={sharePath}
       />
 
       <TierlistGrid filtered={filtered} category={selectedCategory} />

@@ -7,6 +7,9 @@
  * vivem exclusivamente na camada de domínio (`lib/server`).
  */
 
+import type { PeripheralRequestStatus } from "@/lib/peripheral-requests"
+import type { Category } from "@/lib/tag-options"
+
 /**
  * Tipos de notificação. Espelham o `check` da coluna `notifications.type`
  * (ver 20260819_notifications.sql) — mexer aqui exige mexer lá.
@@ -28,6 +31,8 @@ export type NotificationType =
   | "affiliate_payout"
   // Moldura de pódio concedida (cron `/api/cron/rank-frames`).
   | "rank_frame"
+  // Mudança de status de um pedido de cadastro de periférico (trigger no banco).
+  | "peripheral_request_status"
 
 export type NotificationEntityType =
   | "forum_post"
@@ -39,6 +44,7 @@ export type NotificationEntityType =
   | "support_ticket"
   | "store_product"
   | "affiliate_payout"
+  | "peripheral_request"
 
 export type Database = {
   public: {
@@ -2130,6 +2136,52 @@ export type Database = {
           body?: string
           image_urls?: string[]
           created_at?: string
+        }
+      }
+      /** Pedidos de cadastro de periférico — ver 20261130000000_peripheral_requests.sql. */
+      peripheral_requests: {
+        Relationships: []
+        Row: {
+          id: string
+          number: number
+          user_id: string
+          category: Category
+          brand_name: string
+          model_name: string
+          reference_url: string | null
+          notes: string | null
+          status: PeripheralRequestStatus
+          staff_response: string | null
+          peripheral_id: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          /** Identity: o banco gera. */
+          number?: never
+          user_id: string
+          category: Category
+          brand_name: string
+          model_name: string
+          reference_url?: string | null
+          notes?: string | null
+          status?: PeripheralRequestStatus
+          staff_response?: string | null
+          peripheral_id?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          status?: PeripheralRequestStatus
+          staff_response?: string | null
+          peripheral_id?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
         }
       }
       market_listings: {

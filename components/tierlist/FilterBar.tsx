@@ -24,7 +24,6 @@ import { Combobox } from "@/components/ui/combobox"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ShareMenu } from "@/components/forum/ShareMenu"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
@@ -77,9 +76,6 @@ interface FilterBarProps {
   onReset: () => void
   showMouseShapeFilter: boolean
   showKeyboardLayoutFilter: boolean
-  /** Omitidos no admin: lá não faz sentido compartilhar a tierlist. */
-  shareTitle?: string
-  sharePath?: string
 }
 
 export function FilterBar({
@@ -101,8 +97,6 @@ export function FilterBar({
   onReset,
   showMouseShapeFilter,
   showKeyboardLayoutFilter,
-  shareTitle,
-  sharePath,
 }: FilterBarProps) {
   const t = useT()
   const categoryOptions: { key: Category; label: string }[] = [
@@ -343,9 +337,6 @@ export function FilterBar({
             </Button>
           )}
 
-          {sharePath && shareTitle && (
-            <ShareMenu title={shareTitle} path={sharePath} showEmbed={false} />
-          )}
         </div>
       </div>
 

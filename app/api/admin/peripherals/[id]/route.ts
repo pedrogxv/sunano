@@ -17,6 +17,10 @@ import {
   cascadeRerank,
   getRankingFromSpecs,
 } from "@/lib/server/peripherals/ranking-cascade"
+import {
+  isExpertCommentTooLong,
+  PERIPHERAL_EXPERT_COMMENT_TOO_LONG,
+} from "@/lib/peripheral-expert"
 import { sanitizeTagsForCategory, type Category } from "@/lib/tag-options"
 import { revalidatePeripheral } from "@/lib/server/seo/revalidate-public"
 
@@ -46,7 +50,10 @@ const peripheralUpdate = z
       .optional(),
     image_url: z.string().nullable().optional(),
     tags: z.array(z.string()).optional(),
-    specs: z.record(z.string(), z.unknown()).optional(),
+    specs: z
+      .record(z.string(), z.unknown())
+      .refine((specs) => !isExpertCommentTooLong(specs), PERIPHERAL_EXPERT_COMMENT_TOO_LONG)
+      .optional(),
     weight_g: z.number().int().positive().nullable().optional(),
     connectivity: z.string().max(50).nullable().optional(),
     mouse_shape: z.string().max(50).nullable().optional(),

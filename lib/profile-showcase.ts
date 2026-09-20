@@ -81,6 +81,23 @@ export const MEDAL_RARITY_HOLO: Record<MedalRarity, number> = {
   legendary: 1,
 }
 
+/**
+ * Reviews da comunidade num periférico — quantas pessoas avaliaram e a média
+ * das notas visíveis (`peripheral_reviews`, ocultas de fora).
+ *
+ * Viaja DENTRO de `ShowcasePeripheral` e é OBRIGATÓRIO, pelo mesmo motivo de
+ * `isFounder` em `ProfileSummaryExtras`: como campo opcional, cada vitrine
+ * nova o esqueceria e o card voltaria a sair sem a contagem. Quem monta
+ * sempre busca em LOTE (`getPeripheralReviewSummaries`) — uma consulta por card
+ * seria N+1 em cima do setup + favoritos + reviews do perfil inteiro.
+ */
+export type PeripheralReviewSummary = {
+  /** Quantas reviews visíveis o periférico tem no site todo. */
+  count: number
+  /** Média 1.0-5.0 dessas reviews; `null` quando ninguém avaliou ainda. */
+  average: number | null
+}
+
 export type ShowcasePeripheral = {
   id: string
   name: string
@@ -88,10 +105,18 @@ export type ShowcasePeripheral = {
   category: string
   image_url: string | null
   tier: string | null
+  /**
+   * Preço de catálogo em reais (coluna `peripherals.price`). `0` é o valor
+   * que o admin grava quando não se sabe o preço — a tela mostra
+   * "Preço não disponível", nunca "R$ 0,00".
+   */
+  price: number
   /** Tags do catálogo (ver `CARD_TAG_STYLES`) — usadas no hover/tooltip de setup e favoritos. */
   tags: string[]
   /** Notas públicas (rating-first), extraídas de `specs.details.ratings` — usadas no mesmo tooltip. */
   ratings: Ratings
+  /** Reviews da comunidade — ver `PeripheralReviewSummary`. */
+  reviews: PeripheralReviewSummary
 }
 
 /**
@@ -199,6 +224,15 @@ export type ProfileShowcase = {
   reviews_integrity_accepted_at: string | null
   /** Ids de todos os periféricos já avaliados pelo usuário, sem cap — fecha o picker de criação de review não sugerir um já avaliado (o `reviewsByCategory` acima é capado). */
   reviewed_peripheral_ids: string[]
+  /**
+   * Nota que o DONO do perfil deu a cada periférico (`peripheralId → 1.0-5.0`).
+   *
+   * É o que deixa o card de setup/favoritos mostrar a estrela dele com a foto
+   * dele ao lado, como no card de "Meus Reviews" — sem isso a seção mostraria
+   * a média da comunidade em cima do avatar do dono, dizendo que a nota é
+   * dele. Mesma consulta que alimenta `reviewed_peripheral_ids`.
+   */
+  own_review_ratings: Record<string, number>
   /** Handle sem "@" — link exibido como ícone clicável no perfil público. */
   youtube_handle: string | null
   tiktok_handle: string | null

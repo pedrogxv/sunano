@@ -19,6 +19,7 @@ import {
   Loader2,
   Monitor,
   Mouse,
+  PackagePlus,
   Plus,
   Search,
   SlidersHorizontal,
@@ -1036,9 +1037,17 @@ export function PerifericosContent({
         <main className="min-w-0 flex-1">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-              {selectedCategory === "outros" ? t.categories.others : categoryLabels[selectedCategory]}
-            </h1>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <h1 className="text-4xl font-bold tracking-tight text-foreground">
+                {selectedCategory === "outros" ? t.categories.others : categoryLabels[selectedCategory]}
+              </h1>
+              <Button asChild variant="outline" size="sm" className="shrink-0 gap-2">
+                <Link href="/perifericos/pedidos">
+                  <PackagePlus className="size-4" />
+                  {t.peripherals.requestCta}
+                </Link>
+              </Button>
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
               {selectedCategory === "outros" ? t.categories.othersDescription : categoryDescriptions[selectedCategory]}
             </p>
@@ -1103,6 +1112,12 @@ export function PerifericosContent({
               </p>
               <p className="mt-1 text-xs text-muted-foreground/60">
                 {t.peripherals.adjustFilters}
+              </p>
+              <p className="mt-4 text-xs text-muted-foreground">
+                {t.peripherals.requestEmptyHint}{" "}
+                <Link href="/perifericos/pedidos" className="font-medium text-primary hover:underline">
+                  {t.peripherals.requestCta}
+                </Link>
               </p>
             </div>
           ) : (

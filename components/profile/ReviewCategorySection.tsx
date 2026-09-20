@@ -16,6 +16,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+  PeripheralMiniCard,
+  reviewCountLabel,
+  type MiniCardAuthor,
+} from "@/components/profile/PeripheralMiniCard"
 import { StarRating } from "@/components/ui/star-rating"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
@@ -24,6 +29,8 @@ import type { ShowcaseReview, ShowcaseReviewCategoryBlock } from "@/lib/profile-
 
 interface ReviewCategorySectionProps {
   block: ShowcaseReviewCategoryBlock
+  /** Dono do perfil — a foto ao lado da nota, no rodapé do card. */
+  author: MiniCardAuthor
   isOwner: boolean
   onEdit?: (review: ShowcaseReview) => void
   onDelete?: (review: ShowcaseReview) => Promise<void>
@@ -37,7 +44,14 @@ interface ReviewCategorySectionProps {
  * vez, `compact`) quanto empilhado na página completa
  * (`/perfil/[handle]/reviews`, com o texto do review visível).
  */
-export function ReviewCategorySection({ block, isOwner, onEdit, onDelete, compact = false }: ReviewCategorySectionProps) {
+export function ReviewCategorySection({
+  block,
+  author,
+  isOwner,
+  onEdit,
+  onDelete,
+  compact = false,
+}: ReviewCategorySectionProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
   async function handleDelete(review: ShowcaseReview) {
@@ -56,7 +70,13 @@ export function ReviewCategorySection({ block, isOwner, onEdit, onDelete, compac
         {block.label} ({block.reviews.length})
       </h3>
 
-      <ul className={compact ? "grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4" : "space-y-2"}>
+      <ul
+        className={
+          compact
+            ? "grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4"
+            : "space-y-2"
+        }
+      >
         {block.reviews.map((review) => {
           const href = `/perifericos/${buildPeripheralSlug(review.peripheral.name, review.peripheral.id)}#review-${review.id}`
           const actions = isOwner && (
@@ -114,35 +134,17 @@ export function ReviewCategorySection({ block, isOwner, onEdit, onDelete, compac
 
           if (compact) {
             return (
-              <li
-                key={review.id}
-                className="group relative flex flex-col rounded-xl border border-border bg-card p-4"
-              >
-                <Link href={href} className="relative aspect-square w-full shrink-0">
-                  {review.peripheral.image_url ? (
-                    <Image
-                      src={review.peripheral.image_url}
-                      alt={review.peripheral.name}
-                      fill
-                      sizes="(min-width: 768px) 200px, 45vw"
-                      className="object-contain"
-                    />
-                  ) : (
-                    <div className="size-full rounded bg-muted/40" />
-                  )}
-                </Link>
-
-                <div className="min-w-0 space-y-2 pt-3">
-                  <Link href={href} className="block truncate text-sm font-semibold text-foreground hover:underline">
-                    {review.peripheral.name}
-                  </Link>
-                  <div className="flex items-center gap-1.5 border-t border-border/60 pt-2">
-                    <StarRating value={review.rating} size="sm" />
-                    <span className="text-xs font-medium text-muted-foreground">{review.rating}</span>
-                  </div>
-                </div>
-
-                {actions}
+              <li key={review.id} className="min-w-0">
+                {/* A estrela aqui é a nota de QUEM escreveu (é o perfil dele);
+                    a contagem embaixo é da comunidade. */}
+                <PeripheralMiniCard
+                  peripheral={review.peripheral}
+                  rating={review.rating}
+                  author={author}
+                  href={href}
+                  actions={actions}
+                  className="h-full"
+                />
               </li>
             )
           }
@@ -170,7 +172,12 @@ export function ReviewCategorySection({ block, isOwner, onEdit, onDelete, compac
                 <Link href={href} className="block truncate text-sm font-medium text-foreground hover:underline">
                   {review.peripheral.name}
                 </Link>
-                <StarRating value={review.rating} size="sm" />
+                <div className="flex items-center gap-2">
+                  <StarRating value={review.rating} size="sm" />
+                  <span className="text-[11px] text-muted-foreground/70">
+                    {reviewCountLabel(review.peripheral.reviews.count)}
+                  </span>
+                </div>
                 {review.body && (
                   <p className="line-clamp-2 text-xs text-muted-foreground">{review.body}</p>
                 )}

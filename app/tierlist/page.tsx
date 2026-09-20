@@ -4,7 +4,7 @@ import { buildMetadata } from "@/lib/seo"
 import { getTierlistPageData, orderedForCategory, itemListEntries } from "@/lib/server/tierlist-page-data"
 import { TierlistPageHeader } from "@/components/tierlist/TierlistPageHeader"
 import { TierlistContent } from "@/components/tierlist/TierlistContent"
-import { TierlistSeoBlock, TIERLIST_CATEGORY_UI_LABELS } from "@/components/tierlist/TierlistSeoBlock"
+import { TierlistSeoBlock } from "@/components/tierlist/TierlistSeoBlock"
 
 // ISR: serve do cache e revalida em background a cada 120s, em vez de
 // re-renderizar (com nova query ao banco) em toda requisição.
@@ -39,6 +39,7 @@ export default async function TierlistPage() {
         active="oficial"
         latestUpdate={tierlistMeta}
         heading="Tierlist de Periféricos Gamers"
+        sharePath="/tierlist"
       />
 
       <TierlistSeoBlock
@@ -53,7 +54,6 @@ export default async function TierlistPage() {
       <Suspense fallback={null}>
         <TierlistContent
           initialData={items as never}
-          categoryLabels={TIERLIST_CATEGORY_UI_LABELS}
         />
       </Suspense>
     </div>

@@ -56,6 +56,7 @@ const ADMIN_PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/vips":        { title: "VIPs", description: "Assinaturas VIP: estado na Asaas, cobranças e concessão manual." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
   "/admin/suporte":     { title: "Suporte", description: "Veja e responda aos chamados abertos pelos clientes." },
+  "/admin/perifericos/pedidos": { title: "Pedidos de periférico", description: "Pedidos da comunidade para cadastrar periféricos que ainda não estão na wiki." },
   "/admin/forum/denuncias": { title: "Denúncias", description: "Posts e comentários denunciados pela comunidade." },
   "/admin/eventos":     { title: "Conquistas", description: "Gerencie as conquistas que concedem medalhas automaticamente." },
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
@@ -76,6 +77,7 @@ function publicPageDefaults(t: Dict): Record<string, PageDefaults> {
     "/":                      { title: h.home, description: h.homeDesc },
     "/noticias":              { title: h.news, description: h.newsDesc },
     "/perifericos":           { title: h.peripherals, description: h.peripheralsDesc },
+    "/perifericos/pedidos":   { title: "Pedir cadastro", description: "Peça o cadastro de um periférico que ainda não está na wiki." },
     "/tierlist":              { title: h.tierlist, description: h.tierlistDesc },
     "/blog":                  { title: h.guides, description: h.guidesDesc },
     "/offers":                { title: h.offers, description: h.offersDesc },
@@ -97,6 +99,7 @@ function getPageDefaults(pathname: string, t: Dict): PageDefaults {
   if (pathname.startsWith("/admin/store/"))      return { title: "Editar produto", description: "Atualize as informações do produto." }
   if (pathname.startsWith("/admin/blog/new"))    return { title: "Novo artigo", description: "Crie um review ou artigo relacionado a um periférico." }
   if (pathname.startsWith("/admin/blog/"))       return { title: "Editar artigo", description: "Atualize o conteúdo do artigo." }
+  if (pathname.startsWith("/admin/perifericos/pedidos/")) return { title: "Pedido de periférico", description: "Analise o pedido e responda a quem o abriu." }
   if (pathname.startsWith("/admin/perifericos/new")) return { title: "Novo periférico", description: "Adicione um novo periférico à wiki." }
   if (pathname.startsWith("/admin/perifericos/"))    return { title: "Editar periférico", description: "Atualize as informações do periférico." }
   if (pathname.startsWith("/admin/tierlist/new"))    return { title: "Novo periférico", description: "Adicione um novo periférico à tierlist." }
@@ -108,6 +111,7 @@ function getPageDefaults(pathname: string, t: Dict): PageDefaults {
   if (pathname.startsWith("/admin/"))            return { title: "Admin" }
   if (pathname.startsWith("/blog/"))             return { title: t.pageHeader.review }
   if (pathname.startsWith("/forum/"))            return { title: t.pageHeader.forum }
+  if (pathname.startsWith("/perifericos/pedidos/")) return { title: "Pedido de periférico" }
   if (pathname.startsWith("/perifericos/"))      return { title: t.pageHeader.peripheral }
   if (pathname.startsWith("/perfil/"))           return { title: t.pageHeader.profile, description: t.pageHeader.profileDesc }
   return { title: t.pageHeader.fallback }

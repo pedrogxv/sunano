@@ -28,12 +28,14 @@ import {
   type AccountTier,
 } from "@/lib/account-tier"
 import {
+  NO_PERIPHERAL_REVIEWS,
   PERIPHERAL_SHOWCASE_COLUMNS,
   toShowcasePeripheral,
   type PeripheralShowcaseRow,
 } from "@/lib/server/repositories/peripheral-showcase-mapping"
 import {
-  getReviewedPeripheralIds,
+  getPeripheralReviewSummaries,
+  getUserRatingsByPeripheral,
   getUserReviewsByCategory,
   countUserReviews,
 } from "@/lib/server/repositories/peripheral-reviews-repository"
@@ -143,7 +145,7 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     streak,
     reviewsByCategory,
     reviewsTotal,
-    reviewedPeripheralIds,
+    ownReviewRatings,
     youtubeSubscribed,
     discordMember,
     tierlistItemCount,
@@ -164,7 +166,9 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     getUserStreak(userId),
     getUserReviewsByCategory(userId, { limitPerCategory: MINI_REVIEWS_PER_CATEGORY_LIMIT }),
     countUserReviews(userId),
-    getReviewedPeripheralIds(userId),
+    // Notas do próprio dono: alimentam a estrela do card de setup/favoritos e,
+    // pelas chaves, a lista de já avaliados do picker.
+    getUserRatingsByPeripheral(userId),
     isYoutubeSubscriptionEnabled() ? hasConfirmedYoutubeSubscription(userId) : Promise.resolve(false),
     isDiscordMembershipEnabled() ? hasConfirmedDiscordMembership(userId) : Promise.resolve(false),
     // Só o `count` (ver `getUserTierlistItemCount`). O catch segue o resto
@@ -233,7 +237,8 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviewsByCategory,
     reviews_total: reviewsTotal,
     reviews_integrity_accepted_at: row.reviews_integrity_accepted_at,
-    reviewed_peripheral_ids: reviewedPeripheralIds,
+    reviewed_peripheral_ids: Object.keys(ownReviewRatings),
+    own_review_ratings: ownReviewRatings,
     // Dono ocultou a tierlist → o perfil trata como se não houvesse (o link
     // "Ver tierlist" some, e a página pública já dá notFound).
     tierlist_item_count: tierlistHidden ? 0 : tierlistItemCount,
@@ -290,11 +295,27 @@ export async function getUserSetup(userId: string): Promise<SetupItem[]> {
     peripherals: PeripheralRow | PeripheralRow[] | null
   }>
 
+  // O join do PostgREST devolve objeto ou array conforme a cardinalidade.
+  const peripheralOf = (r: (typeof rows)[number]) =>
+    Array.isArray(r.peripherals) ? (r.peripherals[0] ?? null) : r.peripherals
+
+  // Uma consulta para os 5 slots — ver `getPeripheralReviewSummaries`.
+  const stats = await getPeripheralReviewSummaries(
+    rows.flatMap((r) => {
+      const raw = peripheralOf(r)
+      return raw ? [raw.id] : []
+    })
+  )
+
   const bySlot = new Map<SetupSlot, SetupItem>()
   for (const r of rows) {
-    // O join do PostgREST devolve objeto ou array conforme a cardinalidade.
-    const raw = Array.isArray(r.peripherals) ? (r.peripherals[0] ?? null) : r.peripherals
-    bySlot.set(r.slot, { slot: r.slot, peripheral: raw ? toShowcasePeripheral(raw) : null })
+    const raw = peripheralOf(r)
+    bySlot.set(r.slot, {
+      slot: r.slot,
+      peripheral: raw
+        ? toShowcasePeripheral(raw, stats.get(raw.id) ?? NO_PERIPHERAL_REVIEWS)
+        : null,
+    })
   }
 
   return SLOTS.map((slot) => bySlot.get(slot) ?? { slot, peripheral: null })
@@ -365,10 +386,26 @@ export async function getUserFavorites(
     peripherals: PeripheralRow | PeripheralRow[] | null
   }>
 
+  const peripheralOf = (r: (typeof rows)[number]) =>
+    Array.isArray(r.peripherals) ? (r.peripherals[0] ?? null) : r.peripherals
+
+  // Um lote para a lista toda — ver `getPeripheralReviewSummaries`.
+  const stats = await getPeripheralReviewSummaries(
+    rows.flatMap((r) => {
+      const raw = peripheralOf(r)
+      return raw ? [raw.id] : []
+    })
+  )
+
   return rows.flatMap((r) => {
-    const raw = Array.isArray(r.peripherals) ? r.peripherals[0] : r.peripherals
+    const raw = peripheralOf(r)
     if (!raw) return []
-    return [{ position: r.position, peripheral: toShowcasePeripheral(raw) }]
+    return [
+      {
+        position: r.position,
+        peripheral: toShowcasePeripheral(raw, stats.get(raw.id) ?? NO_PERIPHERAL_REVIEWS),
+      },
+    ]
   })
 }
 

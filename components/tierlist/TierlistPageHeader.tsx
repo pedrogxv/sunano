@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import { formatTierlistDate } from "@/lib/format-tierlist-date"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ShareMenu } from "@/components/forum/ShareMenu"
 import { TierlistInfo } from "./TierlistInfo"
 
 type LatestUpdate = {
@@ -31,6 +32,7 @@ export function TierlistPageHeader({
   active,
   latestUpdate,
   heading,
+  sharePath,
 }: {
   active: View
   latestUpdate?: LatestUpdate | null
@@ -39,6 +41,14 @@ export function TierlistPageHeader({
    * (`Tierlist de Mouses`) ou o nome da visão; sem isso cai num rótulo padrão.
    */
   heading?: string
+  /**
+   * Caminho canônico a compartilhar (ex: "/tierlist/mouses"). Quem passa é a
+   * página no servidor, que já conhece o canonical — assim o header não
+   * precisa de `useSearchParams` (que forçaria bailout de CSR nestas rotas
+   * estáticas). Sem este prop o botão não aparece: `/tierlist/pessoal` e
+   * `/tierlist/comunidade` têm o compartilhar próprio, com a URL do dono.
+   */
+  sharePath?: string
 }) {
   const t = useT()
   const { locale } = useLocale()
@@ -63,7 +73,10 @@ export function TierlistPageHeader({
 
   return (
     <section className={cn("rounded-xl border p-3 sm:p-4", CARD_SURFACE)}>
-      <h1 className="text-base font-bold text-foreground sm:text-lg">{h1}</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-base font-bold text-foreground sm:text-lg">{h1}</h1>
+        {sharePath && <ShareMenu title={`${h1} - Sunano`} path={sharePath} showEmbed={false} />}
+      </div>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2">
         {/* Seletor das três visões — pílulas com ícone. */}

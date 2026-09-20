@@ -224,6 +224,11 @@ const LEGACY_TIER_ORDER_SPEC_KEY = "adminTierOrder"
 // o fluxo de tier normal) — usa uma chave própria pra não colidir caso o modo "value" volte
 // a ter um fluxo de tier tradicional no futuro.
 const PRICE_BAND_ORDER_KEY = "adminPriceBandOrder"
+
+// Id do droppable do pool "Sem faixa de preço" da aba Custo Benefício. Soltar aqui limpa a
+// faixa manual (`adminPriceGroup`) e o GOLPE — o item volta a cair no fallback derivado do
+// `price`, igual "Sob Revisão" devolve o item pro estado sem tier nas abas por tier.
+const PRICE_BAND_POOL_ID = "price-band-pool"
 const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
   performance: "adminTierOrder_performance",
   value: "adminTierOrder_value",
@@ -817,12 +822,16 @@ function DroppablePriceBandRow({
   items,
   isDragging,
   hoveredItemId,
+  linkableItems,
+  onAddToRow,
   onRemoveFromCategory,
 }: {
   priceGroup: PriceGroupKey
   items: Peripheral[]
   isDragging: boolean
   hoveredItemId: string | null
+  linkableItems: Peripheral[]
+  onAddToRow: (id: string) => Promise<void>
   onRemoveFromCategory: (id: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `price-band-${priceGroup}` })
@@ -839,7 +848,11 @@ function DroppablePriceBandRow({
         <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-cyan-400/50" />
       )}
 
-      <div className="p-2">
+      <div className="absolute right-2 top-2 z-10">
+        <AddToRowPopover items={linkableItems} onAdd={onAddToRow} />
+      </div>
+
+      <div className="p-2 pr-9">
         {items.length > 0 ? (
           <div className="grid auto-rows-max grid-cols-[repeat(auto-fill,minmax(130px,1fr))] gap-2">
             {items.map((item) => (
@@ -1052,6 +1065,61 @@ function DroppableUnassignedPool({
   )
 }
 
+
+// Pool da aba Custo Benefício: itens que não resolvem faixa nenhuma (preço abaixo de R$100 ou
+// não preenchido, sem `adminPriceGroup` e sem GOLPE — ver resolvePriceGroupKey). Sem este
+// bloco eles eram descartados por `if (!group) continue` e sumiam do board: o admin vinculava
+// o periférico à aba, recebia o toast de sucesso e não tinha onde arrastá-lo. É o equivalente
+// do "Sob Revisão" das abas por tier, e espelha o bloco que a Tierlist pública já mostra.
+function DroppablePriceBandPool({
+  items,
+  isDragging,
+  onRemoveFromCategory,
+}: {
+  items: Peripheral[]
+  isDragging: boolean
+  onRemoveFromCategory: (id: string) => void
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: PRICE_BAND_POOL_ID })
+  const t = useT()
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn("transition-colors duration-150", isOver && "bg-amber-500/5")}
+    >
+      {items.length > 0 ? (
+        <div className="grid gap-2 p-3 [grid-template-columns:repeat(auto-fill,minmax(130px,1fr))]">
+          {items.map((item) => (
+            <DroppableCardSlot key={item.id} itemId={item.id}>
+              <DraggablePeripheralCard
+                item={item}
+                onRemoveFromCategory={onRemoveFromCategory}
+                disableTooltip={isDragging}
+              />
+            </DroppableCardSlot>
+          ))}
+        </div>
+      ) : (
+        <div
+          className={cn(
+            "m-3 flex min-h-[72px] items-center justify-center rounded-lg border-2 border-dashed transition-all duration-200",
+            isOver ? "border-amber-400 bg-amber-500/10" : isDragging ? "border-amber-500/40 bg-amber-500/5" : "border-border"
+          )}
+        >
+          <p
+            className={cn(
+              "px-3 text-center text-xs font-medium transition-colors duration-150",
+              isOver || isDragging ? "text-amber-400/70" : "text-muted-foreground"
+            )}
+          >
+            {t.admin.tierlistPage.noPriceBandEmpty}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function AdminPeripheralsPage() {
   const { locale } = useLocale()
@@ -1634,6 +1702,34 @@ export default function AdminPeripheralsPage() {
       destinationGroup = getItemPriceGroup(targetItem)
       targetItemId = targetItem.id
       insertAfter = getInsertAfter(event)
+    } else if (overId === PRICE_BAND_POOL_ID) {
+      // Devolve o item pro pool: limpa a faixa manual e o GOLPE, e ele volta a cair no
+      // fallback derivado do `price`. Sem `adminPriceGroup`/GOLPE gravados não há o que
+      // limpar, então não gasta um PATCH à toa.
+      const hasManualGroup = draggedItem.specs?.[PRICE_GROUP_SPEC_KEY] !== undefined
+      const isGolpe = draggedItem.specs?.golpe === true
+      if (!hasManualGroup && !isGolpe) return
+
+      const clearedSpecs = { ...draggedItem.specs }
+      delete clearedSpecs[PRICE_GROUP_SPEC_KEY]
+      delete clearedSpecs.golpe
+      delete clearedSpecs.golpeMotivo
+
+      const nextPeripherals = previousPeripherals.map((item) =>
+        item.id === draggedItem.id ? { ...item, specs: clearedSpecs } : item,
+      )
+      setPeripherals(nextPeripherals)
+
+      try {
+        await persistPriceBandOrder(previousPeripherals, nextPeripherals)
+        toast.success(t.admin.tierlistPage.orderUpdated, { description: draggedItem.name })
+      } catch (err) {
+        setPeripherals(previousPeripherals)
+        const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdate
+        setError(message)
+        toast.error(t.admin.tierlistPage.failedToUpdateOrderDesc, { description: message })
+      }
+      return
     } else if (overId.startsWith("price-band-")) {
       destinationGroup = overId.slice("price-band-".length) as PriceGroupKey
     }
@@ -1761,6 +1857,41 @@ export default function AdminPeripheralsPage() {
       setPeripherals((prev) =>
         prev.map((p) => (p.id === id ? { ...p, specs: withTier.specs, tier: tierKey === null ? tier : p.tier } : p)),
       )
+      toast.success(t.admin.tierlistPage.addedToCategory, { description: item.name })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdateOrder
+      toast.error(t.admin.tierlistPage.addToCategoryFailed, { description: message })
+    }
+  }
+
+  // Atalho do botão "+" de cada faixa de preço — equivalente do `handleAddToTier` na aba
+  // Custo Benefício: vincula ao modo E já grava a faixa alvo (`adminPriceGroup`/GOLPE) no
+  // mesmo PATCH. Sem gravar a faixa, um item de preço abaixo de R$100 continuaria sem faixa
+  // resolvida e cairia no pool em vez da linha em que o admin clicou.
+  async function handleAddToPriceBand(id: string, group: PriceGroupKey) {
+    const item = peripherals.find((p) => p.id === id)
+    if (!item) return
+
+    const normalizedMode = ratingMode === "performance" ? "overall" : ratingMode
+    const existing = item.specs?.tierlistCategories
+    const currentModes = Array.isArray(existing)
+      ? existing
+      : getModesForCategory(item.category).map((m) => (m.key === "performance" ? "overall" : m.key))
+    const nextModes = currentModes.includes(normalizedMode) ? currentModes : [...currentModes, normalizedMode]
+
+    const withMode: Peripheral = { ...item, specs: { ...item.specs, tierlistCategories: nextModes } }
+    const nextSpecs = withPriceGroup(withMode, group).specs
+
+    try {
+      const res = await fetch(`/api/admin/peripherals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ specs: nextSpecs }),
+      })
+      const data = (await res.json().catch(() => null)) as { error?: string } | null
+      if (!res.ok) throw new Error(data?.error ?? t.admin.tierlistPage.failedToUpdateOrder)
+
+      setPeripherals((prev) => prev.map((p) => (p.id === id ? { ...p, specs: nextSpecs } : p)))
       toast.success(t.admin.tierlistPage.addedToCategory, { description: item.name })
     } catch (err) {
       const message = err instanceof Error ? err.message : t.admin.tierlistPage.failedToUpdateOrder
@@ -1932,6 +2063,13 @@ export default function AdminPeripheralsPage() {
       }))
   }, [filtered, activeId])
 
+  // Itens da aba que não resolvem faixa nenhuma — `priceGroupRows` os descarta
+  // (`if (!group) continue`), então sem este recorte eles ficariam invisíveis no board.
+  const priceBandUnassignedItems = useMemo(
+    () => (isPriceBandMode ? filtered.filter((item) => getItemPriceGroup(item) === null) : []),
+    [filtered, isPriceBandMode],
+  )
+
   const handleCategoryChange = (category: Category) => {
     setSelectedCategory(category)
     setSelectedBrand("all")
@@ -2073,6 +2211,8 @@ export default function AdminPeripheralsPage() {
                       items={row.items}
                       isDragging={activeId !== null}
                       hoveredItemId={hoveredItemId}
+                      linkableItems={linkableItems}
+                      onAddToRow={(id) => handleAddToPriceBand(id, row.key)}
                       onRemoveFromCategory={handleRemoveFromMode}
                     />
                   </div>
@@ -2080,6 +2220,38 @@ export default function AdminPeripheralsPage() {
               ))
             )}
           </section>
+
+          {/* Pool "Sem faixa de preço": item de preço abaixo de R$100 (ou não preenchido) não
+              cai em faixa nenhuma. Antes ele era simplesmente descartado do board e o admin
+              não tinha como colocá-lo em lugar nenhum depois de vincular. */}
+          <div
+            className={cn(
+              "mt-6 overflow-hidden rounded-xl border bg-secondary/50 shadow-lg transition-colors duration-200",
+              priceBandUnassignedItems.length > 0 || activeId ? "border-amber-500/20" : "border-border"
+            )}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <div className="flex items-center gap-3">
+                {priceBandUnassignedItems.length > 0 && <AlertCircle className="size-4 text-amber-400" />}
+                <div>
+                  <p className={cn("text-sm font-semibold", priceBandUnassignedItems.length > 0 ? "text-amber-300" : "text-muted-foreground")}>
+                    {t.admin.tierlistPage.noPriceBandPeripherals}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{t.admin.tierlistPage.noPriceBandDesc}</p>
+                </div>
+              </div>
+              {priceBandUnassignedItems.length > 0 && (
+                <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-400">
+                  {t.admin.tierlistPage.itemsCount(priceBandUnassignedItems.length)}
+                </span>
+              )}
+            </div>
+            <DroppablePriceBandPool
+              items={priceBandUnassignedItems}
+              isDragging={activeId !== null}
+              onRemoveFromCategory={handleRemoveFromMode}
+            />
+          </div>
 
           <DragOverlay dropAnimation={null}>
             {activeItem ? <DragOverlayCard item={activeItem} /> : null}

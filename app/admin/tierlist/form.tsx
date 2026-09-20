@@ -65,7 +65,11 @@ import {
 } from "@/lib/psu-specs"
 import { PeripheralDetailView } from "@/components/peripherals/PeripheralDetailView"
 import type { PeripheralExpertAuthor } from "@/lib/peripheral-expert"
-import { parseExpertAuthor } from "@/lib/peripheral-expert"
+import {
+  parseExpertAuthor,
+  PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH,
+  PERIPHERAL_EXPERT_COMMENT_TOO_LONG,
+} from "@/lib/peripheral-expert"
 import { getTagOptionsForCategory, hasScoreRanking, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
 import { priceBandModeFor } from "@/lib/price-band"
@@ -104,7 +108,7 @@ const peripheralSchema = z.object({
   soundUrl: z.string().optional(),
   guideUrl: z.string().optional(),
   wikiUrl: z.string().optional(),
-  summary: z.string().optional(),
+  summary: z.string().max(PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH, PERIPHERAL_EXPERT_COMMENT_TOO_LONG).optional(),
   highlights: z.string().optional(),
   pros: z.string().optional(),
   cons: z.string().optional(),
@@ -1316,6 +1320,21 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const watchedTier = form.watch("tier")
   const watchedCategory = form.watch("category")
   const watchedKeyboardType = form.watch("keyboardType")
+
+  // Periférico NOVO nasce marcado na aba geral da categoria (a primeira de
+  // TIERLIST_MODE_OPTIONS: "Geral" na maioria, "Magnético" em teclado, "OLED" em monitor).
+  // `tierlistCategories` vazio significa "não aparece em aba nenhuma" (ver participatesInMode
+  // em app/admin/tierlist/page.tsx e components/tierlist/TierlistGrid.tsx), então salvar sem
+  // marcar nada criava um item invisível na Tierlist inteira — o aviso em âmbar abaixo dos
+  // chips era fácil de passar batido, e 145 periféricos acabaram fora do site assim.
+  // Só a aba geral: marcar todas jogaria um mouse comum na aba Magnético. As demais o admin
+  // marca de propósito, aqui ou pelo "Vincular periférico" do board.
+  // Não roda na EDIÇÃO: lá a lista vem do banco (ver loadPeripheral).
+  useEffect(() => {
+    if (peripheralId) return
+    const firstMode = (TIERLIST_MODE_OPTIONS[watchedCategory] ?? [])[0]
+    setSelectedTierlistCategories(firstMode ? [firstMode.key] : [])
+  }, [peripheralId, watchedCategory])
 
   // Fontes não usam o tier SS e chamam o último tier de BOMBA (ver lib/tier-utils.ts).
   const visibleTierOptions = useMemo(() => {
@@ -3610,11 +3629,19 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-within:bg-[#202024]"
                 placeholder={"Opinião geral e recomendação sobre o produto"}
                 value={form.watch("summary") ?? ""}
-                onChange={(value) => form.setValue("summary", value, { shouldDirty: true })}
+                onChange={(value) => form.setValue("summary", value, { shouldDirty: true, shouldValidate: form.formState.isSubmitted })}
               />
-              <p className="text-[10px] text-muted-foreground">
-                {"Selecione um trecho e use os botões (ou Ctrl+B/I/U/K) pra negrito, itálico, sublinhado, destaque e link. Pra linkar outro periférico ou produto da loja, cole a URL da página dele."}
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-[10px] text-muted-foreground">
+                  {"Selecione um trecho e use os botões (ou Ctrl+B/I/U/K) pra negrito, itálico, sublinhado, destaque e link. Pra linkar outro periférico ou produto da loja, cole a URL da página dele."}
+                </p>
+                <span
+                  className={`shrink-0 text-[10px] tabular-nums ${(form.watch("summary") ?? "").length > PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH ? "text-red-400" : "text-muted-foreground"}`}
+                >
+                  {(form.watch("summary") ?? "").length}/{PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH}
+                </span>
+              </div>
+              {form.formState.errors.summary && <p className="text-xs text-red-400">{form.formState.errors.summary.message}</p>}
             </div>
 
             <div className="space-y-1.5">

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ChevronLeft, ChevronRight, Plus, Star } from "lucide-react"
 
 import { ReviewCategorySection } from "@/components/profile/ReviewCategorySection"
+import type { MiniCardAuthor } from "@/components/profile/PeripheralMiniCard"
 import { ReviewFormDialog } from "@/components/profile/ReviewFormDialog"
 import { IntegrityTermDialog } from "@/components/profile/IntegrityTermDialog"
 import { useReviewsController } from "@/components/profile/useReviewsController"
@@ -17,6 +18,8 @@ const SWIPE_THRESHOLD_PX = 40
 
 interface MeusReviewsGridProps {
   reviewsByCategory: ShowcaseReviewCategoryBlock[]
+  /** Dono do perfil — a foto ao lado da nota, no rodapé do card. */
+  author: MiniCardAuthor
   reviewsIntegrityAcceptedAt: string | null
   reviewedPeripheralIds: string[]
   isOwner: boolean
@@ -31,6 +34,7 @@ interface MeusReviewsGridProps {
  */
 export function MeusReviewsGrid({
   reviewsByCategory,
+  author,
   reviewsIntegrityAcceptedAt,
   reviewedPeripheralIds,
   isOwner,
@@ -126,6 +130,7 @@ export function MeusReviewsGrid({
               <div className="min-w-0 flex-1">
                 <ReviewCategorySection
                   block={blocks[currentIndex]}
+                  author={author}
                   isOwner={isOwner}
                   onEdit={isOwner ? handleEdit : undefined}
                   onDelete={isOwner ? handleDelete : undefined}

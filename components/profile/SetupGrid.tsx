@@ -1,15 +1,18 @@
 "use client"
 
-import Image from "next/image"
-import Link from "next/link"
 import { Headphones, Keyboard, Monitor, Mouse, Square } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { TierItemTooltipContent, type TierItemTooltipContentProps } from "@/components/tierlist/TierItemTooltipContent"
+import {
+  PeripheralMiniCard,
+  PeripheralMiniCardEmpty,
+  type MiniCardAuthor,
+} from "@/components/profile/PeripheralMiniCard"
+import Link from "next/link"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { mapTier } from "@/lib/tier-utils"
 import type { SetupItem, SetupSlot } from "@/lib/profile-showcase"
-import { cn } from "@/lib/utils"
 
 const SLOT_META: Record<SetupSlot, { label: string; Icon: typeof Mouse }> = {
   mouse: { label: "Mouse", Icon: Mouse },
@@ -27,100 +30,104 @@ function getSlotLabel(item: SetupItem): string {
 
 interface SetupGridProps {
   setup: SetupItem[]
+  /** Dono do perfil — a foto que acompanha a nota dele no rodapé do card. */
+  author: MiniCardAuthor
+  /** Nota do dono por periférico (`profile.own_review_ratings`). */
+  ownRatings: Record<string, number>
   /** Dono do perfil vê os slots vazios como convite para configurar. */
   isOwner?: boolean
 }
 
 /** Grid do "Meu Setup" — um card por periférico, sempre com os 5 slots. */
-export function SetupGrid({ setup, isOwner = false }: SetupGridProps) {
+export function SetupGrid({ setup, author, ownRatings, isOwner = false }: SetupGridProps) {
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
         Meu setup
       </h2>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {setup.map((item) => (
-          <SetupCard key={item.slot} item={item} isOwner={isOwner} />
+          <SetupCard
+            key={item.slot}
+            item={item}
+            author={author}
+            ownRatings={ownRatings}
+            isOwner={isOwner}
+          />
         ))}
       </div>
     </section>
   )
 }
 
-function SetupCard({ item, isOwner }: { item: SetupItem; isOwner: boolean }) {
+function SetupCard({
+  item,
+  author,
+  ownRatings,
+  isOwner,
+}: {
+  item: SetupItem
+  author: MiniCardAuthor
+  ownRatings: Record<string, number>
+  isOwner: boolean
+}) {
   const { Icon } = SLOT_META[item.slot]
   const label = getSlotLabel(item)
-  const title = item.peripheral?.name ?? null
-  const isEmpty = !title
 
-  const content = (
-    <div
-      className={cn(
-        "flex h-full flex-col gap-2 rounded-xl border border-border bg-card/60 p-3 transition-colors",
-        isEmpty ? "border-dashed" : "hover:border-primary/40 hover:bg-card"
-      )}
-    >
-      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        <Icon className="size-3.5 shrink-0" />
-        {label}
-      </div>
-
-      <div className="relative flex h-16 items-center justify-center">
-        {item.peripheral?.image_url ? (
-          <Image
-            src={item.peripheral.image_url}
-            alt={item.peripheral.name}
-            fill
-            sizes="160px"
-            className="object-contain"
-          />
-        ) : (
-          <Icon className={cn("size-8", isEmpty ? "text-muted-foreground/25" : "text-muted-foreground/60")} />
-        )}
-      </div>
-
-      <p
-        className={cn(
-          "line-clamp-2 text-xs font-medium",
-          isEmpty ? "text-muted-foreground/50" : "text-foreground"
-        )}
-      >
-        {title ?? (isOwner ? "Configurar" : "Não informado")}
-      </p>
+  const header = (
+    <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+      <Icon className="size-3 shrink-0" />
+      <span className="truncate">{label}</span>
     </div>
   )
 
-  if (item.peripheral) {
-    const peripheral = item.peripheral
-    const href = `/perifericos/${buildPeripheralSlug(peripheral.name, peripheral.id)}`
-
+  if (!item.peripheral) {
     return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Link href={href}>{content}</Link>
-        </TooltipTrigger>
-        <TooltipContent
-          className="rounded-xl border border-border bg-popover p-4 shadow-2xl backdrop-blur-md"
-          sideOffset={12}
-          side="bottom"
-          align="center"
-        >
-          <Link href={href} aria-label={peripheral.name} className="block cursor-pointer hover:opacity-95">
-            <TierItemTooltipContent
-              name={peripheral.name}
-              brand={peripheral.brand}
-              categoryLabel={peripheral.category}
-              image_url={peripheral.image_url}
-              tier={peripheral.tier ? mapTier(peripheral.tier) : null}
-              ratings={peripheral.ratings}
-              tags={peripheral.tags as TierItemTooltipContentProps["tags"]}
-            />
-          </Link>
-        </TooltipContent>
-      </Tooltip>
+      <PeripheralMiniCardEmpty
+        header={header}
+        icon={<Icon className="size-7" />}
+        label={isOwner ? "Configurar" : "Não informado"}
+      />
     )
   }
 
-  return content
+  const peripheral = item.peripheral
+  const href = `/perifericos/${buildPeripheralSlug(peripheral.name, peripheral.id)}`
+
+  return (
+    <Tooltip>
+      {/* O wrapper existe para o Radix ter um nó DOM com ref: o card é um
+          componente de função e `asChild` não consegue passar a ref nele. */}
+      <TooltipTrigger asChild>
+        <div className="h-full">
+          <PeripheralMiniCard
+            peripheral={peripheral}
+            rating={ownRatings[peripheral.id] ?? null}
+            author={author}
+            header={header}
+            className="h-full"
+          />
+        </div>
+      </TooltipTrigger>
+      <TooltipContent
+        className="rounded-xl border border-border bg-popover p-4 shadow-2xl backdrop-blur-md"
+        sideOffset={12}
+        side="bottom"
+        align="center"
+      >
+        <Link href={href} aria-label={peripheral.name} className="block cursor-pointer hover:opacity-95">
+          <TierItemTooltipContent
+            name={peripheral.name}
+            brand={peripheral.brand}
+            categoryLabel={peripheral.category}
+            image_url={peripheral.image_url}
+            tier={peripheral.tier ? mapTier(peripheral.tier) : null}
+            ratings={peripheral.ratings}
+            tags={peripheral.tags as TierItemTooltipContentProps["tags"]}
+          />
+        </Link>
+      </TooltipContent>
+    </Tooltip>
+  )
 }

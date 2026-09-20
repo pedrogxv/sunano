@@ -97,6 +97,15 @@ export function ProfileShowcase({
     </div>
   )
 
+  // O dono do perfil, para a foto que acompanha a nota dele no rodapé dos
+  // cards de periférico (ver `PeripheralMiniCard`). Montado uma vez: as três
+  // seções desenham o mesmo avatar dezenas de vezes.
+  const cardAuthor = {
+    name: profile.display_name,
+    avatarUrl: profile.avatar_url,
+    frame: profileFrameOf(profile),
+  }
+
   const medals = <MedalhasGrid medals={profile.medals} />
   const medalsCentered = (
     <MedalhasGrid medals={profile.medals} className="justify-center text-center" />
@@ -215,16 +224,24 @@ export function ProfileShowcase({
           discordMember={isDiscordMembershipEnabled() ? profile.discord_member : undefined}
         />
 
-        <SetupGrid setup={profile.setup} isOwner={isOwner} />
+        <SetupGrid
+          setup={profile.setup}
+          author={cardAuthor}
+          ownRatings={profile.own_review_ratings}
+          isOwner={isOwner}
+        />
 
         <FavoritosGrid
           favorites={profile.favorites}
           tier={profile.account_tier}
+          author={cardAuthor}
+          ownRatings={profile.own_review_ratings}
           isOwner={isOwner}
         />
 
         <MeusReviewsGrid
           reviewsByCategory={profile.reviewsByCategory}
+          author={cardAuthor}
           reviewsIntegrityAcceptedAt={profile.reviews_integrity_accepted_at}
           reviewedPeripheralIds={profile.reviewed_peripheral_ids}
           isOwner={isOwner}

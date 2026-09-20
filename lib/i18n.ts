@@ -124,6 +124,13 @@ type Translations = {
     storeRestock: string
     affiliatePayoutFallback: string
     rankFrameFallback: string
+    /** `{name}` = marca + modelo do periférico pedido. */
+    peripheralRequestStatus: string
+    peripheralRequestPending: string
+    peripheralRequestInReview: string
+    peripheralRequestAdded: string
+    peripheralRequestDuplicate: string
+    peripheralRequestRejected: string
     viewAll: string
     historyTitle: string
     historySubtitle: string
@@ -285,6 +292,9 @@ type Translations = {
     gamingPeripherals: string
     notFound: string
     adjustFilters: string
+    /** Botão do cabeçalho e link do estado vazio → /perifericos/pedidos. */
+    requestCta: string
+    requestEmptyHint: string
     ranking: string
     new: string
     searchNameBrand: string
@@ -932,6 +942,9 @@ type Translations = {
       releaseToRemove: string
       dropHereRemove: string
       noUnassigned: string
+      noPriceBandPeripherals: string
+      noPriceBandDesc: string
+      noPriceBandEmpty: string
       itemsCount: (count: number) => string
       modeDescriptions: { performance: string; value: string; recommended: string; oled: string; soundTyping: string; mechanical: string; magnetic: string; pcb: string; ips_va: string; competitive: string }
       addToCategory: string
@@ -1180,6 +1193,12 @@ export const translations: Record<LocaleCode, Translations> = {
       storeRestock: "{product} voltou ao estoque!",
       affiliatePayoutFallback: "Seu saque foi atualizado",
       rankFrameFallback: "Você desbloqueou uma moldura de ranking",
+      peripheralRequestStatus: "Seu pedido de \"{name}\" foi atualizado",
+      peripheralRequestPending: "Voltou para a fila",
+      peripheralRequestInReview: "Em análise",
+      peripheralRequestAdded: "Cadastrado na wiki",
+      peripheralRequestDuplicate: "Já estava na wiki",
+      peripheralRequestRejected: "Recusado",
       viewAll: "Ver histórico completo",
       historyTitle: "Histórico de notificações",
       historySubtitle: "Todas as suas notificações, das mais recentes às mais antigas.",
@@ -1393,6 +1412,8 @@ export const translations: Record<LocaleCode, Translations> = {
       gamingPeripherals: "Periféricos Gamer",
       notFound: "Nenhum periférico encontrado.",
       adjustFilters: "Tente ajustar os filtros.",
+      requestCta: "Pedir cadastro",
+      requestEmptyHint: "Não achou o que procura?",
       ranking: "Ranking",
       new: "Novo",
       searchNameBrand: "Nome, marca, sensor…",
@@ -2052,6 +2073,9 @@ export const translations: Record<LocaleCode, Translations> = {
         releaseToRemove: "Solte para remover o tier",
         dropHereRemove: "Solte aqui para remover o tier",
         noUnassigned: "Nenhum periférico Sob Revisão",
+        noPriceBandPeripherals: "Sem faixa de preço",
+        noPriceBandDesc: "Preço abaixo de R$100 (ou não preenchido): não cai em nenhuma faixa. Arraste para uma faixa ou corrija o preço no formulário.",
+        noPriceBandEmpty: "Todo periférico desta aba está em alguma faixa",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "itens"}`,
         modeDescriptions: { performance: "Ordenado por desempenho puro", value: "Agrupado por faixa de preço", recommended: "Escolhas sugeridas por Sunano, priorizando equilibrio geral", oled: "Apenas painéis OLED", soundTyping: "Ordenado por som e digitação", mechanical: "Ordenado por desempenho puro", magnetic: "Ordenado por desempenho magnético", pcb: "Ordenado por desempenho PCB", ips_va: "Apenas painéis IPS e VA", competitive: "Ordenado por desempenho competitivo" },
         addToCategory: "Vincular periférico",
@@ -2689,6 +2713,12 @@ export const translations: Record<LocaleCode, Translations> = {
       storeRestock: "{product} is back in stock!",
       affiliatePayoutFallback: "Your withdrawal was updated",
       rankFrameFallback: "You unlocked a ranking frame",
+      peripheralRequestStatus: "Your request for \"{name}\" was updated",
+      peripheralRequestPending: "Back in the queue",
+      peripheralRequestInReview: "Under review",
+      peripheralRequestAdded: "Added to the wiki",
+      peripheralRequestDuplicate: "Already in the wiki",
+      peripheralRequestRejected: "Declined",
       viewAll: "View full history",
       historyTitle: "Notification history",
       historySubtitle: "All your notifications, from newest to oldest.",
@@ -2902,6 +2932,8 @@ export const translations: Record<LocaleCode, Translations> = {
       gamingPeripherals: "Gaming Peripherals",
       notFound: "No peripherals found.",
       adjustFilters: "Try adjusting your filters.",
+      requestCta: "Request a listing",
+      requestEmptyHint: "Can't find what you're looking for?",
       ranking: "Ranking",
       new: "New",
       searchNameBrand: "Name, brand, sensor…",
@@ -3561,6 +3593,9 @@ export const translations: Record<LocaleCode, Translations> = {
         releaseToRemove: "Release to remove tier",
         dropHereRemove: "Drop here to remove tier",
         noUnassigned: "No peripherals without tier",
+        noPriceBandPeripherals: "No price band",
+        noPriceBandDesc: "Price under R$100 (or unset): falls into no band. Drag it onto a band or fix the price in the form.",
+        noPriceBandEmpty: "Every peripheral in this tab sits in a band",
         itemsCount: (count: number) => `${count} ${count === 1 ? "item" : "items"}`,
         modeDescriptions: { performance: "Sorted by pure performance", value: "Grouped by price range", recommended: "Suggested picks by Sunano, prioritizing overall balance", oled: "Show only OLED panels", soundTyping: "Sorted by sound and typing feel", mechanical: "Sorted by mechanical performance", magnetic: "Sorted by magnetic performance", pcb: "Sorted by PCB performance", ips_va: "Show only IPS and VA panels", competitive: "Sorted by competitive performance" },
         addToCategory: "Link peripheral",

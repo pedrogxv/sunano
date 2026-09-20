@@ -13,6 +13,7 @@ import {
   Newspaper,
   Package,
   PackageCheck,
+  PackagePlus,
   Medal,
   Reply,
   UserPlus,
@@ -45,6 +46,7 @@ export const ICONS: Record<NotificationType, React.ElementType> = {
   store_restock: PackageCheck,
   affiliate_payout: Wallet,
   rank_frame: Medal,
+  peripheral_request_status: PackagePlus,
 }
 
 export const ICON_TONE: Record<NotificationType, string> = {
@@ -63,6 +65,7 @@ export const ICON_TONE: Record<NotificationType, string> = {
   store_restock: "bg-emerald-500/15 text-emerald-400",
   affiliate_payout: "bg-green-500/15 text-green-400",
   rank_frame: "bg-fuchsia-500/15 text-fuchsia-400",
+  peripheral_request_status: "bg-violet-500/15 text-violet-400",
 }
 
 export function fill(template: string, values: Record<string, string | number>) {
@@ -145,6 +148,28 @@ export function buildMessage(n: Notification, t: ReturnType<typeof useT>): strin
     // frase, e ambos vêm do catálogo em pt-BR (ver `notifyRankFrameGranted`).
     case "rank_frame":
       return n.title ?? t.notifications.rankFrameFallback
+    // `title` é marca + modelo do periférico pedido (ver
+    // trg_notify_peripheral_request_status); o status vai em `body`.
+    case "peripheral_request_status":
+      return fill(t.notifications.peripheralRequestStatus, { name: n.title ?? "" })
+  }
+}
+
+/** Rótulo do status gravado em `body` por `peripheral_request_status` — ver trg_notify_peripheral_request_status. */
+export function peripheralRequestStatusLabel(status: string | null, t: ReturnType<typeof useT>): string {
+  switch (status) {
+    case "pending":
+      return t.notifications.peripheralRequestPending
+    case "in_review":
+      return t.notifications.peripheralRequestInReview
+    case "added":
+      return t.notifications.peripheralRequestAdded
+    case "duplicate":
+      return t.notifications.peripheralRequestDuplicate
+    case "rejected":
+      return t.notifications.peripheralRequestRejected
+    default:
+      return status ?? ""
   }
 }
 
@@ -200,9 +225,11 @@ export function NotificationRow({
       ? n.body
       : n.type === "support_status"
         ? supportStatusLabel(n.body, t)
-        : n.type === "new_post"
-          ? n.title
-          : null
+        : n.type === "peripheral_request_status"
+          ? peripheralRequestStatusLabel(n.body, t)
+          : n.type === "new_post"
+            ? n.title
+            : null
 
   const href = notificationHref(n)
 

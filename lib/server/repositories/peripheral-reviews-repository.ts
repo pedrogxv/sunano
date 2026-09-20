@@ -4,9 +4,14 @@ import { cache } from "react"
 
 import type { AccountTier } from "@/lib/account-tier"
 import { reviewCategoryKeyFor, REVIEW_CATEGORY_GROUPS } from "@/lib/peripheral-review-categories"
-import type { ShowcaseReview, ShowcaseReviewCategoryBlock } from "@/lib/profile-showcase"
+import type {
+  PeripheralReviewSummary,
+  ShowcaseReview,
+  ShowcaseReviewCategoryBlock,
+} from "@/lib/profile-showcase"
 import { creditPeripheralReviewCreationAura } from "@/lib/server/repositories/aura-repository"
 import {
+  NO_PERIPHERAL_REVIEWS,
   PERIPHERAL_SHOWCASE_COLUMNS,
   toShowcasePeripheral,
   type PeripheralShowcaseRow,
@@ -39,7 +44,10 @@ type ReviewRow = {
   peripherals: PeripheralShowcaseRow | PeripheralShowcaseRow[] | null
 }
 
-function toShowcaseReview(row: ReviewRow): ShowcaseReview | null {
+function toShowcaseReview(
+  row: ReviewRow,
+  stats: Map<string, PeripheralReviewSummary>
+): ShowcaseReview | null {
   const peripheralRow = Array.isArray(row.peripherals) ? row.peripherals[0] : row.peripherals
   if (!peripheralRow) return null
   return {
@@ -48,7 +56,10 @@ function toShowcaseReview(row: ReviewRow): ShowcaseReview | null {
     body: row.body,
     createdAt: row.created_at,
     editedAt: row.edited_at,
-    peripheral: toShowcasePeripheral(peripheralRow),
+    peripheral: toShowcasePeripheral(
+      peripheralRow,
+      stats.get(peripheralRow.id) ?? NO_PERIPHERAL_REVIEWS
+    ),
   }
 }
 
@@ -95,7 +106,10 @@ export async function addPeripheralReview(params: {
     return { ok: false, error: "Erro ao salvar sua avaliação.", status: 400 }
   }
 
-  const review = toShowcaseReview(data as unknown as ReviewRow)
+  const review = toShowcaseReview(
+    data as unknown as ReviewRow,
+    await getPeripheralReviewSummaries([params.peripheralId])
+  )
   if (!review) return { ok: false, error: "Erro ao salvar sua avaliação.", status: 400 }
 
   // +10 de aura por avaliar, 1x por periférico pra sempre — best-effort, nunca bloqueia a criação em si.
@@ -137,7 +151,10 @@ export async function updateOwnPeripheralReview(params: {
     return { ok: false, error: "Erro ao salvar sua avaliação.", status: 400 }
   }
 
-  const review = toShowcaseReview(data as unknown as ReviewRow)
+  const review = toShowcaseReview(
+    data as unknown as ReviewRow,
+    await getPeripheralReviewSummaries([params.peripheralId])
+  )
   if (!review) return { ok: false, error: "Erro ao salvar sua avaliação.", status: 400 }
 
   return { ok: true, review }
@@ -192,8 +209,11 @@ export async function getUserReviewsByCategory(
     return []
   }
 
-  const reviews = ((data ?? []) as unknown as ReviewRow[])
-    .map(toShowcaseReview)
+  const rows = (data ?? []) as unknown as ReviewRow[]
+  const stats = await getPeripheralReviewSummaries(rows.map((r) => r.peripheral_id))
+
+  const reviews = rows
+    .map((row) => toShowcaseReview(row, stats))
     .filter((r): r is ShowcaseReview => r !== null)
 
   const byKey = new Map<string, ShowcaseReview[]>()
@@ -225,6 +245,58 @@ export async function countUserReviews(userId: string): Promise<number> {
 }
 
 /**
+ * Contagem e média das reviews visíveis de VÁRIOS periféricos, de uma vez.
+ *
+ * É o que alimenta `ShowcasePeripheral.reviews` (card de setup, favoritos e
+ * "Meus Reviews"). Em lote sempre: a vitrine desenha até 19 cards de uma vez
+ * e uma consulta por card seria N+1, o mesmo motivo de
+ * `getVipFounderOwners`.
+ *
+ * Traz as notas cruas e agrega em JS em vez de pedir `avg()` ao PostgREST:
+ * são poucas dezenas de ids por perfil, e o embed agregado depende de
+ * configuração do servidor (`db-aggregates-enabled`) que o resto do
+ * repositório não assume.
+ */
+export async function getPeripheralReviewSummaries(
+  peripheralIds: string[]
+): Promise<Map<string, PeripheralReviewSummary>> {
+  const ids = Array.from(new Set(peripheralIds.filter(Boolean)))
+  const stats = new Map<string, PeripheralReviewSummary>()
+  if (ids.length === 0) return stats
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("peripheral_reviews")
+    .select("peripheral_id, rating")
+    .in("peripheral_id", ids)
+    .eq("is_hidden", false)
+
+  if (error) {
+    // Seção sem contagem é melhor do que perfil quebrado — mesmo critério do
+    // resto da vitrine.
+    console.error("[peripheral-reviews-repository] getPeripheralReviewSummaries:", error)
+    return stats
+  }
+
+  const totals = new Map<string, { count: number; sum: number }>()
+  for (const row of (data ?? []) as { peripheral_id: string; rating: number }[]) {
+    const acc = totals.get(row.peripheral_id) ?? { count: 0, sum: 0 }
+    acc.count += 1
+    acc.sum += row.rating
+    totals.set(row.peripheral_id, acc)
+  }
+
+  for (const [peripheralId, acc] of totals) {
+    stats.set(peripheralId, {
+      count: acc.count,
+      average: acc.count > 0 ? acc.sum / acc.count : null,
+    })
+  }
+
+  return stats
+}
+
+/**
  * Só quantas reviews visíveis um periférico tem.
  *
  * `head: true` — o total vem no header, sem trazer linha nenhuma. Existe
@@ -242,6 +314,36 @@ export const countPeripheralReviews = cache(async (peripheralId: string): Promis
     .eq("is_hidden", false)
   return count ?? 0
 })
+
+/**
+ * Nota que o usuário deu a cada periférico que avaliou (`id → 1.0-5.0`).
+ *
+ * É a mesma consulta de `getReviewedPeripheralIds` com a coluna da nota
+ * junto: o perfil precisa das duas coisas (ids para o picker, notas para a
+ * estrela dos cards de setup/favoritos) e buscar em separado seria a mesma
+ * varredura duas vezes.
+ */
+export async function getUserRatingsByPeripheral(
+  userId: string
+): Promise<Record<string, number>> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("peripheral_reviews")
+    .select("peripheral_id, rating")
+    .eq("user_id", userId)
+    .eq("is_hidden", false)
+
+  if (error) {
+    console.error("[peripheral-reviews-repository] getUserRatingsByPeripheral:", error)
+    return {}
+  }
+
+  const ratings: Record<string, number> = {}
+  for (const row of (data ?? []) as { peripheral_id: string; rating: number }[]) {
+    ratings[row.peripheral_id] = row.rating
+  }
+  return ratings
+}
 
 /** Ids de todos os periféricos já avaliados pelo usuário, sem cap — filtro `excludeIds` do picker de criação. */
 export async function getReviewedPeripheralIds(userId: string): Promise<string[]> {

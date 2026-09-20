@@ -11,6 +11,24 @@
  * O preço disso é que trocar o nome de exibição não repropaga sozinho — quem
  * reabrir e salvar o item no admin regrava o retrato atualizado.
  */
+/**
+ * Teto do texto do card, contado no valor gravado em `specs.details.summary`
+ * (o markdown, não só o que aparece). O card mostra o comentário inteiro, sem
+ * rolagem interna — sem limite, um texto longo empurraria o resto da página.
+ * Formulário e rotas de admin leem daqui, então os dois recusam igual.
+ */
+export const PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH = 2500
+
+export const PERIPHERAL_EXPERT_COMMENT_TOO_LONG = `O comentário pode ter no máximo ${PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH} caracteres.`
+
+/** true quando `specs.details.summary` passa do teto. Sem texto, não passa. */
+export function isExpertCommentTooLong(specs: Record<string, unknown> | undefined): boolean {
+  const details = specs?.details
+  if (!details || typeof details !== "object") return false
+  const summary = (details as Record<string, unknown>).summary
+  return typeof summary === "string" && summary.length > PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH
+}
+
 export type PeripheralExpertAuthor = {
   userId: string
   displayName: string

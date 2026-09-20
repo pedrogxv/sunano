@@ -30,6 +30,7 @@ import { PeripheralVoteBox } from "@/components/peripherals/PeripheralVoteBox"
 import { RankingCrownBadge } from "@/components/peripherals/RankingCrownBadge"
 import { formatBRL, formatCurrencyBRL } from "@/lib/format"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
+import { ShareMenu } from "@/components/forum/ShareMenu"
 import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
 import { CATEGORY_PLURAL_LABELS, getTagLabel, type Category, type Tag } from "@/lib/tag-options"
 import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
@@ -1220,6 +1221,11 @@ export function PeripheralDetailView({
                         <RankingCrownBadge position={rankBadge.position} href={rankingHref} />
                       )}
                       <PeripheralLikeToggle peripheralId={data.id} />
+                      <ShareMenu
+                        title={`${data.brand} ${data.name} - Sunano`}
+                        path={`/perifericos/${buildPeripheralSlug(data.name, data.id)}`}
+                        showEmbed={false}
+                      />
                     </div>
                     {featuredStore && (
                       <FeaturedStoreCard
@@ -1740,7 +1746,7 @@ export function PeripheralDetailView({
                     </CardDescription>
                   )}
                 </CardHeader>
-                <CardContent className="whitespace-pre-wrap break-words text-base text-muted-foreground lg:max-h-80 lg:overflow-auto">
+                <CardContent className="whitespace-pre-wrap break-words text-base text-muted-foreground">
                   {generalComments ? (
                     // O admin escreve o comentário com o markdown mínimo do
                     // projeto (`**negrito**`, `- item`, `##` título); antes o

@@ -3,6 +3,7 @@ import "server-only"
 import { unstable_cache } from "next/cache"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
+  NO_PERIPHERAL_REVIEWS,
   PERIPHERAL_SHOWCASE_COLUMNS,
   toShowcasePeripheral,
   type PeripheralShowcaseRow,
@@ -159,7 +160,10 @@ export async function getUserTierlistItems(
     const raw = Array.isArray(row.peripherals) ? (row.peripherals[0] ?? null) : row.peripherals
     if (!raw) return []
 
-    const showcase = toShowcasePeripheral(raw)
+    // O card da tierlist não mostra contagem de review (só nome, foto e
+    // tier), então o lote de `getPeripheralReviewSummaries` não é buscado aqui:
+    // seria uma consulta por membro na listagem da comunidade.
+    const showcase = toShowcasePeripheral(raw, NO_PERIPHERAL_REVIEWS)
     return [
       {
         peripheralId: row.peripheral_id,

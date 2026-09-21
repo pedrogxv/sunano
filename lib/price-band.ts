@@ -9,10 +9,13 @@
 export const PRICE_BANDS = [
   { key: "1000", label: "R$1000", min: 1000 },
   { key: "750", label: "R$750", min: 750 },
+  { key: "600", label: "R$600", min: 600 },
   { key: "500", label: "R$500", min: 500 },
+  { key: "400", label: "R$400", min: 400 },
   { key: "300", label: "R$300", min: 300 },
   { key: "200", label: "R$200", min: 200 },
   { key: "100", label: "R$100", min: 100 },
+  { key: "50", label: "R$50", min: 50 },
 ] as const
 
 export type PriceBandKey = (typeof PRICE_BANDS)[number]["key"]
@@ -35,7 +38,7 @@ function isPriceBandKey(value: unknown): value is PriceBandKey {
 }
 
 // Faixa = maior piso que o preço atinge (ex: R$850 cai em "R$750+", não em "R$500+").
-// Preços abaixo de R$100 não têm faixa — não existe faixa fictícia pra cobrir esse caso.
+// Preços abaixo de R$50 não têm faixa — não existe faixa fictícia pra cobrir esse caso.
 export function getPriceBandKey(price: number): PriceBandKey | null {
   for (const band of PRICE_BANDS) {
     if (price >= band.min) return band.key

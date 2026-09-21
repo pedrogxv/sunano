@@ -47,6 +47,7 @@ interface Peripheral {
     adminTier_oled?: TierValue
     adminTier_soundTyping?: TierValue
     adminTier_mechanical?: TierValue
+    adminTier_magnetic?: string
     adminTier_pcb?: TierValue
     adminTier_ips_va?: TierValue
     adminTier_competitive?: TierValue
@@ -88,15 +89,17 @@ const ORDER_KEY_BY_MODE: Record<RatingMode, string> = {
   competitive: "adminTierOrder_competitive",
 }
 
-// Modes not listed here share the `tier` column directly (the "default" mode for their
-// category group: overall/Geral for most categories, magnetic for keyboards). Every other
-// mode reads its own tier assignment from `specs`, matching the admin editor.
+// Modes not listed here share the `tier` column directly (the "default" mode: overall/Geral).
+// Every other mode reads its own tier assignment from `specs`, matching the admin board
+// (app/admin/tierlist/page.tsx). Magnético está aqui em toda categoria: sem isso a aba
+// pública lia a coluna `tier` (o Geral) e ignorava onde o admin arrastou o item nela.
 const TIER_KEY_BY_MODE: Partial<Record<RatingMode, string>> = {
   value: "adminTier_value",
   recommended: "adminTier_recommended",
   oled: "adminTier_oled",
   soundTyping: "adminTier_soundTyping",
   mechanical: "adminTier_mechanical",
+  magnetic: "adminTier_magnetic",
   pcb: "adminTier_pcb",
   ips_va: "adminTier_ips_va",
   competitive: "adminTier_competitive",
@@ -104,10 +107,17 @@ const TIER_KEY_BY_MODE: Partial<Record<RatingMode, string>> = {
 
 const TIER_VALUES: Tier[] = ["GOAT", "SS", "S", "A", "B", "C", "L"]
 
+// Espelha o board admin: o Magnético já dividiu a coluna `tier` com o Geral, então item ainda
+// não movido nessa aba (sem a chave) cai em `tier`. Já a chave gravada com o sentinel
+// "__unassigned__" (arrastado para "Sob Revisão") não é tier válido e resolve para null.
+const MAGNETIC_TIER_KEY = "adminTier_magnetic"
+
 function getModeTier(item: Peripheral, tierKey: string | null): TierValue {
   if (tierKey === null) return item.tier
   const value = item.specs?.[tierKey as keyof Peripheral["specs"]]
-  return typeof value === "string" && (TIER_VALUES as string[]).includes(value) ? (value as Tier) : null
+  if (typeof value === "string" && (TIER_VALUES as string[]).includes(value)) return value as Tier
+  if (tierKey === MAGNETIC_TIER_KEY && value === undefined) return item.tier
+  return null
 }
 
 // Sem `tierlistCategories` definido (itens legados), o item continua visível em todas as
@@ -221,11 +231,11 @@ function getRecommendedScore(item: Peripheral) {
   return getTierScore(item.tier) + tagScore - Math.min(item.price / 300, 1)
 }
 
-function sortByTierThenName(items: Peripheral[], orderKey: string, allowLegacyFallback: boolean) {
+// As linhas já saem particionadas pelo tier DA ABA (`getModeTier`), então comparar `item.tier`
+// aqui não separa nada na aba padrão e, nas demais, misturava o tier do Geral na ordem: dois
+// itens da mesma linha do Magnético saíam invertidos em relação ao que o admin arrastou.
+function sortByOrderThenName(items: Peripheral[], orderKey: string, allowLegacyFallback: boolean) {
   return [...items].sort((left, right) => {
-    const tierDiff = getTierScore(right.tier) - getTierScore(left.tier)
-    if (tierDiff !== 0) return tierDiff
-
     const leftOrder = getTierOrder(left, orderKey, allowLegacyFallback)
     const rightOrder = getTierOrder(right, orderKey, allowLegacyFallback)
     if (leftOrder !== null && rightOrder !== null) return leftOrder - rightOrder || left.name.localeCompare(right.name)
@@ -281,7 +291,7 @@ function sortWithTierOrder(
   allowLegacyFallback: boolean,
   fallbackSort: (items: Peripheral[]) => Peripheral[],
 ): Peripheral[] {
-  const withOrder = sortByTierThenName(items, orderKey, allowLegacyFallback)
+  const withOrder = sortByOrderThenName(items, orderKey, allowLegacyFallback)
   const hasAnyOrder = withOrder.some((item) => getTierOrder(item, orderKey, allowLegacyFallback) !== null)
   return hasAnyOrder ? withOrder : fallbackSort(items)
 }
@@ -446,7 +456,7 @@ export function TierlistGrid({ filtered, category }: TierlistGridProps) {
 
   // Faixa é manual (specs.adminPriceGroup, definida arrastando no board admin) — itens nunca
   // movidos caem no fallback calculado a partir do `price` (ver resolvePriceGroupKey em
-  // lib/price-band.ts). GOLPE sempre força a própria faixa. Itens abaixo de R$100 sem posição
+  // lib/price-band.ts). GOLPE sempre força a própria faixa. Itens abaixo de R$50 sem posição
   // manual e não-GOLPE não têm faixa e ficam fora desta aba: sem faixa fictícia pra cobri-los.
   // Dentro de cada faixa, usa a ordem manual definida no board admin (`adminPriceBandOrder`)
   // quando existir; sem ela, cai pro tier base + nome.

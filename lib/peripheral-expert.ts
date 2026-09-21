@@ -21,12 +21,18 @@ export const PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH = 2500
 
 export const PERIPHERAL_EXPERT_COMMENT_TOO_LONG = `O comentário pode ter no máximo ${PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH} caracteres.`
 
+/** Texto gravado em `specs.details.summary`, ou `null` quando o item não tem comentário. */
+export function readExpertComment(specs: Record<string, unknown> | undefined): string | null {
+  const details = specs?.details
+  if (!details || typeof details !== "object") return null
+  const summary = (details as Record<string, unknown>).summary
+  return typeof summary === "string" ? summary : null
+}
+
 /** true quando `specs.details.summary` passa do teto. Sem texto, não passa. */
 export function isExpertCommentTooLong(specs: Record<string, unknown> | undefined): boolean {
-  const details = specs?.details
-  if (!details || typeof details !== "object") return false
-  const summary = (details as Record<string, unknown>).summary
-  return typeof summary === "string" && summary.length > PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH
+  const summary = readExpertComment(specs)
+  return summary !== null && summary.length > PERIPHERAL_EXPERT_COMMENT_MAX_LENGTH
 }
 
 export type PeripheralExpertAuthor = {

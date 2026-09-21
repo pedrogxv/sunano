@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
@@ -37,9 +38,12 @@ interface ProductCardProps {
   has_variants?: boolean
   variants?: StoreCardVariant[]
   sale_type?: "pre_order" | "ready_stock" | "normal"
+  /** `showcase`: cartão grande e mais vistoso, para seções com poucos itens (Serviços). */
+  variant?: "default" | "showcase"
 }
 
 export function ProductCard(props: ProductCardProps) {
+  const showcase = props.variant === "showcase"
   const { cardSurchargePercent, cardMaxInstallments } = useStoreSettings()
   const href = `/loja/${props.slug}`
   const variants = props.variants ?? []
@@ -70,15 +74,21 @@ export function ProductCard(props: ProductCardProps) {
   return (
     <Link href={href} className="group flex h-full flex-col">
       <div className={cn(
-        "relative z-0 flex h-full flex-col overflow-hidden rounded-[18px] border border-[#262626] bg-card transition-all duration-200",
-        "hover:z-10 hover:-translate-y-1 hover:border-[#3a3a3a] hover:shadow-xl hover:shadow-black/40",
+        "relative z-0 flex h-full flex-col overflow-hidden border bg-card transition-all duration-200",
+        showcase
+          ? "rounded-[26px] border-[#2c2c2c] bg-gradient-to-b from-[#1a1a1f] to-card hover:z-10 hover:-translate-y-1.5 hover:border-violet-400/40 hover:shadow-[0_22px_60px_-24px_rgba(167,139,250,0.5)]"
+          : "rounded-[18px] border-[#262626] hover:z-10 hover:-translate-y-1 hover:border-[#3a3a3a] hover:shadow-xl hover:shadow-black/40",
         outOfStock && "opacity-55"
       )}>
         {/* Imagem sem placa própria: o fundo é o do card, então a foto (quase
             sempre PNG recortado em fundo branco) não fica dentro de um
             retângulo cinza destacado. O respiro da cor da categoria só
-            aparece no fallback sem imagem, logo abaixo. */}
-        <div className="relative aspect-square overflow-hidden bg-transparent">
+            aparece no fallback sem imagem, logo abaixo. No `showcase` a arte
+            (pôster quadrado) ganha moldura arredondada com margem do card. */}
+        <div className={cn(
+          "relative aspect-square overflow-hidden",
+          showcase ? "m-3 mb-0 rounded-[18px] bg-[radial-gradient(75%_65%_at_50%_40%,rgba(167,139,250,0.18),#141414_78%)]" : "bg-transparent"
+        )}>
           {image ? (
             <>
               {imageLoaded !== image && (
@@ -95,7 +105,8 @@ export function ProductCard(props: ProductCardProps) {
                 onLoad={() => setImageLoaded(image)}
                 onError={() => setImageLoaded(image)}
                 className={cn(
-                  "h-full w-full object-contain p-4 transition-[opacity,transform] duration-300 group-hover:scale-105",
+                  "h-full w-full object-contain transition-[opacity,transform] duration-300 group-hover:scale-105",
+                  !showcase && "p-4",
                   imageLoaded === image ? "opacity-100" : "opacity-0"
                 )}
               />
@@ -145,41 +156,61 @@ export function ProductCard(props: ProductCardProps) {
         </div>
 
         {/* Info */}
-        <div className="flex flex-1 flex-col gap-2 px-[15px] pb-4 pt-3.5">
+        <div className={cn(
+          "flex flex-1 flex-col",
+          showcase ? "gap-2.5 px-5 pb-5 pt-4" : "gap-2 px-[15px] pb-4 pt-3.5"
+        )}>
           {/* Altura fixa mesmo sem categoria, pra não desalinhar o card com os vizinhos. */}
-          <p className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-[#7a7a7a]">
+          <p className={cn(
+            "font-bold uppercase text-[#7a7a7a]",
+            showcase ? "text-[10.5px] tracking-[0.16em] text-violet-300/70" : "text-[9.5px] tracking-[0.14em]"
+          )}>
             {getCategoryLabel(props.category) || " "}
           </p>
           {/* `font-sans tracking-normal` desfaz o reset global de h3 (Space
               Grotesk + tracking negativo): no mock o nome do produto é Manrope.
               `min-h` reserva 2 linhas sempre, pra não variar a altura entre nomes de 1 e 2 linhas. */}
-          <h3 className="line-clamp-2 min-h-[38px] font-sans text-[14.5px] font-semibold leading-[1.35] tracking-normal text-white">
+          <h3 className={cn(
+            "line-clamp-2 font-sans tracking-normal text-white",
+            showcase
+              ? "min-h-[52px] text-[19px] font-bold leading-[1.3]"
+              : "min-h-[38px] text-[14.5px] font-semibold leading-[1.35]"
+          )}>
             {props.name}
           </h3>
 
           {/* Slot de altura fixa: info do produto (condição/marca) — evita
               cards com heights diferentes no grid. As opções de variante (cor/versão)
               só aparecem na página do produto, não na listagem. */}
-          <div className="flex h-5 flex-wrap items-center gap-[5px]">
+          <div className={cn(
+            "flex h-5 flex-wrap items-center gap-[5px]",
+            showcase && props.condition === "new" && !props.brand && "hidden"
+          )}>
             <p className="line-clamp-1 text-[10.5px] font-medium text-[#7a7a7a]">
               {props.condition !== "new" ? CONDITION_LABEL[props.condition] : (props.brand ?? " ")}
             </p>
           </div>
 
-          <div className="mt-auto text-center">
+          <div className={cn("mt-auto", showcase ? "pt-2 text-left" : "text-center")}>
             {hasDiscount && (
-              <p className="text-[11px] leading-tight text-[#6e6e6e] line-through">{formatBRL(basePriceCents)}</p>
+              <p className={cn("leading-tight text-[#6e6e6e] line-through", showcase ? "text-[12.5px]" : "text-[11px]")}>
+                {formatBRL(basePriceCents)}
+              </p>
             )}
-            <div className="flex flex-wrap items-baseline justify-center gap-2">
+            <div className={cn("flex flex-wrap items-baseline gap-2", showcase ? "justify-start" : "justify-center")}>
               <p className={cn(
-                "font-display text-xl font-bold leading-tight",
+                "font-display font-bold leading-tight",
+                showcase ? "text-[32px]" : "text-xl",
                 hasDiscount ? "text-emerald-400" : "text-white"
               )}>
                 {formatBRL(effectivePriceCents)}
               </p>
-              <span className="text-[9.5px] font-semibold uppercase tracking-wide text-emerald-400/80">à vista no PIX</span>
+              <span className={cn(
+                "font-semibold uppercase tracking-wide text-emerald-400/80",
+                showcase ? "text-[11px]" : "text-[9.5px]"
+              )}>à vista no PIX</span>
             </div>
-            <p className="text-[10px] text-[#7a7a7a]">
+            <p className={cn("text-[#7a7a7a]", showcase ? "text-[12px]" : "text-[10px]")}>
               ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão
               {cardMaxInstallments > 1 && ` em até ${cardMaxInstallments}x sem juros`}
             </p>
@@ -193,6 +224,13 @@ export function ProductCard(props: ProductCardProps) {
               )
             })()}
           </div>
+
+          {showcase && (
+            <span className="mt-1 flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] text-[13.5px] font-bold text-white transition-colors group-hover:border-transparent group-hover:bg-white group-hover:text-black">
+              {outOfStock ? "Ver detalhes" : "Ver serviço"}
+              <ArrowRight className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </span>
+          )}
         </div>
       </div>
     </Link>

@@ -196,8 +196,9 @@ const RANKING_MODES_BY_CATEGORY: Record<string, { key: RankingMode; label: strin
 }
 
 // Modos que não compartilham a coluna `tier` — cada um lê seu próprio valor em
-// `specs.adminTier_<modo>`. "overall"/"magnetic" (teclado) ficam de fora: são o
-// modo "padrão" da categoria e usam a coluna `tier` diretamente.
+// `specs.adminTier_<modo>`. "overall" fica de fora: é o modo "padrão" da categoria e usa a
+// coluna `tier` diretamente. "magnetic" lê a própria chave mesmo no teclado (onde é o modo
+// padrão), porque é nela que o board admin grava; ver `getRankingModeTier`.
 const RANKING_TIER_SPEC_KEY: Partial<Record<RankingMode, string>> = {
   value: "adminTier_value",
   recommended: "adminTier_recommended",
@@ -222,12 +223,16 @@ function getRankingModeTier(
   specs: Record<string, unknown>,
   mode: RankingMode,
 ): string | null {
-  // Teclado usa "magnetic" como modo padrão (compartilha a coluna `tier`).
-  const defaultMode = getDefaultRankingMode(category)
-  if (mode === defaultMode) return tier
   const specKey = RANKING_TIER_SPEC_KEY[mode]
-  if (!specKey) return tier
+  const isMagnetic = mode === "magnetic"
+  // Os outros modos padrão (Geral, OLED) usam a coluna `tier`. Magnético não: o board admin
+  // grava a posição dele em `adminTier_magnetic`, inclusive no teclado, e a coluna `tier` é o
+  // tier do Geral.
+  if (!specKey || (!isMagnetic && mode === getDefaultRankingMode(category))) return tier
   const value = specs?.[specKey]
+  // Item que nunca foi movido na aba Magnético (sem a chave) cai em `tier`, igual ao board
+  // admin e à Tierlist pública. O sentinel "__unassigned__" (Sob Revisão) não é tier válido.
+  if (isMagnetic && value === undefined) return tier
   return typeof value === "string" && (NEW_TIERS as readonly string[]).includes(value) ? value : null
 }
 

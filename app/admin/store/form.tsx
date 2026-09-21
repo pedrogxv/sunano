@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Combobox, MultiCombobox, type ComboboxOption } from "@/components/ui/combobox"
-import { TextFormatToolbar } from "@/components/forum/TextFormatToolbar"
+import { RichTextEditor } from "@/components/ui/rich-text-editor"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
@@ -395,7 +395,6 @@ export function StoreProductForm({
 
   const [hasStock, setHasStock] = useState(product ? product.stock != null : true)
   const [images, setImages] = useState<string[]>(product?.images ?? [])
-  const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [specs, setSpecs] = useState<StoreProductSpec[]>(
     initialSpecs && initialSpecs.length > 0 ? initialSpecs : [{ label: "", value: "" }]
   )
@@ -1494,25 +1493,14 @@ export function StoreProductForm({
       {/* Description */}
       <div className="space-y-2">
         <Label>Descrição</Label>
-        <TextFormatToolbar
-          textareaRef={descriptionTextareaRef}
+        <RichTextEditor
+          className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-within:bg-[#202024]"
+          placeholder="Descreva o produto, características, diferenciais... (evite repetir specs como Plate, Keycaps, Layout, Carcaça, isso já vai na tabela de Especificação Técnica)"
           value={formData.description}
           onChange={(value) => set("description", value)}
         />
-        <textarea
-          ref={descriptionTextareaRef}
-          value={formData.description}
-          onChange={(e) => set("description", e.target.value)}
-          placeholder="Descreva o produto, características, diferenciais... (evite repetir specs como Plate, Keycaps, Layout, Carcaça, isso já vai na tabela de Especificação Técnica)"
-          rows={8}
-          className={cn(
-            "flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background",
-            "placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2",
-            "focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
-          )}
-        />
         <p className="text-[10px] text-muted-foreground/60">
-          Suporta **negrito**, *itálico*, __sublinhado__, ==destaque==, [texto](url) para link e "- item" no início da linha para lista.
+          Selecione um trecho e use os botões (ou Ctrl+B/I/U/K) pra negrito, itálico, sublinhado, destaque e link. Pra linkar outro periférico ou produto da loja, cole a URL da página dele.
         </p>
         <p className="text-[10px] text-amber-600 dark:text-amber-500">
           Não repita aqui specs como Plate, Keycaps, Layout, Carcaça etc.: esses dados já aparecem na tabela de "Especificação Técnica".

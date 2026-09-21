@@ -19,6 +19,7 @@ import {
 } from "@/lib/server/peripherals/ranking-cascade"
 import {
   isExpertCommentTooLong,
+  readExpertComment,
   PERIPHERAL_EXPERT_COMMENT_TOO_LONG,
 } from "@/lib/peripheral-expert"
 import { sanitizeTagsForCategory, type Category } from "@/lib/tag-options"
@@ -50,10 +51,9 @@ const peripheralUpdate = z
       .optional(),
     image_url: z.string().nullable().optional(),
     tags: z.array(z.string()).optional(),
-    specs: z
-      .record(z.string(), z.unknown())
-      .refine((specs) => !isExpertCommentTooLong(specs), PERIPHERAL_EXPERT_COMMENT_TOO_LONG)
-      .optional(),
+    // O teto do comentário de especialista NÃO é validado aqui: neste PATCH ele depende do
+    // que já está gravado (ver a checagem depois de carregar `current`).
+    specs: z.record(z.string(), z.unknown()).optional(),
     weight_g: z.number().int().positive().nullable().optional(),
     connectivity: z.string().max(50).nullable().optional(),
     mouse_shape: z.string().max(50).nullable().optional(),
@@ -154,6 +154,23 @@ export async function PATCH(
     .select("id, name, category, specs, image_url")
     .eq("id", id)
     .single()
+
+  // Teto do comentário de especialista: vale para texto NOVO, nunca para o que já está no
+  // banco. O board da tierlist manda `specs` INTEIRO a cada arrastada (ver
+  // `persistReorderedItems` em app/admin/tierlist/page.tsx) e reordena os vizinhos junto,
+  // então um item legado com comentário acima do teto fazia qualquer arrastada, inclusive de
+  // OUTRO card, voltar com "O comentário pode ter no máximo 2500 caracteres." numa tela que
+  // não edita comentário nenhum, e o `Promise.all` desfazia o movimento inteiro. Quem edita
+  // o texto é o formulário, e lá o zod continua recusando (ver app/admin/tierlist/form.tsx).
+  if (parsed.data.specs !== undefined && isExpertCommentTooLong(parsed.data.specs)) {
+    const stored = readExpertComment(current?.specs as Record<string, unknown> | undefined)
+    if (readExpertComment(parsed.data.specs) !== stored) {
+      return NextResponse.json(
+        { error: PERIPHERAL_EXPERT_COMMENT_TOO_LONG, field: "specs" },
+        { status: 400 }
+      )
+    }
+  }
 
   // Sanitiza tags contra a categoria efetiva do item (a nova, se estiver trocando de
   // categoria neste mesmo PATCH; senão a atual) — mesmo self-heal do formulário de admin,

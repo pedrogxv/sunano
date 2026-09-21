@@ -175,22 +175,25 @@ function SectionHeading({
   )
 }
 
-/** Carrossel horizontal reutilizado por Destaques e Disponibilidade (pronta entrega + pré-venda). */
+/** Carrossel horizontal reutilizado pelas seções de produto da Home (pré-venda, mais vendidos, pronta entrega, etc). */
 function ProductCarouselSection({
   items,
   eyebrow,
   title,
   icon: Icon,
   iconClassName,
+  showcase = false,
 }: {
   items: StoreProductCard[]
   eyebrow: string
   title: string
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
   iconClassName: string
+  /** Cards grandes e vistosos, para seções com poucos itens (Serviços). */
+  showcase?: boolean
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const showCarouselControls = items.length > 5
+  const showCarouselControls = items.length > (showcase ? 3 : 5)
 
   if (items.length === 0) return null
 
@@ -227,8 +230,11 @@ function ProductCarouselSection({
       </div>
       <div ref={scrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 scrollbar-hide sm:gap-3.5 lg:-mx-8 lg:px-8">
         {items.map((product) => (
-          <div key={product.id} className="w-[188px] shrink-0 sm:w-[258px]">
-            <ProductCard {...product} />
+          <div
+            key={product.id}
+            className={cn("shrink-0", showcase ? "w-[264px] sm:w-[372px]" : "w-[188px] sm:w-[258px]")}
+          >
+            <ProductCard {...product} variant={showcase ? "showcase" : "default"} />
           </div>
         ))}
       </div>
@@ -405,13 +411,6 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
     }
   }, [initialItems, initialFeatured])
 
-  // Pronta entrega primeiro (compra imediata), pré-venda depois — cada
-  // ProductCard já traz o badge do tipo, então uma fileira só basta.
-  const availabilityItems = useMemo(
-    () => [...readyStockItems, ...preOrderItems],
-    [readyStockItems, preOrderItems]
-  )
-
   const activeCategory = filters.categories.length === 1 ? filters.categories[0] : null
   const activeFiltersCount = countActiveFilters(filters, lockedCategory, lockedBrand)
 
@@ -524,39 +523,11 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           </section>
         )}
 
-        {/* Pronta entrega + Pré-venda numa seção só — só na landing de marca
-            (mesmo motivo dos Destaques acima). O badge de cada ProductCard já
-            diferencia o tipo de venda, então separar em duas fileiras era
-            redundante. Pronta entrega primeiro (compra imediata). */}
-        {!banner && (
-          <ProductCarouselSection
-            items={availabilityItems}
-            eyebrow="Disponibilidade"
-            title="Pronta entrega e pré-venda"
-            icon={Package}
-            iconClassName="text-emerald-400"
-          />
-        )}
-
-        {/* Seções dinâmicas da Home — só na Loja geral (sem banner). Cada uma
+        {/* Seções dinâmicas da Home, só na Loja geral (sem banner). Cada uma
             só existe se tiver produto (ProductCarouselSection já retorna null
-            vazia); não há fallback estático. */}
+            vazia). Pré-venda vem primeiro. */}
         {!banner && (
           <>
-            {sectionBanners.best_sellers.length > 0 ? (
-              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-                <SectionHeading eyebrow="Popularidade" title="Mais vendidos" icon={TrendingUp} iconClassName="text-amber-400" />
-                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.best_sellers)} />
-              </section>
-            ) : (
-              <ProductCarouselSection
-                items={bestSellingItems}
-                eyebrow="Popularidade"
-                title="Mais vendidos"
-                icon={TrendingUp}
-                iconClassName="text-amber-400"
-              />
-            )}
             {sectionBanners.pre_sale.length > 0 ? (
               <section className="flex flex-col gap-3.5 sm:gap-[18px]">
                 <SectionHeading eyebrow="Lançamento" title="Pré-venda 🔥🔥🔥" icon={Flame} iconClassName="text-orange-400" />
@@ -569,6 +540,20 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 title="Pré-venda 🔥🔥🔥"
                 icon={Flame}
                 iconClassName="text-orange-400"
+              />
+            )}
+            {sectionBanners.best_sellers.length > 0 ? (
+              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
+                <SectionHeading eyebrow="Popularidade" title="Mais vendidos" icon={TrendingUp} iconClassName="text-amber-400" />
+                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.best_sellers)} />
+              </section>
+            ) : (
+              <ProductCarouselSection
+                items={bestSellingItems}
+                eyebrow="Popularidade"
+                title="Mais vendidos"
+                icon={TrendingUp}
+                iconClassName="text-amber-400"
               />
             )}
             {sectionBanners.ready_stock.length > 0 ? (
@@ -605,6 +590,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
               title="Serviços"
               icon={Wrench}
               iconClassName="text-violet-400"
+              showcase
             />
           </>
         )}

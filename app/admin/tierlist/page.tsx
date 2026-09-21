@@ -1066,7 +1066,7 @@ function DroppableUnassignedPool({
 }
 
 
-// Pool da aba Custo Benefício: itens que não resolvem faixa nenhuma (preço abaixo de R$100 ou
+// Pool da aba Custo Benefício: itens que não resolvem faixa nenhuma (preço abaixo de R$50 ou
 // não preenchido, sem `adminPriceGroup` e sem GOLPE — ver resolvePriceGroupKey). Sem este
 // bloco eles eram descartados por `if (!group) continue` e sumiam do board: o admin vinculava
 // o periférico à aba, recebia o toast de sucesso e não tinha onde arrastá-lo. É o equivalente
@@ -1303,6 +1303,12 @@ export default function AdminPeripheralsPage() {
         }
       }),
     )
+
+    // O banner de erro só era limpo no recarregamento da lista, então a mensagem de uma
+    // arrastada que falhou ficava na tela pelo resto da sessão, inclusive depois de
+    // arrastadas que deram certo e em outra aba do board. Era isso que fazia o erro
+    // parecer ter aparecido sozinho, sem relação com a ação de agora.
+    setError(null)
   }, [t])
 
   // Move o item pra `destinationGroup`. A posição é sempre manual (specs.adminPriceGroup) —
@@ -1414,6 +1420,8 @@ export default function AdminPeripheralsPage() {
         }
       }),
     )
+
+    setError(null)
   }, [t])
 
   const loadPeripherals = useCallback(async () => {
@@ -1866,7 +1874,7 @@ export default function AdminPeripheralsPage() {
 
   // Atalho do botão "+" de cada faixa de preço — equivalente do `handleAddToTier` na aba
   // Custo Benefício: vincula ao modo E já grava a faixa alvo (`adminPriceGroup`/GOLPE) no
-  // mesmo PATCH. Sem gravar a faixa, um item de preço abaixo de R$100 continuaria sem faixa
+  // mesmo PATCH. Sem gravar a faixa, um item de preço abaixo de R$50 continuaria sem faixa
   // resolvida e cairia no pool em vez da linha em que o admin clicou.
   async function handleAddToPriceBand(id: string, group: PriceGroupKey) {
     const item = peripherals.find((p) => p.id === id)
@@ -2221,7 +2229,7 @@ export default function AdminPeripheralsPage() {
             )}
           </section>
 
-          {/* Pool "Sem faixa de preço": item de preço abaixo de R$100 (ou não preenchido) não
+          {/* Pool "Sem faixa de preço": item de preço abaixo de R$50 (ou não preenchido) não
               cai em faixa nenhuma. Antes ele era simplesmente descartado do board e o admin
               não tinha como colocá-lo em lugar nenhum depois de vincular. */}
           <div

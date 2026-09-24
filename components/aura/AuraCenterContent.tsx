@@ -49,7 +49,7 @@ import { AvatarFrameSection } from "@/components/aura/AvatarFrameSection"
 import { AuraPeripheralSection } from "@/components/aura/AuraPeripheralSection"
 import type { PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
 import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
-import type { TrustSummary } from "@/lib/server/repositories/trust-repository"
+import type { PublicTrustSummary } from "@/lib/server/repositories/trust-repository"
 import { getDiscordMembershipFeedback } from "@/lib/discord-membership"
 
 type AuraUsage = {
@@ -111,7 +111,7 @@ interface AuraCenterContentProps {
    * do prêmio FÍSICO: agora exige faixa "Muito Bom" e status sem restrição
    * (ver `can_redeem_physical_item`).
    */
-  trust: TrustSummary
+  trust: PublicTrustSummary
 }
 
 /**

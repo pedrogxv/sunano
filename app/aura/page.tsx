@@ -25,7 +25,7 @@ import { getProfileShippingPrefill, getUserProfileSettings } from "@/lib/server/
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
 import { AuraCenterContent } from "@/components/aura/AuraCenterContent"
 import { getStreakFrameItemIds, getVipFounderItemId } from "@/lib/server/repositories/vip-founder-repository"
-import { getTrustSummary } from "@/lib/server/repositories/trust-repository"
+import { getTrustSummary, toPublicTrust } from "@/lib/server/repositories/trust-repository"
 import { TRUST_BASE_SCORE, canRedeemPhysicalItem, testerEligibility, trustLevelOf } from "@/lib/trust-factor"
 
 export const dynamic = "force-dynamic"
@@ -104,16 +104,18 @@ export default async function AuraCenterPage() {
     // Trust Factor — quem SUBSTITUIU o antigo "nível verificado" como trava
     // do prêmio físico. Visitante deslogado recebe a base (50), que não
     // resgata nada: o card fica visível, o botão travado.
+    //
+    // `toPublicTrust` tira `score` e `flags` ANTES da fronteira: daqui pra
+    // frente é prop de Client Component, e prop de Client Component é
+    // serializada no HTML. A tela só usa faixa e status.
     userId
-      ? getTrustSummary(userId)
+      ? getTrustSummary(userId).then(toPublicTrust)
       : Promise.resolve({
-          score: TRUST_BASE_SCORE,
           level: trustLevelOf(TRUST_BASE_SCORE),
           status: "active" as const,
           updatedAt: null,
           canRedeemPhysical: canRedeemPhysicalItem(TRUST_BASE_SCORE, "active"),
           tester: testerEligibility(TRUST_BASE_SCORE, "active"),
-          flags: [],
         }),
   ])
 

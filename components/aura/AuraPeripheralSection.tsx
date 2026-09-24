@@ -15,7 +15,7 @@ import type { PeripheralOwnerEntry } from "@/components/aura/AuraCenterContent"
 import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { PeripheralRedeemDialog, type PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
 import type { ShippingForm } from "@/components/store/ShippingAddressFields"
-import type { TrustSummary } from "@/lib/server/repositories/trust-repository"
+import type { PublicTrustSummary } from "@/lib/server/repositories/trust-repository"
 import { TrustSeal } from "@/components/ui/TrustBadge"
 import { TRUST_PHYSICAL_REDEEM_LEVEL, trustLevelLabel } from "@/lib/trust-factor"
 
@@ -29,7 +29,7 @@ interface AuraPeripheralSectionProps {
   /** VIP ativo agora — 10% off no custo, igual ao resto da Central (a RPC desconta o real). */
   isVip: boolean
   /** Trust Factor da conta — trava o resgate (ver `can_redeem_physical_item`). */
-  trust: TrustSummary
+  trust: PublicTrustSummary
   currentUserSlug: string | null
   currentUserAvatarUrl: string | null
   currentUserName: string
@@ -169,7 +169,7 @@ interface AuraPeripheralCardProps {
   balance: number
   isLoggedIn: boolean
   isVip: boolean
-  trust: TrustSummary
+  trust: PublicTrustSummary
   currentUserSlug: string | null
   currentUserAvatarUrl: string | null
   currentUserName: string

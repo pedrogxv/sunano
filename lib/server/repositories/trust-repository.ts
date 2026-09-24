@@ -40,6 +40,38 @@ export type TrustSummary = {
   flags: TrustFlag[]
 }
 
+/**
+ * Recorte do Trust que pode ATRAVESSAR a fronteira do servidor.
+ *
+ * `score` e `flags` ficam de fora, e não por estilo: prop de Client Component
+ * é serializada no payload RSC, ou seja, vai no HTML da página. O número
+ * exato entrega o gradiente que um farmador precisa para calibrar (é a mesma
+ * razão de `can_redeem_physical_item` ser `service_role`), e a lista de flags
+ * abertas diz a quem está fraudando qual detecção disparou.
+ *
+ * Toda tela do site mostra só a FAIXA. Quem precisa do número é o painel
+ * (`/admin/trust`), que é Server Component e lê `TrustSummary` direto.
+ */
+export type PublicTrustSummary = Omit<TrustSummary, "score" | "flags">
+
+/**
+ * Estreita o resumo antes de entregá-lo a um Client Component.
+ *
+ * Existe como função, e não como "lembre de não passar o objeto inteiro",
+ * porque TypeScript aceita um objeto mais largo onde se espera um mais
+ * estreito: só tipar a prop como `PublicTrustSummary` não impediria o
+ * `TrustSummary` inteiro de ser serializado.
+ */
+export function toPublicTrust(summary: TrustSummary): PublicTrustSummary {
+  return {
+    level: summary.level,
+    status: summary.status,
+    updatedAt: summary.updatedAt,
+    canRedeemPhysical: summary.canRedeemPhysical,
+    tester: summary.tester,
+  }
+}
+
 const DEFAULT_SUMMARY: TrustSummary = {
   score: TRUST_BASE_SCORE,
   level: trustLevelOf(TRUST_BASE_SCORE),

@@ -7,7 +7,6 @@ import {
   BadgePercent,
   BarChart2,
   BookOpen,
-  Clock3,
   Crown,
   Home,
   Info,
@@ -18,6 +17,7 @@ import {
   PlaySquare,
   ShoppingBag,
   ShoppingCart,
+  Sparkles,
   Trophy,
   Users,
 } from "lucide-react"
@@ -149,13 +149,14 @@ export function PublicSidebar() {
       <aside
         className={cn(
           // h-dvh e não h-screen: 100vh é o viewport *sem* a barra de URL do navegador
-          // mobile, o que empurra o rodapé (Changelog, links legais) para fora da tela.
+          // mobile, o que empurra o fim da lista (Patch Notes, Central de Informações)
+          // para fora da tela.
           "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col border-border bg-background transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
           isMobileOpen ? "translate-x-0" : "-translate-x-full",
           isCollapsed ? "md:w-16" : "md:w-60"
         )}
       >
-        <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-4">
+        <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-6">
           {/* Brand */}
           <Link
             href="/"
@@ -177,45 +178,18 @@ export function PublicSidebar() {
             )}
           </Link>
 
-          {/* Início */}
-          <NavLink
-            item={{ href: "/", label: t.nav.home, icon: Home }}
-            isActive={pathname === "/"}
-            collapsed={isCollapsed}
-            onClick={close}
-          />
-
-          {/* Periféricos */}
-          <SectionLabel label={t.nav.peripherals} collapsed={isCollapsed} />
+          {/* Início + Loja + Promoções. A Loja e as Promoções são os destinos que
+              levam a pessoa a comprar: ficam logo abaixo do Início, antes de
+              qualquer seção, e não no fim de Periféricos onde ninguém rolava até lá. */}
           <div className="space-y-1">
-            {peripheralItems.map((item) => (
-              <NavLink
-                key={item.href}
-                item={item}
-                isActive={isActive(item.href)}
-                collapsed={isCollapsed}
-                onClick={close}
-              />
-            ))}
-          </div>
+            {/* Início */}
+            <NavLink
+              item={{ href: "/", label: t.nav.home, icon: Home }}
+              isActive={pathname === "/"}
+              collapsed={isCollapsed}
+              onClick={close}
+            />
 
-          {/* Conteúdo */}
-          <SectionLabel label={t.nav.content} collapsed={isCollapsed} />
-          <div className="space-y-1">
-            {contentItems.map((item) => (
-              <NavLink
-                key={item.href}
-                item={item}
-                isActive={isActive(item.href)}
-                collapsed={isCollapsed}
-                onClick={close}
-              />
-            ))}
-          </div>
-
-          {/* Mercado */}
-          <SectionLabel label={t.nav.shop} collapsed={isCollapsed} />
-          <div className="space-y-1">
             {/* Loja */}
             <Link
               href="/loja"
@@ -268,6 +242,34 @@ export function PublicSidebar() {
                 {t.nav.offers}
               </span>
             </Link>
+          </div>
+
+          {/* Periféricos */}
+          <SectionLabel label={t.nav.peripherals} collapsed={isCollapsed} />
+          <div className="space-y-1">
+            {peripheralItems.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                isActive={isActive(item.href)}
+                collapsed={isCollapsed}
+                onClick={close}
+              />
+            ))}
+          </div>
+
+          {/* Conteúdo */}
+          <SectionLabel label={t.nav.content} collapsed={isCollapsed} />
+          <div className="space-y-1">
+            {contentItems.map((item) => (
+              <NavLink
+                key={item.href}
+                item={item}
+                isActive={isActive(item.href)}
+                collapsed={isCollapsed}
+                onClick={close}
+              />
+            ))}
 
             {/* Central de Aura */}
             <Link
@@ -291,67 +293,62 @@ export function PublicSidebar() {
               </span>
             </Link>
           </div>
-        </nav>
 
-        {/* Changelog para quem é VIP; convite para assinar para quem não é.
-            O gate é `isVip` (VIP valendo AGORA), NÃO "tem assinatura viva":
-            quem cancelou dentro do período pago continua VIP até o fim dele e
-            não pode perder o Changelog por isso — era exatamente o que
-            acontecia quando esta condição também exigia
-            `!subscriptionCanceled`.
+          {/* Mais — Patch Notes, convite VIP e Central de Informações.
+              Ficavam num rodapé fixo, encolhido no canto: quem não rolava
+              o olhar até lá nunca via. Agora fecham a lista, no mesmo ritmo
+              dos demais itens.
 
-            O convite a reativar existe, mas no dropdown da conta (ao lado do
-            selo VIP) e na aba de assinatura, que é onde ele cabe sem tirar
-            nada de quem ainda tem acesso. Ver lib/vip-status.ts. */}
-        <div className="border-t border-border px-3 py-3">
-          {!authUser?.vip.isVip && isVipSubscriptionEnabled() ? (
-            <button
-              type="button"
-              onClick={() => {
-                close()
-                // Deslogado também abre a OFERTA, não o login: o popup se
-                // apresenta no modo de visitante (vantagens + "Entrar"/"Criar
-                // conta") e retoma a assinatura sozinho depois. Mandar direto
-                // para o login perdia o motivo do clique — a pessoa
-                // autenticava e caía no fórum, sem nada sobre VIP.
-                setVipUpsellOpen(true)
-              }}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-lg border border-[var(--vip-accent-soft)] px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--vip-accent-soft)]",
-                isCollapsed && "justify-center"
-              )}
-              style={{ color: "var(--vip-accent)" }}
-            >
-              <Crown className="size-[18px] shrink-0 vip-badge-crown" />
-              <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>
-                {/* Visitante deslogado não tem estado: o convite é o genérico. */}
-                {authUser ? vipCtaLabel(authUser.vip) ?? "Seja VIP" : "Seja VIP"}
-              </span>
-            </button>
-          ) : (
+              O convite VIP aparece para quem NÃO é VIP AGORA (`isVip`, não
+              "tem assinatura viva": quem cancelou dentro do período pago
+              continua VIP até o fim dele). Patch Notes é para todos, a página
+              é pública; antes era um "ou" com o convite porque só havia UM
+              slot no rodapé. Ver lib/vip-status.ts. */}
+          <SectionLabel label={t.nav.more} collapsed={isCollapsed} />
+          <div className="space-y-1">
             <NavLink
-              item={{ href: "/changelog", label: "Changelog", icon: Clock3 }}
+              item={{ href: "/changelog", label: t.nav.patchNotes, icon: Sparkles }}
               isActive={isActive("/changelog")}
               collapsed={isCollapsed}
               onClick={close}
             />
-          )}
-        </div>
 
-        {/* Central de Informações — hub dos documentos legais/institucionais.
-            Um link só; as páginas individuais seguem em suas URLs próprias. */}
-        {!isCollapsed && (
-          <div className="border-t border-border px-3 py-2">
-            <Link
-              href="/informacoes"
-              className="flex items-center gap-2 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <Info className="size-3 shrink-0" />
-              Central de Informações
-            </Link>
+            {!authUser?.vip.isVip && isVipSubscriptionEnabled() && (
+              <button
+                type="button"
+                onClick={() => {
+                  close()
+                  // Deslogado também abre a OFERTA, não o login: o popup se
+                  // apresenta no modo de visitante (vantagens + "Entrar"/"Criar
+                  // conta") e retoma a assinatura sozinho depois. Mandar direto
+                  // para o login perdia o motivo do clique — a pessoa
+                  // autenticava e caía no fórum, sem nada sobre VIP.
+                  setVipUpsellOpen(true)
+                }}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-lg border border-[var(--vip-accent-soft)] px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--vip-accent-soft)]",
+                  isCollapsed && "justify-center"
+                )}
+                style={{ color: "var(--vip-accent)" }}
+              >
+                <Crown className="size-[18px] shrink-0 vip-badge-crown" />
+                <span className={cn("flex-1 text-left", isCollapsed && "hidden")}>
+                  {/* Visitante deslogado não tem estado: o convite é o genérico. */}
+                  {authUser ? vipCtaLabel(authUser.vip) ?? "Seja VIP" : "Seja VIP"}
+                </span>
+              </button>
+            )}
+
+            {/* Hub dos documentos legais/institucionais. Um link só; as
+                páginas individuais seguem em suas URLs próprias. */}
+            <NavLink
+              item={{ href: "/informacoes", label: t.nav.info, icon: Info }}
+              isActive={isActive("/informacoes")}
+              collapsed={isCollapsed}
+              onClick={close}
+            />
           </div>
-        )}
-
+        </nav>
       </aside>
 
       <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />

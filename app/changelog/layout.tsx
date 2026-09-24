@@ -5,11 +5,11 @@ import { buildMetadata } from "@/lib/seo"
 // pode exportar `metadata` — daí este layout, que existe só para dar título e
 // canonical próprios à rota em vez de herdar os da home.
 export const metadata: Metadata = buildMetadata({
-  title: "Changelog",
-  socialTitle: "Changelog: tudo que mudou no site",
+  title: "Patch Notes",
+  socialTitle: "Patch Notes: tudo que mudou no site",
   description: "Todas as novidades, melhorias e correções lançadas na Sunano, versão por versão, com data de cada entrega.",
   path: "/changelog",
-  eyebrow: "Changelog",
+  eyebrow: "Patch Notes",
   subtitle: "Novidades versão por versão",
 })
 

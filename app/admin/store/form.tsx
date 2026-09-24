@@ -233,7 +233,11 @@ function buildAutofillFromPeripheral(p: PeripheralFullData): {
 
   const specs: StoreProductSpec[] = []
   const pushSpec = (label: string, value: string | null | undefined) => {
-    if (value != null && String(value).trim()) specs.push({ label, value: String(value).trim() })
+    if (value == null || !String(value).trim()) return
+    // Coluna real e `details.*` (dual-write legado) podem trazer o mesmo campo
+    // (ex: Peso); o primeiro a entrar é a coluna real e vence.
+    if (specs.some((s) => s.label === label)) return
+    specs.push({ label, value: String(value).trim() })
   }
 
   // Colunas reais têm prioridade sobre `specs.details` (dual-write legado) — mesma

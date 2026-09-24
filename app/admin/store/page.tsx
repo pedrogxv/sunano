@@ -74,6 +74,7 @@ interface StoreProduct {
   is_active: boolean
   is_sold_out: boolean
   is_featured: boolean
+  featured_position: number | null
   pin_best_seller: boolean
   best_seller_position: number | null
   has_variants: boolean
@@ -153,17 +154,19 @@ function formatCategoryLabel(key: string): string {
 }
 
 // ────────────────────────────────────────────
-// Linha arrastável do painel "Mais vendidos — ordem manual"
+// Linha arrastável dos painéis de ordem manual ("Destaques" e "Mais vendidos")
 // ────────────────────────────────────────────
 function SortablePinnedRow({
   product,
   position,
   onUnpin,
+  unpinLabel,
   isBusy,
 }: {
   product: StoreProduct
   position: number
   onUnpin: (product: StoreProduct) => void
+  unpinLabel: string
   isBusy: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -211,8 +214,8 @@ function SortablePinnedRow({
         size="icon"
         variant="ghost"
         className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-        aria-label="Desfixar de Mais vendidos"
-        title="Desfixar de Mais vendidos"
+        aria-label={unpinLabel}
+        title={unpinLabel}
         disabled={isBusy}
         onClick={() => onUnpin(product)}
       >
@@ -242,9 +245,12 @@ export default function AdminStorePage() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, id: "" })
   const [deleting, setDeleting] = useState(false)
 
-  // Painel "Mais vendidos — ordem manual": lista à parte dos produtos
-  // fixados, carregada independente da tabela paginada/filtrada abaixo, pra
-  // sempre mostrar todos os fixados (mesmo os que a busca/filtro atual esconde).
+  // Painéis de ordem manual ("Destaques" e "Mais vendidos"): listas à parte
+  // dos produtos marcados, carregadas independente da tabela paginada/filtrada
+  // abaixo, pra sempre mostrar todos (mesmo os que a busca/filtro atual esconde).
+  const [featuredProducts, setFeaturedProducts] = useState<StoreProduct[]>([])
+  const [loadingFeatured, setLoadingFeatured] = useState(true)
+  const [reorderingFeatured, setReorderingFeatured] = useState(false)
   const [pinnedProducts, setPinnedProducts] = useState<StoreProduct[]>([])
   const [loadingPinned, setLoadingPinned] = useState(true)
   const [reorderingPinned, setReorderingPinned] = useState(false)
@@ -296,6 +302,56 @@ export default function AdminStorePage() {
   useEffect(() => { load() }, [load])
 
   useEffect(() => { setPage(1) }, [outOfStockOnly, debouncedSearch, categoryFilter, brandFilter, saleTypeFilter, sort])
+
+  const loadFeatured = useCallback(async () => {
+    setLoadingFeatured(true)
+    try {
+      const res = await fetch("/api/admin/store/products?featured=1&pageSize=100")
+      const data = (await res.json()) as { products?: StoreProduct[]; error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao carregar")
+      setFeaturedProducts(data.products ?? [])
+    } catch (err) {
+      toast.error("Erro ao carregar destaques", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setLoadingFeatured(false)
+    }
+  }, [])
+
+  useEffect(() => { loadFeatured() }, [loadFeatured])
+
+  async function handleFeaturedDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+
+    const oldIndex = featuredProducts.findIndex((p) => p.id === active.id)
+    const newIndex = featuredProducts.findIndex((p) => p.id === over.id)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const previous = featuredProducts
+    const reordered = arrayMove(featuredProducts, oldIndex, newIndex)
+    setFeaturedProducts(reordered)
+    setReorderingFeatured(true)
+    try {
+      const res = await fetch("/api/admin/store/products/reorder-featured", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: reordered.map((p) => p.id) }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        throw new Error(data?.error ?? "Erro ao reordenar.")
+      }
+    } catch (err) {
+      setFeaturedProducts(previous)
+      toast.error("Não foi possível reordenar", {
+        description: err instanceof Error ? err.message : undefined,
+      })
+    } finally {
+      setReorderingFeatured(false)
+    }
+  }
 
   const loadPinned = useCallback(async () => {
     setLoadingPinned(true)
@@ -416,6 +472,7 @@ export default function AdminStorePage() {
       toast.success(!product.is_featured ? "Produto marcado como destaque" : "Destaque removido", {
         description: product.name,
       })
+      loadFeatured()
     }
   }
 
@@ -500,6 +557,46 @@ export default function AdminStorePage() {
         </div>
       </div>
 
+      {/* Destaques — ordem manual */}
+      <div className="space-y-2.5 rounded-xl border border-border bg-card/50 p-3.5">
+        <div className="flex items-center gap-2">
+          <Star className="size-4 fill-amber-400 text-amber-400" strokeWidth={0} />
+          <p className="text-sm font-semibold text-foreground">Destaques: ordem manual</p>
+          <p className="text-xs text-muted-foreground">
+            {featuredProducts.length > 0
+              ? "Arraste pra reordenar. É essa a ordem de Selecionados da semana na Loja (as 8 primeiras vagas)."
+              : "Marque um produto pela estrela na lista abaixo pra ele aparecer aqui."}
+          </p>
+        </div>
+        {loadingFeatured ? (
+          <div className="flex justify-center py-4">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : featuredProducts.length > 0 ? (
+          <DndContext
+            sensors={dragSensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+            onDragEnd={handleFeaturedDragEnd}
+          >
+            <SortableContext items={featuredProducts.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-1.5">
+                {featuredProducts.map((p, index) => (
+                  <SortablePinnedRow
+                    key={p.id}
+                    product={p}
+                    position={index + 1}
+                    onUnpin={toggleFeatured}
+                    unpinLabel="Remover dos Destaques"
+                    isBusy={reorderingFeatured || savingId === p.id}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        ) : null}
+      </div>
+
       {/* Mais vendidos — ordem manual */}
       <div className="space-y-2.5 rounded-xl border border-border bg-card/50 p-3.5">
         <div className="flex items-center gap-2">
@@ -530,6 +627,7 @@ export default function AdminStorePage() {
                     product={p}
                     position={index + 1}
                     onUnpin={togglePinBestSeller}
+                    unpinLabel="Desfixar de Mais vendidos"
                     isBusy={reorderingPinned || savingId === p.id}
                   />
                 ))}

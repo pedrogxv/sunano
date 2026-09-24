@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, PackageX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
@@ -77,8 +77,7 @@ export function ProductCard(props: ProductCardProps) {
         "relative z-0 flex h-full flex-col overflow-hidden border bg-card transition-all duration-200",
         showcase
           ? "rounded-[26px] border-[#2c2c2c] bg-gradient-to-b from-[#1a1a1f] to-card hover:z-10 hover:-translate-y-1.5 hover:border-violet-400/40 hover:shadow-[0_22px_60px_-24px_rgba(167,139,250,0.5)]"
-          : "rounded-[18px] border-[#262626] hover:z-10 hover:-translate-y-1 hover:border-[#3a3a3a] hover:shadow-xl hover:shadow-black/40",
-        outOfStock && "opacity-55"
+          : "rounded-[18px] border-[#262626] hover:z-10 hover:-translate-y-1 hover:border-[#3a3a3a] hover:shadow-xl hover:shadow-black/40"
       )}>
         {/* Imagem sem placa própria: o fundo é o do card, então a foto (quase
             sempre PNG recortado em fundo branco) não fica dentro de um
@@ -107,13 +106,13 @@ export function ProductCard(props: ProductCardProps) {
                 className={cn(
                   "h-full w-full object-contain transition-[opacity,transform] duration-300 group-hover:scale-105",
                   !showcase && "p-4",
-                  imageLoaded === image ? "opacity-100" : "opacity-0"
+                  imageLoaded === image ? (outOfStock ? "opacity-45 grayscale" : "opacity-100") : "opacity-0"
                 )}
               />
             </>
           ) : (
             <div
-              className="flex h-full items-center justify-center"
+              className={cn("flex h-full items-center justify-center", outOfStock && "opacity-50 grayscale")}
               style={{ background: `radial-gradient(120% 120% at 50% 15%, color-mix(in oklab, ${tint} 13%, #141414), #141414)` }}
             >
               <CategoryIcon
@@ -138,17 +137,27 @@ export function ProductCard(props: ProductCardProps) {
             </span>
           )}
 
-          {hasDiscount && (
+          {/* Selo de desconto some quando esgotou, igual ao selo de pré-venda:
+              debaixo do escurecido ele vira um vermelho sujo e disputa a
+              atenção com a única informação que importa ali. O desconto
+              continua dito pelo preço riscado, logo abaixo. */}
+          {hasDiscount && !outOfStock && (
             <span className="absolute bottom-3 left-3 z-[1] rounded-lg bg-red-600 px-2 py-1 text-[11px] font-extrabold text-white">
               -{discountPercent}%
             </span>
           )}
 
-          {/* Esgotado: escurece só a imagem — o card inteiro já perde opacidade
-              acima, então aqui é só reforçar o texto sem duplicar o efeito. */}
+          {/* Esgotado: a foto sai de cena (dessatura + escurece, logo acima) e a
+              etiqueta fica em contraste cheio por cima. O card inteiro NÃO perde
+              opacidade: era isso que deixava a própria etiqueta a 55% e o preço
+              ilegível — a mensagem que mais precisa ser lida saía a mais fraca. */}
           {outOfStock && (
-            <div className="absolute inset-0 z-[1] flex items-center justify-center bg-black/55">
-              <span className="font-display text-xs font-bold uppercase tracking-[0.1em] text-white">
+            <div className="absolute inset-0 z-[2] flex items-center justify-center bg-gradient-to-b from-black/25 via-black/45 to-black/65">
+              <span className={cn(
+                "flex items-center gap-1.5 rounded-full border border-white/25 bg-black/75 font-display font-bold uppercase text-white shadow-lg shadow-black/60 backdrop-blur-[2px]",
+                showcase ? "gap-2 px-4 py-2 text-[12px] tracking-[0.2em]" : "px-3 py-1.5 text-[10.5px] tracking-[0.18em]"
+              )}>
+                <PackageX className={showcase ? "size-3.5" : "size-3"} strokeWidth={2.5} />
                 Esgotado
               </span>
             </div>
@@ -158,7 +167,8 @@ export function ProductCard(props: ProductCardProps) {
         {/* Info */}
         <div className={cn(
           "flex flex-1 flex-col",
-          showcase ? "gap-2.5 px-5 pb-5 pt-4" : "gap-2 px-[15px] pb-4 pt-3.5"
+          showcase ? "gap-2.5 px-5 pb-5 pt-4" : "gap-2 px-[15px] pb-4 pt-3.5",
+          outOfStock && "opacity-70"
         )}>
           {/* Altura fixa mesmo sem categoria, pra não desalinhar o card com os vizinhos. */}
           <p className={cn(
@@ -208,7 +218,7 @@ export function ProductCard(props: ProductCardProps) {
               <span className={cn(
                 "font-semibold uppercase tracking-wide text-emerald-400/80",
                 showcase ? "text-[11px]" : "text-[9.5px]"
-              )}>à vista no PIX</span>
+              )}>no PIX</span>
             </div>
             <p className={cn("text-[#7a7a7a]", showcase ? "text-[12px]" : "text-[10px]")}>
               ou {formatBRL(computeCardPriceCents(effectivePriceCents, cardSurchargePercent))} no cartão

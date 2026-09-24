@@ -148,7 +148,6 @@ type Translations = {
     peripherals: string
     softwares: string
     content: string
-    shop: string
     news: string
     videos: string
     forum: string
@@ -157,6 +156,10 @@ type Translations = {
     offers: string
     people: string
     events: string
+    /** Rótulo da última seção da sidebar (Patch Notes, VIP, informações). */
+    more: string
+    patchNotes: string
+    info: string
   }
   common: {
     all: string
@@ -1065,6 +1068,10 @@ type Translations = {
     refresh: string
     join: string
     telegramChannel: string
+    /** Convite pro canal, na barra lateral: título, linha de apoio e botão. */
+    joinCardTitle: string
+    joinCardSubtitle: string
+    joinCardAction: string
     noMessages: string
     tryLater: string
     new: string
@@ -1216,7 +1223,6 @@ export const translations: Record<LocaleCode, Translations> = {
       peripherals: "Periféricos",
       softwares: "Softwares",
       content: "Comunidade",
-      shop: "Loja",
       news: "Notícias",
       videos: "Vídeos e redes sociais",
       forum: "Fórum",
@@ -1225,6 +1231,9 @@ export const translations: Record<LocaleCode, Translations> = {
       offers: "Promoções",
       people: "Usuários",
       events: "Conquistas",
+      more: "Mais",
+      patchNotes: "Patch Notes",
+      info: "Central de Informações",
     },
     common: {
       all: "Todos",
@@ -1566,7 +1575,7 @@ export const translations: Record<LocaleCode, Translations> = {
       accountDesc: "Acesso, preferências e privacidade.",
       videos: "Vídeos e redes sociais",
       videosDesc: "Conteúdo em vídeo do canal e todos os canais oficiais do Sunano.",
-      changelog: "Changelog",
+      changelog: "Patch Notes",
       changelogDesc: "Histórico de mudanças no site.",
       review: "Review",
       peripheral: "Periférico",
@@ -2196,6 +2205,9 @@ export const translations: Record<LocaleCode, Translations> = {
       refresh: "Atualizar",
       join: "Entrar",
       telegramChannel: "Canal Telegram",
+      joinCardTitle: "Entre no nosso grupo de ofertas",
+      joinCardSubtitle: "Cupons, promoções e lançamentos em primeira mão!",
+      joinCardAction: "Entrar no Telegram",
       noMessages: "Nenhuma mensagem encontrada",
       tryLater: "Tente novamente mais tarde.",
       new: "Novo",
@@ -2212,7 +2224,7 @@ export const translations: Record<LocaleCode, Translations> = {
       copyFailed: "Não foi possível copiar o cupom",
       coupon: "Cupom",
       coupons: "Cupons",
-      seeOffer: "Ver oferta",
+      seeOffer: "Compre aqui",
       pixPrice: "no Pix",
       installmentPrice: "parcelado",
       searchPlaceholder: "Buscar produto ou cupom...",
@@ -2261,9 +2273,26 @@ export const translations: Record<LocaleCode, Translations> = {
       statusBackAction: "Entrar",
     },
     changelog: {
-      title: "Changelog",
+      title: "Patch Notes",
       description: "O histórico real de tudo que já foi construído, corrigido e melhorado no Sunano.",
       entries: [
+        {
+          version: "v0.4.1",
+          date: "24 de setembro",
+          title: "Promoções só com oferta de verdade, Patch Notes e sidebar reorganizada",
+          description: "A página de Promoções passou a ignorar tudo que não é oferta no canal do Telegram, o Changelog virou Patch Notes e a barra lateral ganhou uma nova ordem, com a Loja e as Promoções logo abaixo do Início.",
+          items: [
+            "Promoções: mensagens do canal sem link de loja (recados, comentários, enquetes e respostas a outras mensagens) não viram mais card na grade",
+            "Link do próprio Sunano, YouTube, Instagram, TikTok, Discord, Telegram, X, Twitch e Kick não conta como link de loja: aviso de vídeo novo ou de página nova no site não aparece como oferta",
+            "A oferta também precisa de foto (a da mensagem ou a prévia do link da loja), porque card sem imagem ficava pela metade na grade",
+            "Mensagem de serviço do canal, como \"fixou uma foto\", deixou de aparecer como card vazio, e o que já tinha sido guardado errado sai do histórico sozinho",
+            "Novo convite para o grupo do Telegram na lateral das Promoções, logo abaixo de \"Como funciona\", que é onde a página acabou de explicar que as ofertas nascem no canal",
+            "\"Changelog\" agora se chama \"Patch Notes\", no menu, no título da página e nos compartilhamentos",
+            "Sidebar: Loja e Promoções subiram para logo abaixo do Início; Patch Notes, convite VIP e Central de Informações passaram a fechar a lista, na seção \"Mais\", em vez de ficarem num rodapé pequeno no canto",
+            "Patch Notes aparece no menu para todo mundo, VIP ou não. Antes, quem não era VIP via só o convite para assinar no lugar dele",
+            "Produto em pré-venda mostra só o botão \"Reservar Agora\", sem \"Adicionar ao carrinho\": a pré-venda é reserva direta e não passa pelo carrinho",
+          ],
+        },
         {
           version: "v0.4.0",
           date: "19 de setembro",
@@ -2736,7 +2765,6 @@ export const translations: Record<LocaleCode, Translations> = {
       peripherals: "Peripherals",
       softwares: "Software",
       content: "Community",
-      shop: "Store",
       news: "News",
       videos: "Videos & socials",
       forum: "Forum",
@@ -2745,6 +2773,9 @@ export const translations: Record<LocaleCode, Translations> = {
       offers: "Deals",
       people: "People",
       events: "Achievements",
+      more: "More",
+      patchNotes: "Patch Notes",
+      info: "Information Center",
     },
     common: {
       all: "All",
@@ -3086,7 +3117,7 @@ export const translations: Record<LocaleCode, Translations> = {
       accountDesc: "Access, preferences and privacy.",
       videos: "Videos and social media",
       videosDesc: "Video content from the channel and all official Sunano channels.",
-      changelog: "Changelog",
+      changelog: "Patch Notes",
       changelogDesc: "History of changes to the site.",
       review: "Review",
       peripheral: "Peripheral",
@@ -3098,7 +3129,7 @@ export const translations: Record<LocaleCode, Translations> = {
     },
     changelogBanner: {
       newLabel: "What's new ({version}):",
-      viewHistory: "View changelog",
+      viewHistory: "View patch notes",
       close: "Dismiss notice",
     },
     psu: {
@@ -3716,6 +3747,9 @@ export const translations: Record<LocaleCode, Translations> = {
       refresh: "Refresh",
       join: "Join",
       telegramChannel: "Telegram Channel",
+      joinCardTitle: "Join our deals group",
+      joinCardSubtitle: "Coupons, deals and launches before anyone else!",
+      joinCardAction: "Join on Telegram",
       noMessages: "No messages found",
       tryLater: "Try again later.",
       new: "New",
@@ -3732,7 +3766,7 @@ export const translations: Record<LocaleCode, Translations> = {
       copyFailed: "Could not copy the coupon",
       coupon: "Coupon",
       coupons: "Coupons",
-      seeOffer: "View deal",
+      seeOffer: "Buy here",
       pixPrice: "with Pix",
       installmentPrice: "installments",
       searchPlaceholder: "Search product or coupon...",
@@ -3781,9 +3815,26 @@ export const translations: Record<LocaleCode, Translations> = {
       statusBackAction: "Enter",
     },
     changelog: {
-      title: "Changelog",
+      title: "Patch Notes",
       description: "The real history of everything we've built, fixed, and improved on Sunano.",
       entries: [
+        {
+          version: "v0.4.1",
+          date: "September 24",
+          title: "Deals only show real offers, Patch Notes, and a reorganized sidebar",
+          description: "The Deals page now ignores everything in the Telegram channel that isn't an offer, the Changelog became Patch Notes, and the sidebar got a new order, with the Store and Deals right below Home.",
+          items: [
+            "Deals: channel messages without a store link (announcements, comments, polls, and replies to other messages) no longer become cards in the grid",
+            "Links to Sunano itself, YouTube, Instagram, TikTok, Discord, Telegram, X, Twitch, and Kick don't count as store links: a new-video or new-page notice no longer shows up as a deal",
+            "An offer also needs a photo (the message's own or the store link's preview), since a card without an image looked half-finished in the grid",
+            "Channel service messages, like \"pinned a photo\", no longer show up as empty cards, and anything saved incorrectly before is cleared from the history automatically",
+            "New invite to the Telegram group in the Deals sidebar, right below \"How it works\", where the page has just explained that offers come from the channel",
+            "\"Changelog\" is now called \"Patch Notes\", in the menu, the page title, and social shares",
+            "Sidebar: Store and Deals moved up to right below Home; Patch Notes, the VIP invite, and the Information Center now close the list, under \"More\", instead of sitting in a small footer in the corner",
+            "Patch Notes shows in the menu for everyone, VIP or not. Before, non-VIP users only saw the subscribe invite in its place",
+            "Pre-order products show only the \"Reserve Now\" button, with no \"Add to cart\": a pre-order is a direct reservation and doesn't go through the cart",
+          ],
+        },
         {
           version: "v0.4.0",
           date: "September 19",

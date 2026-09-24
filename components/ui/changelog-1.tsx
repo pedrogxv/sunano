@@ -43,7 +43,7 @@ const COLOR_STYLES: Record<ChangelogColor, { dot: string; badge: string }> = {
 };
 
 export const Changelog1 = ({
-  title = "Changelog",
+  title = "Patch Notes",
   description = "Get the latest updates and improvements to our platform.",
   entries = [],
 }: Changelog1Props) => {
@@ -53,7 +53,7 @@ export const Changelog1 = ({
         <div className="mx-auto max-w-3xl">
           <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
             <Sparkles className="size-3.5" />
-            Changelog
+            Patch Notes
           </p>
           <h1 className="mb-4 text-3xl font-bold tracking-tight md:text-5xl">
             {title}

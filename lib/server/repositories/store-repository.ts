@@ -32,6 +32,8 @@ export type StoreProductCard = {
   is_active: boolean
   is_sold_out: boolean
   is_featured: boolean
+  /** Ordem manual entre os destaques (menor = mais à frente). `null` se não é destaque. */
+  featured_position: number | null
   /** Fixado manualmente na seção "Mais vendidos" da Home, à frente do ranking de vendas. */
   pin_best_seller: boolean
   /** Ordem manual entre os fixados (menor = mais à frente). `null` se não fixado. */
@@ -113,7 +115,7 @@ export type LinkedProduct = {
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, pin_best_seller, best_seller_position, created_at, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, featured_position, pin_best_seller, best_seller_position, created_at, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position)"
 
 type RawCardRow = Omit<StoreProductCard, "has_variants" | "variants"> & {
   variants: (StoreCardVariant & { position: number })[] | null
@@ -181,7 +183,7 @@ export type StoreProductListFilters = {
   productIds?: string[]
   /** Usado pelo admin para achar produtos zerados sem trazer o catálogo inteiro. */
   outOfStockOnly?: boolean
-  /** Filtra só produtos marcados como destaque (`is_featured`). */
+  /** Filtra só produtos marcados como destaque (`is_featured`), ordenados por `featured_position`. */
   featured?: boolean
   /** Filtra só produtos fixados em "Mais vendidos" (`pin_best_seller`), ordenados por `best_seller_position`. */
   pinnedBestSellersOnly?: boolean
@@ -249,6 +251,10 @@ export async function listStoreProductsPaginated(
   if (filters.productIds) {
     if (filters.productIds.length === 0) return { items: [], total: 0 }
     query = query.in("id", filters.productIds)
+  }
+
+  if (filters.featured) {
+    query = query.order("featured_position", { ascending: true, nullsFirst: false })
   }
 
   if (filters.pinnedBestSellersOnly) {
@@ -349,6 +355,28 @@ export async function reorderPinnedBestSellers(orderedIds: string[]): Promise<vo
   const failed = results.find((result) => result.error)
   if (failed?.error) {
     console.error("[store-repository] reorderPinnedBestSellers:", failed.error)
+    throw failed.error
+  }
+}
+
+/**
+ * Regrava `featured_position` (0, 1, 2...) pra cada id na ordem recebida —
+ * arrastar-e-soltar no painel "Destaques" do admin. Mesmo padrão de
+ * `reorderPinnedBestSellers` acima. O filtro `is_featured` é só uma trava
+ * extra: a lista de ids já vem restrita aos destaques.
+ */
+export async function reorderFeaturedProducts(orderedIds: string[]): Promise<void> {
+  const db = createSupabaseAdminClient()
+
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      db.from("store_products").update({ featured_position: index }).eq("id", id).eq("is_featured", true)
+    )
+  )
+
+  const failed = results.find((result) => result.error)
+  if (failed?.error) {
+    console.error("[store-repository] reorderFeaturedProducts:", failed.error)
     throw failed.error
   }
 }
@@ -600,7 +628,8 @@ function emptyFacets(): StoreFacetCounts {
 
 /**
  * Produtos em destaque para a home (ativos e com estoque, ou sem controle de
- * estoque). Prioriza os marcados manualmente pelo admin (`is_featured`) e
+ * estoque). Prioriza os marcados manualmente pelo admin (`is_featured`), na
+ * ordem definida em `featured_position` (a mesma da vitrine da Loja), e
  * completa o restante das vagas com os mais recentes.
  */
 export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]> {
@@ -615,6 +644,7 @@ export async function listFeaturedProducts(limit = 6): Promise<FeaturedProduct[]
     .eq("is_sold_out", false)
     .eq("is_featured", true)
     .or("stock.is.null,stock.gt.0")
+    .order("featured_position", { ascending: true, nullsFirst: false })
     .order("created_at", { ascending: false })
     .limit(limit)
 
@@ -882,7 +912,15 @@ export const getStoreProductDetail = cache(async (
       : Promise.resolve({ data: null }),
   ])
 
-  const specs = (specsResult.data ?? []) as unknown as StoreProductSpec[]
+  // Produtos criados pelo autofill antigo guardam o mesmo label duas vezes
+  // (ex: Peso); mostra só a primeira ocorrência de cada.
+  const seenSpecLabels = new Set<string>()
+  const specs = ((specsResult.data ?? []) as unknown as StoreProductSpec[]).filter((s) => {
+    const key = s.label.trim().toLowerCase()
+    if (seenSpecLabels.has(key)) return false
+    seenSpecLabels.add(key)
+    return true
+  })
   type RawVariantRow = Omit<StoreProductVariant, "images"> & {
     variant_images: { url: string; position: number }[] | null
   }

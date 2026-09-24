@@ -150,6 +150,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   const db = createSupabaseAdminClient()
 
+  // Marcar/desmarcar destaque: entra no fim da fila manual (editável depois em
+  // /admin/store, arrastar-e-soltar) e sai da fila ao desmarcar — sem isso o
+  // produto reaparecia na posição antiga se voltasse a ser destaque depois.
+  if (patch.is_featured === true) {
+    const { data: last } = await db
+      .from("store_products")
+      .select("featured_position")
+      .eq("is_featured", true)
+      .order("featured_position", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .maybeSingle()
+    patch.featured_position = (last?.featured_position ?? -1) + 1
+  } else if (patch.is_featured === false) {
+    patch.featured_position = null
+  }
+
   // Fixar/desfixar em "Mais vendidos": entra no fim da fila manual (editável
   // depois em /admin/store, arrastar-e-soltar) e sai da fila ao desfixar —
   // sem isso o produto reaparecia na posição antiga se fosse refixado depois.

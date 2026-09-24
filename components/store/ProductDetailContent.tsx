@@ -84,6 +84,7 @@ export function ProductDetailContent({
   const [added, setAdded] = useState(false)
 
   const hasVariants = variants.length > 0
+  const isPreOrder = product.sale_type === "pre_order"
   const isColorSoldOut = (v: { is_sold_out: boolean; stock: number | null }) =>
     v.is_sold_out || (v.stock !== null && v.stock === 0)
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(
@@ -531,24 +532,38 @@ export function ProductDetailContent({
                     <Plus className="size-3.5" />
                   </button>
                 </div>
+                {/* Pré-venda é reserva direta: não passa pelo carrinho, então só há "Reservar Agora". */}
+                {isPreOrder ? (
+                  <Button
+                    className="h-[46px] flex-1 gap-2 rounded-xl bg-gradient-to-r from-[#7F77DD] to-[#D4537E] text-[15px] font-bold text-white shadow-lg shadow-[#D4537E]/20 hover:brightness-110"
+                    onClick={handleBuyNow}
+                    disabled={hasVariants && !activeVariant}
+                  >
+                    <Zap className="size-[18px]" />
+                    Reservar Agora
+                  </Button>
+                ) : (
+                  <Button
+                    className="h-[46px] flex-1 gap-2 rounded-xl text-[15px] font-bold"
+                    variant="secondary"
+                    onClick={handleAddToCart}
+                    disabled={hasVariants && !activeVariant}
+                  >
+                    <ShoppingCart className="size-[18px]" />
+                    {added ? "Adicionado!" : "Adicionar ao carrinho"}
+                  </Button>
+                )}
+              </div>
+              {!isPreOrder && (
                 <Button
-                  className="h-[46px] flex-1 gap-2 rounded-xl text-[15px] font-bold"
-                  variant="secondary"
-                  onClick={handleAddToCart}
+                  className="h-16 w-full gap-2 rounded-xl bg-gradient-to-r from-[#7F77DD] to-[#D4537E] text-[18px] font-bold text-white shadow-lg shadow-[#D4537E]/20 hover:brightness-110"
+                  onClick={handleBuyNow}
                   disabled={hasVariants && !activeVariant}
                 >
-                  <ShoppingCart className="size-[18px]" />
-                  {added ? "Adicionado!" : "Adicionar ao carrinho"}
+                  <Zap className="size-5" />
+                  Comprar Agora
                 </Button>
-              </div>
-              <Button
-                className="h-16 w-full gap-2 rounded-xl bg-gradient-to-r from-[#7F77DD] to-[#D4537E] text-[18px] font-bold text-white shadow-lg shadow-[#D4537E]/20 hover:brightness-110"
-                onClick={handleBuyNow}
-                disabled={hasVariants && !activeVariant}
-              >
-                <Zap className="size-5" />
-                {product.sale_type === "pre_order" ? "Reservar Agora" : "Comprar Agora"}
-              </Button>
+              )}
               {/* Só aparece para afiliado aprovado — para o resto, nada. */}
               <AffiliateShareButton className="w-full justify-center" />
             </div>

@@ -547,6 +547,34 @@ export default function OffersPage() {
                 </p>
               </div>
 
+              {/* Convite pro canal. Fica logo abaixo do "Como funciona", que
+                  acabou de dizer que as ofertas nascem no Telegram: o convite
+                  responde à pergunta que aquele texto levanta, antes de a
+                  pessoa cair na busca e nos filtros. A pílula do cabeçalho
+                  continua existindo — ela é o atalho de quem já está rolando
+                  a grade, e ali no topo um card deste tamanho só empurraria a
+                  primeira oferta pra baixo. */}
+              <a
+                href={TELEGRAM_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="group block rounded-2xl border border-sky-500/20 bg-gradient-to-b from-sky-500/[0.08] to-card/40 p-4 text-center transition-colors hover:border-sky-500/40"
+              >
+                <span className="mx-auto mb-2.5 flex size-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-400 transition-colors group-hover:bg-sky-500/25">
+                  <TelegramIcon className="size-5" />
+                </span>
+                <span className="block text-[13px] font-black uppercase leading-tight tracking-wide text-foreground">
+                  {t.offers.joinCardTitle}
+                </span>
+                <span className="mt-1.5 block text-[11px] leading-relaxed text-muted-foreground">
+                  {t.offers.joinCardSubtitle}
+                </span>
+                <span className="mt-3 flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-sky-500 to-sky-600 px-3 py-2 text-xs font-bold text-white shadow-sm shadow-sky-900/40 transition-all group-hover:brightness-110">
+                  <TelegramIcon className="size-3.5 shrink-0" />
+                  {t.offers.joinCardAction}
+                </span>
+              </a>
+
               {/* Busca */}
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />

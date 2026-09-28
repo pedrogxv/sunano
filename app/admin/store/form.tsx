@@ -1415,15 +1415,13 @@ export function StoreProductForm({
             <SelectContent>
               <SelectItem value="normal">Normal</SelectItem>
               <SelectItem value="pre_order">🚀 Pré-venda</SelectItem>
-              <SelectItem value="ready_stock">📦 Pronta Entrega</SelectItem>
             </SelectContent>
           </Select>
           {formData.sale_type === "pre_order" && (
             <>
               <p className="text-[10px] text-amber-400">
-                Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; ou
-                &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar; o anúncio, reviews
-                e vendas já feitas continuam os mesmos.
+                Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; quando
+                o período de pré-venda acabar; o anúncio, reviews e vendas já feitas continuam os mesmos.
               </p>
               <div className="space-y-1.5 pt-1">
                 <Label className="text-xs">Limite de reservas</Label>
@@ -1468,14 +1466,18 @@ export function StoreProductForm({
               <SelectContent>
                 <SelectItem value="normal">Normal</SelectItem>
                 <SelectItem value="pre_order">🚀 Pré-venda</SelectItem>
-                <SelectItem value="ready_stock">📦 Pronta Entrega</SelectItem>
+                {/* "Pronta entrega" saiu da vitrine; a opção só continua para
+                    o produto que já estava salvo assim, senão o campo abriria
+                    em branco. Trocar para "Normal" não muda nada na Loja. */}
+                {product?.sale_type === "ready_stock" && (
+                  <SelectItem value="ready_stock">📦 Pronta Entrega (fora da vitrine)</SelectItem>
+                )}
               </SelectContent>
             </Select>
             {formData.sale_type === "pre_order" && (
               <p className="text-[10px] text-amber-400">
-                Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; ou
-                &ldquo;Pronta Entrega&rdquo; quando o período de pré-venda acabar; o anúncio, reviews
-                e vendas já feitas continuam os mesmos.
+                Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; quando
+                o período de pré-venda acabar; o anúncio, reviews e vendas já feitas continuam os mesmos.
               </p>
             )}
           </div>

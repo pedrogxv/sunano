@@ -66,7 +66,11 @@ type Banner = {
   updated_at: string
 }
 
-const SECTIONS: StoreBannerSection[] = ["main", "best_sellers", "pre_sale", "ready_stock", "site_items"]
+// "main" (topo da Loja) virou o Hero, com tela própria em /admin/store/hero.
+// "ready_stock" saiu junto com a seção "Pronta entrega" da vitrine. Os dois
+// continuam válidos no banco (CHECK da tabela); só não são mais editáveis
+// aqui nem exibidos na Loja.
+const SECTIONS: StoreBannerSection[] = ["pre_sale", "best_sellers", "site_items"]
 
 const SECTION_LABELS: Record<StoreBannerSection, string> = {
   main: "Topo da Loja",
@@ -217,7 +221,7 @@ export default function AdminStoreBannersPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<StoreBannerSection>("main")
+  const [activeSection, setActiveSection] = useState<StoreBannerSection>("pre_sale")
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Banner | null>(null)
@@ -234,7 +238,7 @@ export default function AdminStoreBannersPage() {
 
   usePageHeader(
     "Banners da Loja",
-    "Carrossel de cada seção da Home da Loja. Sem banner cadastrado, a seção volta ao formato de lista."
+    "Carrossel de cada seção da Home da Loja. Sem banner cadastrado, a seção volta ao formato de lista. O topo da Loja agora é o Hero."
   )
 
   const load = useCallback(async () => {

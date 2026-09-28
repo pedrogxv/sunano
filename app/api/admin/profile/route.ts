@@ -43,7 +43,7 @@ export async function GET() {
     const email = typedProfile?.email ?? authData.user.email ?? null
     const displayName = typedProfile?.display_name?.trim() || defaultNameFromEmail(email)
 
-    // Alimenta os badges de "Suporte" e "Pedidos" da sidebar sem nenhum fetch
+    // Alimenta os badges de "Suporte" e "Cadastros" da sidebar sem nenhum fetch
     // novo — a sidebar já busca este endpoint uma vez no mount (ver
     // AdminSidebar.tsx).
     const [supportAwaitingCount, peripheralRequestsPendingCount] = await Promise.all([

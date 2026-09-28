@@ -61,6 +61,9 @@ export const AURA_BRAND_COLOR_CLASS = "text-orange-500"
 /** Fundo do círculo atrás da chama — mesma cor, bem diluída. */
 export const AURA_BRAND_BG_CLASS = "bg-orange-500/10"
 
+/** Mesma cor, chapada: preenchimento de barra de progresso medida em Aura. */
+export const AURA_BRAND_FILL_CLASS = "bg-orange-500"
+
 const TONE_CLASSES: Record<AuraIconTone, string> = {
   brand: AURA_BRAND_COLOR_CLASS,
   inherit: "",

@@ -10,9 +10,11 @@ import { Slider } from "@/components/ui/slider"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import type { StoreFacetCounts } from "@/lib/server/repositories/store-repository"
 
-export type StoreSortKey = "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
+export type StoreSortKey = "relevance" | "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
 
+/** `relevance` só é oferecida com busca ativa: sem termo não há o que ranquear. */
 export const STORE_SORT_LABEL: Record<StoreSortKey, string> = {
+  relevance: "Mais relevantes",
   recent: "Mais recentes",
   "name-asc": "Nome A-Z",
   "name-desc": "Nome Z-A",
@@ -52,9 +54,12 @@ const CONDITION_LABEL: Record<string, string> = {
   used: "Usado",
 }
 
-/** `normal` não vira opção: significa "sem marcação", não uma escolha de entrega. */
+/**
+ * `normal` não vira opção: significa "sem marcação", não uma escolha de
+ * entrega. "Pronta entrega" também saiu da vitrine (o tipo segue no banco,
+ * só não é mais oferecido como filtro).
+ */
 const SALE_TYPE_LABEL: Record<string, string> = {
-  ready_stock: "Pronta entrega",
   pre_order: "Pré-venda",
 }
 
@@ -409,7 +414,7 @@ export function StoreFilters({
   )
   const saleTypeOptions = useMemo<FacetOption[]>(
     () =>
-      (["ready_stock", "pre_order"] as const)
+      (["pre_order"] as const)
         .map((value) => ({ value, label: SALE_TYPE_LABEL[value], count: facets.saleTypes[value] ?? 0 }))
         .filter((option) => option.count > 0),
     [facets.saleTypes]
@@ -499,11 +504,13 @@ export function StoreFilters({
         <SelectValue>{STORE_SORT_LABEL[sortKey]}</SelectValue>
       </SelectTrigger>
       <SelectContent>
-        {(Object.keys(STORE_SORT_LABEL) as StoreSortKey[]).map((key) => (
-          <SelectItem key={key} value={key}>
-            {STORE_SORT_LABEL[key]}
-          </SelectItem>
-        ))}
+        {(Object.keys(STORE_SORT_LABEL) as StoreSortKey[])
+          .filter((key) => key !== "relevance" || state.query.trim())
+          .map((key) => (
+            <SelectItem key={key} value={key}>
+              {STORE_SORT_LABEL[key]}
+            </SelectItem>
+          ))}
       </SelectContent>
     </Select>
   )

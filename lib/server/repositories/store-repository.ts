@@ -5,6 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 import { getPeripheralRankById, type PeripheralRank } from "@/lib/server/repositories/peripherals-repository"
 import { computeEffectivePrice } from "@/lib/store-pricing"
+import { buildStoreSearchPlan } from "@/lib/store-search"
 
 /**
  * Repositório da Loja — única porta de acesso à tabela `store_products`
@@ -194,7 +195,8 @@ export type StoreProductListFilters = {
   promoOnly?: boolean
   /** Esconde esgotados (marcados na mão ou com estoque zerado). */
   inStockOnly?: boolean
-  sort?: "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
+  /** `relevance` só tem efeito junto de `search`; sem busca, cai em `recent`. */
+  sort?: "relevance" | "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
   page?: number
   pageSize?: number
   /** true na versão admin — a pública sempre restringe a `is_active = true`. */
@@ -216,6 +218,68 @@ function effectivePriceOr(op: "gte" | "lte", cents: number): string {
   return `and(promo_price_cents.not.is.null,promo_price_cents.${op}.${cents}),and(promo_price_cents.is.null,price_cents.${op}.${cents})`
 }
 
+/** Um produto que bateu na busca, na ordem de relevância que o banco devolveu. */
+export type StoreSearchHit = {
+  productId: string
+  score: number
+  /** Sensor do anúncio (ficha técnica ou periférico ligado), se houver. */
+  sensor: string | null
+  /** O termo bateu no sensor: a busca mostra "Sensor PAW3950" para explicar o resultado. */
+  sensorMatched: boolean
+}
+
+/**
+ * Teto de resultados da busca. Os ids vão num `in.(...)` na URL do PostgREST
+ * (~37 caracteres cada), e acima disso a lista já não ajuda ninguém a achar
+ * nada: quem busca "pro" e rola 150 produtos refina o termo.
+ */
+const SEARCH_RESULT_CAP = 150
+
+/**
+ * Produtos que batem com o termo em nome, marca, categoria, sensor ou nas
+ * palavras-chave do Database (periférico ligado, ficha técnica, destaques),
+ * já em ordem de relevância. Ver `store_search_products` (20261204000001) e
+ * `lib/store-search.ts`.
+ *
+ * `null` = a função não respondeu (migration ainda não aplicada, por
+ * exemplo). Quem chama cai na busca antiga por nome/marca em vez de devolver
+ * uma vitrine vazia.
+ */
+async function searchStoreProductHits(
+  searchTerm: string,
+  includeInactive = false
+): Promise<StoreSearchHit[] | null> {
+  // Corta o termo: ILIKE em texto longo não ajuda relevância e só gasta banco.
+  const plan = buildStoreSearchPlan(searchTerm.slice(0, 80))
+  // Só palavras de 1 letra ("x") não viram grupo: a busca antiga por
+  // nome/marca ainda acha "X" no nome, em vez de devolver vazio.
+  if (plan.groups.length === 0) return null
+
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.rpc("store_search_products", {
+    p_groups: plan.groups,
+    p_phrase: plan.phrase,
+    p_include_inactive: includeInactive,
+  })
+  if (error) {
+    console.error("[store-repository] searchStoreProductHits:", error)
+    return null
+  }
+
+  return (data ?? []).slice(0, SEARCH_RESULT_CAP).map((row) => ({
+    productId: row.product_id,
+    score: row.score,
+    sensor: row.sensor,
+    sensorMatched: row.sensor_matched,
+  }))
+}
+
+/** Busca antiga (só nome/marca), usada quando `store_search_products` falha. */
+function legacySearchOr(searchTerm: string): string {
+  const term = escapeOrFilterValue(escapeLikePattern(searchTerm.trim()))
+  return `name.ilike."%${term}%",brand.ilike."%${term}%"`
+}
+
 /**
  * Listagem paginada de produtos da Loja, com filtros aplicados no
  * banco (mesmo padrão de `listOrdersForAdmin` em orders-repository.ts).
@@ -229,14 +293,23 @@ export async function listStoreProductsPaginated(
   const db = createSupabaseAdminClient()
   let query = db.from("store_products").select(CARD_COLUMNS, { count: "exact" })
 
+  // Posição de cada id na ordem de relevância da busca (menor = mais relevante).
+  let relevance: Map<string, number> | null = null
+
   if (!filters.includeInactive) query = query.eq("is_active", true)
   if (filters.type) query = query.eq("type", filters.type)
   if (filters.condition) query = query.eq("condition", filters.condition)
   if (filters.categories?.length) query = query.in("category", filters.categories)
   if (filters.brands?.length) query = query.in("brand", filters.brands)
   if (filters.search?.trim()) {
-    const term = escapeOrFilterValue(escapeLikePattern(filters.search.trim()))
-    query = query.or(`name.ilike."%${term}%",brand.ilike."%${term}%"`)
+    const hits = await searchStoreProductHits(filters.search, Boolean(filters.includeInactive))
+    if (hits === null) {
+      query = query.or(legacySearchOr(filters.search))
+    } else {
+      if (hits.length === 0) return { items: [], total: 0 }
+      query = query.in("id", hits.map((hit) => hit.productId))
+      relevance = new Map(hits.map((hit, index) => [hit.productId, index]))
+    }
   }
   if (filters.priceMinCents != null) query = query.or(effectivePriceOr("gte", filters.priceMinCents))
   if (filters.priceMaxCents != null) query = query.or(effectivePriceOr("lte", filters.priceMaxCents))
@@ -261,34 +334,48 @@ export async function listStoreProductsPaginated(
     query = query.order("best_seller_position", { ascending: true, nullsFirst: false })
   }
 
-  switch (filters.sort) {
-    case "name-asc":
-      query = query.order("name", { ascending: true })
-      break
-    case "name-desc":
-      query = query.order("name", { ascending: false })
-      break
-    case "price-asc":
-      query = query.order("price_cents", { ascending: true })
-      break
-    case "price-desc":
-      query = query.order("price_cents", { ascending: false })
-      break
-    default:
-      query = query.order("created_at", { ascending: false })
+  // Relevância é uma nota que só a busca conhece, não uma coluna: o banco
+  // devolve o recorte inteiro (no máximo SEARCH_RESULT_CAP linhas) e a
+  // ordenação + página acontecem aqui.
+  const sortByRelevance = relevance !== null && filters.sort === "relevance"
+
+  if (!sortByRelevance) {
+    switch (filters.sort) {
+      case "name-asc":
+        query = query.order("name", { ascending: true })
+        break
+      case "name-desc":
+        query = query.order("name", { ascending: false })
+        break
+      case "price-asc":
+        query = query.order("price_cents", { ascending: true })
+        break
+      case "price-desc":
+        query = query.order("price_cents", { ascending: false })
+        break
+      default:
+        query = query.order("created_at", { ascending: false })
+    }
   }
 
   const page = clampPage(filters.page)
   const pageSize = clampPageSize(filters.pageSize)
   const [from, to] = rangeFor(page, pageSize)
-  query = query.range(from, to)
+  if (!sortByRelevance) query = query.range(from, to)
 
   const { data, error, count } = await query
   if (error) {
     console.error("[store-repository] listStoreProductsPaginated:", error)
     return { items: [], total: 0 }
   }
-  return { items: ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow), total: count ?? 0 }
+
+  const items = ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
+  if (sortByRelevance && relevance) {
+    const rank = relevance
+    items.sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity))
+    return { items: items.slice(from, to + 1), total: count ?? items.length }
+  }
+  return { items, total: count ?? 0 }
 }
 
 /**
@@ -381,35 +468,64 @@ export async function reorderFeaturedProducts(orderedIds: string[]): Promise<voi
   }
 }
 
+/** Item do dropdown da busca: o card mais o sensor, quando foi ele que bateu. */
+export type StoreSearchSuggestion = StoreProductCard & {
+  /** Preenchido só quando o termo bateu no sensor ("3950" → "PixArt PAW3950"). */
+  search_sensor: string | null
+}
+
 /**
  * Busca leve pro dropdown "em tempo real" da barra de pesquisa — sem
  * `count: "exact"` (custo extra que o typeahead não precisa) e limitada a
- * poucos itens. Mesma lógica de match (`name`/`brand` ILIKE) de
- * `listStoreProductsPaginated`, só que sem paginação.
+ * poucos itens. Mesmo match de `listStoreProductsPaginated` (nome, marca,
+ * categoria, sensor e Database), já na ordem de relevância.
  */
 export async function searchStoreProductsTop(
   searchTerm: string,
   limit = 5
-): Promise<StoreProductCard[]> {
+): Promise<StoreSearchSuggestion[]> {
   const trimmed = searchTerm.trim()
   if (trimmed.length < 2) return []
 
   const db = createSupabaseAdminClient()
-  const term = escapeOrFilterValue(escapeLikePattern(trimmed))
+  const hits = await searchStoreProductHits(trimmed)
+
+  if (hits === null) {
+    const { data, error } = await db
+      .from("store_products")
+      .select(CARD_COLUMNS)
+      .eq("is_active", true)
+      .or(legacySearchOr(trimmed))
+      .order("is_featured", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error("[store-repository] searchStoreProductsTop:", error)
+      return []
+    }
+    return ((data ?? []) as unknown as RawCardRow[]).map((row) => ({ ...mapCardRow(row), search_sensor: null }))
+  }
+
+  const top = hits.slice(0, limit)
+  if (top.length === 0) return []
+
   const { data, error } = await db
     .from("store_products")
     .select(CARD_COLUMNS)
     .eq("is_active", true)
-    .or(`name.ilike."%${term}%",brand.ilike."%${term}%"`)
-    .order("is_featured", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(limit)
+    .in("id", top.map((hit) => hit.productId))
 
   if (error) {
     console.error("[store-repository] searchStoreProductsTop:", error)
     return []
   }
-  return ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
+
+  const cards = new Map(((data ?? []) as unknown as RawCardRow[]).map((row) => [row.id, mapCardRow(row)]))
+  return top.flatMap((hit) => {
+    const card = cards.get(hit.productId)
+    return card ? [{ ...card, search_sensor: hit.sensorMatched ? hit.sensor : null }] : []
+  })
 }
 
 /**

@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, Package, PackageSearch, ShieldCheck, Sparkles, Star, Tag, TrendingUp, Wrench } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, ShieldCheck, Sparkles, Star, Tag, TrendingUp, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useAuthUser } from "@/components/providers/auth-context"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
@@ -18,9 +17,11 @@ import {
   type StoreSortKey,
 } from "@/components/store/StoreFilters"
 import { MarketInfoDialog } from "@/components/store/MarketInfoDialog"
-import { TrustStrip } from "@/components/store/TrustStrip"
+import { StoreAuthorityStrip } from "@/components/store/StoreAuthorityStrip"
+import { StoreHero } from "@/components/store/StoreHero"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
+import type { StoreHeroView } from "@/lib/store-hero"
 import type { StoreProductCard, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import type { StoreBannerSection, StoreSectionBanner } from "@/lib/server/repositories/store-banners-repository"
 import SectionBannerCarousel, { type SectionCarouselBanner } from "@/components/store/SectionBannerCarousel"
@@ -38,8 +39,8 @@ interface StoreContentProps {
   initialFeatured: StoreProductCard[]
   /** Produtos em pré-venda (todo o catálogo, não só a página atual) — seção dedicada abaixo dos Destaques. */
   preOrderItems?: StoreProductCard[]
-  /** Produtos de pronta entrega (todo o catálogo, não só a página atual) — seção dedicada abaixo dos Destaques. */
-  readyStockItems?: StoreProductCard[]
+  /** Slides do Hero no ar agora (/admin/store/hero). Vazio = arte estática de sempre. */
+  heroSlides?: StoreHeroView[]
   /** Produtos institucionais/do site (category: "site") — seção "Itens para o site" da Home. */
   siteItems?: StoreProductCard[]
   /** Produtos da categoria "services" — seção "Serviços" da Home. */
@@ -242,9 +243,8 @@ function ProductCarouselSection({
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], readyStockItems = [], siteItems = [], serviceItems = [], bestSellingItems = [], sectionBanners = EMPTY_SECTION_BANNERS, pageSize, banner, initialCategory = null }: StoreContentProps) {
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], heroSlides = [], siteItems = [], serviceItems = [], bestSellingItems = [], sectionBanners = EMPTY_SECTION_BANNERS, pageSize, banner, initialCategory = null }: StoreContentProps) {
   const searchParams = useSearchParams()
-  const { user } = useAuthUser()
 
   // A TopBar cai no fallback "Sunano" sem isso — /loja não está no mapa de
   // títulos por rota (getPageDefaults em TopBar.tsx). Descrição curta de
@@ -260,11 +260,14 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const lockedCategory = banner?.type === "category" ? banner.value : null
   const lockedBrand = banner?.type === "brand" ? banner.value : null
 
+  // `?ofertas=1` é o destino do botão "Ver ofertas" do Hero: abre a vitrine
+  // já recortada nos produtos em promoção.
   const [filters, setFilters] = useState<StoreFilterState>(() => ({
     ...EMPTY_STORE_FILTERS,
     query: searchParams.get("q") ?? "",
     categories: lockedCategory ? [lockedCategory] : initialCategory ? [initialCategory] : [],
     brands: lockedBrand ? [lockedBrand] : [],
+    promoOnly: searchParams.get("ofertas") === "1",
   }))
   const patchFilters = (patch: Partial<StoreFilterState>) => setFilters((prev) => ({ ...prev, ...patch }))
   const resetFilters = () =>
@@ -275,7 +278,12 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
     })
 
   const debouncedQuery = useDebouncedValue(filters.query, 400)
-  const [sortKey, setSortKey] = useState<StoreSortKey>("recent")
+  // "Mais relevantes" é o padrão, mas só existe com busca: sem termo não há o
+  // que ranquear, e a ordem cai em "Mais recentes". Se a pessoa escolher outra
+  // ordem, ela vale com ou sem busca.
+  const [sortKey, setSortKey] = useState<StoreSortKey>("relevance")
+  const hasQuery = debouncedQuery.trim().length > 0
+  const effectiveSort: StoreSortKey = sortKey === "relevance" && !hasQuery ? "recent" : sortKey
   const [page, setPage] = useState(1)
 
   // Buscar de novo estando já em /loja não remonta o componente — sem isso o
@@ -284,6 +292,13 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   useEffect(() => {
     setFilters((prev) => (prev.query === urlQuery ? prev : { ...prev, query: urlQuery }))
   }, [urlQuery])
+
+  // Mesmo motivo para `?ofertas=1`: o botão do Hero navega dentro de /loja.
+  // Só LIGA o filtro: sair do parâmetro não desfaz uma escolha feita na barra.
+  const urlOffers = searchParams.get("ofertas") === "1"
+  useEffect(() => {
+    if (urlOffers) setFilters((prev) => (prev.promoOnly ? prev : { ...prev, promoOnly: true }))
+  }, [urlOffers])
 
   const [filterOptions, setFilterOptions] = useState<StoreFilterOptions>(initialFilterOptions)
   useEffect(() => {
@@ -337,7 +352,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // Volta pra página 1 sempre que um filtro (não a página em si) muda.
   useEffect(() => {
     setPage(1)
-  }, [filterKey, sortKey])
+  }, [filterKey, effectiveSort])
 
   useEffect(() => {
     const params = new URLSearchParams()
@@ -353,15 +368,16 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       params.set("priceMin", String(filters.price[0] * 100))
       params.set("priceMax", String(filters.price[1] * 100))
     }
-    if (sortKey !== "recent") params.set("sort", sortKey)
+    if (effectiveSort !== "recent") params.set("sort", effectiveSort)
     params.set("page", String(page))
     params.set("pageSize", String(pageSize))
 
     // Na primeira renderização os dados já vieram do SSR com os mesmos
     // filtros padrão — evita um fetch redundante assim que a página monta.
+    // `?ofertas=1` já nasce filtrado, então precisa buscar.
     if (isFirstRun.current) {
       isFirstRun.current = false
-      if (page === 1 && !debouncedQuery) {
+      if (page === 1 && !debouncedQuery && !filters.promoOnly) {
         return
       }
     }
@@ -383,7 +399,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       .finally(() => (appending ? setIsLoadingMore(false) : setIsFetching(false)))
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterKey, sortKey, page, pageSize])
+  }, [filterKey, effectiveSort, page, pageSize])
 
   // Mobile: acumula a próxima página no grid já visível, em vez da paginação
   // numérica do desktop.
@@ -414,6 +430,20 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const activeCategory = filters.categories.length === 1 ? filters.categories[0] : null
   const activeFiltersCount = countActiveFilters(filters, lockedCategory, lockedBrand)
 
+  // Catálogo: landings de categoria/marca sempre mostram; na Home só com uma
+  // busca ativa (StoreSearchBox navega pra cá com ?q=...#produtos) ou com o
+  // recorte de ofertas do Hero (?ofertas=1#produtos).
+  const showCatalog = Boolean(banner) || Boolean(filters.query.trim()) || filters.promoOnly
+  const catalogRef = useRef<HTMLElement>(null)
+
+  // A âncora #produtos chega antes de o catálogo existir (ele só aparece
+  // depois que o filtro da URL entra no estado), então a rolagem do navegador
+  // não acha o alvo. Rola aqui, quando a seção passa a existir.
+  useEffect(() => {
+    if (!showCatalog || banner || window.location.hash !== "#produtos") return
+    catalogRef.current?.scrollIntoView({ block: "start" })
+  }, [showCatalog, banner, urlQuery, urlOffers])
+
   // Com poucos itens todos já cabem na tela sem rolar — "ver tudo" e as setas
   // de carrossel não fazem sentido até que sobre item fora da área visível.
   const showFeaturedCarouselControls = featuredItems.length > 5
@@ -440,37 +470,20 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           activeCategory={activeCategory}
         />
       ) : (
-        <div className="relative">
-          {sectionBanners.main.length > 0 ? (
-            <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.main)} className="rounded-none border-0" />
-          ) : (
-            /* Fallback estático — mesma imagem de sempre, aspect-ratio dela
-               própria (6047×1890) pra mostrar o banner inteiro em vez de
-               cortar topo/laterais com bg-cover numa altura fixa. */
-            <div
-              className="aspect-[6047/1890] w-full overflow-hidden bg-[#0b0f14] bg-contain bg-center bg-no-repeat"
-              style={{ backgroundImage: "url(/images/mascot/Loja.png)" }}
-            />
-          )}
-          {user && (
-            <Link
-              href="/conta/pedidos"
-              className="absolute right-4 top-4 z-[5] inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/30 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition-colors hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-emerald-300"
-            >
-              <PackageSearch className="size-3.5" />
-              Meus pedidos
-            </Link>
-          )}
-        </div>
+        /* Hero administrável (/admin/store/hero). Sem slide no ar, ele mesmo
+           cai na arte estática de sempre. "Meus pedidos", que ficava em cima
+           do banner, agora é "Pedidos" no menu da Loja. */
+        <StoreHero slides={heroSlides} />
       )}
 
       <div className={cn(
         "mx-auto flex w-full max-w-7xl flex-col px-4 pb-10 sm:pb-[72px] lg:px-8",
-        banner?.type === "category" ? "gap-5 pt-5 sm:gap-7 sm:pt-6" : "gap-9 pt-7 sm:gap-14 sm:pt-12"
+        banner?.type === "category" ? "gap-5 pt-5 sm:gap-7 sm:pt-6" : "gap-9 pt-5 sm:gap-14 sm:pt-6"
       )}>
-        {/* Trust strip — mesma regra dos Destaques: pula na landing de categoria
-            (banner já deixa a área densa com a fileira de tags). */}
-        {banner?.type !== "category" && <TrustStrip />}
+        {/* Argumentos de autoridade logo abaixo do Hero, com a mesma regra dos
+            Destaques: pula na landing de categoria (o banner já deixa a área
+            densa com a fileira de tags). */}
+        {banner?.type !== "category" && <StoreAuthorityStrip />}
 
         {/* Destaques — só na Home. Landing de marca/categoria vai direto pros
             filtros + catálogo, sem essa seção antes do que o usuário veio ver. */}
@@ -556,20 +569,6 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 iconClassName="text-amber-400"
               />
             )}
-            {sectionBanners.ready_stock.length > 0 ? (
-              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-                <SectionHeading eyebrow="Envio imediato" title="Pronta entrega 📦" icon={Package} iconClassName="text-emerald-400" />
-                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.ready_stock)} />
-              </section>
-            ) : (
-              <ProductCarouselSection
-                items={readyStockItems}
-                eyebrow="Envio imediato"
-                title="Pronta entrega 📦"
-                icon={Package}
-                iconClassName="text-emerald-400"
-              />
-            )}
             {sectionBanners.site_items.length > 0 ? (
               <section className="flex flex-col gap-3.5 sm:gap-[18px]">
                 <SectionHeading eyebrow="Sunano" title="Itens para o site 🤝" icon={Handshake} iconClassName="text-sky-400" />
@@ -595,12 +594,10 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           </>
         )}
 
-        {/* Catálogo — landings de categoria/marca sempre mostram; na Home
-            só aparece quando há uma busca ativa (StoreSearchBox navega pra
-            cá com ?q=...#produtos mesmo sem banner). Sem isso a busca fica
-            sem lugar pra mostrar resultado na Home. */}
-        {(banner || filters.query.trim()) && (
-        <section id="produtos" className="flex scroll-mt-20 flex-col gap-3.5 sm:gap-[18px]">
+        {/* Catálogo: ver `showCatalog`. Sem ele a busca e o "Ver ofertas"
+            do Hero ficariam sem lugar pra mostrar resultado na Home. */}
+        {showCatalog && (
+        <section ref={catalogRef} id="produtos" className="flex scroll-mt-20 flex-col gap-3.5 sm:gap-[18px]">
           <div className="flex flex-col gap-[3px] sm:gap-1">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Catálogo completo</p>
             <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Todos os produtos</h2>
@@ -613,7 +610,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             facets={facets}
             lockedCategory={lockedCategory}
             lockedBrand={lockedBrand}
-            sortKey={sortKey}
+            sortKey={effectiveSort}
             onSortChange={setSortKey}
             total={total}
             isFetching={isFetching}

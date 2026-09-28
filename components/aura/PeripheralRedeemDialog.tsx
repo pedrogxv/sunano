@@ -18,6 +18,7 @@ import {
   EMPTY_SHIPPING_FORM,
   ShippingAddressFields,
   isShippingFormComplete,
+  isoToBirthDateInput,
   type ShippingForm,
 } from "@/components/store/ShippingAddressFields"
 import { formatCepInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
@@ -25,6 +26,8 @@ import { formatCepInput, formatPhoneInput } from "@/components/store/CheckoutPay
 
 export type PrefillShipping = {
   recipient: string | null
+  /** "AAAA-MM-DD". */
+  birthDate: string | null
   phone: string | null
   postalCode: string | null
   street: string | null
@@ -40,6 +43,7 @@ function prefillToForm(prefill: PrefillShipping): ShippingForm {
   if (!prefill || !prefill.postalCode) return EMPTY_SHIPPING_FORM
   return {
     recipient: prefill.recipient ?? "",
+    birthDate: isoToBirthDateInput(prefill.birthDate),
     phone: formatPhoneInput(prefill.phone ?? ""),
     postalCode: formatCepInput(prefill.postalCode ?? ""),
     street: prefill.street ?? "",

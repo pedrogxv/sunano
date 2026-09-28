@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
 import { useAuthUser } from "@/components/providers/auth-context"
@@ -131,6 +132,13 @@ export function PeripheralRequestDetailView({ id }: { id: string }) {
           {request.brand_name} {request.model_name}
         </h1>
         <p className="text-sm text-muted-foreground">{PERIPHERAL_REQUEST_STATUS_HINT[request.status]}</p>
+        {request.aura_rewarded !== null && (
+          <p className="flex items-center gap-1 text-sm text-muted-foreground">
+            Você ganhou{" "}
+            <AuraAmount value={request.aura_rewarded} prefix="+" size="md" tone="brand" className="font-semibold text-foreground" />
+            por ajudar a completar a wiki.
+          </p>
+        )}
       </div>
 
       {request.peripheral && (

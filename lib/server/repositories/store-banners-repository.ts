@@ -239,12 +239,20 @@ async function removeUnreferencedMedia(urls: string[]): Promise<void> {
       // referências volta errada — o arquivo seria apagado ainda em uso, ou a
       // query erraria e derrubaria a limpeza inteira.
       const safeUrl = escapeOrFilterValue(url)
-      const { count } = await db
-        .from("store_section_banners")
-        .select("id", { count: "exact", head: true })
-        .or(`image_url.eq."${safeUrl}",video_url.eq."${safeUrl}"`)
+      // O Hero da Loja (store_hero_slides) sobe arte para o mesmo bucket:
+      // arquivo em uso lá também não pode sair daqui.
+      const [{ count }, { count: heroCount }] = await Promise.all([
+        db
+          .from("store_section_banners")
+          .select("id", { count: "exact", head: true })
+          .or(`image_url.eq."${safeUrl}",video_url.eq."${safeUrl}"`),
+        db
+          .from("store_hero_slides")
+          .select("id", { count: "exact", head: true })
+          .or(`image_desktop_url.eq."${safeUrl}",image_mobile_url.eq."${safeUrl}"`),
+      ])
 
-      if ((count ?? 0) > 0) continue
+      if ((count ?? 0) > 0 || (heroCount ?? 0) > 0) continue
 
       paths.push(decodeURIComponent(url.slice(markerIndex + prefix.length).split("?")[0]))
     }

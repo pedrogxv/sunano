@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { setOrderShippingAddress } from "@/lib/server/repositories/orders-repository"
-import { shippingAddressSchema } from "@/lib/server/validation/shipping-address"
+import { shippingAddressColumns, shippingAddressSchema } from "@/lib/server/validation/shipping-address"
 
 export const runtime = "nodejs"
 
@@ -63,17 +63,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     )
   }
 
-  const result = await setOrderShippingAddress(id, user.id, {
-    recipient: parsed.data.shippingRecipient,
-    phone: parsed.data.shippingPhone,
-    postalCode: parsed.data.shippingPostalCode,
-    street: parsed.data.shippingStreet,
-    number: parsed.data.shippingNumber,
-    complement: parsed.data.shippingComplement ?? null,
-    neighborhood: parsed.data.shippingNeighborhood,
-    city: parsed.data.shippingCity,
-    state: parsed.data.shippingState,
-  })
+  const result = await setOrderShippingAddress(id, user.id, parsed.data)
 
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
@@ -93,17 +83,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { createSupabaseAdminClient } = await import("@/lib/server/supabase/admin-client")
     await createSupabaseAdminClient()
       .from("user_profiles")
-      .update({
-        shipping_recipient: parsed.data.shippingRecipient,
-        shipping_phone: parsed.data.shippingPhone,
-        shipping_postal_code: parsed.data.shippingPostalCode,
-        shipping_street: parsed.data.shippingStreet,
-        shipping_number: parsed.data.shippingNumber,
-        shipping_complement: parsed.data.shippingComplement ?? null,
-        shipping_neighborhood: parsed.data.shippingNeighborhood,
-        shipping_city: parsed.data.shippingCity,
-        shipping_state: parsed.data.shippingState,
-      })
+      .update(shippingAddressColumns(parsed.data))
       .eq("id", user.id)
   } catch (err) {
     console.error("[shipping-address] falha ao salvar endereço no perfil:", err)

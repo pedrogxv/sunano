@@ -7,6 +7,7 @@ import { ArrowRight, ExternalLink } from "lucide-react"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import { PeripheralRequestReviewForm } from "@/components/admin/PeripheralRequestReviewForm"
 import { PeripheralRequestStatusBadge } from "@/components/peripherals/requests/PeripheralRequestStatusBadge"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { peripheralRequestNumber } from "@/lib/peripheral-requests"
 import { safeHref } from "@/lib/safe-url"
@@ -33,7 +34,7 @@ export default async function AdminPeripheralRequestPage({ params }: { params: P
     <div className="space-y-6">
       <BackBreadcrumb
         href="/admin/perifericos/pedidos"
-        parentLabel="Pedidos"
+        parentLabel="Cadastros"
         currentLabel={`${request.brand_name} ${request.model_name}`}
       />
 
@@ -87,6 +88,14 @@ export default async function AdminPeripheralRequestPage({ params }: { params: P
           </p>
         )}
 
+        {request.aura_rewarded !== null && (
+          <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+            Quem pediu recebeu{" "}
+            <AuraAmount value={request.aura_rewarded} prefix="+" size="sm" tone="brand" className="font-medium text-foreground" />
+            pelo cadastro.
+          </p>
+        )}
+
         {request.peripheral && (
           <Link
             href={request.peripheral.href}
@@ -111,6 +120,7 @@ export default async function AdminPeripheralRequestPage({ params }: { params: P
           initialResponse={request.staff_response}
           initialPeripheral={request.peripheral}
           modelName={request.model_name}
+          auraRewarded={request.aura_rewarded}
         />
       ) : (
         <p className="rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">

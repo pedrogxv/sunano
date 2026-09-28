@@ -67,6 +67,9 @@ import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
+import { isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
+// `import type` é apagado no build: não puxa `server-only` para o bundle.
+import type { OrderShippingAddress } from "@/lib/server/repositories/orders-repository"
 
 type OrderStatus =
   | "pending"
@@ -111,18 +114,7 @@ type AdminOrder = {
   user_display_name: string | null
   oversold: OrderOversoldFlag | null
   /** Para onde despachar. Null = o cliente ainda não informou. */
-  shipping_address: {
-    recipient: string
-    phone: string
-    postal_code: string
-    street: string
-    number: string
-    complement: string | null
-    neighborhood: string
-    city: string
-    state: string
-    filled_at: string
-  } | null
+  shipping_address: OrderShippingAddress | null
   /** false = pedido de serviço/digital: não há o que despachar, e a falta de endereço não é pendência. */
   requires_shipping_address: boolean
   /** true = pedido pago contra a Asaas sandbox (dinheiro de teste). */
@@ -1213,6 +1205,15 @@ function OrderManageDialog({
                 </p>
                 {order.shipping_address.phone && (
                   <p className="text-xs text-muted-foreground">Tel.: {order.shipping_address.phone}</p>
+                )}
+                {order.shipping_address.birth_date ? (
+                  <p className="text-xs text-muted-foreground">
+                    Nascimento: {isoToBirthDateInput(order.shipping_address.birth_date)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-400">
+                    Sem data de nascimento (endereço informado antes do campo existir).
+                  </p>
                 )}
               </>
             ) : (

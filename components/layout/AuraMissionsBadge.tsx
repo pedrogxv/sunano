@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, Bird, Check, MessageSquare, Sparkles, SquarePen, Youtube } from "lucide-react"
-import { AuraIcon } from "@/components/ui/AuraIcon"
+import { AURA_BRAND_FILL_CLASS, AuraAmount, AuraIcon } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { AURA_CHANGED_EVENT } from "@/lib/client/aura-events"
@@ -19,7 +19,9 @@ import {
   DAILY_MISSION_KEYS,
   DAILY_MISSION_REWARDS,
   EMPTY_DAILY_MISSIONS,
+  auraLevelProgress,
   countCompletedMissions,
+  formatAchievementCount,
   type DailyMissionKey,
   type DailyMissionsState,
   type UserStreak,
@@ -31,6 +33,7 @@ import { DiscordIcon } from "@/components/auth/provider-icons"
 
 type AuraUsage = {
   balance: number
+  totalEarned: number
   givenToday: number
   limit: number
   limitReached: boolean
@@ -68,13 +71,25 @@ const EMPTY_STREAK: UserStreak = {
 const POLL_MS = 180_000
 
 /**
- * Ícone único de Aura + missões na TopBar (substitui os antigos `MissionsBadge`
- * e `AuraBalanceBadge` separados). Por padrão mostra só o saldo total de Aura
- * do usuário; passar o mouse (desktop) ou tocar (mobile) abre um popover com
- * o progresso das 3 missões diárias, a ofensiva atual e o limite diário de
- * reações de Aura (`givenToday/limit`).
+ * Painel de Aura no rodapé da sidebar pública: saldo, nível da conta (trilha
+ * "Aura farmada", ver `auraLevelProgress`) e missões do dia. É a entrada da
+ * Central de Aura; o saldo saiu da TopBar para cá.
+ *
+ * O card inteiro é o link para `/aura`. Passar o mouse (desktop) abre ao lado
+ * o popover com as 3 missões, a ofensiva e o limite diário de reações; no
+ * toque o card só navega, e a Central mostra o mesmo conteúdo.
  */
-export function AuraMissionsBadge() {
+export function AuraMissionsBadge({
+  collapsed = false,
+  active = false,
+  onNavigate,
+}: {
+  /** Sidebar recolhida no desktop (md:w-16): só a chama e o saldo curto. */
+  collapsed?: boolean
+  /** Rota atual é a Central de Aura. */
+  active?: boolean
+  onNavigate?: () => void
+}) {
   const { user } = useAuthUser()
   const [open, setOpen] = useState(false)
   const [missions, setMissions] = useState<DailyMissionsState | null>(null)
@@ -194,34 +209,98 @@ export function AuraMissionsBadge() {
   if (!user) return null
 
   if (!missions || !usage) {
-    return <Skeleton className="size-11 shrink-0 rounded-lg sm:h-8 sm:w-16" />
+    return <Skeleton className={cn("w-full rounded-xl", collapsed ? "h-14" : "h-[132px]")} />
   }
 
   const completed = countCompletedMissions(missions)
   const allDone = completed === DAILY_MISSION_KEYS.length
   const frozen = usage.limitReached
+  const level = auraLevelProgress(usage.totalEarned)
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Aura: ${usage.balance}, ${completed}/${DAILY_MISSION_KEYS.length} missões diárias`}
+      <PopoverAnchor asChild>
+        <Link
+          href="/aura"
+          onClick={() => {
+            setOpen(false)
+            onNavigate?.()
+          }}
+          aria-label={`Central de Aura: ${usage.balance} de Aura, nível ${level.level}, ${completed}/${DAILY_MISSION_KEYS.length} missões diárias`}
           onMouseEnter={() => setOpen(true)}
           onMouseLeave={() => setOpen(false)}
-          className="animate-fade-in-up relative flex size-11 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card/70 text-sm font-semibold tabular-nums text-foreground transition-all hover:bg-muted/40 sm:h-8 sm:w-auto sm:px-3"
-        >
-          <AuraIcon className="size-[15px] shrink-0" />
-          <span className="hidden leading-none sm:inline">{usage.balance}</span>
-          {!allDone && (
-            <span className="absolute -right-1 -top-1 flex size-2.5 items-center justify-center rounded-full bg-primary sm:hidden" />
+          className={cn(
+            "relative block rounded-xl border transition-colors",
+            active
+              ? "border-orange-500/60 bg-orange-500/15"
+              : "border-orange-500/25 bg-orange-500/[0.06] hover:border-orange-500/45 hover:bg-orange-500/10",
+            collapsed ? "flex flex-col items-center gap-1 px-1 py-2" : "p-3"
           )}
-        </button>
-      </PopoverTrigger>
+        >
+          {collapsed ? (
+            <>
+              <AuraIcon size="lg" />
+              <span className="text-[10px] font-semibold leading-none tabular-nums text-foreground">
+                {formatAchievementCount(usage.balance)}
+              </span>
+              {!allDone && (
+                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-orange-500" />
+              )}
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Central de Aura
+                </span>
+                <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
+              </div>
+
+              <AuraAmount
+                value={usage.balance}
+                size="xl"
+                tone="brand"
+                className="mt-1 gap-1.5 font-display text-2xl font-bold leading-none text-foreground"
+              />
+
+              <div className="mt-3">
+                <div className="flex items-baseline justify-between gap-2 text-[11px]">
+                  <span className="truncate font-semibold text-foreground">
+                    Nível {level.level}
+                    {level.name && <span className="font-normal text-muted-foreground"> · {level.name}</span>}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {level.nextThreshold === null
+                      ? "Máximo"
+                      : `${formatAchievementCount(usage.totalEarned)}/${formatAchievementCount(level.nextThreshold)}`}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn("h-full rounded-full transition-[width] duration-500", AURA_BRAND_FILL_CLASS)}
+                    style={{ width: `${Math.round(level.ratio * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-2.5 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span>Missões de hoje</span>
+                <span className={cn("font-semibold tabular-nums", allDone ? "text-emerald-400" : "text-foreground")}>
+                  {completed}/{DAILY_MISSION_KEYS.length}
+                </span>
+              </div>
+            </>
+          )}
+        </Link>
+      </PopoverAnchor>
 
       <PopoverContent
+        side="right"
         align="end"
-        sideOffset={8}
+        sideOffset={12}
+        // Abre no hover: roubar o foco para dentro do popover tiraria a
+        // pessoa do lugar onde ela está navegando.
+        onOpenAutoFocus={(e) => e.preventDefault()}
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
         className="w-[min(20rem,calc(100vw-2rem))] bg-popover p-0 text-foreground shadow-md"

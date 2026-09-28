@@ -28,6 +28,19 @@ export function revalidatePeripheral(peripheral?: { id: string; name: string } |
   }
 }
 
+/**
+ * Hero e barra comercial da Loja. A barra mora no layout de `/loja` e aparece
+ * em toda página da Loja (categoria, marca, produto, avaliações), então a
+ * invalidação é do layout inteiro, não só da Home.
+ */
+export function revalidateStorefront() {
+  try {
+    revalidatePath("/loja", "layout")
+  } catch (error) {
+    console.error("[revalidate-public] revalidateStorefront:", error)
+  }
+}
+
 /** Equivalente para post de blog/notícia, que compartilham a tabela `blog_posts`. */
 export function revalidateBlogPost(slug?: string | null) {
   try {

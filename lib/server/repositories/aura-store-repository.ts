@@ -5,7 +5,10 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { parseSlug } from "@/lib/format"
 import { validateDisplayName } from "@/lib/profile-name"
 import { isDisplayNameAvailable } from "@/lib/server/repositories/users-repository"
-import type { ShippingAddressInput } from "@/lib/server/validation/shipping-address"
+import {
+  shippingAddressColumns,
+  type ShippingAddressInput,
+} from "@/lib/server/validation/shipping-address"
 
 /**
  * Repositório da loja de itens cosméticos da Central de Aura (molduras de
@@ -350,15 +353,7 @@ async function createAuraPeripheralOrder(
       payment_method: "aura",
       is_sandbox: false,
       metadata: { user_id: userId, source: "aura_redeem", aura_item_id: itemId },
-      shipping_recipient: shipping.shippingRecipient,
-      shipping_phone: shipping.shippingPhone,
-      shipping_postal_code: shipping.shippingPostalCode,
-      shipping_street: shipping.shippingStreet,
-      shipping_number: shipping.shippingNumber,
-      shipping_complement: shipping.shippingComplement ?? null,
-      shipping_neighborhood: shipping.shippingNeighborhood,
-      shipping_city: shipping.shippingCity,
-      shipping_state: shipping.shippingState,
+      ...shippingAddressColumns(shipping),
       shipping_address_filled_at: nowIso,
       requires_shipping_address: true,
     })
@@ -374,17 +369,7 @@ async function createAuraPeripheralOrder(
   // vale para despachar já está no pedido acima.
   const { error: profileError } = await db
     .from("user_profiles")
-    .update({
-      shipping_recipient: shipping.shippingRecipient,
-      shipping_phone: shipping.shippingPhone,
-      shipping_postal_code: shipping.shippingPostalCode,
-      shipping_street: shipping.shippingStreet,
-      shipping_number: shipping.shippingNumber,
-      shipping_complement: shipping.shippingComplement ?? null,
-      shipping_neighborhood: shipping.shippingNeighborhood,
-      shipping_city: shipping.shippingCity,
-      shipping_state: shipping.shippingState,
-    })
+    .update(shippingAddressColumns(shipping))
     .eq("id", userId)
   if (profileError) {
     console.error("[aura-store-repository] createAuraPeripheralOrder profile:", profileError)

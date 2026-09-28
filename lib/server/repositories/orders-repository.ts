@@ -9,6 +9,10 @@ import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-re
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 import { computeEffectivePrice } from "@/lib/store-pricing"
+import {
+  shippingAddressColumns,
+  type ShippingAddressInput,
+} from "@/lib/server/validation/shipping-address"
 
 /** Extrai o dono do pedido a partir de `metadata->>user_id` (null em pedidos de convidado). */
 export function orderOwnerId(metadata: Record<string, unknown> | null | undefined): string | null {
@@ -145,6 +149,12 @@ export function lineMovesPhysicalStock(line: { sale_type?: string | null }): boo
  */
 export type OrderShippingAddress = {
   recipient: string
+  /**
+   * "AAAA-MM-DD" de quem recebe, exigida pela alfândega na importação. Nula
+   * em pedido gravado antes do campo existir: o endereço continua valendo
+   * para despachar, só falta esse dado para o que vem de fora.
+   */
+  birth_date: string | null
   phone: string
   postal_code: string
   street: string
@@ -159,6 +169,7 @@ export type OrderShippingAddress = {
 /** Colunas cruas de entrega, como vêm do banco (todas nulas até ser preenchido). */
 type RawShippingColumns = {
   shipping_recipient: string | null
+  shipping_birth_date: string | null
   shipping_phone: string | null
   shipping_postal_code: string | null
   shipping_street: string | null
@@ -177,7 +188,7 @@ type RawShippingColumns = {
 }
 
 const SHIPPING_COLUMNS =
-  "shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state, shipping_address_filled_at, requires_shipping_address"
+  "shipping_recipient, shipping_birth_date, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state, shipping_address_filled_at, requires_shipping_address"
 
 /**
  * Colapsa as colunas cruas num objeto único — ou `null` se o endereço ainda
@@ -199,6 +210,7 @@ export function mapShippingAddress(row: Partial<RawShippingColumns> | null | und
   }
   return {
     recipient: row.shipping_recipient,
+    birth_date: row.shipping_birth_date ?? null,
     phone: row.shipping_phone ?? "",
     postal_code: row.shipping_postal_code,
     street: row.shipping_street,
@@ -1349,17 +1361,7 @@ const SHIPPING_EDITABLE_STATUSES: OrderStatus[] = ["pending", "paid", "awaiting_
 export async function setOrderShippingAddress(
   orderId: string,
   userId: string,
-  address: {
-    recipient: string
-    phone: string
-    postalCode: string
-    street: string
-    number: string
-    complement?: string | null
-    neighborhood: string
-    city: string
-    state: string
-  }
+  address: ShippingAddressInput
 ): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
@@ -1399,15 +1401,7 @@ export async function setOrderShippingAddress(
   }
 
   const update: Database["public"]["Tables"]["store_orders"]["Update"] = {
-    shipping_recipient: address.recipient,
-    shipping_phone: address.phone,
-    shipping_postal_code: address.postalCode,
-    shipping_street: address.street,
-    shipping_number: address.number,
-    shipping_complement: address.complement ?? null,
-    shipping_neighborhood: address.neighborhood,
-    shipping_city: address.city,
-    shipping_state: address.state,
+    ...shippingAddressColumns(address),
     shipping_address_filled_at: new Date().toISOString(),
   }
   if (currentStatus === "paid") update.status = "awaiting_shipping_info"

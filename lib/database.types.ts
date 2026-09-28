@@ -165,6 +165,8 @@ export type Database = {
           state: string | null
           /** Última ENTREGA usada, só para pré-preencher o checkout. */
           shipping_recipient: string | null
+          /** Coluna `date` ("AAAA-MM-DD") de quem recebe; a alfândega exige na importação. */
+          shipping_birth_date: string | null
           shipping_phone: string | null
           shipping_postal_code: string | null
           shipping_street: string | null
@@ -1768,6 +1770,7 @@ export type Database = {
            * Nulo enquanto o endereço for opcional / ainda não preenchido.
            */
           shipping_recipient: string | null
+          shipping_birth_date: string | null
           shipping_phone: string | null
           shipping_postal_code: string | null
           shipping_street: string | null
@@ -1823,6 +1826,7 @@ export type Database = {
           card_surcharge_percent?: number | null
           aura_cost_paid?: number | null
           shipping_recipient?: string | null
+          shipping_birth_date?: string | null
           shipping_phone?: string | null
           shipping_postal_code?: string | null
           shipping_street?: string | null
@@ -1872,6 +1876,7 @@ export type Database = {
           card_surcharge_percent?: number | null
           aura_cost_paid?: number | null
           shipping_recipient?: string | null
+          shipping_birth_date?: string | null
           shipping_phone?: string | null
           shipping_postal_code?: string | null
           shipping_street?: string | null
@@ -2158,6 +2163,8 @@ export type Database = {
           peripheral_id: string | null
           reviewed_by: string | null
           reviewed_at: string | null
+          /** Pago por trigger ao virar "added" (20261203000000). */
+          aura_rewarded: number | null
           created_at: string
           updated_at: string
         }
@@ -2397,6 +2404,98 @@ export type Database = {
           updated_at?: string
         }
       }
+      /** Hero do topo de /loja (20261204000000). Sem grant para cliente. */
+      store_hero_slides: {
+        Relationships: []
+        Row: {
+          id: string
+          title: string
+          subtitle: string | null
+          image_desktop_url: string | null
+          image_mobile_url: string | null
+          product_id: string | null
+          primary_cta_text: string | null
+          primary_cta_link: string | null
+          secondary_cta_text: string | null
+          secondary_cta_link: string | null
+          starts_at: string | null
+          ends_at: string | null
+          is_active: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          title: string
+          subtitle?: string | null
+          image_desktop_url?: string | null
+          image_mobile_url?: string | null
+          product_id?: string | null
+          primary_cta_text?: string | null
+          primary_cta_link?: string | null
+          secondary_cta_text?: string | null
+          secondary_cta_link?: string | null
+          starts_at?: string | null
+          ends_at?: string | null
+          is_active?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["store_hero_slides"]["Insert"]>
+      }
+      /** Barra comercial da Loja, linha única `id = true` (20261204000000). Sem grant para cliente. */
+      store_commerce_bar: {
+        Relationships: []
+        Row: {
+          id: boolean
+          is_enabled: boolean
+          /** Formato validado na API: ver `StoreCommerceBenefit` em lib/store-commerce-bar.ts. */
+          benefits: unknown
+          campaign_enabled: boolean
+          campaign_text: string | null
+          campaign_link_text: string | null
+          campaign_link: string | null
+          campaign_product_id: string | null
+          campaign_tone: string
+          campaign_starts_at: string | null
+          campaign_ends_at: string | null
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          is_enabled?: boolean
+          benefits?: unknown
+          campaign_enabled?: boolean
+          campaign_text?: string | null
+          campaign_link_text?: string | null
+          campaign_link?: string | null
+          campaign_product_id?: string | null
+          campaign_tone?: string
+          campaign_starts_at?: string | null
+          campaign_ends_at?: string | null
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["store_commerce_bar"]["Insert"]>
+      }
+      /** Favoritos da Loja (20261204000000). Sem grant para cliente. */
+      store_product_favorites: {
+        Relationships: []
+        Row: {
+          user_id: string
+          product_id: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          product_id: string
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["store_product_favorites"]["Insert"]>
+      }
       notifications: {
         Relationships: []
         Row: {
@@ -2603,6 +2702,15 @@ export type Database = {
       decrement_store_stock: {
         Args: { p_product_id: string; p_quantity: number }
         Returns: boolean
+      }
+      /**
+       * Busca da Loja (20261204000001). `p_groups`: um array por palavra
+       * digitada, cada um com a palavra e seus sinônimos (lib/store-search.ts).
+       * Devolve em ordem de relevância.
+       */
+      store_search_products: {
+        Args: { p_groups: string[][]; p_phrase?: string | null; p_include_inactive?: boolean }
+        Returns: { product_id: string; score: number; sensor: string | null; sensor_matched: boolean }[]
       }
       decrement_variant_stock: {
         Args: { p_variant_id: string; p_quantity: number }

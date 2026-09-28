@@ -64,6 +64,38 @@ export const PERIPHERAL_REQUEST_STATUS_HINT: Record<PeripheralRequestStatus, str
   cancelled: "Você cancelou este pedido.",
 }
 
+/**
+ * Aura paga a quem pediu quando o pedido vira "added". Espelha
+ * `trg_reward_peripheral_request_added` (20261203000000); o do banco é o que
+ * vale. "duplicate" não paga: o periférico já estava na wiki.
+ */
+export const PERIPHERAL_REQUEST_AURA_REWARD = 10
+
+/**
+ * Respostas prontas do painel, por status. Trocar o status já preenche a
+ * primeira (se a equipe não escreveu nada à mão); as outras ficam a um clique.
+ * "pending" não tem: é o estado de quem ainda não foi olhado.
+ */
+export const PERIPHERAL_REQUEST_REPLY_PRESETS: Partial<Record<PeripheralRequestStatus, readonly string[]>> = {
+  in_review: [
+    "Recebemos seu pedido e já estamos levantando as informações para o cadastro.",
+  ],
+  added: [
+    "Adicionado! Agradecemos o suporte, seu apoio é essencial para manter o site.",
+    "Cadastrado na wiki! Obrigado por ajudar a deixar o catálogo mais completo.",
+    "Pronto, já está na wiki. Valeu pela sugestão!",
+  ],
+  duplicate: [
+    "Esse periférico já estava cadastrado na wiki. A ficha está ligada aqui no pedido. Obrigado mesmo assim!",
+    "Já tínhamos este modelo na wiki, talvez com outro nome. Confira a ficha ligada ao pedido.",
+  ],
+  rejected: [
+    "Não encontramos informações suficientes sobre este modelo para cadastrá-lo. Se tiver um link oficial, abra um novo pedido.",
+    "O link enviado não abre ou não corresponde ao modelo pedido. Abra um novo pedido com o link correto.",
+    "Esta categoria de produto não faz parte da wiki no momento.",
+  ],
+}
+
 /** Número curto do "ticket", ex.: `#0042`. */
 export function peripheralRequestNumber(number: number): string {
   return `#${String(number).padStart(4, "0")}`

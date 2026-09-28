@@ -31,6 +31,7 @@ import {
   formatCepInput,
   formatCpfInput,
   formatPhoneInput,
+  isPayerFormComplete,
   type PayerForm,
 } from "@/components/store/CheckoutPayerCard"
 import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/RemoveCartItemDialog"
@@ -38,6 +39,7 @@ import { CheckoutShippingCard } from "@/components/store/CheckoutShippingCard"
 import {
   EMPTY_SHIPPING_FORM,
   isShippingFormComplete,
+  isoToBirthDateInput,
   shippingFormToPayload,
   type ShippingForm,
 } from "@/components/store/ShippingAddressFields"
@@ -82,6 +84,8 @@ interface PayerInfoResponse {
   /** Último endereço de ENTREGA (distinto do de cobrança acima). */
   shipping?: {
     recipient?: string | null
+    /** "AAAA-MM-DD". Só existe na entrega salva: a cobrança não guarda nascimento. */
+    birthDate?: string | null
     phone?: string | null
     postalCode?: string | null
     street?: string | null
@@ -197,6 +201,7 @@ export default function CheckoutPage() {
         const hasSavedShipping = Boolean(lastShipping?.postalCode)
         setShippingForm({
           recipient: (hasSavedShipping ? lastShipping?.recipient : data.fullName) ?? "",
+          birthDate: hasSavedShipping ? isoToBirthDateInput(lastShipping?.birthDate) : "",
           phone: formatOptionalPhone(
             hasSavedShipping ? lastShipping?.phone : data.phone
           ),
@@ -327,6 +332,15 @@ export default function CheckoutPage() {
   // e ele é cobrado depois do pagamento, em "Meus Pedidos".
   const shippingComplete = isShippingFormComplete(shippingForm)
 
+  // Card em edição só segura o pagamento enquanto falta dado. Preenchido, o
+  // botão de pagar vale como "confirmar": é o que a pessoa faz ao terminar de
+  // digitar, e o corpo da requisição já leva o formulário atual. Exigir o
+  // clique no "Confirmar" de dentro do card deixava o botão cinza sem dizer
+  // por quê, e no card de perfil incompleto esse botão nem existia.
+  const payerFormComplete = isPayerFormComplete(payerForm, requireAddress)
+  const payerBlocking = editingPayer && !payerFormComplete
+  const shippingBlocking = editingShipping && !shippingComplete
+
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
   const cardTotal = computeCardPriceCents(total, cardSurchargePercent)
   const payableTotal = paymentMethod === "credit_card" ? cardTotal : total
@@ -360,15 +374,19 @@ export default function CheckoutPage() {
       return
     }
 
-    if (editingPayer) {
-      setError("Confirme os dados da cobrança antes de continuar.")
+    if (payerBlocking) {
+      setError("Preencha os dados da cobrança antes de continuar.")
       return
     }
 
-    if (editingShipping) {
-      setError("Confirme o endereço de entrega antes de continuar.")
+    if (shippingBlocking) {
+      setError("Complete o endereço de entrega ou escolha informar depois de pagar.")
       return
     }
+
+    // Recolhe os cards para a pessoa ver o resumo do que está sendo enviado.
+    setEditingPayer(false)
+    setEditingShipping(false)
 
     setLoading(true)
 
@@ -812,7 +830,7 @@ export default function CheckoutPage() {
             type="submit"
             className="w-full gap-2 bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:hover:translate-y-0"
             disabled={
-              loading || authLoading || !payerInfoChecked || editingPayer || editingShipping || storeClosed
+              loading || authLoading || !payerInfoChecked || payerBlocking || shippingBlocking || storeClosed
             }
           >
             {loading ? (
@@ -822,10 +840,10 @@ export default function CheckoutPage() {
               </>
             ) : storeClosed ? (
               "Loja fechada no momento"
-            ) : editingPayer ? (
-              "Confirme os dados da cobrança"
-            ) : editingShipping ? (
-              "Confirme o endereço de entrega"
+            ) : payerBlocking ? (
+              "Preencha os dados da cobrança"
+            ) : shippingBlocking ? (
+              "Complete o endereço de entrega"
             ) : paymentMethod === "pix" ? (
               "Gerar PIX"
             ) : (

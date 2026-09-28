@@ -3,6 +3,8 @@ import Link from "next/link"
 import { ArrowLeft } from "lucide-react"
 
 import { PeripheralRequestsHub } from "@/components/peripherals/requests/PeripheralRequestsHub"
+import { AuraAmount } from "@/components/ui/AuraIcon"
+import { PERIPHERAL_REQUEST_AURA_REWARD } from "@/lib/peripheral-requests"
 import { buildMetadata } from "@/lib/seo"
 
 export const metadata: Metadata = buildMetadata({
@@ -32,6 +34,10 @@ export default function PedidosDePerifericoPage() {
         <p className="mt-3 text-sm text-muted-foreground">
           Não achou o que procurava? Conta pra gente qual é. A equipe analisa por ordem de chegada, e você
           acompanha o pedido aqui e pelas notificações.
+        </p>
+        <p className="mt-2 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
+          Se o periférico for cadastrado, você ganha
+          <AuraAmount value={PERIPHERAL_REQUEST_AURA_REWARD} prefix="+" size="md" tone="brand" className="font-semibold text-foreground" />
         </p>
       </header>
 

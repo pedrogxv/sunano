@@ -432,6 +432,18 @@ const BUY_LINK_STYLES: Record<string, { container: string; icon: string }> = {
     container: "border-orange-500/30 bg-orange-500/10 text-orange-200 hover:bg-orange-500/20",
     icon: "text-orange-400",
   },
+  kabum: {
+    container: "border-amber-500/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20",
+    icon: "text-amber-400",
+  },
+  "doctor mouse": {
+    container: "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
+    icon: "text-sky-400",
+  },
+  doctormouse: {
+    container: "border-sky-500/30 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20",
+    icon: "text-sky-400",
+  },
 }
 
 const DEFAULT_BUY_LINK_STYLE = {
@@ -484,14 +496,15 @@ function isLinkedProductSoldOut(product: PeripheralDetailViewLinkedProduct) {
 
 /**
  * Etiqueta do tipo de venda. A venda normal não recebe etiqueta — é o padrão.
+ * "Pronta entrega" também não: saiu da vitrine da Loja, e o selo aqui
+ * prometeria um tipo de venda que a Loja não mostra mais.
  *
  * Devolve a chave do dicionário, não o texto: a função é de módulo (fora de
  * componente) e não pode chamar `useT`. Quem renderiza resolve o idioma.
  */
 function saleTypeLabelKey(
   saleType: PeripheralDetailViewLinkedProduct["sale_type"]
-): "readyStock" | "preOrder" | null {
-  if (saleType === "ready_stock") return "readyStock"
+): "preOrder" | null {
   if (saleType === "pre_order") return "preOrder"
   return null
 }

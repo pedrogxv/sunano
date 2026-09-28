@@ -117,6 +117,8 @@ const peripheralSchema = z.object({
   buyLinkMercadoLivre: z.string().optional(),
   buyLinkAmazon: z.string().optional(),
   buyLinkShopee: z.string().optional(),
+  buyLinkKabum: z.string().optional(),
+  buyLinkDoctorMouse: z.string().optional(),
   compatibility: z.string().optional(),
   comparisons: z.string().optional(),
   weight: z.string().optional(),
@@ -320,7 +322,7 @@ const TIER_OPTIONS: { key: Tier; color: string; textColor: string; bg: string }[
 ]
 
 const BUY_LINK_PLATFORMS: {
-  field: "buyLinkAliexpress" | "buyLinkMercadoLivre" | "buyLinkAmazon" | "buyLinkShopee"
+  field: "buyLinkAliexpress" | "buyLinkMercadoLivre" | "buyLinkAmazon" | "buyLinkShopee" | "buyLinkKabum" | "buyLinkDoctorMouse"
   label: string
   matches: string[]
   dot: string
@@ -330,6 +332,8 @@ const BUY_LINK_PLATFORMS: {
   { field: "buyLinkMercadoLivre", label: "Mercado Livre", matches: ["mercado livre", "mercadolivre"], dot: "bg-yellow-400", ring: "focus-visible:ring-yellow-400/40" },
   { field: "buyLinkAmazon", label: "Amazon", matches: ["amazon"], dot: "bg-blue-500", ring: "focus-visible:ring-blue-400/40" },
   { field: "buyLinkShopee", label: "Shopee", matches: ["shopee"], dot: "bg-orange-500", ring: "focus-visible:ring-orange-400/40" },
+  { field: "buyLinkKabum", label: "Kabum", matches: ["kabum"], dot: "bg-amber-500", ring: "focus-visible:ring-amber-400/40" },
+  { field: "buyLinkDoctorMouse", label: "Doctor Mouse", matches: ["doctor mouse", "doctormouse"], dot: "bg-sky-500", ring: "focus-visible:ring-sky-400/40" },
 ]
 
 const MAX_IMAGES = 8

@@ -17,6 +17,7 @@ import {
   EMPTY_SHIPPING_FORM,
   ShippingAddressFields,
   isShippingFormComplete,
+  isoToBirthDateInput,
   shippingFormToPayload,
   type ShippingForm,
 } from "@/components/store/ShippingAddressFields"
@@ -24,6 +25,8 @@ import { formatCepInput, formatPhoneInput } from "@/components/store/CheckoutPay
 
 export type ExistingShippingAddress = {
   recipient: string
+  /** "AAAA-MM-DD"; nula em pedido anterior ao campo. */
+  birth_date: string | null
   phone: string
   postal_code: string
   street: string
@@ -68,6 +71,7 @@ export function OrderShippingAddressDialog({
       existing
         ? {
             recipient: existing.recipient,
+            birthDate: isoToBirthDateInput(existing.birth_date),
             phone: formatPhoneInput(existing.phone),
             postalCode: formatCepInput(existing.postal_code),
             street: existing.street,

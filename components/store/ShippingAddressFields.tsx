@@ -11,6 +11,8 @@ import { formatCepInput, formatPhoneInput } from "@/components/store/CheckoutPay
 
 export interface ShippingForm {
   recipient: string
+  /** DD/MM/AAAA, como a pessoa digita. Vai para o servidor em ISO. */
+  birthDate: string
   phone: string
   postalCode: string
   street: string
@@ -23,6 +25,7 @@ export interface ShippingForm {
 
 export const EMPTY_SHIPPING_FORM: ShippingForm = {
   recipient: "",
+  birthDate: "",
   phone: "",
   postalCode: "",
   street: "",
@@ -33,6 +36,33 @@ export const EMPTY_SHIPPING_FORM: ShippingForm = {
   state: "",
 }
 
+export function formatBirthDateInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 8)
+  return digits.replace(/(\d{2})(\d)/, "$1/$2").replace(/(\d{2})\/(\d{2})(\d)/, "$1/$2/$3")
+}
+
+/**
+ * "DD/MM/AAAA" → "AAAA-MM-DD", ou `null` se não for uma data de nascimento
+ * possível. Confere o calendário de verdade (31/02 não passa) e recusa data
+ * futura e ano antes de 1900, os mesmos limites do servidor.
+ */
+export function birthDateInputToIso(value: string): string | null {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(value.trim())
+  if (!match) return null
+  const [, dd, mm, yyyy] = match
+  const iso = `${yyyy}-${mm}-${dd}`
+  const date = new Date(`${iso}T00:00:00Z`)
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== iso) return null
+  if (Number(yyyy) < 1900 || date.getTime() > Date.now()) return null
+  return iso
+}
+
+/** "AAAA-MM-DD" (coluna `date`) → "DD/MM/AAAA" para o campo. */
+export function isoToBirthDateInput(iso: string | null | undefined): string {
+  const match = iso ? /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) : null
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : ""
+}
+
 /**
  * Um endereço só serve para despachar se estiver inteiro — a mesma regra do
  * `parseOptionalShippingAddress` no servidor, replicada aqui só para
@@ -41,6 +71,7 @@ export const EMPTY_SHIPPING_FORM: ShippingForm = {
 export function isShippingFormComplete(form: ShippingForm): boolean {
   return (
     form.recipient.trim().length >= 2 &&
+    birthDateInputToIso(form.birthDate) !== null &&
     form.phone.replace(/\D/g, "").length >= 10 &&
     form.postalCode.replace(/\D/g, "").length === 8 &&
     form.street.trim() !== "" &&
@@ -62,6 +93,7 @@ export function isShippingFormTouched(form: ShippingForm): boolean {
 export function shippingFormToPayload(form: ShippingForm) {
   return {
     shippingRecipient: form.recipient.trim(),
+    shippingBirthDate: birthDateInputToIso(form.birthDate) ?? "",
     shippingPhone: form.phone.replace(/\D/g, ""),
     shippingPostalCode: form.postalCode.replace(/\D/g, ""),
     shippingStreet: form.street.trim(),
@@ -118,6 +150,8 @@ export function ShippingAddressFields({
 }) {
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState<string | null>(null)
+  // Só acusa depois da data inteira digitada: "12/0" é digitação em curso, não erro.
+  const birthDateInvalid = form.birthDate.length === 10 && birthDateInputToIso(form.birthDate) === null
 
   function set<K extends keyof ShippingForm>(key: K, value: ShippingForm[K]) {
     onChange({ ...form, [key]: value })
@@ -166,6 +200,28 @@ export function ShippingAddressFields({
           placeholder="Nome de quem recebe o pacote"
           className="border-border/80 bg-muted/30"
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Data de nascimento de quem recebe *</Label>
+        <Input
+          inputMode="numeric"
+          autoComplete="bday"
+          disabled={disabled}
+          value={form.birthDate}
+          onChange={(e) => set("birthDate", formatBirthDateInput(e.target.value))}
+          placeholder="DD/MM/AAAA"
+          maxLength={10}
+          aria-invalid={birthDateInvalid || undefined}
+          className="border-border/80 bg-muted/30"
+        />
+        {birthDateInvalid ? (
+          <p className="text-[10px] text-red-400">Data inválida.</p>
+        ) : (
+          <p className="text-[10px] text-muted-foreground/60">
+            Exigida pela alfândega para liberar produtos importados.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { getCategoryIcon } from "@/lib/store-category-icons"
-import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
+import type { StoreSearchSuggestion } from "@/lib/server/repositories/store-repository"
 
 interface StoreSearchBoxProps {
   className?: string
@@ -22,13 +22,18 @@ interface StoreSearchBoxProps {
  * enquanto digita, Enter ou "ver todos" leva pra `/loja?q=` com os filtros
  * completos. Debounce + AbortController evitam martelar `/api/store/search`
  * a cada tecla; a rota em si tem rate limit no servidor.
+ *
+ * O termo casa com nome, marca, categoria, sensor e palavras-chave do
+ * Database ao mesmo tempo (store_search_products). Quando quem casou foi o
+ * sensor, o resultado diz isso: sem a dica, "3950" devolvendo "ATK X1 Ultimate"
+ * parece erro de busca.
  */
-export function StoreSearchBox({ className, inputClassName, iconClassName, placeholder = "Buscar produto ou marca" }: StoreSearchBoxProps) {
+export function StoreSearchBox({ className, inputClassName, iconClassName, placeholder = "Buscar produto, marca ou sensor" }: StoreSearchBoxProps) {
   const router = useRouter()
   const listboxId = useId()
   const [query, setQuery] = useState("")
   const debouncedQuery = useDebouncedValue(query, 300)
-  const [results, setResults] = useState<StoreProductCard[]>([])
+  const [results, setResults] = useState<StoreSearchSuggestion[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [highlighted, setHighlighted] = useState(-1)
@@ -50,7 +55,7 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
     Promise.resolve().then(() => setIsLoading(true))
     fetch(`/api/store/search?q=${encodeURIComponent(trimmed)}&limit=5`, { signal: controller.signal })
       .then((res) => res.json())
-      .then((data: { items: StoreProductCard[] }) => {
+      .then((data: { items: StoreSearchSuggestion[] }) => {
         setResults(data.items ?? [])
         setHighlighted(-1)
       })
@@ -178,7 +183,15 @@ export function StoreSearchBox({ className, inputClassName, iconClassName, place
                       )}
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate text-[12.5px] font-semibold text-white">{product.name}</span>
-                        {product.brand && <span className="truncate text-[11px] text-[#7a7a7a]">{product.brand}</span>}
+                        {(product.brand || product.search_sensor) && (
+                          <span className="truncate text-[11px] text-[#7a7a7a]">
+                            {product.brand}
+                            {product.brand && product.search_sensor && " · "}
+                            {product.search_sensor && (
+                              <span className="font-semibold text-sky-300/90">Sensor {product.search_sensor}</span>
+                            )}
+                          </span>
+                        )}
                       </span>
                       <span className="shrink-0 text-[12.5px] font-bold text-emerald-400">{formatBRL(price)}</span>
                     </Link>

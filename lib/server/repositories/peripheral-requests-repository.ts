@@ -16,8 +16,8 @@ import type { Category } from "@/lib/tag-options"
  * Repositório de pedidos de cadastro de periférico (`peripheral_requests`,
  * 20261130000000).
  *
- * O teto de pedidos em aberto por pessoa e o aviso de mudança de status vivem
- * no banco (trigger), não aqui: o teto porque só um lock fecha a corrida entre
+ * O teto de pedidos em aberto por pessoa, o aviso de mudança de status e a
+ * Aura do pedido cadastrado vivem no banco (trigger), não aqui: o teto porque só um lock fecha a corrida entre
  * dois envios quase simultâneos, e o aviso para nenhum caminho novo de
  * atualização esquecer de notificar. Este arquivo só traduz o erro do banco.
  */
@@ -58,16 +58,19 @@ export type PeripheralRequestDetail = PeripheralRequestSummary & {
   notes: string | null
   staff_response: string | null
   reviewed_at: string | null
+  /** Aura que a pessoa recebeu pelo pedido cadastrado; `null` se nada foi pago. */
+  aura_rewarded: number | null
   peripheral: LinkedPeripheral | null
 }
 
-const DETAIL_COLUMNS = `${SUMMARY_COLUMNS}, reference_url, notes, staff_response, reviewed_at, peripheral_id`
+const DETAIL_COLUMNS = `${SUMMARY_COLUMNS}, reference_url, notes, staff_response, reviewed_at, aura_rewarded, peripheral_id`
 
 type DetailRow = PeripheralRequestSummary & {
   reference_url: string | null
   notes: string | null
   staff_response: string | null
   reviewed_at: string | null
+  aura_rewarded: number | null
   peripheral_id: string | null
 }
 

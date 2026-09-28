@@ -146,6 +146,48 @@ export function buildTrackProgress(
   })
 }
 
+/**
+ * Nível da conta no painel de Aura da sidebar: a trilha "Aura farmada" lida
+ * direto do total histórico ganho (`user_aura_wallet.total_earned`, o mesmo
+ * contador que a trilha usa). É só exibição: quem concede o nível é o banco;
+ * como o contador é o mesmo, o que a sidebar mostra bate com a conquista.
+ * `level` é 0 antes da Brasa e 5 na Supernova.
+ */
+export type AuraLevelProgress = {
+  level: number
+  tier: AchievementTier | null
+  name: string | null
+  nextName: string | null
+  /** Limiar do próximo nível; `null` no último. */
+  nextThreshold: number | null
+  /** 0–1 dentro do nível atual (1 no último). */
+  ratio: number
+}
+
+export function auraLevelProgress(totalEarned: number): AuraLevelProgress {
+  const thresholds = ACHIEVEMENT_THRESHOLDS.aura_earned
+  const names = ACHIEVEMENT_TIER_NAMES.aura_earned
+  let level = 0
+  for (const tier of ACHIEVEMENT_TIERS) {
+    if (totalEarned >= thresholds[tier]) level += 1
+  }
+  const tier = level > 0 ? ACHIEVEMENT_TIERS[level - 1] : null
+  const nextTier = ACHIEVEMENT_TIERS[level] ?? null
+  const floor = tier ? thresholds[tier] : 0
+  const nextThreshold = nextTier ? thresholds[nextTier] : null
+  return {
+    level,
+    tier,
+    name: tier ? names[tier] : null,
+    nextName: nextTier ? names[nextTier] : null,
+    nextThreshold,
+    ratio:
+      nextThreshold === null
+        ? 1
+        : Math.min(1, Math.max(0, (totalEarned - floor) / (nextThreshold - floor))),
+  }
+}
+
 export type DailyMissionsState = {
   created_post: boolean
   wrote_comment: boolean
@@ -162,7 +204,7 @@ export const EMPTY_DAILY_MISSIONS: DailyMissionsState = {
 
 export type DailyMissionKey = keyof Omit<DailyMissionsState, "bonus_claimed">
 
-/** As 3 missões do dia, na ordem de exibição — usado por `AuraMissionsBadge` (TopBar). */
+/** As 3 missões do dia, na ordem de exibição — usado por `AuraMissionsBadge` (painel da sidebar). */
 export const DAILY_MISSION_KEYS: Array<{ key: DailyMissionKey; label: string }> = [
   { key: "created_post", label: "Criar um post" },
   { key: "wrote_comment", label: "Fazer um comentário" },

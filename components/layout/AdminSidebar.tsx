@@ -23,6 +23,7 @@ import {
   Mouse,
   Newspaper,
   Package,
+  PanelTop,
   PlaySquare,
   Receipt,
   Settings,
@@ -98,7 +99,7 @@ export function AdminSidebar() {
       items: [
         { href: "/admin/tierlist",    label: "Tierlist",                       icon: Trophy,     permission: "peripherals_read" },
         { href: "/admin/perifericos", label: t.admin.sidebar.peripherals,      icon: Mouse,      permission: "peripherals_read" },
-        { href: "/admin/perifericos/pedidos", label: "Pedidos",                  icon: Inbox,      permission: "peripherals_read", badgeCount: peripheralRequestsPendingCount },
+        { href: "/admin/perifericos/pedidos", label: "Cadastros",                icon: Inbox,      permission: "peripherals_read", badgeCount: peripheralRequestsPendingCount },
         { href: "/admin/ranking",     label: "Ranking",                        icon: BarChart2,  permission: "peripherals_read" },
         { href: "/admin/brands",      label: "Marcas",                         icon: Tag,        permission: "brands_read" },
         { href: "/admin/softwares",   label: "Softwares",                      icon: AppWindow,  permission: "brands_read" },
@@ -135,6 +136,8 @@ export function AdminSidebar() {
           permission: "store_read",
           children: [
             { href: "/admin/store",         label: "Produtos", icon: ShoppingBag,          permission: "store_read" },
+            { href: "/admin/store/hero",    label: "Hero",     icon: PanelTop,             permission: "store_read" },
+            { href: "/admin/store/commerce-bar", label: "Barra comercial", icon: Megaphone, permission: "store_read" },
             { href: "/admin/store/banners", label: "Banners",  icon: GalleryHorizontalEnd, permission: "store_read" },
             { href: "/admin/store/orders",  label: "Pedidos",  icon: Package,              permission: "store_read" },
             { href: "/admin/suporte",       label: "Suporte",  icon: LifeBuoy,              permission: "support_read", badgeCount: supportAwaitingCount },

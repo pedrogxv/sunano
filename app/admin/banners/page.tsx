@@ -49,6 +49,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { BANNER_LINK_HINT, isValidBannerLink } from "@/lib/banner-link"
+import { formatShortDateTime, fromLocalInput, toLocalInput } from "@/lib/datetime-local"
 import { cn } from "@/lib/utils"
 
 type Banner = {
@@ -94,29 +95,9 @@ const EMPTY_FORM: FormState = {
 }
 
 // ── Datas ──────────────────────────────────────────────────
-// O banco guarda UTC; o <input type="datetime-local"> fala no fuso do admin.
-function toLocalInput(iso: string | null): string {
-  if (!iso) return ""
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) return ""
-  const pad = (value: number) => String(value).padStart(2, "0")
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-
-function fromLocalInput(value: string): string | null {
-  if (!value) return null
-  const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? null : date.toISOString()
-}
-
-function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  })
-}
+// O banco guarda UTC; o <input type="datetime-local"> fala no fuso do admin
+// (ver lib/datetime-local.ts, compartilhado com o Hero e a barra da Loja).
+const formatDateTime = formatShortDateTime
 
 // ── Status ─────────────────────────────────────────────────
 type BannerStatus = { label: string; hint: string | null; className: string }

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { useAuthUser } from "@/components/providers/auth-context"
+// `import type` é apagado no build: não puxa `server-only` para o bundle.
+import type { OrderShippingAddress } from "@/lib/server/repositories/orders-repository"
 
 export type UserOrderItem = {
   id?: string
@@ -35,18 +37,7 @@ export type UserOrder = {
    * Para onde o pedido vai. Null = ainda não informado — o cliente pulou o
    * endereço no checkout e precisa completar aqui antes do despacho.
    */
-  shipping_address: {
-    recipient: string
-    phone: string
-    postal_code: string
-    street: string
-    number: string
-    complement: string | null
-    neighborhood: string
-    city: string
-    state: string
-    filled_at: string
-  } | null
+  shipping_address: OrderShippingAddress | null
   /**
    * false = pedido de serviço/item digital: não há o que despachar, e a
    * ausência de endereço não é pendência nenhuma.

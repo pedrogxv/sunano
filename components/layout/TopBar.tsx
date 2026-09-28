@@ -24,12 +24,6 @@ const NotificationBell = dynamic(
   () => import("@/components/notifications/notification-bell").then((m) => m.NotificationBell),
   { ssr: false }
 )
-// Idem: Aura + missões diárias só existem pra quem tem conta e buscam seus
-// próprios endpoints. Também se esconde sozinho.
-const AuraMissionsBadge = dynamic(
-  () => import("@/components/layout/AuraMissionsBadge").then((m) => m.AuraMissionsBadge),
-  { ssr: false }
-)
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
 import { CartButton } from "@/components/store/CartDrawer"
@@ -53,10 +47,12 @@ const ADMIN_PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/users":       { title: "Usuários e permissões", description: "Controle quem pode ler ou editar cada seção." },
   "/admin/settings":    { title: "Configurações", description: "Gerencie seu perfil e preferências do sistema." },
   "/admin/store":       { title: "Loja", description: "Gerencie os produtos da loja." },
+  "/admin/store/hero":  { title: "Hero da Loja", description: "Banner principal do topo de /loja." },
+  "/admin/store/commerce-bar": { title: "Barra comercial", description: "Benefícios e campanha abaixo do menu da Loja." },
   "/admin/vips":        { title: "VIPs", description: "Assinaturas VIP: estado na Asaas, cobranças e concessão manual." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
   "/admin/suporte":     { title: "Suporte", description: "Veja e responda aos chamados abertos pelos clientes." },
-  "/admin/perifericos/pedidos": { title: "Pedidos de periférico", description: "Pedidos da comunidade para cadastrar periféricos que ainda não estão na wiki." },
+  "/admin/perifericos/pedidos": { title: "Cadastros", description: "Pedidos da comunidade para cadastrar periféricos que ainda não estão na wiki." },
   "/admin/forum/denuncias": { title: "Denúncias", description: "Posts e comentários denunciados pela comunidade." },
   "/admin/eventos":     { title: "Conquistas", description: "Gerencie as conquistas que concedem medalhas automaticamente." },
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
@@ -99,7 +95,7 @@ function getPageDefaults(pathname: string, t: Dict): PageDefaults {
   if (pathname.startsWith("/admin/store/"))      return { title: "Editar produto", description: "Atualize as informações do produto." }
   if (pathname.startsWith("/admin/blog/new"))    return { title: "Novo artigo", description: "Crie um review ou artigo relacionado a um periférico." }
   if (pathname.startsWith("/admin/blog/"))       return { title: "Editar artigo", description: "Atualize o conteúdo do artigo." }
-  if (pathname.startsWith("/admin/perifericos/pedidos/")) return { title: "Pedido de periférico", description: "Analise o pedido e responda a quem o abriu." }
+  if (pathname.startsWith("/admin/perifericos/pedidos/")) return { title: "Pedido de cadastro", description: "Analise o pedido e responda a quem o abriu." }
   if (pathname.startsWith("/admin/perifericos/new")) return { title: "Novo periférico", description: "Adicione um novo periférico à wiki." }
   if (pathname.startsWith("/admin/perifericos/"))    return { title: "Editar periférico", description: "Atualize as informações do periférico." }
   if (pathname.startsWith("/admin/tierlist/new"))    return { title: "Novo periférico", description: "Adicione um novo periférico à tierlist." }
@@ -185,8 +181,8 @@ export function TopBar() {
           </div>
         </div>
 
-        {/* Right — no mobile, prioriza notificação e missão diária: Aura
-            sai da barra e vira item do menu do avatar. */}
+        {/* Right — carrinho, notificações e conta. O saldo de Aura mora no
+            painel do rodapé da sidebar (AuraMissionsBadge). */}
         <div className="flex shrink-0 items-center gap-1 sm:gap-1.5 md:gap-2">
           {/* Carrinho — só aparece se houver itens pendentes, pra não poluir
               o header. Some no checkout. */}
@@ -198,7 +194,6 @@ export function TopBar() {
           {/* Conta — sempre visível no canto; no admin fica na própria sidebar. */}
           {!isAdmin && (
             <>
-              <AuraMissionsBadge />
               <div className="hidden h-6 w-px shrink-0 bg-border sm:block" />
               <AuthUser
                 layout="topbar"

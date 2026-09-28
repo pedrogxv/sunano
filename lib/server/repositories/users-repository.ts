@@ -1711,6 +1711,8 @@ export type UserProfileSettings = {
 /** Último endereço de ENTREGA salvo no perfil (colunas `shipping_*`, não as de cobrança). */
 export type ProfileShippingPrefill = {
   recipient: string | null
+  /** "AAAA-MM-DD". */
+  birthDate: string | null
   phone: string | null
   postalCode: string | null
   street: string | null
@@ -1733,7 +1735,7 @@ export async function getProfileShippingPrefill(
   const { data } = await db
     .from("user_profiles")
     .select(
-      "shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
+      "shipping_recipient, shipping_birth_date, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
     )
     .eq("id", userId)
     .maybeSingle()
@@ -1741,6 +1743,7 @@ export async function getProfileShippingPrefill(
   if (!data || !data.shipping_postal_code) return null
   return {
     recipient: data.shipping_recipient,
+    birthDate: data.shipping_birth_date,
     phone: data.shipping_phone,
     postalCode: data.shipping_postal_code,
     street: data.shipping_street,
@@ -2137,6 +2140,7 @@ export type UserDataExport = {
     created_at: string
     /** Endereço de entrega gravado no pedido (snapshot) — nulo se nunca informado. */
     shipping_recipient?: string | null
+    shipping_birth_date?: string | null
     shipping_phone?: string | null
     shipping_postal_code?: string | null
     shipping_street?: string | null
@@ -2211,7 +2215,7 @@ export async function getUserDataExport(
     db
       .from("store_orders")
       .select(
-        "id, total_cents, status, payment_method, items, created_at, shipping_recipient, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
+        "id, total_cents, status, payment_method, items, created_at, shipping_recipient, shipping_birth_date, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
       )
       .contains("metadata", { user_id: userId })
       .order("created_at", { ascending: false }),

@@ -99,6 +99,7 @@ export function CheckoutShippingCard({
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
                     {form.recipient}
                   </p>
+                  <p className="text-[11px] text-muted-foreground">Nascimento: {form.birthDate}</p>
                   <p className="text-xs text-foreground">
                     {formatShippingAddressLine({
                       street: form.street,

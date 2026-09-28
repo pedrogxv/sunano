@@ -11,7 +11,7 @@ export const runtime = "nodejs"
  * banco. Consumida por `/loja` (pública — sempre `is_active = true`).
  */
 
-const SORT_KEYS = ["recent", "name-asc", "name-desc", "price-asc", "price-desc"] as const
+const SORT_KEYS = ["relevance", "recent", "name-asc", "name-desc", "price-asc", "price-desc"] as const
 const CONDITIONS = ["new", "used", "opened"] as const
 const SALE_TYPES = ["pre_order", "ready_stock", "normal"] as const
 

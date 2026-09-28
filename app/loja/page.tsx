@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import { ShoppingBag } from "lucide-react"
 import { listStoreProductsPaginated, getStoreFilterOptions, listBestSellingProducts } from "@/lib/server/repositories/store-repository"
 import { listActiveBannersBySection } from "@/lib/server/repositories/store-banners-repository"
+import { listLiveHeroSlides } from "@/lib/server/repositories/store-hero-repository"
 import { StoreContent } from "@/components/store/StoreContent"
 import { ItemListJsonLd } from "@/components/seo/JsonLd"
 import { ComingSoon } from "@/components/store/ComingSoon"
@@ -54,11 +55,11 @@ export default async function LojaPage() {
     filterOptions,
     { items: featuredItems },
     { items: preOrderItems },
-    { items: readyStockItems },
     { items: siteItems },
     { items: serviceItems },
     bestSellingItems,
     sectionBanners,
+    heroSlides,
   ] = await Promise.all([
     listStoreProductsPaginated({
       type: "store",
@@ -80,12 +81,6 @@ export default async function LojaPage() {
     }),
     listStoreProductsPaginated({
       type: "store",
-      saleType: "ready_stock",
-      page: 1,
-      pageSize: 12,
-    }),
-    listStoreProductsPaginated({
-      type: "store",
       categories: ["site"],
       page: 1,
       pageSize: 12,
@@ -98,6 +93,7 @@ export default async function LojaPage() {
     }),
     listBestSellingProducts(12),
     listActiveBannersBySection(),
+    listLiveHeroSlides(),
   ])
 
   if (total === 0 && filterOptions.countByType.store === 0) {
@@ -125,7 +121,7 @@ export default async function LojaPage() {
         initialFilterOptions={filterOptions}
         initialFeatured={featuredItems}
         preOrderItems={preOrderItems}
-        readyStockItems={readyStockItems}
+        heroSlides={heroSlides}
         siteItems={siteItems}
         serviceItems={serviceItems}
         bestSellingItems={bestSellingItems}

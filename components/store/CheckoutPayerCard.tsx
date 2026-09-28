@@ -56,6 +56,26 @@ function maskCpf(cpf: string): string {
   return `***.***.${digits.slice(6, 9)}-${digits.slice(9)}`
 }
 
+/**
+ * O que a cobrança exige: nome e CPF sempre; no cartão, também telefone e
+ * endereço de cobrança. Decide se o card pode sair da edição e se o botão de
+ * pagar do checkout libera. A validação que vale é a do servidor.
+ */
+export function isPayerFormComplete(form: PayerForm, requireAddress: boolean): boolean {
+  return (
+    form.name.trim().length >= 2 &&
+    form.document.replace(/\D/g, "").length === 11 &&
+    (!requireAddress ||
+      (form.phone.replace(/\D/g, "").length >= 10 &&
+        form.postalCode.replace(/\D/g, "").length === 8 &&
+        form.street.trim() !== "" &&
+        form.number.trim() !== "" &&
+        form.neighborhood.trim() !== "" &&
+        form.city.trim() !== "" &&
+        form.state.trim() !== ""))
+  )
+}
+
 interface CepLookupResponse {
   error?: string
   street?: string
@@ -181,17 +201,7 @@ export function CheckoutPayerCard({
     .filter(Boolean)
     .join(" · ")
 
-  const canFinishEditing =
-    form.name.trim().length >= 2 &&
-    form.document.replace(/\D/g, "").length === 11 &&
-    (!requireAddress ||
-      (form.phone.replace(/\D/g, "").length >= 10 &&
-        form.postalCode.replace(/\D/g, "").length === 8 &&
-        form.street.trim() !== "" &&
-        form.number.trim() !== "" &&
-        form.neighborhood.trim() !== "" &&
-        form.city.trim() !== "" &&
-        form.state.trim() !== ""))
+  const canFinishEditing = isPayerFormComplete(form, requireAddress)
 
   return (
     <div className={cn("rounded-xl border", CARD_SURFACE)}>
@@ -391,20 +401,22 @@ export function CheckoutPayerCard({
             </>
           )}
 
-          {/* Sem os dados salvos não há para onde "cancelar" — o card fica
-              travado em edição até a pessoa preencher. */}
-          {!incomplete && (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button
-                type="button"
-                size="sm"
-                onClick={confirmEditing}
-                disabled={!canFinishEditing}
-                className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-500"
-              >
-                <Check className="size-3.5" />
-                Confirmar dados
-              </Button>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              type="button"
+              size="sm"
+              onClick={confirmEditing}
+              disabled={!canFinishEditing}
+              className="gap-1.5 bg-emerald-600 text-white hover:bg-emerald-500"
+            >
+              <Check className="size-3.5" />
+              Confirmar dados
+            </Button>
+            {/* Sem dado salvo não há para onde "cancelar". O "Confirmar"
+                fica mesmo assim: escondê-lo junto deixava o card preso em
+                edição e o botão de pagar desabilitado para sempre, mesmo com
+                tudo preenchido (todo cliente de primeira compra). */}
+            {!incomplete && (
               <Button
                 type="button"
                 size="sm"
@@ -415,8 +427,8 @@ export function CheckoutPayerCard({
                 <X className="size-3.5" />
                 Cancelar
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

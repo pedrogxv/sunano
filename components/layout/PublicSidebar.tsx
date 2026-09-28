@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
 import {
   AppWindow,
@@ -24,6 +25,7 @@ import {
 import { AuraIcon } from "@/components/ui/AuraIcon"
 import { useEffect, useState } from "react"
 
+import { Skeleton } from "@/components/ui/skeleton"
 import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { VipUpsellModal } from "@/components/aura/VipUpsellModal"
 import { isVipSubscriptionEnabled } from "@/lib/vip-signup"
@@ -33,6 +35,13 @@ import { useSidebar } from "@/components/providers/sidebar-context"
 import { useCart } from "@/components/providers/cart-context"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
+
+// Mesmo motivo de antes na TopBar: o painel busca os próprios endpoints e só
+// interessa a quem tem conta. Fora do bundle crítico das páginas públicas.
+const AuraMissionsBadge = dynamic(
+  () => import("@/components/layout/AuraMissionsBadge").then((m) => m.AuraMissionsBadge),
+  { ssr: false, loading: () => <Skeleton className="h-14 w-full rounded-xl" /> }
+)
 
 type NavItem = {
   href: string
@@ -115,6 +124,8 @@ export function PublicSidebar() {
     return () => { mounted = false }
   }, [])
 
+  const latestVersion = t.changelog.entries[0]?.version
+
   const close = () => setMobileOpen(false)
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname?.startsWith(href)
@@ -149,8 +160,8 @@ export function PublicSidebar() {
       <aside
         className={cn(
           // h-dvh e não h-screen: 100vh é o viewport *sem* a barra de URL do navegador
-          // mobile, o que empurra o fim da lista (Patch Notes, Central de Informações)
-          // para fora da tela.
+          // mobile, o que empurra o rodapé (painel de Aura, Patch Notes) para fora
+          // da tela.
           "fixed inset-y-0 left-0 z-40 flex h-dvh w-60 shrink-0 flex-col border-border bg-background transition-all duration-300 md:relative md:inset-auto md:h-full md:translate-x-0",
           isMobileOpen ? "translate-x-0" : "-translate-x-full",
           isCollapsed ? "md:w-16" : "md:w-60"
@@ -242,6 +253,15 @@ export function PublicSidebar() {
                 {t.nav.offers}
               </span>
             </Link>
+
+            {/* Hub dos documentos legais/institucionais. Um link só; as
+                páginas individuais seguem em suas URLs próprias. */}
+            <NavLink
+              item={{ href: "/informacoes", label: t.nav.info, icon: Info }}
+              isActive={isActive("/informacoes")}
+              collapsed={isCollapsed}
+              onClick={close}
+            />
           </div>
 
           {/* Periféricos */}
@@ -271,48 +291,9 @@ export function PublicSidebar() {
               />
             ))}
 
-            {/* Central de Aura */}
-            <Link
-              href="/aura"
-              onClick={close}
-              className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
-                isCollapsed && "justify-center",
-                isActive("/aura")
-                  ? "bg-orange-600 text-white shadow-sm shadow-orange-900/40"
-                  : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
-              )}
-            >
-              <AuraIcon
-                tone="inherit"
-                outline={!isActive("/aura")}
-                className={cn("size-[18px] shrink-0", !isActive("/aura") && "nav-fire-icon")}
-              />
-              <span className={cn(isCollapsed && "hidden", !isActive("/aura") && "nav-fire-text")}>
-                Central de Aura
-              </span>
-            </Link>
-          </div>
-
-          {/* Mais — Patch Notes, convite VIP e Central de Informações.
-              Ficavam num rodapé fixo, encolhido no canto: quem não rolava
-              o olhar até lá nunca via. Agora fecham a lista, no mesmo ritmo
-              dos demais itens.
-
-              O convite VIP aparece para quem NÃO é VIP AGORA (`isVip`, não
-              "tem assinatura viva": quem cancelou dentro do período pago
-              continua VIP até o fim dele). Patch Notes é para todos, a página
-              é pública; antes era um "ou" com o convite porque só havia UM
-              slot no rodapé. Ver lib/vip-status.ts. */}
-          <SectionLabel label={t.nav.more} collapsed={isCollapsed} />
-          <div className="space-y-1">
-            <NavLink
-              item={{ href: "/changelog", label: t.nav.patchNotes, icon: Sparkles }}
-              isActive={isActive("/changelog")}
-              collapsed={isCollapsed}
-              onClick={close}
-            />
-
+            {/* Convite VIP para quem NÃO é VIP AGORA (`isVip`, não "tem
+                assinatura viva": quem cancelou dentro do período pago continua
+                VIP até o fim dele). Ver lib/vip-status.ts. */}
             {!authUser?.vip.isVip && isVipSubscriptionEnabled() && (
               <button
                 type="button"
@@ -338,17 +319,58 @@ export function PublicSidebar() {
                 </span>
               </button>
             )}
-
-            {/* Hub dos documentos legais/institucionais. Um link só; as
-                páginas individuais seguem em suas URLs próprias. */}
-            <NavLink
-              item={{ href: "/informacoes", label: t.nav.info, icon: Info }}
-              isActive={isActive("/informacoes")}
-              collapsed={isCollapsed}
-              onClick={close}
-            />
           </div>
         </nav>
+
+        {/* Rodapé fixo: painel de Aura (saldo + nível + missões, que saiu da
+            TopBar) e, por último, Patch Notes numa linha discreta. Fica fora
+            da rolagem para o saldo estar sempre à vista. Deslogado não tem
+            saldo: a Central aparece como link comum. */}
+        <div className="shrink-0 space-y-1 border-t border-border px-3 pt-3 pb-3">
+          {authUser ? (
+            <AuraMissionsBadge collapsed={isCollapsed} active={!!isActive("/aura")} onNavigate={close} />
+          ) : (
+            <Link
+              href="/aura"
+              onClick={close}
+              className={cn(
+                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all",
+                isCollapsed && "justify-center",
+                isActive("/aura")
+                  ? "bg-orange-600 text-white shadow-sm shadow-orange-900/40"
+                  : "nav-fire-holder border border-orange-500/40 bg-orange-500/10 hover:border-orange-500/60 hover:bg-orange-500/20"
+              )}
+            >
+              <AuraIcon
+                tone="inherit"
+                outline={!isActive("/aura")}
+                className={cn("size-[18px] shrink-0", !isActive("/aura") && "nav-fire-icon")}
+              />
+              <span className={cn(isCollapsed && "hidden", !isActive("/aura") && "nav-fire-text")}>
+                Central de Aura
+              </span>
+            </Link>
+          )}
+
+          <Link
+            href="/changelog"
+            onClick={close}
+            title={isCollapsed ? t.nav.patchNotes : undefined}
+            className={cn(
+              "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors",
+              isCollapsed && "justify-center px-0",
+              isActive("/changelog") ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Sparkles className="size-3.5 shrink-0" />
+            <span className={cn(isCollapsed && "hidden")}>{t.nav.patchNotes}</span>
+            {latestVersion && (
+              <span className={cn("ml-auto tabular-nums opacity-70", isCollapsed && "hidden")}>
+                {latestVersion}
+              </span>
+            )}
+          </Link>
+        </div>
       </aside>
 
       <VipUpsellModal open={vipUpsellOpen} onOpenChange={setVipUpsellOpen} />

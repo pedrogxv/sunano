@@ -11,11 +11,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { AuraAmount } from "@/components/ui/AuraIcon"
 import {
+  PERIPHERAL_REQUEST_AURA_REWARD,
   PERIPHERAL_REQUEST_LIMITS,
+  PERIPHERAL_REQUEST_REPLY_PRESETS,
   PERIPHERAL_REQUEST_STATUS_LABEL,
   type PeripheralRequestStatus,
 } from "@/lib/peripheral-requests"
+import { cn } from "@/lib/utils"
 import { buildPeripheralDisplayName } from "@/lib/peripheral-slug"
 import type { LinkedPeripheral } from "@/lib/server/repositories/peripheral-requests-repository"
 
@@ -27,6 +31,14 @@ const NEEDS_PERIPHERAL: readonly ReviewStatus[] = ["added", "duplicate"]
 
 type CatalogMatch = { id: string; name: string; brand: string }
 
+const ALL_PRESETS = new Set(Object.values(PERIPHERAL_REQUEST_REPLY_PRESETS).flat())
+
+/** Resposta que ninguém escreveu à mão: vazia ou uma das prontas. Só essa o status pode trocar sozinho. */
+function isAutoFillable(text: string): boolean {
+  const trimmed = text.trim()
+  return trimmed.length === 0 || ALL_PRESETS.has(trimmed)
+}
+
 /** Formulário de revisão do pedido: status, resposta à pessoa e a ficha resultante. */
 export function PeripheralRequestReviewForm({
   requestId,
@@ -34,6 +46,7 @@ export function PeripheralRequestReviewForm({
   initialResponse,
   initialPeripheral,
   modelName,
+  auraRewarded,
 }: {
   requestId: string
   initialStatus: ReviewStatus
@@ -41,10 +54,13 @@ export function PeripheralRequestReviewForm({
   initialPeripheral: LinkedPeripheral | null
   /** Modelo pedido: já entra na busca da ficha, que é também a checagem de duplicidade. */
   modelName: string
+  /** Aura já paga por este pedido (`null` = nada ainda): o aviso de recompensa só aparece antes de pagar. */
+  auraRewarded: number | null
 }) {
   const router = useRouter()
   const [status, setStatus] = useState<ReviewStatus>(initialStatus)
   const [response, setResponse] = useState(initialResponse ?? "")
+  const presets = PERIPHERAL_REQUEST_REPLY_PRESETS[status] ?? []
   const [selected, setSelected] = useState<{ id: string; label: string } | null>(
     initialPeripheral ? { id: initialPeripheral.id, label: initialPeripheral.displayName } : null
   )
@@ -77,6 +93,15 @@ export function PeripheralRequestReviewForm({
       controller.abort()
     }
   }, [query, showPicker])
+
+  function handleStatusChange(next: ReviewStatus) {
+    setStatus(next)
+    // Frase pronta do novo status, para bastar escolher o status e salvar.
+    // Texto escrito à mão nunca é sobrescrito.
+    if (isAutoFillable(response)) {
+      setResponse(PERIPHERAL_REQUEST_REPLY_PRESETS[next]?.[0] ?? "")
+    }
+  }
 
   const missingPeripheral = needsPeripheral && !selected
   const missingReason = status === "rejected" && response.trim().length === 0
@@ -112,7 +137,7 @@ export function PeripheralRequestReviewForm({
     <div className="space-y-5 rounded-xl border border-border bg-card p-4">
       <div className="flex flex-col gap-1.5">
         <Label>Status</Label>
-        <Select value={status} onValueChange={(value) => setStatus(value as ReviewStatus)}>
+        <Select value={status} onValueChange={(value) => handleStatusChange(value as ReviewStatus)}>
           <SelectTrigger className="w-full sm:w-64">
             <SelectValue />
           </SelectTrigger>
@@ -124,6 +149,12 @@ export function PeripheralRequestReviewForm({
             ))}
           </SelectContent>
         </Select>
+        {status === "added" && auraRewarded === null && (
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            Ao salvar, quem pediu ganha{" "}
+            <AuraAmount value={PERIPHERAL_REQUEST_AURA_REWARD} prefix="+" size="sm" tone="brand" className="font-medium text-foreground" />
+          </p>
+        )}
       </div>
 
       {needsPeripheral && (
@@ -210,6 +241,26 @@ export function PeripheralRequestReviewForm({
           className="min-h-24"
           maxLength={PERIPHERAL_REQUEST_LIMITS.response}
         />
+        {presets.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {presets.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setResponse(preset)}
+                title={preset}
+                className={cn(
+                  "max-w-full truncate rounded-full border px-2.5 py-1 text-left text-xs transition-colors",
+                  response.trim() === preset
+                    ? "border-foreground/40 bg-muted text-foreground"
+                    : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                )}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end">

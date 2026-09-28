@@ -2,11 +2,15 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Home, LifeBuoy, MessageSquareText, Star } from "lucide-react"
+import { usePathname } from "next/navigation"
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Heart, Home, LifeBuoy, Package, ShoppingCart, Star, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
 import { formatBRL } from "@/lib/format"
+import { useCart } from "@/components/providers/cart-context"
+import { useStoreFavorites } from "@/components/providers/store-favorites-context"
 import { StoreSearchBox } from "@/components/store/StoreSearchBox"
+import { StoreCommerceBarSlot } from "@/components/store/StoreCommerceBar"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 
 interface StoreCategoryNavProps {
@@ -38,7 +42,7 @@ const GROUP_LABEL: Record<StoreNavGroup, string> = {
   mouse: "Mouse",
   teclado: "Teclado",
   mousepad: "Mousepad",
-  audio: "Audio",
+  audio: "Áudio",
   outros: "Outros",
 }
 
@@ -50,6 +54,57 @@ const PREVIEW_ROTATE_MS = 3200
 /** Quantos produtos entram no rodízio por grupo — o suficiente pra variar sem virar slideshow infinito. */
 const PREVIEW_MAX_CANDIDATES = 5
 
+/**
+ * Ação da direita do menu (Favoritos, Carrinho, Pedidos, Suporte). O rótulo
+ * só aparece quando o MENU tem largura para ele (container query, não
+ * viewport): com a sidebar do site aberta, 1440px de tela não sobram 1240px
+ * para o menu, e o rótulo empurraria as categorias para fora.
+ */
+function NavAction({
+  icon: Icon,
+  label,
+  href,
+  onClick,
+  badge = 0,
+  active = false,
+}: {
+  icon: LucideIcon
+  label: string
+  href?: string
+  onClick?: () => void
+  badge?: number
+  active?: boolean
+}) {
+  const className = cn(
+    "flex h-[54px] shrink-0 items-center gap-2 border-b-2 px-2 text-[13px] transition-colors",
+    active ? "border-white font-bold text-white" : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
+  )
+  const content = (
+    <>
+      <span className="relative flex">
+        <Icon className="size-[15px]" strokeWidth={2.1} />
+        {badge > 0 && (
+          <span className="absolute -right-2.5 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-card">
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
+      </span>
+      <span className="hidden @min-[1240px]:inline">{label}</span>
+    </>
+  )
+  const accessibleLabel = badge > 0 ? `${label} (${badge})` : label
+
+  return href ? (
+    <Link href={href} aria-label={accessibleLabel} title={label} aria-current={active ? "page" : undefined} className={className}>
+      {content}
+    </Link>
+  ) : (
+    <button type="button" onClick={onClick} aria-label={accessibleLabel} title={label} className={className}>
+      {content}
+    </button>
+  )
+}
+
 export function StoreCategoryNav({
   categories,
   categoryCounts,
@@ -57,6 +112,11 @@ export function StoreCategoryNav({
   activeCategory,
   previewPool,
 }: StoreCategoryNavProps) {
+  const pathname = usePathname()
+  const { count: cartCount, setOpen: setCartOpen } = useCart()
+  const { count: favoritesCount } = useStoreFavorites()
+  const isHome = pathname === "/loja"
+  const isFavorites = pathname === "/loja/favoritos"
   const [hovered, setHovered] = useState<StoreNavGroup | null>(null)
   const [previewIndex, setPreviewIndex] = useState(0)
   const [previewPaused, setPreviewPaused] = useState(false)
@@ -119,21 +179,28 @@ export function StoreCategoryNav({
   if (categories.length === 0) return null
 
   return (
-    <div className="relative" onMouseLeave={() => hoverGroup(null)}>
-      {/* Desktop: layout space-between em 3 blocos — spacer vazio | Categorias
-          (com Home já dentro, coladinho no Mouse, tudo centralizado) |
-          Busca+Suporte. O spacer da coluna 1 existe só pra manter o bloco de
-          categorias centralizado no espaço do meio (mesma matemática de antes,
-          só que agora sem o Home ocupando aquela coluna). */}
-      <nav className="hidden grid-cols-[1fr_auto_1fr] items-center gap-x-8 border-b border-[#262626] bg-card px-4 md:grid lg:px-8">
-        <div />
+    <>
+    {/* `@container`: o menu decide o layout pela PRÓPRIA largura, não pela
+        da tela: a sidebar do site (aberta ou recolhida) muda quanto sobra. */}
+    <div className="@container relative" onMouseLeave={() => hoverGroup(null)}>
+      {/* Desktop: 3 blocos: Busca | Home + categorias (centralizados) |
+          Favoritos, Carrinho, Pedidos, Suporte. A busca mora à esquerda para
+          o bloco de categorias ficar no meio com espaço dos dois lados. */}
+      <nav className="hidden grid-cols-[1fr_auto_1fr] items-center gap-x-6 border-b border-[#262626] bg-card px-4 @min-[920px]:grid @min-[1100px]:px-8">
+        <div className="flex min-w-0" onMouseEnter={() => hoverGroup(null)}>
+          <StoreSearchBox
+            className="w-full max-w-[320px]"
+            inputClassName="h-[34px] w-full rounded-[10px] border border-[#2a2a2a] bg-[#141414] pl-[34px] pr-3 text-[12.5px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
+          />
+        </div>
 
-        <div className="flex items-center justify-center gap-[26px] overflow-x-auto [scrollbar-width:none]">
+        <div className="flex items-center justify-center gap-[22px]">
           <Link
             href="/loja"
+            onMouseEnter={() => hoverGroup(null)}
             className={cn(
               "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
-              activeCategory === null
+              isHome
                 ? "border-white font-bold text-white"
                 : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
             )}
@@ -187,46 +254,31 @@ export function StoreCategoryNav({
               </button>
             )
           })}
-          <Link
-            href="/loja/avaliacoes"
-            className="flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 border-transparent text-[13.5px] font-semibold text-[#b4b4b4] transition-colors hover:text-white"
-          >
-            <MessageSquareText className="size-[13px]" strokeWidth={2.2} />
-            Avaliações
-          </Link>
         </div>
 
-        {/* Busca vive aqui, na faixa de categorias — é onde o mock a coloca,
-            em vez de ocupar uma linha inteira dentro da barra de filtros.
-            O carrinho não duplica aqui: já vive na TopBar. */}
-        <div className="flex shrink-0 items-center justify-self-end gap-[22px]">
-          <StoreSearchBox
-            className="w-[260px]"
-            inputClassName="h-[34px] w-full rounded-[10px] border border-[#2a2a2a] bg-[#141414] pl-[34px] pr-3 text-[12.5px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
-          />
-          <Link
-            href="/suporte"
-            className="flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 border-transparent text-[13.5px] font-semibold text-[#b4b4b4] transition-colors hover:text-white"
-          >
-            <LifeBuoy className="size-[13px]" strokeWidth={2.2} />
-            Suporte
-          </Link>
+        {/* O carrinho aparece aqui SEMPRE (com contador), e não só quando tem
+            item como na TopBar: dentro da Loja ele é navegação, não aviso. */}
+        <div className="flex shrink-0 items-center justify-self-end gap-1.5" onMouseEnter={() => hoverGroup(null)}>
+          <NavAction icon={Heart} label="Favoritos" href="/loja/favoritos" badge={favoritesCount} active={isFavorites} />
+          <NavAction icon={ShoppingCart} label="Carrinho" onClick={() => setCartOpen(true)} badge={cartCount} />
+          <NavAction icon={Package} label="Pedidos" href="/conta/pedidos" />
+          <NavAction icon={LifeBuoy} label="Suporte" href="/suporte" />
         </div>
       </nav>
 
-      {/* Mobile: busca numa linha e o mesmo menu fixo em pills. */}
-      <div className="border-b border-[#1c1c1c] bg-card px-4 py-3 md:hidden">
+      {/* Mobile / menu estreito: busca numa linha e o mesmo menu fixo em pills. */}
+      <div className="border-b border-[#1c1c1c] bg-card px-4 py-3 @min-[920px]:hidden">
         <StoreSearchBox
           inputClassName="h-11 w-full rounded-xl border border-[#2a2a2a] bg-[#141414] pl-[38px] pr-3.5 text-[13px] text-white outline-none placeholder:text-[#6e6e6e] focus:border-foreground/25"
           iconClassName="left-3.5 size-[15px]"
         />
       </div>
-      <div className="flex gap-2 overflow-x-auto border-b border-[#1c1c1c] bg-card px-4 pb-3.5 pt-3 [scrollbar-width:none] md:hidden">
+      <div className="flex gap-2 overflow-x-auto border-b border-[#1c1c1c] bg-card px-4 pb-3.5 pt-3 [scrollbar-width:none] @min-[920px]:hidden">
         <Link
           href="/loja"
           className={cn(
             "inline-flex h-[34px] shrink-0 items-center rounded-full px-[15px] text-[12.5px] transition-colors",
-            activeCategory === null
+            isHome
               ? "bg-white font-bold text-black"
               : "border border-[#2a2a2a] bg-[#141414] font-semibold text-[#cfcfcf]"
           )}
@@ -252,6 +304,26 @@ export function StoreCategoryNav({
           )
         })}
         <Link
+          href="/loja/favoritos"
+          className={cn(
+            "inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full px-[15px] text-[12.5px] transition-colors",
+            isFavorites
+              ? "bg-white font-bold text-black"
+              : "border border-[#2a2a2a] bg-[#141414] font-semibold text-[#cfcfcf]"
+          )}
+        >
+          <Heart className="size-3.5" strokeWidth={2.2} />
+          Favoritos
+          {favoritesCount > 0 && <span className="text-[11px] opacity-70">{favoritesCount}</span>}
+        </Link>
+        <Link
+          href="/conta/pedidos"
+          className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
+        >
+          <Package className="size-3.5" strokeWidth={2.2} />
+          Pedidos
+        </Link>
+        <Link
           href="/loja/avaliacoes"
           className="inline-flex h-[34px] shrink-0 items-center rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"
         >
@@ -266,7 +338,7 @@ export function StoreCategoryNav({
       </div>
 
       {openGroup && (
-        <div className="absolute inset-x-0 top-full z-10 hidden border-b border-[#262626] bg-card shadow-[0_28px_60px_-20px_rgba(0,0,0,0.9)] md:block">
+        <div className="absolute inset-x-0 top-full z-10 hidden border-b border-[#262626] bg-card shadow-[0_28px_60px_-20px_rgba(0,0,0,0.9)] @min-[920px]:block">
           <div
             className={cn(
               "mx-auto grid max-w-7xl gap-[34px] px-4 pb-8 pt-7 lg:px-8",
@@ -449,5 +521,11 @@ export function StoreCategoryNav({
         </div>
       )}
     </div>
+
+    {/* Barra comercial: benefícios ou campanha, logo abaixo do menu, em toda
+        página da Loja. Fora do bloco acima de propósito: o mega-menu abre
+        colado no menu (`top-full`), não embaixo da barra. */}
+    <StoreCommerceBarSlot />
+    </>
   )
 }

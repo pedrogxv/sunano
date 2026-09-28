@@ -30,6 +30,13 @@ export const shippingAddressSchema = z.object({
     .trim()
     .min(2, "Informe o nome de quem vai receber.")
     .max(200, "Nome de quem recebe muito longo."),
+  // Exigida pela alfândega na importação. É de quem RECEBE, não do pagador:
+  // por isso mora no endereço de entrega, junto do nome do destinatário.
+  shippingBirthDate: z
+    .string("Informe a data de nascimento de quem vai receber.")
+    .trim()
+    .min(1, "Informe a data de nascimento de quem vai receber.")
+    .refine(isValidBirthDate, "Informe uma data de nascimento válida."),
   shippingPhone: z
     .string("Informe um telefone válido.")
     .transform((value) => value.replace(/\D/g, ""))
@@ -71,6 +78,37 @@ export const shippingAddressSchema = z.object({
 })
 
 export type ShippingAddressInput = z.infer<typeof shippingAddressSchema>
+
+/** "AAAA-MM-DD" de um dia que existe no calendário, entre 1900 e hoje. */
+function isValidBirthDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const date = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) return false
+  return Number(value.slice(0, 4)) >= 1900 && date.getTime() <= Date.now()
+}
+
+/**
+ * Colunas `shipping_*` a partir do endereço validado. Os nomes são os mesmos
+ * em `store_orders` (snapshot do pedido) e em `user_profiles` (última entrega,
+ * para pré-preencher), e os três caminhos que gravam endereço (checkout,
+ * "Meus Pedidos" e resgate físico da Central de Aura) passam por aqui. Cada
+ * um montava o próprio objeto, e um campo novo esquecido num deles só
+ * aparecia como pedido sem o dado na hora de despachar.
+ */
+export function shippingAddressColumns(address: ShippingAddressInput) {
+  return {
+    shipping_recipient: address.shippingRecipient,
+    shipping_birth_date: address.shippingBirthDate,
+    shipping_phone: address.shippingPhone,
+    shipping_postal_code: address.shippingPostalCode,
+    shipping_street: address.shippingStreet,
+    shipping_number: address.shippingNumber,
+    shipping_complement: address.shippingComplement ?? null,
+    shipping_neighborhood: address.shippingNeighborhood,
+    shipping_city: address.shippingCity,
+    shipping_state: address.shippingState,
+  }
+}
 
 /**
  * Endereço de entrega OPCIONAL vindo do corpo de uma requisição.

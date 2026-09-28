@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { LocaleProvider } from "@/components/providers/locale-context"
 import { SidebarProvider } from "@/components/providers/sidebar-context"
 import { CartProvider } from "@/components/providers/cart-context"
+import { StoreFavoritesProvider } from "@/components/providers/store-favorites-context"
 import { PageHeaderProvider } from "@/components/providers/page-header-context"
 import { AuthProvider } from "@/components/providers/auth-context"
 import { AuthModalProvider } from "@/components/providers/auth-modal-context"
@@ -123,17 +124,19 @@ export default function RootLayout({
                 <AuraReactionsProvider>
                   <SidebarProvider>
                     <CartProvider>
-                      <PageHeaderProvider>
-                        <TooltipProvider delayDuration={200}>
-                          <LayoutShell>{children}</LayoutShell>
-                          <Toaster />
-                          <AuthHashErrorListener />
-                          <ImpersonationBanner />
-                          <ChromeOutsideMaintenance>
-                            <CookieBanner />
-                          </ChromeOutsideMaintenance>
-                        </TooltipProvider>
-                      </PageHeaderProvider>
+                      <StoreFavoritesProvider>
+                        <PageHeaderProvider>
+                          <TooltipProvider delayDuration={200}>
+                            <LayoutShell>{children}</LayoutShell>
+                            <Toaster />
+                            <AuthHashErrorListener />
+                            <ImpersonationBanner />
+                            <ChromeOutsideMaintenance>
+                              <CookieBanner />
+                            </ChromeOutsideMaintenance>
+                          </TooltipProvider>
+                        </PageHeaderProvider>
+                      </StoreFavoritesProvider>
                     </CartProvider>
                   </SidebarProvider>
                 </AuraReactionsProvider>

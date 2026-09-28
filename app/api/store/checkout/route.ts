@@ -18,6 +18,7 @@ import {
 import {
   orderNeedsShippingAddress,
   parseOptionalShippingAddress,
+  shippingAddressColumns,
 } from "@/lib/server/validation/shipping-address"
 import { checkRateLimit, getClientIpIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
@@ -106,6 +107,7 @@ const checkoutBodySchema = z.object({
   // precisa distinguir "não mandou nada" (legítimo enquanto é opcional) de
   // "mandou pela metade" (recusado).
   shippingRecipient: z.unknown().optional(),
+  shippingBirthDate: z.unknown().optional(),
   shippingPhone: z.unknown().optional(),
   shippingPostalCode: z.unknown().optional(),
   shippingStreet: z.unknown().optional(),
@@ -1144,15 +1146,7 @@ export async function POST(request: NextRequest) {
     // digitou: quem recebe é, por padrão, quem comprou.
     const shippingColumns = shippingAddress
       ? {
-          shipping_recipient: shippingAddress.shippingRecipient,
-          shipping_phone: shippingAddress.shippingPhone,
-          shipping_postal_code: shippingAddress.shippingPostalCode,
-          shipping_street: shippingAddress.shippingStreet,
-          shipping_number: shippingAddress.shippingNumber,
-          shipping_complement: shippingAddress.shippingComplement ?? null,
-          shipping_neighborhood: shippingAddress.shippingNeighborhood,
-          shipping_city: shippingAddress.shippingCity,
-          shipping_state: shippingAddress.shippingState,
+          ...shippingAddressColumns(shippingAddress),
           shipping_address_filled_at: new Date().toISOString(),
           requires_shipping_address: needsShipping,
         }
@@ -1169,17 +1163,7 @@ export async function POST(request: NextRequest) {
     if (shippingAddress) {
       const { error: shippingProfileError } = await db
         .from("user_profiles")
-        .update({
-          shipping_recipient: shippingAddress.shippingRecipient,
-          shipping_phone: shippingAddress.shippingPhone,
-          shipping_postal_code: shippingAddress.shippingPostalCode,
-          shipping_street: shippingAddress.shippingStreet,
-          shipping_number: shippingAddress.shippingNumber,
-          shipping_complement: shippingAddress.shippingComplement ?? null,
-          shipping_neighborhood: shippingAddress.shippingNeighborhood,
-          shipping_city: shippingAddress.shippingCity,
-          shipping_state: shippingAddress.shippingState,
-        })
+        .update(shippingAddressColumns(shippingAddress))
         .eq("id", user.id)
       if (shippingProfileError) {
         console.error(

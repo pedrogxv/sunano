@@ -14,7 +14,7 @@ import type { AuraItem } from "@/lib/server/repositories/aura-store-repository"
 import type { PeripheralOwnerEntry } from "@/components/aura/AuraCenterContent"
 import { AuraPriceTag } from "@/components/aura/AuraPriceTag"
 import { PeripheralRedeemDialog, type PrefillShipping } from "@/components/aura/PeripheralRedeemDialog"
-import type { ShippingForm } from "@/components/store/ShippingAddressFields"
+import { shippingFormToPayload, type ShippingForm } from "@/components/store/ShippingAddressFields"
 import type { PublicTrustSummary } from "@/lib/server/repositories/trust-repository"
 import { TrustSeal } from "@/components/ui/TrustBadge"
 import { TRUST_PHYSICAL_REDEEM_LEVEL, trustLevelLabel } from "@/lib/trust-factor"
@@ -215,17 +215,7 @@ function AuraPeripheralCard({
       const res = await fetch(`/api/aura/items/${item.id}/redeem-peripheral`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shippingRecipient: form.recipient.trim(),
-          shippingPhone: form.phone.replace(/\D/g, ""),
-          shippingPostalCode: form.postalCode.replace(/\D/g, ""),
-          shippingStreet: form.street.trim(),
-          shippingNumber: form.number.trim(),
-          shippingComplement: form.complement.trim() || undefined,
-          shippingNeighborhood: form.neighborhood.trim(),
-          shippingCity: form.city.trim(),
-          shippingState: form.state.trim().toUpperCase(),
-        }),
+        body: JSON.stringify(shippingFormToPayload(form)),
       })
       const data = (await res.json()) as { ok?: boolean; error?: string; orderId?: string | null }
       if (!res.ok || !data.ok) {

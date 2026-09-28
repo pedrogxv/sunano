@@ -28,6 +28,7 @@ import { getColorSwatchStyle } from "@/lib/color-swatch"
 import type { LinkedPeripheralRef, StoreProductDetailResult, StoreProductVariantGroup, StoreFilterOptions, StoreProductCard } from "@/lib/server/repositories/store-repository"
 import { ProductReviews } from "@/components/store/ProductReviews"
 import { RestockAlertButton } from "@/components/store/RestockAlertButton"
+import { FavoriteButton } from "@/components/store/FavoriteButton"
 import { FormattedText } from "@/components/ui/formatted-text"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { ProductBreadcrumb } from "@/components/store/ProductBreadcrumb"
@@ -338,23 +339,20 @@ export function ProductDetailContent({
         {/* Info */}
         <div className="space-y-6 pt-1.5 md:w-1/2">
           <div>
-            {product.sale_type !== "normal" && (() => {
-              const SaleTypeIcon = SALE_TYPE_ICON[product.sale_type]
+            {/* Só a pré-venda ganha selo: "Pronta entrega" saiu da vitrine. */}
+            {isPreOrder && (() => {
+              const SaleTypeIcon = SALE_TYPE_ICON.pre_order
               return (
-                <span
-                  className={cn(
-                    "mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold",
-                    product.sale_type === "pre_order"
-                      ? "bg-amber-500/15 text-amber-400"
-                      : "bg-emerald-500/15 text-emerald-400"
-                  )}
-                >
+                <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-bold text-amber-400">
                   <SaleTypeIcon className="size-3.5" strokeWidth={2.5} />
-                  {SALE_TYPE_LABEL[product.sale_type]}
+                  {SALE_TYPE_LABEL.pre_order}
                 </span>
               )
             })()}
-            <h1 className="font-display text-[38px] font-bold leading-[1.05] tracking-tight text-foreground">{product.name}</h1>
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="font-display text-[38px] font-bold leading-[1.05] tracking-tight text-foreground">{product.name}</h1>
+              <FavoriteButton productId={product.id} productName={product.name} variant="inline" className="mt-1 h-10" />
+            </div>
             {product.category && (
               <p className="mt-2 text-[15px] text-muted-foreground">{getCategoryLabel(product.category)}</p>
             )}

@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { medalImageUrl } from "@/lib/server/validation/medal-image-url"
 import { deleteEvent, getEventForAdmin, updateEvent } from "@/lib/server/repositories/events-repository"
 
 const updateEventSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   description: z.string().trim().max(500).optional().nullable(),
-  imageUrl: z.string().url().optional().nullable(),
+  imageUrl: medalImageUrl.optional().nullable(),
   rarity: z.enum(["common", "rare", "epic", "legendary"]).optional(),
   maxParticipants: z.number().int().positive().optional().nullable(),
   auraCost: z.number().int().positive().optional().nullable(),

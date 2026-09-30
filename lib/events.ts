@@ -8,7 +8,30 @@
 
 import type { MedalRarity } from "@/lib/profile-showcase"
 
-export type EventCriteriaType = "first_n_signups" | "manual_opt_in" | "aura_redeem" | "staff_grant"
+export type EventCriteriaType =
+  | "first_n_signups"
+  | "manual_opt_in"
+  | "aura_redeem"
+  | "staff_grant"
+  | "store_purchase"
+
+/**
+ * O que personaliza o card de `store_purchase` para o dono: o produto do
+ * pedido que dá direito à medalha. Vem de `user_medal_purchases` (tabela
+ * privada) e é trocado pelo trigger de `store_orders` quando o pedido deixa
+ * de valer — ver 20261210000000_store_purchase_medal.sql.
+ */
+export type PurchaseCard = {
+  productName: string | null
+  productImageUrl: string | null
+}
+
+/** Frase do card personalizado — a mesma na vitrine do perfil e em /conquistas. */
+export function purchaseCardCaption(card: PurchaseCard): string {
+  return card.productName
+    ? `Comprou ${card.productName} na Loja Sunano.`
+    : "Cliente da Loja Sunano."
+}
 
 /**
  * Evento com os dados da medalha já resolvidos (join com `medals`) — é o que
@@ -48,6 +71,7 @@ export const EVENT_CRITERIA_SHORT_LABEL: Record<EventCriteriaType, string> = {
   manual_opt_in: "Resgate",
   aura_redeem: "Aura",
   staff_grant: "Staff",
+  store_purchase: "Compra",
 }
 
 /** Rótulo curto do critério, usado no admin e na página pública. */
@@ -56,4 +80,5 @@ export const EVENT_CRITERIA_LABEL: Record<EventCriteriaType, string> = {
   manual_opt_in: "Resgate manual (usuário clica em Resgatar)",
   aura_redeem: "Resgate com Aura (desconta do saldo do usuário)",
   staff_grant: "Premiação da Staff (a equipe escolhe quem recebe)",
+  store_purchase: "Compra na loja (quem tem pedido pago resgata; cancelou ou estornou, perde)",
 }

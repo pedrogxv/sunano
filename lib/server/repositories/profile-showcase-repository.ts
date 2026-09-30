@@ -16,6 +16,8 @@ import { isYoutubeSubscriptionEnabled } from "@/lib/youtube-subscription"
 import { hasConfirmedDiscordMembership } from "@/lib/server/repositories/discord-membership-repository"
 import { isDiscordMembershipEnabled } from "@/lib/discord-membership"
 import { ownsVipFounderFrame } from "@/lib/server/repositories/vip-founder-repository"
+import { getPurchaseCards } from "@/lib/server/repositories/events-repository"
+import { purchaseCardCaption } from "@/lib/events"
 import {
   getUserTierlistItemCount,
   isUserTierlistHidden,
@@ -324,10 +326,13 @@ export async function getUserSetup(userId: string): Promise<SetupItem[]> {
 export async function getUserMedals(userId: string): Promise<ShowcaseMedal[]> {
   const db = createSupabaseAdminClient()
 
-  const { data, error } = await db
-    .from("user_medals")
-    .select("awarded_at, pinned, pinned_order, medals ( id, slug, name, description, icon_url, rarity, category )")
-    .eq("user_id", userId)
+  const [{ data, error }, purchaseCards] = await Promise.all([
+    db
+      .from("user_medals")
+      .select("awarded_at, pinned, pinned_order, medals ( id, slug, name, description, icon_url, rarity, category )")
+      .eq("user_id", userId),
+    getPurchaseCards(userId),
+  ])
 
   if (error) {
     console.error("[profile-showcase-repository] getUserMedals:", error)
@@ -354,8 +359,15 @@ export async function getUserMedals(userId: string): Promise<ShowcaseMedal[]> {
   return rows.flatMap((r) => {
     const medal = Array.isArray(r.medals) ? r.medals[0] : r.medals
     if (!medal) return []
+    // Card de compra: a arte e o texto são os do produto comprado, não os do
+    // catálogo — é a mesma carta que o dono vê em /conquistas.
+    const purchase = purchaseCards[medal.id]
     return [{
       ...medal,
+      ...(purchase && {
+        icon_url: purchase.productImageUrl ?? medal.icon_url,
+        description: purchaseCardCaption(purchase),
+      }),
       awarded_at: r.awarded_at,
       pinned: r.pinned,
       pinned_order: r.pinned_order,

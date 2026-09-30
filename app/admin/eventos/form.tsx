@@ -53,7 +53,22 @@ const CRITERIA_OPTIONS: Array<{ value: EventCriteriaType; label: string; hint: s
     label: "Premiação: só a Staff concede",
     hint: "Ninguém resgata sozinho. Depois de criar, a equipe escolhe manualmente quem recebe, um usuário por vez, na tela de edição desta conquista.",
   },
+  {
+    value: "store_purchase",
+    label: "Compra na loja: quem comprou resgata",
+    hint: "Só resgata quem tem um pedido pago na Loja (sandbox e resgate com Aura não contam). O card mostra o produto comprado. Se o pedido for cancelado, estornado ou expirar, a medalha sai do perfil sozinha. Vagas são opcionais.",
+  },
 ]
+
+/** Vagas opcionais: o custo, a Staff ou a compra já decidem quem recebe. */
+function hasOptionalSlots(criteriaType: EventCriteriaType): boolean {
+  return criteriaType === "aura_redeem" || criteriaType === "staff_grant" || criteriaType === "store_purchase"
+}
+
+/** "Precisa ser VIP" não se aplica: a Staff escolhe a dedo, ou a compra já é o filtro. */
+function ignoresRequiresVip(criteriaType: EventCriteriaType): boolean {
+  return criteriaType === "staff_grant" || criteriaType === "store_purchase"
+}
 
 export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
   const [loading, setLoading] = useState(false)
@@ -120,7 +135,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         if (isNaN(maxParticipants) || maxParticipants <= 0) {
           throw new Error("Número de vagas inválido. Use um inteiro maior que zero ou deixe em branco.")
         }
-      } else if (criteriaType !== "aura_redeem" && criteriaType !== "staff_grant") {
+      } else if (!hasOptionalSlots(criteriaType)) {
         throw new Error("Informe o número de vagas.")
       }
 
@@ -139,7 +154,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
         rarity: formData.rarity,
         maxParticipants,
         auraCost,
-        requiresVip: criteriaType === "staff_grant" ? false : formData.requiresVip,
+        requiresVip: ignoresRequiresVip(criteriaType) ? false : formData.requiresVip,
         ...(event ? { active: formData.active } : { criteriaType }),
       }
 
@@ -261,17 +276,17 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label>
-            Número de vagas {criteriaType === "aura_redeem" || criteriaType === "staff_grant" ? "" : "*"}
+            Número de vagas {hasOptionalSlots(criteriaType) ? "" : "*"}
           </Label>
           <Input
-            required={criteriaType !== "aura_redeem" && criteriaType !== "staff_grant"}
+            required={!hasOptionalSlots(criteriaType)}
             type="number"
             min={1}
             step={1}
             value={formData.maxParticipants}
             onChange={(e) => set("maxParticipants", e.target.value)}
             placeholder={
-              criteriaType === "aura_redeem" || criteriaType === "staff_grant"
+              hasOptionalSlots(criteriaType)
                 ? "Deixe em branco para sem limite"
                 : "1000"
             }
@@ -301,7 +316,7 @@ export function EventForm({ event, onSuccess, onCancel }: EventFormProps) {
       </div>
 
       {/* VIP */}
-      {criteriaType !== "staff_grant" && (
+      {!ignoresRequiresVip(criteriaType) && (
         <label className="flex items-start gap-2.5 rounded-xl border border-border bg-muted/20 px-4 py-3">
           <Checkbox
             className="mt-0.5"

@@ -10,7 +10,7 @@ export const runtime = "nodejs"
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 const ERROR_MESSAGES: Record<
-  "not_found" | "not_manual" | "unavailable" | "insufficient_aura" | "vip_required",
+  "not_found" | "not_manual" | "unavailable" | "insufficient_aura" | "vip_required" | "no_purchase",
   string
 > = {
   not_found: "Conquista não encontrada.",
@@ -18,11 +18,12 @@ const ERROR_MESSAGES: Record<
   unavailable: "As vagas acabaram ou a conquista foi encerrada.",
   insufficient_aura: "Saldo de Aura insuficiente.",
   vip_required: "Essa conquista é exclusiva para membros VIP.",
+  no_purchase: "Essa conquista é de quem tem uma compra paga na Loja.",
 }
 
 /**
- * POST /api/conquistas/:id/claim — resgate manual de um evento `manual_opt_in`
- * ou `aura_redeem`.
+ * POST /api/conquistas/:id/claim — resgate manual de um evento `manual_opt_in`,
+ * `aura_redeem` ou `store_purchase`.
  *
  * `claimEventManually` chama a mesma `claim_event_medal` usada no
  * cadastro/login (atômica e idempotente, e que também debita Aura pra
@@ -57,5 +58,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: ERROR_MESSAGES[result.reason] }, { status })
   }
 
-  return NextResponse.json({ ok: true, event: result.event })
+  return NextResponse.json({ ok: true, event: result.event, purchaseCard: result.purchaseCard })
 }

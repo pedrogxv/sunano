@@ -8,7 +8,7 @@ import { isVipActive, profileMediaProxyUrl } from "@/lib/account-tier"
 import { escapeLikePattern, escapeOrFilterValue } from "@/lib/server/repositories/_shared"
 import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 import type { MedalRarity } from "@/lib/profile-showcase"
-import type { EventCriteriaType, EventDisplay } from "@/lib/events"
+import type { EventCriteriaType, EventDisplay, PurchaseCard } from "@/lib/events"
 
 /**
  * Repositório dos Eventos (campanhas que concedem medalhas automaticamente).
@@ -156,9 +156,17 @@ export type EventInput = {
   requiresVip: boolean
 }
 
-/** Vagas viram teto opcional pra aura_redeem (custo dita quem pode) e staff_grant (a Staff que decide). */
+/**
+ * Vagas viram teto opcional pra aura_redeem (custo dita quem pode),
+ * staff_grant (a Staff que decide) e store_purchase (a compra é o filtro).
+ */
 function requiresMaxParticipants(criteriaType: EventCriteriaType): boolean {
-  return criteriaType !== "aura_redeem" && criteriaType !== "staff_grant"
+  return criteriaType !== "aura_redeem" && criteriaType !== "staff_grant" && criteriaType !== "store_purchase"
+}
+
+/** Critérios em que "precisa ser VIP" não se aplica: a Staff escolhe a dedo, ou a compra já é o filtro. */
+function ignoresRequiresVip(criteriaType: EventCriteriaType): boolean {
+  return criteriaType === "staff_grant" || criteriaType === "store_purchase"
 }
 
 /** Cria a medalha do evento e o evento em si (nessa ordem, por causa da FK). */
@@ -209,8 +217,7 @@ export async function createEvent(input: EventInput): Promise<EventDisplay> {
       // Nunca persiste custo de aura fora do tipo aura_redeem, mesmo que o
       // payload informe um por engano.
       aura_cost: input.criteriaType === "aura_redeem" ? input.auraCost : null,
-      // staff_grant já é escolha a dedo da Staff — requires_vip não se aplica.
-      requires_vip: input.criteriaType === "staff_grant" ? false : input.requiresVip,
+      requires_vip: ignoresRequiresVip(input.criteriaType) ? false : input.requiresVip,
       active: true,
       sort_order: ((last as { sort_order: number } | null)?.sort_order ?? -1) + 1,
     })
@@ -267,9 +274,8 @@ export async function updateEvent(id: string, input: EventUpdateInput): Promise<
   const eventUpdate: Record<string, unknown> = {}
   if (input.maxParticipants !== undefined) eventUpdate.max_participants = input.maxParticipants
   if (input.auraCost !== undefined) eventUpdate.aura_cost = input.auraCost
-  // staff_grant já é escolha a dedo da Staff — requires_vip não se aplica.
   if (input.requiresVip !== undefined) {
-    eventUpdate.requires_vip = current.criteria_type === "staff_grant" ? false : input.requiresVip
+    eventUpdate.requires_vip = ignoresRequiresVip(current.criteria_type) ? false : input.requiresVip
   }
   if (input.active !== undefined) eventUpdate.active = input.active
   eventUpdate.updated_at = new Date().toISOString()
@@ -317,9 +323,51 @@ export async function getClaimedMedalIds(userId: string): Promise<string[]> {
   return data.map((row) => row.medal_id)
 }
 
+/**
+ * Se o usuário tem hoje uma compra que dá direito às medalhas `store_purchase`
+ * (pedido pago, fora do sandbox, não pago com Aura, não estornado por inteiro).
+ * A regra mora só em `first_valid_store_purchase` no banco; aqui é só a
+ * pergunta, para a tela não oferecer "Resgatar" a quem a RPC recusaria.
+ */
+export async function hasValidStorePurchase(userId: string): Promise<boolean> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.rpc("first_valid_store_purchase", { p_user_id: userId })
+  if (error) {
+    console.error("[events-repository] hasValidStorePurchase:", error)
+    return false
+  }
+  return Array.isArray(data) && data.length > 0
+}
+
+/**
+ * Cards de compra do usuário, por `medal_id` — o produto que cada card
+ * exibe. Consulta à parte (e não embed em `user_medals`) para uma falha aqui,
+ * como a tabela ainda não existir no ambiente, só deixar o card sem
+ * personalização em vez de sumir com todas as medalhas.
+ */
+export async function getPurchaseCards(userId: string): Promise<Record<string, PurchaseCard>> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("user_medal_purchases")
+    .select("medal_id, product_name, product_image_url")
+    .eq("user_id", userId)
+
+  if (error || !data) {
+    if (error) console.error("[events-repository] getPurchaseCards:", error)
+    return {}
+  }
+
+  return Object.fromEntries(
+    data.map((row) => [row.medal_id, { productName: row.product_name, productImageUrl: row.product_image_url }])
+  )
+}
+
 export type ClaimEventResult =
-  | { ok: true; event: EventDisplay }
-  | { ok: false; reason: "not_found" | "not_manual" | "unavailable" | "insufficient_aura" | "vip_required" }
+  | { ok: true; event: EventDisplay; purchaseCard: PurchaseCard | null }
+  | {
+      ok: false
+      reason: "not_found" | "not_manual" | "unavailable" | "insufficient_aura" | "vip_required" | "no_purchase"
+    }
 
 /**
  * Resgate manual, disparado pelo clique do usuário em `/eventos`
@@ -344,6 +392,11 @@ export async function claimEventManually(userId: string, eventId: string): Promi
     .maybeSingle()
 
   if (error || !row) return { ok: false, reason: "not_found" }
+
+  if (row.criteria_type === "store_purchase") {
+    return claimStorePurchaseEvent(userId, eventId)
+  }
+
   if (row.criteria_type !== "manual_opt_in" && row.criteria_type !== "aura_redeem") {
     return { ok: false, reason: "not_manual" }
   }
@@ -376,7 +429,27 @@ export async function claimEventManually(userId: string, eventId: string): Promi
 
   const event = await getEventForAdmin(eventId)
   if (!event) return { ok: false, reason: "not_found" }
-  return { ok: true, event }
+  return { ok: true, event, purchaseCard: null }
+}
+
+/**
+ * Resgate de `store_purchase`: a RPC confere a compra, grava o vínculo
+ * privado com o pedido e já devolve se concedeu. A revogação (pedido
+ * cancelado/estornado) não passa por aqui, é o trigger de `store_orders`.
+ */
+async function claimStorePurchaseEvent(userId: string, eventId: string): Promise<ClaimEventResult> {
+  const db = createSupabaseAdminClient()
+  const { data: outcome, error } = await db.rpc("claim_store_purchase_medal", {
+    p_event_id: eventId,
+    p_user_id: userId,
+  })
+  if (error) throw error
+  if (outcome === "no_purchase") return { ok: false, reason: "no_purchase" }
+  if (outcome !== "granted" && outcome !== "already") return { ok: false, reason: "unavailable" }
+
+  const [event, cards] = await Promise.all([getEventForAdmin(eventId), getPurchaseCards(userId)])
+  if (!event) return { ok: false, reason: "not_found" }
+  return { ok: true, event, purchaseCard: cards[event.medalId] ?? null }
 }
 
 export async function awardEligibleEventMedals(userId: string): Promise<void> {

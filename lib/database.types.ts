@@ -542,6 +542,26 @@ export type Database = {
         }
         Update: Partial<Database["public"]["Tables"]["user_medals"]["Insert"]>
       }
+      user_medal_purchases: {
+        Relationships: []
+        Row: {
+          user_id: string
+          medal_id: string
+          order_id: string
+          product_name: string | null
+          product_image_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          medal_id: string
+          order_id: string
+          product_name?: string | null
+          product_image_url?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["user_medal_purchases"]["Insert"]>
+      }
       user_youtube_subscription: {
         Relationships: []
         Row: {
@@ -574,7 +594,7 @@ export type Database = {
           id: string
           slug: string
           medal_id: string
-          criteria_type: "first_n_signups" | "manual_opt_in" | "aura_redeem" | "staff_grant"
+          criteria_type: "first_n_signups" | "manual_opt_in" | "aura_redeem" | "staff_grant" | "store_purchase"
           max_participants: number | null
           current_count: number
           aura_cost: number | null
@@ -2777,6 +2797,14 @@ export type Database = {
       grant_event_medal: {
         Args: { p_event_id: string; p_user_id: string; p_granted_by: string }
         Returns: boolean
+      }
+      claim_store_purchase_medal: {
+        Args: { p_event_id: string; p_user_id: string }
+        Returns: string
+      }
+      first_valid_store_purchase: {
+        Args: { p_user_id: string }
+        Returns: { order_id: string; product_name: string | null; product_image_url: string | null }[]
       }
       redeem_aura_item: {
         Args: { p_user_id: string; p_item_id: string }

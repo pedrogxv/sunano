@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 520" fill="none">
+  <defs>
+    <linearGradient id="plumage" x1="0" y1="100" x2="0" y2="490" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fcd23f"/>
+      <stop offset="0.42" stop-color="#fde07c"/>
+      <stop offset="0.56" stop-color="#fff4d8"/>
+      <stop offset="1" stop-color="#fbeccd"/>
+    </linearGradient>
+    <linearGradient id="bag" x1="400" y1="250" x2="520" y2="365" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fdba74"/>
+      <stop offset="0.55" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#ea580c"/>
+    </linearGradient>
+    <linearGradient id="box" x1="60" y1="400" x2="170" y2="490" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="scarf" x1="0" y1="290" x2="0" y2="385" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fb923c"/>
+      <stop offset="1" stop-color="#ea580c"/>
+    </linearGradient>
+    <radialGradient id="blush">
+      <stop offset="0" stop-color="#f7875a" stop-opacity="0.95"/>
+      <stop offset="0.6" stop-color="#f7875a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#f7875a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <g stroke="#5b2a16" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <!-- linhas de ação "!!!" -->
+    <rect x="96" y="58" width="22" height="62" rx="9" transform="rotate(-28 107 89)" fill="#fcd34d"/>
+    <rect x="138" y="36" width="22" height="66" rx="9" transform="rotate(-8 149 69)" fill="#fcd34d"/>
+    <rect x="62" y="118" width="20" height="50" rx="8" transform="rotate(-55 72 143)" fill="#fcd34d"/>
+
+    <!-- caixa de presente (atrás, no chão) -->
+    <path d="M62 418h104v68a8 8 0 0 1-8 8H70a8 8 0 0 1-8-8z" fill="url(#box)"/>
+    <path d="M54 398h120v24H54z" fill="#fde68a"/>
+    <path d="M106 398v96" stroke-width="5"/>
+    <path d="M106 398v96" stroke="#ef4444" stroke-width="12" stroke-linecap="butt"/>
+    <path d="M106 398c-10-26-44-30-40-8 3 12 26 10 40 8zM106 398c10-26 44-30 40-8-3 12-26 10-40 8z" fill="#ef4444"/>
+
+    <!-- alça da sacola -->
+    <path d="M430 256c-4-64 64-64 60 0" stroke-width="16"/>
+    <path d="M430 256c-4-64 64-64 60 0" stroke="#fed7aa" stroke-width="6"/>
+
+    <!-- sacola -->
+    <path d="M404 250h112a8 8 0 0 1 8 7l9 100a10 10 0 0 1-10 11H397a10 10 0 0 1-10-11l9-100a8 8 0 0 1 8-7z" fill="url(#bag)"/>
+    <path d="M404 250h112a8 8 0 0 1 8 7l1.5 17H394.5l1.5-17a8 8 0 0 1 8-7z" fill="#fed7aa"/>
+    <path d="M460 288l9.5 19.2 21.2 3.1-15.4 15 3.6 21.1L460 336.4l-18.9 10 3.6-21.1-15.4-15 21.2-3.1z" fill="#fffbeb" stroke-width="5"/>
+
+    <!-- corpo + cabeça -->
+    <path d="M258 100C340 100 382 160 380 228C379 270 372 290 384 322C406 372 402 440 352 470C312 492 206 494 166 470C116 440 112 372 136 322C148 290 136 270 136 228C136 160 176 100 258 100Z" fill="url(#plumage)"/>
+
+    <!-- topete -->
+    <path d="M220 120C204 92 186 70 160 56C196 56 228 76 246 108Z" fill="#fcd23f"/>
+    <path d="M232 112C228 70 214 44 190 22C240 34 268 64 272 104Z" fill="#fcd23f"/>
+    <path d="M262 106C266 76 280 56 302 44C296 70 292 90 284 110Z" fill="#fcd23f"/>
+
+    <!-- lenço -->
+    <path d="M142 292c62 28 172 28 238-4l-12 30c-32 14-60 34-100 70-40-36-70-56-112-68z" fill="url(#scarf)"/>
+    <path d="M142 292c-22-6-40 2-42 18 18 4 34 0 44-6M148 300c-18 12-26 28-18 40 14-8 22-20 22-32" fill="#fb923c"/>
+  </g>
+
+  <!-- bochechas (sem contorno) -->
+  <ellipse cx="194" cy="252" rx="36" ry="26" fill="url(#blush)"/>
+  <ellipse cx="340" cy="250" rx="30" ry="24" fill="url(#blush)"/>
+
+  <g stroke="#5b2a16" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <!-- olho aberto -->
+    <circle cx="218" cy="204" r="24" fill="#2b140c" stroke-width="5"/>
+    <!-- olho piscando -->
+    <path d="M296 214l20-14 20 14" stroke-width="7" fill="none"/>
+    <!-- bico aberto -->
+    <path d="M246 236c6 22 32 24 38 0-12 8-26 8-38 0z" fill="#c2410c"/>
+    <path d="M242 230c4-18 40-18 44 0-6 12-38 12-44 0z" fill="#f9a54e"/>
+  </g>
+  <circle cx="209" cy="195" r="8.5" fill="#fff"/>
+  <circle cx="227" cy="213" r="4" fill="#fff"/>
+
+  <!-- texto do lenço -->
+  <text x="265" y="330" text-anchor="middle" font-family="'Arial Black', 'Arial', sans-serif" font-weight="900" font-size="23" fill="#fff7ed" letter-spacing="1">CLIENTE</text>
+  <path d="M265 340l3.5 7 7.7 1.1-5.6 5.4 1.3 7.6-6.9-3.6-6.9 3.6 1.3-7.6-5.6-5.4 7.7-1.1z" fill="#fff7ed"/>
+
+  <g stroke="#5b2a16" stroke-width="6" stroke-linejoin="round" stroke-linecap="round">
+    <!-- asa esquerda (abaixada) -->
+    <path d="M168 338c-46 14-72 64-68 104 14-6 22 2 34-10 10 10 24 4 30-8 22-24 28-60 4-86z" fill="#fffaf0"/>
+    <path d="M128 404c8 2 16 0 22-6" stroke-width="4"/>
+    <!-- asa direita (levantada, segurando a sacola) -->
+    <path d="M345 335C365 300 395 255 420 222C428 208 446 200 458 210C468 220 462 234 452 240C456 250 450 262 440 262C440 276 428 290 418 290C414 318 398 350 382 372Z" fill="#fffaf0"/>
+    <path d="M396 300c10-4 18-12 22-22" stroke-width="4"/>
+    <!-- pés -->
+    <path d="M222 482l-18 18M222 482l-4 22M222 482l12 18" stroke="#8b4a2b" stroke-width="9"/>
+    <path d="M300 482l-12 18M300 482l4 22M300 482l18 18" stroke="#8b4a2b" stroke-width="9"/>
+  </g>
+
+  <!-- brilhos -->
+  <g fill="#fcd34d" stroke="#5b2a16" stroke-width="4" stroke-linejoin="round">
+    <path d="M548 86l8 22 22 8-22 8-8 22-8-22-22-8 22-8z"/>
+    <path d="M566 392l6 15 15 6-15 6-6 15-6-15-15-6 15-6z"/>
+    <path d="M42 270l5 13 13 5-13 5-5 13-5-13-13-5 13-5z"/>
+  </g>
+</svg>

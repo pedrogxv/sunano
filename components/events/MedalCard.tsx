@@ -13,7 +13,12 @@ import {
   MEDAL_RARITY_STYLES,
   MEDAL_RARITY_SYMBOL,
 } from "@/lib/profile-showcase"
-import { EVENT_CRITERIA_SHORT_LABEL, type EventDisplay } from "@/lib/events"
+import {
+  EVENT_CRITERIA_SHORT_LABEL,
+  purchaseCardCaption,
+  type EventDisplay,
+  type PurchaseCard,
+} from "@/lib/events"
 import { auraPriceForVip } from "@/lib/aura-pricing"
 import { useHoloTilt } from "@/lib/hooks/use-holo-tilt"
 import { cn } from "@/lib/utils"
@@ -30,6 +35,12 @@ interface MedalCardProps extends React.ComponentPropsWithoutRef<"div"> {
    * cheia, o halo forte de cada carta invadiria a vizinha.
    */
   glow?: "default" | "strong"
+  /**
+   * Card de `store_purchase` do próprio dono: a arte vira a foto do produto
+   * comprado e o texto diz o que foi comprado. É o que faz cada carta dessa
+   * conquista ser única. `null`/ausente = a carta padrão do evento.
+   */
+  purchaseCard?: PurchaseCard | null
 }
 
 /**
@@ -53,6 +64,7 @@ export function MedalCard({
   claimed,
   isVip = false,
   glow = "default",
+  purchaseCard = null,
   className,
   ...rest
 }: MedalCardProps) {
@@ -73,6 +85,8 @@ export function MedalCard({
   const tiltEnabled = event.active
   const accent = MEDAL_RARITY_SOLID[event.rarity]
   const showCost = event.criteriaType === "aura_redeem" && !claimed && Boolean(event.auraCost)
+  const artUrl = purchaseCard?.productImageUrl ?? event.imageUrl
+  const description = purchaseCard ? purchaseCardCaption(purchaseCard) : event.description
 
   return (
     <div
@@ -134,10 +148,10 @@ export function MedalCard({
               MEDAL_RARITY_STYLES[event.rarity]
             )}
           >
-            {event.imageUrl ? (
+            {artUrl ? (
               <Image
-                src={event.imageUrl}
-                alt={event.name}
+                src={artUrl}
+                alt={purchaseCard?.productName ?? event.name}
                 width={128}
                 height={128}
                 className="size-[85%] object-contain"
@@ -177,7 +191,7 @@ export function MedalCard({
               vira respiro dos dois lados. */}
           <div className="flex flex-1 items-center">
             <p className="line-clamp-4 text-[10px] leading-snug text-muted-foreground">
-              {event.description}
+              {description}
             </p>
           </div>
 

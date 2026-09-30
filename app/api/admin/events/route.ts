@@ -2,24 +2,27 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { medalImageUrl } from "@/lib/server/validation/medal-image-url"
 import { createEvent, listEventsForAdmin } from "@/lib/server/repositories/events-repository"
 
 const createEventSchema = z
   .object({
     name: z.string().trim().min(1).max(100),
     description: z.string().trim().max(500).optional().nullable(),
-    imageUrl: z.string().url().optional().nullable(),
+    imageUrl: medalImageUrl.optional().nullable(),
     rarity: z.enum(["common", "rare", "epic", "legendary"]).optional().default("legendary"),
     maxParticipants: z.number().int().positive().optional().nullable(),
     criteriaType: z
-      .enum(["first_n_signups", "manual_opt_in", "aura_redeem", "staff_grant"])
+      .enum(["first_n_signups", "manual_opt_in", "aura_redeem", "staff_grant", "store_purchase"])
       .optional()
       .default("first_n_signups"),
     auraCost: z.number().int().positive().optional().nullable(),
     requiresVip: z.boolean().optional().default(false),
   })
   .superRefine((data, ctx) => {
-    if (data.criteriaType !== "aura_redeem" && data.criteriaType !== "staff_grant" && !data.maxParticipants) {
+    const optionalSlots =
+      data.criteriaType === "aura_redeem" || data.criteriaType === "staff_grant" || data.criteriaType === "store_purchase"
+    if (!optionalSlots && !data.maxParticipants) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["maxParticipants"],

@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { CheckCircle2, Crown, Flame, Loader2, Lock } from "lucide-react"
+import { CheckCircle2, Crown, Flame, Loader2, Lock, ShoppingBag } from "lucide-react"
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { MedalCard } from "@/components/events/MedalCard"
-import { type EventDisplay } from "@/lib/events"
+import { RouteLink } from "@/components/ui/route-link"
+import { purchaseCardCaption, type EventDisplay, type PurchaseCard } from "@/lib/events"
 import { auraPriceForVip } from "@/lib/aura-pricing"
 
 interface EventCardProps {
@@ -32,13 +33,26 @@ interface EventCardProps {
    * regra da Central de Aura. Quem cobra é `claim_event_medal` em SQL.
    */
   isVip: boolean
+  /** Tem compra paga na Loja agora — só relevante pra eventos `store_purchase`. */
+  hasStorePurchase: boolean
+  /** Produto que personaliza a carta de `store_purchase` já resgatada. */
+  purchaseCard: PurchaseCard | null
   /** Resgate manual em andamento para este card específico. */
   pending: boolean
   onClaim: () => void
 }
 
 /** Rodapé de ação: o único bloco que muda de fato entre os critérios de evento. */
-function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, onClaim }: EventCardProps) {
+function EventFooter({
+  event,
+  claimed,
+  isLoggedIn,
+  auraBalance,
+  isVip,
+  hasStorePurchase,
+  pending,
+  onClaim,
+}: EventCardProps) {
   // Preço já com desconto: o afford e todos os textos abaixo usam ele, senão
   // um VIP com saldo entre os dois preços veria "faltam X Aura" para uma
   // medalha que a RPC deixaria ele resgatar.
@@ -80,7 +94,7 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, 
     )
   }
 
-  // manual_opt_in / aura_redeem
+  // manual_opt_in / aura_redeem / store_purchase
   const soldOut = !event.active || (event.maxParticipants !== null && event.currentCount >= event.maxParticipants)
   if (soldOut) {
     return (
@@ -111,6 +125,47 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, 
         <p className="text-[10px] leading-snug text-muted-foreground/80">
           Vamos pedir sua confirmação antes de gastar a Aura
         </p>
+      </div>
+    )
+  }
+
+  if (event.criteriaType === "store_purchase" && isLoggedIn && !hasStorePurchase) {
+    return (
+      <div className="flex w-full flex-col items-center gap-1.5">
+        <Button size="sm" variant="outline" asChild className="w-full gap-1.5 text-xs">
+          <RouteLink href="/loja">
+            <ShoppingBag className="size-3.5" />
+            Compre na Loja para liberar
+          </RouteLink>
+        </Button>
+        <p className="text-center text-[10px] leading-snug text-muted-foreground/80">
+          Libera com um pedido pago. Cancelou ou estornou, o card sai.
+        </p>
+      </div>
+    )
+  }
+
+  if (event.criteriaType === "store_purchase" && isLoggedIn) {
+    return (
+      <div className="flex w-full flex-col items-center gap-1.5">
+        <Button
+          size="sm"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onClaim()
+          }}
+          disabled={pending}
+          className="w-full gap-1.5 text-xs"
+        >
+          {pending ? <Loader2 className="size-3.5 animate-spin" /> : <ShoppingBag className="size-3.5" />}
+          {pending ? "Resgatando..." : "Resgatar meu card"}
+        </Button>
+        {!pending && (
+          <p className="text-center text-[10px] leading-snug text-muted-foreground/80">
+            O card mostra no seu perfil o produto que você comprou.
+          </p>
+        )}
       </div>
     )
   }
@@ -217,16 +272,24 @@ function EventFooter({ event, claimed, isLoggedIn, auraBalance, isVip, pending, 
  * parecer um banner com borda.
  */
 export function EventCard(props: EventCardProps) {
-  const { event, claimed, isVip } = props
+  const { event, claimed, isVip, purchaseCard } = props
 
   return (
     <div className="flex w-64 flex-col gap-3">
       <Tooltip>
         <TooltipTrigger asChild>
-          <MedalCard event={event} claimed={claimed} isVip={isVip} className="cursor-help" />
+          <MedalCard
+            event={event}
+            claimed={claimed}
+            isVip={isVip}
+            purchaseCard={claimed ? purchaseCard : null}
+            className="cursor-help"
+          />
         </TooltipTrigger>
         <TooltipContent>
-          <p className="max-w-[220px] text-xs">{event.description ?? event.name}</p>
+          <p className="max-w-[220px] text-xs">
+            {claimed && purchaseCard ? purchaseCardCaption(purchaseCard) : (event.description ?? event.name)}
+          </p>
         </TooltipContent>
       </Tooltip>
 

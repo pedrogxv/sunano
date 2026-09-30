@@ -1,7 +1,12 @@
 import { Suspense } from "react"
 
 import { getUserAuraBalance, getUserAuraTotalEarned } from "@/lib/server/repositories/aura-repository"
-import { getClaimedMedalIds, listActiveEventsForDisplay } from "@/lib/server/repositories/events-repository"
+import {
+  getClaimedMedalIds,
+  getPurchaseCards,
+  hasValidStorePurchase,
+  listActiveEventsForDisplay,
+} from "@/lib/server/repositories/events-repository"
 import { getUserAchievements } from "@/lib/server/repositories/achievements-repository"
 import { countForumActivity } from "@/lib/server/repositories/profile-showcase-repository"
 import { countFollowers } from "@/lib/server/repositories/users-repository"
@@ -31,6 +36,8 @@ export default async function ConquistasPage() {
     youtubeConfirmed,
     discordConfirmed,
     vipStatus,
+    hasStorePurchase,
+    purchaseCards,
   ] = await Promise.all([
     listActiveEventsForDisplay(),
     userId ? getClaimedMedalIds(userId) : Promise.resolve([]),
@@ -46,6 +53,8 @@ export default async function ConquistasPage() {
       ? hasConfirmedDiscordMembership(userId)
       : Promise.resolve(false),
     userId ? getVipStatus(userId) : Promise.resolve({ active: false, expiresAt: null }),
+    userId ? hasValidStorePurchase(userId) : Promise.resolve(false),
+    userId ? getPurchaseCards(userId) : Promise.resolve({}),
   ])
 
   return (
@@ -56,6 +65,8 @@ export default async function ConquistasPage() {
         initialAuraBalance={auraBalance}
         isLoggedIn={Boolean(userId)}
         isVip={vipStatus.active}
+        hasStorePurchase={hasStorePurchase}
+        initialPurchaseCards={purchaseCards}
         achievements={achievements}
         achievementCounts={{
           posts: forumActivity.posts,

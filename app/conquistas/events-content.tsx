@@ -12,7 +12,7 @@ import { DiscordMembershipButton } from "@/components/auth/DiscordMembershipButt
 import { notifyAuraChanged } from "@/lib/client/aura-events"
 import { getDiscordMembershipFeedback } from "@/lib/discord-membership"
 import { auraPriceForVip } from "@/lib/aura-pricing"
-import type { EventDisplay } from "@/lib/events"
+import type { EventDisplay, PurchaseCard } from "@/lib/events"
 import type { AchievementTrack, ShowcaseAchievement } from "@/lib/achievements"
 
 interface EventsContentProps {
@@ -22,6 +22,10 @@ interface EventsContentProps {
   isLoggedIn: boolean
   /** VIP ativo agora — medalhas de `aura_redeem` saem 10% mais baratas. */
   isVip: boolean
+  /** Tem compra paga na Loja agora — libera o resgate das conquistas `store_purchase`. */
+  hasStorePurchase: boolean
+  /** Produto que personaliza cada card de compra já resgatado, por `medalId`. */
+  initialPurchaseCards: Record<string, PurchaseCard>
   /** Conquistas gerais (posts/comentários/seguidores) já desbloqueadas — vazio quando deslogado. */
   achievements: ShowcaseAchievement[]
   achievementCounts: Record<AchievementTrack, number>
@@ -45,6 +49,8 @@ export function EventsContent({
   initialAuraBalance,
   isLoggedIn,
   isVip,
+  hasStorePurchase,
+  initialPurchaseCards,
   achievements,
   achievementCounts,
   youtubeEnabled,
@@ -57,6 +63,7 @@ export function EventsContent({
   const [events, setEvents] = useState(initialEvents)
   const [claimedMedalIds, setClaimedMedalIds] = useState(() => new Set(initialClaimedMedalIds))
   const [auraBalance, setAuraBalance] = useState(initialAuraBalance)
+  const [purchaseCards, setPurchaseCards] = useState(initialPurchaseCards)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [youtubeConfirmed, setYoutubeConfirmed] = useState(initialYoutubeConfirmed)
   const [discordConfirmed, setDiscordConfirmed] = useState(initialDiscordConfirmed)
@@ -118,7 +125,11 @@ export function EventsContent({
     setPendingId(event.id)
     try {
       const res = await fetch(`/api/conquistas/${event.id}/claim`, { method: "POST" })
-      const data = (await res.json().catch(() => null)) as { event?: EventDisplay; error?: string } | null
+      const data = (await res.json().catch(() => null)) as {
+        event?: EventDisplay
+        purchaseCard?: PurchaseCard | null
+        error?: string
+      } | null
 
       if (res.status === 401) {
         router.push("/login")
@@ -132,6 +143,10 @@ export function EventsContent({
 
       setEvents((prev) => prev.map((e) => (e.id === event.id ? data.event! : e)))
       setClaimedMedalIds((prev) => new Set(prev).add(event.medalId))
+      if (data.purchaseCard) {
+        const card = data.purchaseCard
+        setPurchaseCards((prev) => ({ ...prev, [event.medalId]: card }))
+      }
       if (event.criteriaType === "aura_redeem" && event.auraCost) {
         // Decremento otimista tem que usar o preço com desconto — quem cobrou
         // foi `claim_event_medal`, que já aplicou o 10% do VIP.
@@ -216,6 +231,8 @@ export function EventsContent({
                     isLoggedIn={isLoggedIn}
                     auraBalance={auraBalance}
                     isVip={isVip}
+                    hasStorePurchase={hasStorePurchase}
+                    purchaseCard={purchaseCards[event.medalId] ?? null}
                     pending={pendingId === event.id}
                     onClaim={() => handleClaim(event)}
                   />
@@ -241,6 +258,8 @@ export function EventsContent({
                     isLoggedIn={isLoggedIn}
                     auraBalance={auraBalance}
                     isVip={isVip}
+                    hasStorePurchase={hasStorePurchase}
+                    purchaseCard={purchaseCards[event.medalId] ?? null}
                     pending={false}
                     onClaim={() => handleClaim(event)}
                   />

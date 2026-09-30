@@ -301,7 +301,7 @@ insert into public.medals (slug, name, description, icon_url, rarity, category)
 values (
   'cliente-sunano',
   'CLIENTE SUNANO',
-  'Card exclusivo de quem comprou na Loja Sunano. Ele mostra no seu perfil o produto que você levou. Se o pedido for cancelado ou estornado, o card sai junto.',
+  'Card exclusivo de quem comprou na Loja Sunano. Ele mostra no seu perfil o produto que você levou.',
   '/images/medals/cliente-sunano.svg',
   'legendary',
   'event'

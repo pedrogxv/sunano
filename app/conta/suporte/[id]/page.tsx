@@ -2,6 +2,7 @@
 
 import { useRef, useState, type KeyboardEvent } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { useParams } from "next/navigation"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
@@ -216,13 +217,13 @@ export default function TicketDetailPage() {
                 </span>
               )}
               {ticket.product_name && ticket.product_slug && (
-                <Link
+                <RouteLink
                   href={`/loja/${ticket.product_slug}`}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1 text-xs text-primary hover:underline"
                 >
                   <ShoppingBag className="size-3.5" />
                   {ticket.product_name}
-                </Link>
+                </RouteLink>
               )}
             </div>
           )}

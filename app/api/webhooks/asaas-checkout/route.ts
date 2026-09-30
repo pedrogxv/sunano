@@ -9,6 +9,8 @@ import {
 } from "@/lib/server/repositories/orders-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
+import type { OrderEventStatus } from "@/lib/server/integrations/discord-order-card"
+import { openServiceOrderTicket } from "@/lib/server/repositories/support-repository"
 import { getPaymentsByCheckoutSession } from "@/lib/server/integrations/asaas"
 
 export const runtime = "nodejs"
@@ -158,7 +160,9 @@ export async function POST(request: NextRequest) {
                 .eq("asaas_checkout_id", checkoutId)
                 .in("id", payableIds)
                 .in("status", ["pending", "expired", "cancelled"])
-                .select("id, affiliate_id, metadata")
+                // `status` volta já decidido pelo trigger de etapa de entrega:
+              // pago sem endereço é `awaiting_shipping_info`, não `paid`.
+              .select("id, affiliate_id, metadata, status, requires_shipping_address")
             ).data ?? [])
 
       // Pedido que já tinha devolvido o estoque precisa reservá-lo de novo,
@@ -193,13 +197,29 @@ export async function POST(request: NextRequest) {
       for (const order of updatedOrders ?? []) {
         const ownerId = orderOwnerId(order.metadata as Record<string, unknown> | null)
         if (!ownerId) continue
-        await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "paid" })
+        await notifyOrderStatusChange({
+          userId: ownerId,
+          orderId: order.id,
+          status: order.status,
+          requiresShipping: order.requires_shipping_address !== false,
+        })
+      }
+
+      // Serviço não tem pacote a despachar: quem precisa agir é a equipe,
+      // combinando o atendimento. O chamado já nasce aberto e amarrado ao
+      // pedido (pedido físico é ignorado lá dentro).
+      for (const order of updatedOrders ?? []) {
+        await openServiceOrderTicket(order.id)
       }
 
       // Fora do laço acima: pedido de convidado não tem dono para notificar
       // no site, mas a venda tem que aparecer no canal do mesmo jeito.
       for (const order of updatedOrders ?? []) {
-        await notifyDiscordOrderEvent({ orderId: order.id, status: "paid", actor: "webhook-asaas" })
+        await notifyDiscordOrderEvent({
+          orderId: order.id,
+          status: order.status as OrderEventStatus,
+          actor: "webhook-asaas",
+        })
       }
 
       return NextResponse.json({ received: true })

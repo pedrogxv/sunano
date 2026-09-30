@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ArrowLeft,
@@ -409,10 +409,10 @@ function SectionBody({
             Acompanhe seu saldo, extrato e link de indicação no painel do afiliado.
           </p>
           <Button asChild variant="outline" className="shrink-0">
-            <Link href="/afiliados">
+            <RouteLink href="/afiliados">
               Acessar painel
               <ArrowRight className="size-4" />
-            </Link>
+            </RouteLink>
           </Button>
         </div>
       )

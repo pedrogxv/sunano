@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { Pause, Play } from "lucide-react"
 
 import { isInternalBannerLink } from "@/lib/banner-link"
@@ -68,9 +68,9 @@ function BannerCtaButton({
     "inline-flex w-fit items-center gap-1.5 rounded-full bg-white px-5 py-2.5 text-[13px] font-bold text-black transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black/40 sm:text-sm"
 
   return isInternalBannerLink(ctaLink) ? (
-    <Link href={ctaLink} tabIndex={tabIndex} className={className}>
+    <RouteLink href={ctaLink} tabIndex={tabIndex} className={className}>
       {ctaText}
-    </Link>
+    </RouteLink>
   ) : (
     <a href={ctaLink} target="_blank" rel="noopener noreferrer" tabIndex={tabIndex} className={className}>
       {ctaText}

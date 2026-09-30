@@ -62,6 +62,8 @@ export type ForumListPost = {
   is_pinned: boolean
   /** Só vem preenchido de verdade na aba "mine" — nas demais abas o post já chega sempre `false`. */
   is_hidden: boolean
+  /** Oculto pelo painel ou pelo banimento: o autor não pode reexibir. Sempre `false` em post visível. */
+  hidden_by_moderation: boolean
   comment_count: number
   /** Somatório denormalizado da aura de todos os comentários do post — ver 20260823000000_forum_post_aura_from_comments.sql. */
   aura_count: number
@@ -164,6 +166,7 @@ type ForumPostRow = {
   is_locked: boolean
   is_pinned: boolean
   is_hidden: boolean
+  hidden_by_moderation: boolean
   aura_count: number | null
 }
 
@@ -255,6 +258,7 @@ export async function enrichForumPostRows(rows: ForumPostRow[]): Promise<ForumLi
     is_locked: p.is_locked,
     is_pinned: p.is_pinned,
     is_hidden: p.is_hidden,
+    hidden_by_moderation: p.hidden_by_moderation,
     comment_count: summaryMap.get(p.id)?.comment_count ?? 0,
     aura_count: p.aura_count ?? 0,
     saved_count: savedCounts[p.id] ?? 0,
@@ -314,7 +318,7 @@ export async function listForumPosts(params: {
   let query = db
     .from("forum_posts")
     .select(
-      "id, slug, title, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, aura_count",
+      "id, slug, title, body_preview, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, hidden_by_moderation, aura_count",
       { count: "exact" }
     )
 
@@ -607,13 +611,26 @@ function mapForumCommentRows(
  */
 export async function listForumComments(
   slug: string,
-  { page = 1, sort = "recent" }: { page?: number; sort?: CommentSort } = {}
+  {
+    page = 1,
+    sort = "recent",
+    viewerId = null,
+  }: { page?: number; sort?: CommentSort; viewerId?: string | null } = {}
 ): Promise<PaginatedComments> {
   const db = createSupabaseAdminClient()
 
-  const { data: post } = await db.from("forum_posts").select("id").eq("slug", slug).maybeSingle()
-  if (!post) return { comments: [], totalRootCount: 0, hasMore: false }
-  const postId = (post as { id: string }).id
+  // Post oculto: os comentários somem junto, exceto para o autor (mesma regra
+  // de getForumPostBySlug). Sem isto, `GET /api/forum/posts/<slug>/comments`
+  // seguia servindo a discussão de um post que a moderação tirou do ar.
+  const { data: post } = await db
+    .from("forum_posts")
+    .select("id, user_id, is_hidden")
+    .eq("slug", slug)
+    .maybeSingle()
+  if (!post || (post.is_hidden && post.user_id !== viewerId)) {
+    return { comments: [], totalRootCount: 0, hasMore: false }
+  }
+  const postId = post.id
 
   const from = (page - 1) * COMMENTS_PAGE_SIZE
   const to = from + COMMENTS_PAGE_SIZE - 1
@@ -739,7 +756,7 @@ export const getForumPostBySlug = cache(async (
   const { data: post, error } = await db
     .from("forum_posts")
     .select(
-      "id, slug, title, body, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, aura_count"
+      "id, slug, title, body, author_name, user_id, category_id, media_image_urls, media_video_url, created_at, is_locked, is_pinned, is_hidden, hidden_by_moderation, aura_count"
     )
     .eq("slug", slug)
     .maybeSingle()
@@ -752,7 +769,7 @@ export const getForumPostBySlug = cache(async (
   if (post.is_hidden && post.user_id !== viewerId) return null
 
   const [commentsPage, { count: totalCommentCount }, { count: savedCount }] = await Promise.all([
-    listForumComments(slug),
+    listForumComments(slug, { viewerId }),
     db
       .from("forum_comments")
       .select("id", { count: "exact", head: true })
@@ -778,6 +795,7 @@ export const getForumPostBySlug = cache(async (
     is_locked: post.is_locked,
     is_pinned: post.is_pinned,
     is_hidden: post.is_hidden,
+    hidden_by_moderation: post.hidden_by_moderation,
     comment_count: totalCommentCount ?? 0,
     aura_count: post.aura_count ?? 0,
     saved_count: savedCount ?? 0,
@@ -890,6 +908,7 @@ export async function createForumPost(params: {
       media_image_urls: params.mediaImageUrls ?? [],
       media_video_url: params.mediaVideoUrl ?? null,
       is_hidden: false,
+      hidden_by_moderation: false,
       is_locked: false,
       is_pinned: false,
       // Somatório denormalizado da aura dos comentários — nasce zerado, post
@@ -1146,7 +1165,7 @@ export async function setOwnForumPostHidden(params: {
 
   const { data: post } = await db
     .from("forum_posts")
-    .select("id, user_id, is_hidden")
+    .select("id, user_id, is_hidden, hidden_by_moderation")
     .eq("slug", params.postSlug)
     .maybeSingle()
 
@@ -1155,6 +1174,11 @@ export async function setOwnForumPostHidden(params: {
   }
   if (post.user_id !== params.userId) {
     return { ok: false, error: "Você só pode alterar os seus próprios posts.", status: 403 }
+  }
+  // `is_hidden` é a mesma coluna da moderação: sem esta trava, quem teve o
+  // post removido pelo painel (ou pelo banimento) o reexibia por aqui.
+  if (!params.hidden && post.hidden_by_moderation) {
+    return { ok: false, error: "Este post foi ocultado pela moderação e não pode ser reexibido.", status: 403 }
   }
 
   const { error } = await db.from("forum_posts").update({ is_hidden: params.hidden }).eq("id", post.id)
@@ -1392,13 +1416,70 @@ export async function updateForumPost(
     await db.from("forum_posts").update({ is_pinned: false }).eq("is_pinned", true).neq("id", existing.id)
   }
 
-  const { error } = await db.from("forum_posts").update(updates).eq("id", existing.id)
+  // Só o painel chama esta função (PATCH com `forum_write`): ocultar por aqui
+  // é moderação, igual a setForumPostFlag.
+  const row =
+    updates.is_hidden === undefined ? updates : { ...updates, hidden_by_moderation: updates.is_hidden }
+  const { error } = await db.from("forum_posts").update(row).eq("id", existing.id)
 
   if (error) {
     console.error("[forum-repository] updateForumPost:", error)
     return { ok: false, error: publicDbErrorMessage(error, "Não foi possível salvar o post."), status: 400 }
   }
   return { ok: true }
+}
+
+/** Alvo de uma ação de moderação, lido ANTES da ação: depois de excluir, o post já não existe para dizer de quem era. */
+export type ForumModerationTarget = {
+  table: "forum_posts" | "forum_comments"
+  id: string
+  userId: string | null
+  metadata: Record<string, string | null>
+}
+
+export async function getForumModerationTarget(
+  ref: { postId: string } | { postSlug: string } | { commentId: string }
+): Promise<ForumModerationTarget | null> {
+  const db = createSupabaseAdminClient()
+
+  if ("commentId" in ref) {
+    const { data } = await db
+      .from("forum_comments")
+      .select("id, user_id, post_id")
+      .eq("id", ref.commentId)
+      .maybeSingle()
+    if (!data) return null
+    return { table: "forum_comments", id: data.id, userId: data.user_id, metadata: { post_id: data.post_id } }
+  }
+
+  const query = db.from("forum_posts").select("id, slug, title, user_id")
+  const { data } = await ("postId" in ref ? query.eq("id", ref.postId) : query.eq("slug", ref.postSlug)).maybeSingle()
+  if (!data) return null
+  return { table: "forum_posts", id: data.id, userId: data.user_id, metadata: { slug: data.slug, title: data.title } }
+}
+
+/**
+ * Registra no `audit_log` quem moderou o quê. Sem isto não havia como saber se
+ * um post oculto foi ocultado pelo autor ou pela equipe, nem por quem. Falha
+ * aqui só loga: a ação de moderação já aconteceu e não deve voltar erro.
+ */
+export async function logForumModeration(
+  actorId: string,
+  action: string,
+  target: ForumModerationTarget | null,
+  extra: Record<string, unknown> = {}
+): Promise<void> {
+  if (!target) return
+  const db = createSupabaseAdminClient()
+  const { error } = await db.from("audit_log").insert({
+    user_id: target.userId,
+    actor_id: actorId,
+    action,
+    table_name: target.table,
+    record_id: target.id,
+    metadata: { ...target.metadata, ...extra },
+  })
+  if (error) console.error("[forum-repository] logForumModeration:", error)
 }
 
 /** Alterna uma flag de moderação de um post. */
@@ -1408,7 +1489,11 @@ export async function setForumPostFlag(
   value: boolean
 ): Promise<void> {
   const db = createSupabaseAdminClient()
-  if (flag === "is_hidden") await db.from("forum_posts").update({ is_hidden: value }).eq("id", postId)
+  // Ocultar pelo painel marca `hidden_by_moderation`, que impede o autor de
+  // reexibir; mostrar de novo zera a marca (o trigger também garante isso).
+  if (flag === "is_hidden") {
+    await db.from("forum_posts").update({ is_hidden: value, hidden_by_moderation: value }).eq("id", postId)
+  }
   else if (flag === "is_locked") await db.from("forum_posts").update({ is_locked: value }).eq("id", postId)
   else {
     // Só 1 post fixado por vez: fixar este desfixa qualquer outro que já estivesse.

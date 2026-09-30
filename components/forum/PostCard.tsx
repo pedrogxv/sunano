@@ -48,6 +48,8 @@ export type PostCardData = {
   is_pinned: boolean
   /** `true` só é relevante na aba "Meus Posts" — nas demais listagens públicas o post oculto nem chega aqui. */
   is_hidden?: boolean
+  /** Oculto pelo painel/banimento: o autor não tem o botão de reexibir. */
+  hidden_by_moderation?: boolean
   comment_count: number
   /** Somatório da aura de todos os comentários do post (denormalizado). */
   aura_count: number
@@ -391,7 +393,7 @@ export function PostCard({
             {post.is_hidden && (
               <span className="inline-flex items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                 <EyeOff className="size-2.5" />
-                Oculto
+                {post.hidden_by_moderation ? "Oculto pela moderação" : "Oculto"}
               </span>
             )}
             {post.is_locked && <Lock className="size-3 text-amber-500" />}
@@ -446,11 +448,13 @@ export function PostCard({
             {!post.is_hidden && <ShareMenu slug={post.slug} title={post.title} />}
             {isOwner ? (
               <>
-                <PostVisibilityButton
-                  postSlug={post.slug}
-                  isHidden={Boolean(post.is_hidden)}
-                  onChanged={onOwnPostVisibilityChange}
-                />
+                {!post.hidden_by_moderation && (
+                  <PostVisibilityButton
+                    postSlug={post.slug}
+                    isHidden={Boolean(post.is_hidden)}
+                    onChanged={onOwnPostVisibilityChange}
+                  />
+                )}
                 <PostDeleteButton postSlug={post.slug} onDeleted={onOwnPostDeleted} />
               </>
             ) : (

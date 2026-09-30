@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { usePathname } from "next/navigation"
 import { ChevronLeft, ChevronRight, Eye, Gift, Home, LogOut, Menu, Mouse, NotebookPen, Package, Settings, Users, X } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -104,7 +104,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 const active = isActive(item.href)
 
                 return (
-                  <Link
+                  <RouteLink
                     key={item.href}
                     href={item.href}
                     onClick={() => setIsMobileMenuOpen(false)}
@@ -118,7 +118,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   >
                     <Icon className="size-[18px]" />
                     <span className={cn(isCollapsed && "hidden")}>{item.label}</span>
-                  </Link>
+                  </RouteLink>
                 )
               })}
             </div>
@@ -128,7 +128,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               <p className={cn("mb-2 px-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground", isCollapsed && "hidden")}>
                 {t.admin.sidebar.actions}
               </p>
-              <Link
+              <RouteLink
                 href="/"
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={cn(
@@ -138,7 +138,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               >
                 <Eye className="size-[18px]" />
                 <span className={cn(isCollapsed && "hidden")}>{t.admin.sidebar.viewSite}</span>
-              </Link>
+              </RouteLink>
               <form action={logoutAction}>
                 <Button
                   className={cn(

@@ -42,13 +42,18 @@ export async function POST(
   }
 
   const db = createSupabaseAdminClient()
+  // O post-pai conta: comentário de post oculto some junto com ele, e reagir
+  // a ele seguia movendo Aura numa discussão que a moderação tirou do ar.
   const { data: comment } = await db
     .from("forum_comments")
-    .select("id, is_hidden")
+    .select("id, is_hidden, post_id")
     .eq("id", commentId)
     .maybeSingle()
+  const { data: post } = comment
+    ? await db.from("forum_posts").select("is_hidden").eq("id", comment.post_id).maybeSingle()
+    : { data: null }
 
-  if (!comment || comment.is_hidden) {
+  if (!comment || comment.is_hidden || !post || post.is_hidden) {
     return NextResponse.json({ error: "Comentário não encontrado.", code: "not_found" }, { status: 404 })
   }
 

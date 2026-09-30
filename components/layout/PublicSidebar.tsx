@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
 import {
@@ -73,7 +73,7 @@ function NavLink({
 }) {
   const Icon = item.icon
   return (
-    <Link
+    <RouteLink
       href={item.href}
       onClick={onClick}
       className={cn(
@@ -96,7 +96,7 @@ function NavLink({
           {item.badge > 9 ? "9+" : item.badge}
         </span>
       )}
-    </Link>
+    </RouteLink>
   )
 }
 
@@ -169,7 +169,7 @@ export function PublicSidebar() {
       >
         <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 pt-6 pb-6">
           {/* Brand */}
-          <Link
+          <RouteLink
             href="/"
             onClick={close}
             className={cn(
@@ -187,7 +187,7 @@ export function PublicSidebar() {
                 className="h-9 w-auto shrink-0 object-contain"
               />
             )}
-          </Link>
+          </RouteLink>
 
           {/* Início + Loja + Promoções. A Loja e as Promoções são os destinos que
               levam a pessoa a comprar: ficam logo abaixo do Início, antes de
@@ -202,7 +202,7 @@ export function PublicSidebar() {
             />
 
             {/* Loja */}
-            <Link
+            <RouteLink
               href="/loja"
               onClick={close}
               className={cn(
@@ -232,10 +232,10 @@ export function PublicSidebar() {
                   {cartCount > 9 ? "9+" : cartCount}
                 </button>
               )}
-            </Link>
+            </RouteLink>
 
             {/* Promoções */}
-            <Link
+            <RouteLink
               href="/offers"
               onClick={close}
               className={cn(
@@ -252,7 +252,7 @@ export function PublicSidebar() {
               <span className={cn(isCollapsed && "hidden", !isActive("/offers") && "nav-bolt-text")}>
                 {t.nav.offers}
               </span>
-            </Link>
+            </RouteLink>
 
             {/* Hub dos documentos legais/institucionais. Um link só; as
                 páginas individuais seguem em suas URLs próprias. */}
@@ -330,7 +330,7 @@ export function PublicSidebar() {
           {authUser ? (
             <AuraMissionsBadge collapsed={isCollapsed} active={!!isActive("/aura")} onNavigate={close} />
           ) : (
-            <Link
+            <RouteLink
               href="/aura"
               onClick={close}
               className={cn(
@@ -349,10 +349,10 @@ export function PublicSidebar() {
               <span className={cn(isCollapsed && "hidden", !isActive("/aura") && "nav-fire-text")}>
                 Central de Aura
               </span>
-            </Link>
+            </RouteLink>
           )}
 
-          <Link
+          <RouteLink
             href="/changelog"
             onClick={close}
             title={isCollapsed ? t.nav.patchNotes : undefined}
@@ -369,7 +369,7 @@ export function PublicSidebar() {
                 {latestVersion}
               </span>
             )}
-          </Link>
+          </RouteLink>
         </div>
       </aside>
 

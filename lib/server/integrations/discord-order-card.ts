@@ -71,19 +71,25 @@ const STATUS_STYLE: Record<OrderEventStatus, StatusStyle> = {
     headline: "Pedido criado. O cliente ainda não pagou.",
     action: null,
   },
+  // `paid` é "Pedido feito": pago e, se for produto, já com endereço (o
+  // trigger `trg_store_orders_shipping_stage` segura o que falta endereço em
+  // `awaiting_shipping_info`). É o único degrau pré-despacho que é da equipe.
   paid: {
     emoji: "💚",
-    label: "Pago",
+    label: "Pedido feito",
     color: COLORS.green,
-    headline: "Pagamento confirmado pela Asaas.",
-    action: "Separe os itens e avance o pedido para **Aguardando dados de entrega**.",
+    headline: "Pago e com tudo o que precisa para seguir.",
+    action:
+      "Produto: quando chegar ao armazém, poste e registre o **código de rastreio** no admin. Serviço: combine o atendimento no chamado.",
   },
+  // Espera o CLIENTE, não a equipe: sem `action`, não menciona o cargo. O
+  // pedido vira `paid` sozinho quando o endereço chega.
   awaiting_shipping_info: {
     emoji: "📮",
-    label: "Aguardando envio",
+    label: "Aguardando dados de entrega",
     color: COLORS.amber,
-    headline: "Pedido separado, esperando ser postado.",
-    action: "Poste o pacote e registre **código de rastreio + transportadora** no admin.",
+    headline: "Pago, mas o cliente ainda não informou o endereço. Avança sozinho quando ele preencher.",
+    action: null,
   },
   shipped: {
     emoji: "🚚",
@@ -169,8 +175,8 @@ export function isActionable(status: OrderEventStatus): boolean {
  */
 const FLOW_LABEL: Partial<Record<OrderEventStatus, string>> = {
   pending: "Pagamento",
-  paid: "Pago",
-  awaiting_shipping_info: "Separado",
+  awaiting_shipping_info: "Endereço",
+  paid: "Pedido feito",
   shipped: "Enviado",
   delivered: "Entregue",
 }
@@ -180,7 +186,7 @@ export function renderTimeline(params: {
   requiresShipping: boolean
 }): string {
   const flow: OrderEventStatus[] = params.requiresShipping
-    ? ["pending", "paid", "awaiting_shipping_info", "shipped", "delivered"]
+    ? ["pending", "awaiting_shipping_info", "paid", "shipped", "delivered"]
     : ["pending", "paid", "delivered"]
 
   // Estados terminais fora do fluxo feliz não têm posição na régua — a

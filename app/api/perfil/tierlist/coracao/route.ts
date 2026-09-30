@@ -3,7 +3,7 @@ import * as z from "zod"
 
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
-import { setTierlistHeart } from "@/lib/server/repositories/user-tierlist-repository"
+import { isUserTierlistHidden, setTierlistHeart } from "@/lib/server/repositories/user-tierlist-repository"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -42,6 +42,12 @@ async function toggleHeart(request: NextRequest, hearted: boolean) {
   })
   if (!rateLimit.allowed) {
     return NextResponse.json({ error: "Aguarde um pouco antes de curtir novamente." }, { status: 429 })
+  }
+
+  // Tierlist oculta não aparece para ninguém além do dono, então também não
+  // recebe coração. Tirar o próprio coração segue liberado.
+  if (hearted && (await isUserTierlistHidden(ownerId))) {
+    return NextResponse.json({ error: "Tierlist não encontrada." }, { status: 404 })
   }
 
   try {

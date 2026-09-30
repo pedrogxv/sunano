@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
   AlertCircle,
@@ -559,7 +559,7 @@ function VipsContent() {
                       {/* Ação */}
                       <td className="px-4 py-3 text-right">
                         <Button asChild variant="outline" size="sm" className="h-8">
-                          <Link href={`/admin/vips/${row.userId}`}>{canWrite ? "Gerenciar" : "Ver"}</Link>
+                          <RouteLink href={`/admin/vips/${row.userId}`}>{canWrite ? "Gerenciar" : "Ver"}</RouteLink>
                         </Button>
                       </td>
                     </tr>

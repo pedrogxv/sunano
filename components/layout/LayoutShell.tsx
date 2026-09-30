@@ -8,6 +8,7 @@ import { ChangelogBanner } from "@/components/layout/ChangelogBanner"
 import { PublicSidebar } from "@/components/layout/PublicSidebar"
 import { AdminSidebar } from "@/components/layout/AdminSidebar"
 import { CartDrawer } from "@/components/store/CartDrawer"
+import { SupportFab } from "@/components/layout/SupportFab"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { VipIntentWatcher } from "@/components/aura/VipIntentWatcher"
 
@@ -96,6 +97,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {!isAdmin && !isCheckout && <CartDrawer />}
+      {!isAdmin && <SupportFab />}
       {hasOpenedAuthModal && <AuthModal />}
       {/* Retoma o popup do VIP para quem acabou de logar por causa dele. Fica
           no layout porque o login pode terminar em OUTRA página: o OAuth sai

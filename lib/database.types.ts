@@ -33,6 +33,10 @@ export type NotificationType =
   | "rank_frame"
   // Mudança de status de um pedido de cadastro de periférico (trigger no banco).
   | "peripheral_request_status"
+  // Aviso à equipe da loja: pedido chegou em `paid` (trigger em store_orders).
+  | "order_paid"
+  // Aviso à equipe de periféricos: pedido de cadastro novo (trigger em peripheral_requests).
+  | "peripheral_request_new"
 
 export type NotificationEntityType =
   | "forum_post"
@@ -814,6 +818,8 @@ export type Database = {
           media_image_urls: string[]
           media_video_url: string | null
           is_hidden: boolean
+          /** Oculto pelo painel/banimento: o autor não reexibe. O trigger zera quando `is_hidden` volta a `false`. */
+          hidden_by_moderation: boolean
           is_locked: boolean
           is_pinned: boolean
           aura_count: number

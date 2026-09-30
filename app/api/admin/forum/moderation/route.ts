@@ -4,7 +4,9 @@ import * as z from "zod"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import {
   deleteForumPost,
+  getForumModerationTarget,
   listForumPostsForModeration,
+  logForumModeration,
   setForumCommentHidden,
   setForumPostFlag,
   type ModerationFilter,
@@ -70,6 +72,13 @@ const actionSchema = z.discriminatedUnion("type", [
   }),
 ])
 
+/** Nome da ação no `audit_log` para [ligar, desligar] cada flag. */
+const POST_FLAG_ACTIONS = {
+  is_hidden: ["forum_post_hidden", "forum_post_unhidden"],
+  is_locked: ["forum_post_locked", "forum_post_unlocked"],
+  is_pinned: ["forum_post_pinned", "forum_post_unpinned"],
+} as const
+
 /** Aplica uma ação de moderação (toggle de flag ou exclusão) sem recarregar a página. */
 export async function POST(request: Request) {
   const profile = await requireProfile()
@@ -84,16 +93,22 @@ export async function POST(request: Request) {
   }
 
   const action = parsed.data
+  const target = await getForumModerationTarget(
+    action.type === "comment_hidden" ? { commentId: action.commentId } : { postId: action.postId }
+  )
 
   if (action.type === "post_flag") {
     await setForumPostFlag(action.postId, action.flag, action.value)
+    await logForumModeration(profile.id, POST_FLAG_ACTIONS[action.flag][action.value ? 0 : 1], target)
   } else if (action.type === "comment_hidden") {
     await setForumCommentHidden(action.commentId, action.value)
+    await logForumModeration(profile.id, action.value ? "forum_comment_hidden" : "forum_comment_unhidden", target)
   } else {
     const result = await deleteForumPost(action.postId)
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status })
     }
+    await logForumModeration(profile.id, "forum_post_deleted", target)
   }
 
   return NextResponse.json({ ok: true })

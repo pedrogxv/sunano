@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import {
   AlertTriangle,
   ArrowRight,
@@ -366,14 +367,14 @@ export default function AdminPage() {
           </h2>
           <div className="space-y-1">
             {attentionItems.map((item) => (
-              <Link
+              <RouteLink
                 key={item.href + item.label}
                 href={item.href}
                 className="group flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-amber-500/10"
               >
                 <span>{item.label}</span>
                 <ArrowRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:text-foreground" />
-              </Link>
+              </RouteLink>
             ))}
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import {
   closestCenter,
   DndContext,
@@ -1039,16 +1040,16 @@ export default function AdminStorePage() {
                             <DropdownMenuSeparator />
 
                             <DropdownMenuItem asChild>
-                              <Link href={`/admin/store/${p.id}/reviews`} className="flex items-center gap-2">
+                              <RouteLink href={`/admin/store/${p.id}/reviews`} className="flex items-center gap-2">
                                 <MessageSquare className="size-3.5" />
                                 Resenhas
-                              </Link>
+                              </RouteLink>
                             </DropdownMenuItem>
                             <DropdownMenuItem asChild>
-                              <Link href={`/admin/store/${p.id}`} className="flex items-center gap-2">
+                              <RouteLink href={`/admin/store/${p.id}`} className="flex items-center gap-2">
                                 <Edit className="size-3.5" />
                                 Editar produto completo
-                              </Link>
+                              </RouteLink>
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="flex items-center gap-2 text-red-400 focus:text-red-400"

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { toast } from "sonner"
 import { CheckCircle2, ImagePlus, LifeBuoy, Loader2, LogIn, Search, ShoppingBag, X } from "lucide-react"
 
@@ -163,19 +163,19 @@ export function SupportTicketForm() {
         </div>
         <div className="mt-2 flex w-full max-w-xs flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
           <Button asChild className="gap-2">
-            <Link href={`/conta/suporte/${submittedTicket.id}`}>
+            <RouteLink href={`/conta/suporte/${submittedTicket.id}`}>
               <LifeBuoy className="size-4" />
               Ver este chamado
-            </Link>
+            </RouteLink>
           </Button>
           <Button asChild variant="outline" className="gap-2">
-            <Link href="/conta/suporte">Ver meus tickets</Link>
+            <RouteLink href="/conta/suporte">Ver meus tickets</RouteLink>
           </Button>
           <Button asChild variant="ghost" className="gap-2">
-            <Link href="/loja">
+            <RouteLink href="/loja">
               <ShoppingBag className="size-4" />
               Voltar à loja
-            </Link>
+            </RouteLink>
           </Button>
         </div>
       </div>

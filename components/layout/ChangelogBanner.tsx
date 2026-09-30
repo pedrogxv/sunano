@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { useEffect, useRef, useState } from "react"
 import { Sparkles, X } from "lucide-react"
 
@@ -68,12 +68,12 @@ export function ChangelogBanner() {
         <span className="font-semibold">{t.changelogBanner.newLabel.replace("{version}", latest.version)}</span>{" "}
         <span className="text-muted-foreground">{latest.title}</span>
       </p>
-      <Link
+      <RouteLink
         href="/changelog"
         className="shrink-0 font-medium text-primary underline underline-offset-2 hover:text-primary/80"
       >
         {t.changelogBanner.viewHistory}
-      </Link>
+      </RouteLink>
       <button
         type="button"
         onClick={dismiss}

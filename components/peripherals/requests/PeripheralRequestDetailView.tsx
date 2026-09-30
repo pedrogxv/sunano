@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -113,7 +114,7 @@ export function PeripheralRequestDetailView({ id }: { id: string }) {
           {state === "error" ? "Não foi possível carregar o pedido." : "Pedido não encontrado."}
         </p>
         <Button asChild variant="outline" size="sm">
-          <Link href="/perifericos/pedidos">Voltar aos meus pedidos</Link>
+          <RouteLink href="/perifericos/pedidos">Voltar aos meus pedidos</RouteLink>
         </Button>
       </div>
     )
@@ -188,7 +189,7 @@ export function PeripheralRequestDetailView({ id }: { id: string }) {
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Button asChild variant="ghost" size="sm">
-          <Link href="/perifericos/pedidos">Meus pedidos</Link>
+          <RouteLink href="/perifericos/pedidos">Meus pedidos</RouteLink>
         </Button>
 
         {open && (

@@ -27,6 +27,7 @@ const NotificationBell = dynamic(
 import { useSidebar } from "@/components/providers/sidebar-context"
 import { usePageHeaderState } from "@/components/providers/page-header-context"
 import { CartButton } from "@/components/store/CartDrawer"
+import { MyOrdersButton } from "@/components/layout/MyOrdersButton"
 import { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 
@@ -187,6 +188,15 @@ export function TopBar() {
           {/* Carrinho — só aparece se houver itens pendentes, pra não poluir
               o header. Some no checkout. */}
           {!isAdmin && !isCheckout && <CartButton />}
+
+          {/* Meus pedidos — atalho ao lado do sino. No celular fica só no
+              menu do avatar: com o sino e a conta, um terceiro botão de 44px
+              espremia o título da página. */}
+          {!isAdmin && (
+            <div className="hidden sm:contents">
+              <MyOrdersButton />
+            </div>
+          )}
 
           {/* Notificações — vale também no admin, onde não há AuthUser aqui. */}
           <NotificationBell />

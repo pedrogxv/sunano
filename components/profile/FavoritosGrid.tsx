@@ -8,7 +8,6 @@ import { TierItemTooltipContent, type TierItemTooltipContentProps } from "@/comp
 import {
   PeripheralMiniCard,
   PeripheralMiniCardEmpty,
-  type MiniCardAuthor,
 } from "@/components/profile/PeripheralMiniCard"
 import { getFavoriteLimit, type AccountTier } from "@/lib/account-tier"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
@@ -19,23 +18,18 @@ interface FavoritosGridProps {
   /** Já filtrados pelo limite do tier (ver `selectVisibleFavorites`). */
   favorites: ShowcasePeripheral[]
   tier: AccountTier
-  /** Dono do perfil — a foto que acompanha a nota dele no rodapé do card. */
-  author: MiniCardAuthor
-  /** Nota do dono por periférico (`profile.own_review_ratings`). */
-  ownRatings: Record<string, number>
   isOwner?: boolean
 }
 
 /**
  * Periféricos favoritos. O número de slots é o limite do tier
  * (3 comum · 8 VIP), com os não preenchidos exibidos como
- * placeholders — inclusive para deixar o ganho de upgrade visível.
+ * placeholders — inclusive para deixar o ganho de upgrade visível. Só foto e
+ * nome: preço e nota ficam para "Meus Reviews".
  */
 export function FavoritosGrid({
   favorites,
   tier,
-  author,
-  ownRatings,
   isOwner = false,
 }: FavoritosGridProps) {
   const limit = getFavoriteLimit(tier)
@@ -63,8 +57,7 @@ export function FavoritosGrid({
                 <div className="h-full">
                   <PeripheralMiniCard
                     peripheral={peripheral}
-                    rating={ownRatings[peripheral.id] ?? null}
-                    author={author}
+                    showDetails={false}
                     className="h-full"
                   />
                 </div>
@@ -96,6 +89,7 @@ export function FavoritosGrid({
             key={`empty-${i}`}
             icon={isOwner ? <Plus className="size-6" /> : <Heart className="size-6" />}
             label={isOwner ? "Adicionar" : "Vazio"}
+            showDetails={false}
           />
         ))}
       </div>

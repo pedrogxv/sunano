@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { RouteLink } from "@/components/ui/route-link"
 import {
   AlertCircle,
   Ban,
@@ -11,6 +12,7 @@ import {
   ExternalLink,
   Eye,
   FlaskConical,
+  LifeBuoy,
   Loader2,
   Mail,
   MapPinOff,
@@ -21,6 +23,7 @@ import {
   Sparkles,
   Truck,
   User,
+  Wrench,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -64,9 +67,11 @@ import {
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
+import { orderStatusLabel } from "@/lib/order-status"
 import { isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
 import type { OrderShippingAddress } from "@/lib/server/repositories/orders-repository"
@@ -119,6 +124,8 @@ type AdminOrder = {
   requires_shipping_address: boolean
   /** true = pedido pago contra a Asaas sandbox (dinheiro de teste). */
   is_sandbox: boolean
+  /** Chamado aberto sozinho quando o serviço foi pago. Null em pedido físico. */
+  service_ticket_id: string | null
 }
 
 /**
@@ -127,6 +134,18 @@ type AdminOrder = {
  * "sandbox"/"all" existem para conferir o que foi testado.
  */
 type OrderEnvironment = "production" | "sandbox" | "all"
+
+/**
+ * Aba da fila. Espelha `OrderKind` do repositório: produto tem pacote a
+ * despachar, serviço se resolve conversando com o cliente no chamado.
+ */
+type OrderKind = "all" | "product" | "service"
+
+const KIND_TABS: { value: OrderKind; label: string; icon: React.ElementType }[] = [
+  { value: "all", label: "Todos", icon: Package },
+  { value: "product", label: "Produtos", icon: Truck },
+  { value: "service", label: "Serviços", icon: Wrench },
+]
 
 const ENVIRONMENT_FILTERS: { value: OrderEnvironment; label: string }[] = [
   { value: "production", label: "Produção" },
@@ -160,21 +179,10 @@ type OrderCustomer = {
   email: string | null
 }
 
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  pending: "Aguardando pagamento",
-  paid: "Pago",
-  awaiting_shipping_info: "Aguardando dados de entrega",
-  shipped: "Enviado",
-  delivered: "Entregue",
-  cancelled: "Cancelado",
-  refunded: "Reembolsado",
-  expired: "Expirado",
-}
-
 const STATUS_STYLE: Record<OrderStatus, string> = {
   pending: "bg-amber-500/15 text-amber-400",
   paid: "bg-emerald-500/15 text-emerald-400",
-  awaiting_shipping_info: "bg-blue-500/15 text-blue-300",
+  awaiting_shipping_info: "bg-amber-500/15 text-amber-400",
   shipped: "bg-violet-500/15 text-violet-300",
   delivered: "bg-teal-500/15 text-teal-300",
   cancelled: "bg-muted text-muted-foreground",
@@ -182,10 +190,15 @@ const STATUS_STYLE: Record<OrderStatus, string> = {
   expired: "bg-orange-500/15 text-orange-400",
 }
 
-/** Próxima etapa do fluxo pós-venda, ou null quando o pedido não está mais nele. */
+/**
+ * Próxima etapa que o ADMIN marca, ou undefined quando não há nenhuma.
+ *
+ * `awaiting_shipping_info` não tem: quem destrava é o cliente informando o
+ * endereço, e o banco passa o pedido para `paid` ("Pedido feito") sozinho
+ * (ver 20261206000002_order_shipping_stage_auto.sql).
+ */
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
-  paid: "awaiting_shipping_info",
-  awaiting_shipping_info: "shipped",
+  paid: "shipped",
   shipped: "delivered",
 }
 
@@ -210,7 +223,7 @@ const STATUS_FILTER_ICON_STYLE: Record<OrderStatus | "all", string> = {
   all: "bg-primary/15 text-primary",
   pending: "bg-amber-500/15 text-amber-400",
   paid: "bg-emerald-500/15 text-emerald-400",
-  awaiting_shipping_info: "bg-blue-500/15 text-blue-300",
+  awaiting_shipping_info: "bg-amber-500/15 text-amber-400",
   shipped: "bg-violet-500/15 text-violet-300",
   delivered: "bg-teal-500/15 text-teal-300",
   cancelled: "bg-muted-foreground/15 text-muted-foreground",
@@ -221,8 +234,8 @@ const STATUS_FILTER_ICON_STYLE: Record<OrderStatus | "all", string> = {
 const STATUS_FILTERS: Array<{ value: OrderStatus | "all"; label: string; icon: React.ElementType }> = [
   { value: "all", label: "Todos", icon: Package },
   { value: "pending", label: "Aguardando pagamento", icon: Clock },
-  { value: "paid", label: "Pago", icon: CheckCircle2 },
-  { value: "awaiting_shipping_info", label: "Aguardando dados", icon: Clock },
+  { value: "awaiting_shipping_info", label: "Aguardando dados", icon: MapPinOff },
+  { value: "paid", label: "Pedido feito", icon: CheckCircle2 },
   { value: "shipped", label: "Enviado", icon: Truck },
   { value: "delivered", label: "Entregue", icon: PackageCheck },
   { value: "cancelled", label: "Cancelado", icon: Ban },
@@ -259,10 +272,10 @@ function formatDateShort(value: string): string {
   return fromDateInputValue(value).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" })
 }
 
-function StatusBadge({ status }: { status: OrderStatus }) {
+function StatusBadge({ order }: { order: Pick<AdminOrder, "status" | "requires_shipping_address"> }) {
   return (
-    <Badge variant="secondary" className={cn("text-[10px]", STATUS_STYLE[status])}>
-      {STATUS_LABEL[status]}
+    <Badge variant="secondary" className={cn("text-[10px]", STATUS_STYLE[order.status])}>
+      {orderStatusLabel(order.status, order.requires_shipping_address)}
     </Badge>
   )
 }
@@ -599,6 +612,8 @@ export default function AdminOrdersPage() {
   // pagamento de teste e não são trabalho a fazer — mas continuam no banco,
   // acessíveis trocando este seletor.
   const [environment, setEnvironment] = useState<OrderEnvironment>("production")
+  // Aba, não filtro: "Limpar filtros" não mexe nela.
+  const [kind, setKind] = useState<OrderKind>("all")
   const [page, setPage] = useState(1)
 
   const [manageOrder, setManageOrder] = useState<AdminOrder | null>(null)
@@ -614,8 +629,9 @@ export default function AdminOrdersPage() {
       if (customerFilter?.userId) params.set("userId", customerFilter.userId)
       if (dateFrom) params.set("dateFrom", new Date(dateFrom).toISOString())
       if (dateTo) params.set("dateTo", new Date(`${dateTo}T23:59:59.999`).toISOString())
-      if (missingShippingOnly) params.set("missingShipping", "1")
+      if (missingShippingOnly && kind !== "service") params.set("missingShipping", "1")
       params.set("environment", environment)
+      if (kind !== "all") params.set("kind", kind)
       params.set("page", String(page))
       params.set("pageSize", String(PAGE_SIZE))
 
@@ -637,7 +653,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, page])
+  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, kind, page])
 
   useEffect(() => {
     const timeout = setTimeout(load, userQuery ? 350 : 0)
@@ -647,7 +663,7 @@ export default function AdminOrdersPage() {
   // Qualquer mudança de filtro volta pra primeira página.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment])
+  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, kind])
 
   // Trocar de ambiente invalida o cliente escolhido: ele pode não ter pedido
   // nenhum do outro lado, e a fila voltaria vazia sem explicação.
@@ -679,6 +695,17 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-6">
+      <Tabs value={kind} onValueChange={(value) => setKind(value as OrderKind)}>
+        <TabsList>
+          {KIND_TABS.map(({ value, label, icon: Icon }) => (
+            <TabsTrigger key={value} value={value} className="gap-1.5">
+              <Icon className="size-3.5" />
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
       {/* Filtros */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -775,6 +802,7 @@ export default function AdminOrdersPage() {
               ))}
             </SelectContent>
           </Select>
+          {kind !== "service" && (
           <Button
             type="button"
             variant={missingShippingOnly ? "default" : "outline"}
@@ -789,6 +817,7 @@ export default function AdminOrdersPage() {
             <MapPinOff className="size-3.5" />
             Sem endereço
           </Button>
+          )}
           {hasActiveFilters && (
             <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
               <X className="size-3.5" />
@@ -867,7 +896,7 @@ export default function AdminOrdersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-col items-start gap-1">
-                      <StatusBadge status={order.status} />
+                      <StatusBadge order={order} />
                       {order.payment_method === "aura" && (
                         <span
                           title="Resgate da Central de Aura: pago com Aura, sem cobrança em dinheiro"
@@ -884,6 +913,15 @@ export default function AdminOrdersPage() {
                         >
                           <AlertCircle className="size-2.5" strokeWidth={2.5} />
                           SEM ESTOQUE
+                        </span>
+                      )}
+                      {!order.requires_shipping_address && (
+                        <span
+                          title="Serviço/item digital: sem entrega, o atendimento é combinado no chamado de suporte"
+                          className="inline-flex items-center gap-1 rounded-md bg-cyan-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-cyan-400"
+                        >
+                          <Wrench className="size-2.5" strokeWidth={2.5} />
+                          SERVIÇO
                         </span>
                       )}
                       {isMissingShippingAddress(order) && (
@@ -1049,7 +1087,7 @@ function OrderManageDialog({
         tracking_code: trackingCode.trim() || order.tracking_code,
         carrier: carrier.trim() || order.carrier,
       })
-      toast.success(`Pedido marcado como "${STATUS_LABEL[next]}"`, { description: `#${orderNumber(order.id)}` })
+      toast.success(`Pedido marcado como "${orderStatusLabel(next, order.requires_shipping_address)}"`, { description: `#${orderNumber(order.id)}` })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao atualizar pedido"
       toast.error("Erro ao atualizar pedido", { description: message })
@@ -1133,7 +1171,7 @@ function OrderManageDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Pedido #{orderNumber(order.id)}
-            <StatusBadge status={order.status} />
+            <StatusBadge order={order} />
           </DialogTitle>
           <DialogDescription>Criado em {formatDateTime(order.created_at)}</DialogDescription>
         </DialogHeader>
@@ -1186,9 +1224,26 @@ function OrderManageDialog({
               Endereço de entrega
             </p>
             {!order.requires_shipping_address ? (
-              <p className="text-xs text-muted-foreground">
-                Pedido de serviço/item digital: não precisa de endereço de entrega.
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Pedido de serviço/item digital: não precisa de endereço de entrega.
+                </p>
+                {order.service_ticket_id ? (
+                  <Button asChild size="sm" variant="outline" className="gap-1.5">
+                    <RouteLink href={`/admin/suporte/${order.service_ticket_id}`}>
+                      <LifeBuoy className="size-3.5" />
+                      Abrir chamado do atendimento
+                    </RouteLink>
+                  </Button>
+                ) : (
+                  REFUNDABLE_STATUSES.includes(order.status) && (
+                    <p className="text-xs text-muted-foreground">
+                      Sem chamado vinculado (pedido de convidado ou pago antes da abertura
+                      automática). Combine o atendimento pelo e-mail do cliente.
+                    </p>
+                  )
+                )}
+              </div>
             ) : order.shipping_address ? (
               <>
                 <p className="text-sm text-foreground">{order.shipping_address.recipient}</p>
@@ -1300,6 +1355,20 @@ function OrderManageDialog({
 
           <Separator />
 
+          {/* Pago sem endereço: não há botão, a pendência é do cliente. */}
+          {order.status === "awaiting_shipping_info" && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Próxima etapa
+              </p>
+              <p className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+                <MapPinOff className="mt-px size-3.5 shrink-0" />
+                O cliente ainda não informou o endereço de entrega. Assim que ele preencher em Meus
+                Pedidos, o pedido passa sozinho para &quot;Pedido feito&quot;.
+              </p>
+            </div>
+          )}
+
           {/* Ações de status */}
           {next && (
             <div className="space-y-3">
@@ -1341,9 +1410,14 @@ function OrderManageDialog({
                 }
                 className="w-full gap-2"
               >
-                <PackageCheck className="size-4" />
-                {advancing ? "Salvando..." : `Marcar como "${STATUS_LABEL[next]}"`}
+                {next === "shipped" ? <Truck className="size-4" /> : <PackageCheck className="size-4" />}
+                {advancing ? "Salvando..." : `Marcar como "${orderStatusLabel(next, order.requires_shipping_address)}"`}
               </Button>
+              {order.status === "shipped" && (
+                <p className="text-[11px] text-muted-foreground">
+                  O cliente também pode fechar o pedido em Meus Pedidos, pelo botão &quot;Já recebi meu produto&quot;.
+                </p>
+              )}
             </div>
           )}
 

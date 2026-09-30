@@ -1,7 +1,7 @@
 "use client"
 
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { RouteLink } from "@/components/ui/route-link"
+import { usePathname, useRouter } from "next/navigation"
 import {
   AppWindow,
   BarChart2,
@@ -33,7 +33,8 @@ import {
   Users,
   Wrench,
 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
 
 import { AuthUser } from "@/components/auth/auth-user"
 import { SunanoLogo } from "@/components/ui/SunanoLogo"
@@ -54,7 +55,7 @@ interface NavItem {
   permission?: AdminPermissionKey
   requiresWebMaster?: boolean
   children?: NavItem[]
-  /** Contador exibido como pill ao lado do label — hoje só "Suporte" (chamados aguardando resposta). */
+  /** Contador exibido como pill ao lado do label (chamados aguardando resposta, pedidos pagos, cadastros). */
   badgeCount?: number
 }
 
@@ -72,9 +73,13 @@ function SectionLabel({ label, collapsed }: { label: string; collapsed: boolean 
   )
 }
 
+/** Intervalo de atualização dos badges (pedidos pagos, suporte, cadastros). */
+const BADGE_REFRESH_MS = 60_000
+
 export function AdminSidebar() {
   const t = useT()
   const pathname = usePathname()
+  const router = useRouter()
   const { adminCollapsed, isAdminMobileOpen, setAdminMobileOpen } = useSidebar()
 
   // Mesmo motivo do PublicSidebar: o colapso é do desktop, o drawer mobile é
@@ -86,6 +91,7 @@ export function AdminSidebar() {
   const [expandedHref, setExpandedHref] = useState<string | null>(null)
   const [supportAwaitingCount, setSupportAwaitingCount] = useState(0)
   const [peripheralRequestsPendingCount, setPeripheralRequestsPendingCount] = useState(0)
+  const [paidOrdersAwaitingCount, setPaidOrdersAwaitingCount] = useState(0)
 
   const navGroups: NavGroup[] = [
     {
@@ -139,7 +145,7 @@ export function AdminSidebar() {
             { href: "/admin/store/hero",    label: "Hero",     icon: PanelTop,             permission: "store_read" },
             { href: "/admin/store/commerce-bar", label: "Barra comercial", icon: Megaphone, permission: "store_read" },
             { href: "/admin/store/banners", label: "Banners",  icon: GalleryHorizontalEnd, permission: "store_read" },
-            { href: "/admin/store/orders",  label: "Pedidos",  icon: Package,              permission: "store_read" },
+            { href: "/admin/store/orders",  label: "Pedidos",  icon: Package,              permission: "store_read", badgeCount: paidOrdersAwaitingCount },
             { href: "/admin/suporte",       label: "Suporte",  icon: LifeBuoy,              permission: "support_read", badgeCount: supportAwaitingCount },
           ],
         },
@@ -175,30 +181,73 @@ export function AdminSidebar() {
     },
   ]
 
+  // Último total de pedidos pagos visto, para avisar quando entra um novo.
+  // `null` até a primeira carga: abrir o painel com pedidos já pendentes não
+  // é "novo pedido", o badge basta.
+  const lastPaidOrdersCount = useRef<number | null>(null)
+
   useEffect(() => {
     let mounted = true
-    async function loadProfile() {
+    async function loadProfile(initial: boolean) {
       try {
         const res = await fetch("/api/admin/profile")
         if (!res.ok) {
-          if (mounted) { setProfile(null); setIsLoadingProfile(false) }
+          // Só a primeira carga decide o menu. Uma falha de refresh não pode
+          // esconder a sidebar inteira de quem já está usando o painel.
+          if (mounted && initial) { setProfile(null); setIsLoadingProfile(false) }
           return
         }
         const data = (await res.json().catch(() => null)) as
-          | { profile?: AdminProfile; supportAwaitingCount?: number; peripheralRequestsPendingCount?: number }
+          | {
+              profile?: AdminProfile
+              supportAwaitingCount?: number
+              peripheralRequestsPendingCount?: number
+              paidOrdersAwaitingCount?: number
+            }
           | null
         if (!mounted) return
         setProfile(data?.profile ?? null)
         setSupportAwaitingCount(data?.supportAwaitingCount ?? 0)
         setPeripheralRequestsPendingCount(data?.peripheralRequestsPendingCount ?? 0)
+
+        const paidCount = data?.paidOrdersAwaitingCount ?? 0
+        const previous = lastPaidOrdersCount.current
+        if (previous !== null && paidCount > previous) {
+          const added = paidCount - previous
+          toast.success(added === 1 ? "Novo pedido pago" : `${added} novos pedidos pagos`, {
+            description: "Confira em Loja › Pedidos.",
+            action: { label: "Ver pedidos", onClick: () => router.push("/admin/store/orders") },
+            duration: 10_000,
+          })
+        }
+        lastPaidOrdersCount.current = paidCount
+        setPaidOrdersAwaitingCount(paidCount)
       } catch {
-        if (mounted) setProfile(null)
+        if (mounted && initial) setProfile(null)
       } finally {
-        if (mounted) setIsLoadingProfile(false)
+        if (mounted && initial) setIsLoadingProfile(false)
       }
     }
-    loadProfile()
-    return () => { mounted = false }
+    loadProfile(true)
+
+    // Pagamento chega por webhook, sem ninguém no painel ter feito nada: sem
+    // reconsultar, o badge só mudava ao recarregar a página, e a venda era
+    // descoberta quando o cliente abria o suporte. Aba em segundo plano não
+    // consulta; ao voltar para ela, atualiza na hora.
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") loadProfile(false)
+    }, BADGE_REFRESH_MS)
+    function onVisible() {
+      if (document.visibilityState === "visible") loadProfile(false)
+    }
+    document.addEventListener("visibilitychange", onVisible)
+
+    return () => {
+      mounted = false
+      clearInterval(interval)
+      document.removeEventListener("visibilitychange", onVisible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const isActive = (href: string) => {
@@ -336,7 +385,7 @@ export function AdminSidebar() {
                                       const ChildIcon = child.icon
                                       const childActiveState = child.href === activeChild
                                       return (
-                                        <Link
+                                        <RouteLink
                                           key={child.href}
                                           href={child.href}
                                           onClick={close}
@@ -354,7 +403,7 @@ export function AdminSidebar() {
                                               {child.badgeCount}
                                             </span>
                                           )}
-                                        </Link>
+                                        </RouteLink>
                                       )
                                     })}
                                   </div>
@@ -373,7 +422,7 @@ export function AdminSidebar() {
                           (other) => other !== item && other.href.length > item.href.length && isActive(other.href)
                         )
                       return (
-                        <Link
+                        <RouteLink
                           key={item.href}
                           href={item.href}
                           onClick={close}
@@ -392,7 +441,7 @@ export function AdminSidebar() {
                               {item.badgeCount}
                             </span>
                           )}
-                        </Link>
+                        </RouteLink>
                       )
                     })}
                   </div>
@@ -405,7 +454,7 @@ export function AdminSidebar() {
           {!isLoadingProfile && (
             <>
               <SectionLabel label={t.admin.sidebar.actions} collapsed={isCollapsed} />
-              <Link
+              <RouteLink
                 href="/"
                 onClick={close}
                 className={cn(
@@ -415,7 +464,7 @@ export function AdminSidebar() {
               >
                 <Eye className="size-[18px] shrink-0" />
                 <span className={cn(isCollapsed && "hidden")}>{t.admin.sidebar.viewSite}</span>
-              </Link>
+              </RouteLink>
             </>
           )}
         </nav>

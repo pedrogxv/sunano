@@ -3,6 +3,7 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getUserProfiles, searchUserProfiles } from "@/lib/server/repositories/users-repository"
 import { orderNumber } from "@/lib/order-number"
+import { orderOwnerId } from "@/lib/server/repositories/orders-repository"
 import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
 import { signSupportImageUrls } from "@/lib/server/support-media"
 
@@ -246,6 +247,109 @@ export async function createSupportTicket(params: {
   }
 
   return { ok: true, ticketId: ticket.id as string }
+}
+
+/**
+ * Abre o chamado de um pedido de SERVIÇO assim que ele é pago.
+ *
+ * Serviço (mentoria, setup, configuração) não se resolve avançando status:
+ * alguém precisa combinar horário e detalhes com o cliente, e isso levava o
+ * cliente a abrir o suporte por conta própria, que era quando a equipe
+ * descobria a venda. Com o chamado aberto na hora, a conversa já nasce no
+ * lugar certo, amarrada ao pedido, e entra no badge "aguardando admin".
+ *
+ * A mensagem inicial sai em nome do cliente porque `support_messages` não tem
+ * remetente de sistema (`sender_id` é sempre um usuário real). O texto deixa
+ * claro que foi aberto automaticamente.
+ *
+ * Best-effort, igual às notificações: nunca lança. O pagamento já foi
+ * confirmado quando isto roda, e falhar aqui não pode derrubar o 200 que o
+ * webhook devolve à Asaas. Idempotente por `metadata.service_ticket_id`, então
+ * reentrega de webhook não duplica o chamado.
+ */
+export async function openServiceOrderTicket(orderId: string): Promise<void> {
+  try {
+    const db = createSupabaseAdminClient()
+    const { data: order, error } = await db
+      .from("store_orders")
+      .select("id, requires_shipping_address, metadata, items, customer_name, is_sandbox")
+      .eq("id", orderId)
+      .maybeSingle()
+    if (error || !order) {
+      if (error) console.error("[support-repository] openServiceOrderTicket load:", error)
+      return
+    }
+
+    // Pedido com algo para despachar segue o fluxo de envio de sempre.
+    if (order.requires_shipping_address !== false) return
+
+    const metadata = (order.metadata ?? {}) as Record<string, unknown>
+    if (metadata.service_ticket_id) return
+
+    // Chamado é conversa de usuário logado; sem dono não há quem veja.
+    const ownerId = orderOwnerId(metadata)
+    if (!ownerId) return
+
+    const items = (order.items ?? []) as { id?: string; name?: string; quantity?: number }[]
+    const number = orderNumber(order.id)
+    // Sandbox continua abrindo (é como se testa o fluxo), mas marcado para
+    // ninguém da equipe agendar atendimento de um pagamento de mentira.
+    const subject = `${order.is_sandbox ? "[Teste] " : ""}Serviço: pedido #${number}`
+    const itemLines = items.map((item) => `- ${item.quantity ?? 1}x ${item.name ?? "Serviço"}`).join("\n")
+    const body = [
+      `Chamado aberto automaticamente com o pagamento do pedido #${number}.`,
+      itemLines ? `Serviço contratado:\n${itemLines}` : null,
+      "A equipe do Sunano vai responder por aqui para combinar o atendimento.",
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, 4000)
+
+    const profiles = await getUserProfiles([ownerId])
+    const authorName = profiles[ownerId]?.display_name || order.customer_name || "Cliente"
+
+    // Sem o teto de 3 chamados abertos de `createSupportTicket`: o teto existe
+    // contra spam do usuário, e este chamado é consequência de uma compra.
+    const { data: ticket, error: ticketError } = await db
+      .from("support_tickets")
+      .insert({
+        user_id: ownerId,
+        subject,
+        order_id: order.id,
+        product_id: items[0]?.id ?? null,
+      })
+      .select("id")
+      .single()
+    if (ticketError || !ticket) {
+      console.error("[support-repository] openServiceOrderTicket insert ticket:", ticketError)
+      return
+    }
+
+    const { error: messageError } = await db.from("support_messages").insert({
+      ticket_id: ticket.id,
+      sender_type: "user",
+      sender_id: ownerId,
+      sender_name: authorName,
+      body,
+      image_urls: [],
+    })
+    if (messageError) {
+      console.error("[support-repository] openServiceOrderTicket insert message:", messageError)
+      // Mesmo motivo de `createSupportTicket`: ticket sem mensagem é órfão.
+      await db.from("support_tickets").delete().eq("id", ticket.id)
+      return
+    }
+
+    const { error: metadataError } = await db
+      .from("store_orders")
+      .update({ metadata: { ...metadata, service_ticket_id: ticket.id } })
+      .eq("id", order.id)
+    if (metadataError) {
+      console.error("[support-repository] openServiceOrderTicket metadata:", metadataError)
+    }
+  } catch (err) {
+    console.error("[support-repository] openServiceOrderTicket:", err)
+  }
 }
 
 /**

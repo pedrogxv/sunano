@@ -27,6 +27,10 @@ import { cn } from "@/lib/utils"
  * Quem enfeita por fora: o slot do setup passa `header`, o dono passa
  * `actions` (editar/excluir), e o tooltip do catálogo continua sendo
  * responsabilidade de quem usa o card.
+ *
+ * "Meu setup" e "Periféricos favoritos" passam `showDetails={false}`: lá o
+ * card é só foto e nome. Preço e nota ficam para "Meus Reviews", que é onde
+ * a classificação é o assunto.
  */
 
 /** Altura da caixa da foto. Único número a mexer para o card inteiro acompanhar. */
@@ -57,6 +61,8 @@ interface PeripheralMiniCardProps {
   actions?: ReactNode
   /** Link próprio; por padrão vai para a ficha do periférico. */
   href?: string
+  /** `false` esconde a linha de preço e o rodapé de nota. */
+  showDetails?: boolean
   className?: string
 }
 
@@ -83,6 +89,7 @@ export function PeripheralMiniCard({
   header,
   actions,
   href,
+  showDetails = true,
   className,
 }: PeripheralMiniCardProps) {
   const target = href ?? `/perifericos/${buildPeripheralSlug(peripheral.name, peripheral.id)}`
@@ -124,44 +131,48 @@ export function PeripheralMiniCard({
         {peripheral.name}
       </Link>
 
-      <p className="mt-1.5 truncate border-b border-border/60 pb-1.5 text-[11px] text-muted-foreground/80">
-        {priceLabel(peripheral.price)}
-      </p>
-
-      <div className="mt-2 flex items-center gap-2">
-        {/* Quem assina a nota. A foto da pessoa só aparece quando a nota é
-            DELA; quando é a média da comunidade quem assina é o site, senão o
-            card diria que ela deu uma nota que não deu. */}
-        {shownRating != null &&
-          (isOwnRating && author ? (
-            <ProfileAvatar
-              name={author.name}
-              avatarUrl={author.avatarUrl}
-              frame={author.frame}
-              size="sm"
-              wrapperClassName="shrink-0"
-            />
-          ) : (
-            <SunanoIcon
-              className="size-8 shrink-0 rounded-full bg-muted/40 p-0.5"
-              title="Média da comunidade"
-            />
-          ))}
-
-        <div className="min-w-0">
-          {shownRating != null && (
-            <div className="flex items-center gap-1.5">
-              <StarRating value={shownRating} size="sm" className="gap-0" />
-              <span className="text-[11px] font-semibold text-amber-400">
-                {ratingLabel(shownRating)}
-              </span>
-            </div>
-          )}
-          <p className="truncate text-[11px] text-muted-foreground/70">
-            {reviewCountLabel(peripheral.reviews.count)}
+      {showDetails && (
+        <>
+          <p className="mt-1.5 truncate border-b border-border/60 pb-1.5 text-[11px] text-muted-foreground/80">
+            {priceLabel(peripheral.price)}
           </p>
-        </div>
-      </div>
+
+          <div className="mt-2 flex items-center gap-2">
+            {/* Quem assina a nota. A foto da pessoa só aparece quando a nota é
+                DELA; quando é a média da comunidade quem assina é o site, senão o
+                card diria que ela deu uma nota que não deu. */}
+            {shownRating != null &&
+              (isOwnRating && author ? (
+                <ProfileAvatar
+                  name={author.name}
+                  avatarUrl={author.avatarUrl}
+                  frame={author.frame}
+                  size="sm"
+                  wrapperClassName="shrink-0"
+                />
+              ) : (
+                <SunanoIcon
+                  className="size-8 shrink-0 rounded-full bg-muted/40 p-0.5"
+                  title="Média da comunidade"
+                />
+              ))}
+
+            <div className="min-w-0">
+              {shownRating != null && (
+                <div className="flex items-center gap-1.5">
+                  <StarRating value={shownRating} size="sm" className="gap-0" />
+                  <span className="text-[11px] font-semibold text-amber-400">
+                    {ratingLabel(shownRating)}
+                  </span>
+                </div>
+              )}
+              <p className="truncate text-[11px] text-muted-foreground/70">
+                {reviewCountLabel(peripheral.reviews.count)}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
 
       {actions}
     </div>
@@ -173,11 +184,14 @@ export function PeripheralMiniCardEmpty({
   header,
   icon,
   label,
+  showDetails = true,
   className,
 }: {
   header?: ReactNode
   icon: ReactNode
   label: string
+  /** Acompanha o `showDetails` do card cheio, para as alturas baterem. */
+  showDetails?: boolean
   className?: string
 }) {
   return (
@@ -197,8 +211,12 @@ export function PeripheralMiniCardEmpty({
         {icon}
       </div>
       <p className="mt-3 truncate text-sm font-semibold text-muted-foreground/50">{label}</p>
-      <p className="mt-1.5 border-b border-border/40 pb-1.5 text-[11px] text-transparent">&nbsp;</p>
-      <p className="mt-2 truncate text-[11px] text-transparent">&nbsp;</p>
+      {showDetails && (
+        <>
+          <p className="mt-1.5 border-b border-border/40 pb-1.5 text-[11px] text-transparent">&nbsp;</p>
+          <p className="mt-2 truncate text-[11px] text-transparent">&nbsp;</p>
+        </>
+      )}
     </div>
   )
 }

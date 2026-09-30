@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { redirect } from "next/navigation"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -74,7 +74,7 @@ export default async function AdminPeripheralRequestsPage({
     <div className="space-y-6">
       <div className="flex flex-wrap gap-2">
         {filters.map((filter) => (
-          <Link
+          <RouteLink
             key={filter.value}
             href={queueHref(filter.value)}
             className={cn(
@@ -86,7 +86,7 @@ export default async function AdminPeripheralRequestsPage({
           >
             {filter.label}
             <span className="tabular-nums opacity-70">{filter.count}</span>
-          </Link>
+          </RouteLink>
         ))}
       </div>
 
@@ -133,7 +133,7 @@ export default async function AdminPeripheralRequestsPage({
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Button asChild size="sm" variant="outline">
-                      <Link href={`/admin/perifericos/pedidos/${request.id}`}>Ver pedido</Link>
+                      <RouteLink href={`/admin/perifericos/pedidos/${request.id}`}>Ver pedido</RouteLink>
                     </Button>
                   </td>
                 </tr>
@@ -148,12 +148,12 @@ export default async function AdminPeripheralRequestsPage({
             <div className="flex gap-1.5">
               {page > 1 && (
                 <Button asChild size="sm" variant="outline" className="h-8 text-xs">
-                  <Link href={queueHref(status, page - 1)}>Anterior</Link>
+                  <RouteLink href={queueHref(status, page - 1)}>Anterior</RouteLink>
                 </Button>
               )}
               {page < totalPages && (
                 <Button asChild size="sm" variant="outline" className="h-8 text-xs">
-                  <Link href={queueHref(status, page + 1)}>Próxima</Link>
+                  <RouteLink href={queueHref(status, page + 1)}>Próxima</RouteLink>
                 </Button>
               )}
             </div>

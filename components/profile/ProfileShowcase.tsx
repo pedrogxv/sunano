@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { Eye, Settings, Trophy } from "lucide-react"
 
 import { FollowButton } from "@/components/people/FollowButton"
@@ -56,22 +56,22 @@ export function ProfileShowcase({
 }: ProfileShowcaseProps) {
   const actionButton = isOwner ? (
     <div className="flex shrink-0 items-center gap-2">
-      <Link
+      <RouteLink
         href="/perfil"
         className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
       >
         <Settings className="size-3.5" />
         Editar perfil
-      </Link>
+      </RouteLink>
       {/* O editor da tierlist pessoal (VIP) mora na aba "Minha Tierlist" de
           /tierlist agora — não mais embutido no perfil. */}
-      <Link
+      <RouteLink
         href="/tierlist/pessoal"
         className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
       >
         <Trophy className="size-3.5" />
         Minha tierlist
-      </Link>
+      </RouteLink>
     </div>
   ) : (
     <div className="flex shrink-0 items-center gap-2">
@@ -80,13 +80,13 @@ export function ProfileShowcase({
           Só aparece quando há o que ver — mandar o visitante pra um board
           vazio é pior do que não oferecer o caminho. */}
       {profile.tierlist_item_count > 0 && (
-        <Link
+        <RouteLink
           href={`${profilePath(profile.display_slug ?? profile.id)}/tierlist`}
           className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
         >
           <Trophy className="size-3.5" />
           Ver tierlist
-        </Link>
+        </RouteLink>
       )}
       <FollowButton
         userId={profile.id}
@@ -98,8 +98,8 @@ export function ProfileShowcase({
   )
 
   // O dono do perfil, para a foto que acompanha a nota dele no rodapé dos
-  // cards de periférico (ver `PeripheralMiniCard`). Montado uma vez: as três
-  // seções desenham o mesmo avatar dezenas de vezes.
+  // cards de "Meus Reviews" (ver `PeripheralMiniCard`). Montado uma vez: a
+  // seção desenha o mesmo avatar dezenas de vezes.
   const cardAuthor = {
     name: profile.display_name,
     avatarUrl: profile.avatar_url,
@@ -226,16 +226,12 @@ export function ProfileShowcase({
 
         <SetupGrid
           setup={profile.setup}
-          author={cardAuthor}
-          ownRatings={profile.own_review_ratings}
           isOwner={isOwner}
         />
 
         <FavoritosGrid
           favorites={profile.favorites}
           tier={profile.account_tier}
-          author={cardAuthor}
-          ownRatings={profile.own_review_ratings}
           isOwner={isOwner}
         />
 

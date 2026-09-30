@@ -71,6 +71,27 @@ function withEnvironment<T>(query: T, environment: OrderEnvironment): T {
 }
 
 /**
+ * Recorte por tipo de pedido na fila do admin. Espelha o snapshot
+ * `requires_shipping_address`: "product" = tem algo para despachar,
+ * "service" = serviço/digital, sem entrega. Pedido misto (um item físico e um
+ * serviço) é "product", porque ainda tem pacote a enviar.
+ */
+export type OrderKind = "all" | "product" | "service"
+
+export const ORDER_KINDS: OrderKind[] = ["all", "product", "service"]
+
+/** Normaliza um valor vindo de query string no recorte de tipo. */
+export function parseOrderKind(value: string | null | undefined): OrderKind {
+  return ORDER_KINDS.includes(value as OrderKind) ? (value as OrderKind) : "all"
+}
+
+/** `requires_shipping_address` que corresponde ao tipo, ou null para "todos". */
+function requiresShippingFor(kind: OrderKind): boolean | null {
+  if (kind === "all") return null
+  return kind === "product"
+}
+
+/**
  * Janela de expiração do PIX. A Asaas devolve um `expirationDate` de longa
  * validade no QR code, então este valor é o prazo real que a loja impõe:
  * usado no checkout de cartão (`minutesToExpire`) e aqui como fallback ao
@@ -90,13 +111,24 @@ export const PIX_EXPIRATION_MINUTES = Number(process.env.PIX_EXPIRATION_MINUTES)
 export const PREORDER_PIX_EXPIRATION_MINUTES =
   Number(process.env.PREORDER_PIX_EXPIRATION_MINUTES) || 24 * 60
 
-/** Sequência válida do fluxo pós-venda — só avança, nunca pula etapa. */
+/**
+ * Sequência do fluxo pós-venda de produto físico: só avança, nunca pula etapa.
+ *
+ * Os dois primeiros degraus não são do admin: o trigger
+ * `trg_store_orders_shipping_stage` (20261206000002) põe o pedido pago em
+ * `awaiting_shipping_info` enquanto falta endereço e em `paid` ("Pedido
+ * feito") quando o endereço existe. O admin só dá `shipped` e `delivered`, e
+ * o cliente também pode dar `delivered` ("Já recebi").
+ */
 export const ORDER_FULFILLMENT_FLOW: OrderStatus[] = [
-  "paid",
   "awaiting_shipping_info",
+  "paid",
   "shipped",
   "delivered",
 ]
+
+/** Etapas que o admin marca na mão. As anteriores são decididas pelo endereço. */
+export const ADMIN_ADVANCE_STATUSES = ["shipped", "delivered"] as const satisfies readonly OrderStatus[]
 
 /**
  * Fluxo de um pedido SEM entrega (serviço/digital, `requires_shipping` false).
@@ -387,6 +419,12 @@ export type AdminOrderRow = {
   requires_shipping_address: boolean
   /** true = pagamento de teste (ASAAS_ENV=sandbox). Marcado na linha da fila. */
   is_sandbox: boolean
+  /**
+   * Chamado de suporte aberto sozinho quando o pedido de serviço foi pago
+   * (`metadata.service_ticket_id`, ver `openServiceOrderTicket`). Null em
+   * pedido físico e em serviço pago antes de a abertura automática existir.
+   */
+  service_ticket_id: string | null
 }
 
 const ADMIN_ORDER_COLUMNS =
@@ -440,6 +478,8 @@ export async function listOrdersForAdmin(filters?: {
   missingShipping?: boolean
   /** Recorte de ambiente do gateway. Sem valor = só produção. */
   environment?: OrderEnvironment
+  /** Produtos (com entrega) ou serviços (sem entrega). Sem valor = os dois. */
+  kind?: OrderKind
   page?: number
   pageSize?: number
 }): Promise<AdminOrderListResult> {
@@ -453,6 +493,8 @@ export async function listOrdersForAdmin(filters?: {
   )
 
   if (filters?.status) query = query.eq("status", filters.status)
+  const requiresShipping = requiresShippingFor(filters?.kind ?? "all")
+  if (requiresShipping !== null) query = query.eq("requires_shipping_address", requiresShipping)
   if (filters?.userQuery?.trim()) {
     const term = escapeOrFilterValue(escapeLikePattern(filters.userQuery.trim()))
     query = query.or(`customer_name.ilike."%${term}%",customer_email.ilike."%${term}%"`)
@@ -520,6 +562,7 @@ export async function listOrdersForAdmin(filters?: {
       shipping_address: mapShippingAddress(row),
       requires_shipping_address: row.requires_shipping_address !== false,
       is_sandbox: row.is_sandbox === true,
+      service_ticket_id: (row.metadata?.service_ticket_id as string | undefined) ?? null,
     }
   })
 
@@ -536,13 +579,18 @@ export type OrderStatusCounts = Record<OrderStatus | "all", number>
  * número de status, não com o total de pedidos.
  */
 export async function countOrdersByStatus(
-  environment: OrderEnvironment = "production"
+  environment: OrderEnvironment = "production",
+  kind: OrderKind = "all"
 ): Promise<OrderStatusCounts> {
   const db = createSupabaseAdminClient()
+  const requiresShipping = requiresShippingFor(kind)
   const { data, error } = await db.rpc("count_orders_by_status", {
     // `null` = os dois ambientes; a RPC trata assim (ver
     // 20261013000000_store_orders_sandbox_flag.sql).
     p_is_sandbox: environment === "all" ? null : environment === "sandbox",
+    // Só vai quando há recorte: sem o argumento, a chamada casa com a
+    // assinatura antiga e continua funcionando antes de 20261206000000 subir.
+    ...(requiresShipping === null ? {} : { p_requires_shipping: requiresShipping }),
   })
   const counts: OrderStatusCounts = {
     all: 0,
@@ -564,6 +612,30 @@ export async function countOrdersByStatus(
     counts.all += Number(row.count)
   }
   return counts
+}
+
+/**
+ * Pedidos pagos que ainda esperam o admin: separar/despachar o produto ou
+ * entrar em contato para o serviço. É o badge de "Pedidos" na sidebar do
+ * admin, e é o que faltava para ninguém descobrir uma venda pelo suporte.
+ *
+ * Conta só `paid` de produção: é o "Pedido feito" (produto com endereço) e o
+ * serviço pago. `awaiting_shipping_info` espera o CLIENTE, não a equipe;
+ * `shipped` em diante já foi tocado pelo admin; e pedido de sandbox não é
+ * trabalho a fazer.
+ */
+export async function countPaidOrdersAwaitingAction(): Promise<number> {
+  const db = createSupabaseAdminClient()
+  const { count, error } = await db
+    .from("store_orders")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "paid")
+    .eq("is_sandbox", false)
+  if (error) {
+    console.error("[orders-repository] countPaidOrdersAwaitingAction:", error)
+    return 0
+  }
+  return count ?? 0
 }
 
 export type OrderCustomer = {
@@ -660,7 +732,8 @@ export type RepositoryResult = { ok: true } | { ok: false; error: string; status
 /**
  * Avança o status de um pedido para a próxima etapa válida do fluxo
  * pós-venda (`ORDER_FULFILLMENT_FLOW`). Só aceita avançar exatamente uma
- * etapa a partir do status atual — nunca pular, nunca regredir.
+ * etapa a partir do status atual (nunca pular, nunca regredir), e só para
+ * as etapas do admin (`ADMIN_ADVANCE_STATUSES`).
  */
 export async function advanceOrderStatus(
   id: string,
@@ -668,6 +741,12 @@ export async function advanceOrderStatus(
   extra?: { trackingCode?: string; carrier?: string },
   adminId?: string | null
 ): Promise<RepositoryResult> {
+  // "Aguardando dados de entrega" e "Pedido feito" saem do endereço (trigger
+  // no banco). Marcá-los na mão criaria um status que contradiz o dado.
+  if (!(ADMIN_ADVANCE_STATUSES as readonly OrderStatus[]).includes(nextStatus)) {
+    return { ok: false, error: "Esta etapa é definida automaticamente pelo endereço de entrega.", status: 400 }
+  }
+
   const db = createSupabaseAdminClient()
 
   const { data: existing } = await db
@@ -684,10 +763,8 @@ export async function advanceOrderStatus(
   // descarta qualquer endereço enviado e a rota de endereço o recusa, então
   // ele NUNCA terá `shipping_*` preenchido. Como `shipped` exige endereço
   // (trava logo abaixo) e o fluxo físico obriga a passar por lá para chegar a
-  // `delivered`, esse pedido ficaria preso para sempre em
-  // `awaiting_shipping_info` — um estado que, ainda por cima, diz aguardar
-  // dados de entrega que ele não deve pedir. Por isso ele tem fluxo próprio:
-  // do pagamento direto para concluído.
+  // `delivered`, esse pedido ficaria preso para sempre em `paid`. Por isso
+  // ele tem fluxo próprio: do pagamento direto para concluído.
   const requiresShipping = existing.requires_shipping_address !== false
   const flow = requiresShipping ? ORDER_FULFILLMENT_FLOW : ORDER_DIGITAL_FULFILLMENT_FLOW
 
@@ -708,6 +785,13 @@ export async function advanceOrderStatus(
 
   if (currentIndex === -1) {
     return { ok: false, error: "Este pedido não está no fluxo de pós-venda.", status: 400 }
+  }
+  if (currentStatus === "awaiting_shipping_info") {
+    return {
+      ok: false,
+      error: "O cliente ainda não informou o endereço de entrega; o pedido avança sozinho quando ele preencher.",
+      status: 400,
+    }
   }
   if (nextIndex !== currentIndex + 1) {
     return {
@@ -742,7 +826,7 @@ export async function advanceOrderStatus(
 
   const ownerId = orderOwnerId(existing.metadata as Record<string, unknown> | null)
   if (ownerId) {
-    await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: nextStatus })
+    await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: nextStatus, requiresShipping })
   }
 
   // Discord fica FORA do `if (ownerId)`: um pedido de convidado não tem quem
@@ -1353,9 +1437,10 @@ const SHIPPING_EDITABLE_STATUSES: OrderStatus[] = ["pending", "paid", "awaiting_
  * comando é o que impede que um id de pedido adivinhado/vazado seja
  * sobrescrito por outra conta.
  *
- * Efeito colateral deliberado: um pedido `paid` que ganha endereço avança
- * para `awaiting_shipping_info` — é exatamente o significado desse status na
- * fila do admin ("tem endereço, falta despachar"). Pedido ainda `pending`
+ * Efeito colateral deliberado: um pedido `awaiting_shipping_info` que ganha
+ * endereço vira `paid` ("Pedido feito"). Quem garante é o trigger
+ * `trg_store_orders_shipping_stage`, pelo `shipping_address_filled_at`; o
+ * status explícito aqui só deixa a intenção visível. Pedido ainda `pending`
  * não muda de status: o pagamento é que manda.
  */
 export async function setOrderShippingAddress(
@@ -1404,7 +1489,7 @@ export async function setOrderShippingAddress(
     ...shippingAddressColumns(address),
     shipping_address_filled_at: new Date().toISOString(),
   }
-  if (currentStatus === "paid") update.status = "awaiting_shipping_info"
+  if (currentStatus === "awaiting_shipping_info") update.status = "paid"
 
   const { error } = await db
     .from("store_orders")
@@ -1417,21 +1502,70 @@ export async function setOrderShippingAddress(
     return { ok: false, error: "Não foi possível salvar o endereço de entrega.", status: 500 }
   }
 
+  // Sem notificação para o cliente: foi ele mesmo que acabou de preencher, e
+  // a tela já mostra o status novo.
   if (update.status) {
-    await notifyOrderStatusChange({
-      userId,
-      orderId,
-      status: "awaiting_shipping_info",
-    })
     // O card do Discord recarrega o pedido do banco, então já sai com o
     // endereço que acabou de ser gravado — é exatamente o que o admin
     // precisa ver para postar o pacote.
     await notifyDiscordOrderEvent({
       orderId,
-      status: "awaiting_shipping_info",
+      status: "paid",
       actor: "cliente",
+      note: "Endereço de entrega informado pelo cliente.",
     })
   }
+
+  return { ok: true }
+}
+
+/**
+ * "Já recebi meu produto": o próprio cliente fecha o pedido enviado.
+ *
+ * Só a partir de `shipped`: confirmar recebimento de algo que nem saiu do
+ * armazém não faz sentido e tiraria o pedido da fila do admin. A posse e o
+ * status de origem vão no próprio UPDATE (mesmo motivo de
+ * `setOrderShippingAddress`): dois cliques, ou o admin marcando ao mesmo
+ * tempo, resultam em uma transição só.
+ */
+export async function confirmOrderDelivered(orderId: string, userId: string): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: updated, error } = await db
+    .from("store_orders")
+    .update({ status: "delivered", delivered_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .eq("metadata->>user_id", userId)
+    .eq("status", "shipped")
+    .eq("requires_shipping_address", true)
+    .select("id")
+    .maybeSingle()
+
+  if (error) {
+    console.error("[orders-repository] confirmOrderDelivered:", error)
+    return { ok: false, error: "Não foi possível confirmar o recebimento.", status: 500 }
+  }
+
+  if (!updated) {
+    // Diferencia só o que é do próprio usuário: "não existe" e "não é seu"
+    // seguem com a mesma resposta.
+    const { data: existing } = await db
+      .from("store_orders")
+      .select("status")
+      .eq("id", orderId)
+      .eq("metadata->>user_id", userId)
+      .maybeSingle()
+    if (!existing) return { ok: false, error: "Pedido não encontrado.", status: 404 }
+    if (existing.status === "delivered") return { ok: true }
+    return { ok: false, error: "Só dá para confirmar o recebimento de um pedido já enviado.", status: 400 }
+  }
+
+  await notifyDiscordOrderEvent({
+    orderId,
+    status: "delivered",
+    actor: "cliente",
+    note: "Recebimento confirmado pelo cliente.",
+  })
 
   return { ok: true }
 }

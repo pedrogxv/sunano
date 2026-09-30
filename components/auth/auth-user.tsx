@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { Bookmark, Crown, Handshake, LayoutDashboard, LifeBuoy, LogIn, LogOut, MoreVertical, PackageSearch, QrCode, Settings, ShieldCheck, User } from "lucide-react"
 
 import { useState } from "react"
@@ -126,7 +127,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
       )
     }
     return (
-      <Link
+      <RouteLink
         href={loginHref}
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground",
@@ -135,7 +136,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
       >
         <LogIn className="size-[18px] shrink-0" />
         <span className={cn(isCollapsed && "hidden")}>Login</span>
-      </Link>
+      </RouteLink>
     )
   }
 
@@ -247,7 +248,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
         {variant === "public" && pendingOrder && (
           <>
             <DropdownMenuItem asChild>
-              <Link
+              <RouteLink
                 href={pendingPaymentHref(pendingOrder)}
                 className="flex cursor-pointer items-center gap-2.5 rounded-sm bg-amber-500/10 focus:bg-amber-500/20 focus:text-foreground"
               >
@@ -259,7 +260,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
                     {pendingOrder.payment_method === "credit_card" ? "concluir com cartão" : "concluir com PIX"}
                   </span>
                 </div>
-              </Link>
+              </RouteLink>
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-border" />
           </>
@@ -275,35 +276,35 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
         {variant === "public" ? (
           <>
             <DropdownMenuItem asChild>
-              <Link
+              <RouteLink
                 href={myProfileHref}
                 className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
               >
                 <User className="size-4 text-muted-foreground" />
                 {t.auth.myProfile}
-              </Link>
+              </RouteLink>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link
+              <RouteLink
                 href="/conta"
                 className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
               >
                 <ShieldCheck className="size-4 text-muted-foreground" />
                 {t.auth.accountSettings}
-              </Link>
+              </RouteLink>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link
+              <RouteLink
                 href="/conta/pedidos"
                 className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
               >
                 <PackageSearch className="size-4 text-muted-foreground" />
                 {t.auth.myOrders}
-              </Link>
+              </RouteLink>
             </DropdownMenuItem>
             {authUser?.hasSupportTicket && (
               <DropdownMenuItem asChild>
-                <Link
+                <RouteLink
                   href="/conta/suporte"
                   className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
                 >
@@ -312,60 +313,60 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
                   {Boolean(authUser.supportTicketsAwaitingMe) && (
                     <span className="size-2 shrink-0 rounded-full bg-amber-500" />
                   )}
-                </Link>
+                </RouteLink>
               </DropdownMenuItem>
             )}
             <DropdownMenuItem asChild>
-              <Link
+              <RouteLink
                 href="/forum/salvos"
                 className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
               >
                 <Bookmark className="size-4 text-muted-foreground" />
                 {t.auth.savedPosts}
-              </Link>
+              </RouteLink>
             </DropdownMenuItem>
             {showAffiliates && (
               <DropdownMenuItem asChild>
-                <Link
+                <RouteLink
                   href="/afiliados"
                   className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
                 >
                   <Handshake className="size-4 text-muted-foreground" />
                   {t.auth.affiliates}
-                </Link>
+                </RouteLink>
               </DropdownMenuItem>
             )}
             {isAdmin && (
               <DropdownMenuItem asChild>
-                <Link
+                <RouteLink
                   href="/admin"
                   className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
                 >
                   <LayoutDashboard className="size-4 text-muted-foreground" />
                   {t.auth.adminPanel}
-                </Link>
+                </RouteLink>
               </DropdownMenuItem>
             )}
           </>
         ) : (
           <>
             <DropdownMenuItem asChild>
-              <Link
+              <RouteLink
                 href={myProfileHref}
                 className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
               >
                 <User className="size-4 text-muted-foreground" />
                 {t.auth.myProfile}
-              </Link>
+              </RouteLink>
             </DropdownMenuItem>
             <DropdownMenuItem asChild>
-              <Link
+              <RouteLink
                 href="/admin/settings"
                 className="flex cursor-pointer items-center gap-2 focus:bg-muted/40 focus:text-foreground"
               >
                 <Settings className="size-4 text-muted-foreground" />
                 {t.auth.settings}
-              </Link>
+              </RouteLink>
             </DropdownMenuItem>
           </>
         )}

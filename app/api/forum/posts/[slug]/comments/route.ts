@@ -27,7 +27,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ slu
   const page = Math.max(1, Number(searchParams.get("page")) || 1)
   const sort = searchParams.get("sort") === "aura" ? "aura" : "recent"
   try {
-    const result = await listForumComments(slug, { page, sort })
+    // O autor de um post oculto continua vendo a própria discussão.
+    const viewer = await getRequestUser(request)
+    const result = await listForumComments(slug, { page, sort, viewerId: viewer?.id ?? null })
     return NextResponse.json({ ok: true, ...result })
   } catch {
     return NextResponse.json({ error: "Erro ao carregar comentários." }, { status: 500 })

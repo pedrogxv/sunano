@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ArrowLeft, Heart } from "lucide-react"
 
 import { useAuthUser } from "@/components/providers/auth-context"
@@ -117,12 +118,12 @@ export function StoreFavoritesContent({ filterOptions }: { filterOptions: StoreF
             <Heart className="size-8 text-[#5e5e5e]" strokeWidth={1.8} />
             <p className="text-sm text-muted-foreground">Você ainda não favoritou nenhum produto.</p>
             <p className="text-xs text-muted-foreground/70">Toque no coração de um produto para guardar ele aqui.</p>
-            <Link
+            <RouteLink
               href="/loja"
               className="mt-1 inline-flex h-10 items-center rounded-xl border border-[#2a2a2a] bg-[#141414] px-5 text-[13px] font-bold text-[#e8e8e8] transition-colors hover:border-foreground/25"
             >
               Explorar a loja
-            </Link>
+            </RouteLink>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5 lg:grid-cols-4">

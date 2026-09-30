@@ -6,6 +6,7 @@ import {
   countOrdersByStatus,
   listOrdersForAdmin,
   parseOrderEnvironment,
+  parseOrderKind,
   type OrderStatus,
 } from "@/lib/server/repositories/orders-repository"
 
@@ -40,12 +41,14 @@ export async function GET(request: NextRequest) {
   // Sem o parâmetro, a fila mostra só produção — pedido de sandbox só aparece
   // quando o admin pede explicitamente.
   const environment = parseOrderEnvironment(url.searchParams.get("environment"))
+  // Aba Produtos/Serviços. Vale para a lista E para as contagens por status.
+  const kind = parseOrderKind(url.searchParams.get("kind"))
   const page = Number(url.searchParams.get("page") ?? "1") || 1
   const pageSize = Number(url.searchParams.get("pageSize") ?? "20") || 20
 
   const [{ orders, total }, counts] = await Promise.all([
-    listOrdersForAdmin({ status, productId, userQuery, userId, dateFrom, dateTo, missingShipping, environment, page, pageSize }),
-    countOrdersByStatus(environment),
+    listOrdersForAdmin({ status, productId, userQuery, userId, dateFrom, dateTo, missingShipping, environment, kind, page, pageSize }),
+    countOrdersByStatus(environment, kind),
   ])
-  return NextResponse.json({ ok: true, orders, total, page, pageSize, counts, environment })
+  return NextResponse.json({ ok: true, orders, total, page, pageSize, counts, environment, kind })
 }

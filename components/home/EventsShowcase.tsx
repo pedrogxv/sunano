@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ArrowRight, Sparkles } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -46,13 +47,13 @@ export function EventsShowcase({ events }: { events: EventDisplay[] }) {
             Medalhas por tempo ou vagas limitadas, ainda dá tempo de resgatar
           </p>
         </div>
-        <Link
+        <RouteLink
           href="/conquistas"
           className="group flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:bg-muted hover:text-foreground"
         >
           Ver todos
           <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
-        </Link>
+        </RouteLink>
       </div>
 
       {/* flex-wrap com cards de largura fixa (não grid de colunas fixas): a

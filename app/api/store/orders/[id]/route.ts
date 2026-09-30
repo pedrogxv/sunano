@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { dbErrorResponse } from "@/lib/db-errors"
+import { ORDER_PAID_STATUSES } from "@/lib/order-status"
 
 /**
  * Usada pela página de checkout PIX para fazer polling do status do
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { data: order, error } = await db
     .from("store_orders")
     .select(
-      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at"
+      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at, requires_shipping_address"
     )
     .eq("id", id)
     // Pedido de sandbox não existe para o cliente — nem por link direto
@@ -55,9 +56,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // recarregar a página, qualquer outro consumidor).
   const slim = request.nextUrl.searchParams.get("slim") === "1"
 
+  // A tela de pagamento só distingue "ainda não pagou" de "pagou". Pago sem
+  // endereço é `awaiting_shipping_info` no banco (e depois vem `shipped`,
+  // `delivered`), e ela ficaria esperando um `paid` que nunca chega.
+  const isPaid = (ORDER_PAID_STATUSES as string[]).includes(order.status)
+
   return NextResponse.json({
     id: order.id,
-    status: order.status,
+    status: isPaid ? "paid" : order.status,
     totalCents: order.total_cents,
     copyPaste: slim ? null : order.pix_copy_paste,
     qrCodeBase64: slim ? null : order.pix_qr_code_base64,
@@ -71,10 +77,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     installmentCount: order.installment_count,
     pixPriceCents: order.pix_price_cents,
     cardSurchargePercent: order.card_surcharge_percent,
+    // Decide o "e agora?" da tela de confirmação: produto é acompanhar em
+    // Meus Pedidos, serviço é o chamado aberto sozinho no pagamento.
+    requiresShipping: order.requires_shipping_address !== false,
     // Comprovantes: só existem depois de pago. O Asaas devolve um link de
     // comprovante (transactionReceiptUrl/invoiceUrl) cacheado pelo webhook.
     receipt:
-      order.status === "paid"
+      isPaid
         ? {
             asaasPaymentId: order.asaas_payment_id,
             asaasReceiptUrl: order.asaas_receipt_url,

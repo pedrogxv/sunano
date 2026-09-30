@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import {
   ArrowRight,
   BadgePercent,
@@ -104,9 +104,9 @@ function BarLink({
   tabIndex?: number
 }) {
   return isInternalBannerLink(href) ? (
-    <Link href={href} className={className} tabIndex={tabIndex}>
+    <RouteLink href={href} className={className} tabIndex={tabIndex}>
       {children}
-    </Link>
+    </RouteLink>
   ) : (
     <a href={href} target="_blank" rel="noopener noreferrer" className={className} tabIndex={tabIndex}>
       {children}

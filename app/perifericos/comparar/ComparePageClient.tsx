@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { ArrowLeft, Check, ExternalLink, Plus, Search, Trophy, X } from "lucide-react"
 
@@ -744,12 +745,12 @@ export function ComparePageClient() {
         <div className={cn("rounded-2xl border p-10 text-center space-y-3", CARD_SURFACE)}>
           <p className="text-base font-semibold text-foreground">Nenhum periférico selecionado</p>
           <p className="text-sm text-muted-foreground">Volte para a lista e marque os itens que deseja comparar.</p>
-          <Link
+          <RouteLink
             href="/perifericos"
             className="mt-2 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
             Ir para periféricos
-          </Link>
+          </RouteLink>
         </div>
       )}
 

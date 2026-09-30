@@ -1,4 +1,5 @@
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { redirect } from "next/navigation"
 import {
   ArrowRight,
@@ -65,7 +66,7 @@ export default async function AfiliadosPage() {
           confirmada dentro de {ATTRIBUTION_DAYS} dias da indicação.
         </p>
         <Button asChild className="mt-6">
-          <Link href="/afiliados/solicitar">Quero ser afiliado</Link>
+          <RouteLink href="/afiliados/solicitar">Quero ser afiliado</RouteLink>
         </Button>
       </div>
     )
@@ -98,7 +99,7 @@ export default async function AfiliadosPage() {
           <p className="mt-3 text-muted-foreground">Motivo: {affiliate.rejection_reason}</p>
         )}
         <Button asChild className="mt-6">
-          <Link href="/afiliados/solicitar">Enviar nova solicitação</Link>
+          <RouteLink href="/afiliados/solicitar">Enviar nova solicitação</RouteLink>
         </Button>
       </div>
     )
@@ -235,12 +236,12 @@ export default async function AfiliadosPage() {
 
       <div className="mb-10 flex flex-wrap gap-3">
         <Button asChild>
-          <Link href="/afiliados/saques">
+          <RouteLink href="/afiliados/saques">
             Solicitar saque <ArrowRight className="size-4" />
-          </Link>
+          </RouteLink>
         </Button>
         <Button asChild variant="outline">
-          <Link href="/afiliados/extrato">Ver extrato</Link>
+          <RouteLink href="/afiliados/extrato">Ver extrato</RouteLink>
         </Button>
       </div>
 

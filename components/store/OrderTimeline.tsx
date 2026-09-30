@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, Clock, CreditCard, MapPin, PackageCheck, Rocket, Truck } from "lucide-react"
+import { CheckCircle2, CreditCard, MapPin, PackageCheck, Truck, Warehouse } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { UserOrder } from "@/lib/hooks/use-user-orders"
@@ -9,37 +9,62 @@ import type { UserOrder } from "@/lib/hooks/use-user-orders"
  * Trilho de progresso do pedido — a resposta visual para "cadê minha
  * compra?", que hoje só existia como um badge de status solto.
  *
- * Os quatro passos são a jornada real da loja, não os oito status do banco:
- * `awaiting_shipping_info` é a MESMA etapa de "pago" do ponto de vista de
- * quem comprou (o dinheiro saiu, falta despachar), e mostrá-lo como um passo
- * próprio faria parecer que o pedido regrediu.
+ * Os passos são a jornada real da loja, na mesma ordem de
+ * `ORDER_FULFILLMENT_FLOW`: pagou, deu o endereço, pedido feito (esperando o
+ * produto chegar ao armazém), enviado, entregue. Os dois do meio não são
+ * cliques do admin: o banco decide pelo endereço
+ * (`trg_store_orders_shipping_stage`), então o trilho nunca diz "falta
+ * endereço" para quem já deu um.
  *
- * Pedido de serviço (`requires_shipping_address` false) pula a etapa de
- * endereço: prometer "a caminho" para uma mentoria é pior que não mostrar
- * trilho nenhum.
+ * Pedido de serviço (`requires_shipping_address` false) não tem endereço,
+ * armazém nem pacote: prometer "a caminho" para uma mentoria é pior que
+ * mostrar só pagamento e conclusão.
  */
-const STEPS = [
-  { key: "created", label: "Pedido feito", icon: Clock },
-  { key: "paid", label: "Pagamento", icon: CreditCard },
+const PHYSICAL_STEPS = [
+  { key: "payment", label: "Pagamento", icon: CreditCard },
+  { key: "address", label: "Endereço", icon: MapPin },
+  { key: "placed", label: "Pedido feito", icon: Warehouse },
   { key: "shipped", label: "Enviado", icon: Truck },
   { key: "delivered", label: "Entregue", icon: PackageCheck },
 ] as const
 
-/** Índice do passo já concluído; -1 quando o pedido saiu do trilho feliz. */
-function currentStepIndex(status: UserOrder["status"]): number {
+const SERVICE_STEPS = [
+  { key: "payment", label: "Pagamento", icon: CreditCard },
+  { key: "delivered", label: "Concluído", icon: PackageCheck },
+] as const
+
+/**
+ * Índice do último passo concluído (-1 = nenhum), ou null quando o pedido
+ * saiu do trilho feliz (cancelado, estornado, expirado).
+ */
+function lastDoneIndex(status: UserOrder["status"], requiresShipping: boolean): number | null {
+  if (!requiresShipping) {
+    switch (status) {
+      case "pending":
+        return -1
+      case "paid":
+      case "awaiting_shipping_info":
+        return 0
+      case "shipped":
+      case "delivered":
+        return 1
+      default:
+        return null
+    }
+  }
   switch (status) {
     case "pending":
+      return -1
+    case "awaiting_shipping_info":
       return 0
     case "paid":
-    case "awaiting_shipping_info":
-      return 1
-    case "shipped":
       return 2
-    case "delivered":
+    case "shipped":
       return 3
+    case "delivered":
+      return 4
     default:
-      // cancelled/refunded/expired não têm progresso a mostrar.
-      return -1
+      return null
   }
 }
 
@@ -50,39 +75,23 @@ export function OrderTimeline({
   order: UserOrder
   className?: string
 }) {
-  const active = currentStepIndex(order.status)
-  if (active < 0) return null
+  const lastDone = lastDoneIndex(order.status, order.requires_shipping_address)
+  if (lastDone === null) return null
 
-  const steps = order.requires_shipping_address
-    ? STEPS
-    : STEPS.filter((s) => s.key !== "shipped" && s.key !== "delivered")
+  const steps = order.requires_shipping_address ? PHYSICAL_STEPS : SERVICE_STEPS
 
-  // O passo de envio fica travado enquanto falta endereço — é o ponto exato
-  // onde o pedido para, e dizer isso no próprio trilho evita o cliente
-  // procurar o motivo em outro lugar.
-  const blockedByAddress =
-    order.requires_shipping_address && !order.shipping_address && active >= 1
-
-  // Pedido de pré-venda pago espera o lote chegar, não o despacho. Sem dizer
-  // isso, ele mostra exatamente o mesmo trilho de quem comprou algo que sai
-  // amanhã — e fica parado em "Pagamento" por semanas, sem explicação.
-  const isPreOrder = order.items.some((item) => item.sale_type === "pre_order")
-  const awaitingBatch = isPreOrder && active === 1 && !blockedByAddress
+  // O passo seguinte fica em destaque quando depende do CLIENTE: pagar ou
+  // informar o endereço. É o ponto exato onde o pedido para, e dizer isso no
+  // próprio trilho evita o cliente procurar o motivo em outro lugar. O que
+  // depende da loja (chegar ao armazém, postar) não pede nada dele.
+  const waitingOnCustomer = order.status === "pending" || order.status === "awaiting_shipping_info"
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
       {steps.map((step, idx) => {
-        const done = idx <= active
-        const isBlockedNext = blockedByAddress && idx === active + 1
-        const isAwaitingBatch = awaitingBatch && idx === active + 1
-        const pending = isBlockedNext || isAwaitingBatch
-        const Icon = isBlockedNext
-          ? MapPin
-          : isAwaitingBatch
-            ? Rocket
-            : done
-              ? CheckCircle2
-              : step.icon
+        const done = idx <= lastDone
+        const pending = waitingOnCustomer && idx === lastDone + 1
+        const Icon = done ? CheckCircle2 : step.icon
         return (
           <div key={step.key} className="flex min-w-0 flex-1 items-center gap-1">
             <div className="flex min-w-0 flex-col items-center gap-1">
@@ -108,11 +117,7 @@ export function OrderTimeline({
                       : "text-muted-foreground/50"
                 )}
               >
-                {isBlockedNext
-                  ? "Falta endereço"
-                  : isAwaitingBatch
-                    ? "Aguardando lote"
-                    : step.label}
+                {pending && step.key === "address" ? "Falta endereço" : step.label}
               </span>
             </div>
             {idx < steps.length - 1 && (
@@ -120,7 +125,7 @@ export function OrderTimeline({
                 aria-hidden
                 className={cn(
                   "-mt-4 h-px flex-1 rounded-full",
-                  idx < active ? "bg-emerald-500/40" : "bg-border/60"
+                  idx < lastDone ? "bg-emerald-500/40" : "bg-border/60"
                 )}
               />
             )}

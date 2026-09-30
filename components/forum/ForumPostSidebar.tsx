@@ -2,6 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Award, ChevronRight, Eye, MessageCircle, MessagesSquare, Tag, User, Users } from "lucide-react"
@@ -228,10 +229,10 @@ export function ForumPostSidebar({
 
         {author.display_slug && (
           <Button asChild size="sm" variant="outline" className="mt-4 w-full gap-1.5 border-border">
-            <Link href={`/perfil/${author.display_slug}`}>
+            <RouteLink href={`/perfil/${author.display_slug}`}>
               <User className="size-3.5" />
               Ver perfil
-            </Link>
+            </RouteLink>
           </Button>
         )}
       </CollapsibleSidebarCard>

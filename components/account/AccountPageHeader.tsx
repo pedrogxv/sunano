@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ExternalLink } from "lucide-react"
 
 import type { ProfileData } from "./ProfileSection"
@@ -134,13 +134,13 @@ export function AccountPageHeader({
         </div>
 
         {publicProfileHref && (
-          <Link
+          <RouteLink
             href={publicProfileHref}
             className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-border bg-background/60 px-3 py-2 text-xs font-medium text-muted-foreground backdrop-blur-sm transition-colors hover:bg-muted/60 hover:text-foreground"
           >
             <ExternalLink className="size-3.5" />
             Ver perfil público
-          </Link>
+          </RouteLink>
         )}
       </div>
     </header>

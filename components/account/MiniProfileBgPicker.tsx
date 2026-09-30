@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { useEffect, useState } from "react"
 import { Ban, Check, Loader2, Sparkles } from "lucide-react"
 import { toast } from "sonner"
@@ -120,12 +120,12 @@ export function MiniProfileBgPicker() {
         <p className="mt-1 text-xs text-muted-foreground">
           Bordas com brilho, raios, partículas e mais, a partir de 50 de Aura.
         </p>
-        <Link
+        <RouteLink
           href="/aura"
           className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-1.5 text-xs font-bold text-[#1a1200] transition-colors hover:bg-orange-400"
         >
           Ver na Central de Aura
-        </Link>
+        </RouteLink>
       </div>
     )
   }

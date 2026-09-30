@@ -1,5 +1,5 @@
 import { revalidatePath } from "next/cache"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { notFound, redirect } from "next/navigation"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -122,14 +122,14 @@ export default async function AdminSupportTicketPage({ params }: { params: Promi
               </span>
             )}
             {ticket.product_name && ticket.product_id && (
-              <Link
+              <RouteLink
                 href={`/admin/store/${ticket.product_id}`}
                 target="_blank"
                 className="inline-flex items-center gap-1.5 rounded-lg bg-muted/40 px-2.5 py-1 text-xs text-primary hover:underline"
               >
                 <ShoppingBag className="size-3.5" />
                 {ticket.product_name}
-              </Link>
+              </RouteLink>
             )}
           </div>
         )}

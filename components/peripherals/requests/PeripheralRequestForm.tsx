@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { toast } from "sonner"
 import { CheckCircle2, ExternalLink, Loader2, LogIn, Search } from "lucide-react"
 
@@ -150,7 +151,7 @@ export function PeripheralRequestForm({
         </div>
         <div className="flex w-full max-w-xs flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
           <Button asChild>
-            <Link href={`/perifericos/pedidos/${created.id}`}>Ver este pedido</Link>
+            <RouteLink href={`/perifericos/pedidos/${created.id}`}>Ver este pedido</RouteLink>
           </Button>
           <Button type="button" variant="outline" onClick={reset} disabled={atLimit}>
             Pedir outro

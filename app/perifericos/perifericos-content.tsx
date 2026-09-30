@@ -1,6 +1,7 @@
 "use client"
 
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import Image from "next/image"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 import {
@@ -1042,10 +1043,10 @@ export function PerifericosContent({
                 {selectedCategory === "outros" ? t.categories.others : categoryLabels[selectedCategory]}
               </h1>
               <Button asChild variant="outline" size="sm" className="shrink-0 gap-2">
-                <Link href="/perifericos/pedidos">
+                <RouteLink href="/perifericos/pedidos">
                   <PackagePlus className="size-4" />
                   {t.peripherals.requestCta}
-                </Link>
+                </RouteLink>
               </Button>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">

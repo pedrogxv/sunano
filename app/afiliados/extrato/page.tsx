@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ArrowLeft, ArrowDownLeft, ArrowUpRight, Receipt, SlidersHorizontal } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -88,9 +89,9 @@ export default function ExtratoAfiliadoPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2 text-muted-foreground">
-        <Link href="/afiliados">
+        <RouteLink href="/afiliados">
           <ArrowLeft className="size-4" /> Painel do afiliado
-        </Link>
+        </RouteLink>
       </Button>
 
       <h1 className="font-display text-2xl font-bold tracking-tight">Extrato de comissões</h1>
@@ -119,7 +120,7 @@ export default function ExtratoAfiliadoPage() {
               aparece aqui.
             </p>
             <Button asChild variant="outline" size="sm" className="mt-4">
-              <Link href="/afiliados">Voltar ao painel</Link>
+              <RouteLink href="/afiliados">Voltar ao painel</RouteLink>
             </Button>
           </CardContent>
         </Card>

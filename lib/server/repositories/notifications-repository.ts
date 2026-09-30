@@ -2,6 +2,7 @@ import "server-only"
 
 import type { NotificationEntityType, NotificationType } from "@/lib/database.types"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { orderStatusDescription, orderStatusLabel, type OrderStatusValue } from "@/lib/order-status"
 
 /**
  * Repositório de notificações. A produção das notificações é toda por trigger
@@ -201,24 +202,6 @@ export async function broadcastSystemNotification(params: {
 }
 
 /**
- * Label em português de cada status de pedido notificável. Duplica
- * (pequeno) o texto que `/conta/pedidos` já usa em `STATUS_LABEL` — não
- * importa de lá porque é um arquivo de front-end, e não importa o tipo
- * `OrderStatus` de `orders-repository.ts` para evitar dependência circular
- * entre os dois repositories.
- */
-const ORDER_STATUS_LABEL: Record<string, string> = {
-  pending: "Aguardando pagamento",
-  paid: "Pago",
-  awaiting_shipping_info: "Aguardando dados de entrega",
-  shipped: "Enviado",
-  delivered: "Entregue",
-  cancelled: "Cancelado",
-  expired: "Expirado",
-  refunded: "Reembolsado",
-}
-
-/**
  * Notifica o dono de um pedido que o status mudou (ou que o pedido foi
  * criado, com status "pending"). Chamada explícita (não trigger) a partir de
  * orders-repository.ts, do checkout e dos webhooks de pagamento — pedidos de
@@ -236,10 +219,16 @@ export async function notifyOrderStatusChange(params: {
   userId: string
   orderId: string
   status: string
+  /** false = serviço/digital, que tem rótulo próprio ("Pago", "Concluído"). */
+  requiresShipping?: boolean
 }): Promise<void> {
   const db = createSupabaseAdminClient()
   const shortId = params.orderId.slice(0, 8).toUpperCase()
-  const statusLabel = ORDER_STATUS_LABEL[params.status] ?? params.status
+  const status = params.status as OrderStatusValue
+  const requiresShipping = params.requiresShipping !== false
+  // A frase explica o que fazer ("falta o endereço"); sem ela, o rótulo.
+  const statusText =
+    orderStatusDescription(status, requiresShipping) ?? orderStatusLabel(status, requiresShipping)
 
   // Um pedido expirado é a intenção de compra mais qualificada da loja — a
   // pessoa escolheu tudo e só não pagou. Dizer só "Expirado" encerra o
@@ -258,7 +247,7 @@ export async function notifyOrderStatusChange(params: {
       : `Pedido #${shortId} atualizado`,
     body: isExpired
       ? "O prazo do pagamento acabou e os itens voltaram ao estoque. Você pode refazer a compra em um clique."
-      : statusLabel,
+      : statusText,
   })
 
   if (error) {

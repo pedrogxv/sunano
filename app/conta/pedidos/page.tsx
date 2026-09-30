@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { toast } from "sonner"
 import {
   CalendarIcon,
@@ -67,22 +68,17 @@ import { Input } from "@/components/ui/input"
 import { OrderShippingAddressDialog } from "@/components/store/OrderShippingAddressDialog"
 import { OrderTimeline } from "@/components/store/OrderTimeline"
 import { formatShippingAddressLine } from "@/components/store/ShippingAddressFields"
-
-const STATUS_LABEL: Record<UserOrder["status"], string> = {
-  pending: "Aguardando pagamento",
-  paid: "Pago",
-  awaiting_shipping_info: "Aguardando dados de entrega",
-  shipped: "Enviado",
-  delivered: "Entregue",
-  cancelled: "Cancelado",
-  refunded: "Reembolsado",
-  expired: "Expirado",
-}
+import {
+  ORDER_PAID_STATUSES,
+  ORDER_STATUS_LABEL,
+  orderStatusDescription,
+  orderStatusLabel,
+} from "@/lib/order-status"
 
 const STATUS_STYLE: Record<UserOrder["status"], string> = {
   pending: "bg-amber-500/15 text-amber-400",
   paid: "bg-emerald-500/15 text-emerald-400",
-  awaiting_shipping_info: "bg-blue-500/15 text-blue-300",
+  awaiting_shipping_info: "bg-amber-500/15 text-amber-400",
   shipped: "bg-violet-500/15 text-violet-300",
   delivered: "bg-teal-500/15 text-teal-300",
   cancelled: "bg-muted text-muted-foreground",
@@ -92,14 +88,14 @@ const STATUS_STYLE: Record<UserOrder["status"], string> = {
 
 const STATUS_FILTERS: Array<{ value: UserOrder["status"] | "all"; label: string }> = [
   { value: "all", label: "Todos os status" },
-  { value: "pending", label: STATUS_LABEL.pending },
-  { value: "paid", label: STATUS_LABEL.paid },
-  { value: "awaiting_shipping_info", label: STATUS_LABEL.awaiting_shipping_info },
-  { value: "shipped", label: STATUS_LABEL.shipped },
-  { value: "delivered", label: STATUS_LABEL.delivered },
-  { value: "cancelled", label: STATUS_LABEL.cancelled },
-  { value: "refunded", label: STATUS_LABEL.refunded },
-  { value: "expired", label: STATUS_LABEL.expired },
+  { value: "pending", label: ORDER_STATUS_LABEL.pending },
+  { value: "awaiting_shipping_info", label: ORDER_STATUS_LABEL.awaiting_shipping_info },
+  { value: "paid", label: ORDER_STATUS_LABEL.paid },
+  { value: "shipped", label: ORDER_STATUS_LABEL.shipped },
+  { value: "delivered", label: ORDER_STATUS_LABEL.delivered },
+  { value: "cancelled", label: ORDER_STATUS_LABEL.cancelled },
+  { value: "refunded", label: ORDER_STATUS_LABEL.refunded },
+  { value: "expired", label: ORDER_STATUS_LABEL.expired },
 ]
 
 const PAGE_SIZE = 10
@@ -317,6 +313,72 @@ function CancelOrderButton({
 }
 
 /**
+ * "Já recebi meu produto": fecha o pedido enviado. Pede confirmação porque não
+ * tem volta pelo site, e um toque sem querer tiraria o pedido da fila da loja
+ * antes de o pacote chegar.
+ */
+function ConfirmDeliveryButton({
+  order,
+  onConfirmed,
+  className,
+}: {
+  order: UserOrder
+  onConfirmed: () => void
+  className?: string
+}) {
+  const [confirming, setConfirming] = useState(false)
+
+  async function handleConfirm() {
+    setConfirming(true)
+    try {
+      const res = await fetch(`/api/store/orders/${order.id}/confirm-delivery`, { method: "POST" })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+      if (!res.ok) throw new Error(data.message ?? data.error ?? "Erro ao confirmar o recebimento")
+      toast.success("Recebimento confirmado", { description: `#${orderNumber(order.id)}` })
+      onConfirmed()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao confirmar o recebimento"
+      toast.error("Não foi possível confirmar", { description: message })
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-lg border border-teal-500/40 bg-teal-500/10 px-2.5 py-1 text-xs font-medium text-teal-300 transition-colors hover:bg-teal-500/20",
+            className
+          )}
+        >
+          <PackageCheck className="size-3.5" />
+          Já recebi meu produto
+        </button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar que recebeu o pedido?</AlertDialogTitle>
+          <AlertDialogDescription>
+            O pedido #{orderNumber(order.id)} será marcado como entregue. Se o pacote chegou com algum
+            problema, fale com o suporte antes de confirmar.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={confirming}>Voltar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirm} disabled={confirming}>
+            {confirming ? "Confirmando..." : "Sim, recebi"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+/**
  * Estados em que ainda faz sentido o cliente mexer no endereço. Depois de
  * `shipped` a etiqueta já saiu — o servidor recusa a alteração, então nem
  * oferecemos o botão. Espelha `SHIPPING_EDITABLE_STATUSES` no repositório.
@@ -331,7 +393,7 @@ const SHIPPING_EDITABLE: UserOrder["status"][] = ["pending", "paid", "awaiting_s
 const STATUS_ACCENT: Record<UserOrder["status"], string> = {
   pending: "from-amber-500/60",
   paid: "from-emerald-500/60",
-  awaiting_shipping_info: "from-blue-500/60",
+  awaiting_shipping_info: "from-amber-500/60",
   shipped: "from-violet-500/60",
   delivered: "from-teal-500/60",
   cancelled: "from-muted-foreground/40",
@@ -343,11 +405,13 @@ function OrderCard({
   order,
   onViewDetails,
   onCancelled,
+  onDelivered,
   onEditShipping,
 }: {
   order: UserOrder
   onViewDetails: (order: UserOrder) => void
   onCancelled: () => void
+  onDelivered: () => void
   onEditShipping: (order: UserOrder) => void
 }) {
   const itemCount = order.items.reduce((sum, i) => sum + (i.quantity ?? 1), 0)
@@ -402,7 +466,7 @@ function OrderCard({
               STATUS_STYLE[order.status]
             )}
           >
-            {STATUS_LABEL[order.status]}
+            {orderStatusLabel(order.status, order.requires_shipping_address)}
           </span>
           {isAuraOrder(order) && (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
@@ -446,14 +510,22 @@ function OrderCard({
       {/* Ações de pagamento pendente */}
       {order.status === "pending" && (
         <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-2.5 pl-5">
-          <Link
+          <RouteLink
             href={pendingPaymentHref(order)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400 transition-colors hover:bg-amber-500/20"
           >
             <QrCode className="size-3.5" />
             {order.payment_method === "credit_card" ? "Continuar pagamento" : "Pagar com PIX"}
-          </Link>
+          </RouteLink>
           <CancelOrderButton order={order} onCancelled={onCancelled} />
+        </div>
+      )}
+
+      {/* O cliente fecha o próprio pedido quando o pacote chega; o admin
+          também pode marcar pelo painel, quem vier primeiro vale. */}
+      {order.status === "shipped" && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-2.5 pl-5">
+          <ConfirmDeliveryButton order={order} onConfirmed={onDelivered} />
         </div>
       )}
 
@@ -560,17 +632,24 @@ function OrderDetailsDialog({
   order,
   onOpenChange,
   onCancelled,
+  onDelivered,
   onEditShipping,
 }: {
   order: UserOrder | null
   onOpenChange: (open: boolean) => void
   onCancelled: () => void
+  onDelivered: () => void
   onEditShipping: (order: UserOrder) => void
 }) {
   const auraOrder = order ? isAuraOrder(order) : false
-  const receipt =
-    order?.status === "paid" && !auraOrder ? order.asaas_payment_id ?? null : null
-  const receiptUrl = order?.status === "paid" && !auraOrder ? order.asaas_receipt_url : null
+  // Comprovante vale para o pedido pago em qualquer etapa, não só em `paid`:
+  // enviado ou esperando endereço, o pagamento continua sendo o mesmo.
+  const isPaid = order ? ORDER_PAID_STATUSES.includes(order.status) : false
+  const receipt = isPaid && !auraOrder ? order?.asaas_payment_id ?? null : null
+  const receiptUrl = isPaid && !auraOrder ? order?.asaas_receipt_url ?? null : null
+  const statusDescription = order
+    ? orderStatusDescription(order.status, order.requires_shipping_address)
+    : null
   const showPix =
     order?.status === "pending" &&
     !auraOrder &&
@@ -592,7 +671,7 @@ function OrderDetailsDialog({
             <div className="space-y-3 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5">
               <div className="flex items-center justify-between">
                 <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold", STATUS_STYLE[order.status])}>
-                  {STATUS_LABEL[order.status]}
+                  {orderStatusLabel(order.status, order.requires_shipping_address)}
                 </span>
                 <OrderPriceLabel order={order} />
               </div>
@@ -603,7 +682,21 @@ function OrderDetailsDialog({
                 </p>
               )}
               <OrderTimeline order={order} />
+              {statusDescription && (
+                <p className="text-[11px] text-muted-foreground">{statusDescription}</p>
+              )}
             </div>
+
+            {order.status === "shipped" && (
+              <ConfirmDeliveryButton
+                order={order}
+                onConfirmed={() => {
+                  onDelivered()
+                  onOpenChange(false)
+                }}
+                className="w-full justify-center"
+              />
+            )}
 
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens</p>
@@ -728,6 +821,12 @@ function OrderDetailsDialog({
                     Copiar
                   </Button>
                 </div>
+                {order.status === "shipped" && (
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Se o rastreio ainda não aparecer no site da transportadora, é porque o produto ainda não
+                    chegou ao Brasil. Ele passa a ser atualizado assim que a encomenda entrar no país.
+                  </p>
+                )}
               </div>
             )}
 
@@ -901,13 +1000,13 @@ export default function PedidosPage() {
                 : "Histórico de compras na Loja."}
             </p>
           </div>
-          <Link
+          <RouteLink
             href="/loja"
             className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20"
           >
             <Sparkles className="size-3.5" />
             Ver a loja
-          </Link>
+          </RouteLink>
         </div>
 
         {/* Chamada única para as pendências de endereço da página: o card de
@@ -1040,6 +1139,7 @@ export default function PedidosPage() {
                   order={order}
                   onViewDetails={setSelectedOrder}
                   onCancelled={refetch}
+                  onDelivered={refetch}
                   onEditShipping={setShippingOrder}
                 />
               ))}
@@ -1082,6 +1182,7 @@ export default function PedidosPage() {
         order={selectedOrder}
         onOpenChange={(open) => !open && setSelectedOrder(null)}
         onCancelled={refetch}
+        onDelivered={refetch}
         onEditShipping={(order) => {
           // Fecha o detalhe antes de abrir o endereço: dois dialogs
           // empilhados brigam pelo foco e pelo scroll lock.

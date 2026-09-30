@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { Clock, Crown, Info, ListChecks, Users } from "lucide-react"
 
 import { useLocale } from "@/components/providers/locale-context"
@@ -85,7 +85,7 @@ export function TierlistPageHeader({
             const Icon = view.icon
             const isActive = active === view.id
             return (
-              <Link
+              <RouteLink
                 key={view.id}
                 href={view.href}
                 aria-current={isActive ? "page" : undefined}
@@ -107,7 +107,7 @@ export function TierlistPageHeader({
               >
                 <Icon className="size-3.5" />
                 {view.label}
-              </Link>
+              </RouteLink>
             )
           })}
         </nav>

@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ArrowRight, Check, Crown, Keyboard, PackageCheck, Sparkles } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -69,13 +70,13 @@ export function AuraSpotlight({ peripherals }: AuraSpotlightProps) {
             Participe do site, junte Aura e troque por prêmio de verdade
           </p>
         </div>
-        <Link
+        <RouteLink
           href="/aura"
           className="group flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:bg-muted hover:text-foreground"
         >
           Ver Central
           <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
-        </Link>
+        </RouteLink>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[1.6fr_1fr]">
@@ -205,14 +206,14 @@ function VipSupportCard({
             Seu VIP é o que mantém o site no ar e em constante melhoria. Aproveite: tudo que custa
             Aura sai 10% mais barato para você.
           </p>
-          <Link
+          <RouteLink
             href="/aura"
             className="relative mt-auto flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:bg-[var(--vip-accent-soft)]"
             style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
           >
             <Sparkles className="size-3.5" />
             Gastar minha Aura
-          </Link>
+          </RouteLink>
         </>
       ) : (
         <>
@@ -245,14 +246,14 @@ function VipSupportCard({
               // Assinatura paga desligada (`VIP_SUBSCRIPTION_ENABLED`): o VIP
               // por Aura segue existindo na Central, então o convite aponta
               // para lá em vez de sumir.
-              <Link
+              <RouteLink
                 href="/aura"
                 className="flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition-colors hover:bg-[var(--vip-accent-soft)]"
                 style={{ borderColor: "var(--vip-accent-soft)", color: "var(--vip-accent)" }}
               >
                 <Crown className="size-3.5" />
                 Ver vantagens do VIP
-              </Link>
+              </RouteLink>
             )}
           </div>
         </>

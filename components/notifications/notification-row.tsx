@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { formatDistanceToNow } from "date-fns"
 import type { Locale } from "date-fns"
 import {
@@ -16,6 +16,7 @@ import {
   PackagePlus,
   Medal,
   Reply,
+  ShoppingBag,
   UserPlus,
   Wallet,
   X,
@@ -24,6 +25,7 @@ import { AuraFlameIcon } from "@/components/ui/AuraIcon"
 
 import type { Notification } from "@/lib/hooks/use-notifications"
 import type { NotificationType } from "@/lib/database.types"
+import type { CategoryKey } from "@/lib/i18n"
 import type { useT } from "@/lib/use-t"
 import { cn } from "@/lib/utils"
 
@@ -47,6 +49,8 @@ export const ICONS: Record<NotificationType, React.ElementType> = {
   affiliate_payout: Wallet,
   rank_frame: Medal,
   peripheral_request_status: PackagePlus,
+  order_paid: ShoppingBag,
+  peripheral_request_new: PackagePlus,
 }
 
 export const ICON_TONE: Record<NotificationType, string> = {
@@ -66,6 +70,8 @@ export const ICON_TONE: Record<NotificationType, string> = {
   affiliate_payout: "bg-green-500/15 text-green-400",
   rank_frame: "bg-fuchsia-500/15 text-fuchsia-400",
   peripheral_request_status: "bg-violet-500/15 text-violet-400",
+  order_paid: "bg-emerald-500/15 text-emerald-400",
+  peripheral_request_new: "bg-violet-500/15 text-violet-400",
 }
 
 export function fill(template: string, values: Record<string, string | number>) {
@@ -152,6 +158,14 @@ export function buildMessage(n: Notification, t: ReturnType<typeof useT>): strin
     // trg_notify_peripheral_request_status); o status vai em `body`.
     case "peripheral_request_status":
       return fill(t.notifications.peripheralRequestStatus, { name: n.title ?? "" })
+    // `title` é o número curto do pedido e `body` o resumo (tipo + itens),
+    // ambos gravados por trg_notify_admins_order_paid.
+    case "order_paid":
+      return fill(t.notifications.orderPaid, { name, number: n.title ?? "" })
+    // `title` é marca + modelo e `body` a chave da categoria, gravados por
+    // trg_notify_staff_peripheral_request.
+    case "peripheral_request_new":
+      return fill(t.notifications.peripheralRequestNew, { name, model: n.title ?? "" })
   }
 }
 
@@ -208,7 +222,11 @@ export function NotificationRow({
   onDismiss,
   onNavigate,
 }: NotificationRowProps) {
-  const Icon = ICONS[n.type]
+  // Fallback para tipo que o banco já grava e este build ainda não conhece:
+  // sem ele, `ICONS[tipo novo]` é undefined e o React derruba a lista inteira
+  // do sino. Acontece sempre que a migration de um aviso novo sobe antes do
+  // deploy do front que o desenha.
+  const Icon = ICONS[n.type] ?? Bell
   const message = buildMessage(n, t)
   // Só o aviso do sistema, pedido e "post novo" mostram um trecho extra
   // (corpo do aviso, status, título do post) — comentário/resposta não
@@ -219,6 +237,7 @@ export function NotificationRow({
     n.type === "support_reply" ||
     n.type === "support_new_ticket" ||
     n.type === "support_user_reply" ||
+    n.type === "order_paid" ||
     // `store_restock` grava a cor que voltou em `body` (null quando o aviso
     // era do produto inteiro).
     n.type === "store_restock"
@@ -227,9 +246,11 @@ export function NotificationRow({
         ? supportStatusLabel(n.body, t)
         : n.type === "peripheral_request_status"
           ? peripheralRequestStatusLabel(n.body, t)
-          : n.type === "new_post"
-            ? n.title
-            : null
+          : n.type === "peripheral_request_new"
+            ? (n.body && t.categories.labels[n.body as CategoryKey]) || n.body
+            : n.type === "new_post"
+              ? n.title
+              : null
 
   const href = notificationHref(n)
 
@@ -262,7 +283,7 @@ export function NotificationRow({
   return (
     <li className={cn("group relative", isNew && "bg-violet-500/[0.06]")}>
       {href ? (
-        <Link
+        <RouteLink
           href={href}
           onClick={() => {
             onNavigate?.()
@@ -277,7 +298,7 @@ export function NotificationRow({
           className="block px-3 py-2.5 pr-16 transition-colors hover:bg-muted/40"
         >
           {row}
-        </Link>
+        </RouteLink>
       ) : (
         <div className="px-3 py-2.5 pr-16">{row}</div>
       )}

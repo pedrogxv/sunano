@@ -3,12 +3,19 @@ import * as z from "zod"
 
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
-import { advanceOrderStatus, cancelOrder, refundOrder } from "@/lib/server/repositories/orders-repository"
+import {
+  ADMIN_ADVANCE_STATUSES,
+  advanceOrderStatus,
+  cancelOrder,
+  refundOrder,
+} from "@/lib/server/repositories/orders-repository"
 
 const patchSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("advance"),
-    status: z.enum(["awaiting_shipping_info", "shipped", "delivered"]),
+    // "Aguardando dados de entrega" e "Pedido feito" saem do endereço, não
+    // de um clique (ver trg_store_orders_shipping_stage).
+    status: z.enum(ADMIN_ADVANCE_STATUSES),
     trackingCode: z.string().trim().max(120).optional(),
     carrier: z.string().trim().max(80).optional(),
   }),

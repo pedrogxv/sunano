@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { usePathname, useRouter } from "next/navigation"
 import { ArrowLeft, MessageSquare, Mouse, Newspaper, Trophy } from "lucide-react"
 
@@ -45,7 +45,7 @@ export default function NotFound() {
 
       <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
         <Button asChild>
-          <Link href={isAdmin ? "/admin" : "/"}>{isAdmin ? e.backDashboard : e.backHome}</Link>
+          <RouteLink href={isAdmin ? "/admin" : "/"}>{isAdmin ? e.backDashboard : e.backHome}</RouteLink>
         </Button>
         <Button variant="outline" onClick={() => router.back()}>
           <ArrowLeft className="size-4" />
@@ -62,14 +62,14 @@ export default function NotFound() {
             {QUICK_LINKS.map((link) => {
               const Icon = link.icon
               return (
-                <Link
+                <RouteLink
                   key={link.href}
                   href={link.href}
                   className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
                 >
                   <Icon className="size-3.5" />
                   {e[link.key]}
-                </Link>
+                </RouteLink>
               )
             })}
           </div>

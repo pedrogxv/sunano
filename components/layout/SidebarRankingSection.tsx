@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ChevronRight, Trophy } from "lucide-react"
 
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
@@ -123,13 +124,13 @@ export function SidebarRankingSection({ isCollapsed }: { isCollapsed: boolean })
 
       {/* Ver todos */}
       {!loading && (
-        <Link
+        <RouteLink
           href="/ranking"
           className="mt-0.5 flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] text-muted-foreground/60 transition-all hover:text-muted-foreground"
         >
           <ChevronRight className="size-3 shrink-0" />
           Ver todos
-        </Link>
+        </RouteLink>
       )}
     </div>
   )

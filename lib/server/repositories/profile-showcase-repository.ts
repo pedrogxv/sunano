@@ -238,7 +238,6 @@ export const getProfileShowcase = cache(async (userId: string): Promise<ProfileS
     reviews_total: reviewsTotal,
     reviews_integrity_accepted_at: row.reviews_integrity_accepted_at,
     reviewed_peripheral_ids: Object.keys(ownReviewRatings),
-    own_review_ratings: ownReviewRatings,
     // Dono ocultou a tierlist → o perfil trata como se não houvesse (o link
     // "Ver tierlist" some, e a página pública já dá notFound).
     tierlist_item_count: tierlistHidden ? 0 : tierlistItemCount,

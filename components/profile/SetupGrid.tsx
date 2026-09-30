@@ -7,7 +7,6 @@ import { TierItemTooltipContent, type TierItemTooltipContentProps } from "@/comp
 import {
   PeripheralMiniCard,
   PeripheralMiniCardEmpty,
-  type MiniCardAuthor,
 } from "@/components/profile/PeripheralMiniCard"
 import Link from "next/link"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
@@ -30,16 +29,15 @@ function getSlotLabel(item: SetupItem): string {
 
 interface SetupGridProps {
   setup: SetupItem[]
-  /** Dono do perfil — a foto que acompanha a nota dele no rodapé do card. */
-  author: MiniCardAuthor
-  /** Nota do dono por periférico (`profile.own_review_ratings`). */
-  ownRatings: Record<string, number>
   /** Dono do perfil vê os slots vazios como convite para configurar. */
   isOwner?: boolean
 }
 
-/** Grid do "Meu Setup" — um card por periférico, sempre com os 5 slots. */
-export function SetupGrid({ setup, author, ownRatings, isOwner = false }: SetupGridProps) {
+/**
+ * Grid do "Meu Setup" — um card por periférico, sempre com os 5 slots. Só foto
+ * e nome: preço e nota ficam para "Meus Reviews".
+ */
+export function SetupGrid({ setup, isOwner = false }: SetupGridProps) {
   return (
     <section className="space-y-3">
       <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
@@ -48,30 +46,14 @@ export function SetupGrid({ setup, author, ownRatings, isOwner = false }: SetupG
 
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
         {setup.map((item) => (
-          <SetupCard
-            key={item.slot}
-            item={item}
-            author={author}
-            ownRatings={ownRatings}
-            isOwner={isOwner}
-          />
+          <SetupCard key={item.slot} item={item} isOwner={isOwner} />
         ))}
       </div>
     </section>
   )
 }
 
-function SetupCard({
-  item,
-  author,
-  ownRatings,
-  isOwner,
-}: {
-  item: SetupItem
-  author: MiniCardAuthor
-  ownRatings: Record<string, number>
-  isOwner: boolean
-}) {
+function SetupCard({ item, isOwner }: { item: SetupItem; isOwner: boolean }) {
   const { Icon } = SLOT_META[item.slot]
   const label = getSlotLabel(item)
 
@@ -88,6 +70,7 @@ function SetupCard({
         header={header}
         icon={<Icon className="size-7" />}
         label={isOwner ? "Configurar" : "Não informado"}
+        showDetails={false}
       />
     )
   }
@@ -103,9 +86,8 @@ function SetupCard({
         <div className="h-full">
           <PeripheralMiniCard
             peripheral={peripheral}
-            rating={ownRatings[peripheral.id] ?? null}
-            author={author}
             header={header}
+            showDetails={false}
             className="h-full"
           />
         </div>

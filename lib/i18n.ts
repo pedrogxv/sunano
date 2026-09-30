@@ -113,6 +113,8 @@ type Translations = {
     supportReply: string
     /** `{name}` = quem abriu o chamado (nome do usuário). */
     supportNewTicket: string
+    /** Aviso à equipe. `{name}` = cliente, `{number}` = número curto do pedido. */
+    orderPaid: string
     /** `{name}` = quem respondeu (nome do usuário). */
     supportUserReply: string
     /** `{subject}` = assunto do chamado. */
@@ -131,6 +133,7 @@ type Translations = {
     peripheralRequestAdded: string
     peripheralRequestDuplicate: string
     peripheralRequestRejected: string
+    peripheralRequestNew: string
     viewAll: string
     historyTitle: string
     historySubtitle: string
@@ -1035,6 +1038,8 @@ type Translations = {
     accountSettings: string
     myOrders: string
     myTickets: string
+    support: string
+    supportAwaiting: string
     savedPosts: string
     affiliates: string
     adminPanel: string
@@ -1192,6 +1197,7 @@ export const translations: Record<LocaleCode, Translations> = {
       orderStatusFallback: "Seu pedido foi atualizado",
       supportReply: "{name} respondeu seu chamado de suporte",
       supportNewTicket: "{name} abriu um novo chamado de suporte",
+      orderPaid: "Novo pedido pago: #{number} de {name}",
       supportUserReply: "{name} respondeu no chamado de suporte",
       supportStatus: "Seu chamado \"{subject}\" foi atualizado",
       supportStatusResolved: "Marcado como resolvido",
@@ -1206,6 +1212,7 @@ export const translations: Record<LocaleCode, Translations> = {
       peripheralRequestAdded: "Cadastrado na wiki",
       peripheralRequestDuplicate: "Já estava na wiki",
       peripheralRequestRejected: "Recusado",
+      peripheralRequestNew: "{name} pediu o cadastro de \"{model}\"",
       viewAll: "Ver histórico completo",
       historyTitle: "Histórico de notificações",
       historySubtitle: "Todas as suas notificações, das mais recentes às mais antigas.",
@@ -2172,6 +2179,8 @@ export const translations: Record<LocaleCode, Translations> = {
       accountSettings: "Configurações da conta",
       myOrders: "Meus Pedidos",
       myTickets: "Meus Tickets",
+      support: "Suporte",
+      supportAwaiting: "Suporte: resposta nova no seu chamado",
       savedPosts: "Posts Salvos",
       affiliates: "Programa de Afiliados",
       adminPanel: "Painel admin",
@@ -2734,6 +2743,7 @@ export const translations: Record<LocaleCode, Translations> = {
       orderStatusFallback: "Your order was updated",
       supportReply: "{name} replied to your support ticket",
       supportNewTicket: "{name} opened a new support ticket",
+      orderPaid: "New paid order: #{number} from {name}",
       supportUserReply: "{name} replied on the support ticket",
       supportStatus: "Your ticket \"{subject}\" was updated",
       supportStatusResolved: "Marked as resolved",
@@ -2748,6 +2758,7 @@ export const translations: Record<LocaleCode, Translations> = {
       peripheralRequestAdded: "Added to the wiki",
       peripheralRequestDuplicate: "Already in the wiki",
       peripheralRequestRejected: "Declined",
+      peripheralRequestNew: "{name} requested \"{model}\" be added",
       viewAll: "View full history",
       historyTitle: "Notification history",
       historySubtitle: "All your notifications, from newest to oldest.",
@@ -3714,6 +3725,8 @@ export const translations: Record<LocaleCode, Translations> = {
       accountSettings: "Account settings",
       myOrders: "My Orders",
       myTickets: "My Tickets",
+      support: "Support",
+      supportAwaiting: "Support: new reply on your ticket",
       savedPosts: "Saved Posts",
       affiliates: "Affiliate Program",
       adminPanel: "Admin panel",

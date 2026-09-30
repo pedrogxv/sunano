@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import {
   AlertCircle,
   ArrowLeft,
@@ -239,9 +239,9 @@ export default function SaquesAfiliadoPage() {
   return (
     <div className="mx-auto max-w-2xl px-4 py-10">
       <Button asChild variant="ghost" size="sm" className="mb-4 -ml-2 text-muted-foreground">
-        <Link href="/afiliados">
+        <RouteLink href="/afiliados">
           <ArrowLeft className="size-4" /> Painel do afiliado
-        </Link>
+        </RouteLink>
       </Button>
 
       <h1 className="mb-6 font-display text-2xl font-bold tracking-tight">Saques</h1>

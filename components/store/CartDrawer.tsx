@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { LogIn, Minus, Package, Plus, ShoppingBag, ShoppingCart, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/RemoveCartItemDialog"
@@ -138,7 +138,7 @@ export function CartDrawer() {
                 <p className="text-xs text-muted-foreground">Adicione produtos da loja</p>
               </div>
               <Button variant="outline" size="sm" onClick={() => setOpen(false)} asChild>
-                <Link href="/loja">Explorar loja</Link>
+                <RouteLink href="/loja">Explorar loja</RouteLink>
               </Button>
             </div>
           ) : (
@@ -271,9 +271,9 @@ export function CartDrawer() {
               className="h-14 w-full gap-2 rounded-xl bg-emerald-600 text-base font-extrabold text-white hover:bg-emerald-500"
               asChild
             >
-              <Link href="/checkout" onClick={() => setOpen(false)}>
+              <RouteLink href="/checkout" onClick={() => setOpen(false)}>
                 Finalizar Compra
-              </Link>
+              </RouteLink>
             </Button>
           </div>
         )}

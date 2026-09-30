@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ArrowRight, Bird, Check, MessageSquare, Sparkles, SquarePen, Youtube } from "lucide-react"
 import { AURA_BRAND_FILL_CLASS, AuraAmount, AuraIcon } from "@/components/ui/AuraIcon"
 import { toast } from "sonner"
@@ -220,7 +220,7 @@ export function AuraMissionsBadge({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <Link
+        <RouteLink
           href="/aura"
           onClick={() => {
             setOpen(false)
@@ -291,7 +291,7 @@ export function AuraMissionsBadge({
               </div>
             </>
           )}
-        </Link>
+        </RouteLink>
       </PopoverAnchor>
 
       <PopoverContent
@@ -336,7 +336,7 @@ export function AuraMissionsBadge({
                     <span className="ml-auto text-[11px] text-muted-foreground">+{DAILY_MISSION_REWARDS[key]} aura</span>
                   </div>
                 ) : (
-                  <Link
+                  <RouteLink
                     href={MISSION_HREFS[key]}
                     className={cn(itemClassName, "group transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground")}
                   >
@@ -348,7 +348,7 @@ export function AuraMissionsBadge({
                       +{DAILY_MISSION_REWARDS[key]} aura
                       <ArrowRight className="size-3 shrink-0 text-primary opacity-0 transition-opacity group-hover:opacity-100" />
                     </span>
-                  </Link>
+                  </RouteLink>
                 )}
               </li>
             )
@@ -407,13 +407,13 @@ export function AuraMissionsBadge({
           </p>
         </div>
 
-        <Link
+        <RouteLink
           href="/aura"
           className="flex items-center justify-center gap-1.5 border-t border-border px-3 py-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted/40"
         >
           Ver Central de Aura
           <ArrowRight className="size-3" />
-        </Link>
+        </RouteLink>
       </PopoverContent>
     </Popover>
   )

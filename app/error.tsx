@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import Image from "next/image"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { usePathname, useRouter } from "next/navigation"
 import { ArrowLeft, RotateCw } from "lucide-react"
 
@@ -55,7 +55,7 @@ export default function ErrorBoundary({
           {e.tryAgain}
         </Button>
         <Button variant="outline" asChild>
-          <Link href={isAdmin ? "/admin" : "/"}>{isAdmin ? e.backDashboard : e.backHome}</Link>
+          <RouteLink href={isAdmin ? "/admin" : "/"}>{isAdmin ? e.backDashboard : e.backHome}</RouteLink>
         </Button>
         <Button variant="ghost" onClick={() => router.back()}>
           <ArrowLeft className="size-4" />

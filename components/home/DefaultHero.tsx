@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { Package } from "lucide-react"
 
 import { AnimatedCounter } from "@/components/animated-counter"
@@ -74,13 +74,13 @@ export default function DefaultHero({
           </p>
 
           <div className="flex flex-wrap gap-3 pt-2">
-            <Link
+            <RouteLink
               href="/tierlist"
               className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:shadow-primary/30"
             >
               <Package className="size-4" />
               Explorar Tierlist
-            </Link>
+            </RouteLink>
           </div>
 
           {/* Stats — só fora do carrossel; lá dentro o overlay já cobre isso */}

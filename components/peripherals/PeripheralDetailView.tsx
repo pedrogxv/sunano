@@ -4,6 +4,7 @@ import type { ComponentType, ReactNode } from "react"
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { Activity, AudioLines, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
 import { AuraIcon } from "@/components/ui/AuraIcon"
 import { format } from "date-fns"
@@ -1399,13 +1400,13 @@ export function PeripheralDetailView({
                       <CardDescription className="text-xs">{t.peripheralDetail.performanceDesc}</CardDescription>
                       {rankBadge && (
                         <CardAction>
-                          <Link
+                          <RouteLink
                             href={rankingHref}
                             className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-primary transition hover:bg-primary/20"
                           >
                             <Trophy className="size-4 shrink-0" />
                             {`#${rankBadge.position} de ${rankBadge.total} no Ranking`}
-                          </Link>
+                          </RouteLink>
                         </CardAction>
                       )}
                     </CardHeader>

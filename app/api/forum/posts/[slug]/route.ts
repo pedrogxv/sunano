@@ -6,7 +6,9 @@ import { hasAdminPermission } from "@/lib/admin-permissions"
 import { isAllowedForumImageUrlForModeration } from "@/lib/server/forum-media"
 import {
   deleteForumPostBySlug,
+  getForumModerationTarget,
   getForumPostBySlug,
+  logForumModeration,
   updateForumPost,
 } from "@/lib/server/repositories/forum-repository"
 import { syncPostPeripherals } from "@/lib/server/repositories/forum-peripherals-repository"
@@ -75,6 +77,12 @@ export async function PATCH(
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
+  await logForumModeration(
+    auth.profile.id,
+    "forum_post_edited",
+    await getForumModerationTarget({ postSlug: slug }),
+    { fields: Object.keys(parsed.data), ...(parsed.data.is_hidden !== undefined ? { is_hidden: parsed.data.is_hidden } : {}) }
+  )
 
   // Editar o texto pode ter introduzido ou removido a citação de um
   // periférico — recalcula sobre o post já salvo. Só quando título/corpo
@@ -107,9 +115,11 @@ export async function DELETE(
     return NextResponse.json({ error: "Sem permissão." }, { status: 403 })
   }
 
+  const target = await getForumModerationTarget({ postSlug: slug })
   const result = await deleteForumPostBySlug(slug)
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
+  await logForumModeration(auth.profile.id, "forum_post_deleted", target)
   return NextResponse.json({ ok: true })
 }

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Bird, Crown, Frame, Lock, Star, Trophy } from "lucide-react"
 import { toast } from "sonner"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 
 import { AuraItemCard } from "@/components/aura/AuraItemCard"
 import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
@@ -284,13 +284,13 @@ export function AvatarFrameSection({
         avatarUrl={currentUserAvatarUrl}
         name={currentUserName}
         action={
-          <Link
+          <RouteLink
             href="/pessoas"
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[11px] font-bold text-foreground transition-colors hover:border-primary/40 hover:text-primary"
           >
             <Trophy className="size-3" />
             Ver rankings
-          </Link>
+          </RouteLink>
         }
       />
     </div>

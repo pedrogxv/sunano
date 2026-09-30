@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
+import { OrderPaidNextStepsDialog } from "@/components/store/OrderPaidNextStepsDialog"
 
 interface OrderItem {
   id?: string
@@ -27,6 +28,8 @@ interface OrderStatus {
   installmentCount: number | null
   pixPriceCents: number | null
   cardSurchargePercent: number | null
+  /** false = serviço/digital: o chamado de suporte é aberto no pagamento. */
+  requiresShipping: boolean
 }
 
 const POLL_INTERVAL_MS = 3000
@@ -117,13 +120,16 @@ function CardCheckoutContent() {
 
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center gap-6 px-4 py-10 text-center">
+        <OrderPaidNextStepsDialog orderId={order.id} requiresShipping={order.requiresShipping} />
         <div className="flex size-20 items-center justify-center rounded-full bg-emerald-500/15">
           <CheckCircle className="size-10 text-emerald-400" />
         </div>
         <div className="space-y-2">
           <h1 className="text-3xl font-black text-foreground">Pagamento confirmado!</h1>
           <p className="text-muted-foreground max-w-sm">
-            Seu pedido foi recebido com sucesso. Acompanhe o andamento pelo seu perfil.
+            {order.requiresShipping
+              ? "Seu pedido foi recebido com sucesso. Acompanhe o andamento em Meus Pedidos."
+              : "Seu pedido foi recebido. Abrimos um chamado em Meus Tickets para combinar o atendimento."}
           </p>
         </div>
 

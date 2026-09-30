@@ -78,6 +78,17 @@ where has_any_column_privilege(cr.r, t.oid, 'SELECT')
   and not (t.relname = 'admin_profiles' and cr.r = 'authenticated')
 
 union all
+-- Policy de leitura com NOT EXISTS: a subconsulta roda sob a RLS da tabela
+-- consultada, que esconde do cliente justamente a linha "oculta". O NOT EXISTS
+-- vira sempre true (foi assim que a tierlist oculta ficou legivel ate
+-- 20261208000001). Escreva a regra positiva: EXISTS de um pai VISIVEL.
+select 'policy_com_not_exists', tablename || ' "' || policyname || '"'
+from pg_policies
+where schemaname = 'public'
+  and cmd = 'SELECT'
+  and qual ~* 'not \(exists'
+
+union all
 -- Coluna de PII, segredo, pagamento ou pedido legivel por cliente
 select 'coluna_sensivel_legivel', t.relname || '.' || a.attname || ' ' || cr.r
 from pg_attribute a
@@ -85,7 +96,7 @@ join tables t on t.oid = a.attrelid
 cross join client_roles cr
 where a.attnum > 0
   and not a.attisdropped
-  and a.attname ~ '((^|_)(cpf|ip|phone|email|token|secret|password|pix|asaas)(_|$))|(^|_)order_id$'
+  and a.attname ~ '((^|_)(cpf|ip|phone|email|token|secret|password|pix|asaas|admin)(_|$))|(^|_)order_id$|^granted_by$'
   and has_column_privilege(cr.r, a.attrelid, a.attnum, 'SELECT')
   and not (t.relname = 'admin_profiles' and a.attname = 'email')
 

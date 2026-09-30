@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import {
   ArrowRight,
   Crown,
@@ -83,13 +84,13 @@ function SectionHeader({
         </div>
         {subtitle && <p className="mt-0.5 text-xs text-muted-foreground md:text-sm">{subtitle}</p>}
       </div>
-      <Link
+      <RouteLink
         href={href}
         className="group flex shrink-0 items-center gap-1 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:bg-muted hover:text-foreground"
       >
         {linkLabel}
         <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" />
-      </Link>
+      </RouteLink>
     </div>
   )
 }

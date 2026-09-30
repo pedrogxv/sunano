@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { enUS, ptBR } from "date-fns/locale"
 import { Bell, Heart, Loader2 } from "lucide-react"
 
@@ -210,13 +210,13 @@ export function NotificationBell() {
 
         {items.length > 0 && (
           <div className="shrink-0 border-t border-border p-2">
-            <Link
+            <RouteLink
               href="/conta/notificacoes"
               onClick={() => setOpen(false)}
               className="block rounded-md px-2 py-1.5 text-center text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
             >
               {t.notifications.viewAll}
-            </Link>
+            </RouteLink>
           </div>
         )}
       </PopoverContent>

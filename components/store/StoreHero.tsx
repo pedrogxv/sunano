@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ArrowRight, ChevronLeft, ChevronRight, Clock, Pause, Play, Rocket } from "lucide-react"
 
 import { isInternalBannerLink } from "@/lib/banner-link"
@@ -69,9 +70,9 @@ function HeroLink({
   children: React.ReactNode
 }) {
   return isInternalBannerLink(href) ? (
-    <Link href={href} tabIndex={tabIndex} className={className}>
+    <RouteLink href={href} tabIndex={tabIndex} className={className}>
       {children}
-    </Link>
+    </RouteLink>
   ) : (
     <a href={href} target="_blank" rel="noopener noreferrer" tabIndex={tabIndex} className={className}>
       {children}

@@ -224,15 +224,6 @@ export type ProfileShowcase = {
   reviews_integrity_accepted_at: string | null
   /** Ids de todos os periféricos já avaliados pelo usuário, sem cap — fecha o picker de criação de review não sugerir um já avaliado (o `reviewsByCategory` acima é capado). */
   reviewed_peripheral_ids: string[]
-  /**
-   * Nota que o DONO do perfil deu a cada periférico (`peripheralId → 1.0-5.0`).
-   *
-   * É o que deixa o card de setup/favoritos mostrar a estrela dele com a foto
-   * dele ao lado, como no card de "Meus Reviews" — sem isso a seção mostraria
-   * a média da comunidade em cima do avatar do dono, dizendo que a nota é
-   * dele. Mesma consulta que alimenta `reviewed_peripheral_ids`.
-   */
-  own_review_ratings: Record<string, number>
   /** Handle sem "@" — link exibido como ícone clicável no perfil público. */
   youtube_handle: string | null
   tiktok_handle: string | null

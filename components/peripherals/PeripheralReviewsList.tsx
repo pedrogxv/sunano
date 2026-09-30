@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 import {
@@ -264,9 +264,9 @@ export function PeripheralReviewsList({ peripheralId, peripheralSlug }: Peripher
 
       <div className="flex justify-center">
         <Button asChild variant="outline" size="sm">
-          <Link href={`/perifericos/${peripheralSlug}/reviews`}>
+          <RouteLink href={`/perifericos/${peripheralSlug}/reviews`}>
             Ver todos os reviews{totalCount ? ` (${totalCount})` : ""}
-          </Link>
+          </RouteLink>
         </Button>
       </div>
     </div>

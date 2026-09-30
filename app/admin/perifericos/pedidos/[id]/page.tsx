@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { RouteLink } from "@/components/ui/route-link"
 import { notFound, redirect } from "next/navigation"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -97,14 +97,14 @@ export default async function AdminPeripheralRequestPage({ params }: { params: P
         )}
 
         {request.peripheral && (
-          <Link
+          <RouteLink
             href={request.peripheral.href}
             target="_blank"
             className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 transition-colors hover:bg-emerald-500/10"
           >
             <span className="truncate text-sm font-medium text-foreground">{request.peripheral.displayName}</span>
             <ArrowRight className="size-4 shrink-0 text-emerald-400" />
-          </Link>
+          </RouteLink>
         )}
       </div>
 

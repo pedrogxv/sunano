@@ -34,7 +34,11 @@ import {
   PREORDER_PIX_EXPIRATION_MINUTES,
 } from "@/lib/server/repositories/orders-repository"
 import { getStoreSettings } from "@/lib/server/repositories/store-settings-repository"
-import { getAffiliateByCode } from "@/lib/server/repositories/affiliates-repository"
+import {
+  readAffiliateRefCookie,
+  resolveAffiliateCode,
+  type AffiliateAttribution,
+} from "@/lib/server/affiliate-attribution"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEventInBackground } from "@/lib/server/repositories/discord-orders-repository"
 import { canUseStoreNow } from "@/lib/server/auth/store-access"
@@ -67,9 +71,6 @@ const MAX_QUANTITY_PER_LINE = 20
  * um em "Meus Pedidos" (ou ele expira) e segue.
  */
 const MAX_PENDING_ORDERS_PER_USER = 3
-
-const AFFILIATE_REF_COOKIE = "sn_aff_ref"
-const AFFILIATE_REF_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 
 const checkoutItemSchema = z.object({
   productId: z
@@ -116,48 +117,14 @@ const checkoutBodySchema = z.object({
   shippingNeighborhood: z.unknown().optional(),
   shippingCity: z.unknown().optional(),
   shippingState: z.unknown().optional(),
+  /**
+   * Afiliado escolhido no seletor do checkout. Ausente = cliente antigo, vale
+   * o cookie do link. `null`/"" = a pessoa escolheu não apoiar ninguém, e
+   * isso também desliga o cookie.
+   */
+  affiliateCode: z.string().max(40).nullish(),
   /** Marca explícita de "não quero informar agora" — só aceita enquanto o endereço for opcional. */
 })
-
-/**
- * Resolve o afiliado a atribuir a esta venda a partir do cookie gravado pelo
- * proxy (`?ref=CODIGO`), se ainda dentro da janela de 30 dias e se o código
- * corresponde a um afiliado aprovado. Bloqueia auto-indicação silenciosamente
- * — o comprador logado com o próprio código não gera comissão para si mesmo,
- * mas a compra segue normalmente (não é motivo pra recusar o checkout).
- */
-async function resolveAffiliateAttribution(
-  request: NextRequest,
-  userId: string | null
-): Promise<{
-  affiliateId: string
-  affiliateCode: string
-  affiliateUserId: string
-} | null> {
-  const raw = request.cookies.get(AFFILIATE_REF_COOKIE)?.value
-  if (!raw) return null
-
-  let parsed: { code?: unknown; clickedAt?: unknown }
-  try {
-    parsed = JSON.parse(raw)
-  } catch {
-    return null
-  }
-
-  if (typeof parsed.code !== "string" || typeof parsed.clickedAt !== "number")
-    return null
-  if (Date.now() - parsed.clickedAt > AFFILIATE_REF_MAX_AGE_MS) return null
-
-  const affiliate = await getAffiliateByCode(parsed.code)
-  if (!affiliate) return null
-  if (userId && affiliate.user_id === userId) return null
-
-  return {
-    affiliateId: affiliate.id,
-    affiliateCode: parsed.code,
-    affiliateUserId: affiliate.user_id,
-  }
-}
 
 /**
  * Segunda barreira de auto-indicação, aplicada quando o CPF do pagador já foi
@@ -477,11 +444,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const affiliateAttribution = await resolveAffiliateAttribution(
-      request,
-      user.id
-    )
-
     const rawBody = await request.json().catch(() => null)
     const parsedBody = checkoutBodySchema.safeParse(rawBody)
     if (!parsedBody.success) {
@@ -491,6 +453,24 @@ export async function POST(request: NextRequest) {
       )
     }
     const { items, paymentMethod } = parsedBody.data
+
+    // Escolha do seletor ganha do cookie. Um código escolhido que não serve
+    // mais (afiliado suspenso entre abrir a tela e pagar) é recusado em vez
+    // de ignorado: a pessoa quis apoiar alguém e acharia que apoiou.
+    const chosenAffiliateCode = parsedBody.data.affiliateCode
+    let affiliateAttribution: AffiliateAttribution | null = null
+    if (chosenAffiliateCode === undefined) {
+      const cookieCode = readAffiliateRefCookie(request)
+      affiliateAttribution = cookieCode ? await resolveAffiliateCode(cookieCode, user.id) : null
+    } else if (chosenAffiliateCode) {
+      affiliateAttribution = await resolveAffiliateCode(chosenAffiliateCode, user.id)
+      if (!affiliateAttribution) {
+        return NextResponse.json(
+          { error: "O afiliado escolhido não está mais disponível. Escolha outro ou nenhum." },
+          { status: 400 }
+        )
+      }
+    }
 
     // Limite adicional (mais rígido) só pra tentativas de cartão, em cima do
     // limite geral acima — cartão é o alvo natural de spam/enumeração de

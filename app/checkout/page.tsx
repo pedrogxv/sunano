@@ -36,6 +36,7 @@ import {
 } from "@/components/store/CheckoutPayerCard"
 import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/RemoveCartItemDialog"
 import { CheckoutShippingCard } from "@/components/store/CheckoutShippingCard"
+import { CheckoutAffiliatePicker } from "@/components/store/CheckoutAffiliatePicker"
 import {
   EMPTY_SHIPPING_FORM,
   isShippingFormComplete,
@@ -145,6 +146,9 @@ export default function CheckoutPage() {
   const [error, setError] = useState<string | null>(null)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix")
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
+  // Afiliado escolhido no "Apoie um afiliado". `undefined` enquanto o seletor
+  // não carregou: aí o corpo não leva o campo e vale o cookie do link.
+  const [affiliateCode, setAffiliateCode] = useState<string | null | undefined>(undefined)
   // Divergências entre o carrinho (localStorage) e o banco, detectadas na
   // abertura da tela — mostradas ANTES do submit, não como erro depois dele.
   const [cartIssues, setCartIssues] = useState<ValidatedCartLine[]>([])
@@ -420,6 +424,7 @@ export default function CheckoutPage() {
           // servidor recusa um endereço pela metade (e faz bem — pedido com
           // rua e sem número parece pronto para despachar e não é).
           ...(shippingComplete && !shippingSkipped ? shippingFormToPayload(shippingForm) : {}),
+          ...(affiliateCode !== undefined ? { affiliateCode } : {}),
         }),
       })
 
@@ -805,6 +810,12 @@ export default function CheckoutPage() {
             skipped={shippingSkipped}
             onSkippedChange={setShippingSkipped}
           />
+        )}
+
+        {/* Logo acima do botão de pagar: é o último passo antes de finalizar,
+            onde a pessoa ainda lembra de quem a trouxe até aqui. */}
+        {!authLoading && user && payerInfoChecked && (
+          <CheckoutAffiliatePicker value={affiliateCode} onChange={setAffiliateCode} disabled={loading} />
         )}
 
         {/* Loja fechada: avisa ANTES do botão, e o botão fica desabilitado —

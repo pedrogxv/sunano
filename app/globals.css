@@ -2793,3 +2793,74 @@ button:not(:disabled):hover .aura-icon-holder {
     animation: none;
   }
 }
+
+/* ════════════════════════════════════════════
+   "Apoie um afiliado" no checkout (CheckoutAffiliatePicker.tsx): a borda dá
+   voltas de 360° para a pessoa não esquecer de escolher. Mesmo "picture
+   frame" do `.aura-stat-card` (conic-gradient girando atrás, miolo coberto
+   pelo `::after`), mas na paleta da Loja (esmeralda → ciano → violeta): a
+   rampa quente é da Aura, e aqui não se ganha Aura.
+
+   O quadrado que gira é `aspect-ratio: 1` com 200% da LARGURA, não 250% de
+   largura E altura: num card largo e baixo, um retângulo girando deixa a
+   borda de cima e de baixo sem cor quando fica em pé.
+   ════════════════════════════════════════════ */
+@keyframes checkout-affiliate-border-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.checkout-affiliate-card {
+  isolation: isolate;
+  overflow: hidden;
+  border-color: transparent;
+  box-shadow: 0 0 24px -8px oklch(0.7 0.17 162 / 0.45);
+}
+
+.checkout-affiliate-card::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -2;
+  width: 200%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: conic-gradient(
+    from 0deg,
+    oklch(0.7 0.17 162),
+    oklch(0.78 0.14 200),
+    oklch(0.62 0.2 290),
+    oklch(0.7 0.17 162) 50%,
+    transparent 62%,
+    transparent 88%,
+    oklch(0.7 0.17 162)
+  );
+  pointer-events: none;
+  animation: checkout-affiliate-border-spin 2.6s linear infinite;
+}
+
+.checkout-affiliate-card::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  z-index: -1;
+  border-radius: calc(var(--radius-xl, 0.75rem) - 2px);
+  background: var(--card);
+  pointer-events: none;
+}
+
+/* Escolhido: a volta desacelera e o brilho baixa, para não disputar com o
+   botão de pagar logo abaixo. */
+.checkout-affiliate-card[data-selected]::before {
+  animation-duration: 7s;
+}
+.checkout-affiliate-card[data-selected] {
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .checkout-affiliate-card::before {
+    animation: none;
+  }
+}

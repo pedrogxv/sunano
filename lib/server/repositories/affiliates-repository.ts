@@ -85,6 +85,46 @@ export async function getAffiliateByCode(code: string): Promise<AffiliateRow | n
   return data as AffiliateRow | null
 }
 
+export type CheckoutAffiliateOption = { code: string; user_id: string }
+
+/**
+ * Afiliados que o comprador pode escolher apoiar no checkout: aprovados, com
+ * código, e sem conta banida (banir não suspende a afiliação sozinho, e o
+ * seletor não pode oferecer quem a moderação tirou do site). O próprio
+ * comprador fica de fora: auto-indicação não gera comissão.
+ */
+export async function listCheckoutAffiliates(excludeUserId: string): Promise<CheckoutAffiliateOption[]> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("affiliates")
+    .select("code, user_id")
+    .eq("status", "approved")
+    .not("code", "is", null)
+    .neq("user_id", excludeUserId)
+    .order("approved_at", { ascending: true })
+    .limit(500)
+  if (error) {
+    console.error("[affiliates-repository] listCheckoutAffiliates:", error)
+    return []
+  }
+  const rows = (data ?? []) as CheckoutAffiliateOption[]
+  if (rows.length === 0) return []
+
+  // `affiliates.user_id` referencia `auth.users`, não `user_profiles`, então
+  // não há join embutido: a trava de ban é uma segunda consulta, em lote.
+  const { data: banned, error: bannedError } = await db
+    .from("user_profiles")
+    .select("id")
+    .in("id", rows.map((row) => row.user_id))
+    .not("account_banned_at", "is", null)
+  if (bannedError) {
+    console.error("[affiliates-repository] listCheckoutAffiliates (ban):", bannedError)
+    return []
+  }
+  const bannedIds = new Set((banned ?? []).map((row) => row.id))
+  return rows.filter((row) => !bannedIds.has(row.user_id))
+}
+
 /**
  * Checa se um código está livre para uso. `exceptAffiliateId` permite que o
  * próprio dono da solicitação "reserve" o código que ele já tem (reenvio sem

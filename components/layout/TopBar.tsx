@@ -58,7 +58,6 @@ const ADMIN_PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/eventos":     { title: "Conquistas", description: "Gerencie as conquistas que concedem medalhas automaticamente." },
   "/admin/maintenance": { title: "Modo de manutenção", description: "Ative o modo de manutenção do site." },
   "/admin/notificacoes":{ title: "Avisos do sistema", description: "Envie um recado que aparece no sino de quem usa o site." },
-  "/admin/login":       { title: "Login" },
 }
 
 type Dict = ReturnType<typeof useT>
@@ -208,7 +207,6 @@ export function TopBar() {
               <AuthUser
                 layout="topbar"
                 variant="public"
-                loginHref="/login"
               />
             </>
           )}

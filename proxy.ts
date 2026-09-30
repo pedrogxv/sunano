@@ -416,7 +416,6 @@ function resolveLandingPath(profile: AdminProfile | null) {
 export async function proxy(request: NextRequest, event: NextFetchEvent) {
   const { pathname } = request.nextUrl
   const isAdminRoute = pathname.startsWith("/admin")
-  const isLoginRoute = pathname === "/admin/login"
   const maintenanceMode = isMaintenanceEnabled()
   const isStoreOrderWritePath = STORE_ORDER_WRITE_PATHS.includes(pathname)
   const isAffiliatePath = AFFILIATE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
@@ -443,6 +442,15 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   // abaixo, para que quem tem `store_access` possa passar.
   if (storeMaintenanceMode && !hasSupabaseSession(request)) {
     return storeMaintenanceResponse(request, isAffiliatePath)
+  }
+
+  // O login é um só para membro e cargo (o /login já manda admin ao painel).
+  // O antigo /admin/login só redireciona, para links salvos não darem 404.
+  if (pathname === "/admin/login") {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = "/login"
+    loginUrl.search = ""
+    return NextResponse.redirect(loginUrl, 308)
   }
 
   // Mercado REMOVIDO do produto (2026-09-12): as rotas `/mercado/**` e
@@ -736,10 +744,10 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   if (maintenanceMode && !isWebMaster(profile)) {
     // `/maintenance` é o destino desta própria regra: precisa renderizar, ou o
     // redirect abaixo a mandaria para o login e o usuário nunca veria o aviso.
-    // `/admin/login` continua aberto para o WEB MASTER conseguir entrar — sem
-    // ele a manutenção se tornaria irreversível pela interface.
+    // `/login` (em `isPublicAuthRoute`) continua aberto para o WEB MASTER
+    // conseguir entrar — sem ele a manutenção se tornaria irreversível pela
+    // interface.
     if (
-      isLoginRoute ||
       isPublicAuthRoute(pathname) ||
       pathname === MAINTENANCE_STATUS_PATH ||
       isMachineToMachinePath(pathname)
@@ -777,20 +785,14 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return maintenanceResponse
   }
 
-  if (isAdminRoute && !profile && !isLoginRoute) {
-    const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = "/admin/login"
+  // Sem sessão vai ao login; logado sem cargo não tem o que ver no painel, e
+  // mandá-lo ao login mostraria a tela de entrar para quem já entrou.
+  if (isAdminRoute && !profile) {
+    const targetUrl = request.nextUrl.clone()
+    targetUrl.pathname = user ? "/" : "/login"
+    targetUrl.search = ""
 
-    const redirectResponse = NextResponse.redirect(loginUrl)
-    copyCookies(response, redirectResponse)
-    return redirectResponse
-  }
-
-  if (profile && isLoginRoute) {
-    const adminUrl = request.nextUrl.clone()
-    adminUrl.pathname = "/admin"
-
-    const redirectResponse = NextResponse.redirect(adminUrl)
+    const redirectResponse = NextResponse.redirect(targetUrl)
     copyCookies(response, redirectResponse)
     return redirectResponse
   }
@@ -804,7 +806,7 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     return redirectResponse
   }
 
-  if (profile && isAdminRoute && !isLoginRoute) {
+  if (profile && isAdminRoute) {
     const requiredPermission = getRequiredPermission(pathname)
     const hasAccess = requiredPermission ? hasAdminPermission(profile, requiredPermission) : true
 

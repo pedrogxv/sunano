@@ -301,21 +301,13 @@ export async function GET(request: NextRequest) {
       }))
     )
 
-    // O destino do OAuth vem da query (`next`) e é controlável pelo cliente —
-    // o botão do /admin/login manda "/admin". Quem não tem perfil
-    // administrativo nunca pode ser levado ao painel: sem isso a pessoa
-    // entrava, era barrada pelo proxy e ficava logada presa no /admin/login,
-    // sem explicação. Espelha o `loginAction`: encerra a sessão e avisa.
+    // O destino do OAuth vem da query (`next`) e é controlável pelo cliente:
+    // quem não tem cargo e pediu o painel entra normalmente e vai ao fórum.
+    // Admins que entraram pelo login padrão vão direto ao painel.
     const wantsAdmin = next === "/admin" || next.startsWith("/admin/")
     const isAdmin = await isAdminUser(authData.user.id)
-
-    if (wantsAdmin && !isAdmin) {
-      await supabase.auth.signOut()
-      return NextResponse.redirect(`${origin}/admin/login?error=no_admin_access`)
-    }
-
-    // Admins que entraram pelo site público vão direto ao painel.
-    const destination = next === "/forum" && isAdmin ? "/admin" : next
+    const destination =
+      wantsAdmin && !isAdmin ? "/forum" : next === "/forum" && isAdmin ? "/admin" : next
 
     // 2FA ativo: a sessão OAuth também nasce em aal1. Exige o segundo fator
     // antes de seguir para o destino.

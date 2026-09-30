@@ -31,8 +31,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   // chave na primeira vez que `isOpen` aparece `true`.
   const [hasOpenedAuthModal, setHasOpenedAuthModal] = useState(false)
   if (isAuthModalOpen && !hasOpenedAuthModal) setHasOpenedAuthModal(true)
-  const isAdminLogin = pathname === "/admin/login"
-  const isAdmin = pathname.startsWith("/admin") && !isAdminLogin
+  const isAdmin = pathname.startsWith("/admin")
   // Idem TopBar: a gaveta do carrinho não deve flutuar por cima do fluxo de checkout.
   const isCheckout = pathname.startsWith("/checkout")
   const isAuthPage =
@@ -50,7 +49,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
   // Admin pages that self-manage their own padding/max-width (like PerifericosContent)
   const isSelfPaddedAdminPage = pathname === "/admin/perifericos"
 
-  if (isAdminLogin || isAuthPage || isMaintenancePage) {
+  if (isAuthPage || isMaintenancePage) {
     return (
       <div className="min-h-screen bg-background text-foreground">
         {children}

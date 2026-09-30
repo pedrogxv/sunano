@@ -30,8 +30,6 @@ import { vipCtaLabel, vipCtaShortLabel } from "@/lib/vip-status"
 
 interface AuthUserProps {
   isCollapsed?: boolean
-  /** Para onde mandar ao logar/deslogar. Sidebar pública usa "/login"; admin, "/admin/login". */
-  loginHref?: string
   /** "public" mostra "Meu Perfil" (vitrine pública) e "Configurações da conta" (/conta); "admin" mostra "Configurações" (/admin/settings). */
   variant?: "public" | "admin"
   /** "sidebar" (padrão) usa o layout de rodapé; "topbar" usa um avatar compacto no canto,
@@ -45,7 +43,7 @@ interface AuthUserProps {
   mobileExtraItems?: React.ReactNode
 }
 
-export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", variant = "admin", layout = "sidebar", mobileExtraItems }: AuthUserProps) {
+export function AuthUser({ isCollapsed = false, variant = "admin", layout = "sidebar", mobileExtraItems }: AuthUserProps) {
   const t = useT()
   const { user: authUser, pending } = useAuthUser()
   const { openLogin } = useAuthModal()
@@ -62,8 +60,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
   // no browser a variante sem NEXT_PUBLIC_ não existe.
   const showAffiliates = authUser?.canUseStore ?? false
   const [vipUpsellOpen, setVipUpsellOpen] = useState(false)
-  // Só a topbar pública abre o modal — a sidebar de admin (/admin/login) segue
-  // navegando de verdade, já que aquele login não é o alvo deste modal.
+  // Só a topbar pública abre o modal; a sidebar de admin navega até o /login.
   const useModal = variant === "public" && layout === "topbar"
   const user = authUser ? { name: authUser.displayName, email: authUser.email, avatar: authUser.avatarUrl || "" } : null
   // A moldura da sessão em um objeto só: a topbar desenha a MESMA que o resto
@@ -121,14 +118,14 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
         )
       }
       return (
-        <Link href={loginHref} className={className}>
+        <Link href="/login" className={className}>
           {content}
         </Link>
       )
     }
     return (
       <RouteLink
-        href={loginHref}
+        href="/login"
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/40 hover:text-foreground",
           isCollapsed && "justify-center px-0"
@@ -377,7 +374,7 @@ export function AuthUser({ isCollapsed = false, loginHref = "/admin/login", vari
           className="cursor-pointer text-red-400 focus:bg-red-500/10 focus:text-red-300"
           onSelect={async () => {
             await signOutSafely()
-            window.location.href = loginHref
+            window.location.href = "/login"
           }}
         >
           <LogOut className="size-4" />

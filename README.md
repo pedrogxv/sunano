@@ -8,7 +8,7 @@ Set `MAINTENANCE_MODE=true` (or `NEXT_PUBLIC_MAINTENANCE_MODE=true`) in your env
 
 When enabled:
 
-- Public routes redirect to `/admin/login`
+- Public routes show the maintenance screen (`503`); login stays open at `/login`
 - The maintenance panel lives at `/admin/maintenance`
 - Non-authenticated API requests return `503`
 - Logged-in admin users keep normal access

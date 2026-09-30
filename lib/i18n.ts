@@ -902,33 +902,6 @@ type Translations = {
       saveChanges: string
       createPeripheral: string
     }
-    login: {
-      title: string
-      description: string
-      password: string
-      yourPassword: string
-      signIn: string
-      signingIn: string
-      or: string
-      forgotPassword: string
-      continueWithGoogle: string
-      continueWithDiscord: string
-      passwordReset: string
-      passwordResetDesc: string
-      sendResetLink: string
-      sending: string
-      resetSentIfRegistered: string
-      backToLogin: string
-      enterEmail: string
-      enterValidEmail: string
-      errors: {
-        missingCredentials: string
-        invalidCredentials: string
-        noAdminAccess: string
-        captchaFailed: string
-        tooManyAttempts: string
-      }
-    }
     tierlistPage: {
       newPeripheral: string
       dragAndDropHint: string
@@ -1976,34 +1949,7 @@ export const translations: Record<LocaleCode, Translations> = {
         stateFromEnv: "Estado lido diretamente da variavel de ambiente.",
         active: "ativo",
         inactive: "inativo",
-        reopen: "Se precisar liberar o site, desative MAINTENANCE_MODE no deploy. Se quiser manter a administracao disponivel, o login continua acessivel em /admin/login.",
-      },
-      login: {
-        title: "Entrar no admin",
-        description: "Gerencie o site com segurança usando sua conta.",
-        password: "Senha",
-        yourPassword: "Sua senha",
-        signIn: "Entrar",
-        signingIn: "Entrando...",
-        or: "ou",
-        forgotPassword: "Esqueci minha senha",
-        continueWithGoogle: "Continuar com Google",
-        continueWithDiscord: "Continuar com Discord",
-        passwordReset: "Redefinição de senha",
-        passwordResetDesc: "Informe o email da sua conta e enviaremos um link para criar uma nova senha.",
-        sendResetLink: "Enviar link de redefinição",
-        sending: "Enviando...",
-        resetSentIfRegistered: "Se o email estiver cadastrado, você receberá as instruções em breve.",
-        backToLogin: "Voltar ao login",
-        enterEmail: "Informe seu email.",
-        enterValidEmail: "Informe um email válido.",
-        errors: {
-          missingCredentials: "Informe email e senha.",
-          invalidCredentials: "Credenciais inválidas.",
-          noAdminAccess: "Conta sem acesso ao admin.",
-          captchaFailed: "Não foi possível confirmar que você não é um robô. Tente novamente.",
-          tooManyAttempts: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
-        },
+        reopen: "Se precisar liberar o site, desative MAINTENANCE_MODE no deploy. Se quiser manter a administracao disponivel, o login continua acessivel em /login.",
       },
       tierlistForm: {
         parentPeripherals: "Periféricos",
@@ -3522,7 +3468,7 @@ export const translations: Record<LocaleCode, Translations> = {
         stateFromEnv: "State read directly from environment variable.",
         active: "active",
         inactive: "inactive",
-        reopen: "If you need to reopen the site, disable MAINTENANCE_MODE on deploy. To keep administration available, login stays accessible at /admin/login.",
+        reopen: "If you need to reopen the site, disable MAINTENANCE_MODE on deploy. To keep administration available, login stays accessible at /login.",
       },
       tierlistForm: {
         parentPeripherals: "Peripherals",
@@ -3588,33 +3534,6 @@ export const translations: Record<LocaleCode, Translations> = {
         saving: "Saving...",
         saveChanges: "Save changes",
         createPeripheral: "Create peripheral",
-      },
-      login: {
-        title: "Sign in to admin",
-        description: "Manage the website securely with your account.",
-        password: "Password",
-        yourPassword: "Your password",
-        signIn: "Sign in",
-        signingIn: "Signing in...",
-        or: "or",
-        forgotPassword: "Forgot my password",
-        continueWithGoogle: "Continue with Google",
-        continueWithDiscord: "Continue with Discord",
-        passwordReset: "Password reset",
-        passwordResetDesc: "Enter your account email and we'll send a reset link.",
-        sendResetLink: "Send reset link",
-        sending: "Sending...",
-        resetSentIfRegistered: "If the email is registered, you will receive the reset instructions shortly.",
-        backToLogin: "Back to login",
-        enterEmail: "Enter your email.",
-        enterValidEmail: "Enter a valid email.",
-        errors: {
-          missingCredentials: "Enter email and password.",
-          invalidCredentials: "Invalid credentials.",
-          noAdminAccess: "Account has no admin access.",
-          captchaFailed: "We could not confirm you are not a robot. Please try again.",
-          tooManyAttempts: "Too many attempts. Wait a few minutes and try again.",
-        },
       },
       tierlistPage: {
         newPeripheral: "New Peripheral",

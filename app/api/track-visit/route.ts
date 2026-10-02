@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
+import { isBotUserAgent } from "@/lib/bot-user-agent"
 import { checkRateLimit, getClientIdentifier } from "@/lib/server/rate-limit"
 import { secretsMatch } from "@/lib/server/secret-compare"
 import {
@@ -48,6 +49,12 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-real-ip") ||
       "unknown"
     const userAgent = request.headers.get("user-agent") || "unknown"
+
+    // Mesmo corte que o proxy faz: crawler não guarda o cookie de dedupe, e
+    // cada hit dele viraria uma escrita nova. "Visitante" aqui é pessoa.
+    if (isBotUserAgent(userAgent)) {
+      return new NextResponse(null, { status: 204 })
+    }
 
     // Teto por origem: o proxy já evita a chamada repetida via cookie
     // (`sn_visit_tracked`), então tráfego legítimo fica muito abaixo disso.

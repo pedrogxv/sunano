@@ -2,6 +2,7 @@ import type { NextFetchEvent, NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
 import { hasAdminPermission, isWebMaster, type AdminPermissionKey, type AdminProfile } from "@/lib/admin-permissions"
+import { isBotUserAgent } from "@/lib/bot-user-agent"
 import { isMfaStepUpRequired, sanitizeNextPath, TRUSTED_DEVICE_COOKIE_NAME, TWO_FACTOR_PATH } from "@/lib/auth-mfa"
 import {
   IMPERSONATION_ACTIVE_COOKIE,
@@ -323,6 +324,12 @@ function todayIso() {
 // `x-internal-token` — não é mais o caminho usado aqui.
 function trackVisit(request: NextRequest, event: NextFetchEvent, response: NextResponse) {
   if (request.method !== "GET" || request.nextUrl.pathname.startsWith("/api")) return
+
+  // Crawler não guarda cookie, então o `sn_visit_tracked` abaixo nunca o
+  // segura: cada pageview dele era um INSERT novo em `site_visits`. Fica
+  // ANTES do cookie porque não há o que lembrar de um cliente que não o
+  // devolve — e "visitante" no dashboard quer dizer pessoa, não indexador.
+  if (isBotUserAgent(request.headers.get("user-agent"))) return
 
   const today = todayIso()
   if (request.cookies.get(VISIT_TRACKED_COOKIE)?.value === today) return

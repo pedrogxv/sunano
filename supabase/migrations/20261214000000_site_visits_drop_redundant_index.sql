@@ -1,0 +1,16 @@
+-- Disk IO: `site_visits` era a maior tabela do banco (10 MB de 47 MB) e tinha
+-- 7,4 MB de índice para 3,1 MB de dados. Parte disso é um índice redundante.
+--
+-- `idx_site_visits_hash` é (visitor_hash, visited_date) — definição IDÊNTICA
+-- ao índice que a constraint `unique (visitor_hash, visited_date)` já cria
+-- automaticamente (`site_visits_visitor_hash_visited_date_key`). Duas árvores
+-- com as mesmas colunas na mesma ordem: toda escrita na tabela mantinha as
+-- duas, e as buscas por hash iam para a da constraint de qualquer forma
+-- (562k scans nela contra 11k no índice solto).
+--
+-- Dropar não muda plano de consulta nenhum: a constraint continua cobrindo
+-- tanto a checagem de "já visitou hoje" (recordVisit) quanto a de recorrência
+-- (hash em datas anteriores). `idx_site_visits_date`, sobre (visited_date),
+-- FICA — é o que serve as contagens por período do dashboard, e a constraint
+-- não o substitui porque lá `visited_date` é a segunda coluna.
+drop index if exists public.idx_site_visits_hash;

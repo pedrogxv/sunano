@@ -44,17 +44,44 @@ export function hashVisitor(ip: string, userAgent: string): string {
 }
 
 /**
- * Registra a visita do dia para este hash. Upsert idempotente: a mesma
+ * Registra a visita do dia para este hash. Idempotente por dia: a mesma
  * pessoa navegando várias páginas no mesmo dia grava uma linha só, então a
  * contagem é de visitantes, não de pageviews.
+ *
+ * Checa a existência ANTES de inserir, em vez de delegar ao `on conflict do
+ * nothing` do upsert. Parece um round-trip a mais, mas inverte o custo de
+ * disco: um `select` na constraint única é leitura pura (o banco é pequeno e
+ * fica 100% em cache, logo zero IO), enquanto um INSERT descartado pelo
+ * conflito **já escreveu no WAL e nos índices** antes de descobrir que a
+ * linha existia — Postgres não detecta o conflito sem escrever primeiro.
+ * Com ~88% dos INSERTs sendo duplicatas, era essa escrita jogada fora que
+ * esgotava o Disk IO Budget do projeto e inflou o índice a 2,4× o heap.
+ *
+ * A corrida entre o select e o insert é benigna e fica com o banco: dois
+ * pageviews simultâneos do mesmo visitante podem passar os dois pelo select,
+ * e aí a constraint única rejeita o segundo — `23505` é ignorado abaixo,
+ * porque "a linha do dia já existe" é exatamente o resultado desejado.
  */
 export async function recordVisit(visitorHash: string, date: string = todayIso()): Promise<void> {
   const db = createSupabaseAdminClient()
-  const { error } = await db
-    .from("site_visits")
-    .upsert({ visitor_hash: visitorHash, visited_date: date }, { onConflict: "visitor_hash,visited_date", ignoreDuplicates: true })
 
-  if (error) {
+  const { count, error: selectError } = await db
+    .from("site_visits")
+    .select("visitor_hash", { count: "exact", head: true })
+    .eq("visitor_hash", visitorHash)
+    .eq("visited_date", date)
+
+  if (selectError) {
+    console.error("[visits-repository] recordVisit (select):", selectError)
+    throw selectError
+  }
+  if ((count ?? 0) > 0) return
+
+  const { error } = await db.from("site_visits").insert({ visitor_hash: visitorHash, visited_date: date })
+
+  // 23505 = unique_violation: outro request do mesmo visitante inseriu entre
+  // o select e este insert. O estado final é o correto, então não é erro.
+  if (error && error.code !== "23505") {
     console.error("[visits-repository] recordVisit:", error)
     throw error
   }

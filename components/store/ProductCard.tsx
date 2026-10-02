@@ -30,6 +30,8 @@ const CONDITION_LABEL: Record<"new" | "used" | "opened", string> = {
 type ProductCardProps = StoreProductCard & {
   /** `showcase`: cartão grande e mais vistoso, para seções com poucos itens (Serviços). */
   variant?: "default" | "showcase"
+  /** Pede confirmação ao desfavoritar (lista de favoritos, onde o card some ao clicar). */
+  confirmFavoriteRemoval?: boolean
 }
 
 /** O selo principal, no canto da foto. Cor, ícone e texto vêm de `STORE_CARD_BADGE`. */
@@ -378,6 +380,7 @@ export function ProductCard(props: ProductCardProps) {
       <FavoriteButton
         productId={props.id}
         productName={props.name}
+        confirmRemoval={props.confirmFavoriteRemoval}
         className={cn(
           "absolute z-[3] transition-transform duration-200",
           showcase ? "right-5 top-5 group-hover:-translate-y-1.5" : "right-2.5 top-2.5 group-hover:-translate-y-1"

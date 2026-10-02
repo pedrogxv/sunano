@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 import { useAuthUser } from "@/components/providers/auth-context"
@@ -41,11 +41,14 @@ export function StoreFavoritesProvider({ children }: { children: React.ReactNode
   const { user, loading: authLoading } = useAuthUser()
   const { openLogin } = useAuthModal()
   const pathname = usePathname()
+  const router = useRouter()
   const userId = user?.id ?? null
 
   const [requested, setRequested] = useState(false)
   const [owned, setOwned] = useState<{ userId: string; ids: Set<string> } | null>(null)
   const inFlight = useRef(new Set<string>())
+  /** Estado que o último clique pediu, por produto, enquanto há requisição pendente. */
+  const desired = useRef(new Map<string, boolean>())
 
   useEffect(() => {
     if (!requested || authLoading || !userId) return
@@ -76,10 +79,8 @@ export function StoreFavoritesProvider({ children }: { children: React.ReactNode
         openLogin(pathname || "/loja")
         return
       }
-      if (!ids || inFlight.current.has(productId)) return
+      if (!ids) return
 
-      const next = !ids.has(productId)
-      inFlight.current.add(productId)
       const apply = (favorite: boolean) =>
         setOwned((prev) => {
           if (!prev || prev.userId !== userId) return prev
@@ -89,25 +90,49 @@ export function StoreFavoritesProvider({ children }: { children: React.ReactNode
           return { userId, ids: updated }
         })
 
-      apply(next)
+      // Vale o ÚLTIMO clique: o coração troca na hora a cada toque, mas só
+      // existe uma requisição por produto de cada vez. Cliques durante ela só
+      // mudam `desired`; ao voltar, o laço reenvia se o desejado mudou. Antes,
+      // o clique com requisição pendente era descartado e o botão parecia travado.
+      const before = ids.has(productId)
+      apply(!before)
+      desired.current.set(productId, !before)
+      if (inFlight.current.has(productId)) return
+
+      inFlight.current.add(productId)
+      // Estado que o servidor confirmou por último; começa no de antes do clique.
+      let confirmed = before
       try {
-        const res = await fetch("/api/store/favorites", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ productId, favorite: next }),
-        })
-        if (!res.ok) {
-          const data = (await res.json().catch(() => null)) as { error?: string } | null
-          throw new Error(data?.error ?? "Não foi possível atualizar seus favoritos.")
+        while (desired.current.get(productId) !== confirmed) {
+          const target = desired.current.get(productId) as boolean
+          const res = await fetch("/api/store/favorites", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId, favorite: target }),
+          })
+          if (!res.ok) {
+            const data = (await res.json().catch(() => null)) as { error?: string } | null
+            throw new Error(data?.error ?? "Não foi possível atualizar seus favoritos.")
+          }
+          confirmed = target
+        }
+        // O coração muda de cor e só: sem o atalho, quem favorita não sabe onde a lista mora.
+        // `id` fixo por produto: o toast é substituído, não empilhado.
+        if (confirmed && !before && pathname !== "/loja/favoritos") {
+          toast.success("Adicionado aos favoritos", {
+            id: `store-favorite-${productId}`,
+            action: { label: "Ver favoritos", onClick: () => router.push("/loja/favoritos") },
+          })
         }
       } catch (error) {
-        apply(!next)
+        apply(confirmed)
         toast.error(error instanceof Error ? error.message : "Não foi possível atualizar seus favoritos.")
       } finally {
         inFlight.current.delete(productId)
+        desired.current.delete(productId)
       }
     },
-    [userId, ids, openLogin, pathname]
+    [userId, ids, openLogin, pathname, router]
   )
 
   const value = useMemo<StoreFavoritesContextValue>(

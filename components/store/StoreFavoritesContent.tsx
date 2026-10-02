@@ -122,7 +122,7 @@ export function StoreFavoritesContent({ filterOptions }: { filterOptions: StoreF
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5 lg:grid-cols-4">
             {visible.map((product) => (
-              <ProductCard key={product.id} {...product} />
+              <ProductCard key={product.id} {...product} confirmFavoriteRemoval />
             ))}
           </div>
         )}

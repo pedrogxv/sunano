@@ -14,6 +14,7 @@ import {
 } from "@/lib/server/repositories/affiliates-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
+import { sendOrderEmail } from "@/lib/server/repositories/order-emails-repository"
 import type { OrderEventStatus } from "@/lib/server/integrations/discord-order-card"
 import { openServiceOrderTicket } from "@/lib/server/repositories/support-repository"
 
@@ -467,6 +468,12 @@ export async function POST(request: NextRequest) {
     // pedido (pedido físico é ignorado lá dentro).
     for (const order of updatedOrders ?? []) {
       await openServiceOrderTicket(order.id)
+    }
+
+    // E-mail de compra confirmada: só aqui, na transição para pago — o
+    // UPDATE acima só devolve o pedido na primeira confirmação.
+    for (const order of updatedOrders) {
+      await sendOrderEmail(order.id, "confirmed")
     }
 
     // Fora do laço acima de propósito: pedido de convidado não tem dono para

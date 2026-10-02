@@ -2,6 +2,7 @@ import "server-only"
 
 import { isVipActive, profileMediaProxyUrl } from "@/lib/account-tier"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { sendOrderEmail } from "@/lib/server/repositories/order-emails-repository"
 import { parseSlug } from "@/lib/format"
 import { validateDisplayName } from "@/lib/profile-name"
 import { isDisplayNameAvailable } from "@/lib/server/repositories/users-repository"
@@ -275,6 +276,7 @@ export async function redeemAuraPeripheral(
   switch (data) {
     case "ok": {
       const orderId = await createAuraPeripheralOrder(db, userId, itemId, shipping)
+      if (orderId) await sendOrderEmail(orderId, "confirmed")
       return { ok: true, orderId }
     }
     case "already_claimed":

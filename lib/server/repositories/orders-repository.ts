@@ -5,6 +5,7 @@ import type { Database } from "@/lib/database.types"
 import { getUserProfiles } from "@/lib/server/repositories/users-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
+import { sendOrderEmail } from "@/lib/server/repositories/order-emails-repository"
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
@@ -878,6 +879,10 @@ export async function advanceOrderStatus(
   if (ownerId) {
     await notifyOrderStatusChange({ userId: ownerId, orderId: id, status: nextStatus, requiresShipping })
   }
+
+  // Por e-mail só o envio (com o rastreio): "entregue" o cliente costuma
+  // confirmar ele mesmo, e o Resend está no plano gratuito.
+  if (nextStatus === "shipped") await sendOrderEmail(id, "shipped")
 
   // Discord fica FORA do `if (ownerId)`: um pedido de convidado não tem quem
   // notificar no site, mas a equipe precisa vê-lo no canal igual aos outros.

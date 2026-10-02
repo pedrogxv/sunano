@@ -119,18 +119,21 @@ export default async function ForumPostPage({
       ...(post.author_display_slug ? { url: `${SITE_URL}${profilePath(post.author_display_slug)}` } : {}),
     },
     // `about` descreve o assunto do tópico: a categoria e, quando há,
-    // os periféricos citados como entidades `Product`. É o que liga a
-    // discussão ao produto nos dados estruturados — o equivalente
-    // semântico do link que os chips já dão em HTML.
+    // os periféricos citados. É o que liga a discussão ao produto nos dados
+    // estruturados — o equivalente semântico do link que os chips já dão em
+    // HTML. NUNCA `@type: "Product"` aqui: o Google valida todo nó Product,
+    // até aninhado, e exige `offers`/`review`/`aggregateRating` — o post era
+    // reprovado com "Especifique offers, review ou aggregateRating"
+    // (Search Console, 17/09/2026). O Product completo mora na ficha
+    // `/perifericos/[slug]`, para onde o `url` aponta.
     ...(post.category || peripherals.length > 0
       ? {
           about: [
             ...(post.category ? [post.category.name] : []),
             ...peripherals.map((peripheral) => ({
-              "@type": "Product",
+              "@type": "Thing",
               name: buildPeripheralDisplayName(peripheral.brand, peripheral.name),
               url: `${SITE_URL}/perifericos/${peripheral.slug}`,
-              ...(peripheral.brand ? { brand: { "@type": "Brand", name: peripheral.brand } } : {}),
               ...(peripheral.image_url ? { image: peripheral.image_url } : {}),
             })),
           ],

@@ -12,7 +12,7 @@ import {
 import { restrictToParentElement } from "@dnd-kit/modifiers"
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Ban, Boxes, GripVertical, Loader2, Minus, Plus, Sparkles, Trash2, Upload, X } from "lucide-react"
+import { Ban, BadgeCheck, Boxes, GripVertical, Loader2, Megaphone, Minus, Plus, RefreshCcw, Rocket, Sparkles, Trash2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +36,26 @@ import { compressImageFile } from "@/lib/client/compress-image"
 import { EmojiPicker } from "@/components/ui/emoji-picker"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
+import {
+  BEST_SELLER_MIN_UNITS,
+  BEST_SELLER_TOP,
+  BEST_SELLER_WINDOW_DAYS,
+  CARD_HIGHLIGHT_MAX_CHARS,
+  CARD_HIGHLIGHTS_MAX,
+  LOW_STOCK_MAX_UNITS,
+  NEW_PRODUCT_DAYS,
+  sanitizeCardHighlights,
+  STORE_CARD_BADGE_CHOICE_LABEL,
+  STORE_CARD_BADGE_CHOICES,
+} from "@/lib/store-card"
+import { PREORDER_STATUSES, PREORDER_STATUS_LABEL, type PreorderStatus } from "@/lib/store-preorder"
+import {
+  buildCombinations,
+  isEmptySkuDraft,
+  ProductSkuMatrix,
+  skuDraftKey,
+  type SkuDraft,
+} from "@/components/admin/store/ProductSkuMatrix"
 
 interface StoreProductSpec {
   id?: string
@@ -97,7 +117,7 @@ interface VariantGroupRow {
   options: VariantGroupOptionRow[]
 }
 
-interface StoreProduct {
+export interface StoreProduct {
   id: string
   slug: string
   name: string
@@ -119,6 +139,27 @@ interface StoreProduct {
   requires_shipping?: boolean
   features?: string[]
   video_url?: string | null
+  card_badge?: string | null
+  card_highlights?: string[]
+  /** Colunas da migration 20261213000001 (ausentes antes dela). */
+  sku?: string | null
+  preorder_batch_name?: string | null
+  preorder_ships_at?: string | null
+  preorder_status?: PreorderStatus
+  is_launch?: boolean
+  launch_until?: string | null
+}
+
+/** Combinação salva (store_product_skus), como a API de edição devolve. */
+export interface StoreProductSkuInput {
+  variant_id: string | null
+  option_ids: string[]
+  sku: string | null
+  price_cents: number | null
+  promo_price_cents: number | null
+  stock: number | null
+  image_url: string | null
+  is_sold_out: boolean
 }
 
 interface StoreProductFormProps {
@@ -126,7 +167,9 @@ interface StoreProductFormProps {
   initialSpecs?: StoreProductSpec[]
   initialVariants?: StoreProductVariantInput[]
   initialVariantGroups?: StoreProductVariantGroupInput[]
-  initialCombinations?: Array<{ variant_id: string; option_id: string }>
+  initialSkus?: StoreProductSkuInput[]
+  /** Unidades já reservadas no lote atual (pré-venda). */
+  preorderReserved?: number | null
   initialPeripheralIds?: string[]
   onSuccess: (product: StoreProduct) => void
   onCancel: () => void
@@ -366,7 +409,8 @@ export function StoreProductForm({
   initialSpecs,
   initialVariants,
   initialVariantGroups,
-  initialCombinations,
+  initialSkus,
+  preorderReserved,
   initialPeripheralIds,
   onSuccess,
   onCancel,
@@ -395,7 +439,22 @@ export function StoreProductForm({
     // físico até a coluna existir) — daí `!== false`, não `?? true` puro.
     requires_shipping: product?.requires_shipping !== false,
     video_url: product?.video_url ?? "",
+    // "" = automático (coluna nula).
+    card_badge: product?.card_badge ?? "",
+    sku: product?.sku ?? "",
+    preorder_batch_name: product?.preorder_batch_name ?? "",
+    preorder_ships_at: product?.preorder_ships_at ?? "",
+    preorder_status: product?.preorder_status ?? "open",
+    is_launch: product?.is_launch ?? false,
+    launch_until: product?.launch_until ?? "",
   })
+  // "Abrir novo lote": vira `start_new_batch` no save (a contagem do teto
+  // recomeça). Não é coluna, então não mora em formData.
+  const [startNewBatch, setStartNewBatch] = useState(false)
+  // Sempre 3 campos na tela; os vazios somem no save.
+  const [cardHighlights, setCardHighlights] = useState<string[]>(() =>
+    Array.from({ length: CARD_HIGHLIGHTS_MAX }, (_, index) => product?.card_highlights?.[index] ?? "")
+  )
 
   const [hasStock, setHasStock] = useState(product ? product.stock != null : true)
   const [images, setImages] = useState<string[]>(product?.images ?? [])
@@ -428,21 +487,23 @@ export function StoreProductForm({
       })),
     }))
   )
-  // Chave `${variantClientKey}|${optionClientKey}` -> esgotado. Só usada quando
-  // o produto tem Cor E Variante juntos (ver seção "Estoque por combinação" no
-  // render). Pra linhas já existentes clientKey == id, então os pares de
-  // initialCombinations (que vêm por id do banco) já batem direto.
-  const [combinations, setCombinations] = useState<Set<string>>(() => {
-    const variantIds = new Set((initialVariants ?? []).map((v) => v.id).filter((id): id is string => Boolean(id)))
-    const optionIds = new Set(
-      (initialVariantGroups ?? []).flatMap((g) => g.options.map((o) => o.id).filter((id): id is string => Boolean(id)))
+  // Matriz de combinações (SKU), chaveada por cor + opções. Para linha já
+  // salva o clientKey é o id, então as linhas de `initialSkus` já batem.
+  const [skuDrafts, setSkuDrafts] = useState<Record<string, SkuDraft>>(() =>
+    Object.fromEntries(
+      (initialSkus ?? []).map((row) => [
+        skuDraftKey(row.variant_id, row.option_ids),
+        {
+          sku: row.sku ?? "",
+          price_brl: row.price_cents != null ? (row.price_cents / 100).toFixed(2) : "",
+          promo_brl: row.promo_price_cents != null ? (row.promo_price_cents / 100).toFixed(2) : "",
+          stock: row.stock != null ? String(row.stock) : "",
+          image_url: row.image_url,
+          is_sold_out: row.is_sold_out,
+        },
+      ])
     )
-    return new Set(
-      (initialCombinations ?? [])
-        .filter((c) => variantIds.has(c.variant_id) && optionIds.has(c.option_id))
-        .map((c) => `${c.variant_id}|${c.option_id}`)
-    )
-  })
+  )
   const [peripheralIds, setPeripheralIds] = useState<string[]>(initialPeripheralIds ?? [])
   const [peripheralOptions, setPeripheralOptions] = useState<PeripheralOption[]>([])
   const [autofilling, setAutofilling] = useState(false)
@@ -595,18 +656,10 @@ export function StoreProductForm({
     })
   }
 
+  // A combinação de uma cor/opção removida some da matriz sozinha: o save só
+  // grava as combinações que ainda existem (ver `buildCombinations`).
   function removeVariantRow(index: number) {
-    const removedKey = variants[index]?.clientKey
     setVariants((prev) => prev.filter((_, i) => i !== index))
-    if (removedKey) {
-      setCombinations((prev) => {
-        const next = new Set(prev)
-        for (const key of next) {
-          if (key.startsWith(`${removedKey}|`)) next.delete(key)
-        }
-        return next
-      })
-    }
   }
 
   function addVariantGroup() {
@@ -625,17 +678,7 @@ export function StoreProductForm({
   }
 
   function removeVariantGroup(groupIndex: number) {
-    const removedKeys = new Set(variantGroups[groupIndex]?.options.map((o) => o.clientKey) ?? [])
     setVariantGroups((prev) => prev.filter((_, i) => i !== groupIndex))
-    if (removedKeys.size > 0) {
-      setCombinations((prev) => {
-        const next = new Set(prev)
-        for (const key of next) {
-          if (removedKeys.has(key.split("|")[1])) next.delete(key)
-        }
-        return next
-      })
-    }
   }
 
   function updateVariantGroupName(groupIndex: number, name: string) {
@@ -661,32 +704,9 @@ export function StoreProductForm({
   }
 
   function removeVariantGroupOption(groupIndex: number, optionIndex: number) {
-    const removedKey = variantGroups[groupIndex]?.options[optionIndex]?.clientKey
     setVariantGroups((prev) =>
       prev.map((g, i) => (i === groupIndex ? { ...g, options: g.options.filter((_, oi) => oi !== optionIndex) } : g))
     )
-    if (removedKey) {
-      setCombinations((prev) => {
-        const next = new Set(prev)
-        for (const key of next) {
-          if (key.split("|")[1] === removedKey) next.delete(key)
-        }
-        return next
-      })
-    }
-  }
-
-  function toggleCombination(variantClientKey: string, optionClientKey: string) {
-    setCombinations((prev) => {
-      const key = `${variantClientKey}|${optionClientKey}`
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next
-    })
   }
 
   function updateVariantGroupOption(
@@ -775,6 +795,47 @@ export function StoreProductForm({
 
   function set(field: string, value: string | boolean) {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  /**
+   * Selo e características do card só vão no corpo quando mudaram. Os dois
+   * moram em colunas novas (migration 20261212000000): mandando sempre, um
+   * deploy antes da migration quebraria o save de QUALQUER produto, mesmo de
+   * quem nunca mexeu no card.
+   */
+  function cardPayload(): { card_badge?: string | null; card_highlights?: string[] } {
+    const badge = formData.card_badge || null
+    const highlights = sanitizeCardHighlights(cardHighlights)
+    const savedHighlights = product?.card_highlights ?? []
+    return {
+      ...(badge !== (product?.card_badge ?? null) ? { card_badge: badge } : {}),
+      ...(highlights.join("\n") !== savedHighlights.join("\n") ? { card_highlights: highlights } : {}),
+    }
+  }
+
+  /**
+   * SKU, lote e Lançamento: mesma regra do `cardPayload`. As colunas são da
+   * migration 20261213000001, e só vão no corpo quando mudaram, para um
+   * deploy antes dela não quebrar o save de quem nem mexeu nesses campos.
+   */
+  function pageFieldsPayload(): Record<string, string | boolean | null> {
+    const current: Record<string, string | boolean | null> = {
+      sku: formData.sku.trim() || null,
+      preorder_batch_name: formData.preorder_batch_name.trim() || null,
+      preorder_ships_at: formData.preorder_ships_at || null,
+      preorder_status: formData.preorder_status,
+      is_launch: formData.is_launch,
+      launch_until: formData.is_launch ? formData.launch_until || null : null,
+    }
+    const saved: Record<string, string | boolean | null> = {
+      sku: product?.sku ?? null,
+      preorder_batch_name: product?.preorder_batch_name ?? null,
+      preorder_ships_at: product?.preorder_ships_at ?? null,
+      preorder_status: product?.preorder_status ?? "open",
+      is_launch: product?.is_launch ?? false,
+      launch_until: product?.launch_until ?? null,
+    }
+    return Object.fromEntries(Object.entries(current).filter(([key, value]) => value !== saved[key]))
   }
 
   function setStatus(status: "active" | "sold_out" | "inactive") {
@@ -1037,6 +1098,47 @@ export function StoreProductForm({
         cleanVariantGroups.push({ id: g.id, name, options: cleanOptions })
       }
 
+      // Combinações: validadas ANTES de salvar qualquer coisa, para um preço
+      // errado numa linha não deixar o produto salvo pela metade. Só as que
+      // ainda existem (cor/opção apagada some) e só as que têm algo próprio.
+      const parseBrl = (value: string) => Math.round(parseFloat(value.replace(",", ".")) * 100)
+      const draftSkus: Array<{
+        variantClientKey: string | null
+        optionClientKeys: string[]
+        sku: string | null
+        price_cents: number | null
+        promo_price_cents: number | null
+        stock: number | null
+        image_url: string | null
+        is_sold_out: boolean
+      }> = []
+      for (const combo of buildCombinations(variants, variantGroups)) {
+        const draft = skuDrafts[combo.key]
+        if (!draft || isEmptySkuDraft(draft)) continue
+        const price = draft.price_brl.trim() ? parseBrl(draft.price_brl) : null
+        if (price !== null && (isNaN(price) || price < MIN_PRICE_CENTS)) {
+          throw new Error(`Preço inválido em "${combo.label}". Use um valor de pelo menos ${formatBRL(MIN_PRICE_CENTS)}.`)
+        }
+        const promo = draft.promo_brl.trim() ? parseBrl(draft.promo_brl) : null
+        if (promo !== null && (isNaN(promo) || promo <= 0 || promo >= (price ?? priceCents))) {
+          throw new Error(`Promoção inválida em "${combo.label}": precisa ser menor que o preço da combinação.`)
+        }
+        const stock = draft.stock.trim() ? parseInt(draft.stock, 10) : null
+        if (stock !== null && (isNaN(stock) || stock < 0 || stock > MAX_STOCK)) {
+          throw new Error(`Estoque inválido em "${combo.label}".`)
+        }
+        draftSkus.push({
+          variantClientKey: combo.variantClientKey,
+          optionClientKeys: combo.optionClientKeys,
+          sku: draft.sku.trim() || null,
+          price_cents: price,
+          promo_price_cents: promo,
+          stock,
+          image_url: draft.image_url,
+          is_sold_out: draft.is_sold_out,
+        })
+      }
+
       const payload = {
         name: formData.name.trim(),
         description: formData.description.trim() || null,
@@ -1059,6 +1161,9 @@ export function StoreProductForm({
         is_sold_out: formData.is_sold_out,
         requires_shipping: formData.requires_shipping,
         video_url: videoUrl || null,
+        ...cardPayload(),
+        ...pageFieldsPayload(),
+        ...(product && startNewBatch && formData.sale_type === "pre_order" ? { start_new_batch: true } : {}),
       }
 
       const url = product
@@ -1141,30 +1246,41 @@ export function StoreProductForm({
       }
 
       if (variantIdByClientKey && optionIdByClientKey) {
-        const idByClientKey = variantIdByClientKey
-        const optionIdMap = optionIdByClientKey
-        const combinationPairs = [...combinations]
-          .map((key) => {
-            const [variantClientKey, optionClientKey] = key.split("|")
-            const variantId = idByClientKey.get(variantClientKey)
-            const optionId = optionIdMap.get(optionClientKey)
-            return variantId && optionId ? { variant_id: variantId, option_id: optionId } : null
-          })
-          .filter((p): p is { variant_id: string; option_id: string } => p != null)
+        const variantIds = variantIdByClientKey
+        const optionIds = optionIdByClientKey
+        const skuRows = draftSkus.flatMap((row) => {
+          const variantId = row.variantClientKey ? variantIds.get(row.variantClientKey) : null
+          const ids = row.optionClientKeys.map((key) => optionIds.get(key))
+          if (variantId === undefined || ids.some((id) => id === undefined)) return []
+          return [
+            {
+              variant_id: variantId,
+              option_ids: ids as string[],
+              sku: row.sku,
+              price_cents: row.price_cents,
+              promo_price_cents: row.promo_price_cents,
+              stock: row.stock,
+              image_url: row.image_url,
+              is_sold_out: row.is_sold_out,
+            },
+          ]
+        })
 
-        const combinationsRes = await fetch(`/api/admin/store/products/${data.product.id}/variant-combinations`, {
+        // Sempre manda (mesmo vazio): é o que apaga combinações que o admin
+        // limpou ou cujas cores/opções deixaram de existir.
+        const skusRes = await fetch(`/api/admin/store/products/${data.product.id}/skus`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ combinations: combinationPairs }),
+          body: JSON.stringify({ skus: skuRows }),
         })
-        if (!combinationsRes.ok) {
-          const combinationsData = (await combinationsRes.json()) as { error?: string }
-          toast.error("Produto salvo, mas houve erro nas combinações de estoque", {
-            description: combinationsData.error,
+        if (!skusRes.ok) {
+          const skusData = (await skusRes.json().catch(() => ({}))) as { error?: string }
+          toast.error("Produto salvo, mas houve erro nas combinações (SKU)", {
+            description: skusData.error,
           })
         }
-      } else if (combinations.size > 0) {
-        toast.error("Combinações de estoque não foram salvas", {
+      } else if (draftSkus.length > 0) {
+        toast.error("Combinações (SKU) não foram salvas", {
           description: "Corrija o erro em Cor ou Variantes acima e salve novamente.",
         })
       }
@@ -1207,6 +1323,101 @@ export function StoreProductForm({
     promoPriceCentsPreview > 0 && priceCentsPreview > 0 && promoPriceCentsPreview < priceCentsPreview
       ? Math.round((1 - promoPriceCentsPreview / priceCentsPreview) * 100)
       : null
+
+  const hasCombinations = variants.some((v) => v.label.trim()) || variantGroups.some((g) => g.options.some((o) => o.label.trim()))
+
+  // Lote da pré-venda: o mesmo bloco na criação e na edição (a edição não
+  // mostrava nem o limite de reservas).
+  const preorderFields = formData.sale_type === "pre_order" && (
+    <div className="space-y-3 rounded-xl border border-amber-500/25 bg-amber-500/[0.04] p-3">
+      <div className="flex items-center gap-2">
+        <Rocket className="size-4 text-amber-400" />
+        <p className="text-sm font-semibold text-foreground">Lote da pré-venda</p>
+      </div>
+      <p className="text-[10px] text-amber-400">
+        Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; quando o período de pré-venda
+        acabar; o anúncio, reviews e vendas já feitas continuam os mesmos.
+      </p>
+      <div className="grid gap-3 md:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Status do lote</Label>
+          <Select value={formData.preorder_status} onValueChange={(v) => set("preorder_status", v)}>
+            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PREORDER_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {PREORDER_STATUS_LABEL[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[10px] text-muted-foreground">
+            Só &ldquo;Pré-venda aberta&rdquo; aceita reserva. Com limite, o lote vira &ldquo;Esgotado&rdquo; sozinho quando enche.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Nome do lote</Label>
+          <Input
+            value={formData.preorder_batch_name}
+            maxLength={60}
+            onChange={(e) => set("preorder_batch_name", e.target.value)}
+            placeholder="Ex: Lote 1"
+            className="h-9 border-border bg-muted/20 text-sm"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Previsão de envio</Label>
+          <Input
+            type="date"
+            value={formData.preorder_ships_at}
+            onChange={(e) => set("preorder_ships_at", e.target.value)}
+            className="h-9 border-border bg-muted/20 text-sm"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Limite de reservas do lote</Label>
+          <Input
+            type="number"
+            min={0}
+            value={formData.preorder_limit}
+            onChange={(e) => set("preorder_limit", e.target.value)}
+            placeholder="Sem limite"
+            className="h-9 border-border bg-muted/20 text-sm"
+          />
+          <p className="text-[10px] text-muted-foreground">
+            Em pré-venda o estoque não é descontado: é este número que fecha as reservas e mostra &ldquo;Restam N&rdquo; na
+            página. Vazio = sem limite.
+          </p>
+        </div>
+      </div>
+      {product && (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
+          <p className="text-[11px] text-muted-foreground">
+            {preorderReserved != null && (
+              <>
+                Reservadas neste lote: <span className="font-semibold text-foreground">{preorderReserved}</span>.{" "}
+              </>
+            )}
+            {startNewBatch
+              ? "Ao salvar, a contagem recomeça do zero. Troque o nome do lote e o status se precisar."
+              : "Lote novo? A contagem do limite recomeça a partir de agora."}
+          </p>
+          <Button
+            type="button"
+            variant={startNewBatch ? "default" : "outline"}
+            size="sm"
+            className="h-8 gap-1.5 text-[11px]"
+            onClick={() => setStartNewBatch((prev) => !prev)}
+          >
+            <RefreshCcw className="size-3.5" />
+            {startNewBatch ? "Novo lote ao salvar" : "Abrir novo lote"}
+          </Button>
+        </div>
+      )}
+    </div>
+  )
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -1417,29 +1628,6 @@ export function StoreProductForm({
               <SelectItem value="pre_order">🚀 Pré-venda</SelectItem>
             </SelectContent>
           </Select>
-          {formData.sale_type === "pre_order" && (
-            <>
-              <p className="text-[10px] text-amber-400">
-                Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; quando
-                o período de pré-venda acabar; o anúncio, reviews e vendas já feitas continuam os mesmos.
-              </p>
-              <div className="space-y-1.5 pt-1">
-                <Label className="text-xs">Limite de reservas</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={formData.preorder_limit}
-                  onChange={(e) => set("preorder_limit", e.target.value)}
-                  placeholder="Sem limite"
-                  className="h-9 border-border bg-muted/20 text-sm"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Quantas unidades do lote você aceita reservar. Em pré-venda o estoque não é
-                  descontado: é este número que fecha as reservas. Deixe vazio para não limitar.
-                </p>
-              </div>
-            </>
-          )}
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
@@ -1474,15 +1662,11 @@ export function StoreProductForm({
                 )}
               </SelectContent>
             </Select>
-            {formData.sale_type === "pre_order" && (
-              <p className="text-[10px] text-amber-400">
-                Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; quando
-                o período de pré-venda acabar; o anúncio, reviews e vendas já feitas continuam os mesmos.
-              </p>
-            )}
           </div>
         </div>
       )}
+
+      {preorderFields}
 
       {!isNewStoreListing && formData.condition !== "new" && (
         <div className="space-y-1.5">
@@ -1562,6 +1746,93 @@ export function StoreProductForm({
           )}
         </div>
 
+      </div>
+
+      {/* Card da vitrine */}
+      <div className="space-y-4 rounded-xl border border-border bg-muted/10 p-4">
+        <div className="flex items-center gap-2">
+          <BadgeCheck className="size-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">Card da vitrine</h3>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Selo principal</Label>
+            <Select value={formData.card_badge || "auto"} onValueChange={(v) => set("card_badge", v === "auto" ? "" : v)}>
+              <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Automático</SelectItem>
+                {STORE_CARD_BADGE_CHOICES.map((choice) => (
+                  <SelectItem key={choice} value={choice}>
+                    {STORE_CARD_BADGE_CHOICE_LABEL[choice]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground/70">
+              Um selo por produto. No automático, nesta ordem: Estoque baixo (até {LOW_STOCK_MAX_UNITS} unidades), Mais
+              vendido (top {BEST_SELLER_TOP} em vendas nos últimos {BEST_SELLER_WINDOW_DAYS} dias, com {BEST_SELLER_MIN_UNITS}+ unidades), Melhor
+              custo-benefício (tag do Database) e Novo (até {NEW_PRODUCT_DAYS} dias). Pré-venda aparece sempre, por cima da
+              escolha; esgotado fica sem selo.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Características no card</Label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {cardHighlights.map((value, index) => (
+                <Input
+                  key={index}
+                  value={value}
+                  maxLength={CARD_HIGHLIGHT_MAX_CHARS}
+                  onChange={(e) =>
+                    setCardHighlights((prev) => prev.map((item, i) => (i === index ? e.target.value : item)))
+                  }
+                  placeholder={["49g", "PAW3950", "8K"][index]}
+                  className="text-sm"
+                />
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground/70">
+              Vazio = automático, pelo Database e pela Especificação Técnica (mouse: peso, sensor, polling; teclado:
+              switch, polling, case; IEM: assinatura, drivers, material). Preencha quando o Database não tiver o dado.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 border-t border-border/60 pt-4 md:grid-cols-2">
+          <label className="flex items-start gap-2.5">
+            <Checkbox
+              checked={formData.is_launch}
+              onCheckedChange={(checked) => set("is_launch", checked === true)}
+              className="mt-0.5"
+            />
+            <span className="space-y-0.5">
+              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <Megaphone className="size-3.5 text-violet-400" />
+                Lançamento
+              </span>
+              <span className="block text-[10px] text-muted-foreground/70">
+                Aparece em &ldquo;Lançamentos e Pré-venda&rdquo; na Home, com o selo &ldquo;Lançamento&rdquo; no card. Pré-venda já
+                entra na seção sozinha.
+              </span>
+            </span>
+          </label>
+          {formData.is_launch && (
+            <div className="space-y-1.5">
+              <Label className="text-xs">Sai da seção depois de</Label>
+              <Input
+                type="date"
+                value={formData.launch_until}
+                onChange={(e) => set("launch_until", e.target.value)}
+                className="h-9 border-border bg-muted/20 text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground/70">Vazio = até você desmarcar.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Estoque & Variantes */}
@@ -1645,6 +1916,23 @@ export function StoreProductForm({
               </SelectContent>
             </Select>
           </div>
+
+          {!hasCombinations && (
+            <div className="space-y-2">
+              <Label>SKU</Label>
+              <Input
+                value={formData.sku}
+                maxLength={64}
+                onChange={(e) => set("sku", e.target.value)}
+                placeholder="Ex: WLM-BX-V2"
+                className="font-mono text-sm"
+              />
+              <p className="text-[10px] text-muted-foreground/70">
+                Código do produto na separação do pedido. Com cor ou variantes, cada combinação tem o seu, na tabela
+                Combinações (SKU).
+              </p>
+            </div>
+          )}
         </div>
 
       {/* Entrega */}
@@ -1673,8 +1961,8 @@ export function StoreProductForm({
       <div className="space-y-2 border-t border-border/60 pt-4">
         <Label>Cor (Opcional)</Label>
         <p className="text-[10px] text-muted-foreground/60">
-          Se o produto tem variações visuais (cor, modelo, etc.), cadastre aqui. Para um produto
-          com preço ou estoque diferente, cadastre-o como um anúncio separado.
+          Se o produto tem variações visuais (cor, modelo, etc.), cadastre aqui. Preço, estoque, foto e SKU
+          de cada combinação ficam na tabela Combinações (SKU), no fim desta seção.
         </p>
         <div className="space-y-2">
           {variants.map((variant, idx) => (
@@ -1954,77 +2242,6 @@ export function StoreProductForm({
                 </span>
               </div>
 
-              {(() => {
-                const activeColors = variants.filter((v) => v.label.trim())
-                const activeOptions = group.options.filter((o) => o.label.trim())
-                if (activeColors.length === 0 || activeOptions.length === 0) return null
-                return (
-                  <div className="space-y-1.5 border-t border-border/60 pt-2">
-                    <p className="text-[10px] font-medium text-muted-foreground">
-                      Estoque por combinação (Cor × {group.name.trim() || "Variante"})
-                    </p>
-                    <p className="text-[10px] text-muted-foreground/60">
-                      Clique numa célula pra esgotar só aquela combinação de cor + variante.
-                    </p>
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse text-[11px]">
-                        <thead>
-                          <tr>
-                            <th className="p-1 text-left font-normal text-muted-foreground" />
-                            {activeOptions.map((option) => (
-                              <th key={option.clientKey} className="p-1 text-center font-medium text-muted-foreground">
-                                {option.label}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {activeColors.map((variant) => (
-                            <tr key={variant.clientKey}>
-                              <td className="whitespace-nowrap p-1 text-muted-foreground">
-                                <span className="flex items-center gap-1.5">
-                                  {variant.color && (
-                                    <span
-                                      className="inline-block size-2.5 shrink-0 rounded-full border border-border"
-                                      style={{ backgroundColor: variant.color }}
-                                    />
-                                  )}
-                                  {variant.label}
-                                </span>
-                              </td>
-                              {activeOptions.map((option) => {
-                                const soldOut = combinations.has(`${variant.clientKey}|${option.clientKey}`)
-                                return (
-                                  <td key={option.clientKey} className="p-1 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleCombination(variant.clientKey, option.clientKey)}
-                                      aria-pressed={soldOut}
-                                      aria-label={`${variant.label} + ${option.label}: ${soldOut ? "esgotado" : "disponível"}`}
-                                      className={cn(
-                                        "inline-flex size-6 items-center justify-center rounded-md border transition-colors",
-                                        soldOut
-                                          ? "border-red-500/60 bg-red-500/90 text-white hover:bg-red-500"
-                                          : "border-border text-muted-foreground hover:border-foreground/30"
-                                      )}
-                                    >
-                                      {soldOut ? (
-                                        <Ban className="size-3.5" />
-                                      ) : (
-                                        <span className="size-1.5 rounded-full bg-current" />
-                                      )}
-                                    </button>
-                                  </td>
-                                )
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )
-              })()}
             </div>
           ))}
         </div>
@@ -2043,6 +2260,15 @@ export function StoreProductForm({
           <span className="text-[10px] text-muted-foreground">{variantGroups.length}/{MAX_VARIANT_GROUPS}</span>
         </div>
       </div>
+
+      <ProductSkuMatrix
+        variants={variants}
+        groups={variantGroups}
+        productImages={images}
+        drafts={skuDrafts}
+        onChange={(key, draft) => setSkuDrafts((prev) => ({ ...prev, [key]: draft }))}
+        onUploadImage={async (file) => uploadImage(await prepareProductImage(file))}
+      />
       </div>
 
       {/* Actions */}

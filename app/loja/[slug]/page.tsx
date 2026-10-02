@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { ShoppingBag } from "lucide-react"
-import { getStoreProductDetail, getStoreFilterOptions, listStoreProductsPaginated } from "@/lib/server/repositories/store-repository"
+import { getStoreProductDetail, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { getReviewAggregate } from "@/lib/server/repositories/store-reviews-repository"
 import { JsonLd } from "@/components/seo/JsonLd"
 import { ProductDetailContent } from "@/components/store/ProductDetailContent"
@@ -11,6 +11,8 @@ import {
   storeMaintenanceMetadata,
 } from "@/lib/server/auth/store-maintenance-gate"
 import { getStoreLaunchAt } from "@/lib/store-maintenance"
+import { hasFreeShipping } from "@/lib/store-shipping"
+import { effectivePreorderStatus } from "@/lib/store-preorder"
 import { buildDescription, buildMetadata } from "@/lib/seo"
 import { getCategoryLabel } from "@/lib/store-category-icons"
 import { SITE_URL } from "@/lib/site-url"
@@ -90,9 +92,10 @@ export default async function ProductPage({ params }: PageProps) {
   const detail = await getStoreProductDetail(slug)
   if (!detail) notFound()
 
-  const [filterOptions, { items: previewPool }, reviewAggregate] = await Promise.all([
+  // O card "Em destaque" do menu vem de `filterOptions.menuHighlights`: a
+  // página não busca mais 24 produtos só para alimentá-lo.
+  const [filterOptions, reviewAggregate] = await Promise.all([
     getStoreFilterOptions("store"),
-    listStoreProductsPaginated({ type: "store", page: 1, pageSize: 24 }),
     // Já existia no repositório e alimentava só a UI — é o que habilita as
     // estrelas no resultado de busca.
     getReviewAggregate(detail.product.id),
@@ -117,7 +120,9 @@ export default async function ProductPage({ params }: PageProps) {
     }),
     // Absolutas: o Google descarta imagem relativa no schema.
     image: product.images.map((image) => new URL(image, SITE_URL).toString()),
-    sku: product.id,
+    // Código de SKU quando o produto simples tem um; senão o id, que já era
+    // o identificador estável que o Merchant Center via.
+    sku: product.sku ?? product.id,
     ...(product.category ? { category: product.category } : {}),
     itemCondition:
       product.condition === "new"
@@ -151,8 +156,12 @@ export default async function ProductPage({ params }: PageProps) {
       // revalidação). O campo é opcional; data inventada é pior que ausente.
       availability: product.is_sold_out
         ? "https://schema.org/OutOfStock"
-        : product.sale_type === "pre_order"
-          ? "https://schema.org/PreOrder"
+        : product.preorder
+          ? // Lote fechado, cheio ou "em breve" não é reservável: anunciar
+            // PreOrder ali levaria a pessoa da busca a um botão que não existe.
+            effectivePreorderStatus(product.preorder, false) === "open"
+            ? "https://schema.org/PreOrder"
+            : "https://schema.org/OutOfStock"
           : "https://schema.org/InStock",
       itemCondition:
         product.condition === "new"
@@ -170,6 +179,12 @@ export default async function ProductPage({ params }: PageProps) {
           "@type": "DefinedRegion",
           addressCountry: "BR",
         },
+        // Frete grátis é o que o checkout cobra (nada), não promoção: ver
+        // lib/store-shipping.ts. O prazo fica de fora: o schema pede
+        // manuseio e trânsito separados, e só sabemos o total.
+        ...(hasFreeShipping(product)
+          ? { shippingRate: { "@type": "MonetaryAmount", value: 0, currency: "BRL" } }
+          : {}),
       },
       hasMerchantReturnPolicy: {
         "@type": "MerchantReturnPolicy",
@@ -221,7 +236,11 @@ export default async function ProductPage({ params }: PageProps) {
     <>
       <JsonLd data={productJsonLd} />
       <JsonLd data={breadcrumbJsonLd} />
-      <ProductDetailContent {...detail} filterOptions={filterOptions} previewPool={previewPool} />
+      <ProductDetailContent
+        {...detail}
+        filterOptions={filterOptions}
+        rating={reviewAggregate.count > 0 ? { average: reviewAggregate.avgRating, count: reviewAggregate.count } : null}
+      />
     </>
   )
 }

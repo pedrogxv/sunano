@@ -6,24 +6,26 @@ import { usePathname } from "next/navigation"
 import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Heart, Home, LifeBuoy, Package, ShoppingCart, Star, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
+import { catalogConfigForGroup, catalogHref } from "@/lib/store-catalog"
 import { formatBRL } from "@/lib/format"
+import { computeCardDisplayPrice } from "@/lib/store-pricing"
 import { useCart } from "@/components/providers/cart-context"
 import { useStoreFavorites } from "@/components/providers/store-favorites-context"
 import { StoreSearchBox } from "@/components/store/StoreSearchBox"
 import { StoreCommerceBarSlot } from "@/components/store/StoreCommerceBar"
-import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
+import { RouteLink } from "@/components/ui/route-link"
+import type { StoreFilterOptions } from "@/lib/server/repositories/store-repository"
+
+/** O que o menu precisa das opções de filtro: categorias, marcas, contagens do catálogo e destaques. */
+export type StoreNavData = Pick<
+  StoreFilterOptions,
+  "categories" | "categoryCounts" | "brandsByCategory" | "catalogFacetsByCategory" | "menuHighlights"
+>
 
 interface StoreCategoryNavProps {
-  categories: string[]
-  categoryCounts: Record<string, number>
-  /** Marcas por categoria, já ordenadas por frequência (vem do filter-options). */
-  brandsByCategory: Record<string, { brand: string; count: number }[]>
+  /** Vem de `getStoreFilterOptions`: igual em toda página da Loja, sem fetch próprio. */
+  data: StoreNavData
   activeCategory: string | null
-  /**
-   * Pool de produtos já carregados no cliente, usado só pra achar 1 preview
-   * por categoria no hover — nada aqui vem de fetch novo.
-   */
-  previewPool: StoreProductCard[]
 }
 
 const CONDITION_LABEL: Record<string, string> = {
@@ -50,9 +52,30 @@ const GROUP_LABEL: Record<StoreNavGroup, string> = {
 const GROUP_ORDER: StoreNavGroup[] = ["mouse", "teclado", "mousepad", "audio", "outros"]
 
 /** Intervalo de troca do card "Em destaque" enquanto o menu está aberto. */
-const PREVIEW_ROTATE_MS = 3200
+const PREVIEW_ROTATE_MS = 4500
 /** Quantos produtos entram no rodízio por grupo — o suficiente pra variar sem virar slideshow infinito. */
-const PREVIEW_MAX_CANDIDATES = 5
+const PREVIEW_MAX_CANDIDATES = 3
+/** Linhas por coluna do mega menu: mais que isso vira lista, não atalho. */
+const MENU_COLUMN_MAX = 8
+
+/** Título de coluna do mega menu. */
+function MenuHeading({ children }: { children: React.ReactNode }) {
+  return <span className="text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">{children}</span>
+}
+
+/** Atalho de uma coluna (tipo, marca, faixa): texto + contagem, link de conteúdo para a categoria filtrada. */
+function MenuLink({ href, label, count, onNavigate }: { href: string; label: string; count?: number; onNavigate: () => void }) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className="group/menu flex items-center justify-between gap-2.5 rounded-lg py-[6px] text-left text-[13px] font-medium text-[#b4b4b4] transition-colors hover:text-white"
+    >
+      <span className="truncate">{label}</span>
+      {count != null && <span className="text-[11px] tabular-nums text-[#5e5e5e] group-hover/menu:text-[#8a8a8a]">{count}</span>}
+    </Link>
+  )
+}
 
 /**
  * Ação da direita do menu (Favoritos, Carrinho, Pedidos, Suporte). O rótulo
@@ -105,13 +128,8 @@ function NavAction({
   )
 }
 
-export function StoreCategoryNav({
-  categories,
-  categoryCounts,
-  brandsByCategory,
-  activeCategory,
-  previewPool,
-}: StoreCategoryNavProps) {
+export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps) {
+  const { categories, categoryCounts, brandsByCategory } = data
   const pathname = usePathname()
   const { count: cartCount, setOpen: setCartOpen } = useCart()
   const { count: favoritesCount } = useStoreFavorites()
@@ -136,6 +154,12 @@ export function StoreCategoryNav({
   const openGroup = hovered
   const openCategories = openGroup ? grouped.get(openGroup) ?? [] : []
   const openCount = openCategories.reduce((sum, c) => sum + (categoryCounts[c] ?? 0), 0)
+  // Categoria "principal" do grupo (a com mais produtos): é para onde vão os
+  // atalhos de tipo e de preço. Mousepad junta mousepad + glasspad; o glasspad
+  // entra como item próprio na coluna de tipos.
+  const primaryCategory = [...openCategories].sort((a, b) => (categoryCounts[b] ?? 0) - (categoryCounts[a] ?? 0))[0] ?? null
+  const catalog = openGroup ? catalogConfigForGroup(openGroup) : null
+  const catalogCounts = primaryCategory ? data.catalogFacetsByCategory?.[primaryCategory] : undefined
   const openBrands = openCategories.length
     ? Object.values(
         openCategories
@@ -146,26 +170,36 @@ export function StoreCategoryNav({
           }, {})
       ).sort((a, b) => b.count - a.count)
     : []
-  // Rodízio do card "Em destaque": prioriza os marcados manualmente pelo admin
-  // (`is_featured`), completa com promoções e por fim com qualquer produto da
-  // categoria — sempre deduplicado e limitado pra não virar slideshow infinito.
-  const previewCandidates: StoreProductCard[] = []
-  if (openCategories.length) {
-    const inGroup = previewPool.filter((p) => p.category != null && openCategories.includes(p.category))
-    const isPromo = (p: StoreProductCard) => p.promo_price_cents != null && p.promo_price_cents < p.price_cents
-    const ranked = [
-      ...inGroup.filter((p) => p.is_featured),
-      ...inGroup.filter((p) => !p.is_featured && isPromo(p)),
-      ...inGroup.filter((p) => !p.is_featured && !isPromo(p)),
-    ]
-    const seen = new Set<string>()
-    for (const p of ranked) {
-      if (seen.has(p.id)) continue
-      seen.add(p.id)
-      previewCandidates.push(p)
-      if (previewCandidates.length === PREVIEW_MAX_CANDIDATES) break
+  const primaryBrands = new Set((primaryCategory ? brandsByCategory[primaryCategory] ?? [] : []).map((item) => item.brand))
+
+  // "Por tipo": tipos do catálogo com produto + as outras categorias do grupo.
+  // Grupo sem catálogo próprio (Áudio, Outros) lista as categorias, como antes.
+  const typeLinks: { key: string; label: string; count: number; href: string }[] = []
+  if (catalog && primaryCategory) {
+    for (const collection of catalog.collections) {
+      const count = catalogCounts?.collections[collection.key] ?? 0
+      if (count > 0) {
+        typeLinks.push({ key: collection.key, label: collection.label, count, href: catalogHref(primaryCategory, { tipo: collection.key }) })
+      }
     }
   }
+  for (const category of openCategories) {
+    if (catalog && category === primaryCategory) continue
+    typeLinks.push({ key: `cat:${category}`, label: getCategoryLabel(category), count: categoryCounts[category] ?? 0, href: catalogHref(category) })
+  }
+
+  const priceLinks =
+    catalog && primaryCategory
+      ? catalog.priceBands
+          .map((band) => ({ ...band, count: catalogCounts?.priceBands[band.key] ?? 0 }))
+          .filter((band) => band.count > 0)
+      : []
+
+  // Destaques vêm do servidor (`menuHighlights`), já na ordem: marcados pelo
+  // admin, maior desconto, mais recentes. A principal do grupo vem primeiro.
+  const previewCandidates = (primaryCategory ? [primaryCategory, ...openCategories.filter((c) => c !== primaryCategory)] : [])
+    .flatMap((category) => data.menuHighlights?.[category] ?? [])
+    .slice(0, PREVIEW_MAX_CANDIDATES)
   const previewProduct = previewCandidates.length ? previewCandidates[previewIndex % previewCandidates.length] : null
 
   useEffect(() => {
@@ -339,149 +373,165 @@ export function StoreCategoryNav({
 
       {openGroup && (
         <div className="absolute inset-x-0 top-full z-10 hidden border-b border-[#262626] bg-card shadow-[0_28px_60px_-20px_rgba(0,0,0,0.9)] @min-[920px]:block">
-          <div
-            className={cn(
-              "mx-auto grid max-w-7xl gap-[34px] px-4 pb-8 pt-7 lg:px-8",
-              openCategories.length === 1 ? "grid-cols-[0.9fr_1fr]" : "grid-cols-[1.35fr_0.75fr_1fr]"
-            )}
-          >
-            {/* Coluna 1: só existe quando o grupo agrupa várias categorias
-                (Audio, Outros...) — com 1 categoria só, o próprio nome no menu
-                e o "Ver todos" da coluna de marcas já cobrem a navegação, então
-                não duplica um card de categoria aqui. */}
-            {openCategories.length > 1 && (
-              <div className="flex flex-col gap-3.5">
-                <span className="text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">
-                  {GROUP_LABEL[openGroup]}
-                </span>
-                <div className="flex flex-col gap-2">
-                  {openCategories.map((cat) => {
-                    const { icon: Icon, tint } = getCategoryIcon(cat)
-                    return (
-                      <Link
-                        key={cat}
-                        href={`/loja/categoria/${encodeURIComponent(cat)}`}
-                        className="flex items-center gap-2.5 rounded-[11px] border border-[#262626] bg-[#0e0e0e] px-[13px] py-2.5 text-left transition-colors hover:border-foreground/25"
-                      >
-                        <Icon className="size-4 shrink-0" style={{ color: tint }} strokeWidth={1.6} />
-                        <span className="flex-1 text-[13px] font-semibold text-white">{getCategoryLabel(cat)}</span>
-                        <span className="text-[11px] text-[#7a7a7a]">{categoryCounts[cat] ?? 0}</span>
-                      </Link>
-                    )
-                  })}
+          <div className="mx-auto flex max-w-7xl gap-8 px-4 pb-7 pt-6 lg:px-8">
+            <div
+              className={cn(
+                "grid min-w-0 flex-1 gap-7",
+                priceLinks.length > 0 ? "grid-cols-3" : "grid-cols-2"
+              )}
+            >
+              {/* Por tipo: tipos do catálogo (Ultraleves, FPS...) e as outras
+                  categorias do grupo. Em Áudio/Outros, só as categorias. */}
+              {typeLinks.length > 0 && (
+                <div className="flex min-w-0 flex-col gap-2">
+                  <MenuHeading>{catalog ? "Por tipo" : "Categorias"}</MenuHeading>
+                  <div className="flex flex-col">
+                    {typeLinks.slice(0, MENU_COLUMN_MAX).map((item) => (
+                      <MenuLink key={item.key} href={item.href} label={item.label} count={item.count} onNavigate={() => hoverGroup(null)} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Marcas do grupo. Dentro da categoria principal, a marca abre a
+                  própria categoria já filtrada (com a barra de filtros); marca
+                  que só existe em outra categoria do grupo vai para a página dela. */}
+              <div className="flex min-w-0 flex-col gap-2">
+                <MenuHeading>Marcas</MenuHeading>
+                <div className="flex flex-col">
+                  {openBrands.slice(0, MENU_COLUMN_MAX).map(({ brand, count }) => (
+                    <MenuLink
+                      key={brand}
+                      href={
+                        primaryCategory && primaryBrands.has(brand)
+                          ? catalogHref(primaryCategory, { marca: brand })
+                          : `/loja/marca/${encodeURIComponent(brand)}`
+                      }
+                      label={brand}
+                      count={count}
+                      onNavigate={() => hoverGroup(null)}
+                    />
+                  ))}
+                  {openBrands.length === 0 && <p className="py-[6px] text-[13px] text-[#5e5e5e]">Sem marca cadastrada.</p>}
                 </div>
               </div>
-            )}
 
-            {/* Coluna 2: marcas reais do grupo */}
-            <div className="flex flex-col gap-3">
-              <span className="text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">Marcas</span>
-              <div className="flex flex-col">
-                {openBrands.slice(0, 6).map(({ brand }) => {
-                  // Com 1 categoria só no grupo, manda a marca já filtrada por ela —
-                  // senão a página de marca mostra todo o catálogo da marca (outras
-                  // categorias juntas), o que não é o que o usuário veio ver aqui.
-                  const brandHref =
-                    openCategories.length === 1
-                      ? `/loja/marca/${encodeURIComponent(brand)}?categoria=${encodeURIComponent(openCategories[0])}`
-                      : `/loja/marca/${encodeURIComponent(brand)}`
-                  return (
-                    <Link
-                      key={brand}
-                      href={brandHref}
-                      className="flex items-center justify-between gap-2.5 py-[7px] text-left text-[13px] font-medium text-[#b4b4b4] transition-colors hover:text-white"
-                    >
-                      <span>{brand}</span>
-                    </Link>
-                  )
-                })}
-                {openBrands.length === 0 && (
-                  <p className="py-[7px] text-[13px] text-[#5e5e5e]">Sem marca cadastrada.</p>
-                )}
-              </div>
-              {openCategories.length === 1 && (
-                <Link
-                  href={`/loja/categoria/${encodeURIComponent(openCategories[0])}`}
-                  style={{ color: getCategoryIcon(openCategories[0]).tint }}
-                  className="mt-1 inline-flex items-center gap-[7px] text-left text-[12.5px] font-bold transition-opacity hover:opacity-80"
+              {/* Por preço: faixas do grupo que têm produto. */}
+              {priceLinks.length > 0 && primaryCategory && (
+                <div className="flex min-w-0 flex-col gap-2">
+                  <MenuHeading>Por preço</MenuHeading>
+                  <div className="flex flex-col">
+                    {priceLinks.map((band) => (
+                      <MenuLink
+                        key={band.key}
+                        href={catalogHref(primaryCategory, { preco: band.key })}
+                        label={band.label}
+                        count={band.count}
+                        onNavigate={() => hoverGroup(null)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {primaryCategory && (
+                <RouteLink
+                  href={catalogHref(primaryCategory)}
+                  onClick={() => hoverGroup(null)}
+                  style={{ color: getCategoryIcon(primaryCategory).tint }}
+                  className="col-span-full inline-flex w-fit cursor-pointer items-center gap-[7px] text-[12.5px] font-bold transition-opacity hover:opacity-80"
                 >
-                  Ver todos os {openCount}
+                  Ver todos{openCategories.length === 1 ? ` os ${openCount}` : ` em ${getCategoryLabel(primaryCategory)}`}
                   <ArrowRight className="size-[13px]" strokeWidth={2.2} />
-                </Link>
+                </RouteLink>
               )}
             </div>
 
-            {/* Coluna 3: produto em destaque do grupo */}
-            <div className="flex flex-col gap-3">
+            {/* Em destaque: produto com foto, preço e "Ver produto". */}
+            <div className="flex w-[340px] shrink-0 flex-col gap-2.5">
               <span className="inline-flex items-center gap-1.5 text-[10.5px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a]">
                 <Star className="size-3 fill-amber-400 text-amber-400" strokeWidth={0} />
                 Em destaque
               </span>
               {previewProduct ? (
                 <div
-                  className="flex flex-col gap-2.5"
+                  className="relative"
                   onMouseEnter={() => setPreviewPaused(true)}
                   onMouseLeave={() => setPreviewPaused(false)}
                 >
-                  <div className="relative">
-                  <Link
-                    key={previewProduct.id}
-                    href={`/loja/${previewProduct.slug}`}
-                    className="flex animate-fade-in-up gap-4 rounded-2xl border border-[#262626] p-4 transition-colors hover:border-foreground/25"
-                    style={{ background: `radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, ${getCategoryIcon(previewProduct.category).tint} 12%, #0e0e0e), #0e0e0e)` }}
-                  >
-                    {previewProduct.images?.[0] ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={previewProduct.images[0]}
-                        alt=""
-                        className="size-[108px] shrink-0 rounded-[13px] object-contain p-2"
-                      />
-                    ) : (
-                      (() => {
-                        const { icon: Icon, tint } = getCategoryIcon(previewProduct.category)
-                        return (
-                          <span className="flex size-[108px] shrink-0 items-center justify-center rounded-[13px] bg-[#171717]">
-                            <Icon className="size-[62px] opacity-55" style={{ color: tint }} strokeWidth={1.15} />
-                          </span>
-                        )
-                      })()
-                    )}
-                    <span className="flex min-w-0 flex-col gap-[7px]">
-                      <span
-                        className="inline-flex self-start items-center gap-[5px] rounded-full border px-[9px] py-[3px] text-[9px] font-bold uppercase tracking-[0.06em]"
-                        style={{
-                          borderColor: `color-mix(in oklab, ${CONDITION_TINT[previewProduct.condition]} 32%, transparent)`,
-                          background: `color-mix(in oklab, ${CONDITION_TINT[previewProduct.condition]} 14%, #000)`,
-                          color: CONDITION_TINT[previewProduct.condition],
-                        }}
+                  {(() => {
+                    const { effectiveCents, baseCents, hasDiscount, discountPercent } = computeCardDisplayPrice(previewProduct)
+                    const { icon: CategoryIcon, tint } = getCategoryIcon(previewProduct.category)
+                    const image = previewProduct.images?.[0] ?? null
+                    return (
+                      <div
+                        key={previewProduct.id}
+                        className="flex animate-fade-in-up flex-col gap-3 rounded-2xl border border-[#262626] p-3.5"
+                        style={{ background: `radial-gradient(90% 120% at 100% 0%, color-mix(in oklab, ${tint} 12%, #0e0e0e), #0e0e0e)` }}
                       >
-                        {CONDITION_LABEL[previewProduct.condition]}
-                      </span>
-                      <span className="text-[13.5px] font-semibold leading-[1.35] text-white">{previewProduct.name}</span>
-                      <span className="flex items-baseline gap-2">
-                        {previewProduct.promo_price_cents != null && previewProduct.promo_price_cents < previewProduct.price_cents && (
-                          <span className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(previewProduct.price_cents)}</span>
-                        )}
-                        <span className="font-display text-[19px] font-bold text-emerald-400">
-                          {formatBRL(previewProduct.promo_price_cents ?? previewProduct.price_cents)}
-                        </span>
-                      </span>
-                      {previewProduct.brand && (
-                        <span className="text-[11.5px] font-medium leading-[1.45] text-[#8a8a8a]">{previewProduct.brand}</span>
-                      )}
-                    </span>
-                  </Link>
-                  {/* Setas laterais: as bolinhas abaixo continuam existindo, mas
-                      só como indicador de posição — quem quer passar o card
-                      usa o chevron, que é alvo de clique bem maior. */}
+                        <Link
+                          href={`/loja/${previewProduct.slug}`}
+                          onClick={() => hoverGroup(null)}
+                          className="group/preview flex gap-3.5"
+                        >
+                          <span className="relative flex size-[112px] shrink-0 items-center justify-center overflow-hidden rounded-[13px] bg-[#151515]">
+                            {image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={image}
+                                alt=""
+                                className="size-full object-contain p-2 transition-transform duration-300 group-hover/preview:scale-105"
+                              />
+                            ) : (
+                              <CategoryIcon className="size-[58px] opacity-55" style={{ color: tint }} strokeWidth={1.15} />
+                            )}
+                            {hasDiscount && discountPercent != null && (
+                              <span className="absolute left-1.5 top-1.5 rounded-md bg-emerald-500 px-1.5 py-px text-[10px] font-extrabold text-[#03140c]">
+                                -{discountPercent}%
+                              </span>
+                            )}
+                          </span>
+                          <span className="flex min-w-0 flex-col justify-center gap-1.5">
+                            <span
+                              className="inline-flex self-start items-center rounded-full border px-[9px] py-[3px] text-[9px] font-bold uppercase tracking-[0.06em]"
+                              style={{
+                                borderColor: `color-mix(in oklab, ${CONDITION_TINT[previewProduct.condition]} 32%, transparent)`,
+                                background: `color-mix(in oklab, ${CONDITION_TINT[previewProduct.condition]} 14%, #000)`,
+                                color: CONDITION_TINT[previewProduct.condition],
+                              }}
+                            >
+                              {CONDITION_LABEL[previewProduct.condition]}
+                            </span>
+                            <span className="line-clamp-2 text-[13.5px] font-semibold leading-[1.35] text-white">{previewProduct.name}</span>
+                            {previewProduct.brand && (
+                              <span className="text-[11.5px] font-medium text-[#8a8a8a]">{previewProduct.brand}</span>
+                            )}
+                            <span className="flex flex-wrap items-baseline gap-x-2">
+                              {hasDiscount && <span className="text-[11.5px] text-[#6e6e6e] line-through">{formatBRL(baseCents)}</span>}
+                              <span className="font-display text-[19px] font-bold text-emerald-400">{formatBRL(effectiveCents)}</span>
+                            </span>
+                          </span>
+                        </Link>
+                        <RouteLink
+                          href={`/loja/${previewProduct.slug}`}
+                          onClick={() => hoverGroup(null)}
+                          className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-white text-[13px] font-bold text-black transition-transform hover:scale-[1.01]"
+                        >
+                          Ver produto
+                          <ArrowRight className="size-4" strokeWidth={2.4} />
+                        </RouteLink>
+                      </div>
+                    )
+                  })()}
+                  {/* Setas laterais: as bolinhas abaixo são só indicador de
+                      posição; o chevron é o alvo de clique. */}
                   {previewCandidates.length > 1 && (
                     <>
                       <button
                         type="button"
                         aria-label="Destaque anterior"
                         onClick={() => setPreviewIndex((i) => (i - 1 + previewCandidates.length) % previewCandidates.length)}
-                        className="absolute -left-3 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] text-[#b4b4b4] transition-colors hover:border-foreground/30 hover:text-white"
+                        className="absolute -left-3 top-[68px] flex size-7 items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] text-[#b4b4b4] transition-colors hover:border-foreground/30 hover:text-white"
                       >
                         <ChevronLeft className="size-4" strokeWidth={2.2} />
                       </button>
@@ -489,32 +539,29 @@ export function StoreCategoryNav({
                         type="button"
                         aria-label="Próximo destaque"
                         onClick={() => setPreviewIndex((i) => (i + 1) % previewCandidates.length)}
-                        className="absolute -right-3 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] text-[#b4b4b4] transition-colors hover:border-foreground/30 hover:text-white"
+                        className="absolute -right-3 top-[68px] flex size-7 items-center justify-center rounded-full border border-[#2f2f2f] bg-[#141414] text-[#b4b4b4] transition-colors hover:border-foreground/30 hover:text-white"
                       >
                         <ChevronRight className="size-4" strokeWidth={2.2} />
                       </button>
+                      <div className="mt-2.5 flex items-center justify-center gap-1.5">
+                        {previewCandidates.map((p, i) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            aria-label={`Ver ${p.name}`}
+                            onClick={() => setPreviewIndex(i)}
+                            className={cn(
+                              "h-1.5 rounded-full transition-all",
+                              i === previewIndex % previewCandidates.length ? "w-4 bg-white" : "w-1.5 bg-[#3a3a3a] hover:bg-[#5a5a5a]"
+                            )}
+                          />
+                        ))}
+                      </div>
                     </>
-                  )}
-                  </div>
-                  {previewCandidates.length > 1 && (
-                    <div className="flex items-center justify-center gap-1.5">
-                      {previewCandidates.map((p, i) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          aria-label={`Ver ${p.name}`}
-                          onClick={() => setPreviewIndex(i)}
-                          className={cn(
-                            "h-1.5 rounded-full transition-all",
-                            i === previewIndex % previewCandidates.length ? "w-4 bg-white" : "w-1.5 bg-[#3a3a3a] hover:bg-[#5a5a5a]"
-                          )}
-                        />
-                      ))}
-                    </div>
                   )}
                 </div>
               ) : (
-                <p className="text-[13px] text-[#5e5e5e]">Nenhum produto carregado ainda.</p>
+                <p className="text-[13px] text-[#5e5e5e]">Nenhum produto em destaque nesta categoria.</p>
               )}
             </div>
           </div>

@@ -27,6 +27,13 @@ export interface CartItem {
   type: "store"
   condition: "new" | "used" | "opened"
   sale_type: "pre_order" | "ready_stock" | "normal"
+  /**
+   * Serviço: mesmo preço no PIX e no cartão (ver `isSinglePriceProduct`).
+   * Opcional porque carrinho salvo antes do campo existir não o tem; o
+   * checkout cobra pelo banco de qualquer jeito, e a revalidação devolve o
+   * valor certo para a tela.
+   */
+  singlePrice?: boolean
 }
 
 interface CartContextValue {

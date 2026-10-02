@@ -30,6 +30,9 @@ interface OrderStatus {
   cardSurchargePercent: number | null
   /** false = serviço/digital: o chamado de suporte é aberto no pagamento. */
   requiresShipping: boolean
+  /** Pedido com serviço: a janela pós-compra abre a conversa do chamado. */
+  hasService?: boolean
+  serviceTicketId?: string | null
 }
 
 const POLL_INTERVAL_MS = 3000
@@ -120,16 +123,23 @@ function CardCheckoutContent() {
 
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center gap-6 px-4 py-10 text-center">
-        <OrderPaidNextStepsDialog orderId={order.id} requiresShipping={order.requiresShipping} />
+        <OrderPaidNextStepsDialog
+          orderId={order.id}
+          requiresShipping={order.requiresShipping}
+          hasService={order.hasService}
+          serviceTicketId={order.serviceTicketId}
+        />
         <div className="flex size-20 items-center justify-center rounded-full bg-emerald-500/15">
           <CheckCircle className="size-10 text-emerald-400" />
         </div>
         <div className="space-y-2">
           <h1 className="text-3xl font-black text-foreground">Pagamento confirmado!</h1>
           <p className="text-muted-foreground max-w-sm">
-            {order.requiresShipping
-              ? "Seu pedido foi recebido com sucesso. Acompanhe o andamento em Meus Pedidos."
-              : "Seu pedido foi recebido. Abrimos um chamado em Meus Tickets para combinar o atendimento."}
+            {order.hasService
+              ? "Seu pedido foi recebido. A conversa com o suporte já está aberta em Meus Tickets."
+              : order.requiresShipping
+                ? "Seu pedido foi recebido com sucesso. Acompanhe o andamento em Meus Pedidos."
+                : "Seu pedido foi recebido. Abrimos um chamado em Meus Tickets para combinar o atendimento."}
           </p>
         </div>
 
@@ -185,9 +195,12 @@ function CardCheckoutContent() {
                     ? `Pago em ${order.installmentCount}x no cartão`
                     : "Pago no cartão à vista"}
                 </p>
-                <p>
-                  No PIX sairia por {formatBRL(order.pixPriceCents)}: {order.cardSurchargePercent}% de desconto.
-                </p>
+                {/* Pedido só de serviço tem preço único: o PIX sairia pelo mesmo valor. */}
+                {order.pixPriceCents < order.totalCents && (
+                  <p>
+                    No PIX sairia por {formatBRL(order.pixPriceCents)}: {order.cardSurchargePercent}% de desconto.
+                  </p>
+                )}
               </div>
             </div>
           )}

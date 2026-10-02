@@ -4,8 +4,10 @@ import { secretsMatch } from "@/lib/server/secret-compare"
 import { creditCommissionForOrder } from "@/lib/server/repositories/affiliates-repository"
 import {
   lineMovesPhysicalStock,
+  orderLineStockMovement,
   orderOwnerId,
   reReserveStockForLatePayment,
+  restoreStock,
 } from "@/lib/server/repositories/orders-repository"
 import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
@@ -31,6 +33,8 @@ type OrderItemLine = {
   quantity?: number
   /** Snapshot do tipo de venda gravado pelo checkout; pré-venda não move estoque físico. */
   sale_type?: string | null
+  sku_id?: string | null
+  sku_stock?: boolean | null
 }
 
 export async function POST(request: NextRequest) {
@@ -284,11 +288,7 @@ export async function POST(request: NextRequest) {
           items.map(async (item) => {
             if (!item.id || !item.quantity) return
             try {
-              if (item.variant_id) {
-                await db.rpc("increment_variant_stock", { p_variant_id: item.variant_id, p_quantity: item.quantity })
-              } else {
-                await db.rpc("increment_store_stock", { p_product_id: item.id, p_quantity: item.quantity })
-              }
+              await restoreStock(db, orderLineStockMovement({ ...item, id: item.id, quantity: item.quantity }))
             } catch (err) {
               console.error("[webhooks/asaas-checkout] falha ao reverter reserva de estoque:", item, err)
             }

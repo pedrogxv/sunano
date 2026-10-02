@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
+  CalendarClock,
   CreditCard,
   Lock,
   LogIn,
@@ -15,13 +16,16 @@ import {
   ShieldCheck,
   ShoppingCart,
   Trash2,
+  Truck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/providers/cart-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { useAuthModal } from "@/components/providers/auth-modal-context"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
-import { computeCardPriceCents, computePixDiscountCents } from "@/lib/store-pricing"
+import { useDeliveryEstimate } from "@/lib/hooks/use-delivery-estimate"
+import { STORE_DELIVERY_BUSINESS_DAYS } from "@/lib/store-shipping"
+import { computeCardTotalCents } from "@/lib/store-pricing"
 import { formatBRL } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
@@ -104,6 +108,8 @@ interface ValidatedCartLine {
   name: string | null
   priceCents: number | null
   stock: number | null
+  /** Serviço: mesmo preço no PIX e no cartão. */
+  singlePrice?: boolean
   available: boolean
   issues: string[]
 }
@@ -123,6 +129,7 @@ const CART_ISSUE_LABEL: Record<string, string> = {
   option_unavailable: "está com essa opção indisponível",
   combination_unavailable: "está com essa combinação indisponível",
   insufficient_stock: "está sem estoque",
+  preorder_unavailable: "está com a pré-venda fechada no momento",
 }
 
 export default function CheckoutPage() {
@@ -140,6 +147,7 @@ export default function CheckoutPage() {
   // Há item físico no carrinho? Vem do servidor (`requires_shipping` de cada
   // produto); um carrinho só de serviços não mostra o card de entrega.
   const [cartNeedsShipping, setCartNeedsShipping] = useState(true)
+  const [singlePriceProductIds, setSinglePriceProductIds] = useState<Set<string>>(() => new Set())
   const [payerEmail, setPayerEmail] = useState<string | null>(null)
   const [editingPayer, setEditingPayer] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -276,6 +284,9 @@ export default function CheckoutPage() {
       .then((data: CartValidationResponse | null) => {
         if (cancelled || !data) return
         setCartNeedsShipping(data.cartNeedsShipping !== false)
+        setSinglePriceProductIds(
+          new Set(data.lines.filter((line) => line.singlePrice).map((line) => line.productId))
+        )
         setCartIssues(
           data.lines.filter((line) => !line.available || line.issues.length > 0)
         )
@@ -346,9 +357,22 @@ export default function CheckoutPage() {
   const shippingBlocking = editingShipping && !shippingComplete
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
-  const cardTotal = computeCardPriceCents(total, cardSurchargePercent)
+  // Serviço tem preço único: o acréscimo do cartão (e o desconto do PIX) só
+  // incide sobre o resto do carrinho. O item salvo antes do campo existir
+  // aprende pela revalidação.
+  const cardTotal = computeCardTotalCents(
+    items.map((i) => ({
+      priceCents: i.priceCents,
+      quantity: i.quantity,
+      singlePrice: i.singlePrice ?? singlePriceProductIds.has(i.productId),
+    })),
+    cardSurchargePercent
+  )
+  const cardSurchargeCents = cardTotal - total
   const payableTotal = paymentMethod === "credit_card" ? cardTotal : total
   const hasPreOrderItem = items.some((i) => i.sale_type === "pre_order")
+  const onlyPreOrderItems = items.length > 0 && items.every((i) => i.sale_type === "pre_order")
+  const deliveryDeadline = useDeliveryEstimate()
 
   function requestRemoval(item: (typeof items)[number], fromDecrement: boolean) {
     setPendingRemoval({
@@ -617,7 +641,8 @@ export default function CheckoutPage() {
           <QrCode className="size-5" />
           PIX
           <span className="text-[10px] font-normal text-muted-foreground">
-            {formatBRL(total)} (-{cardSurchargePercent}%)
+            {formatBRL(total)}
+            {cardSurchargeCents > 0 && ` (-${cardSurchargePercent}%)`}
           </span>
         </button>
         <button
@@ -709,16 +734,27 @@ export default function CheckoutPage() {
           <span>Subtotal ({itemCount} {itemCount === 1 ? "item" : "itens"})</span>
           <span>{formatBRL(total)}</span>
         </div>
-        {paymentMethod === "credit_card" && (
+        {paymentMethod === "credit_card" && cardSurchargeCents > 0 && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Acréscimo do cartão</span>
-            <span>+{formatBRL(computePixDiscountCents(total, cardSurchargePercent))}</span>
+            <span>+{formatBRL(cardSurchargeCents)}</span>
           </div>
         )}
-        {paymentMethod === "pix" && (
+        {paymentMethod === "pix" && cardSurchargeCents > 0 && (
           <div className="flex items-center justify-between text-xs text-emerald-400">
             <span>Economia à vista no PIX</span>
-            <span>{formatBRL(computePixDiscountCents(total, cardSurchargePercent))}</span>
+            <span>{formatBRL(cardSurchargeCents)}</span>
+          </div>
+        )}
+        {/* O total nunca teve frete: a linha só diz isso em voz alta. Carrinho
+            só de serviço não vai pelo correio, então não fala de frete. */}
+        {cartNeedsShipping && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <Truck className="size-3.5" />
+              Frete
+            </span>
+            <span className="font-bold text-emerald-400">Grátis</span>
           </div>
         )}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -734,6 +770,35 @@ export default function CheckoutPage() {
           <span className="text-emerald-400">{formatBRL(payableTotal)}</span>
         </div>
       </div>
+
+      {/* Previsão de entrega: a mesma conta da página do produto
+          (lib/store-shipping.ts). Pré-venda conta da chegada do lote, então
+          não tem data. */}
+      {cartNeedsShipping && (
+        <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.05] px-4 py-3">
+          <CalendarClock className="mt-0.5 size-4 shrink-0 text-emerald-400" />
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              {onlyPreOrderItems ? (
+                `Entrega em até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis após a chegada do lote`
+              ) : deliveryDeadline ? (
+                <>
+                  Entrega estimada: até <span className="text-emerald-400">{deliveryDeadline}</span>
+                </>
+              ) : (
+                `Entrega em até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis`
+              )}
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {onlyPreOrderItems
+                ? "Frete grátis. O prazo começa a contar quando o estoque chega."
+                : `Frete grátis. Até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis contados da confirmação do pagamento.`}
+              {hasPreOrderItem && !onlyPreOrderItems &&
+                ` Itens em pré-venda: até ${STORE_DELIVERY_BUSINESS_DAYS} dias úteis após a chegada do lote.`}
+            </p>
+          </div>
+        </div>
+      )}
 
       {hasPreOrderItem && (
         <div className="mb-6 flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-sm text-amber-400">

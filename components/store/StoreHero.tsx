@@ -3,12 +3,40 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import Link from "next/link"
 import { RouteLink } from "@/components/ui/route-link"
-import { ArrowRight, ChevronLeft, ChevronRight, Clock, Pause, Play, Rocket } from "lucide-react"
+import {
+  ArrowRight,
+  BadgeCheck,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Database,
+  Megaphone,
+  MessageSquareQuote,
+  PackageCheck,
+  Pause,
+  Percent,
+  Play,
+  Rocket,
+  ShieldCheck,
+  Star,
+  Trophy,
+  Users,
+  type LucideIcon,
+} from "lucide-react"
 
 import { isInternalBannerLink } from "@/lib/banner-link"
 import { formatBRL } from "@/lib/format"
 import { getCategoryIcon } from "@/lib/store-category-icons"
-import { productHref, type StoreHeroCta, type StoreHeroView } from "@/lib/store-hero"
+import {
+  productHref,
+  type HeroSealIcon,
+  type StoreHeroCta,
+  type StoreHeroHighlightKind,
+  type StoreHeroProductAnalysis,
+  type StoreHeroSeal,
+  type StoreHeroTrust,
+  type StoreHeroView,
+} from "@/lib/store-hero"
 import { computeEffectivePrice } from "@/lib/store-pricing"
 import { cn } from "@/lib/utils"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
@@ -25,6 +53,11 @@ import type { StoreProductCard } from "@/lib/server/repositories/store-repositor
  *
  * Slide com fim de campanha sai da tela sozinho quando o prazo vence, sem
  * esperar o cache da página (revalidate de 60s) nem um recarregamento.
+ *
+ * Colada embaixo vem a faixa de selos de curadoria (Produtos testados,
+ * Reviews independentes, Curadoria Sunano, Database completo) com a nota dos
+ * compradores. Ela vale também para a arte estática: é o motivo de comprar
+ * aqui, não a campanha da semana.
  */
 
 const AUTOPLAY_MS = 7_000
@@ -119,6 +152,29 @@ function CampaignCountdown({ endsAt }: { endsAt: string }) {
   )
 }
 
+const HIGHLIGHT_STYLE: Record<StoreHeroHighlightKind, { icon: LucideIcon; className: string }> = {
+  campaign: { icon: Megaphone, className: "border-violet-300/40 bg-violet-500/25 text-violet-100" },
+  launch: { icon: Rocket, className: "border-sky-300/40 bg-sky-500/25 text-sky-100" },
+  product: { icon: Star, className: "border-amber-300/40 bg-amber-500/25 text-amber-100" },
+  offer: { icon: Percent, className: "border-emerald-300/40 bg-emerald-500/25 text-emerald-100" },
+}
+
+/** Etiqueta acima do título: diz se o slide é campanha, lançamento, destaque ou oferta. */
+function HighlightPill({ highlight }: { highlight: NonNullable<StoreHeroView["highlight"]> }) {
+  const { icon: Icon, className } = HIGHLIGHT_STYLE[highlight.kind]
+  return (
+    <span
+      className={cn(
+        "inline-flex w-fit items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-[0.12em] backdrop-blur-sm md:text-[11.5px]",
+        className
+      )}
+    >
+      <Icon className="size-3.5" strokeWidth={2.4} />
+      {highlight.label}
+    </span>
+  )
+}
+
 /** Mesmo preço que o card da vitrine anuncia (primeira variante com estoque). */
 function heroProductPrice(product: StoreProductCard) {
   const variants = product.variants ?? []
@@ -134,6 +190,7 @@ function HeroProductChip({ product, tabIndex }: { product: StoreProductCard; tab
   const { effectiveCents, baseCents, hasDiscount } = heroProductPrice(product)
   const image = product.images?.[0] ?? null
   const isPreOrder = product.sale_type === "pre_order"
+  const discountPercent = hasDiscount && baseCents > 0 ? Math.round((1 - effectiveCents / baseCents) * 100) : 0
 
   return (
     <Link
@@ -155,6 +212,11 @@ function HeroProductChip({ product, tabIndex }: { product: StoreProductCard; tab
               Pré-venda
             </span>
           )}
+          {discountPercent > 0 && (
+            <span className="shrink-0 rounded-md bg-emerald-500/90 px-1.5 py-px text-[9.5px] font-extrabold text-[#03140c]">
+              -{discountPercent}%
+            </span>
+          )}
           <span className="truncate text-[12.5px] font-semibold text-white">{product.name}</span>
         </span>
         <span className="flex items-baseline gap-1.5">
@@ -164,6 +226,36 @@ function HeroProductChip({ product, tabIndex }: { product: StoreProductCard; tab
         </span>
       </span>
       <ArrowRight className="size-4 shrink-0 text-white/60 transition-transform group-hover/chip:translate-x-0.5 group-hover/chip:text-white" />
+    </Link>
+  )
+}
+
+/**
+ * O produto em destaque no resto do Sunano: periférico vinculado no Database
+ * e a posição no ranking da categoria. Link separado do chip (link dentro de
+ * link não é HTML válido).
+ */
+function HeroProductAnalysis({ analysis, tabIndex }: { analysis: StoreHeroProductAnalysis; tabIndex: number }) {
+  return (
+    <Link
+      href={analysis.href}
+      tabIndex={tabIndex}
+      className="group/analysis inline-flex w-fit max-w-full items-center gap-1.5 text-[11.5px] font-semibold text-white/70 transition-colors hover:text-white"
+    >
+      <Database className="size-3.5 shrink-0 text-sky-300" strokeWidth={2.2} />
+      <span className="truncate">
+        Analisado no Database
+        {analysis.rank ? (
+          <>
+            {" · "}
+            <span className="font-bold text-white">
+              #{analysis.rank.position} de {analysis.rank.total}
+            </span>{" "}
+            na categoria
+          </>
+        ) : null}
+      </span>
+      <ArrowRight className="size-3 shrink-0 transition-transform group-hover/analysis:translate-x-0.5" strokeWidth={2.4} />
     </Link>
   )
 }
@@ -263,8 +355,11 @@ function HeroSlide({
       aria-label={`${index + 1} de ${total}: ${slide.title}`}
       aria-hidden={!isCurrent}
       inert={!isCurrent}
+      // Sem overflow-hidden aqui: com etiqueta, prazo, botões e produto o
+      // texto pode passar do 3:4 de um celular estreito, e aí o slide cresce
+      // em vez de cortar o título. Quem recorta o zoom da arte é a <section>.
       className={cn(
-        "relative col-start-1 row-start-1 aspect-[3/4] max-h-[620px] w-full overflow-hidden transition-opacity duration-700 ease-out motion-reduce:transition-none md:aspect-[16/5] md:max-h-none md:min-h-[380px]",
+        "relative col-start-1 row-start-1 aspect-[3/4] max-h-[620px] w-full transition-opacity duration-700 ease-out motion-reduce:transition-none md:aspect-[16/5] md:max-h-none md:min-h-[380px]",
         isCurrent ? "opacity-100" : "pointer-events-none opacity-0"
       )}
     >
@@ -286,7 +381,12 @@ function HeroSlide({
             isCurrent ? "translate-y-0 opacity-100 delay-150" : "translate-y-3 opacity-0"
           )}
         >
-          {slide.endsAt && <CampaignCountdown endsAt={slide.endsAt} />}
+          {(slide.highlight || slide.endsAt) && (
+            <div className="flex flex-wrap items-center gap-2">
+              {slide.highlight && <HighlightPill highlight={slide.highlight} />}
+              {slide.endsAt && <CampaignCountdown endsAt={slide.endsAt} />}
+            </div>
+          )}
           <h2 className="font-display text-[30px] font-bold leading-[1.02] tracking-[-0.02em] text-white drop-shadow-sm md:text-[44px] lg:text-[54px]">
             {slide.title}
           </h2>
@@ -302,8 +402,9 @@ function HeroSlide({
             </div>
           )}
           {slide.product && (
-            <div className="pt-1">
+            <div className="flex flex-col gap-2 pt-1">
               <HeroProductChip product={slide.product} tabIndex={tabIndex} />
+              {slide.analysis && <HeroProductAnalysis analysis={slide.analysis} tabIndex={tabIndex} />}
             </div>
           )}
         </div>
@@ -480,8 +581,113 @@ function useLiveSlides(slides: StoreHeroView[]): StoreHeroView[] {
   )
 }
 
-export function StoreHero({ slides }: { slides: StoreHeroView[] }) {
+/** Ícone e cor de cada selo. Exportado para o seletor do painel desenhar o mesmo. */
+export const HERO_SEAL_STYLE: Record<HeroSealIcon, { icon: LucideIcon; tint: string }> = {
+  tested: { icon: PackageCheck, tint: "oklch(0.75 0.15 160)" },
+  reviews: { icon: MessageSquareQuote, tint: "oklch(0.78 0.14 85)" },
+  curation: { icon: BadgeCheck, tint: "oklch(0.72 0.14 250)" },
+  database: { icon: Database, tint: "oklch(0.74 0.12 210)" },
+  ranking: { icon: Trophy, tint: "oklch(0.8 0.13 95)" },
+  shield: { icon: ShieldCheck, tint: "oklch(0.74 0.13 150)" },
+  community: { icon: Users, tint: "oklch(0.72 0.14 300)" },
+}
+
+function SealItem({ seal }: { seal: StoreHeroSeal }) {
+  const { icon: Icon, tint } = HERO_SEAL_STYLE[seal.icon]
+  const content = (
+    <>
+      <span
+        className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/10 md:size-9"
+        style={{ background: `color-mix(in oklab, ${tint} 16%, #0e0e0e)` }}
+      >
+        <Icon className="size-4 md:size-[18px]" style={{ color: tint }} strokeWidth={2} />
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="flex items-center gap-1 text-[12px] font-bold leading-tight text-white md:text-[13px]">
+          {seal.title}
+          {seal.link && (
+            // No celular o título quebra em duas linhas e a seta solta ficava
+            // longe do texto; lá o selo inteiro já é a área de toque.
+            <ArrowRight
+              className="hidden size-3 shrink-0 text-white/40 transition-all group-hover/seal:translate-x-0.5 group-hover/seal:text-white md:block"
+              strokeWidth={2.4}
+            />
+          )}
+        </span>
+        {seal.description && (
+          <span className="mt-0.5 hidden text-[11.5px] leading-snug text-[#8f8f8f] lg:block">{seal.description}</span>
+        )}
+      </span>
+    </>
+  )
+  const className = "group/seal flex items-center gap-2.5 md:gap-3"
+
+  if (!seal.link) return <div className={className}>{content}</div>
+  return isInternalBannerLink(seal.link) ? (
+    <RouteLink href={seal.link} className={className}>
+      {content}
+    </RouteLink>
+  ) : (
+    <a href={seal.link} target="_blank" rel="noopener noreferrer" className={className}>
+      {content}
+    </a>
+  )
+}
+
+/** Nota média dos compradores, com link para todas as avaliações. */
+function RatingSummary({ rating }: { rating: NonNullable<StoreHeroTrust["rating"]> }) {
+  const average = rating.average.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+  return (
+    <RouteLink
+      href="/loja/avaliacoes"
+      className="group/rating flex shrink-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2 transition-colors hover:border-white/25 hover:bg-white/[0.07]"
+    >
+      <Star className="size-4 fill-amber-400 text-amber-400" strokeWidth={0} />
+      <span className="font-display text-[15px] font-bold text-white">{average}</span>
+      <span className="text-[11.5px] font-semibold text-[#9a9a9a] group-hover/rating:text-white">
+        {rating.count} {rating.count === 1 ? "avaliação" : "avaliações"} de compradores
+      </span>
+    </RouteLink>
+  )
+}
+
+/**
+ * Faixa colada no Hero: por que comprar na Loja Sunano. Administrável em
+ * /admin/store/hero (selos) e alimentada pelas avaliações publicadas (nota).
+ * Exportada para a prévia do painel.
+ */
+export function HeroSealsBar({ trust }: { trust: StoreHeroTrust }) {
+  if (trust.seals.length === 0 && !trust.rating) return null
+
+  return (
+    <section aria-label="Por que comprar na Loja Sunano" className="border-b border-[#1c1c1c] bg-[#0b0f14]">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3.5 lg:flex-row lg:items-center lg:gap-6 lg:px-8 lg:py-4">
+        {trust.seals.length > 0 && (
+          <ul
+            className={cn(
+              "grid flex-1 grid-cols-2 gap-x-3 gap-y-3 md:gap-x-5",
+              trust.seals.length === 3 ? "md:grid-cols-3" : trust.seals.length >= 4 ? "md:grid-cols-4" : ""
+            )}
+          >
+            {trust.seals.map((seal) => (
+              <li key={`${seal.icon}-${seal.title}`} className="min-w-0">
+                <SealItem seal={seal} />
+              </li>
+            ))}
+          </ul>
+        )}
+        {trust.rating && <RatingSummary rating={trust.rating} />}
+      </div>
+    </section>
+  )
+}
+
+export function StoreHero({ slides, trust }: { slides: StoreHeroView[]; trust?: StoreHeroTrust }) {
   const liveSlides = useLiveSlides(slides)
-  if (liveSlides.length === 0) return <StaticStoreHero />
-  return <HeroCarousel slides={liveSlides} />
+  return (
+    <>
+      {liveSlides.length === 0 ? <StaticStoreHero /> : <HeroCarousel slides={liveSlides} />}
+      {trust && <HeroSealsBar trust={trust} />}
+    </>
+  )
 }

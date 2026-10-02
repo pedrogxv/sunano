@@ -4,33 +4,10 @@ import { useEffect, useState } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { toast } from "sonner"
 import BoxLoader from "@/components/ui/box-loader"
-import { StoreProductForm } from "../form"
+import { StoreProductForm, type StoreProduct, type StoreProductSkuInput } from "../form"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { ProductPriceHistoryChart, type PriceHistoryPoint } from "@/components/admin/store/ProductPriceHistoryChart"
-
-interface StoreProduct {
-  id: string
-  slug: string
-  name: string
-  description: string | null
-  price_cents: number
-  promo_price_cents?: number | null
-  stock: number | null
-  images: string[]
-  category: string | null
-  brand: string | null
-  type: "store"
-  condition: "new" | "used" | "opened"
-  condition_notes: string | null
-  sale_type: "pre_order" | "ready_stock" | "normal"
-  preorder_limit?: number | null
-  is_active: boolean
-  is_sold_out: boolean
-  requires_shipping?: boolean
-  features?: string[]
-  video_url?: string | null
-}
 
 interface StoreProductSpec {
   id?: string
@@ -64,11 +41,6 @@ interface StoreProductVariantGroup {
   options: StoreProductVariantGroupOption[]
 }
 
-interface StoreProductVariantCombination {
-  variant_id: string
-  option_id: string
-}
-
 export default function EditProductPage() {
   const router = useRouter()
   const { id } = useParams<{ id: string }>()
@@ -76,7 +48,8 @@ export default function EditProductPage() {
   const [specs, setSpecs] = useState<StoreProductSpec[]>([])
   const [variants, setVariants] = useState<StoreProductVariant[]>([])
   const [variantGroups, setVariantGroups] = useState<StoreProductVariantGroup[]>([])
-  const [combinations, setCombinations] = useState<StoreProductVariantCombination[]>([])
+  const [skus, setSkus] = useState<StoreProductSkuInput[]>([])
+  const [preorderReserved, setPreorderReserved] = useState<number | null>(null)
   const [peripheralIds, setPeripheralIds] = useState<string[]>([])
   const [priceHistory, setPriceHistory] = useState<PriceHistoryPoint[]>([])
   const [loading, setLoading] = useState(true)
@@ -94,7 +67,8 @@ export default function EditProductPage() {
           specs?: StoreProductSpec[]
           variants?: StoreProductVariant[]
           variantGroups?: StoreProductVariantGroup[]
-          combinations?: StoreProductVariantCombination[]
+          skus?: StoreProductSkuInput[]
+          preorderReserved?: number | null
           peripheralIds?: string[]
           error?: string
         }
@@ -103,7 +77,8 @@ export default function EditProductPage() {
         setSpecs(data.specs ?? [])
         setVariants(data.variants ?? [])
         setVariantGroups(data.variantGroups ?? [])
-        setCombinations(data.combinations ?? [])
+        setSkus(data.skus ?? [])
+        setPreorderReserved(data.preorderReserved ?? null)
         setPeripheralIds(data.peripheralIds ?? [])
 
         if (historyRes.ok) {
@@ -167,7 +142,8 @@ export default function EditProductPage() {
           initialSpecs={specs}
           initialVariants={variants}
           initialVariantGroups={variantGroups}
-          initialCombinations={combinations}
+          initialSkus={skus}
+          preorderReserved={preorderReserved}
           initialPeripheralIds={peripheralIds}
           onSuccess={() => router.push("/admin/store")}
           onCancel={() => router.push("/admin/store")}

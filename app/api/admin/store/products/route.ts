@@ -11,7 +11,9 @@ import {
   type StoreSaleType,
 } from "@/lib/server/repositories/store-repository"
 import { parseSlug } from "@/lib/format"
+import { CARD_HIGHLIGHT_MAX_CHARS, CARD_HIGHLIGHTS_MAX, sanitizeCardHighlights, STORE_CARD_BADGE_CHOICES } from "@/lib/store-card"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
+import { productPageFieldsShape, skuConflictMessage } from "@/lib/server/validation/store-product-page"
 
 const MAX_PRODUCT_IMAGES = 8
 const MAX_STOCK = 999_999
@@ -45,6 +47,15 @@ const createProductSchema = z.object({
     .refine((v) => v === "" || isValidYoutubeUrl(v), "URL de vídeo precisa ser um link do YouTube.")
     .optional()
     .nullable(),
+  /** Selo do card escolhido à mão; null = automático. Ver lib/store-card.ts. */
+  card_badge: z.enum(STORE_CARD_BADGE_CHOICES).nullable().optional(),
+  /** Características do card; vazio = automático pelo Database. */
+  card_highlights: z
+    .array(z.string().trim().max(CARD_HIGHLIGHT_MAX_CHARS, `Cada característica do card tem até ${CARD_HIGHLIGHT_MAX_CHARS} caracteres.`))
+    .max(CARD_HIGHLIGHTS_MAX)
+    .transform(sanitizeCardHighlights)
+    .optional(),
+  ...productPageFieldsShape,
 })
 
 export async function GET(request: NextRequest) {
@@ -123,8 +134,16 @@ export async function POST(request: NextRequest) {
   const {
     name, description, price_cents, promo_price_cents, stock, images, category, brand, condition,
     condition_notes, sale_type, preorder_limit, is_active, is_sold_out, features, video_url,
-    requires_shipping,
+    requires_shipping, card_badge, card_highlights,
+    sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch, launch_until,
   } = parsed.data
+  // Campos da página do produto (20261213000001) só entram quando vieram,
+  // como o selo do card: o form omite o que ficou no padrão.
+  const pageFields = Object.fromEntries(
+    Object.entries({ sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch, launch_until }).filter(
+      ([, value]) => value !== undefined
+    )
+  )
 
   if (promo_price_cents != null && promo_price_cents >= price_cents) {
     return NextResponse.json(
@@ -167,11 +186,17 @@ export async function POST(request: NextRequest) {
       requires_shipping,
       features,
       video_url: video_url || null,
+      // Só entram quando vieram: o form omite o que ficou no automático.
+      ...(card_badge !== undefined ? { card_badge } : {}),
+      ...(card_highlights !== undefined ? { card_highlights } : {}),
+      ...pageFields,
     })
     .select()
     .single()
 
   if (error) {
+    const conflict = skuConflictMessage(error)
+    if (conflict) return NextResponse.json({ error: conflict }, { status: 409 })
     const { body, status } = dbErrorResponse(error, "Erro ao criar produto.")
     return NextResponse.json(body, { status })
   }

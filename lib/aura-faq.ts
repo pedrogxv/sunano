@@ -14,6 +14,7 @@
  * - Inscrição YouTube: `confirm_youtube_subscription` (20260921120000_youtube_subscription_achievement.sql)
  * - Membro do Discord: `confirm_discord_membership` (20261015000000_discord_membership_achievement.sql)
  * - Indicação de amigo: `validate_referral` (20261023000000_referral_program.sql) — 50 direto + 20 indireto
+ * - Compra na Loja: `trg_reward_store_purchase_aura` (20261213000002_store_purchase_aura.sql) — 1 a cada R$ 10
  * - Conquistas por trilha: seeds de `20260808_achievements_streak.sql` e `20260919000000_aura_earned_achievements.sql`,
  *   creditadas por `check_and_award_track_achievements` (20260930000000_aura_fixed_rewards.sql)
  *
@@ -83,6 +84,12 @@ export const AURA_GAIN_ENTRIES: AuraFaqEntry[] = [
     question: "Indicar um amigo que se cadastra no site",
     answer:
       "+50 de Aura por amigo, e +20 quando alguém que você indicou também indica outra pessoa. Valores fixos, não passam pelo multiplicador. Só conta depois que o amigo confirma a conta (entrar no Discord, conectar Google/Discord ou fazer 3 dias de ofensiva), e ele tem 30 dias para isso. Veja tudo em /indicar.",
+  },
+  {
+    id: "store-purchase",
+    question: "Comprar na Loja",
+    answer:
+      "+1 de Aura a cada R$ 10 do preço no PIX (R$ 700 rendem 70), creditada quando o pedido é entregue. Serviço, que não tem entrega, credita no pagamento. Valor fixo, não passa pelo multiplicador, e pagar no cartão rende o mesmo que no PIX.",
   },
   {
     id: "achievements",

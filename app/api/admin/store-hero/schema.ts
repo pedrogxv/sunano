@@ -1,7 +1,13 @@
 import { z } from "zod"
 
 import { BANNER_LINK_HINT, isValidBannerLink, normalizeBannerLink } from "@/lib/banner-link"
-import { HERO_CTA_TEXT_MAX, HERO_SUBTITLE_MAX, HERO_TITLE_MAX } from "@/lib/store-hero"
+import {
+  HERO_CTA_TEXT_MAX,
+  HERO_HIGHLIGHT_LABEL_MAX,
+  HERO_SUBTITLE_MAX,
+  HERO_TITLE_MAX,
+  STORE_HERO_HIGHLIGHTS,
+} from "@/lib/store-hero"
 
 /**
  * Schemas de `POST /api/admin/store-hero` e `PATCH /api/admin/store-hero/[id]`.
@@ -48,6 +54,11 @@ const fields = {
   primaryCtaLink: link,
   secondaryCtaText: trimmedOrNull(HERO_CTA_TEXT_MAX, `Texto do botão deve ter no máximo ${HERO_CTA_TEXT_MAX} caracteres.`),
   secondaryCtaLink: link,
+  highlight: z.enum(STORE_HERO_HIGHLIGHTS).nullable(),
+  highlightLabel: trimmedOrNull(
+    HERO_HIGHLIGHT_LABEL_MAX,
+    `A etiqueta deve ter no máximo ${HERO_HIGHLIGHT_LABEL_MAX} caracteres.`
+  ),
   startsAt: dateTime,
   endsAt: dateTime,
   isActive: z.boolean(),
@@ -63,6 +74,8 @@ export const createStoreHeroSchema = z.object({
   primaryCtaLink: fields.primaryCtaLink.optional().default(null),
   secondaryCtaText: fields.secondaryCtaText.optional().default(null),
   secondaryCtaLink: fields.secondaryCtaLink.optional().default(null),
+  highlight: fields.highlight.optional().default(null),
+  highlightLabel: fields.highlightLabel.optional().default(null),
   startsAt: fields.startsAt.optional().default(null),
   endsAt: fields.endsAt.optional().default(null),
   isActive: fields.isActive.optional().default(true),
@@ -79,6 +92,8 @@ export const updateStoreHeroSchema = z
     primaryCtaLink: fields.primaryCtaLink.optional(),
     secondaryCtaText: fields.secondaryCtaText.optional(),
     secondaryCtaLink: fields.secondaryCtaLink.optional(),
+    highlight: fields.highlight.optional(),
+    highlightLabel: fields.highlightLabel.optional(),
     startsAt: fields.startsAt.optional(),
     endsAt: fields.endsAt.optional(),
     isActive: fields.isActive.optional(),

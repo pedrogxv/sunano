@@ -82,7 +82,9 @@ export type StoreCommerceBarConfig = {
 export const DEFAULT_COMMERCE_BENEFITS: StoreCommerceBenefit[] = [
   { icon: "pix", text: "PIX com desconto", link: null },
   { icon: "card", text: "Até 6x sem juros", link: null },
-  { icon: "truck", text: "Frete calculado no carrinho", link: null },
+  // O checkout não cobra frete (lib/store-shipping.ts): "calculado no
+  // carrinho" contradizia o "Frete grátis" do card e da página do produto.
+  { icon: "truck", text: "Frete grátis para todo o Brasil", link: null },
   { icon: "support", text: "Suporte especializado", link: "/suporte" },
 ]
 

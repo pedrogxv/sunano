@@ -152,6 +152,56 @@ export type OrderStockLine = {
   quantity: number
   variant_id?: string | null
   sale_type?: string | null
+  /** Combinação (SKU) do item, quando havia uma. */
+  sku_id?: string | null
+  /** true = o estoque descontado foi o da combinação, não o da cor/produto. */
+  sku_stock?: boolean | null
+}
+
+/** Uma movimentação de estoque: de onde a unidade saiu (ou para onde volta). */
+export type StockMovement = {
+  productId: string
+  variantId: string | null
+  /** Preenchido só quando o estoque que se mexe é o da combinação. */
+  skuId: string | null
+  quantity: number
+}
+
+/** De onde o item do pedido tirou estoque no checkout. */
+export function orderLineStockMovement(item: OrderStockLine): StockMovement {
+  return {
+    productId: item.id,
+    variantId: item.variant_id ?? null,
+    skuId: item.sku_stock ? item.sku_id ?? null : null,
+    quantity: item.quantity,
+  }
+}
+
+type StockDb = ReturnType<typeof createSupabaseAdminClient>
+
+/**
+ * Devolve unidades ao estoque de onde saíram: a combinação, a cor ou o
+ * produto. Todo caminho que desfaz uma venda (cancelamento, expiração,
+ * reembolso, checkout que falhou) passa por aqui, para a combinação não
+ * perder unidade para a cor quando o pedido volta.
+ */
+export async function restoreStock(db: StockDb, line: StockMovement): Promise<boolean> {
+  const { data } = line.skuId
+    ? await db.rpc("increment_sku_stock", { p_sku_id: line.skuId, p_quantity: line.quantity })
+    : line.variantId
+      ? await db.rpc("increment_variant_stock", { p_variant_id: line.variantId, p_quantity: line.quantity })
+      : await db.rpc("increment_store_stock", { p_product_id: line.productId, p_quantity: line.quantity })
+  return Boolean(data)
+}
+
+/** Desconta unidades (RPC atômica: falha, sem mexer, se não couber). Par de `restoreStock`. */
+export async function takeStock(db: StockDb, line: StockMovement): Promise<boolean> {
+  const { data } = line.skuId
+    ? await db.rpc("decrement_sku_stock", { p_sku_id: line.skuId, p_quantity: line.quantity })
+    : line.variantId
+      ? await db.rpc("decrement_variant_stock", { p_variant_id: line.variantId, p_quantity: line.quantity })
+      : await db.rpc("decrement_store_stock", { p_product_id: line.productId, p_quantity: line.quantity })
+  return Boolean(data)
 }
 
 /**
@@ -1019,13 +1069,7 @@ export async function cancelOrder(
 
   // Pré-venda fica de fora: não teve estoque descontado para devolver.
   const cart = ((existing.items as OrderStockLine[]) ?? []).filter(lineMovesPhysicalStock)
-  await Promise.all(
-    cart.map((item) =>
-      item.variant_id
-        ? db.rpc("increment_variant_stock", { p_variant_id: item.variant_id, p_quantity: item.quantity })
-        : db.rpc("increment_store_stock", { p_product_id: item.id, p_quantity: item.quantity })
-    )
-  )
+  await Promise.all(cart.map((item) => restoreStock(db, orderLineStockMovement(item))))
 
   const ownerId = orderOwnerId(existing.metadata as Record<string, unknown> | null)
   if (ownerId) {
@@ -1124,10 +1168,8 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
 
   const results = await Promise.all(
     restoreTasks.map(async ({ orderId, item }) => {
-      const { data: restored } = item.variant_id
-        ? await db.rpc("increment_variant_stock", { p_variant_id: item.variant_id, p_quantity: item.quantity })
-        : await db.rpc("increment_store_stock", { p_product_id: item.id, p_quantity: item.quantity })
-      return { orderId, item, restored: Boolean(restored) }
+      const restored = await restoreStock(db, orderLineStockMovement(item))
+      return { orderId, item, restored }
     })
   )
 
@@ -1230,16 +1272,8 @@ export async function expireOrderByPaymentId(
 
   const results = await Promise.all(
     cart.map(async (item) => {
-      const { data: restored } = item.variant_id
-        ? await db.rpc("increment_variant_stock", {
-            p_variant_id: item.variant_id,
-            p_quantity: item.quantity,
-          })
-        : await db.rpc("increment_store_stock", {
-            p_product_id: item.id,
-            p_quantity: item.quantity,
-          })
-      return { item, restored: Boolean(restored) }
+      const restored = await restoreStock(db, orderLineStockMovement(item))
+      return { item, restored }
     })
   )
 
@@ -1296,16 +1330,8 @@ export async function reReserveStockForLatePayment(orderId: string): Promise<{
 
   const results = await Promise.all(
     cart.map(async (item) => {
-      const { data: ok } = item.variant_id
-        ? await db.rpc("decrement_variant_stock", {
-            p_variant_id: item.variant_id,
-            p_quantity: item.quantity,
-          })
-        : await db.rpc("decrement_store_stock", {
-            p_product_id: item.id,
-            p_quantity: item.quantity,
-          })
-      return { item, ok: Boolean(ok) }
+      const ok = await takeStock(db, orderLineStockMovement(item))
+      return { item, ok }
     })
   )
 

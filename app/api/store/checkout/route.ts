@@ -26,12 +26,16 @@ import {
   getVariantsForCheckout,
   getVariantOptionsForCheckout,
   getRecentProductPurchaseQuantity,
-  getSoldOutCombinations,
+  getSkusForProducts,
+  getLaunchAndPreorderInfo,
   DAILY_PURCHASE_LIMIT_NO_STOCK,
 } from "@/lib/server/repositories/store-repository"
 import {
   PIX_EXPIRATION_MINUTES,
   PREORDER_PIX_EXPIRATION_MINUTES,
+  restoreStock,
+  takeStock,
+  type StockMovement,
 } from "@/lib/server/repositories/orders-repository"
 import { getStoreSettings } from "@/lib/server/repositories/store-settings-repository"
 import {
@@ -43,7 +47,9 @@ import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications
 import { notifyDiscordOrderEventInBackground } from "@/lib/server/repositories/discord-orders-repository"
 import { canUseStoreNow } from "@/lib/server/auth/store-access"
 import { isStoreMaintenanceEnabled } from "@/lib/store-maintenance"
-import { computeCardPriceCents, computeEffectivePrice } from "@/lib/store-pricing"
+import { computeCardTotalCents, computeItemCardPriceCents, isSinglePriceProduct } from "@/lib/store-pricing"
+import { effectivePreorderStatus, PREORDER_STATUS_LABEL } from "@/lib/store-preorder"
+import { resolveSelection, type ResolvedSelection } from "@/lib/store-sku"
 import { SITE_URL } from "@/lib/site-url"
 import type { Database } from "@/lib/database.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
@@ -51,11 +57,7 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 export const runtime = "nodejs"
 export const maxDuration = 20
 
-type DecrementedLine = {
-  productId: string
-  variantId: string | null
-  quantity: number
-}
+type DecrementedLine = StockMovement
 
 const MAX_ITEM_LINES = 50
 const MAX_QUANTITY_PER_LINE = 20
@@ -210,17 +212,7 @@ async function revertDecrements(
   await Promise.all(
     lines.map(async (line) => {
       try {
-        if (line.variantId) {
-          await db.rpc("increment_variant_stock", {
-            p_variant_id: line.variantId,
-            p_quantity: line.quantity,
-          })
-        } else {
-          await db.rpc("increment_store_stock", {
-            p_product_id: line.productId,
-            p_quantity: line.quantity,
-          })
-        }
+        await restoreStock(db, line)
       } catch (err) {
         console.error(
           "[checkout] falha ao reverter reserva de estoque:",
@@ -268,7 +260,7 @@ async function confirmReservations(
  * conciliável com o pedido.
  *
  * O ajuste de centavos existe porque o acréscimo do cartão é calculado sobre
- * o TOTAL (`computeCardPriceCents(totalCents, …)`), não item a item:
+ * o TOTAL (`computeCardTotalCents`), não item a item:
  * converter cada unidade isoladamente e somar dá diferença de alguns centavos
  * por arredondamento. Como a Asaas cobra a soma dos itens, a sobra vai toda
  * para o item mais caro (onde some percentualmente melhor) — assim a soma
@@ -282,6 +274,7 @@ function buildAsaasCheckoutItems(
     quantity: number
     variant_label: string | null
     variant_options: { group: string; label: string }[]
+    single_price: boolean
   }[],
   cardTotalCents: number,
   cardSurchargePercent: number
@@ -297,7 +290,8 @@ function buildAsaasCheckoutItems(
       // A Asaas limita o nome do item; corta sem truncar no meio do acento.
       name: item.name.slice(0, 100),
       quantity: item.quantity,
-      unitPriceCents: computeCardPriceCents(item.price_cents, cardSurchargePercent),
+      // Serviço tem preço único: vai para a Asaas sem o acréscimo do cartão.
+      unitPriceCents: computeItemCardPriceCents(item.price_cents, cardSurchargePercent, item.single_price),
       description: details.length > 0 ? details.join(", ").slice(0, 255) : null,
     }
   })
@@ -559,21 +553,18 @@ export async function POST(request: NextRequest) {
       { data: products, error: dbError },
       variants,
       variantOptions,
-      soldOutCombinations,
+      skus,
     ] = await Promise.all([
       db
         .from("store_products")
         .select(
-          "id, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type"
+          "id, name, price_cents, promo_price_cents, stock, images, type, condition, is_active, is_sold_out, requires_shipping, sale_type, category"
         )
         .in("id", productIds),
       getVariantsForCheckout(variantIds),
       getVariantOptionsForCheckout(optionIds),
-      getSoldOutCombinations(variantIds, optionIds),
+      getSkusForProducts(productIds),
     ])
-    const soldOutCombinationKeys = new Set(
-      soldOutCombinations.map((c) => `${c.variant_id}:${c.option_id}`)
-    )
 
     if (dbError) {
       const { body, status } = dbErrorResponse(
@@ -604,6 +595,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Lote de cada pré-venda: a mensagem de recusa diz o status com o mesmo
+    // nome da tela, e o item do pedido guarda de qual lote é a reserva.
+    const preorderInfo = await getLaunchAndPreorderInfo(
+      products.map((product) => ({ id: product.id, sale_type: product.sale_type }))
+    )
+
     // Validação síncrona (sem query) de cada linha antes de tocar o banco —
     // nenhum decremento acontece ainda aqui, então não precisa reverter nada
     // em caso de erro.
@@ -611,6 +608,8 @@ export async function POST(request: NextRequest) {
       product: (typeof products)[number]
       variant: (typeof variants)[number] | null
       options: (typeof variantOptions)[number][]
+      /** Preço, estoque e SKU da combinação — a MESMA resolução da página do produto. */
+      selection: ResolvedSelection
       quantity: number
     }
     const validatedLines: ValidatedLine[] = []
@@ -633,6 +632,18 @@ export async function POST(request: NextRequest) {
           { error: `Produto esgotado: ${product.name}` },
           { status: 400 }
         )
+      }
+      // A recusa de verdade é de `reserve_preorder` (lote fechado ou cheio);
+      // aqui só evita gastar a reserva das outras linhas para descobrir isso.
+      const preorder = preorderInfo.get(product.id)?.preorder
+      if (preorder) {
+        const status = effectivePreorderStatus(preorder, product.is_sold_out)
+        if (status !== "open") {
+          return NextResponse.json(
+            { error: `A pré-venda de "${product.name}" não está aberta: ${PREORDER_STATUS_LABEL[status]}.` },
+            { status: 400 }
+          )
+        }
       }
 
       const variant = cartItem.variantId
@@ -690,28 +701,33 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      // Combinação Cor × Variante esgotada — checado à parte dos flags
-      // isolados acima, já que uma cor e uma opção podem estar disponíveis
-      // individualmente mas bloqueadas juntas (ver store_product_variant_combinations).
-      if (variant) {
-        for (const option of options) {
-          if (soldOutCombinationKeys.has(`${variant.id}:${option.id}`)) {
-            return NextResponse.json(
-              {
-                error: `Combinação indisponível: ${product.name} · ${variant.label} + ${option.label}`,
-              },
-              { status: 400 }
-            )
-          }
-        }
+      const sortedOptions = [...options].sort(
+        (a, b) => a.group.position - b.group.position
+      )
+      const selection = resolveSelection(
+        product,
+        variant ?? null,
+        sortedOptions,
+        skus.filter((sku) => sku.product_id === product.id)
+      )
+
+      // Combinação esgotada à mão: cor e opção podem estar à venda sozinhas
+      // e bloqueadas juntas (ver store_product_skus.is_sold_out).
+      if (selection.sku?.is_sold_out) {
+        const label = [variant?.label, ...sortedOptions.map((o) => o.label)]
+          .filter(Boolean)
+          .join(" + ")
+        return NextResponse.json(
+          { error: `Combinação indisponível: ${product.name} · ${label}` },
+          { status: 400 }
+        )
       }
 
       validatedLines.push({
         product,
         variant: variant ?? null,
-        options: [...options].sort(
-          (a, b) => a.group.position - b.group.position
-        ),
+        options: sortedOptions,
+        selection,
         quantity: cartItem.quantity,
       })
     }
@@ -739,10 +755,7 @@ export async function POST(request: NextRequest) {
       // o limite diário aqui é para produto sem NENHUM teto, e aplicá-lo à
       // pré-venda limitaria uma reserva de lançamento a 15 unidades/dia.
       if (line.product.sale_type === "pre_order") continue
-      const effectiveStock = line.variant
-        ? line.variant.stock
-        : line.product.stock
-      if (effectiveStock !== null) continue
+      if (line.selection.stock !== null) continue
       unlimitedStockQuantityByProduct.set(
         line.product.id,
         (unlimitedStockQuantityByProduct.get(line.product.id) ?? 0) +
@@ -794,7 +807,7 @@ export async function POST(request: NextRequest) {
     // uma corrida real sendo resolvida.
     const decrementResults = await Promise.all(
       validatedLines.map(async (line) => {
-        const { product, variant, quantity } = line
+        const { product, variant, selection, quantity } = line
 
         // Pré-venda não tem estoque físico para descontar — o lote ainda vai
         // chegar. O teto é `preorder_limit`, e a RPC confere e registra a
@@ -810,21 +823,15 @@ export async function POST(request: NextRequest) {
           return { line, ok: Boolean(reserved), isPreOrder: true }
         }
 
-        if (variant) {
-          const { data: decremented } = await db.rpc(
-            "decrement_variant_stock",
-            {
-              p_variant_id: variant.id,
-              p_quantity: quantity,
-            }
-          )
-          return { line, ok: Boolean(decremented), isPreOrder: false }
-        }
-        const { data: decremented } = await db.rpc("decrement_store_stock", {
-          p_product_id: product.id,
-          p_quantity: quantity,
+        // A unidade sai de onde o estoque é controlado: a combinação, se
+        // ela tem estoque próprio; senão a cor; senão o produto.
+        const ok = await takeStock(db, {
+          productId: product.id,
+          variantId: variant?.id ?? null,
+          skuId: selection.stockSource === "sku" ? selection.sku!.id : null,
+          quantity,
         })
-        return { line, ok: Boolean(decremented), isPreOrder: false }
+        return { line, ok, isPreOrder: false }
       })
     )
 
@@ -835,6 +842,7 @@ export async function POST(request: NextRequest) {
       decrementedLines.push({
         productId: line.product.id,
         variantId: line.variant?.id ?? null,
+        skuId: line.selection.stockSource === "sku" ? line.selection.sku!.id : null,
         quantity: line.quantity,
       })
     }
@@ -842,19 +850,22 @@ export async function POST(request: NextRequest) {
     const failed = decrementResults.find((r) => !r.ok)
     if (failed) {
       await revertDecrements(db, decrementedLines, reservationGroup)
-      const { product, variant } = failed.line
-      const label = variant
-        ? `${product.name} · ${variant.label}`
-        : product.name
-      return NextResponse.json(
-        {
-          error:
-            product.sale_type === "pre_order"
-              ? `As reservas de pré-venda de "${label}" esgotaram.`
-              : `Estoque insuficiente para "${label}".`,
-        },
-        { status: 409 }
-      )
+      const { product, variant, options } = failed.line
+      const label = [product.name, variant?.label, ...options.map((o) => o.label)]
+        .filter(Boolean)
+        .join(" · ")
+      let error = `Estoque insuficiente para "${label}".`
+      if (product.sale_type === "pre_order") {
+        // `reserve_preorder` recusa por dois motivos: lote cheio ou lote que
+        // não está aberto. A mensagem diz qual, com o mesmo nome da tela.
+        const preorder = preorderInfo.get(product.id)?.preorder
+        const status = preorder ? effectivePreorderStatus(preorder, product.is_sold_out) : "sold_out"
+        error =
+          status === "open" || status === "sold_out"
+            ? `As reservas de pré-venda de "${label}" esgotaram.`
+            : `A pré-venda de "${label}" não está aberta: ${PREORDER_STATUS_LABEL[status]}.`
+      }
+      return NextResponse.json({ error }, { status: 409 })
     }
 
     // Estoque reservado com sucesso: registra no diário ANTES de qualquer
@@ -871,6 +882,7 @@ export async function POST(request: NextRequest) {
             reservation_group: reservationGroup,
             product_id: line.productId,
             variant_id: line.variantId,
+            ...(line.skuId ? { sku_id: line.skuId } : {}),
             quantity: line.quantity,
           }))
         )
@@ -885,16 +897,14 @@ export async function POST(request: NextRequest) {
     let totalCents = 0
     const orderItems = []
     for (const line of validatedLines) {
-      const { product, variant, options, quantity } = line
-      // Mesma função que a vitrine e a página de produto usam para decidir o
-      // preço exibido (`lib/store-pricing.ts`) — inclusive a promoção. Antes
-      // isto era uma segunda implementação que esquecia `promo_price_cents`,
-      // e a loja cobrava o preço cheio de um produto anunciado com desconto.
-      const { effectiveCents: effectivePriceCents } = computeEffectivePrice(
-        product,
-        variant,
-        options
-      )
+      const { product, variant, options, selection, quantity } = line
+      // Mesma resolução que a página do produto usa para decidir o preço
+      // exibido (`lib/store-sku.ts` → `lib/store-pricing.ts`), inclusive a
+      // promoção e o preço da combinação. Antes isto era uma segunda
+      // implementação que esquecia `promo_price_cents`, e a loja cobrava o
+      // preço cheio de um produto anunciado com desconto.
+      const effectivePriceCents = selection.price.effectiveCents
+      const singlePrice = isSinglePriceProduct(product)
 
       totalCents += effectivePriceCents * quantity
       orderItems.push({
@@ -913,7 +923,16 @@ export async function POST(request: NextRequest) {
           group: o.group.name,
           label: o.label,
         })),
-        image: product.images?.[0] ?? null,
+        // Código da combinação, para a separação do pedido. `sku_stock` diz
+        // se a unidade saiu do estoque DELA (é o que a devolução lê).
+        sku_id: selection.sku?.id ?? null,
+        sku: selection.skuCode,
+        sku_stock: selection.stockSource === "sku" && product.sale_type !== "pre_order",
+        // Serviço: preço único e chamado de suporte aberto no pagamento.
+        single_price: singlePrice,
+        is_service: singlePrice,
+        preorder_batch: preorderInfo.get(product.id)?.preorder?.batchName ?? null,
+        image: selection.image ?? product.images?.[0] ?? null,
       })
     }
 
@@ -1167,10 +1186,15 @@ export async function POST(request: NextRequest) {
       // página da própria Asaas; nosso backend nunca recebe número de
       // cartão, validade ou CVV (ver createCheckout).
       const settings = await getStoreSettings()
-      // Mesmo helper usado na vitrine/checkout do cliente — o valor cobrado
-      // aqui tem que bater com o que a tela mostrou, centavo a centavo.
-      const cardTotalCents = computeCardPriceCents(
-        totalCents,
+      // Mesmo helper usado no carrinho e no checkout do cliente — o valor
+      // cobrado aqui tem que bater com o que a tela mostrou, centavo a
+      // centavo. Serviço entra sem o acréscimo (preço único).
+      const cardTotalCents = computeCardTotalCents(
+        orderItems.map((item) => ({
+          priceCents: item.price_cents,
+          quantity: item.quantity,
+          singlePrice: item.single_price,
+        })),
         settings.cardSurchargePercent
       )
 

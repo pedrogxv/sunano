@@ -54,13 +54,7 @@ export function StoreFavoritesContent({ filterOptions }: { filterOptions: StoreF
 
   return (
     <div>
-      <StoreCategoryNav
-        categories={filterOptions.categories}
-        categoryCounts={filterOptions.categoryCounts}
-        brandsByCategory={filterOptions.brandsByCategory}
-        activeCategory={null}
-        previewPool={items ?? []}
-      />
+      <StoreCategoryNav data={filterOptions} activeCategory={null} />
 
       <div className="relative overflow-hidden border-b border-[#1c1c1c] bg-[#0b0f14] py-10 sm:py-14">
         <Heart

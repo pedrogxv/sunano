@@ -1116,6 +1116,7 @@ export type Database = {
             | "referral_signup"
             | "referral_indirect"
             | "aura_peripheral_redeemed"
+            | "store_purchase"
           source_post_id: string | null
           source_comment_id: string | null
           source_blog_post_id: string | null
@@ -1123,10 +1124,14 @@ export type Database = {
           source_peripheral_id: string | null
           source_peripheral_comment_id: string | null
           source_peripheral_review_id: string | null
+          /** Pedido da Loja que rendeu a Aura (`reason = 'store_purchase'`). */
+          source_order_id: string | null
           giver_id: string | null
           created_at: string
         }
-        Insert: Omit<Database["public"]["Tables"]["aura_ledger"]["Row"], "id" | "created_at">
+        Insert: Omit<Database["public"]["Tables"]["aura_ledger"]["Row"], "id" | "created_at" | "source_order_id"> & {
+          source_order_id?: string | null
+        }
         Update: Partial<Database["public"]["Tables"]["aura_ledger"]["Insert"]>
       }
       rate_limit_events: {
@@ -1241,6 +1246,21 @@ export type Database = {
           peripheral_id: string | null
           features: string[]
           video_url: string | null
+          card_badge: string | null
+          card_highlights: string[]
+          /** SKU de produto simples (sem cor nem grupo). Combinações têm o seu em store_product_skus. */
+          sku: string | null
+          /** Lote de pré-venda (20261213000001). Ver lib/store-preorder.ts. */
+          preorder_batch_name: string | null
+          /** Previsão de envio do lote, `YYYY-MM-DD`. */
+          preorder_ships_at: string | null
+          preorder_status: "open" | "sold_out" | "next_batch_soon" | "closed" | "shipping"
+          /** Início do lote atual: o teto conta só pedidos daqui em diante. Nulo = todos. */
+          preorder_batch_started_at: string | null
+          /** Entra na seção "Lançamentos e Pré-venda" da Home. */
+          is_launch: boolean
+          /** Último dia como lançamento (`YYYY-MM-DD`); nulo = até desmarcar. */
+          launch_until: string | null
           created_at: string
           updated_at: string
         }
@@ -1270,6 +1290,15 @@ export type Database = {
           peripheral_id?: string | null
           features?: string[]
           video_url?: string | null
+          card_badge?: string | null
+          card_highlights?: string[]
+          sku?: string | null
+          preorder_batch_name?: string | null
+          preorder_ships_at?: string | null
+          preorder_status?: "open" | "sold_out" | "next_batch_soon" | "closed" | "shipping"
+          preorder_batch_started_at?: string | null
+          is_launch?: boolean
+          launch_until?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1299,6 +1328,15 @@ export type Database = {
           peripheral_id?: string | null
           features?: string[]
           video_url?: string | null
+          card_badge?: string | null
+          card_highlights?: string[]
+          sku?: string | null
+          preorder_batch_name?: string | null
+          preorder_ships_at?: string | null
+          preorder_status?: "open" | "sold_out" | "next_batch_soon" | "closed" | "shipping"
+          preorder_batch_started_at?: string | null
+          is_launch?: boolean
+          launch_until?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1504,12 +1542,60 @@ export type Database = {
           created_at?: string
         }
       }
+      store_product_skus: {
+        Relationships: []
+        Row: {
+          id: string
+          product_id: string
+          variant_id: string | null
+          /** Ordenado (check `store_product_skus_option_ids_sorted`). */
+          option_ids: string[]
+          sku: string | null
+          price_cents: number | null
+          promo_price_cents: number | null
+          stock: number | null
+          image_url: string | null
+          is_sold_out: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          variant_id?: string | null
+          option_ids?: string[]
+          sku?: string | null
+          price_cents?: number | null
+          promo_price_cents?: number | null
+          stock?: number | null
+          image_url?: string | null
+          is_sold_out?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          variant_id?: string | null
+          option_ids?: string[]
+          sku?: string | null
+          price_cents?: number | null
+          promo_price_cents?: number | null
+          stock?: number | null
+          image_url?: string | null
+          is_sold_out?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
       store_stock_reservations: {
         Row: {
           id: string
           reservation_group: string
           product_id: string
           variant_id: string | null
+          /** Combinação cujo estoque foi descontado (20261213000000). */
+          sku_id: string | null
           quantity: number
           created_at: string
         }
@@ -1518,6 +1604,7 @@ export type Database = {
           reservation_group: string
           product_id: string
           variant_id?: string | null
+          sku_id?: string | null
           quantity: number
           created_at?: string
         }
@@ -1526,6 +1613,7 @@ export type Database = {
           reservation_group?: string
           product_id?: string
           variant_id?: string | null
+          sku_id?: string | null
           quantity?: number
           created_at?: string
         }
@@ -2444,6 +2532,9 @@ export type Database = {
           primary_cta_link: string | null
           secondary_cta_text: string | null
           secondary_cta_link: string | null
+          /** 'campaign' | 'launch' | 'product' | 'offer' (20261211000000): ver `StoreHeroHighlight`. */
+          highlight: string | null
+          highlight_label: string | null
           starts_at: string | null
           ends_at: string | null
           is_active: boolean
@@ -2462,6 +2553,8 @@ export type Database = {
           primary_cta_link?: string | null
           secondary_cta_text?: string | null
           secondary_cta_link?: string | null
+          highlight?: string | null
+          highlight_label?: string | null
           starts_at?: string | null
           ends_at?: string | null
           is_active?: boolean
@@ -2470,6 +2563,28 @@ export type Database = {
           updated_at?: string
         }
         Update: Partial<Database["public"]["Tables"]["store_hero_slides"]["Insert"]>
+      }
+      /** Selos de curadoria do Hero da Loja, linha única `id = true` (20261211000000). Sem grant para cliente. */
+      store_hero_settings: {
+        Relationships: []
+        Row: {
+          id: boolean
+          seals_enabled: boolean
+          /** Formato validado na API: ver `StoreHeroSeal` em lib/store-hero.ts. */
+          seals: unknown
+          show_rating: boolean
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: boolean
+          seals_enabled?: boolean
+          seals?: unknown
+          show_rating?: boolean
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["store_hero_settings"]["Insert"]>
       }
       /** Barra comercial da Loja, linha única `id = true` (20261204000000). Sem grant para cliente. */
       store_commerce_bar: {
@@ -2761,6 +2876,18 @@ export type Database = {
       preorder_reserved_quantity: {
         Args: { p_product_id: string }
         Returns: number
+      }
+      preorder_reserved_quantities: {
+        Args: { p_product_ids: string[] }
+        Returns: { product_id: string; reserved: number }[]
+      }
+      decrement_sku_stock: {
+        Args: { p_sku_id: string; p_quantity: number }
+        Returns: boolean
+      }
+      increment_sku_stock: {
+        Args: { p_sku_id: string; p_quantity: number }
+        Returns: boolean
       }
       increment_variant_stock: {
         Args: { p_variant_id: string; p_quantity: number }

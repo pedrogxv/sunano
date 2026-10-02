@@ -25,12 +25,14 @@ import {
   Plus,
   ShoppingBag,
   Smartphone,
+  Tag,
   Trash2,
   Upload,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { StoreProductPicker } from "@/components/admin/StoreProductPicker"
+import { StoreHeroSealsEditor } from "@/components/admin/store/StoreHeroSealsEditor"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { StoreHero } from "@/components/store/StoreHero"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -54,16 +56,22 @@ import {
   buildHeroView,
   HERO_CTA_PRESETS,
   HERO_CTA_TEXT_MAX,
+  HERO_HIGHLIGHT_LABEL,
+  HERO_HIGHLIGHT_LABEL_MAX,
   HERO_STATUS_LABEL,
   HERO_SUBTITLE_MAX,
   HERO_TITLE_MAX,
   heroSlideStatus,
+  STORE_HERO_HIGHLIGHTS,
   type AdminStoreHeroSlide,
+  type StoreHeroHighlightKind,
   type StoreHeroStatus,
 } from "@/lib/store-hero"
 import { cn } from "@/lib/utils"
 
 type FormState = {
+  highlight: StoreHeroHighlightKind | null
+  highlightLabel: string
   title: string
   subtitle: string
   imageDesktopUrl: string
@@ -79,6 +87,8 @@ type FormState = {
 }
 
 const EMPTY_FORM: FormState = {
+  highlight: null,
+  highlightLabel: "",
   title: "",
   subtitle: "",
   imageDesktopUrl: "",
@@ -135,6 +145,8 @@ function HeroPreview({ form, now }: { form: FormState; now: number }) {
       primaryCtaLink: form.primaryCtaLink.trim() || null,
       secondaryCtaText: form.secondaryCtaText.trim() || null,
       secondaryCtaLink: form.secondaryCtaLink.trim() || null,
+      highlight: form.highlight,
+      highlightLabel: form.highlightLabel.trim() || null,
       endsAt: endsAt && Date.parse(endsAt) > now ? endsAt : null,
     },
     form.product
@@ -386,6 +398,11 @@ function SortableSlideRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
+          {slide.highlight && (
+            <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+              {slide.highlightLabel ?? HERO_HIGHLIGHT_LABEL[slide.highlight]}
+            </span>
+          )}
           <p className="truncate text-sm font-medium text-foreground">{slide.title}</p>
           <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold", STATUS_CLASS[status])}>
             {HERO_STATUS_LABEL[status]}
@@ -460,7 +477,7 @@ export default function AdminStoreHeroPage() {
 
   usePageHeader(
     "Hero da Loja",
-    "Banner principal do topo de /loja. Vários slides no ar viram carrossel; sem nenhum, a Loja mostra a arte padrão."
+    "Banner principal do topo de /loja: campanha, lançamento, produto ou oferta. Vários slides no ar viram carrossel; sem nenhum, a Loja mostra a arte padrão."
   )
 
   const load = useCallback(async () => {
@@ -508,6 +525,8 @@ export default function AdminStoreHeroPage() {
   function openEdit(slide: AdminStoreHeroSlide) {
     setEditing(slide)
     setForm({
+      highlight: slide.highlight,
+      highlightLabel: slide.highlightLabel ?? "",
       title: slide.title,
       subtitle: slide.subtitle ?? "",
       imageDesktopUrl: slide.imageDesktopUrl ?? "",
@@ -576,6 +595,8 @@ export default function AdminStoreHeroPage() {
     setSaving(true)
     try {
       const payload = {
+        highlight: form.highlight,
+        highlightLabel: form.highlight ? form.highlightLabel.trim() || null : null,
         title,
         subtitle: form.subtitle.trim() || null,
         imageDesktopUrl: form.imageDesktopUrl || null,
@@ -745,6 +766,8 @@ export default function AdminStoreHeroPage() {
         </DndContext>
       )}
 
+      <StoreHeroSealsEditor />
+
       {/* Editor */}
       <Dialog open={formOpen} onOpenChange={setFormOpen}>
         <DialogContent className="max-h-[92vh] overflow-y-auto border border-border bg-card sm:max-w-3xl">
@@ -756,6 +779,48 @@ export default function AdminStoreHeroPage() {
           <HeroPreview form={form} now={now} />
 
           <div className="space-y-5">
+            {/* Etiqueta */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <Tag className="size-3.5" />
+                O que este slide destaca
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {([null, ...STORE_HERO_HIGHLIGHTS] as const).map((kind) => {
+                  const selected = form.highlight === kind
+                  return (
+                    <button
+                      key={kind ?? "none"}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => patchForm({ highlight: kind })}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                        selected
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground"
+                      )}
+                    >
+                      {kind ? HERO_HIGHLIGHT_LABEL[kind] : "Sem etiqueta"}
+                    </button>
+                  )
+                })}
+              </div>
+              {form.highlight && (
+                <Input
+                  aria-label="Texto da etiqueta"
+                  placeholder={`Texto da etiqueta, opcional (vazio = "${HERO_HIGHLIGHT_LABEL[form.highlight]}")`}
+                  maxLength={HERO_HIGHLIGHT_LABEL_MAX}
+                  value={form.highlightLabel}
+                  onChange={(event) => patchForm({ highlightLabel: event.target.value })}
+                />
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                Aparece acima do título, com cor e ícone do tipo. Ex.: &ldquo;Black Week&rdquo; numa campanha,
+                &ldquo;Só esta semana&rdquo; numa oferta.
+              </p>
+            </div>
+
             {/* Texto */}
             <div className="space-y-2">
               <Label htmlFor="hero-title">Título</Label>
@@ -768,10 +833,10 @@ export default function AdminStoreHeroPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="hero-subtitle">Subtítulo, opcional</Label>
+              <Label htmlFor="hero-subtitle">Subtítulo curto, opcional</Label>
               <Textarea
                 id="hero-subtitle"
-                placeholder="Ex.: 49g, sensor PAW3950 e 8K de polling. Lote limitado em pré-venda."
+                placeholder="Ex.: 49g, PAW3950 e 8K de polling. Lote limitado."
                 maxLength={HERO_SUBTITLE_MAX}
                 rows={2}
                 value={form.subtitle}
@@ -813,8 +878,9 @@ export default function AdminStoreHeroPage() {
               </Label>
               <StoreProductPicker value={form.product} onChange={(product) => patchForm({ product })} />
               <p className="text-[11px] text-muted-foreground">
-                Aparece no slide com foto e preço, e vira o destino do botão principal quando o link dele fica
-                vazio. Sem imagem de desktop, a foto do produto vira a arte do slide.
+                Aparece no slide com foto, preço e desconto, e vira o destino do botão principal quando o link dele
+                fica vazio. Sem imagem de desktop, a foto do produto vira a arte do slide. Se o produto tiver
+                periférico vinculado, o slide mostra a posição dele no ranking do Database.
               </p>
             </div>
 
@@ -839,7 +905,7 @@ export default function AdminStoreHeroPage() {
               title="Botão secundário, opcional"
               text={form.secondaryCtaText}
               link={form.secondaryCtaLink}
-              linkPlaceholder="/suporte"
+              linkPlaceholder="/tierlist"
               linkHint="Só aparece com texto e link."
               hasProduct={false}
               onChange={({ text, link }) =>

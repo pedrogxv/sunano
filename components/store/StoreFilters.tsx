@@ -7,24 +7,17 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
+import { findPriceBand, STORE_SORT_OPTIONS, type CatalogGroupConfig, type StoreSortKey } from "@/lib/store-catalog"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import type { StoreFacetCounts } from "@/lib/server/repositories/store-repository"
 
-export type StoreSortKey = "relevance" | "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
-
-/** `relevance` só é oferecida com busca ativa: sem termo não há o que ranquear. */
-export const STORE_SORT_LABEL: Record<StoreSortKey, string> = {
-  relevance: "Mais relevantes",
-  recent: "Mais recentes",
-  "name-asc": "Nome A-Z",
-  "name-desc": "Nome Z-A",
-  "price-asc": "Menor preço",
-  "price-desc": "Maior preço",
-}
+export type { StoreSortKey }
 
 /**
  * Tudo que o cliente pode recortar no catálogo. `price` em reais (não centavos)
  * porque é o que o slider manipula; `null` = faixa inteira, sem filtro.
+ * `priceBand` é a faixa pronta do catálogo ("R$300–500"); as duas não valem
+ * juntas, escolher uma limpa a outra.
  */
 export type StoreFilterState = {
   query: string
@@ -33,6 +26,11 @@ export type StoreFilterState = {
   conditions: string[]
   saleTypes: string[]
   price: [number, number] | null
+  priceBand: string | null
+  /** Tipos do catálogo ("ultraleves", "fps"). Ver `lib/store-catalog.ts`. */
+  collections: string[]
+  /** Facetas do Database por chave (`peso`, `formato`...). */
+  catalogFacets: Record<string, string[]>
   promoOnly: boolean
   inStockOnly: boolean
 }
@@ -44,11 +42,14 @@ export const EMPTY_STORE_FILTERS: StoreFilterState = {
   conditions: [],
   saleTypes: [],
   price: null,
+  priceBand: null,
+  collections: [],
+  catalogFacets: {},
   promoOnly: false,
   inStockOnly: false,
 }
 
-const CONDITION_LABEL: Record<string, string> = {
+export const CONDITION_LABEL: Record<string, string> = {
   new: "Novo",
   opened: "Emb. aberta",
   used: "Usado",
@@ -59,7 +60,7 @@ const CONDITION_LABEL: Record<string, string> = {
  * entrega. "Pronta entrega" também saiu da vitrine (o tipo segue no banco,
  * só não é mais oferecido como filtro).
  */
-const SALE_TYPE_LABEL: Record<string, string> = {
+export const SALE_TYPE_LABEL: Record<string, string> = {
   pre_order: "Pré-venda",
 }
 
@@ -71,7 +72,7 @@ export const TRIGGER_CLASS =
 export const MOBILE_TRIGGER_CLASS =
   "flex h-11 w-full items-center justify-between gap-[7px] whitespace-nowrap rounded-xl border border-[#2a2a2a] bg-[#141414] px-4 text-[13px] font-semibold text-[#cfcfcf]"
 
-const ACTIVE_TRIGGER_CLASS = "border-emerald-500/45 bg-emerald-500/10 text-white"
+export const ACTIVE_TRIGGER_CLASS = "border-emerald-500/45 bg-emerald-500/10 text-white"
 
 /** Cortes "redondos" pras faixas de preço — nada de R$ 1.237. */
 const NICE_CUTS = [50, 100, 150, 200, 250, 300, 400, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000, 5000, 7500, 10000]
@@ -80,7 +81,7 @@ function niceCut(value: number): number {
   return NICE_CUTS.find((cut) => cut >= value) ?? Math.ceil(value / 1000) * 1000
 }
 
-function formatShortBRL(value: number): string {
+export function formatShortBRL(value: number): string {
   return `R$ ${value.toLocaleString("pt-BR")}`
 }
 
@@ -112,6 +113,9 @@ export function countActiveFilters(state: StoreFilterState, lockedCategory: stri
     state.conditions.length +
     state.saleTypes.length +
     (state.price ? 1 : 0) +
+    (state.priceBand ? 1 : 0) +
+    state.collections.length +
+    Object.values(state.catalogFacets).reduce((sum, values) => sum + values.length, 0) +
     (state.promoOnly ? 1 : 0) +
     (state.inStockOnly ? 1 : 0)
   )
@@ -453,7 +457,7 @@ export function StoreFilters({
       )}
       <PricePopover
         value={state.price}
-        onChange={(price) => onChange({ price })}
+        onChange={(price) => onChange({ price, priceBand: null })}
         maxPrice={maxPrice}
         triggerClass={triggerClass}
       />
@@ -499,23 +503,10 @@ export function StoreFilters({
   )
 
   const sortSelect = (className: string) => (
-    <Select value={sortKey} onValueChange={(v) => onSortChange(v as StoreSortKey)}>
-      <SelectTrigger className={className}>
-        <SelectValue>{STORE_SORT_LABEL[sortKey]}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {(Object.keys(STORE_SORT_LABEL) as StoreSortKey[])
-          .filter((key) => key !== "relevance" || state.query.trim())
-          .map((key) => (
-            <SelectItem key={key} value={key}>
-              {STORE_SORT_LABEL[key]}
-            </SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
+    <StoreSortSelect value={sortKey} onChange={onSortChange} hasQuery={Boolean(state.query.trim())} className={className} />
   )
 
-  const chips = buildActiveChips(state, onChange, lockedCategory, lockedBrand)
+  const chips = buildActiveChips(state, onChange, lockedCategory, lockedBrand, null)
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -590,32 +581,70 @@ export function StoreFilters({
 
       {/* Resumo do que está aplicado — cada pedaço sai sozinho, sem precisar
           reabrir o popover que o criou. */}
-      {chips.length > 0 && (
-        <div className="hidden flex-wrap items-center gap-2 md:flex">
-          {chips.map((chip) => (
-            <span
-              key={chip.key}
-              className="inline-flex items-center gap-1.5 rounded-full border border-[#2a2a2a] bg-[#141414] py-[5px] pl-3 pr-2 text-[11.5px] font-semibold text-[#cfcfcf]"
-            >
-              <span className="text-[#7a7a7a]">{chip.group}:</span>
-              <span className="max-w-[180px] truncate">{chip.label}</span>
-              <button
-                type="button"
-                onClick={chip.onRemove}
-                aria-label={`Remover filtro ${chip.label}`}
-                className="flex size-4 items-center justify-center rounded-full text-[#6e6e6e] transition-colors hover:bg-white/10 hover:text-white"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+      <ActiveFilterChips chips={chips} className="hidden md:flex" />
 
       <span className="hidden items-center gap-1.5 text-[12.5px] font-semibold text-[#8a8a8a] md:flex">
         <b className="text-white">{total}</b> produto{total !== 1 ? "s" : ""}
         {isFetching && <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />}
       </span>
+    </div>
+  )
+}
+
+/**
+ * Seletor de ordem da vitrine. `relevance` só aparece com busca ativa: sem
+ * termo não há o que ranquear.
+ */
+export function StoreSortSelect({
+  value,
+  onChange,
+  hasQuery,
+  className,
+}: {
+  value: StoreSortKey
+  onChange: (sort: StoreSortKey) => void
+  hasQuery: boolean
+  className: string
+}) {
+  const label = STORE_SORT_OPTIONS.find((option) => option.key === value)?.label ?? "Mais recentes"
+  return (
+    <Select value={value} onValueChange={(next) => onChange(next as StoreSortKey)}>
+      <SelectTrigger className={className} aria-label="Ordenar produtos">
+        <SelectValue>{label}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {STORE_SORT_OPTIONS.filter((option) => option.key !== "relevance" || hasQuery).map((option) => (
+          <SelectItem key={option.key} value={option.key}>
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+/** Resumo do que está aplicado: cada pedaço sai sozinho, sem reabrir o filtro que o criou. */
+export function ActiveFilterChips({ chips, className }: { chips: ActiveChip[]; className?: string }) {
+  if (chips.length === 0) return null
+  return (
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+      {chips.map((chip) => (
+        <span
+          key={chip.key}
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#2a2a2a] bg-[#141414] py-[5px] pl-3 pr-2 text-[11.5px] font-semibold text-[#cfcfcf]"
+        >
+          <span className="text-[#7a7a7a]">{chip.group}:</span>
+          <span className="max-w-[180px] truncate">{chip.label}</span>
+          <button
+            type="button"
+            onClick={chip.onRemove}
+            aria-label={`Remover filtro ${chip.label}`}
+            className="flex size-4 items-center justify-center rounded-full text-[#6e6e6e] transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <X className="size-3" />
+          </button>
+        </span>
+      ))}
     </div>
   )
 }
@@ -637,20 +666,31 @@ function LockedPill({ value, kind, className }: { value: string; kind: "category
   )
 }
 
-interface ActiveChip {
+export interface ActiveChip {
   key: string
   group: string
   label: string
   onRemove: () => void
 }
 
-function buildActiveChips(
+export function buildActiveChips(
   state: StoreFilterState,
   onChange: (patch: Partial<StoreFilterState>) => void,
   lockedCategory: string | null,
-  lockedBrand: string | null
+  lockedBrand: string | null,
+  /** Configuração do catálogo da página: dá nome aos tipos, facetas e faixas. */
+  catalog: CatalogGroupConfig | null
 ): ActiveChip[] {
   const chips: ActiveChip[] = []
+
+  for (const key of state.collections) {
+    chips.push({
+      key: `tipo:${key}`,
+      group: "Tipo",
+      label: catalog?.collections.find((item) => item.key === key)?.label ?? key,
+      onRemove: () => onChange({ collections: state.collections.filter((c) => c !== key) }),
+    })
+  }
 
   if (state.query.trim()) {
     chips.push({
@@ -692,6 +732,26 @@ function buildActiveChips(
       group: "Entrega",
       label: SALE_TYPE_LABEL[saleType] ?? saleType,
       onRemove: () => onChange({ saleTypes: state.saleTypes.filter((s) => s !== saleType) }),
+    })
+  }
+  for (const [facetKey, values] of Object.entries(state.catalogFacets)) {
+    const facet = catalog?.facets.find((item) => item.key === facetKey)
+    for (const value of values) {
+      chips.push({
+        key: `f:${facetKey}:${value}`,
+        group: facet?.label ?? facetKey,
+        label: facet?.options.find((option) => option.value === value)?.label ?? value,
+        onRemove: () =>
+          onChange({ catalogFacets: { ...state.catalogFacets, [facetKey]: values.filter((v) => v !== value) } }),
+      })
+    }
+  }
+  if (state.priceBand) {
+    chips.push({
+      key: "priceBand",
+      group: "Preço",
+      label: (catalog && findPriceBand(catalog, state.priceBand)?.label) ?? state.priceBand,
+      onRemove: () => onChange({ priceBand: null }),
     })
   }
   if (state.price) {

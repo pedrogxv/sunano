@@ -2,9 +2,14 @@ import type { Metadata } from "next"
 import { buildMetadata } from "@/lib/seo"
 import { Suspense } from "react"
 import { ShoppingBag } from "lucide-react"
-import { listStoreProductsPaginated, getStoreFilterOptions, listBestSellingProducts } from "@/lib/server/repositories/store-repository"
+import {
+  listStoreProductsPaginated,
+  getStoreFilterOptions,
+  listBestSellingProducts,
+  listLaunchAndPreorderProducts,
+} from "@/lib/server/repositories/store-repository"
 import { listActiveBannersBySection } from "@/lib/server/repositories/store-banners-repository"
-import { listLiveHeroSlides } from "@/lib/server/repositories/store-hero-repository"
+import { getStoreHeroTrust, listLiveHeroSlides } from "@/lib/server/repositories/store-hero-repository"
 import { StoreContent } from "@/components/store/StoreContent"
 import { ItemListJsonLd } from "@/components/seo/JsonLd"
 import { ComingSoon } from "@/components/store/ComingSoon"
@@ -54,12 +59,13 @@ export default async function LojaPage() {
     { items, total },
     filterOptions,
     { items: featuredItems },
-    { items: preOrderItems },
+    { preorders: preOrderItems, launches: launchItems },
     { items: siteItems },
     { items: serviceItems },
     bestSellingItems,
     sectionBanners,
     heroSlides,
+    heroTrust,
   ] = await Promise.all([
     listStoreProductsPaginated({
       type: "store",
@@ -73,12 +79,7 @@ export default async function LojaPage() {
       page: 1,
       pageSize: 8,
     }),
-    listStoreProductsPaginated({
-      type: "store",
-      saleType: "pre_order",
-      page: 1,
-      pageSize: 12,
-    }),
+    listLaunchAndPreorderProducts(12),
     listStoreProductsPaginated({
       type: "store",
       categories: ["site"],
@@ -94,6 +95,7 @@ export default async function LojaPage() {
     listBestSellingProducts(12),
     listActiveBannersBySection(),
     listLiveHeroSlides(),
+    getStoreHeroTrust(),
   ])
 
   if (total === 0 && filterOptions.countByType.store === 0) {
@@ -121,7 +123,9 @@ export default async function LojaPage() {
         initialFilterOptions={filterOptions}
         initialFeatured={featuredItems}
         preOrderItems={preOrderItems}
+        launchItems={launchItems}
         heroSlides={heroSlides}
+        heroTrust={heroTrust}
         siteItems={siteItems}
         serviceItems={serviceItems}
         bestSellingItems={bestSellingItems}

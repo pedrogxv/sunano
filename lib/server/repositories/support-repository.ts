@@ -1,7 +1,12 @@
 import "server-only"
 
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
-import { getUserProfiles, searchUserProfiles } from "@/lib/server/repositories/users-repository"
+import {
+  findUserIdByDisplaySlug,
+  getUserProfiles,
+  searchUserProfiles,
+} from "@/lib/server/repositories/users-repository"
+import { SITE_OWNER_SLUG } from "@/lib/special-tag"
 import { orderNumber } from "@/lib/order-number"
 import { orderOwnerId } from "@/lib/server/repositories/orders-repository"
 import { clampPage, clampPageSize, rangeFor } from "@/lib/server/repositories/_shared"
@@ -250,17 +255,24 @@ export async function createSupportTicket(params: {
 }
 
 /**
- * Abre o chamado de um pedido de SERVIÇO assim que ele é pago.
+ * Abre o chamado de um pedido com serviço assim que o pagamento é confirmado.
  *
- * Serviço (mentoria, setup, configuração) não se resolve avançando status:
- * alguém precisa combinar horário e detalhes com o cliente, e isso levava o
- * cliente a abrir o suporte por conta própria, que era quando a equipe
- * descobria a venda. Com o chamado aberto na hora, a conversa já nasce no
- * lugar certo, amarrada ao pedido, e entra no badge "aguardando admin".
+ * Serviço (mentoria, setup, consulta de importação) não se resolve avançando
+ * status: alguém precisa saber o que o cliente quer, e isso levava o cliente
+ * a abrir o suporte por conta própria, que era quando a equipe descobria a
+ * venda. Com o chamado aberto na hora, a conversa já nasce no lugar certo,
+ * amarrada ao pedido, e a janela pós-compra (`OrderPaidNextStepsDialog`) leva
+ * o cliente direto para escrever nele.
  *
- * A mensagem inicial sai em nome do cliente porque `support_messages` não tem
- * remetente de sistema (`sender_id` é sempre um usuário real). O texto deixa
- * claro que foi aberto automaticamente.
+ * Vale para o pedido que tem item de serviço (`is_service`, snapshot do
+ * checkout) OU que não tem envio. Era só "sem envio", e serviço que despacha
+ * algo (o Xianyu Express compra e envia) ficava sem chamado.
+ *
+ * A mensagem de abertura sai da EQUIPE (em nome da conta do site), não do
+ * cliente. Com ela em nome do cliente, o chamado nascia "aguardando o
+ * suporte" e a regra de turno (`enforce_support_message_turn`) travava o
+ * cliente justo na hora de dizer o que queria. Sem a conta do site (nunca
+ * deveria acontecer), cai no formato antigo, em nome do cliente.
  *
  * Best-effort, igual às notificações: nunca lança. O pagamento já foi
  * confirmado quando isto roda, e falhar aqui não pode derrubar o 200 que o
@@ -280,8 +292,8 @@ export async function openServiceOrderTicket(orderId: string): Promise<void> {
       return
     }
 
-    // Pedido com algo para despachar segue o fluxo de envio de sempre.
-    if (order.requires_shipping_address !== false) return
+    const items = (order.items ?? []) as { id?: string; name?: string; quantity?: number; is_service?: boolean }[]
+    if (!orderHasService(order.requires_shipping_address, items)) return
 
     const metadata = (order.metadata ?? {}) as Record<string, unknown>
     if (metadata.service_ticket_id) return
@@ -290,23 +302,37 @@ export async function openServiceOrderTicket(orderId: string): Promise<void> {
     const ownerId = orderOwnerId(metadata)
     if (!ownerId) return
 
-    const items = (order.items ?? []) as { id?: string; name?: string; quantity?: number }[]
+    const serviceItems = items.some((item) => item.is_service) ? items.filter((item) => item.is_service) : items
     const number = orderNumber(order.id)
     // Sandbox continua abrindo (é como se testa o fluxo), mas marcado para
     // ninguém da equipe agendar atendimento de um pagamento de mentira.
     const subject = `${order.is_sandbox ? "[Teste] " : ""}Serviço: pedido #${number}`
-    const itemLines = items.map((item) => `- ${item.quantity ?? 1}x ${item.name ?? "Serviço"}`).join("\n")
-    const body = [
-      `Chamado aberto automaticamente com o pagamento do pedido #${number}.`,
-      itemLines ? `Serviço contratado:\n${itemLines}` : null,
-      "A equipe do Sunano vai responder por aqui para combinar o atendimento.",
-    ]
+    const itemLines = serviceItems.map((item) => `- ${item.quantity ?? 1}x ${item.name ?? "Serviço"}`).join("\n")
+
+    const [profiles, siteOwnerId] = await Promise.all([
+      getUserProfiles([ownerId]),
+      findUserIdByDisplaySlug(SITE_OWNER_SLUG),
+    ])
+    const customerName = profiles[ownerId]?.display_name || order.customer_name || "Cliente"
+    const teamSenderId = siteOwnerId && siteOwnerId !== ownerId ? siteOwnerId : null
+    const fromTeam = teamSenderId !== null
+
+    const body = (
+      fromTeam
+        ? [
+            `Olá, ${customerName}! Recebemos o pagamento do pedido #${number}.`,
+            itemLines ? `Serviço contratado:\n${itemLines}` : null,
+            "Conte aqui o que você precisa: o que quer consultar, links, prints, horários que funcionam para você. A equipe responde por esta conversa.",
+          ]
+        : [
+            `Chamado aberto automaticamente com o pagamento do pedido #${number}.`,
+            itemLines ? `Serviço contratado:\n${itemLines}` : null,
+            "A equipe do Sunano vai responder por aqui para combinar o atendimento.",
+          ]
+    )
       .filter(Boolean)
       .join("\n\n")
       .slice(0, 4000)
-
-    const profiles = await getUserProfiles([ownerId])
-    const authorName = profiles[ownerId]?.display_name || order.customer_name || "Cliente"
 
     // Sem o teto de 3 chamados abertos de `createSupportTicket`: o teto existe
     // contra spam do usuário, e este chamado é consequência de uma compra.
@@ -316,7 +342,7 @@ export async function openServiceOrderTicket(orderId: string): Promise<void> {
         user_id: ownerId,
         subject,
         order_id: order.id,
-        product_id: items[0]?.id ?? null,
+        product_id: serviceItems[0]?.id ?? null,
       })
       .select("id")
       .single()
@@ -325,14 +351,25 @@ export async function openServiceOrderTicket(orderId: string): Promise<void> {
       return
     }
 
-    const { error: messageError } = await db.from("support_messages").insert({
-      ticket_id: ticket.id,
-      sender_type: "user",
-      sender_id: ownerId,
-      sender_name: authorName,
-      body,
-      image_urls: [],
-    })
+    const { error: messageError } = await db.from("support_messages").insert(
+      teamSenderId
+        ? {
+            ticket_id: ticket.id,
+            sender_type: "admin",
+            sender_id: teamSenderId,
+            sender_name: "Equipe Sunano",
+            body,
+            image_urls: [],
+          }
+        : {
+            ticket_id: ticket.id,
+            sender_type: "user",
+            sender_id: ownerId,
+            sender_name: customerName,
+            body,
+            image_urls: [],
+          }
+    )
     if (messageError) {
       console.error("[support-repository] openServiceOrderTicket insert message:", messageError)
       // Mesmo motivo de `createSupportTicket`: ticket sem mensagem é órfão.
@@ -350,6 +387,14 @@ export async function openServiceOrderTicket(orderId: string): Promise<void> {
   } catch (err) {
     console.error("[support-repository] openServiceOrderTicket:", err)
   }
+}
+
+/** O pedido tem serviço? Item marcado no checkout, ou nada para despachar. */
+export function orderHasService(
+  requiresShippingAddress: boolean | null,
+  items: readonly { is_service?: boolean | null }[]
+): boolean {
+  return requiresShippingAddress === false || items.some((item) => item.is_service === true)
 }
 
 /**

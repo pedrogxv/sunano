@@ -8,7 +8,7 @@ import { RemoveCartItemDialog, type PendingRemoval } from "@/components/store/Re
 import { useCart } from "@/components/providers/cart-context"
 import { useAuthUser } from "@/components/providers/auth-context"
 import { formatBRL } from "@/lib/format"
-import { computeCardPriceCents } from "@/lib/store-pricing"
+import { computeCardTotalCents } from "@/lib/store-pricing"
 import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { cn } from "@/lib/utils"
 import { SALE_TYPE_ICON, SALE_TYPE_LABEL } from "@/lib/store-sale-type"
@@ -60,7 +60,7 @@ export function CartDrawer() {
   }
 
   const total = items.reduce((sum, i) => sum + i.priceCents * i.quantity, 0)
-  const cardTotal = computeCardPriceCents(total, cardSurchargePercent)
+  const cardTotal = computeCardTotalCents(items, cardSurchargePercent)
   const hasPreOrderItem = items.some((i) => i.sale_type === "pre_order")
 
   useEffect(() => {
@@ -246,8 +246,11 @@ export function CartDrawer() {
               <span className="text-lg font-black text-foreground">{formatBRL(total)}</span>
             </div>
 
+            {/* Carrinho só de serviço tem preço único: não há desconto de PIX a anunciar. */}
             <p className="text-[10px] text-muted-foreground">
-              PIX: {formatBRL(total)} ({cardSurchargePercent}% de desconto) · Cartão: {formatBRL(cardTotal)}
+              {cardTotal > total
+                ? `PIX: ${formatBRL(total)} (${cardSurchargePercent}% de desconto) · Cartão: ${formatBRL(cardTotal)}`
+                : "Mesmo preço no PIX e no cartão"}
             </p>
 
             {hasPreOrderItem && (

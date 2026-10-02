@@ -3,6 +3,7 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser } from "@/lib/server/auth/current-user"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { ORDER_PAID_STATUSES } from "@/lib/order-status"
+import { orderHasService } from "@/lib/server/repositories/support-repository"
 
 /**
  * Usada pela página de checkout PIX para fazer polling do status do
@@ -80,6 +81,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Decide o "e agora?" da tela de confirmação: produto é acompanhar em
     // Meus Pedidos, serviço é o chamado aberto sozinho no pagamento.
     requiresShipping: order.requires_shipping_address !== false,
+    // Pedido com serviço: a janela pós-compra abre a conversa do chamado. O
+    // id chega alguns instantes DEPOIS do "pago" (o webhook marca o status e
+    // só então abre o chamado), por isso a janela continua consultando.
+    hasService: orderHasService(order.requires_shipping_address, (order.items ?? []) as { is_service?: boolean }[]),
+    serviceTicketId:
+      isPaid && typeof order.metadata?.service_ticket_id === "string" ? order.metadata.service_ticket_id : null,
     // Comprovantes: só existem depois de pago. O Asaas devolve um link de
     // comprovante (transactionReceiptUrl/invoiceUrl) cacheado pelo webhook.
     receipt:

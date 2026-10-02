@@ -1,11 +1,41 @@
 import "server-only"
 
+import { unstable_cache } from "next/cache"
 import { cache } from "react"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 import { getPeripheralRankById, type PeripheralRank } from "@/lib/server/repositories/peripherals-repository"
-import { computeEffectivePrice } from "@/lib/store-pricing"
+import { getCatalogFacetCounts, getStoreCatalogIndex, matchCatalogProductIds } from "@/lib/server/repositories/store-catalog-repository"
+import {
+  EMPTY_ATTRIBUTES,
+  hasCatalogSelection,
+  type CatalogSelection,
+  type StoreCatalogFacetCounts,
+  type StoreSortKey,
+} from "@/lib/store-catalog"
+import {
+  BEST_SELLER_MIN_UNITS,
+  BEST_SELLER_TOP,
+  BEST_SELLER_WINDOW_DAYS,
+  deriveCardHighlights,
+  isStoreCardBadgeChoice,
+  NEW_PRODUCT_DAYS,
+  resolveCardBadge,
+  sanitizeCardHighlights,
+  type StoreCardBadge,
+} from "@/lib/store-card"
+import { cardActiveVariant, computeCardDisplayPrice, isCardSoldOut, isSinglePriceProduct } from "@/lib/store-pricing"
 import { buildStoreSearchPlan } from "@/lib/store-search"
+import {
+  effectivePreorderStatus,
+  isLaunchActive,
+  isPreorderStatus,
+  preorderRemaining,
+  type PreorderInfo,
+  type PreorderStatus,
+} from "@/lib/store-preorder"
+import { todayKeySaoPaulo } from "@/lib/store-shipping"
+import { findSku, resolveSelection, skuKey, type StoreSku } from "@/lib/store-sku"
 
 /**
  * Repositório da Loja — única porta de acesso à tabela `store_products`
@@ -40,7 +70,43 @@ export type StoreProductCard = {
   /** Ordem manual entre os fixados (menor = mais à frente). `null` se não fixado. */
   best_seller_position: number | null
   created_at: string
+  /** false = serviço/digital: não vai pelo correio, então não anuncia frete. */
+  requires_shipping: boolean
+  /** Tem grupo de opção (Switch, Voltagem...): comprar exige escolher, o card oferece "Escolher opções". */
+  has_option_groups: boolean
+  /** Nota média e quantidade de avaliações publicadas; `null` = ninguém avaliou ainda. */
+  rating: StoreCardRating | null
+  /** Selo principal, no máximo um. Ver `resolveCardBadge` em lib/store-card.ts. */
+  badge: StoreCardBadge | null
+  /** Até 3 características técnicas curtas ("49g", "PAW3950", "8K"). */
+  highlights: string[]
+  /** Lote da pré-venda; `null` em produto que não é pré-venda. Ver lib/store-preorder.ts. */
+  preorder: StoreCardPreorder | null
+  /** Marcado como Lançamento no admin e ainda no prazo. */
+  is_launch: boolean
 }
+
+export type StoreCardRating = { average: number; count: number }
+
+/** O lote como o card e a seção "Lançamentos e Pré-venda" mostram: status já efetivo. */
+export type StoreCardPreorder = {
+  status: PreorderStatus
+  batchName: string | null
+  shipsAt: string | null
+  limit: number | null
+  /** `null` = lote sem teto. */
+  remaining: number | null
+}
+
+/**
+ * Campos que dependem de outras tabelas (avaliações, vendas, Database) e são
+ * preenchidos por `withCardDisplay`. Obrigatórios em `StoreProductCard` de
+ * propósito: toda listagem nova tem de passar por ele, senão o TypeScript
+ * reclama, em vez de a tela sair sem selo e sem nota sem ninguém notar.
+ */
+type CardDisplayFields = "rating" | "badge" | "highlights" | "preorder" | "is_launch"
+
+type StoreProductCardBase = Omit<StoreProductCard, CardDisplayFields>
 
 export type StoreCardVariant = {
   id: string
@@ -116,20 +182,260 @@ export type LinkedProduct = {
 }
 
 const CARD_COLUMNS =
-  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, featured_position, pin_best_seller, best_seller_position, created_at, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position)"
+  "id, slug, name, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_active, is_sold_out, is_featured, featured_position, pin_best_seller, best_seller_position, created_at, requires_shipping, variants:store_product_variants(id, label, price_cents_override, promo_price_cents, stock, color, icon, image_url, is_sold_out, position), option_groups:store_product_variant_groups(id)"
 
-type RawCardRow = Omit<StoreProductCard, "has_variants" | "variants"> & {
+type RawCardRow = Omit<StoreProductCardBase, "has_variants" | "variants" | "has_option_groups"> & {
   variants: (StoreCardVariant & { position: number })[] | null
+  option_groups: { id: string }[] | null
 }
 
-/** Converte a linha crua (com variantes embutidas) para StoreProductCard. */
-function mapCardRow(row: RawCardRow): StoreProductCard {
-  const { variants: rawVariants, ...rest } = row
+/** Converte a linha crua (com variantes embutidas) para o card, ainda sem nota/selo/características. */
+function mapCardRow(row: RawCardRow): StoreProductCardBase {
+  const { variants: rawVariants, option_groups: optionGroups, ...rest } = row
   const variants = [...(rawVariants ?? [])].sort((a, b) => a.position - b.position)
   return {
     ...rest,
     has_variants: variants.length > 0,
     variants: variants.map(({ position: _position, ...v }) => v),
+    has_option_groups: (optionGroups ?? []).length > 0,
+  }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Selo e características escolhidos no admin. Consulta à parte, e não em
+ * CARD_COLUMNS: se o código subir antes da migration 20261212000000, a coluna
+ * inexistente derrubaria a vitrine inteira; assim o card só cai no automático.
+ */
+async function getCardChoices(ids: string[]): Promise<Map<string, { badge: unknown; highlights: unknown }>> {
+  const choices = new Map<string, { badge: unknown; highlights: unknown }>()
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.from("store_products").select("id, card_badge, card_highlights").in("id", ids)
+  if (error) {
+    console.error("[store-repository] getCardChoices:", error)
+    return choices
+  }
+  for (const row of data ?? []) choices.set(row.id, { badge: row.card_badge, highlights: row.card_highlights })
+  return choices
+}
+
+/**
+ * Pódio de vendas para o selo "Mais vendido": só os `BEST_SELLER_TOP`
+ * primeiros, e só com `BEST_SELLER_MIN_UNITS` vendidas. Com a Loja recém
+ * aberta, o "1º" vendeu 1 unidade: chamar isso de mais vendido seria
+ * anunciar o que não aconteceu.
+ *
+ * "Fixar em Mais vendidos" NÃO dá o selo: o pino decide a ordem da seção da
+ * Home (curadoria), o selo afirma um número de vendas. Com os dois juntos,
+ * todo card da seção saía com "Mais vendido" e o selo não dizia mais nada.
+ *
+ * Em cache por 5 min: a rota de produtos é dinâmica, e sem ele cada clique
+ * de filtro somaria os pedidos de 90 dias.
+ */
+const getBestSellerBadgeIds = unstable_cache(
+  async (): Promise<string[]> => {
+    const units = await getUnitsSoldByProduct(BEST_SELLER_WINDOW_DAYS)
+    return [...units.entries()]
+      .filter(([, sold]) => sold >= BEST_SELLER_MIN_UNITS)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, BEST_SELLER_TOP)
+      .map(([id]) => id)
+  },
+  ["store-repository:getBestSellerBadgeIds"],
+  { revalidate: 300 }
+)
+
+/**
+ * Nota, selo e características de cada card. Toda listagem pública passa
+ * aqui (ver `CardDisplayFields`). Leituras para a página inteira, não por
+ * card: avaliações e escolhas do admin por `in(id)`; pódio de vendas e
+ * índice do catálogo vêm de cache.
+ */
+async function withCardDisplay(items: StoreProductCardBase[]): Promise<StoreProductCard[]> {
+  if (items.length === 0) return []
+  const ids = items.map((item) => item.id)
+  const [ratings, choices, bestSellers, catalog, launchAndPreorder, defaultSkus] = await Promise.all([
+    getRatingsByProduct(ids),
+    getCardChoices(ids),
+    getBestSellerBadgeIds(),
+    getStoreCatalogIndex(),
+    getLaunchAndPreorderInfo(items),
+    getDefaultVariantSkus(items),
+  ])
+  const newSince = Date.now() - NEW_PRODUCT_DAYS * DAY_MS
+  const today = todayKeySaoPaulo()
+
+  return items.map((rawItem) => {
+    const item = withDefaultSkus(rawItem, defaultSkus)
+    const attributes = catalog[item.id]?.attributes ?? EMPTY_ATTRIBUTES
+    const choice = choices.get(item.id)
+    const variant = cardActiveVariant(item)
+    const manualHighlights = sanitizeCardHighlights(Array.isArray(choice?.highlights) ? choice.highlights : [])
+    const extras = launchAndPreorder.get(item.id)
+    const soldOut = isCardSoldOut(item)
+    const preorder =
+      item.sale_type === "pre_order" ? toCardPreorder(extras?.preorder ?? DEFAULT_PREORDER_INFO, soldOut) : null
+
+    return {
+      ...item,
+      rating: ratings.get(item.id) ?? null,
+      badge: resolveCardBadge({
+        // Lote fechado, cheio ou "em breve" não tem o que vender agora: sem
+        // selo, igual a esgotado. O card mostra o status do lote no lugar.
+        soldOut: soldOut || (preorder !== null && preorder.status !== "open"),
+        saleType: item.sale_type,
+        choice: isStoreCardBadgeChoice(choice?.badge) ? choice.badge : null,
+        stock: variant ? variant.stock : item.stock,
+        isBestSeller: bestSellers.includes(item.id),
+        isBestValue: attributes.tags.includes("value"),
+        isNew: item.condition === "new" && Date.parse(item.created_at) >= newSince,
+        isLaunch: extras ? isLaunchActive(extras, today) : false,
+      }),
+      highlights: manualHighlights.length > 0 ? manualHighlights : deriveCardHighlights(item.category, attributes),
+      preorder,
+      is_launch: extras ? isLaunchActive(extras, today) : false,
+    }
+  })
+}
+
+/** Pré-venda sem as colunas do lote (código no ar antes da migration 20261213000001): lote aberto, sem teto. */
+const DEFAULT_PREORDER_INFO: PreorderInfo = { status: "open", batchName: null, shipsAt: null, limit: null, reserved: 0 }
+
+function toCardPreorder(info: PreorderInfo, productSoldOut: boolean): StoreCardPreorder {
+  return {
+    status: effectivePreorderStatus(info, productSoldOut),
+    batchName: info.batchName,
+    shipsAt: info.shipsAt,
+    limit: info.limit,
+    remaining: preorderRemaining(info),
+  }
+}
+
+type LaunchAndPreorderInfo = {
+  is_launch: boolean
+  launch_until: string | null
+  preorder: PreorderInfo | null
+}
+
+/**
+ * Lote de pré-venda e marcação de Lançamento de uma página de produtos.
+ * Consulta à parte (e não em CARD_COLUMNS) pelo mesmo motivo de
+ * `getCardChoices`: com o código no ar antes da migration 20261213000001, a
+ * coluna inexistente derrubaria a vitrine inteira. Assim a pré-venda só cai
+ * em "aberta, sem teto", que é como ela funcionava antes do lote existir.
+ */
+export async function getLaunchAndPreorderInfo(
+  items: readonly { id: string; sale_type: StoreSaleType }[]
+): Promise<Map<string, LaunchAndPreorderInfo>> {
+  const result = new Map<string, LaunchAndPreorderInfo>()
+  if (items.length === 0) return result
+  const db = createSupabaseAdminClient()
+  const preorderIds = items.filter((item) => item.sale_type === "pre_order").map((item) => item.id)
+
+  const [{ data, error }, reserved] = await Promise.all([
+    db
+      .from("store_products")
+      .select("id, is_launch, launch_until, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit")
+      .in(
+        "id",
+        items.map((item) => item.id)
+      ),
+    getPreorderReserved(preorderIds),
+  ])
+  if (error) {
+    console.error("[store-repository] getLaunchAndPreorderInfo:", error)
+    return result
+  }
+
+  for (const row of data ?? []) {
+    result.set(row.id, {
+      is_launch: Boolean(row.is_launch),
+      launch_until: row.launch_until ?? null,
+      preorder: preorderIds.includes(row.id)
+        ? {
+            status: isPreorderStatus(row.preorder_status) ? row.preorder_status : "open",
+            batchName: row.preorder_batch_name ?? null,
+            shipsAt: row.preorder_ships_at ?? null,
+            limit: row.preorder_limit ?? null,
+            reserved: reserved.get(row.id) ?? 0,
+          }
+        : null,
+    })
+  }
+  return result
+}
+
+/** Unidades já reservadas no lote atual de cada pré-venda (pedidos válidos + reservas em voo). */
+async function getPreorderReserved(productIds: string[]): Promise<Map<string, number>> {
+  const reserved = new Map<string, number>()
+  if (productIds.length === 0) return reserved
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.rpc("preorder_reserved_quantities", { p_product_ids: productIds })
+  if (error) {
+    console.error("[store-repository] getPreorderReserved:", error)
+    return reserved
+  }
+  for (const row of data ?? []) reserved.set(row.product_id, Number(row.reserved) || 0)
+  return reserved
+}
+
+const SKU_COLUMNS = "id, product_id, variant_id, option_ids, sku, price_cents, promo_price_cents, stock, image_url, is_sold_out"
+
+type StoreSkuRow = StoreSku & { product_id: string }
+
+/**
+ * Combinações dos produtos informados. Tolerante como `getCardChoices`: sem
+ * a tabela (migration 20261213000000 ainda não aplicada) devolve vazio, e
+ * toda seleção cai na regra antiga (cor → produto).
+ */
+export async function getSkusForProducts(
+  productIds: string[],
+  opts?: { onlyWithoutOptions?: boolean }
+): Promise<StoreSkuRow[]> {
+  if (productIds.length === 0) return []
+  const db = createSupabaseAdminClient()
+  let query = db.from("store_product_skus").select(SKU_COLUMNS).in("product_id", productIds)
+  if (opts?.onlyWithoutOptions) query = query.filter("option_ids", "eq", "{}")
+  const { data, error } = await query
+  if (error) {
+    console.error("[store-repository] getSkusForProducts:", error)
+    return []
+  }
+  return (data ?? []) as unknown as StoreSkuRow[]
+}
+
+/**
+ * O card não conhece grupos de opção: anuncia a cor sozinha. Quando o admin
+ * deu preço, estoque ou foto próprios à combinação "só a cor", é ela que o
+ * card tem de mostrar, senão a vitrine anuncia um preço e a página abre em
+ * outro.
+ */
+async function getDefaultVariantSkus(items: readonly StoreProductCardBase[]): Promise<StoreSkuRow[]> {
+  const ids = items.filter((item) => item.has_variants).map((item) => item.id)
+  return getSkusForProducts(ids, { onlyWithoutOptions: true })
+}
+
+function withDefaultSkus(item: StoreProductCardBase, skus: readonly StoreSkuRow[]): StoreProductCardBase {
+  if (!item.has_variants) return item
+  const own = skus.filter((sku) => sku.product_id === item.id)
+  if (own.length === 0) return item
+  return {
+    ...item,
+    variants: item.variants.map((variant) => {
+      const sku = findSku(own, variant.id, [])
+      if (!sku) return variant
+      // Mesma precedência de `computeEffectivePrice` com `sku`: preço próprio
+      // leva a promoção junto; só promoção incide sobre o preço da cor.
+      return {
+        ...variant,
+        price_cents_override: sku.price_cents ?? variant.price_cents_override,
+        promo_price_cents: sku.price_cents != null ? sku.promo_price_cents : sku.promo_price_cents ?? variant.promo_price_cents,
+        stock: sku.stock ?? variant.stock,
+        image_url: sku.image_url ?? variant.image_url,
+        is_sold_out: variant.is_sold_out || sku.is_sold_out,
+      }
+    }),
   }
 }
 
@@ -149,7 +455,7 @@ export async function listActiveProductsByType(
     console.error("[store-repository] listActiveProductsByType:", error)
     return []
   }
-  return ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
+  return withCardDisplay(((data ?? []) as unknown as RawCardRow[]).map(mapCardRow))
 }
 
 /** Lista todos os produtos ativos, para a página unificada. */
@@ -165,7 +471,7 @@ export async function listActiveProducts(): Promise<StoreProductCard[]> {
     console.error("[store-repository] listActiveProducts:", error)
     return []
   }
-  return ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
+  return withCardDisplay(((data ?? []) as unknown as RawCardRow[]).map(mapCardRow))
 }
 
 export type StoreCondition = "new" | "used" | "opened"
@@ -195,8 +501,10 @@ export type StoreProductListFilters = {
   promoOnly?: boolean
   /** Esconde esgotados (marcados na mão ou com estoque zerado). */
   inStockOnly?: boolean
+  /** Tipos e facetas do catálogo ("Ultraleves", peso, formato...). Ver `lib/store-catalog.ts`. */
+  catalog?: CatalogSelection
   /** `relevance` só tem efeito junto de `search`; sem busca, cai em `recent`. */
-  sort?: "relevance" | "recent" | "name-asc" | "name-desc" | "price-asc" | "price-desc"
+  sort?: StoreSortKey
   page?: number
   pageSize?: number
   /** true na versão admin — a pública sempre restringe a `is_active = true`. */
@@ -295,6 +603,12 @@ export async function listStoreProductsPaginated(
 
   // Posição de cada id na ordem de relevância da busca (menor = mais relevante).
   let relevance: Map<string, number> | null = null
+  // Recorte por id (lista pedida, busca, tipos do catálogo): a interseção de
+  // todos vira UM `in`, em vez de vários `in` na mesma coluna.
+  let allowedIds: Set<string> | null = null
+  const restrictTo = (ids: string[]) => {
+    allowedIds = allowedIds ? new Set(ids.filter((id) => allowedIds!.has(id))) : new Set(ids)
+  }
 
   if (!filters.includeInactive) query = query.eq("is_active", true)
   if (filters.type) query = query.eq("type", filters.type)
@@ -307,10 +621,11 @@ export async function listStoreProductsPaginated(
       query = query.or(legacySearchOr(filters.search))
     } else {
       if (hits.length === 0) return { items: [], total: 0 }
-      query = query.in("id", hits.map((hit) => hit.productId))
+      restrictTo(hits.map((hit) => hit.productId))
       relevance = new Map(hits.map((hit, index) => [hit.productId, index]))
     }
   }
+  if (hasCatalogSelection(filters.catalog)) restrictTo(await matchCatalogProductIds(filters.catalog!))
   if (filters.priceMinCents != null) query = query.or(effectivePriceOr("gte", filters.priceMinCents))
   if (filters.priceMaxCents != null) query = query.or(effectivePriceOr("lte", filters.priceMaxCents))
   if (filters.outOfStockOnly) query = query.eq("stock", 0)
@@ -321,9 +636,11 @@ export async function listStoreProductsPaginated(
   if (filters.conditions?.length) query = query.in("condition", filters.conditions)
   if (filters.promoOnly) query = query.not("promo_price_cents", "is", null)
   if (filters.inStockOnly) query = query.eq("is_sold_out", false).or("stock.is.null,stock.gt.0")
-  if (filters.productIds) {
-    if (filters.productIds.length === 0) return { items: [], total: 0 }
-    query = query.in("id", filters.productIds)
+  if (filters.productIds) restrictTo(filters.productIds)
+  if (allowedIds) {
+    const ids = [...(allowedIds as Set<string>)]
+    if (ids.length === 0) return { items: [], total: 0 }
+    query = query.in("id", ids)
   }
 
   if (filters.featured) {
@@ -334,34 +651,28 @@ export async function listStoreProductsPaginated(
     query = query.order("best_seller_position", { ascending: true, nullsFirst: false })
   }
 
-  // Relevância é uma nota que só a busca conhece, não uma coluna: o banco
-  // devolve o recorte inteiro (no máximo SEARCH_RESULT_CAP linhas) e a
-  // ordenação + página acontecem aqui.
+  // Ordens que não são uma coluna (relevância da busca, preço que o card
+  // mostra, vendas, nota, desconto): o banco devolve o recorte inteiro e a
+  // ordenação + página acontecem aqui. O catálogo público é pequeno; a busca
+  // já vem limitada a SEARCH_RESULT_CAP. Desempate de todas: mais recente.
   const sortByRelevance = relevance !== null && filters.sort === "relevance"
+  const sortInMemory = sortByRelevance || IN_MEMORY_SORTS.has(filters.sort ?? "recent")
 
-  if (!sortByRelevance) {
-    switch (filters.sort) {
-      case "name-asc":
-        query = query.order("name", { ascending: true })
-        break
-      case "name-desc":
-        query = query.order("name", { ascending: false })
-        break
-      case "price-asc":
-        query = query.order("price_cents", { ascending: true })
-        break
-      case "price-desc":
-        query = query.order("price_cents", { ascending: false })
-        break
-      default:
-        query = query.order("created_at", { ascending: false })
-    }
+  switch (filters.sort) {
+    case "name-asc":
+      query = query.order("name", { ascending: true })
+      break
+    case "name-desc":
+      query = query.order("name", { ascending: false })
+      break
+    default:
+      query = query.order("created_at", { ascending: false })
   }
 
   const page = clampPage(filters.page)
   const pageSize = clampPageSize(filters.pageSize)
   const [from, to] = rangeFor(page, pageSize)
-  if (!sortByRelevance) query = query.range(from, to)
+  if (!sortInMemory) query = query.range(from, to)
 
   const { data, error, count } = await query
   if (error) {
@@ -370,12 +681,146 @@ export async function listStoreProductsPaginated(
   }
 
   const items = ((data ?? []) as unknown as RawCardRow[]).map(mapCardRow)
+  if (!sortInMemory) return { items: await withCardDisplay(items), total: count ?? 0 }
+
   if (sortByRelevance && relevance) {
     const rank = relevance
     items.sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity))
-    return { items: items.slice(from, to + 1), total: count ?? items.length }
+  } else {
+    await sortCardsInMemory(items, filters.sort!)
   }
-  return { items, total: count ?? 0 }
+  return { items: await withCardDisplay(items.slice(from, to + 1)), total: count ?? items.length }
+}
+
+const IN_MEMORY_SORTS = new Set<StoreSortKey>(["price-asc", "price-desc", "best-selling", "top-rated", "discount"])
+
+/** Janela do "Mais vendidos" da vitrine: um ano, para produto sazonal não sumir do topo em 90 dias. */
+const BEST_SELLING_WINDOW_DAYS = 365
+
+/** Unidades vendidas por produto (pedidos pagos), pela RPC do dashboard. */
+async function getUnitsSoldByProduct(windowDays = BEST_SELLING_WINDOW_DAYS): Promise<Map<string, number>> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.rpc("get_top_selling_products", {
+    p_from: new Date(Date.now() - windowDays * DAY_MS).toISOString(),
+    p_to: new Date().toISOString(),
+    p_limit: 1000,
+  })
+  if (error) console.error("[store-repository] getUnitsSoldByProduct:", error)
+  return new Map(((data ?? []) as { product_id: string; units_sold: number }[]).map((row) => [row.product_id, Number(row.units_sold) || 0]))
+}
+
+/** Nota média e quantidade de avaliações publicadas por produto. */
+async function getRatingsByProduct(productIds: string[]): Promise<Map<string, StoreCardRating>> {
+  const ratings = new Map<string, StoreCardRating>()
+  if (productIds.length === 0) return ratings
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_product_reviews")
+    .select("product_id, rating")
+    .eq("status", "published")
+    .in("product_id", productIds)
+  if (error) console.error("[store-repository] getRatingsByProduct:", error)
+
+  const sums = new Map<string, { sum: number; count: number }>()
+  for (const row of (data ?? []) as { product_id: string; rating: number }[]) {
+    const entry = sums.get(row.product_id) ?? { sum: 0, count: 0 }
+    entry.sum += row.rating
+    entry.count += 1
+    sums.set(row.product_id, entry)
+  }
+  for (const [id, { sum, count }] of sums) ratings.set(id, { average: sum / count, count })
+  return ratings
+}
+
+/**
+ * Ordena os cards já filtrados (que vieram do banco por `created_at desc`):
+ * `Array.sort` é estável, então empate fica com o mais recente na frente.
+ */
+async function sortCardsInMemory(items: StoreProductCardBase[], sort: StoreSortKey): Promise<void> {
+  switch (sort) {
+    case "price-asc":
+    case "price-desc": {
+      const price = new Map(items.map((item) => [item.id, computeCardDisplayPrice(item).effectiveCents]))
+      const direction = sort === "price-asc" ? 1 : -1
+      items.sort((a, b) => direction * (price.get(a.id)! - price.get(b.id)!))
+      return
+    }
+    case "discount": {
+      const discount = new Map(items.map((item) => [item.id, computeCardDisplayPrice(item).discountPercent ?? 0]))
+      items.sort((a, b) => discount.get(b.id)! - discount.get(a.id)!)
+      return
+    }
+    case "best-selling": {
+      const units = await getUnitsSoldByProduct()
+      items.sort((a, b) => (units.get(b.id) ?? 0) - (units.get(a.id) ?? 0))
+      return
+    }
+    case "top-rated": {
+      // Sem avaliação vai para o fim: zero estrelas não é "pior avaliado", é
+      // "ninguém avaliou ainda", e não pode ficar à frente de uma nota 3.
+      const ratings = await getRatingsByProduct(items.map((item) => item.id))
+      items.sort((a, b) => {
+        const ra = ratings.get(a.id)
+        const rb = ratings.get(b.id)
+        if (!ra || !rb) return (rb ? 1 : 0) - (ra ? 1 : 0)
+        return rb.average - ra.average || rb.count - ra.count
+      })
+      return
+    }
+  }
+}
+
+/** Ordem dos lotes na seção: o que dá para reservar primeiro, o que está por vir depois. */
+const PREORDER_SECTION_ORDER: Record<PreorderStatus, number> = {
+  open: 0,
+  next_batch_soon: 1,
+  sold_out: 2,
+  shipping: 3,
+  closed: 4,
+}
+
+/**
+ * Seção "Lançamentos e Pré-venda" da Home.
+ *
+ * Pré-vendas: todas menos as encerradas, com o lote aberto na frente. "Novo
+ * lote em breve" e "Esgotado" ficam (com o status no card): é a vitrine do
+ * que vem aí, e é dali que sai o "avise-me".
+ *
+ * Lançamentos: os marcados no admin e ainda no prazo (`launch_until`), fora
+ * os que já aparecem como pré-venda.
+ */
+export async function listLaunchAndPreorderProducts(
+  limit = 12
+): Promise<{ preorders: StoreProductCard[]; launches: StoreProductCard[] }> {
+  const db = createSupabaseAdminClient()
+  const [{ items: preorderItems }, { data: launchRows, error: launchError }] = await Promise.all([
+    listStoreProductsPaginated({ type: "store", saleType: "pre_order", page: 1, pageSize: 48 }),
+    db
+      .from("store_products")
+      .select("id, launch_until")
+      .eq("type", "store")
+      .eq("is_active", true)
+      .eq("is_launch", true)
+      .neq("sale_type", "pre_order"),
+  ])
+  // Sem a coluna (migration 20261213000001 pendente): seção só de pré-venda.
+  if (launchError) console.error("[store-repository] listLaunchAndPreorderProducts:", launchError)
+
+  const preorders = preorderItems
+    .filter((item) => item.preorder?.status !== "closed")
+    .sort((a, b) => PREORDER_SECTION_ORDER[a.preorder?.status ?? "open"] - PREORDER_SECTION_ORDER[b.preorder?.status ?? "open"])
+    .slice(0, limit)
+
+  const today = todayKeySaoPaulo()
+  const launchIds = (launchRows ?? [])
+    .filter((row) => isLaunchActive({ is_launch: true, launch_until: row.launch_until }, today))
+    .map((row) => row.id)
+  const launches =
+    launchIds.length > 0
+      ? (await listStoreProductsPaginated({ type: "store", productIds: launchIds, page: 1, pageSize: limit })).items
+      : []
+
+  return { preorders, launches }
 }
 
 /**
@@ -469,7 +914,8 @@ export async function reorderFeaturedProducts(orderedIds: string[]): Promise<voi
 }
 
 /** Item do dropdown da busca: o card mais o sensor, quando foi ele que bateu. */
-export type StoreSearchSuggestion = StoreProductCard & {
+/** Sem nota/selo/características: o dropdown não desenha card, e cada tecla viraria quatro consultas. */
+export type StoreSearchSuggestion = StoreProductCardBase & {
   /** Preenchido só quando o termo bateu no sensor ("3950" → "PixArt PAW3950"). */
   search_sensor: string | null
 }
@@ -562,6 +1008,20 @@ export type StoreFilterOptions = {
   facetsByCategory: Record<string, StoreFacetCounts>
   /** Facetas recortadas por marca — mesma ideia, para a landing de marca. */
   facetsByBrand: Record<string, StoreFacetCounts>
+  /**
+   * Contagem dos tipos, facetas do Database e faixas de preço de cada
+   * categoria (`lib/store-catalog.ts`): o mega menu e a barra lateral só
+   * mostram opção que tem produto.
+   */
+  catalogFacetsByCategory: Record<string, StoreCatalogFacetCounts>
+  /**
+   * Até 3 produtos em destaque por categoria, para o card da direita do mega
+   * menu: os marcados como destaque pelo admin primeiro, depois maior
+   * desconto, depois os mais recentes. Vem do servidor para o card existir em
+   * toda página da Loja (avaliações, favoritos), não só onde a grade já
+   * carregou produto daquela categoria.
+   */
+  menuHighlights: Record<string, StoreProductCard[]>
   priceMinCents: number
   priceMaxCents: number
   countByType: { store: number; all: number }
@@ -576,7 +1036,9 @@ export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilter
   const db = createSupabaseAdminClient()
   let query = db
     .from("store_products")
-    .select("category, brand, price_cents, promo_price_cents, condition, sale_type, is_sold_out, stock, type")
+    .select(
+      "id, category, brand, price_cents, promo_price_cents, condition, sale_type, is_sold_out, stock, type, images, is_featured, featured_position, created_at"
+    )
     .eq("is_active", true)
   if (type) query = query.eq("type", type)
 
@@ -591,6 +1053,8 @@ export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilter
       facets: emptyFacets(),
       facetsByCategory: {},
       facetsByBrand: {},
+      catalogFacetsByCategory: {},
+      menuHighlights: {},
       priceMinCents: 0,
       priceMaxCents: 0,
       countByType: { store: 0, all: 0 },
@@ -598,6 +1062,11 @@ export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilter
   }
 
   type FacetRow = {
+    id: string
+    images: string[] | null
+    is_featured: boolean
+    featured_position: number | null
+    created_at: string
     category: string | null
     brand: string | null
     price_cents: number
@@ -653,6 +1122,13 @@ export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilter
     brandsByCategory[category] = categoryFacets.brands
   }
 
+  const effectiveCentsOf = (row: FacetRow) =>
+    row.promo_price_cents != null && row.promo_price_cents < row.price_cents ? row.promo_price_cents : row.price_cents
+  const [catalogFacetsByCategory, menuHighlights] = await Promise.all([
+    getCatalogFacetCounts(rows.map((row) => ({ id: row.id, category: row.category, effectiveCents: effectiveCentsOf(row) }))),
+    getMenuHighlights(rows),
+  ])
+
   return {
     categories: [...categories].sort((a, b) => a.localeCompare(b)),
     categoryCounts,
@@ -661,10 +1137,57 @@ export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilter
     facets,
     facetsByCategory,
     facetsByBrand,
+    catalogFacetsByCategory,
+    menuHighlights,
     priceMinCents: facets.priceMinCents,
     priceMaxCents: facets.priceMaxCents,
     countByType,
   }
+}
+
+const MENU_HIGHLIGHTS_PER_CATEGORY = 3
+
+/** Ver `StoreFilterOptions.menuHighlights`. Esgotado e anúncio sem foto ficam de fora: o card é vitrine. */
+async function getMenuHighlights(
+  rows: {
+    id: string
+    category: string | null
+    images: string[] | null
+    is_featured: boolean
+    featured_position: number | null
+    created_at: string
+    price_cents: number
+    promo_price_cents: number | null
+    is_sold_out: boolean
+    stock: number | null
+  }[]
+): Promise<Record<string, StoreProductCard[]>> {
+  const discountOf = (row: (typeof rows)[number]) =>
+    row.promo_price_cents != null && row.promo_price_cents < row.price_cents ? 1 - row.promo_price_cents / row.price_cents : 0
+  const eligible = rows.filter(
+    (row) => row.category && (row.images?.length ?? 0) > 0 && !row.is_sold_out && (row.stock == null || row.stock > 0)
+  )
+  const ranked = [...eligible].sort((a, b) => {
+    if (a.is_featured !== b.is_featured) return a.is_featured ? -1 : 1
+    if (a.is_featured && b.is_featured) return (a.featured_position ?? Infinity) - (b.featured_position ?? Infinity)
+    return discountOf(b) - discountOf(a) || b.created_at.localeCompare(a.created_at)
+  })
+
+  const chosen = new Map<string, string[]>()
+  for (const row of ranked) {
+    const ids = chosen.get(row.category!) ?? []
+    if (ids.length < MENU_HIGHLIGHTS_PER_CATEGORY) chosen.set(row.category!, [...ids, row.id])
+  }
+  const allIds = [...chosen.values()].flat()
+  if (allIds.length === 0) return {}
+
+  const { items } = await listStoreProductsPaginated({ type: "store", productIds: allIds, pageSize: 60 })
+  const cards = new Map(items.map((item) => [item.id, item]))
+  const highlights: Record<string, StoreProductCard[]> = {}
+  for (const [category, ids] of chosen) {
+    highlights[category] = ids.flatMap((id) => (cards.has(id) ? [cards.get(id)!] : []))
+  }
+  return highlights
 }
 
 type FacetAccumulator = {
@@ -900,6 +1423,14 @@ export type StoreProductDetail = {
   peripheral_id: string | null
   features: string[]
   video_url: string | null
+  /** false = serviço/digital: sem frete nem prazo de entrega. */
+  requires_shipping: boolean
+  /** SKU de produto simples. Combinações têm o seu em `skus`. */
+  sku: string | null
+  /** Lote atual; `null` em produto que não é pré-venda. */
+  preorder: PreorderInfo | null
+  /** Marcado como Lançamento e ainda no prazo. */
+  is_launch: boolean
 }
 
 export type StoreProductSpec = {
@@ -924,8 +1455,8 @@ export type StoreProductDetailResult = {
   specs: StoreProductSpec[]
   variants: StoreProductVariant[]
   variantGroups: StoreProductVariantGroup[]
-  /** Pares (cor, opção) esgotados — só relevante quando o produto tem Cor e Variante juntos. */
-  combinations: StoreProductVariantCombination[]
+  /** Combinações com SKU/preço/estoque/foto próprios. Ver lib/store-sku.ts. */
+  skus: StoreSku[]
 }
 
 /**
@@ -967,7 +1498,7 @@ export const getStoreProductDetail = cache(async (
   const { data: product, error } = await db
     .from("store_products")
     .select(
-      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_sold_out, peripheral_id, features, video_url"
+      "id, slug, name, description, price_cents, promo_price_cents, stock, images, category, brand, type, condition, condition_notes, sale_type, is_sold_out, peripheral_id, features, video_url, requires_shipping"
     )
     .eq("slug", slug)
     .eq("type", "store")
@@ -980,22 +1511,24 @@ export const getStoreProductDetail = cache(async (
   }
   if (!product) return null
 
-  const detail = product as unknown as StoreProductDetail
+  const baseDetail = product as unknown as Omit<StoreProductDetail, "sku" | "preorder" | "is_launch">
   let linkedPeripheral: LinkedPeripheralRef | null = null
 
-  const [specsResult, variantsResult, variantGroupsResult, combinationsResult, peripheralsResult, peripheralResult] =
+  const [extras, skuRows, specsResult, variantsResult, variantGroupsResult, peripheralsResult, peripheralResult] =
     await Promise.all([
+    getProductPageExtras(baseDetail.id, baseDetail.sale_type),
+    getSkusForProducts([baseDetail.id]),
     db
       .from("store_product_specs")
       .select("id, label, value, position")
-      .eq("product_id", detail.id)
+      .eq("product_id", baseDetail.id)
       .order("position", { ascending: true }),
     db
       .from("store_product_variants")
       .select(
         "id, label, price_cents_override, promo_price_cents, stock, position, color, icon, image_url, is_sold_out, variant_images:store_product_variant_images(url, position)"
       )
-      .eq("product_id", detail.id)
+      .eq("product_id", baseDetail.id)
       .eq("is_active", true)
       // `id` como desempate: variantes soft-deletadas guardam a posição antiga
       // e podem empatar com uma ativa reindexada (ver replaceProductVariants).
@@ -1008,22 +1541,18 @@ export const getStoreProductDetail = cache(async (
       .select(
         "id, name, position, options:store_product_variant_group_options(id, label, price_cents_override, is_sold_out, position)"
       )
-      .eq("product_id", detail.id)
+      .eq("product_id", baseDetail.id)
       .order("position", { ascending: true }),
-    db
-      .from("store_product_variant_combinations")
-      .select("variant_id, option_id")
-      .eq("product_id", detail.id),
     db
       .from("store_product_peripherals")
       .select("position, peripherals(id, name, brand_id, brands(name), image_url)")
-      .eq("product_id", detail.id)
+      .eq("product_id", baseDetail.id)
       .order("position", { ascending: true }),
-    detail.peripheral_id
+    baseDetail.peripheral_id
       ? db
           .from("peripherals")
           .select("id, name, brand_id, brands(name), image_url")
-          .eq("id", detail.peripheral_id as string)
+          .eq("id", baseDetail.peripheral_id as string)
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ])
@@ -1052,7 +1581,11 @@ export const getStoreProductDetail = cache(async (
     options: [...(g.options ?? [])].sort((a, b) => a.position - b.position),
   }))
 
-  const combinations = (combinationsResult.data ?? []) as unknown as StoreProductVariantCombination[]
+  const activeVariantIds = new Set(variants.map((variant) => variant.id))
+  // Combinação de cor desativada nunca casa com uma seleção: não vai para o cliente.
+  const skus: StoreSku[] = skuRows
+    .filter((row) => row.variant_id === null || activeVariantIds.has(row.variant_id))
+    .map(({ product_id: _productId, ...sku }) => sku)
 
   type PeripheralJoinRow = {
     peripherals: { id: string; name: string; brand_id: string; brands: { name: string } | { name: string }[] | null; image_url: string | null } | null
@@ -1082,6 +1615,8 @@ export const getStoreProductDetail = cache(async (
     rank: ranks.get(p.id) ?? null,
   }))
 
+  const detail: StoreProductDetail = { ...baseDetail, ...extras }
+
   linkedPeripheral = peripheralRow
     ? {
         id: peripheralRow.id,
@@ -1092,8 +1627,44 @@ export const getStoreProductDetail = cache(async (
       }
     : null
 
-  return { product: detail, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups, combinations }
+  return { product: detail, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups, skus }
 })
+
+/**
+ * SKU, lote e Lançamento da página do produto. À parte do select principal
+ * pelo mesmo motivo de `getLaunchAndPreorderInfo`: código no ar antes da
+ * migration 20261213000001 não pode derrubar a página (ela daria 404).
+ */
+async function getProductPageExtras(
+  productId: string,
+  saleType: StoreSaleType
+): Promise<Pick<StoreProductDetail, "sku" | "preorder" | "is_launch">> {
+  const db = createSupabaseAdminClient()
+  const [{ data, error }, reserved] = await Promise.all([
+    db
+      .from("store_products")
+      .select("sku, is_launch, launch_until, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit")
+      .eq("id", productId)
+      .maybeSingle(),
+    saleType === "pre_order" ? getPreorderReserved([productId]) : Promise.resolve(new Map<string, number>()),
+  ])
+  if (error) console.error("[store-repository] getProductPageExtras:", error)
+
+  return {
+    sku: data?.sku ?? null,
+    is_launch: data ? isLaunchActive(data, todayKeySaoPaulo()) : false,
+    preorder:
+      saleType === "pre_order"
+        ? {
+            status: isPreorderStatus(data?.preorder_status) ? data.preorder_status : "open",
+            batchName: data?.preorder_batch_name ?? null,
+            shipsAt: data?.preorder_ships_at ?? null,
+            limit: data?.preorder_limit ?? null,
+            reserved: reserved.get(productId) ?? 0,
+          }
+        : null,
+  }
+}
 
 /** Lista variantes de um produto (usado pela API admin ao editar). */
 export async function listProductVariants(
@@ -1153,105 +1724,110 @@ export async function listProductVariantGroups(productId: string): Promise<Store
   }))
 }
 
-export type StoreProductVariantCombination = {
-  variant_id: string
-  option_id: string
+/** Combinações (SKU) de um produto, para a matriz do admin. Inclui as de cor desativada: o save as limpa. */
+export async function listProductSkus(productId: string): Promise<StoreSku[]> {
+  const rows = await getSkusForProducts([productId])
+  return rows.map(({ product_id: _productId, ...sku }) => sku)
 }
 
-/** Lista as combinações Cor × Variante marcadas como esgotadas de um produto, usado pela API admin ao editar. */
-export async function listProductVariantCombinations(productId: string): Promise<StoreProductVariantCombination[]> {
-  const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("store_product_variant_combinations")
-    .select("variant_id, option_id")
-    .eq("product_id", productId)
-
-  if (error) {
-    console.error("[store-repository] listProductVariantCombinations:", error)
-    return []
-  }
-  return (data ?? []) as unknown as StoreProductVariantCombination[]
+export type ProductSkuInput = {
+  variant_id: string | null
+  option_ids: string[]
+  sku: string | null
+  price_cents: number | null
+  promo_price_cents: number | null
+  stock: number | null
+  image_url: string | null
+  is_sold_out: boolean
 }
+
+export class ProductSkuConflictError extends Error {}
 
 /**
- * Substitui as combinações Cor × Variante esgotadas de um produto — usado
- * pela API admin ao salvar. A existência da linha já significa "esgotado"
- * (sem coluna booleana), então é delete-then-insert escopado por produto,
- * igual replaceProductSpecs. Filtra os pares recebidos contra as
- * variantes/opções que de fato pertencem ao produto, evitando referenciar
- * ids de outro produto.
+ * Substitui a matriz de combinações de um produto. Upsert pela chave
+ * (cor, opções), não delete-then-insert: o `id` da linha precisa sobreviver
+ * ao save, porque o diário de reservas (`store_stock_reservations.sku_id`) e
+ * os itens de pedido em aberto apontam para ele na hora de devolver estoque.
+ *
+ * Linha sem nenhum campo próprio não é gravada (ela só herdaria tudo), e a
+ * que deixou de vir é apagada. Cor e opção são conferidas contra o produto,
+ * para nunca referenciar id de outro.
  */
-export async function replaceProductVariantCombinations(
-  productId: string,
-  pairs: Array<{ variant_id: string; option_id: string }>
-): Promise<void> {
+export async function replaceProductSkus(productId: string, rows: ProductSkuInput[]): Promise<void> {
   const db = createSupabaseAdminClient()
 
-  const [{ data: productVariants, error: variantsError }, { data: productGroups, error: groupsError }] =
+  const [{ data: productVariants, error: variantsError }, { data: productGroups, error: groupsError }, existing] =
     await Promise.all([
       db.from("store_product_variants").select("id").eq("product_id", productId).eq("is_active", true),
-      db.from("store_product_variant_groups").select("id").eq("product_id", productId),
+      db
+        .from("store_product_variant_groups")
+        .select("id, options:store_product_variant_group_options(id)")
+        .eq("product_id", productId),
+      getSkusForProducts([productId]),
     ])
   if (variantsError || groupsError) {
-    console.error("[store-repository] replaceProductVariantCombinations list:", variantsError ?? groupsError)
+    console.error("[store-repository] replaceProductSkus list:", variantsError ?? groupsError)
     throw new Error("Erro ao atualizar combinações.")
   }
 
-  const groupIds = (productGroups ?? []).map((row) => row.id as string)
-  let productOptionIds = new Set<string>()
-  if (groupIds.length > 0) {
-    const { data: productOptions, error: optionsError } = await db
-      .from("store_product_variant_group_options")
-      .select("id")
-      .in("group_id", groupIds)
-    if (optionsError) {
-      console.error("[store-repository] replaceProductVariantCombinations list options:", optionsError)
+  const variantIds = new Set((productVariants ?? []).map((row) => row.id as string))
+  const groupOfOption = new Map<string, string>()
+  for (const group of (productGroups ?? []) as unknown as { id: string; options: { id: string }[] | null }[]) {
+    for (const option of group.options ?? []) groupOfOption.set(option.id, group.id)
+  }
+
+  const hasOwnData = (row: ProductSkuInput) =>
+    row.sku != null ||
+    row.price_cents != null ||
+    row.promo_price_cents != null ||
+    row.stock != null ||
+    row.image_url != null ||
+    row.is_sold_out
+
+  const valid = rows.filter((row) => {
+    if (row.variant_id !== null && !variantIds.has(row.variant_id)) return false
+    const groups = row.option_ids.map((id) => groupOfOption.get(id))
+    if (groups.some((group) => group === undefined)) return false
+    // Uma opção por grupo; a combinação "nada escolhido" só existe com cor.
+    if (new Set(groups).size !== groups.length) return false
+    return row.variant_id !== null || row.option_ids.length > 0
+  })
+
+  const keep = valid.filter(hasOwnData)
+  const keepKeys = new Set(keep.map((row) => skuKey(row.variant_id, row.option_ids)))
+  const staleIds = existing.filter((row) => !keepKeys.has(skuKey(row.variant_id, row.option_ids))).map((row) => row.id)
+
+  if (staleIds.length > 0) {
+    const { error } = await db.from("store_product_skus").delete().in("id", staleIds)
+    if (error) {
+      console.error("[store-repository] replaceProductSkus delete:", error)
       throw new Error("Erro ao atualizar combinações.")
     }
-    productOptionIds = new Set((productOptions ?? []).map((row) => row.id as string))
   }
 
-  const productVariantIds = new Set((productVariants ?? []).map((row) => row.id as string))
-  const validPairs = pairs.filter((p) => productVariantIds.has(p.variant_id) && productOptionIds.has(p.option_id))
-
-  const { error: deleteError } = await db
-    .from("store_product_variant_combinations")
-    .delete()
-    .eq("product_id", productId)
-  if (deleteError) {
-    console.error("[store-repository] replaceProductVariantCombinations delete:", deleteError)
-    throw new Error("Erro ao atualizar combinações.")
+  for (const row of keep) {
+    const optionIds = [...row.option_ids].sort()
+    const current = findSku(existing, row.variant_id, optionIds)
+    const values = {
+      sku: row.sku,
+      price_cents: row.price_cents,
+      promo_price_cents: row.promo_price_cents,
+      stock: row.stock,
+      image_url: row.image_url,
+      is_sold_out: row.is_sold_out,
+      updated_at: new Date().toISOString(),
+    }
+    const { error } = current
+      ? await db.from("store_product_skus").update(values).eq("id", current.id)
+      : await db
+          .from("store_product_skus")
+          .insert({ ...values, product_id: productId, variant_id: row.variant_id, option_ids: optionIds })
+    if (error) {
+      console.error("[store-repository] replaceProductSkus upsert:", error)
+      if (error.code === "23505") throw new ProductSkuConflictError(`O SKU "${row.sku}" já está em uso em outro produto.`)
+      throw new Error("Erro ao atualizar combinações.")
+    }
   }
-
-  if (validPairs.length === 0) return
-
-  const { error: insertError } = await db.from("store_product_variant_combinations").insert(
-    validPairs.map((p) => ({ product_id: productId, variant_id: p.variant_id, option_id: p.option_id }))
-  )
-  if (insertError) {
-    console.error("[store-repository] replaceProductVariantCombinations insert:", insertError)
-    throw new Error("Erro ao atualizar combinações.")
-  }
-}
-
-/** Busca combinações Cor × Variante esgotadas entre os ids informados, para validar no checkout. */
-export async function getSoldOutCombinations(
-  variantIds: string[],
-  optionIds: string[]
-): Promise<StoreProductVariantCombination[]> {
-  if (variantIds.length === 0 || optionIds.length === 0) return []
-  const db = createSupabaseAdminClient()
-  const { data, error } = await db
-    .from("store_product_variant_combinations")
-    .select("variant_id, option_id")
-    .in("variant_id", variantIds)
-    .in("option_id", optionIds)
-
-  if (error) {
-    console.error("[store-repository] getSoldOutCombinations:", error)
-    return []
-  }
-  return (data ?? []) as unknown as StoreProductVariantCombination[]
 }
 
 export type CheckoutVariant = {
@@ -1924,6 +2500,7 @@ export type CartLineIssue =
   | "combination_unavailable"
   | "insufficient_stock"
   | "price_changed"
+  | "preorder_unavailable"
 
 export type ValidatedCartLine = {
   productId: string
@@ -1935,6 +2512,8 @@ export type ValidatedCartLine = {
   priceCents: number | null
   /** Estoque atual da combinação; `null` = sem controle de estoque. */
   stock: number | null
+  /** Serviço: mesmo preço no PIX e no cartão (ver `isSinglePriceProduct`). */
+  singlePrice: boolean
   /** `true` quando a linha ainda pode ser comprada (talvez com menos unidades). */
   available: boolean
   issues: CartLineIssue[]
@@ -1943,8 +2522,9 @@ export type ValidatedCartLine = {
 /**
  * Estado atual das linhas de um carrinho, para a tela avisar sobre divergências
  * ANTES do submit do checkout. Reusa exatamente as mesmas consultas e a mesma
- * função de preço que o checkout usa para cobrar — é isso que garante que o
- * aviso corresponda ao que vai acontecer de fato na compra.
+ * resolução de combinação (`resolveSelection`) que o checkout usa para cobrar
+ * — é isso que garante que o aviso corresponda ao que vai acontecer de fato na
+ * compra.
  *
  * Não substitui a validação do checkout (que continua sendo a autoridade e
  * roda de novo, com reserva atômica de estoque): entre esta chamada e o
@@ -1962,19 +2542,20 @@ export async function validateCartLines(
   ]
   const optionIds = [...new Set(lines.flatMap((l) => l.optionIds))]
 
-  const [{ data: products }, variants, options, combinations] = await Promise.all([
+  const [{ data: products }, variants, options, skus] = await Promise.all([
     db
       .from("store_products")
       .select(
-        "id, name, price_cents, promo_price_cents, stock, is_active, is_sold_out, requires_shipping"
+        "id, name, price_cents, promo_price_cents, stock, is_active, is_sold_out, requires_shipping, sale_type, category"
       )
       .in("id", productIds),
     getVariantsForCheckout(variantIds),
     getVariantOptionsForCheckout(optionIds),
-    getSoldOutCombinations(variantIds, optionIds),
+    getSkusForProducts(productIds),
   ])
-
-  const soldOutKeys = new Set(combinations.map((c) => `${c.variant_id}:${c.option_id}`))
+  const preorderInfo = await getLaunchAndPreorderInfo(
+    (products ?? []).map((product) => ({ id: product.id, sale_type: product.sale_type }))
+  )
 
   const validated: ValidatedCartLine[] = lines.map((line) => {
     const issues: CartLineIssue[] = []
@@ -1985,12 +2566,14 @@ export async function validateCartLines(
       name: null,
       priceCents: null,
       stock: null,
+      singlePrice: false,
     }
 
     const product = (products ?? []).find((p) => p.id === line.productId)
     if (!product) return { ...base, available: false, issues: ["not_found"] }
 
     base.name = product.name
+    base.singlePrice = isSinglePriceProduct(product)
     if (!product.is_active) issues.push("inactive")
     if (product.is_sold_out) issues.push("sold_out")
 
@@ -2012,20 +2595,23 @@ export async function validateCartLines(
     }
     if (selectedOptions.some((o) => o.is_sold_out)) issues.push("option_unavailable")
 
-    if (variant && selectedOptions.some((o) => soldOutKeys.has(`${variant.id}:${o.id}`))) {
-      issues.push("combination_unavailable")
-    }
-
     // Mesma ordenação por `group.position` que o checkout aplica antes de
     // precificar — a ordem decide qual override vence.
     const orderedOptions = [...selectedOptions].sort(
       (a, b) => a.group.position - b.group.position
     )
-    const { effectiveCents } = computeEffectivePrice(product, variant ?? null, orderedOptions)
+    const productSkus = skus.filter((sku) => sku.product_id === product.id)
+    const selection = resolveSelection(product, variant ?? null, orderedOptions, productSkus)
+    if (selection.sku?.is_sold_out) issues.push("combination_unavailable")
 
-    base.priceCents = effectiveCents
-    base.stock = variant ? variant.stock : product.stock
+    base.priceCents = selection.price.effectiveCents
+    base.stock = selection.stock
     if (base.stock !== null && base.stock <= 0) issues.push("insufficient_stock")
+
+    const preorder = preorderInfo.get(product.id)?.preorder
+    if (preorder && effectivePreorderStatus(preorder, product.is_sold_out) !== "open") {
+      issues.push("preorder_unavailable")
+    }
 
     return { ...base, available: issues.length === 0, issues }
   })

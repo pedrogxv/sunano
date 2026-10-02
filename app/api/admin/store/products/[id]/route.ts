@@ -7,10 +7,12 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   recordPriceHistoryIfChanged,
   listProductVariantGroups,
-  listProductVariantCombinations,
+  listProductSkus,
 } from "@/lib/server/repositories/store-repository"
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
+import { CARD_HIGHLIGHT_MAX_CHARS, CARD_HIGHLIGHTS_MAX, sanitizeCardHighlights, STORE_CARD_BADGE_CHOICES } from "@/lib/store-card"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
+import { productPageFieldsShape, skuConflictMessage } from "@/lib/server/validation/store-product-page"
 import type { Database } from "@/lib/database.types"
 
 type StoreProductUpdate = Database["public"]["Tables"]["store_products"]["Update"]
@@ -49,6 +51,21 @@ const updateProductSchema = z.object({
     .refine((v) => v === "" || isValidYoutubeUrl(v), "URL de vídeo precisa ser um link do YouTube.")
     .nullable()
     .optional(),
+  /** Selo do card escolhido à mão; null = automático. Ver lib/store-card.ts. */
+  card_badge: z.enum(STORE_CARD_BADGE_CHOICES).nullable().optional(),
+  /** Características do card; vazio = automático pelo Database. */
+  card_highlights: z
+    .array(z.string().trim().max(CARD_HIGHLIGHT_MAX_CHARS, `Cada característica do card tem até ${CARD_HIGHLIGHT_MAX_CHARS} caracteres.`))
+    .max(CARD_HIGHLIGHTS_MAX)
+    .transform(sanitizeCardHighlights)
+    .optional(),
+  ...productPageFieldsShape,
+  /**
+   * Abre um lote novo de pré-venda: o teto passa a contar só os pedidos daqui
+   * em diante (`preorder_batch_started_at`). Não é coluna: vira o carimbo de
+   * agora no servidor, nunca uma data vinda do cliente.
+   */
+  start_new_batch: z.boolean().optional(),
 })
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -62,7 +79,7 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
 
   const { id } = await context.params
   const db = createSupabaseAdminClient()
-  const [{ data, error }, { data: specs }, { data: variants }, { data: peripherals }, variantGroups, combinations] =
+  const [{ data, error }, { data: specs }, { data: variants }, { data: peripherals }, variantGroups, skus, preorderReserved] =
     await Promise.all([
       db.from("store_products").select("*").eq("id", id).single(),
       db
@@ -89,7 +106,10 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
         .eq("product_id", id)
         .order("position", { ascending: true }),
       listProductVariantGroups(id),
-      listProductVariantCombinations(id),
+      listProductSkus(id),
+      // Quantas unidades o lote atual já tem: o admin decide abrir lote novo
+      // olhando para este número.
+      db.rpc("preorder_reserved_quantity", { p_product_id: id }),
     ])
 
   if (error) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
@@ -110,7 +130,8 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
     specs: specs ?? [],
     variants: variantsWithImages,
     variantGroups,
-    combinations,
+    skus,
+    preorderReserved: preorderReserved.error ? null : preorderReserved.data,
     peripheralIds: (peripherals ?? []).map((row) => row.peripheral_id),
   })
 }
@@ -141,11 +162,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     )
   }
 
-  const allowed = Object.keys(updateProductSchema.shape) as (keyof StoreProductUpdate)[]
+  const { start_new_batch: startNewBatch, ...fields } = parsed.data
+  const allowed = Object.keys(fields) as (keyof StoreProductUpdate)[]
   const patch: StoreProductUpdate = {}
   for (const key of allowed) {
-    if (key in parsed.data) (patch as Record<string, unknown>)[key] = (parsed.data as Record<string, unknown>)[key]
+    (patch as Record<string, unknown>)[key] = (fields as Record<string, unknown>)[key]
   }
+  if (startNewBatch) patch.preorder_batch_started_at = new Date().toISOString()
   if (typeof patch.video_url === "string") patch.video_url = patch.video_url || null
 
   const db = createSupabaseAdminClient()
@@ -208,6 +231,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     .single()
 
   if (error) {
+    const conflict = skuConflictMessage(error)
+    if (conflict) return NextResponse.json({ error: conflict }, { status: 409 })
     const { body, status } = dbErrorResponse(error, "Erro ao atualizar produto.")
     return NextResponse.json(body, { status })
   }

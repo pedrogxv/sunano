@@ -93,6 +93,10 @@ type OrderItem = {
   price_cents?: number
   variant_label?: string | null
   variant_options?: { group: string; label: string }[] | null
+  /** Código da combinação no momento da compra (snapshot do checkout). */
+  sku?: string | null
+  /** Lote da pré-venda em que a reserva entrou. */
+  preorder_batch?: string | null
 }
 
 type AdminOrder = {
@@ -1283,13 +1287,20 @@ function OrderManageDialog({
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Itens</p>
             <div className="space-y-1.5">
               {order.items.map((item, idx) => (
-                <div key={idx} className="flex items-center justify-between text-sm">
-                  <span className="text-foreground">
+                <div key={idx} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 text-foreground">
                     {item.quantity ?? 1}x {item.name ?? "Produto"}
                     {[item.variant_label, ...(item.variant_options ?? []).map((o) => o.label)]
                       .filter(Boolean)
                       .map((label) => ` · ${label}`)
                       .join("")}
+                    {/* SKU e lote: o que a separação precisa para pegar a caixa certa. */}
+                    {(item.sku || item.preorder_batch) && (
+                      <span className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-muted-foreground">
+                        {item.sku && <span className="font-mono">SKU {item.sku}</span>}
+                        {item.preorder_batch && <span>{item.preorder_batch}</span>}
+                      </span>
+                    )}
                   </span>
                   {!isAuraOrder && typeof item.price_cents === "number" && (
                     <span className="text-muted-foreground">{formatBRL(item.price_cents)}</span>

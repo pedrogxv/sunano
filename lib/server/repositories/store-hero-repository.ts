@@ -1,14 +1,27 @@
 import "server-only"
 
+import { cache } from "react"
+
 import type { Database } from "@/lib/database.types"
+import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { escapeOrFilterValue } from "@/lib/server/repositories/_shared"
+import { getPeripheralRankById, listAllPeripherals } from "@/lib/server/repositories/peripherals-repository"
+import { getStoreWideReviewAggregate } from "@/lib/server/repositories/store-reviews-repository"
 import { listStoreProductsPaginated } from "@/lib/server/repositories/store-repository"
 import { revalidateStorefront } from "@/lib/server/seo/revalidate-public"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   buildHeroView,
+  DEFAULT_HERO_SETTINGS,
+  isHeroHighlightKind,
+  parseHeroSeals,
   type AdminStoreHeroSlide,
+  type StoreHeroHighlightKind,
+  type StoreHeroProductAnalysis,
+  type StoreHeroSeal,
+  type StoreHeroSettings,
   type StoreHeroSlide,
+  type StoreHeroTrust,
   type StoreHeroView,
 } from "@/lib/store-hero"
 
@@ -19,12 +32,15 @@ import {
  *
  * As artes vão para o mesmo bucket dos banners de seção (`store-banners`),
  * pela mesma rota de upload.
+ *
+ * Também é a porta de `store_hero_settings` (20261211000000), a linha única
+ * com os selos de curadoria que ficam colados no Hero.
  */
 
 const STORAGE_BUCKET = "store-banners"
 
 const COLUMNS =
-  "id, title, subtitle, image_desktop_url, image_mobile_url, product_id, primary_cta_text, primary_cta_link, secondary_cta_text, secondary_cta_link, starts_at, ends_at, is_active, sort_order, created_at, updated_at"
+  "id, title, subtitle, image_desktop_url, image_mobile_url, product_id, primary_cta_text, primary_cta_link, secondary_cta_text, secondary_cta_link, highlight, highlight_label, starts_at, ends_at, is_active, sort_order, created_at, updated_at"
 
 type HeroRow = Database["public"]["Tables"]["store_hero_slides"]["Row"]
 
@@ -38,6 +54,8 @@ export type StoreHeroWriteInput = {
   primaryCtaLink: string | null
   secondaryCtaText: string | null
   secondaryCtaLink: string | null
+  highlight: StoreHeroHighlightKind | null
+  highlightLabel: string | null
   startsAt: string | null
   endsAt: string | null
   isActive: boolean
@@ -59,6 +77,9 @@ function toSlide(row: HeroRow): StoreHeroSlide {
     primaryCtaLink: row.primary_cta_link,
     secondaryCtaText: row.secondary_cta_text,
     secondaryCtaLink: row.secondary_cta_link,
+    // Valor fora da lista (escrito à mão no banco) vira slide sem etiqueta.
+    highlight: isHeroHighlightKind(row.highlight) ? row.highlight : null,
+    highlightLabel: row.highlight_label,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     isActive: row.is_active,
@@ -79,6 +100,8 @@ function toRowPatch(input: Partial<StoreHeroWriteInput>): Database["public"]["Ta
     ...(input.primaryCtaLink !== undefined ? { primary_cta_link: input.primaryCtaLink } : {}),
     ...(input.secondaryCtaText !== undefined ? { secondary_cta_text: input.secondaryCtaText } : {}),
     ...(input.secondaryCtaLink !== undefined ? { secondary_cta_link: input.secondaryCtaLink } : {}),
+    ...(input.highlight !== undefined ? { highlight: input.highlight } : {}),
+    ...(input.highlightLabel !== undefined ? { highlight_label: input.highlightLabel } : {}),
     ...(input.startsAt !== undefined ? { starts_at: input.startsAt } : {}),
     ...(input.endsAt !== undefined ? { ends_at: input.endsAt } : {}),
     ...(input.isActive !== undefined ? { is_active: input.isActive } : {}),
@@ -112,6 +135,54 @@ async function withProduct(slides: StoreHeroSlide[]): Promise<AdminStoreHeroSlid
 }
 
 /**
+ * O produto em destaque visto pelo Database: o periférico vinculado e a
+ * posição dele no ranking da categoria. Mesma precedência da página do
+ * produto (`getStoreProductDetail`): o FK legado `store_products.peripheral_id`
+ * primeiro, depois o primeiro da lista M:N. Falha aqui só tira a linha do
+ * Database do slide; não derruba o Hero.
+ */
+async function getProductAnalyses(productIds: string[]): Promise<Map<string, StoreHeroProductAnalysis>> {
+  const analyses = new Map<string, StoreHeroProductAnalysis>()
+  if (productIds.length === 0) return analyses
+
+  try {
+    const db = createSupabaseAdminClient()
+    const [{ data: legacy }, { data: links }, peripherals] = await Promise.all([
+      db.from("store_products").select("id, peripheral_id").in("id", productIds),
+      db
+        .from("store_product_peripherals")
+        .select("product_id, peripheral_id, position")
+        .in("product_id", productIds)
+        .order("position", { ascending: true }),
+      listAllPeripherals(),
+    ])
+
+    const peripheralById = new Map(peripherals.map((peripheral) => [peripheral.id, peripheral]))
+    const chosen = new Map<string, string>()
+    for (const row of legacy ?? []) {
+      if (row.peripheral_id && peripheralById.has(row.peripheral_id)) chosen.set(row.id, row.peripheral_id)
+    }
+    for (const row of links ?? []) {
+      if (!chosen.has(row.product_id) && peripheralById.has(row.peripheral_id)) chosen.set(row.product_id, row.peripheral_id)
+    }
+
+    await Promise.all(
+      [...chosen].map(async ([productId, peripheralId]) => {
+        const peripheral = peripheralById.get(peripheralId)!
+        analyses.set(productId, {
+          peripheralName: peripheral.brand ? `${peripheral.brand} ${peripheral.name}` : peripheral.name,
+          href: `/perifericos/${buildPeripheralSlug(peripheral.name, peripheral.id)}`,
+          rank: await getPeripheralRankById(peripheralId),
+        })
+      })
+    )
+  } catch (error) {
+    console.error("[store-hero-repository] getProductAnalyses:", error)
+  }
+  return analyses
+}
+
+/**
  * Slides no ar agora, na ordem do painel, com botões resolvidos e o card do
  * produto (só produto ativo: um anúncio pausado não pode virar vitrine).
  * Slide sem arte cujo produto saiu do ar é pulado: não sobra nada para
@@ -138,14 +209,17 @@ export async function listLiveHeroSlides(): Promise<StoreHeroView[]> {
 
   const slides = (data ?? []).map((row) => toSlide(row as HeroRow))
   const productIds = [...new Set(slides.map((slide) => slide.productId).filter((id): id is string => Boolean(id)))]
-  const { items: products } = productIds.length
-    ? await listStoreProductsPaginated({ type: "store", productIds, pageSize: productIds.length })
-    : { items: [] }
+  const [{ items: products }, analyses] = await Promise.all([
+    productIds.length
+      ? listStoreProductsPaginated({ type: "store", productIds, pageSize: productIds.length })
+      : Promise.resolve({ items: [] }),
+    getProductAnalyses(productIds),
+  ])
   const productById = new Map(products.map((product) => [product.id, product]))
 
   return slides.flatMap<StoreHeroView>((slide) => {
     const product = slide.productId ? productById.get(slide.productId) ?? null : null
-    const view = buildHeroView(slide, product)
+    const view = buildHeroView(slide, product, product ? analyses.get(product.id) ?? null : null)
     return view ? [view] : []
   })
 }
@@ -317,4 +391,82 @@ async function removeUnreferencedMedia(urls: string[]): Promise<void> {
   } catch (error) {
     console.error("[store-hero-repository] removeUnreferencedMedia:", error)
   }
+}
+
+// ────────────────────────────────────────────
+// Selos de curadoria (store_hero_settings)
+// ────────────────────────────────────────────
+
+const SETTINGS_COLUMNS = "seals_enabled, seals, show_rating"
+
+type SettingsRow = Pick<
+  Database["public"]["Tables"]["store_hero_settings"]["Row"],
+  "seals_enabled" | "seals" | "show_rating"
+>
+
+function toSettings(row: SettingsRow): StoreHeroSettings {
+  return { sealsEnabled: row.seals_enabled, seals: parseHeroSeals(row.seals), showRating: row.show_rating }
+}
+
+/**
+ * Configuração dos selos. Sem a linha (ou com a migration ainda não aplicada)
+ * devolve os selos padrão: é o posicionamento da Loja, não pode sumir do topo
+ * por causa de um erro de leitura. `cache` deduplica dentro da renderização.
+ */
+export const getStoreHeroSettings = cache(async (): Promise<StoreHeroSettings> => {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db.from("store_hero_settings").select(SETTINGS_COLUMNS).eq("id", true).maybeSingle()
+
+  if (error || !data) {
+    if (error) console.error("[store-hero-repository] getStoreHeroSettings:", error)
+    return DEFAULT_HERO_SETTINGS
+  }
+  return toSettings(data as SettingsRow)
+})
+
+/** O que a vitrine desenha embaixo do Hero: selos ligados e a nota dos compradores. */
+export async function getStoreHeroTrust(): Promise<StoreHeroTrust> {
+  const settings = await getStoreHeroSettings()
+  const aggregate = settings.showRating ? await getStoreWideReviewAggregate() : null
+  return {
+    seals: settings.sealsEnabled ? settings.seals : [],
+    rating: aggregate && aggregate.count > 0 ? { average: aggregate.avgRating, count: aggregate.count } : null,
+  }
+}
+
+export type StoreHeroSettingsWriteInput = {
+  sealsEnabled: boolean
+  seals: StoreHeroSeal[]
+  showRating: boolean
+  adminId: string
+}
+
+export type StoreHeroSettingsResult =
+  | { ok: true; settings: StoreHeroSettings }
+  | { ok: false; error: string; status: number }
+
+export async function updateStoreHeroSettings(input: StoreHeroSettingsWriteInput): Promise<StoreHeroSettingsResult> {
+  const db = createSupabaseAdminClient()
+  const { data, error } = await db
+    .from("store_hero_settings")
+    .upsert(
+      {
+        id: true,
+        seals_enabled: input.sealsEnabled,
+        seals: input.seals,
+        show_rating: input.showRating,
+        updated_by: input.adminId,
+      },
+      { onConflict: "id" }
+    )
+    .select(SETTINGS_COLUMNS)
+    .single()
+
+  if (error || !data) {
+    console.error("[store-hero-repository] updateStoreHeroSettings:", error)
+    return { ok: false, error: "Não foi possível salvar os selos.", status: 500 }
+  }
+
+  revalidateStorefront()
+  return { ok: true, settings: toSettings(data as SettingsRow) }
 }

@@ -28,6 +28,45 @@ export function computeCardPriceCents(pixPriceCents: number, discountPercent: nu
   return Math.round(pixPriceCents / (1 - pct / 100))
 }
 
+// ---------------------------------------------------------------------------
+// Preço único (serviços)
+// ---------------------------------------------------------------------------
+// Serviço não tem desconto no PIX nem acréscimo no cartão: o preço cadastrado
+// é o que se paga, em qualquer forma de pagamento. Decidido em 01/10/2026.
+// É pela categoria, não por `requires_shipping`: há serviço que precisa de
+// endereço (o Xianyu Express despacha o que comprou) e continua sendo serviço.
+
+const SINGLE_PRICE_CATEGORIES = new Set(["services"])
+
+export function isSinglePriceProduct(product: { category?: string | null }): boolean {
+  return product.category != null && SINGLE_PRICE_CATEGORIES.has(product.category)
+}
+
+/** Preço no cartão de UM item: igual ao PIX quando é preço único. */
+export function computeItemCardPriceCents(pixPriceCents: number, discountPercent: number, singlePrice: boolean): number {
+  return singlePrice ? pixPriceCents : computeCardPriceCents(pixPriceCents, discountPercent)
+}
+
+/**
+ * Total no cartão de um carrinho que pode misturar produto e serviço. O
+ * acréscimo do cartão é calculado sobre a SOMA dos itens com desconto no PIX
+ * (não item a item, que somaria centavos de arredondamento), e o preço único
+ * entra como está. É a conta que o checkout cobra e que o carrinho mostra.
+ */
+export function computeCardTotalCents(
+  lines: readonly { priceCents: number; quantity: number; singlePrice?: boolean | null }[],
+  discountPercent: number
+): number {
+  let discountedCents = 0
+  let singlePriceCents = 0
+  for (const line of lines) {
+    const subtotal = line.priceCents * line.quantity
+    if (line.singlePrice) singlePriceCents += subtotal
+    else discountedCents += subtotal
+  }
+  return computeCardPriceCents(discountedCents, discountPercent) + singlePriceCents
+}
+
 /**
  * Desconto em centavos que o cliente economiza pagando no PIX. Derivado do
  * preço do cartão para que "cartão − desconto" feche sempre com o preço PIX
@@ -62,6 +101,12 @@ export type PricingProduct = {
   promo_price_cents?: number | null
 }
 
+/** Combinação (SKU) selecionada, no que importa para o preço. Ver lib/store-sku.ts. */
+export type PricingSku = {
+  price_cents: number | null
+  promo_price_cents: number | null
+}
+
 export type EffectivePrice = {
   /** O que será efetivamente cobrado (promo aplicada, se houver). */
   effectiveCents: number
@@ -86,11 +131,17 @@ export type EffectivePrice = {
  *
  * `options` deve chegar ordenada por `group.position` (é o que a vitrine e o
  * checkout já fazem) — a ordem decide qual override vence quando há mais de um.
+ *
+ * A combinação (`sku`) é o nível mais específico e vence todos: com preço
+ * próprio, a promoção que vale é só a dela; sem preço próprio mas com
+ * promoção, a promoção dela incide sobre o preço que os níveis de cima
+ * decidiram.
  */
 export function computeEffectivePrice(
   product: PricingProduct,
   variant: PricingVariant | null,
-  options: PricingOption[] = []
+  options: PricingOption[] = [],
+  sku: PricingSku | null = null
 ): EffectivePrice {
   let baseCents = variant?.price_cents_override ?? product.price_cents
   let groupOverrideApplied = false
@@ -101,12 +152,19 @@ export function computeEffectivePrice(
     }
   }
 
-  const promoCents = groupOverrideApplied
+  let promoCents = groupOverrideApplied
     ? null
     : variant
       ? (variant.promo_price_cents ??
         (variant.price_cents_override == null ? product.promo_price_cents ?? null : null))
       : product.promo_price_cents ?? null
+
+  if (sku?.price_cents != null) {
+    baseCents = sku.price_cents
+    promoCents = sku.promo_price_cents
+  } else if (sku?.promo_price_cents != null) {
+    promoCents = sku.promo_price_cents
+  }
 
   const hasDiscount = promoCents != null && promoCents < baseCents
   const effectiveCents = hasDiscount ? (promoCents as number) : baseCents
@@ -119,4 +177,48 @@ export function computeEffectivePrice(
       ? Math.round((1 - (promoCents as number) / baseCents) * 100)
       : null,
   }
+}
+
+type CardVariant = PricingVariant & { stock: number | null; is_sold_out?: boolean }
+
+function isVariantSoldOut(variant: CardVariant): boolean {
+  return Boolean(variant.is_sold_out) || (variant.stock !== null && variant.stock === 0)
+}
+
+/**
+ * Variante que o card da vitrine anuncia: a primeira à venda (ou a primeira
+ * de todas, se nenhuma estiver). Mesma escolha com que a página do produto
+ * abre: sem pular a cor esgotada à mão, o card mostrava foto e preço de uma
+ * cor e a página abria em outra.
+ */
+export function cardActiveVariant<V extends CardVariant>(card: {
+  has_variants?: boolean
+  variants?: V[] | null
+}): V | null {
+  const variants = card.variants ?? []
+  if (!card.has_variants || variants.length === 0) return null
+  return variants.find((variant) => !isVariantSoldOut(variant)) ?? variants[0]
+}
+
+/** O card mostra "Esgotado"? Produto esgotado à mão, ou a variante anunciada sem estoque. */
+export function isCardSoldOut(card: {
+  is_sold_out?: boolean
+  stock: number | null
+  has_variants?: boolean
+  variants?: CardVariant[] | null
+}): boolean {
+  if (card.is_sold_out) return true
+  const variant = cardActiveVariant(card)
+  return variant ? isVariantSoldOut(variant) : card.stock !== null && card.stock === 0
+}
+
+/**
+ * Preço que o card mostra. A ordenação "Menor preço" usa este, não a coluna
+ * `price_cents`: ordenar pelo preço cheio punha um produto em promoção na
+ * posição do preço que ele não está cobrando.
+ */
+export function computeCardDisplayPrice(
+  card: PricingProduct & { has_variants?: boolean; variants?: (PricingVariant & { stock: number | null })[] | null }
+): EffectivePrice {
+  return computeEffectivePrice(card, cardActiveVariant(card))
 }

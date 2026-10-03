@@ -1032,7 +1032,14 @@ export type StoreFilterOptions = {
  * contagem por tipo) para a Loja. Query leve, pensada para ser
  * chamada por trás de cache (`revalidate` na página/rota chamadora).
  */
-export async function getStoreFilterOptions(type?: "store"): Promise<StoreFilterOptions> {
+export const getStoreFilterOptions = cache(loadStoreFilterOptions)
+
+/**
+ * `React.cache` porque as landings de categoria e marca leem as opções duas
+ * vezes por request: no `layout.tsx`, que valida o slug antes do boundary do
+ * `loading.tsx` (é o que mantém o 404 de verdade), e de novo na página.
+ */
+async function loadStoreFilterOptions(type?: "store"): Promise<StoreFilterOptions> {
   const db = createSupabaseAdminClient()
   let query = db
     .from("store_products")

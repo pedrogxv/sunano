@@ -20,7 +20,7 @@ import {
   type StoreFilterState,
   type StoreSortKey,
 } from "@/components/store/StoreFilters"
-import { StoreCatalogMobileFilters, StoreCatalogSidebar, StoreQuickFilters } from "@/components/store/StoreCatalogFilters"
+import { StoreCatalogMobileFilters, StoreCatalogSidebar, StoreFiltersButton, StoreQuickFilters } from "@/components/store/StoreCatalogFilters"
 import { MarketInfoDialog } from "@/components/store/MarketInfoDialog"
 import { StoreAuthorityStrip } from "@/components/store/StoreAuthorityStrip"
 import { StoreHero } from "@/components/store/StoreHero"
@@ -315,6 +315,12 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const hasQuery = debouncedQuery.trim().length > 0
   const effectiveSort: StoreSortKey = sortKey === "relevance" && !hasQuery ? "recent" : sortKey
   const [page, setPage] = useState(1)
+  // Barra de filtros do desktop começa recolhida: o espaço vai para os
+  // produtos, e o botão "Filtros" a abre. Chegar por um link já filtrado
+  // (URL com filtro) abre de cara, para a pessoa ver o que está aplicado.
+  const [showFilterSidebar, setShowFilterSidebar] = useState(
+    () => initialUrlState != null && countActiveFilters(filters, lockedCategory, null) > 0
+  )
 
   // Buscar de novo estando já em /loja não remonta o componente — sem isso o
   // `?q=` novo entrava na URL e a grade continuava mostrando a busca anterior.
@@ -418,7 +424,13 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // troca de filtro (via `isFetching`), evitando layout shift.
   const [items, setItems] = useState<StoreProductCard[]>(initialItems)
   const [total, setTotal] = useState(initialTotal)
-  const [isFetching, setIsFetching] = useState(false)
+  // Página que já nasce filtrada (link do mega menu, `?ofertas=1`, ordem na
+  // URL) recebeu do SSR a grade SEM o recorte — a página é ISR e não lê a URL.
+  // Começa em "buscando" para mostrar o esqueleto, e não produtos que o filtro
+  // vai tirar da tela meio segundo depois. Mesma condição do primeiro fetch abaixo.
+  const [isFetching, setIsFetching] = useState(
+    () => countActiveFilters(filters, lockedCategory ?? initialCategory, lockedBrand) > 0 || effectiveSort !== "recent"
+  )
   // "Carregar mais" do mobile soma a próxima página aos itens já carregados
   // em vez de substituir — o mesmo grid serve os dois breakpoints, então o
   // fetch effect abaixo lê essa ref pra saber se deve acumular ou trocar.
@@ -484,7 +496,15 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
       .catch((err) => {
         if (err?.name !== "AbortError" && !appending) setItems([])
       })
-      .finally(() => (appending ? setIsLoadingMore(false) : setIsFetching(false)))
+      .finally(() => {
+        // Busca cancelada por outra mais nova NÃO desliga o "carregando": a
+        // nova ainda está no ar, e desligar aqui fazia a grade voltar aos
+        // `items` antigos (a lista SEM filtro que veio do SSR) por meio
+        // segundo antes da resposta certa chegar.
+        if (controller.signal.aborted) return
+        if (appending) setIsLoadingMore(false)
+        else setIsFetching(false)
+      })
     return () => controller.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterKey, effectiveSort, page, pageSize])
@@ -780,9 +800,16 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           {/* Topo: filtros rápidos ("Para FPS", "Ultraleves", "Até R$500"). */}
           <StoreQuickFilters config={catalogConfig} counts={catalogCounts} state={filters} onChange={patchFilters} />
 
-          <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[256px_minmax(0,1fr)]">
-            {/* Desktop: filtros completos na esquerda, presos ao rolar. */}
-            <div className="hidden lg:block">
+          <div
+            className={cn(
+              "grid gap-6",
+              showFilterSidebar && "lg:grid-cols-[240px_minmax(0,1fr)] xl:grid-cols-[256px_minmax(0,1fr)]"
+            )}
+          >
+            {/* Desktop: filtros completos na esquerda, presos ao rolar — só
+                quando a pessoa abre pelo botão "Filtros". Fechada, a grade
+                usa a largura toda. */}
+            <div className={cn("hidden", showFilterSidebar && "lg:block")}>
               <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto rounded-[16px] border border-[#262626] bg-card px-4 py-3.5 [scrollbar-width:thin]">
                 <StoreCatalogSidebar
                   config={catalogConfig}
@@ -811,6 +838,13 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                     isFetching={isFetching}
                   />
                 </div>
+                <div className="hidden lg:block">
+                  <StoreFiltersButton
+                    activeCount={countActiveFilters(filters, lockedCategory, null)}
+                    pressed={showFilterSidebar}
+                    onClick={() => setShowFilterSidebar((value) => !value)}
+                  />
+                </div>
                 <span className="flex items-center gap-2 text-[12.5px] font-semibold text-[#8a8a8a]">
                   <b className="text-white">{total}</b> produto{total !== 1 ? "s" : ""}
                   {isFetching && <span className="size-1.5 animate-pulse rounded-full bg-emerald-400" />}
@@ -830,7 +864,12 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 chips={buildActiveChips(filters, patchFilters, lockedCategory, lockedBrand, catalogConfig)}
               />
 
-              {catalogResults("grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5")}
+              {catalogResults(
+                cn(
+                  "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-3.5",
+                  !showFilterSidebar && "lg:grid-cols-4"
+                )
+              )}
             </div>
           </div>
         </section>

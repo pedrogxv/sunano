@@ -16,6 +16,17 @@ import { getStoreLaunchAt } from "@/lib/store-maintenance"
 
 export const revalidate = 60
 
+// Sem isto o `revalidate` acima não valia: rota com segmento dinâmico e sem
+// `generateStaticParams` é renderizada a CADA request (produção respondia
+// `no-store`, 1,6–2s por visita). Lista vazia = cada categoria é gerada na
+// primeira visita e depois sai do cache, e o `<Link>` passa a pré-carregar a
+// página inteira — a troca a partir da Home fica instantânea em vez de
+// segurar a Home na tela até o servidor responder. `revalidateStorefront`
+// (`revalidatePath("/loja", "layout")`) já invalida estas páginas ao salvar.
+export function generateStaticParams() {
+  return []
+}
+
 const PAGE_SIZE = 24
 
 interface CategoriaPageProps {
@@ -81,10 +92,12 @@ export default async function LojaCategoriaPage({ params }: CategoriaPageProps) 
   ])
 
   return (
-    <Suspense>
+    <>
       {/* A grade é filtrada e paginada no cliente: sem `ItemList` o Google não
           tem âncora rastreável para os produtos desta categoria — o mesmo
-          motivo pelo qual `/loja` emite o bloco. */}
+          motivo pelo qual `/loja` emite o bloco. FORA do `<Suspense>`: com a
+          página estática, o `useSearchParams` do StoreContent faz tudo dentro
+          do boundary renderizar só no cliente, e o JSON-LD sumiria do HTML. */}
       <ItemListJsonLd
         name={`${getCategoryLabel(category)} - Loja Sunano`}
         items={items.map((item) => ({ name: item.name, url: `/loja/${item.slug}` }))}
@@ -95,14 +108,16 @@ export default async function LojaCategoriaPage({ params }: CategoriaPageProps) 
           { name: getCategoryLabel(category), item: `/loja/categoria/${encodeURIComponent(category)}` },
         ]}
       />
-      <StoreContent
-        initialItems={items}
-        initialTotal={total}
-        initialFilterOptions={filterOptions}
-        initialFeatured={featuredItems}
-        pageSize={PAGE_SIZE}
-        banner={{ type: "category", value: category }}
-      />
-    </Suspense>
+      <Suspense>
+        <StoreContent
+          initialItems={items}
+          initialTotal={total}
+          initialFilterOptions={filterOptions}
+          initialFeatured={featuredItems}
+          pageSize={PAGE_SIZE}
+          banner={{ type: "category", value: category }}
+        />
+      </Suspense>
+    </>
   )
 }

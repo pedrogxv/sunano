@@ -16,8 +16,9 @@ import { cn } from "@/lib/utils"
 
 /**
  * Filtros da página de categoria (/loja/categoria/[categoria]): chips rápidos
- * no topo, barra lateral completa no desktop e o mesmo conteúdo num painel no
- * celular. Tudo sai de `lib/store-catalog.ts` (o que existe) e das contagens
+ * no topo e, atrás do botão "Filtros", a barra lateral completa no desktop
+ * (recolhida por padrão, para a grade de produtos usar a largura toda) e o
+ * mesmo conteúdo num painel no celular. Tudo sai de `lib/store-catalog.ts` (o que existe) e das contagens
  * de `getStoreFilterOptions` (o que tem produto): opção com zero produto não
  * aparece, para nenhum clique zerar a grade.
  */
@@ -483,6 +484,42 @@ export function StoreCatalogSidebar(
   )
 }
 
+/**
+ * Botão "Filtros" com contador de filtros ativos. No celular abre o painel; no
+ * desktop recolhe/expande a barra lateral (`pressed` = barra aberta).
+ */
+export function StoreFiltersButton({
+  activeCount,
+  onClick,
+  pressed,
+}: {
+  activeCount: number
+  onClick: () => void
+  pressed?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={pressed}
+      className={cn(
+        "inline-flex h-10 shrink-0 items-center gap-[7px] rounded-xl border px-3.5 text-[12.5px] font-bold transition-colors",
+        pressed
+          ? "border-emerald-500/50 bg-emerald-500/12 text-white"
+          : "border-[#2a2a2a] bg-[#141414] text-[#e8e8e8] hover:border-foreground/25 hover:text-white"
+      )}
+    >
+      <SlidersHorizontal className="size-[15px]" strokeWidth={1.9} />
+      Filtros
+      {activeCount > 0 && (
+        <span className="flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9.5px] font-extrabold text-[#04140d]">
+          {activeCount}
+        </span>
+      )}
+    </button>
+  )
+}
+
 /** Celular: botão "Filtros" com contador e o mesmo conteúdo da barra lateral num painel. */
 export function StoreCatalogMobileFilters(
   props: CatalogFiltersProps & { lockedCategory: string | null; onReset: () => void; total: number; isFetching: boolean }
@@ -492,19 +529,7 @@ export function StoreCatalogMobileFilters(
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="inline-flex h-10 shrink-0 items-center gap-[7px] rounded-xl border border-[#2a2a2a] bg-[#141414] px-3.5 text-[12.5px] font-bold text-[#e8e8e8]"
-      >
-        <SlidersHorizontal className="size-[15px]" strokeWidth={1.9} />
-        Filtros
-        {activeCount > 0 && (
-          <span className="flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9.5px] font-extrabold text-[#04140d]">
-            {activeCount}
-          </span>
-        )}
-      </button>
+      <StoreFiltersButton activeCount={activeCount} onClick={() => setOpen(true)} />
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           showCloseButton={false}

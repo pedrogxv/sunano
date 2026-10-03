@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { StarRating } from "@/components/ui/star-rating"
 import { RouteLink } from "@/components/ui/route-link"
 import { FavoriteButton } from "@/components/store/FavoriteButton"
+import { PreorderCard } from "@/components/store/PreorderCard"
 import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import type { StoreCardRating, StoreProductCard } from "@/lib/server/repositories/store-repository"
 
@@ -89,7 +90,21 @@ function CardHighlights({ items }: { items: { label: string; tone?: "condition" 
   )
 }
 
+/**
+ * O card de produto da Loja inteira. Pré-venda sai sempre no `PreorderCard`
+ * (lote, previsão, quanto sobra, "Reservar na pré-venda"): antes só a seção da
+ * Home o usava, e a mesma pré-venda aparecia com um card na Home e com outro
+ * na listagem de categoria, marca, favoritos e busca. Decidir aqui, e não em
+ * cada tela, é o que impede a próxima listagem de repetir a divergência.
+ */
 export function ProductCard(props: ProductCardProps) {
+  if (props.sale_type === "pre_order" && props.variant !== "showcase") {
+    return <PreorderCard {...props} confirmFavoriteRemoval={props.confirmFavoriteRemoval} />
+  }
+  return <StandardProductCard {...props} />
+}
+
+function StandardProductCard(props: ProductCardProps) {
   const showcase = props.variant === "showcase"
   const router = useRouter()
   const { add, setOpen: setCartOpen } = useCart()

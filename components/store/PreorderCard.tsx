@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { ArrowRight, CalendarDays, Package, Rocket } from "lucide-react"
 
 import { useCart } from "@/components/providers/cart-context"
+import { FavoriteButton } from "@/components/store/FavoriteButton"
 import { PreorderAvailability, PreorderStatusChip } from "@/components/store/PreorderLotPanel"
 import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import { RouteLink } from "@/components/ui/route-link"
@@ -26,7 +27,12 @@ import type { StoreProductCard } from "@/lib/server/repositories/store-repositor
  * como na página). Lote que não está aberto troca o botão por "Ver detalhes",
  * onde mora o "avise-me".
  */
-export function PreorderCard(props: StoreProductCard) {
+export function PreorderCard(
+  props: StoreProductCard & {
+    /** Pede confirmação ao desfavoritar (lista de favoritos, onde o card some ao clicar). */
+    confirmFavoriteRemoval?: boolean
+  }
+) {
   const router = useRouter()
   const { add } = useCart()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -69,7 +75,7 @@ export function PreorderCard(props: StoreProductCard) {
   return (
     <article
       className={cn(
-        "group relative flex h-full flex-col overflow-hidden rounded-[22px] border bg-gradient-to-b to-card transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1",
+        "@container group relative flex h-full flex-col overflow-hidden rounded-[22px] border bg-gradient-to-b to-card transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1",
         open
           ? "border-amber-400/30 from-amber-400/[0.09] hover:border-amber-400/60 hover:shadow-[0_20px_50px_-24px_rgba(251,191,36,0.45)]"
           : "border-[#2a2a2a] from-white/[0.03] hover:border-white/20"
@@ -96,7 +102,7 @@ export function PreorderCard(props: StoreProductCard) {
             <CategoryIcon className="size-24 opacity-50" style={{ color: tint }} strokeWidth={1.15} />
           </div>
         )}
-        <PreorderStatusChip status={status} className="absolute left-3 top-3 shadow-md shadow-black/30 backdrop-blur-sm" />
+        <PreorderStatusChip status={status} className="absolute left-3 top-3 max-w-[calc(100%-4rem)] shadow-md shadow-black/30 backdrop-blur-sm" />
       </Link>
 
       <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-1">
@@ -140,8 +146,11 @@ export function PreorderCard(props: StoreProductCard) {
               onClick={handleReserve}
               className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-amber-500 text-[13.5px] font-bold text-[#1a1200] transition-[filter] hover:brightness-105"
             >
-              <Rocket className="size-4" />
-              {PREORDER_CTA_LABEL}
+              <Rocket className="size-4 shrink-0" />
+              {/* Na grade de 2 colunas do celular o card tem ~165px: o rótulo
+                  longo não cabe, e "Reservar" diz a mesma coisa. */}
+              <span className="@[15rem]:hidden">Reservar</span>
+              <span className="hidden @[15rem]:inline">{PREORDER_CTA_LABEL}</span>
             </button>
           ) : (
             <RouteLink
@@ -154,6 +163,13 @@ export function PreorderCard(props: StoreProductCard) {
           )}
         </div>
       </div>
+
+      <FavoriteButton
+        productId={props.id}
+        productName={props.name}
+        confirmRemoval={props.confirmFavoriteRemoval}
+        className="absolute right-3 top-3 z-[3]"
+      />
 
       {requiresChoice && (
         <VariantPickerDialog

@@ -41,7 +41,6 @@ import {
   BEST_SELLER_TOP,
   BEST_SELLER_WINDOW_DAYS,
   CARD_HIGHLIGHT_MAX_CHARS,
-  CARD_HIGHLIGHTS_MAX,
   LOW_STOCK_MAX_UNITS,
   NEW_PRODUCT_DAYS,
   sanitizeCardHighlights,
@@ -56,6 +55,7 @@ import {
   skuDraftKey,
   type SkuDraft,
 } from "@/components/admin/store/ProductSkuMatrix"
+import { CardHighlightPicker } from "@/components/admin/store/CardHighlightPicker"
 
 interface StoreProductSpec {
   id?: string
@@ -451,9 +451,9 @@ export function StoreProductForm({
   // "Abrir novo lote": vira `start_new_batch` no save (a contagem do teto
   // recomeça). Não é coluna, então não mora em formData.
   const [startNewBatch, setStartNewBatch] = useState(false)
-  // Sempre 3 campos na tela; os vazios somem no save.
+  // Vazio = automático. A ordem é a do card (ver CardHighlightPicker).
   const [cardHighlights, setCardHighlights] = useState<string[]>(() =>
-    Array.from({ length: CARD_HIGHLIGHTS_MAX }, (_, index) => product?.card_highlights?.[index] ?? "")
+    sanitizeCardHighlights(product?.card_highlights ?? [])
   )
 
   const [hasStock, setHasStock] = useState(product ? product.stock != null : true)
@@ -1781,23 +1781,12 @@ export function StoreProductForm({
 
           <div className="space-y-2">
             <Label>Características no card</Label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {cardHighlights.map((value, index) => (
-                <Input
-                  key={index}
-                  value={value}
-                  maxLength={CARD_HIGHLIGHT_MAX_CHARS}
-                  onChange={(e) =>
-                    setCardHighlights((prev) => prev.map((item, i) => (i === index ? e.target.value : item)))
-                  }
-                  placeholder={["49g", "PAW3950", "8K"][index]}
-                  className="text-sm"
-                />
-              ))}
-            </div>
+            <CardHighlightPicker productId={product?.id ?? null} value={cardHighlights} onChange={setCardHighlights} />
             <p className="text-[10px] text-muted-foreground/70">
-              Vazio = automático, pelo Database e pela Especificação Técnica (mouse: peso, sensor, polling; teclado:
-              switch, polling, case; IEM: assinatura, drivers, material). Preencha quando o Database não tiver o dado.
+              Sem escolha = automático, pelo Database e pela Especificação Técnica (mouse: peso, sensor, polling;
+              teclado: switch, polling, case; IEM: assinatura, drivers, material). Busque um termo que a loja já usa ou
+              crie um novo (até {CARD_HIGHLIGHT_MAX_CHARS} caracteres); arraste para reordenar, o card corta o que não
+              cabe numa linha.
             </p>
           </div>
         </div>

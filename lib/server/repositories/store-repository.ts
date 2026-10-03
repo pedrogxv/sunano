@@ -34,6 +34,7 @@ import {
   type PreorderInfo,
   type PreorderStatus,
 } from "@/lib/store-preorder"
+import { STORE_SHOWCASE_SLOTS } from "@/lib/store-showcase"
 import { todayKeySaoPaulo } from "@/lib/store-shipping"
 import { findSku, resolveSelection, skuKey, type StoreSku } from "@/lib/store-sku"
 
@@ -847,7 +848,8 @@ export async function listBestSellingProducts(limit = 12): Promise<StoreProductC
       .select("id")
       .eq("type", "store")
       .eq("pin_best_seller", true)
-      .order("best_seller_position", { ascending: true, nullsFirst: false }),
+      .order("best_seller_position", { ascending: true, nullsFirst: false })
+      .limit(STORE_SHOWCASE_SLOTS),
     db.rpc("get_top_selling_products", {
       p_from: from.toISOString(),
       p_to: new Date().toISOString(),

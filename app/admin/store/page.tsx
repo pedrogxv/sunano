@@ -4,22 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { RouteLink } from "@/components/ui/route-link"
 import {
-  closestCenter,
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core"
-import { restrictToParentElement, restrictToVerticalAxis } from "@dnd-kit/modifiers"
-import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable"
-import { CSS } from "@dnd-kit/utilities"
-import {
   AlertCircle,
   AlertTriangle,
   Check,
   Edit,
-  GripVertical,
   Loader2,
   MessageSquare,
   MoreVertical,
@@ -55,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { MultiCombobox } from "@/components/ui/combobox"
+import { ShowcaseCurator, type ShowcaseProduct } from "@/components/admin/store/ShowcaseCurator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { cn } from "@/lib/utils"
@@ -154,78 +143,6 @@ function formatCategoryLabel(key: string): string {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-// ────────────────────────────────────────────
-// Linha arrastável dos painéis de ordem manual ("Destaques" e "Mais vendidos")
-// ────────────────────────────────────────────
-function SortablePinnedRow({
-  product,
-  position,
-  onUnpin,
-  unpinLabel,
-  isBusy,
-}: {
-  product: StoreProduct
-  position: number
-  onUnpin: (product: StoreProduct) => void
-  unpinLabel: string
-  isBusy: boolean
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: product.id,
-  })
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(
-        "flex items-center gap-3 rounded-xl border border-border bg-card p-2.5 transition-colors",
-        isDragging && "z-10 border-primary/40 shadow-lg"
-      )}
-    >
-      <button
-        type="button"
-        aria-label={`Reordenar ${product.name}`}
-        className="cursor-grab touch-none rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" />
-      </button>
-
-      <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">{position}</span>
-
-      <div className="relative size-10 shrink-0 overflow-hidden rounded-lg bg-muted">
-        {product.images[0] ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.images[0]} alt="" className="size-full object-cover" />
-        ) : (
-          <div className="flex size-full items-center justify-center text-muted-foreground">
-            <Package className="size-4" />
-          </div>
-        )}
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">{product.name}</p>
-        <p className="text-xs text-muted-foreground">{formatBRL(product.promo_price_cents ?? product.price_cents)}</p>
-      </div>
-
-      <Button
-        size="icon"
-        variant="ghost"
-        className="size-8 shrink-0 text-muted-foreground hover:text-foreground"
-        aria-label={unpinLabel}
-        title={unpinLabel}
-        disabled={isBusy}
-        onClick={() => onUnpin(product)}
-      >
-        <X className="size-3.5" />
-      </Button>
-    </div>
-  )
-}
-
 export default function AdminStorePage() {
   const [products, setProducts] = useState<StoreProduct[]>([])
   const [total, setTotal] = useState(0)
@@ -255,7 +172,6 @@ export default function AdminStorePage() {
   const [pinnedProducts, setPinnedProducts] = useState<StoreProduct[]>([])
   const [loadingPinned, setLoadingPinned] = useState(true)
   const [reorderingPinned, setReorderingPinned] = useState(false)
-  const dragSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
 
   // Detalhe do produto (specs/variantes/descrição) — só buscado quando o
   // admin abre o dropdown daquela linha pela primeira vez, e cacheado aqui
@@ -322,23 +238,16 @@ export default function AdminStorePage() {
 
   useEffect(() => { loadFeatured() }, [loadFeatured])
 
-  async function handleFeaturedDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const oldIndex = featuredProducts.findIndex((p) => p.id === active.id)
-    const newIndex = featuredProducts.findIndex((p) => p.id === over.id)
-    if (oldIndex === -1 || newIndex === -1) return
-
+  async function reorderFeatured(ids: string[]) {
     const previous = featuredProducts
-    const reordered = arrayMove(featuredProducts, oldIndex, newIndex)
-    setFeaturedProducts(reordered)
+    const byId = new Map(previous.map((p) => [p.id, p]))
+    setFeaturedProducts(ids.map((id) => byId.get(id)).filter((p): p is StoreProduct => !!p))
     setReorderingFeatured(true)
     try {
       const res = await fetch("/api/admin/store/products/reorder-featured", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: reordered.map((p) => p.id) }),
+        body: JSON.stringify({ ids }),
       })
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null
@@ -372,23 +281,16 @@ export default function AdminStorePage() {
 
   useEffect(() => { loadPinned() }, [loadPinned])
 
-  async function handlePinnedDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-
-    const oldIndex = pinnedProducts.findIndex((p) => p.id === active.id)
-    const newIndex = pinnedProducts.findIndex((p) => p.id === over.id)
-    if (oldIndex === -1 || newIndex === -1) return
-
+  async function reorderPinned(ids: string[]) {
     const previous = pinnedProducts
-    const reordered = arrayMove(pinnedProducts, oldIndex, newIndex)
-    setPinnedProducts(reordered)
+    const byId = new Map(previous.map((p) => [p.id, p]))
+    setPinnedProducts(ids.map((id) => byId.get(id)).filter((p): p is StoreProduct => !!p))
     setReorderingPinned(true)
     try {
       const res = await fetch("/api/admin/store/products/reorder-best-sellers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: reordered.map((p) => p.id) }),
+        body: JSON.stringify({ ids }),
       })
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null
@@ -488,6 +390,17 @@ export default function AdminStorePage() {
     }
   }
 
+  /** Tira da lista o que passou de `STORE_SHOWCASE_SLOTS` (marcado antes da trava existir). */
+  async function trimOverflow(overflow: ShowcaseProduct[], flag: "is_featured" | "pin_best_seller") {
+    let removed = 0
+    for (const product of overflow) {
+      if (await patchProduct(product.id, { [flag]: false })) removed += 1
+    }
+    if (removed > 0) toast.success(`${removed} ${removed === 1 ? "excedente removido" : "excedentes removidos"}`)
+    if (flag === "is_featured") loadFeatured()
+    else loadPinned()
+  }
+
   async function toggleActive(product: StoreProduct) {
     await patchProduct(product.id, { is_active: !product.is_active })
   }
@@ -558,85 +471,28 @@ export default function AdminStorePage() {
         </div>
       </div>
 
-      {/* Destaques — ordem manual */}
-      <div className="space-y-2.5 rounded-xl border border-border bg-card/50 p-3.5">
-        <div className="flex items-center gap-2">
-          <Star className="size-4 fill-amber-400 text-amber-400" strokeWidth={0} />
-          <p className="text-sm font-semibold text-foreground">Destaques: ordem manual</p>
-          <p className="text-xs text-muted-foreground">
-            {featuredProducts.length > 0
-              ? "Arraste pra reordenar. É essa a ordem de Selecionados da semana na Loja (as 8 primeiras vagas)."
-              : "Marque um produto pela estrela na lista abaixo pra ele aparecer aqui."}
-          </p>
-        </div>
-        {loadingFeatured ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : featuredProducts.length > 0 ? (
-          <DndContext
-            sensors={dragSensors}
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-            onDragEnd={handleFeaturedDragEnd}
-          >
-            <SortableContext items={featuredProducts.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-1.5">
-                {featuredProducts.map((p, index) => (
-                  <SortablePinnedRow
-                    key={p.id}
-                    product={p}
-                    position={index + 1}
-                    onUnpin={toggleFeatured}
-                    unpinLabel="Remover dos Destaques"
-                    isBusy={reorderingFeatured || savingId === p.id}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        ) : null}
-      </div>
-
-      {/* Mais vendidos — ordem manual */}
-      <div className="space-y-2.5 rounded-xl border border-border bg-card/50 p-3.5">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="size-4 text-emerald-400" />
-          <p className="text-sm font-semibold text-foreground">Mais vendidos: ordem manual</p>
-          <p className="text-xs text-muted-foreground">
-            {pinnedProducts.length > 0
-              ? "Arraste pra reordenar. Aparecem na Home nessa ordem, à frente do ranking de vendas."
-              : "Fixe um produto pelo ícone de tendência na lista abaixo pra ele aparecer aqui."}
-          </p>
-        </div>
-        {loadingPinned ? (
-          <div className="flex justify-center py-4">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
-          </div>
-        ) : pinnedProducts.length > 0 ? (
-          <DndContext
-            sensors={dragSensors}
-            collisionDetection={closestCenter}
-            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-            onDragEnd={handlePinnedDragEnd}
-          >
-            <SortableContext items={pinnedProducts.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-1.5">
-                {pinnedProducts.map((p, index) => (
-                  <SortablePinnedRow
-                    key={p.id}
-                    product={p}
-                    position={index + 1}
-                    onUnpin={togglePinBestSeller}
-                    unpinLabel="Desfixar de Mais vendidos"
-                    isBusy={reorderingPinned || savingId === p.id}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        ) : null}
-      </div>
+      {/* Curadoria manual: Destaques e Mais vendidos, uma aba por vez */}
+      <ShowcaseCurator
+        busyId={savingId}
+        lists={{
+          featured: {
+            items: featuredProducts,
+            loading: loadingFeatured,
+            reordering: reorderingFeatured,
+            onReorder: reorderFeatured,
+            onRemove: (p) => toggleFeatured({ ...(p as StoreProduct), is_featured: true }),
+            onTrimOverflow: (overflow) => trimOverflow(overflow, "is_featured"),
+          },
+          bestSellers: {
+            items: pinnedProducts,
+            loading: loadingPinned,
+            reordering: reorderingPinned,
+            onReorder: reorderPinned,
+            onRemove: (p) => togglePinBestSeller({ ...(p as StoreProduct), pin_best_seller: true }),
+            onTrimOverflow: (overflow) => trimOverflow(overflow, "pin_best_seller"),
+          },
+        }}
+      />
 
       {/* Busca e filtros */}
       <div className="flex flex-wrap items-center gap-2.5">

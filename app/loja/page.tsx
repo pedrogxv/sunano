@@ -18,6 +18,7 @@ import {
   storeMaintenanceMetadata,
 } from "@/lib/server/auth/store-maintenance-gate"
 import { getStoreLaunchAt } from "@/lib/store-maintenance"
+import { STORE_SHOWCASE_SLOTS } from "@/lib/store-showcase"
 
 export const revalidate = 60
 
@@ -77,7 +78,7 @@ export default async function LojaPage() {
       type: "store",
       featured: true,
       page: 1,
-      pageSize: 8,
+      pageSize: STORE_SHOWCASE_SLOTS,
     }),
     listLaunchAndPreorderProducts(12),
     listStoreProductsPaginated({

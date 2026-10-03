@@ -11,6 +11,7 @@ import {
 } from "@/lib/server/repositories/store-repository"
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { CARD_HIGHLIGHT_MAX_CHARS, CARD_HIGHLIGHTS_MAX, sanitizeCardHighlights, STORE_CARD_BADGE_CHOICES } from "@/lib/store-card"
+import { STORE_SHOWCASE_SLOTS } from "@/lib/store-showcase"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
 import { productPageFieldsShape, skuConflictMessage } from "@/lib/server/validation/store-product-page"
 import type { Database } from "@/lib/database.types"
@@ -136,6 +137,28 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
   })
 }
 
+/**
+ * Recusa o 9º em "Destaques" / "Mais vendidos" (`STORE_SHOWCASE_SLOTS`). O
+ * próprio produto não conta: remarcar quem já está na lista não é entrar.
+ */
+async function showcaseFull(
+  db: ReturnType<typeof createSupabaseAdminClient>,
+  flag: "is_featured" | "pin_best_seller",
+  id: string
+): Promise<NextResponse | null> {
+  const { count } = await db
+    .from("store_products")
+    .select("id", { count: "exact", head: true })
+    .eq(flag, true)
+    .neq("id", id)
+  if ((count ?? 0) < STORE_SHOWCASE_SLOTS) return null
+  const list = flag === "is_featured" ? "Destaques" : "Mais vendidos"
+  return NextResponse.json(
+    { error: `${list} já tem as ${STORE_SHOWCASE_SLOTS} vagas ocupadas. Remova um produto antes de adicionar outro.` },
+    { status: 409 }
+  )
+}
+
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await getAuthorizedProfile()
   if (auth.error || !auth.profile) {
@@ -177,6 +200,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   // /admin/store, arrastar-e-soltar) e sai da fila ao desmarcar — sem isso o
   // produto reaparecia na posição antiga se voltasse a ser destaque depois.
   if (patch.is_featured === true) {
+    const full = await showcaseFull(db, "is_featured", id)
+    if (full) return full
     const { data: last } = await db
       .from("store_products")
       .select("featured_position")
@@ -193,6 +218,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   // depois em /admin/store, arrastar-e-soltar) e sai da fila ao desfixar —
   // sem isso o produto reaparecia na posição antiga se fosse refixado depois.
   if (patch.pin_best_seller === true) {
+    const full = await showcaseFull(db, "pin_best_seller", id)
+    if (full) return full
     const { data: last } = await db
       .from("store_products")
       .select("best_seller_position")

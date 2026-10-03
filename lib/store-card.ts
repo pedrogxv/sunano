@@ -129,6 +129,21 @@ export function resolveCardBadge(facts: CardBadgeFacts): StoreCardBadge | null {
 export const CARD_HIGHLIGHTS_MAX = 3
 export const CARD_HIGHLIGHT_MAX_CHARS = 18
 
+/** Um termo do vocabulário de características (seletor do admin). */
+export type CardHighlightOption = {
+  label: string
+  /** Produtos que escolheram este termo à mão. */
+  manualUses: number
+  /** Produtos cujo card mostra este termo pelo automático (Database). */
+  autoUses: number
+}
+
+export type CardHighlightVocabulary = {
+  options: CardHighlightOption[]
+  /** O que o automático mostraria NESTE produto (vazio para produto novo ou inativo). */
+  suggested: string[]
+}
+
 /** Limpa a lista manual do admin: sem vazio, sem repetido, no máximo 3. */
 export function sanitizeCardHighlights(values: readonly unknown[] | null | undefined): string[] {
   const seen = new Set<string>()

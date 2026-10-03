@@ -369,10 +369,10 @@ function StandardProductCard(props: ProductCardProps) {
             {/* Frete grátis tem destaque próprio (o checkout não cobra frete;
                 ver lib/store-shipping.ts). A urgência de estoque fica do lado
                 quando o selo da foto não é ela, senão diria a mesma coisa duas vezes. */}
-            <div className="mt-1.5 flex h-5 items-center justify-between gap-2">
+            <div className="mt-1.5 flex h-6 items-center justify-between gap-2">
               {freeShipping ? (
-                <span className="flex items-center gap-1 rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10.5px] font-bold text-emerald-400">
-                  <Truck className="size-3" strokeWidth={2.4} />
+                <span className="flex items-center gap-1.5 rounded-md bg-emerald-500/15 px-2 py-1 text-[12px] font-bold text-emerald-400">
+                  <Truck className="size-3.5" strokeWidth={2.4} />
                   Frete grátis
                 </span>
               ) : (

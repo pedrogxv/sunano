@@ -5,6 +5,7 @@ import { RouteLink } from "@/components/ui/route-link"
 import {
   AlertCircle,
   Ban,
+  Banknote,
   CalendarIcon,
   CheckCircle2,
   ChevronsUpDown,
@@ -75,7 +76,11 @@ import { orderStatusLabel } from "@/lib/order-status"
 import { formatCpfInput } from "@/components/store/CheckoutPayerCard"
 import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
-import type { OrderShippingAddress } from "@/lib/server/repositories/orders-repository"
+import type {
+  ManualPaymentMethod,
+  OrderManualPayment,
+  OrderShippingAddress,
+} from "@/lib/server/repositories/orders-repository"
 
 type OrderStatus =
   | "pending"
@@ -104,6 +109,8 @@ type AdminOrder = {
   id: string
   status: OrderStatus
   total_cents: number
+  /** Preço à vista no PIX (pedido de cartão). Null em pedido criado no PIX. */
+  pix_price_cents: number | null
   items: OrderItem[]
   created_at: string
   updated_at: string
@@ -132,6 +139,8 @@ type AdminOrder = {
   is_sandbox: boolean
   /** Chamado aberto sozinho quando o serviço foi pago. Null em pedido físico. */
   service_ticket_id: string | null
+  /** Pago por fora do site e registrado no painel. */
+  manual_payment: OrderManualPayment | null
 }
 
 /**
@@ -224,6 +233,33 @@ function nextStatusFor(order: AdminOrder): OrderStatus | undefined {
 }
 
 const REFUNDABLE_STATUSES: OrderStatus[] = ["paid", "awaiting_shipping_info", "shipped", "delivered"]
+
+/**
+ * Onde cabe "Registrar pagamento manual". Espelha `MANUAL_PAYABLE_STATUSES`
+ * do repositório: `pending` fica fora porque o link do site ainda cobra.
+ */
+const MANUAL_PAYABLE_STATUSES: OrderStatus[] = ["expired", "cancelled"]
+
+const MANUAL_PAYMENT_METHOD_LABEL: Record<ManualPaymentMethod, string> = {
+  pix: "PIX",
+  credit_card: "Cartão",
+}
+
+/** Valor esperado do pedido no método escolhido. Pedido criado no PIX já tem o total do PIX. */
+function manualPaymentExpectedCents(order: AdminOrder, method: ManualPaymentMethod): number {
+  return method === "pix" ? order.pix_price_cents ?? order.total_cents : order.total_cents
+}
+
+function centsToInput(cents: number): string {
+  return (cents / 100).toFixed(2).replace(".", ",")
+}
+
+/** "5.055,56", "5055,56" ou "5055.56" → centavos. NaN quando não é número. */
+function parseBrlInput(value: string): number {
+  const trimmed = value.trim()
+  const normalized = trimmed.includes(",") ? trimmed.replace(/\./g, "").replace(",", ".") : trimmed
+  return Math.round(Number(normalized) * 100)
+}
 
 const STATUS_FILTER_ICON_STYLE: Record<OrderStatus | "all", string> = {
   all: "bg-primary/15 text-primary",
@@ -1050,6 +1086,12 @@ function OrderManageDialog({
   const [cancelReason, setCancelReason] = useState("")
   const [cancelling, setCancelling] = useState(false)
 
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualMethod, setManualMethod] = useState<ManualPaymentMethod>("pix")
+  const [manualAmount, setManualAmount] = useState("")
+  const [manualReference, setManualReference] = useState("")
+  const [registeringManual, setRegisteringManual] = useState(false)
+
   useEffect(() => {
     if (!order) return
     setTrackingCode(order.tracking_code ?? "")
@@ -1059,6 +1101,10 @@ function OrderManageDialog({
     setRefundReason("")
     setCancelOpen(false)
     setCancelReason("")
+    setManualOpen(false)
+    setManualMethod("pix")
+    setManualAmount("")
+    setManualReference("")
   }, [order?.id])
 
   if (!order) {
@@ -1070,6 +1116,7 @@ function OrderManageDialog({
   const remainingCents = order.total_cents - order.refunded_cents
   // Pedido de Aura não tem cobrança em dinheiro — não há o que estornar pelo gateway.
   const canRefund = !isAuraOrder && REFUNDABLE_STATUSES.includes(order.status) && remainingCents > 0
+  const canRegisterManual = !isAuraOrder && MANUAL_PAYABLE_STATUSES.includes(order.status)
 
   async function handleAdvance() {
     if (!order || !next) return
@@ -1162,6 +1209,58 @@ function OrderManageDialog({
       toast.error("Erro ao cancelar pedido", { description: message })
     } finally {
       setCancelling(false)
+    }
+  }
+
+  function selectManualMethod(method: ManualPaymentMethod) {
+    if (!order) return
+    setManualMethod(method)
+    setManualAmount(centsToInput(manualPaymentExpectedCents(order, method)))
+  }
+
+  async function handleManualPayment() {
+    if (!order) return
+    const amountCents = parseBrlInput(manualAmount)
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      toast.error("Valor recebido inválido")
+      return
+    }
+
+    setRegisteringManual(true)
+    try {
+      const res = await fetch(`/api/admin/store/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "manual_payment",
+          method: manualMethod,
+          amountCents,
+          reference: manualReference.trim() || undefined,
+        }),
+      })
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string
+        status?: OrderStatus
+        totalCents?: number
+        manualPayment?: OrderManualPayment
+      }
+      if (!res.ok || !data.status) throw new Error(data.error ?? "Erro ao registrar pagamento")
+
+      onOrderPatched(order.id, {
+        status: data.status,
+        payment_method: manualMethod,
+        total_cents: data.totalCents ?? amountCents,
+        manual_payment: data.manualPayment ?? null,
+      })
+      toast.success("Pagamento registrado", {
+        description: `${formatBRL(amountCents)} · #${orderNumber(order.id)}`,
+      })
+      setManualOpen(false)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao registrar pagamento"
+      toast.error("Erro ao registrar pagamento", { description: message })
+    } finally {
+      setRegisteringManual(false)
     }
   }
 
@@ -1360,9 +1459,25 @@ function OrderManageDialog({
               </p>
             ) : (
               <>
-                <p className="text-foreground">
-                  {order.asaas_payment_id ? "Asaas" : "—"} · PIX
-                </p>
+                {order.manual_payment ? (
+                  <>
+                    <p className="text-foreground">
+                      Registrado à mão · {MANUAL_PAYMENT_METHOD_LABEL[order.manual_payment.method]} ·{" "}
+                      {formatBRL(order.manual_payment.amount_cents)}
+                    </p>
+                    {order.manual_payment.reference && (
+                      <p className="break-all text-muted-foreground">Ref.: {order.manual_payment.reference}</p>
+                    )}
+                    <p className="text-muted-foreground">
+                      Em {formatDateTime(order.manual_payment.registered_at)}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-foreground">
+                    {order.asaas_payment_id ? "Asaas" : "—"} ·{" "}
+                    {order.payment_method === "credit_card" ? "Cartão" : "PIX"}
+                  </p>
+                )}
                 {order.asaas_payment_id && (
                   <p className="break-all text-muted-foreground">ID Asaas: {order.asaas_payment_id}</p>
                 )}
@@ -1455,6 +1570,94 @@ function OrderManageDialog({
             </div>
           )}
 
+          {/* Pago por fora do site: link avulso da Asaas, PIX direto. O site
+              não recebe aviso desse pagamento, então o admin registra. */}
+          {canRegisterManual && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Pagamento por fora do site
+              </p>
+
+              {!manualOpen ? (
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => {
+                    selectManualMethod("pix")
+                    setManualReference("")
+                    setManualOpen(true)
+                  }}
+                >
+                  <Banknote className="size-4" />
+                  Registrar pagamento manual
+                </Button>
+              ) : (
+                <div className="space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
+                  <p className="text-xs text-muted-foreground">
+                    Use só depois de conferir no painel da Asaas que o dinheiro entrou. O pedido vira pago na
+                    conta do cliente, o estoque é reservado de novo e ele recebe a notificação e o e-mail de
+                    compra confirmada.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["pix", "credit_card"] as const).map((method) => (
+                      <Button
+                        key={method}
+                        type="button"
+                        variant="outline"
+                        onClick={() => selectManualMethod(method)}
+                        className={cn(
+                          manualMethod === method && "border-emerald-500/60 bg-emerald-500/10 text-emerald-400"
+                        )}
+                      >
+                        {MANUAL_PAYMENT_METHOD_LABEL[method]}
+                      </Button>
+                    ))}
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="manual-amount" className="text-xs">
+                      Valor recebido (pedido no {MANUAL_PAYMENT_METHOD_LABEL[manualMethod]}:{" "}
+                      {formatBRL(manualPaymentExpectedCents(order, manualMethod))})
+                    </Label>
+                    <Input
+                      id="manual-amount"
+                      inputMode="decimal"
+                      value={manualAmount}
+                      onChange={(e) => setManualAmount(e.target.value)}
+                      placeholder="0,00"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="manual-reference" className="text-xs">Referência (opcional)</Label>
+                    <Input
+                      id="manual-reference"
+                      value={manualReference}
+                      onChange={(e) => setManualReference(e.target.value)}
+                      placeholder="Ex: ID da cobrança na Asaas"
+                      maxLength={120}
+                    />
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Extorno deste pagamento não sai pelo botão do painel: o site não tem a cobrança. Faça direto
+                    na Asaas.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setManualOpen(false)}
+                      disabled={registeringManual}
+                    >
+                      Voltar
+                    </Button>
+                    <Button className="flex-1 gap-2" onClick={handleManualPayment} disabled={registeringManual}>
+                      {registeringManual ? "Registrando..." : "Confirmar pagamento"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Cancelamento — só pedidos aguardando pagamento */}
           {order.status === "pending" && (
             <div className="space-y-3">
@@ -1521,8 +1724,9 @@ function OrderManageDialog({
                 <Alert className="border-amber-500/30 bg-amber-500/10 py-2">
                   <AlertCircle className="size-3.5 text-amber-400" />
                   <AlertDescription className="text-xs text-amber-300">
-                    Este pedido não tem cobrança Asaas associada (pago por um gateway anterior). Extorne
-                    manualmente no painel do gateway e depois marque o pedido como reembolsado.
+                    {order.manual_payment
+                      ? "Este pedido foi pago por fora do site e registrado à mão. Extorne direto no painel da Asaas."
+                      : "Este pedido não tem cobrança Asaas associada (pago por um gateway anterior). Extorne manualmente no painel do gateway e depois marque o pedido como reembolsado."}
                   </AlertDescription>
                 </Alert>
               )}

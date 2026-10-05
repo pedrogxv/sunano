@@ -449,10 +449,30 @@ export type OrderOversoldFlag = {
   detected_at: string
 }
 
+/**
+ * Pagamento recebido por fora do checkout do site (link avulso da Asaas, PIX
+ * direto) e registrado à mão no painel. Mora em `metadata.manual_payment`:
+ * é o único registro de que o dinheiro entrou, já que nenhuma cobrança do
+ * site foi paga (ver `registerManualPayment`).
+ */
+export const MANUAL_PAYMENT_METHODS = ["pix", "credit_card"] as const
+export type ManualPaymentMethod = (typeof MANUAL_PAYMENT_METHODS)[number]
+
+export type OrderManualPayment = {
+  method: ManualPaymentMethod
+  amount_cents: number
+  /** Id da cobrança na Asaas, E2E do PIX ou o que identificar o pagamento. */
+  reference: string | null
+  registered_by: string
+  registered_at: string
+}
+
 export type AdminOrderRow = {
   id: string
   status: OrderStatus
   total_cents: number
+  /** Preço à vista no PIX; o checkout de cartão grava os dois. Null em pedido criado no PIX. */
+  pix_price_cents: number | null
   items: Record<string, unknown>[]
   created_at: string
   updated_at: string
@@ -488,16 +508,19 @@ export type AdminOrderRow = {
    * pedido físico e em serviço pago antes de a abertura automática existir.
    */
   service_ticket_id: string | null
+  /** Não-nulo = pago por fora do site e registrado no painel. */
+  manual_payment: OrderManualPayment | null
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, is_sandbox, " +
+  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, is_sandbox, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
   id: string
   status: OrderStatus
   total_cents: number
+  pix_price_cents: number | null
   items: Record<string, unknown>[]
   created_at: string
   updated_at: string
@@ -616,6 +639,7 @@ export async function listOrdersForAdmin(filters?: {
       id: row.id,
       status: row.status,
       total_cents: row.total_cents,
+      pix_price_cents: row.pix_price_cents ?? null,
       items: row.items,
       created_at: row.created_at,
       updated_at: row.updated_at,
@@ -639,6 +663,7 @@ export async function listOrdersForAdmin(filters?: {
       requires_shipping_address: row.requires_shipping_address !== false,
       is_sandbox: row.is_sandbox === true,
       service_ticket_id: (row.metadata?.service_ticket_id as string | undefined) ?? null,
+      manual_payment: (row.metadata?.manual_payment as OrderManualPayment | undefined) ?? null,
     }
   })
 

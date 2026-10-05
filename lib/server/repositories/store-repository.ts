@@ -97,6 +97,9 @@ export type StoreCardPreorder = {
   limit: number | null
   /** `null` = lote sem teto. */
   remaining: number | null
+  /** Prazo da pré-venda (ISO), para a contagem do card. Ver `preorderCountdown`. */
+  earlyEndsAt: string | null
+  endsAt: string | null
 }
 
 /**
@@ -301,7 +304,7 @@ async function withCardDisplay(items: StoreProductCardBase[]): Promise<StoreProd
 }
 
 /** Pré-venda sem as colunas do lote (código no ar antes da migration 20261213000001): lote aberto, sem teto. */
-const DEFAULT_PREORDER_INFO: PreorderInfo = { status: "open", batchName: null, shipsAt: null, limit: null, reserved: 0 }
+const DEFAULT_PREORDER_INFO: PreorderInfo = { status: "open", batchName: null, shipsAt: null, limit: null, reserved: 0, earlyEndsAt: null, endsAt: null }
 
 function toCardPreorder(info: PreorderInfo, productSoldOut: boolean): StoreCardPreorder {
   return {
@@ -310,6 +313,8 @@ function toCardPreorder(info: PreorderInfo, productSoldOut: boolean): StoreCardP
     shipsAt: info.shipsAt,
     limit: info.limit,
     remaining: preorderRemaining(info),
+    earlyEndsAt: info.earlyEndsAt,
+    endsAt: info.endsAt,
   }
 }
 
@@ -337,7 +342,7 @@ export async function getLaunchAndPreorderInfo(
   const [{ data, error }, reserved] = await Promise.all([
     db
       .from("store_products")
-      .select("id, is_launch, launch_until, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit")
+      .select("id, is_launch, launch_until, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit, preorder_early_ends_at, preorder_ends_at")
       .in(
         "id",
         items.map((item) => item.id)
@@ -360,6 +365,8 @@ export async function getLaunchAndPreorderInfo(
             shipsAt: row.preorder_ships_at ?? null,
             limit: row.preorder_limit ?? null,
             reserved: reserved.get(row.id) ?? 0,
+            earlyEndsAt: row.preorder_early_ends_at ?? null,
+            endsAt: row.preorder_ends_at ?? null,
           }
         : null,
     })
@@ -1652,7 +1659,7 @@ async function getProductPageExtras(
   const [{ data, error }, reserved] = await Promise.all([
     db
       .from("store_products")
-      .select("sku, is_launch, launch_until, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit")
+      .select("sku, is_launch, launch_until, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit, preorder_early_ends_at, preorder_ends_at")
       .eq("id", productId)
       .maybeSingle(),
     saleType === "pre_order" ? getPreorderReserved([productId]) : Promise.resolve(new Map<string, number>()),
@@ -1670,6 +1677,8 @@ async function getProductPageExtras(
             shipsAt: data?.preorder_ships_at ?? null,
             limit: data?.preorder_limit ?? null,
             reserved: reserved.get(productId) ?? 0,
+            earlyEndsAt: data?.preorder_early_ends_at ?? null,
+            endsAt: data?.preorder_ends_at ?? null,
           }
         : null,
   }

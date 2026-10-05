@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { usePathname } from "next/navigation"
 import { RouteLink } from "@/components/ui/route-link"
 import {
   ArrowRight,
@@ -186,6 +187,14 @@ function MobileBenefits({ benefits }: { benefits: StoreCommerceBenefit[] }) {
   )
 }
 
+const NON_PRODUCT_LOJA_SEGMENTS = new Set(["avaliacoes", "categoria", "favoritos", "marca"])
+
+/** `/loja/<slug>` é produto; as demais rotas de um segmento são listagens. */
+function isProductDetailPath(pathname: string | null) {
+  const parts = (pathname ?? "").split("/").filter(Boolean)
+  return parts.length === 2 && parts[0] === "loja" && !NON_PRODUCT_LOJA_SEGMENTS.has(parts[1])
+}
+
 /**
  * Barra comercial em si, sem relógio próprio: o painel usa esta para a
  * pré-visualização, passando o `now` que quiser. A vitrine usa
@@ -255,6 +264,7 @@ export function StoreCommerceBar({ config, now }: { config: StoreCommerceBarConf
  * A primeira pintura usa o relógio do servidor para casar com a hidratação.
  */
 export function StoreCommerceBarSlot() {
+  const pathname = usePathname()
   const context = useStoreCommerceBar()
   const [now, setNow] = useState(context?.serverNow ?? 0)
   const synced = useRef(false)
@@ -280,6 +290,8 @@ export function StoreCommerceBarSlot() {
     return () => timers.forEach((timer) => window.clearTimeout(timer))
   }, [config, now])
 
-  if (!config) return null
+  // Página de produto já traz os mesmos benefícios (frete, PIX, parcelamento)
+  // em cards ao lado do preço: a barra ali só duplica e polui.
+  if (!config || isProductDetailPath(pathname)) return null
   return <StoreCommerceBar config={config} now={now} />
 }

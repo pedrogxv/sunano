@@ -1,6 +1,6 @@
 import * as z from "zod"
 
-import { PREORDER_STATUSES, type PreorderStatus } from "@/lib/store-preorder"
+import { PREORDER_STATUSES, preorderEndsAtFrom, type PreorderStatus } from "@/lib/store-preorder"
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/
 
@@ -34,6 +34,28 @@ export const productPageFieldsShape = {
   preorder_status: z.enum(PREORDER_STATUSES as [PreorderStatus, ...PreorderStatus[]]).optional(),
   is_launch: z.boolean().optional(),
   launch_until: optionalDate,
+  /** Fim do desconto inicial da pré-venda (ISO com fuso). `preorder_ends_at` é derivado no servidor. */
+  preorder_early_ends_at: z
+    .string()
+    .trim()
+    .refine((value) => value === "" || !Number.isNaN(Date.parse(value)), "Data do fim do desconto inválida.")
+    .transform((value) => (value ? new Date(value).toISOString() : null))
+    .nullable()
+    .optional(),
+}
+
+/**
+ * `preorder_ends_at` nunca vem do cliente: é o fim do desconto + 7 dias.
+ * Vale para o objeto que vai ao `insert`/`update`, só quando o prazo veio.
+ */
+export function withPreorderEnd<T extends { preorder_early_ends_at?: string | null }>(
+  fields: T
+): T & { preorder_ends_at?: string | null } {
+  if (fields.preorder_early_ends_at === undefined) return fields
+  return {
+    ...fields,
+    preorder_ends_at: fields.preorder_early_ends_at ? preorderEndsAtFrom(fields.preorder_early_ends_at) : null,
+  }
 }
 
 /** Mensagem para SKU repetido (índice único `store_products_sku_uniq`). */

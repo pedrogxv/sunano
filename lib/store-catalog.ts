@@ -273,7 +273,7 @@ const KEYBOARD_FACETS: CatalogFacet[] = [
     key: "switch",
     label: "Tipo de switch",
     options: [
-      { value: "magnetico", label: "Magnético (Hall Effect)" },
+      { value: "magnetico", label: "Magnético" },
       { value: "mecanico", label: "Mecânico" },
     ],
     valueOf: (a) =>

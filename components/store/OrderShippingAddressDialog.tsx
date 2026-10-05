@@ -19,14 +19,17 @@ import {
   isShippingFormComplete,
   isoToBirthDateInput,
   shippingFormToPayload,
+  toShippingResidenceType,
   type ShippingForm,
 } from "@/components/store/ShippingAddressFields"
-import { formatCepInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
+import { formatCepInput, formatCpfInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
 
 export type ExistingShippingAddress = {
   recipient: string
-  /** "AAAA-MM-DD"; nula em pedido anterior ao campo. */
+  /** CPF, nascimento ("AAAA-MM-DD") e tipo de residência: nulos em pedido anterior a cada campo. */
+  cpf: string | null
   birth_date: string | null
+  residence_type: string | null
   phone: string
   postal_code: string
   street: string
@@ -71,15 +74,17 @@ export function OrderShippingAddressDialog({
       existing
         ? {
             recipient: existing.recipient,
-            birthDate: isoToBirthDateInput(existing.birth_date),
-            phone: formatPhoneInput(existing.phone),
             postalCode: formatCepInput(existing.postal_code),
+            residenceType: toShippingResidenceType(existing.residence_type),
             street: existing.street,
             number: existing.number,
             complement: existing.complement ?? "",
             neighborhood: existing.neighborhood,
             city: existing.city,
             state: existing.state,
+            cpf: formatCpfInput(existing.cpf ?? ""),
+            phone: formatPhoneInput(existing.phone),
+            birthDate: isoToBirthDateInput(existing.birth_date),
           }
         : EMPTY_SHIPPING_FORM
     )

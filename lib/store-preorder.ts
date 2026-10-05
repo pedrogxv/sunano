@@ -66,6 +66,57 @@ export type PreorderInfo = {
   limit: number | null
   /** Unidades já reservadas NESTE lote (pedidos válidos + reservas em voo). */
   reserved: number
+  /** Fim do desconto inicial (ISO); `null` = pré-venda sem prazo. */
+  earlyEndsAt: string | null
+  /** Fim da pré-venda (ISO): depois dele o cron devolve o produto ao catálogo. */
+  endsAt: string | null
+}
+
+/** Dias que a pré-venda continua, já sem o desconto, depois do fim do preço inicial. */
+export const PREORDER_REGULAR_DAYS = 7
+
+/** Fim da pré-venda a partir do fim do desconto. Quem grava `preorder_ends_at` é o servidor, com esta conta. */
+export function preorderEndsAtFrom(earlyEndsAtIso: string): string {
+  return new Date(Date.parse(earlyEndsAtIso) + PREORDER_REGULAR_DAYS * 86_400_000).toISOString()
+}
+
+export type PreorderPhase = "early" | "regular"
+
+export type PreorderCountdownState = {
+  phase: PreorderPhase
+  /** Instante (ms) em que esta fase acaba. */
+  targetMs: number
+  /** Texto fixo da fase, antes do relógio. */
+  label: string
+}
+
+/**
+ * Em que fase está a pré-venda e para quando é a contagem. `null` = sem
+ * prazo (nada a contar) ou prazo vencido e o cron ainda não rodou (a tela
+ * some com a contagem em vez de mostrar "0 segundos").
+ */
+export function preorderCountdown(
+  info: Pick<PreorderInfo, "earlyEndsAt" | "endsAt">,
+  nowMs: number
+): PreorderCountdownState | null {
+  if (!info.earlyEndsAt) return null
+  const early = Date.parse(info.earlyEndsAt)
+  if (nowMs < early) return { phase: "early", targetMs: early, label: "Preço de lançamento acaba em" }
+  const end = info.endsAt ? Date.parse(info.endsAt) : null
+  if (end !== null && nowMs < end) return { phase: "regular", targetMs: end, label: "Pré-venda termina em" }
+  return null
+}
+
+/** "2d 04h 12m" / "04:12:33" (menos de um dia mostra segundos, que é onde a urgência está). */
+export function formatCountdown(remainingMs: number): string {
+  const total = Math.max(Math.floor(remainingMs / 1000), 0)
+  const days = Math.floor(total / 86_400)
+  const hours = Math.floor((total % 86_400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  const pad = (n: number) => String(n).padStart(2, "0")
+  if (days > 0) return `${days}d ${pad(hours)}h ${pad(minutes)}m`
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
 }
 
 /** Quantas sobram no lote; `null` quando o lote não tem teto (não há o que contar). */

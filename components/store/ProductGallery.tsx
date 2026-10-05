@@ -62,7 +62,7 @@ export function ProductGallery({ images, videoUrl, productName, category }: Prod
         onOpenChange={setLightboxOpen}
       />
 
-      <div className="group/stage relative aspect-square w-full overflow-hidden rounded-[24px] border border-border/40 bg-transparent lg:flex-1">
+      <div className="group/stage relative aspect-square w-full overflow-hidden rounded-[24px] border border-border/40 bg-transparent lg:max-h-[calc(100vh-var(--sticky-header-h)-3rem)] lg:flex-1">
         {current?.kind === "video" ? (
           <iframe
             key={current.videoId}
@@ -136,7 +136,7 @@ export function ProductGallery({ images, videoUrl, productName, category }: Prod
       </div>
 
       {hasMany && (
-        <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide lg:max-h-[min(640px,calc(100vh-10rem))] lg:w-[76px] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:overflow-x-visible lg:pb-0">
+        <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide lg:max-h-[calc(100vh-var(--sticky-header-h)-3rem)] lg:w-[76px] lg:shrink-0 lg:flex-col lg:overflow-y-auto lg:overflow-x-visible lg:pb-0">
           {items.map((item, index) => (
             <button
               key={item.kind === "image" ? item.src : `video-${item.videoId}`}

@@ -47,7 +47,7 @@ import {
   STORE_CARD_BADGE_CHOICE_LABEL,
   STORE_CARD_BADGE_CHOICES,
 } from "@/lib/store-card"
-import { PREORDER_STATUSES, PREORDER_STATUS_LABEL, type PreorderStatus } from "@/lib/store-preorder"
+import { PREORDER_REGULAR_DAYS, PREORDER_STATUSES, PREORDER_STATUS_LABEL, type PreorderStatus } from "@/lib/store-preorder"
 import {
   buildCombinations,
   isEmptySkuDraft,
@@ -148,6 +148,7 @@ export interface StoreProduct {
   preorder_status?: PreorderStatus
   is_launch?: boolean
   launch_until?: string | null
+  preorder_early_ends_at?: string | null
 }
 
 /** Combinação salva (store_product_skus), como a API de edição devolve. */
@@ -265,6 +266,39 @@ const PERIPHERAL_SPEC_LABELS: Array<{ key: keyof PeripheralDetails; label: strin
   { key: "features", label: "Features" },
 ]
 
+/** O cadastro do periférico guarda chaves internas (`wireless`, `symmetrical`,
+ * `optical`...). Copiadas cruas pra tabela da loja, saíam em inglês e minúsculas,
+ * desconexas do resto da página. Chave desconhecida passa como veio (texto livre). */
+const PERIPHERAL_VALUE_LABELS: Record<string, string> = {
+  wired: "Com fio",
+  wireless: "Sem fio",
+  symmetrical: "Simétrico",
+  ergonomic: "Ergonômico",
+  asymmetrical: "Assimétrico",
+  magnetic: "Magnético",
+  optical: "Óptico",
+  mechanical: "Mecânico",
+  ips: "IPS",
+  tn: "TN",
+  va: "VA",
+  oled: "OLED",
+}
+
+function peripheralValueLabel(value: string | null | undefined): string | undefined {
+  if (value == null) return undefined
+  const trimmed = String(value).trim()
+  return PERIPHERAL_VALUE_LABELS[trimmed.toLowerCase()] ?? trimmed
+}
+
+/** ISO (UTC) -> valor de <input type="datetime-local"> no fuso do navegador. */
+function isoToLocalInput(iso: string | null | undefined): string {
+  if (!iso) return ""
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ""
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 16)
+}
+
 function buildAutofillFromPeripheral(p: PeripheralFullData): {
   category: string | null
   brand: string
@@ -286,15 +320,15 @@ function buildAutofillFromPeripheral(p: PeripheralFullData): {
   // Colunas reais têm prioridade sobre `specs.details` (dual-write legado) — mesma
   // regra de leitura usada na página pública do periférico.
   pushSpec("Peso", p.weightG != null ? `${p.weightG}g` : details.weight)
-  pushSpec("Conectividade", p.connectivity)
-  pushSpec("Shape", p.mouseShape)
+  pushSpec("Conectividade", peripheralValueLabel(p.connectivity))
+  pushSpec("Shape", peripheralValueLabel(p.mouseShape))
   pushSpec("Layout", p.keyboardLayout)
   pushSpec("Superfície", p.surface)
   pushSpec("Perfil", p.profile)
-  pushSpec("Tipo de Painel", p.panelType)
+  pushSpec("Tipo de Painel", peripheralValueLabel(p.panelType))
   pushSpec("Taxa de Atualização", p.refreshRate != null ? `${p.refreshRate}Hz` : undefined)
   for (const { key, label } of PERIPHERAL_SPEC_LABELS) {
-    pushSpec(label, details[key] as string | undefined)
+    pushSpec(label, peripheralValueLabel(details[key] as string | undefined))
   }
 
   const descriptionParts: string[] = []
@@ -447,6 +481,7 @@ export function StoreProductForm({
     preorder_status: product?.preorder_status ?? "open",
     is_launch: product?.is_launch ?? false,
     launch_until: product?.launch_until ?? "",
+    preorder_early_ends_at: isoToLocalInput(product?.preorder_early_ends_at),
   })
   // "Abrir novo lote": vira `start_new_batch` no save (a contagem do teto
   // recomeça). Não é coluna, então não mora em formData.
@@ -826,6 +861,10 @@ export function StoreProductForm({
       preorder_status: formData.preorder_status,
       is_launch: formData.is_launch,
       launch_until: formData.is_launch ? formData.launch_until || null : null,
+      preorder_early_ends_at:
+        formData.sale_type === "pre_order" && formData.preorder_early_ends_at
+          ? new Date(formData.preorder_early_ends_at).toISOString()
+          : null,
     }
     const saved: Record<string, string | boolean | null> = {
       sku: product?.sku ?? null,
@@ -834,6 +873,7 @@ export function StoreProductForm({
       preorder_status: product?.preorder_status ?? "open",
       is_launch: product?.is_launch ?? false,
       launch_until: product?.launch_until ?? null,
+      preorder_early_ends_at: product?.preorder_early_ends_at ? new Date(product.preorder_early_ends_at).toISOString() : null,
     }
     return Object.fromEntries(Object.entries(current).filter(([key, value]) => value !== saved[key]))
   }
@@ -1335,8 +1375,9 @@ export function StoreProductForm({
         <p className="text-sm font-semibold text-foreground">Lote da pré-venda</p>
       </div>
       <p className="text-[10px] text-amber-400">
-        Produto ainda sem estoque físico. Volte aqui e troque para &ldquo;Normal&rdquo; quando o período de pré-venda
-        acabar; o anúncio, reviews e vendas já feitas continuam os mesmos.
+        Produto ainda sem estoque físico. Sem prazo, troque para &ldquo;Normal&rdquo; à mão quando a pré-venda acabar; com
+        o &ldquo;Fim do preço de lançamento&rdquo; preenchido, a troca é automática. O anúncio, reviews e vendas já feitas
+        continuam os mesmos.
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
@@ -1375,6 +1416,31 @@ export function StoreProductForm({
             onChange={(e) => set("preorder_ships_at", e.target.value)}
             className="h-9 border-border bg-muted/20 text-sm"
           />
+        </div>
+        <div className="space-y-1.5 md:col-span-2">
+          <Label className="text-xs">Fim do preço de lançamento</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="datetime-local"
+              value={formData.preorder_early_ends_at}
+              onChange={(e) => set("preorder_early_ends_at", e.target.value)}
+              className="h-9 max-w-[240px] border-border bg-muted/20 text-sm"
+            />
+            {formData.preorder_early_ends_at && (
+              <button
+                type="button"
+                onClick={() => set("preorder_early_ends_at", "")}
+                className="text-[11px] text-muted-foreground underline hover:text-foreground"
+              >
+                Sem prazo
+              </button>
+            )}
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            {formData.preorder_early_ends_at
+              ? `A loja mostra a contagem. Nesta data o preço promocional é apagado (o preço sobe para o preço base) e a pré-venda segue por mais ${PREORDER_REGULAR_DAYS} dias, até ${new Date(Date.parse(formData.preorder_early_ends_at) + PREORDER_REGULAR_DAYS * 86_400_000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. Depois disso o produto vira Normal e sai da seção sozinho. Promoção cadastrada depois do fim do desconto é apagada.`
+              : "Vazio = pré-venda sem prazo (você troca para Normal à mão). Com data, o preço promocional vale como desconto inicial."}
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Limite de reservas do lote</Label>

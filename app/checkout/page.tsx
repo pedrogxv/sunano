@@ -45,6 +45,7 @@ import {
   EMPTY_SHIPPING_FORM,
   isShippingFormComplete,
   isoToBirthDateInput,
+  toShippingResidenceType,
   shippingFormToPayload,
   type ShippingForm,
 } from "@/components/store/ShippingAddressFields"
@@ -89,8 +90,10 @@ interface PayerInfoResponse {
   /** Último endereço de ENTREGA (distinto do de cobrança acima). */
   shipping?: {
     recipient?: string | null
+    cpf?: string | null
     /** "AAAA-MM-DD". Só existe na entrega salva: a cobrança não guarda nascimento. */
     birthDate?: string | null
+    residenceType?: string | null
     phone?: string | null
     postalCode?: string | null
     street?: string | null
@@ -213,13 +216,10 @@ export default function CheckoutPage() {
         const hasSavedShipping = Boolean(lastShipping?.postalCode)
         setShippingForm({
           recipient: (hasSavedShipping ? lastShipping?.recipient : data.fullName) ?? "",
-          birthDate: hasSavedShipping ? isoToBirthDateInput(lastShipping?.birthDate) : "",
-          phone: formatOptionalPhone(
-            hasSavedShipping ? lastShipping?.phone : data.phone
-          ),
           postalCode: formatOptionalCep(
             hasSavedShipping ? lastShipping?.postalCode : data.postalCode
           ),
+          residenceType: hasSavedShipping ? toShippingResidenceType(lastShipping?.residenceType) : "",
           street: (hasSavedShipping ? lastShipping?.street : data.street) ?? "",
           number: (hasSavedShipping ? lastShipping?.number : data.number) ?? "",
           complement: (hasSavedShipping ? lastShipping?.complement : data.complement) ?? "",
@@ -227,6 +227,13 @@ export default function CheckoutPage() {
             (hasSavedShipping ? lastShipping?.neighborhood : data.neighborhood) ?? "",
           city: (hasSavedShipping ? lastShipping?.city : data.city) ?? "",
           state: (hasSavedShipping ? lastShipping?.state : data.state) ?? "",
+          // Sem entrega salva, o CPF da cobrança acompanha o nome da cobrança
+          // que já foi para o campo de nome: o par continua sendo da mesma pessoa.
+          cpf: formatCpfInput((hasSavedShipping ? lastShipping?.cpf : data.cpf) ?? ""),
+          phone: formatOptionalPhone(
+            hasSavedShipping ? lastShipping?.phone : data.phone
+          ),
+          birthDate: hasSavedShipping ? isoToBirthDateInput(lastShipping?.birthDate) : "",
         })
         setPayerForm({
           name: data.fullName ?? "",

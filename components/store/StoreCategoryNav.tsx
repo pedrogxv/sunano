@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, Heart, Home, LifeBuoy, Package, ShoppingCart, Star, type LucideIcon } from "lucide-react"
+import { ArrowRight, ChevronLeft, ChevronRight, Home, LifeBuoy, Package, ShoppingCart, Star, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
 import { catalogConfigForGroup, catalogHref } from "@/lib/store-catalog"
 import { formatBRL } from "@/lib/format"
 import { computeCardDisplayPrice } from "@/lib/store-pricing"
 import { useCart } from "@/components/providers/cart-context"
-import { useStoreFavorites } from "@/components/providers/store-favorites-context"
 import { StoreSearchBox } from "@/components/store/StoreSearchBox"
 import { StoreCommerceBarSlot } from "@/components/store/StoreCommerceBar"
 import { RouteLink } from "@/components/ui/route-link"
@@ -132,9 +131,7 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
   const { categories, categoryCounts, brandsByCategory } = data
   const pathname = usePathname()
   const { count: cartCount, setOpen: setCartOpen } = useCart()
-  const { count: favoritesCount } = useStoreFavorites()
   const isHome = pathname === "/loja"
-  const isFavorites = pathname === "/loja/favoritos"
   const [hovered, setHovered] = useState<StoreNavGroup | null>(null)
   const [previewIndex, setPreviewIndex] = useState(0)
   const [previewPaused, setPreviewPaused] = useState(false)
@@ -250,16 +247,7 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
             const tint = groupCategories.length === 1 ? getCategoryIcon(groupCategories[0]).tint : "oklch(0.75 0.15 195)"
             const singleHref = groupCategories.length === 1 ? `/loja/categoria/${encodeURIComponent(groupCategories[0])}` : undefined
 
-            const content = (
-              <>
-                {GROUP_LABEL[group]}
-                <ChevronDown
-                  className={cn("size-[13px] transition-transform", isOpen && "rotate-180")}
-                  strokeWidth={2.2}
-                  style={{ color: highlighted ? tint : "#6e6e6e" }}
-                />
-              </>
-            )
+            const content = GROUP_LABEL[group]
 
             const sharedClass = cn(
               "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
@@ -288,12 +276,24 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
               </button>
             )
           })}
+          <Link
+            href="/loja/avaliacoes"
+            onMouseEnter={() => hoverGroup(null)}
+            className={cn(
+              "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
+              pathname === "/loja/avaliacoes"
+                ? "border-white font-bold text-white"
+                : "border-transparent font-semibold text-[#b4b4b4] hover:text-white"
+            )}
+          >
+            <Star className="size-[13px]" strokeWidth={2.2} />
+            Avaliações
+          </Link>
         </div>
 
         {/* O carrinho aparece aqui SEMPRE (com contador), e não só quando tem
             item como na TopBar: dentro da Loja ele é navegação, não aviso. */}
         <div className="flex shrink-0 items-center justify-self-end gap-1.5" onMouseEnter={() => hoverGroup(null)}>
-          <NavAction icon={Heart} label="Favoritos" href="/loja/favoritos" badge={favoritesCount} active={isFavorites} />
           <NavAction icon={ShoppingCart} label="Carrinho" onClick={() => setCartOpen(true)} badge={cartCount} />
           <NavAction icon={Package} label="Pedidos" href="/conta/pedidos" />
           <NavAction icon={LifeBuoy} label="Suporte" href="/suporte" />
@@ -337,19 +337,6 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
             </Link>
           )
         })}
-        <Link
-          href="/loja/favoritos"
-          className={cn(
-            "inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full px-[15px] text-[12.5px] transition-colors",
-            isFavorites
-              ? "bg-white font-bold text-black"
-              : "border border-[#2a2a2a] bg-[#141414] font-semibold text-[#cfcfcf]"
-          )}
-        >
-          <Heart className="size-3.5" strokeWidth={2.2} />
-          Favoritos
-          {favoritesCount > 0 && <span className="text-[11px] opacity-70">{favoritesCount}</span>}
-        </Link>
         <Link
           href="/conta/pedidos"
           className="inline-flex h-[34px] shrink-0 items-center gap-1.5 rounded-full border border-[#2a2a2a] bg-[#141414] px-[15px] text-[12.5px] font-semibold text-[#cfcfcf] transition-colors"

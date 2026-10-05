@@ -188,7 +188,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
 
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,1fr)] lg:items-start lg:gap-12">
           {/* Galeria: presa no topo enquanto a coluna de compra rola. */}
-          <div className="lg:sticky lg:top-24">
+          <div className="lg:sticky lg:top-[calc(var(--sticky-header-h)+1.5rem)] lg:self-start">
             <ProductGallery
               key={images[0] ?? "sem-foto"}
               images={images}
@@ -482,8 +482,6 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
             <ProductPurchaseBenefits
               freeShipping={freeShipping}
               singlePrice={singlePrice}
-              pixDiscountPercent={pixDiscountPercent}
-              maxInstallments={cardMaxInstallments}
               aura={purchaseAuraFor(effectiveCents * qty)}
             />
 

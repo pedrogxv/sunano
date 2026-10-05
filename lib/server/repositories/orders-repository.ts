@@ -233,11 +233,14 @@ export function lineMovesPhysicalStock(line: { sale_type?: string | null }): boo
 export type OrderShippingAddress = {
   recipient: string
   /**
-   * "AAAA-MM-DD" de quem recebe, exigida pela alfândega na importação. Nula
-   * em pedido gravado antes do campo existir: o endereço continua valendo
-   * para despachar, só falta esse dado para o que vem de fora.
+   * CPF, nascimento ("AAAA-MM-DD") e tipo de residência de quem recebe,
+   * exigidos na importação. Nulos em pedido gravado antes de cada campo
+   * existir: o endereço continua valendo para despachar, só falta esse dado
+   * para o que vem de fora.
    */
+  cpf: string | null
   birth_date: string | null
+  residence_type: "house" | "apartment" | null
   phone: string
   postal_code: string
   street: string
@@ -252,7 +255,9 @@ export type OrderShippingAddress = {
 /** Colunas cruas de entrega, como vêm do banco (todas nulas até ser preenchido). */
 type RawShippingColumns = {
   shipping_recipient: string | null
+  shipping_cpf: string | null
   shipping_birth_date: string | null
+  shipping_residence_type: string | null
   shipping_phone: string | null
   shipping_postal_code: string | null
   shipping_street: string | null
@@ -271,7 +276,7 @@ type RawShippingColumns = {
 }
 
 const SHIPPING_COLUMNS =
-  "shipping_recipient, shipping_birth_date, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state, shipping_address_filled_at, requires_shipping_address"
+  "shipping_recipient, shipping_cpf, shipping_birth_date, shipping_residence_type, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state, shipping_address_filled_at, requires_shipping_address"
 
 /**
  * Colapsa as colunas cruas num objeto único — ou `null` se o endereço ainda
@@ -293,7 +298,12 @@ export function mapShippingAddress(row: Partial<RawShippingColumns> | null | und
   }
   return {
     recipient: row.shipping_recipient,
+    cpf: row.shipping_cpf ?? null,
     birth_date: row.shipping_birth_date ?? null,
+    residence_type:
+      row.shipping_residence_type === "house" || row.shipping_residence_type === "apartment"
+        ? row.shipping_residence_type
+        : null,
     phone: row.shipping_phone ?? "",
     postal_code: row.shipping_postal_code,
     street: row.shipping_street,
@@ -462,6 +472,8 @@ export type AdminOrderRow = {
   /** Presente quando o pedido foi feito por um usuário logado (metadata.user_id). */
   user_id: string | null
   user_display_name: string | null
+  /** CPF do pagador (perfil do comprador), só dígitos. Null em convidado ou perfil sem CPF. */
+  customer_cpf: string | null
   /** Não-nulo = vendido sem estoque, precisa de intervenção manual. */
   oversold: OrderOversoldFlag | null
   /** Para onde despachar. Null = o cliente ainda não informou (fluxo awaiting_shipping_info). */
@@ -585,6 +597,18 @@ export async function listOrdersForAdmin(filters?: {
       .filter((id): id is string => Boolean(id))
   )]
   const profiles = await getUserProfiles(userIds)
+  // CPF em lote (uma consulta para a página inteira): é o documento que a
+  // Asaas exigiu do pagador, e quem despacha precisa dele na declaração.
+  const cpfByUser: Record<string, string | null> = {}
+  if (userIds.length > 0) {
+    const { data: cpfRows } = await createSupabaseAdminClient()
+      .from("user_profiles")
+      .select("id, cpf")
+      .in("id", userIds)
+    for (const r of (cpfRows ?? []) as Array<{ id: string; cpf: string | null }>) {
+      cpfByUser[r.id] = r.cpf
+    }
+  }
 
   const orders: AdminOrderRow[] = rows.map((row) => {
     const userId = (row.metadata?.user_id as string | undefined) ?? null
@@ -609,6 +633,7 @@ export async function listOrdersForAdmin(filters?: {
       asaas_payment_id: row.asaas_payment_id,
       user_id: userId,
       user_display_name: userId ? profiles[userId]?.display_name ?? null : null,
+      customer_cpf: userId ? cpfByUser[userId] ?? null : null,
       oversold: (row.metadata?.oversold as OrderOversoldFlag | undefined) ?? null,
       shipping_address: mapShippingAddress(row),
       requires_shipping_address: row.requires_shipping_address !== false,

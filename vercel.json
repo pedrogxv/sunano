@@ -18,6 +18,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/preorder-phases",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/trust-daily",
       "schedule": "0 5 * * *"
     }

@@ -1,5 +1,6 @@
 import { CalendarDays, Package } from "lucide-react"
 
+import { PreorderCountdown } from "@/components/store/PreorderCountdown"
 import {
   formatPreorderShipDate,
   PREORDER_STATUS_HINT,
@@ -85,6 +86,8 @@ export function PreorderLotPanel({ info, status }: { info: PreorderInfo; status:
           </span>
         </p>
       )}
+
+      {status === "open" && <PreorderCountdown info={info} />}
 
       <PreorderAvailability limit={info.limit} remaining={preorderRemaining(info)} status={status} />
     </div>

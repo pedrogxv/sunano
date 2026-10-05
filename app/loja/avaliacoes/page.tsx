@@ -3,6 +3,7 @@ import { buildMetadata } from "@/lib/seo"
 import { Suspense } from "react"
 import { getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { getStoreWideReviewAggregate, listStoreWideReviews } from "@/lib/server/repositories/store-reviews-repository"
+import { listPublishedTestimonials } from "@/lib/server/repositories/store-testimonials-repository"
 import { StoreReviewsContent } from "@/components/store/StoreReviewsContent"
 import { ShoppingBag } from "lucide-react"
 import { ComingSoon } from "@/components/store/ComingSoon"
@@ -44,15 +45,16 @@ export default async function LojaAvaliacoesPage() {
     )
   }
 
-  const [filterOptions, aggregate, reviews] = await Promise.all([
+  const [filterOptions, aggregate, reviews, testimonials] = await Promise.all([
     getStoreFilterOptions("store"),
     getStoreWideReviewAggregate(),
     listStoreWideReviews(60),
+    listPublishedTestimonials(60),
   ])
 
   return (
     <Suspense>
-      <StoreReviewsContent filterOptions={filterOptions} aggregate={aggregate} reviews={reviews} />
+      <StoreReviewsContent filterOptions={filterOptions} aggregate={aggregate} reviews={reviews} testimonials={testimonials} />
     </Suspense>
   )
 }

@@ -72,7 +72,8 @@ import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { orderStatusLabel } from "@/lib/order-status"
-import { isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
+import { formatCpfInput } from "@/components/store/CheckoutPayerCard"
+import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
 import type { OrderShippingAddress } from "@/lib/server/repositories/orders-repository"
 
@@ -111,6 +112,7 @@ type AdminOrder = {
   aura_cost_paid: number | null
   customer_name: string | null
   customer_email: string | null
+  customer_cpf: string | null
   tracking_code: string | null
   carrier: string | null
   shipped_at: string | null
@@ -1252,6 +1254,9 @@ function OrderManageDialog({
               <>
                 <p className="text-sm text-foreground">{order.shipping_address.recipient}</p>
                 <p className="text-xs text-muted-foreground">
+                  {order.shipping_address.residence_type
+                    ? `${SHIPPING_RESIDENCE_TYPE_LABELS[order.shipping_address.residence_type]} · `
+                    : null}
                   {[
                     `${order.shipping_address.street}, ${order.shipping_address.number}`,
                     order.shipping_address.complement || null,
@@ -1262,8 +1267,26 @@ function OrderManageDialog({
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {!order.shipping_address.residence_type && (
+                  <p className="text-xs text-amber-400">
+                    Sem casa/apartamento (endereço informado antes do campo existir).
+                  </p>
+                )}
+                {order.shipping_address.cpf ? (
+                  <p className="text-xs text-muted-foreground">
+                    CPF: {formatCpfInput(order.shipping_address.cpf)}
+                  </p>
+                ) : order.customer_cpf ? (
+                  // Endereço anterior ao CPF de quem recebe: o do comprador é o
+                  // melhor que há, mas pode não ser o do destinatário.
+                  <p className="text-xs text-amber-400">
+                    CPF do comprador (sem CPF de quem recebe): {formatCpfInput(order.customer_cpf)}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-400">Sem CPF de quem recebe nem do comprador.</p>
+                )}
                 {order.shipping_address.phone && (
-                  <p className="text-xs text-muted-foreground">Tel.: {order.shipping_address.phone}</p>
+                  <p className="text-xs text-muted-foreground">Celular: {order.shipping_address.phone}</p>
                 )}
                 {order.shipping_address.birth_date ? (
                   <p className="text-xs text-muted-foreground">

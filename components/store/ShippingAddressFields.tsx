@@ -7,33 +7,66 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BR_STATES } from "@/lib/br-states"
-import { formatCepInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
+import { formatCepInput, formatCpfInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
+import { isValidCPF } from "@/lib/pix-key"
 
+export type ShippingResidenceType = "house" | "apartment"
+
+export const SHIPPING_RESIDENCE_TYPE_LABELS: Record<ShippingResidenceType, string> = {
+  house: "Casa",
+  apartment: "Apartamento",
+}
+
+/** Valor cru do banco → tipo do formulário ("" quando nunca foi informado). */
+export function toShippingResidenceType(value: string | null | undefined): ShippingResidenceType | "" {
+  return value === "house" || value === "apartment" ? value : ""
+}
+
+/**
+ * Campos na ORDEM que a importação exige (e que o formulário mostra): nome
+ * completo, endereço completo com CEP e casa/apartamento, CPF do mesmo nome,
+ * celular e nascimento do mesmo CPF. Tudo de quem RECEBE, não do pagador.
+ */
 export interface ShippingForm {
   recipient: string
-  /** DD/MM/AAAA, como a pessoa digita. Vai para o servidor em ISO. */
-  birthDate: string
-  phone: string
   postalCode: string
+  residenceType: ShippingResidenceType | ""
   street: string
   number: string
   complement: string
   neighborhood: string
   city: string
   state: string
+  cpf: string
+  phone: string
+  /** DD/MM/AAAA, como a pessoa digita. Vai para o servidor em ISO. */
+  birthDate: string
 }
 
 export const EMPTY_SHIPPING_FORM: ShippingForm = {
   recipient: "",
-  birthDate: "",
-  phone: "",
   postalCode: "",
+  residenceType: "",
   street: "",
   number: "",
   complement: "",
   neighborhood: "",
   city: "",
   state: "",
+  cpf: "",
+  phone: "",
+  birthDate: "",
+}
+
+/** Nome e sobrenome: só o primeiro nome não casa com o CPF na alfândega. */
+function isFullName(value: string): boolean {
+  const trimmed = value.trim()
+  return trimmed.length >= 2 && trimmed.split(/\s+/).length >= 2
+}
+
+/** DDD + 9 dígitos começando em 9, a mesma regra do servidor. */
+function isMobilePhone(value: string): boolean {
+  return /^\d{2}9\d{8}$/.test(value.replace(/\D/g, ""))
 }
 
 export function formatBirthDateInput(value: string): string {
@@ -70,15 +103,18 @@ export function isoToBirthDateInput(iso: string | null | undefined): string {
  */
 export function isShippingFormComplete(form: ShippingForm): boolean {
   return (
-    form.recipient.trim().length >= 2 &&
-    birthDateInputToIso(form.birthDate) !== null &&
-    form.phone.replace(/\D/g, "").length >= 10 &&
+    isFullName(form.recipient) &&
     form.postalCode.replace(/\D/g, "").length === 8 &&
+    form.residenceType !== "" &&
     form.street.trim() !== "" &&
     form.number.trim() !== "" &&
+    (form.residenceType !== "apartment" || form.complement.trim() !== "") &&
     form.neighborhood.trim() !== "" &&
     form.city.trim() !== "" &&
-    form.state.trim().length === 2
+    form.state.trim().length === 2 &&
+    isValidCPF(form.cpf) &&
+    isMobilePhone(form.phone) &&
+    birthDateInputToIso(form.birthDate) !== null
   )
 }
 
@@ -93,7 +129,9 @@ export function isShippingFormTouched(form: ShippingForm): boolean {
 export function shippingFormToPayload(form: ShippingForm) {
   return {
     shippingRecipient: form.recipient.trim(),
+    shippingCpf: form.cpf.replace(/\D/g, ""),
     shippingBirthDate: birthDateInputToIso(form.birthDate) ?? "",
+    shippingResidenceType: form.residenceType,
     shippingPhone: form.phone.replace(/\D/g, ""),
     shippingPostalCode: form.postalCode.replace(/\D/g, ""),
     shippingStreet: form.street.trim(),
@@ -150,8 +188,15 @@ export function ShippingAddressFields({
 }) {
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState<string | null>(null)
-  // Só acusa depois da data inteira digitada: "12/0" é digitação em curso, não erro.
+  // Só acusa depois do campo inteiro digitado: "12/0" é digitação em curso, não erro.
   const birthDateInvalid = form.birthDate.length === 10 && birthDateInputToIso(form.birthDate) === null
+  const cpfInvalid = form.cpf.replace(/\D/g, "").length === 11 && !isValidCPF(form.cpf)
+  const phoneDigits = form.phone.replace(/\D/g, "")
+  const phoneInvalid = phoneDigits.length >= 10 && !isMobilePhone(form.phone)
+  // Nome só é julgado quando a pessoa já saiu dele parcialmente: sem espaço
+  // nenhum e com o resto do formulário em branco ainda é digitação.
+  const recipientInvalid = form.recipient.trim().length >= 2 && !isFullName(form.recipient) && form.postalCode !== ""
+  const isApartment = form.residenceType === "apartment"
 
   function set<K extends keyof ShippingForm>(key: K, value: ShippingForm[K]) {
     onChange({ ...form, [key]: value })
@@ -191,19 +236,187 @@ export function ShippingAddressFields({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label>Quem vai receber *</Label>
+        <Label>Nome completo *</Label>
         <Input
           maxLength={200}
+          autoComplete="name"
           disabled={disabled}
           value={form.recipient}
           onChange={(e) => set("recipient", e.target.value)}
-          placeholder="Nome de quem recebe o pacote"
+          placeholder="Nome e sobrenome de quem recebe o pacote"
           className="border-border/80 bg-muted/30"
         />
+        {recipientInvalid && (
+          <p className="text-[10px] text-red-400">Informe nome e sobrenome.</p>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-foreground">Endereço completo</p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>CEP *</Label>
+            <div className="relative">
+              <Input
+                inputMode="numeric"
+                autoComplete="postal-code"
+                disabled={disabled}
+                value={form.postalCode}
+                onChange={(e) => handleCepChange(e.target.value)}
+                placeholder="00000-000"
+                maxLength={9}
+                className="border-border/80 bg-muted/30"
+              />
+              {cepLoading && (
+                <Loader2 className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
+              )}
+            </div>
+            {cepError && <p className="text-[10px] text-red-400">{cepError}</p>}
+          </div>
+          <div className="space-y-2">
+            <Label>Casa ou apartamento? *</Label>
+            <Select
+              value={form.residenceType}
+              onValueChange={(v) => set("residenceType", v as ShippingResidenceType)}
+              disabled={disabled}
+            >
+              <SelectTrigger className="w-full border-border/80 bg-muted/30">
+                <SelectValue placeholder="Selecione" />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(SHIPPING_RESIDENCE_TYPE_LABELS) as ShippingResidenceType[]).map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {SHIPPING_RESIDENCE_TYPE_LABELS[type]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-2 space-y-2">
+            <Label>Endereço *</Label>
+            <Input
+              maxLength={200}
+              disabled={disabled}
+              value={form.street}
+              onChange={(e) => set("street", e.target.value)}
+              placeholder="Rua, avenida..."
+              className="border-border/80 bg-muted/30"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Número *</Label>
+            <Input
+              maxLength={20}
+              disabled={disabled}
+              value={form.number}
+              onChange={(e) => set("number", e.target.value)}
+              placeholder="123"
+              className="border-border/80 bg-muted/30"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>{isApartment ? "Complemento *" : "Complemento"}</Label>
+          <Input
+            maxLength={100}
+            disabled={disabled}
+            value={form.complement}
+            onChange={(e) => set("complement", e.target.value)}
+            placeholder={isApartment ? "Apto e bloco (ex.: Apto 52, Bloco B)" : "Referência... (opcional)"}
+            className="border-border/80 bg-muted/30"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Bairro *</Label>
+          <Input
+            maxLength={100}
+            disabled={disabled}
+            value={form.neighborhood}
+            onChange={(e) => set("neighborhood", e.target.value)}
+            placeholder="Seu bairro"
+            className="border-border/80 bg-muted/30"
+          />
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-2 space-y-2">
+            <Label>Cidade *</Label>
+            <Input
+              maxLength={100}
+              disabled={disabled}
+              value={form.city}
+              onChange={(e) => set("city", e.target.value)}
+              placeholder="Sua cidade"
+              className="border-border/80 bg-muted/30"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>UF *</Label>
+            <Select value={form.state} onValueChange={(v) => set("state", v)} disabled={disabled}>
+              <SelectTrigger className="w-full border-border/80 bg-muted/30">
+                <SelectValue placeholder="UF" />
+              </SelectTrigger>
+              <SelectContent>
+                {BR_STATES.map((state) => (
+                  <SelectItem key={state.uf} value={state.uf}>
+                    {state.uf}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Data de nascimento de quem recebe *</Label>
+        <Label>CPF *</Label>
+        <Input
+          inputMode="numeric"
+          disabled={disabled}
+          value={form.cpf}
+          onChange={(e) => set("cpf", formatCpfInput(e.target.value))}
+          placeholder="000.000.000-00"
+          maxLength={14}
+          aria-invalid={cpfInvalid || undefined}
+          className="border-border/80 bg-muted/30"
+        />
+        {cpfInvalid ? (
+          <p className="text-[10px] text-red-400">CPF inválido.</p>
+        ) : (
+          <p className="text-[10px] text-muted-foreground/60">Do mesmo titular do nome acima.</p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Celular *</Label>
+        <Input
+          inputMode="numeric"
+          autoComplete="tel-national"
+          disabled={disabled}
+          value={form.phone}
+          onChange={(e) => set("phone", formatPhoneInput(e.target.value))}
+          placeholder="(00) 90000-0000"
+          maxLength={15}
+          aria-invalid={phoneInvalid || undefined}
+          className="border-border/80 bg-muted/30"
+        />
+        {phoneInvalid ? (
+          <p className="text-[10px] text-red-400">Informe um celular com DDD.</p>
+        ) : (
+          <p className="text-[10px] text-muted-foreground/60">
+            Usado pela transportadora em caso de problema na entrega.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <Label>Data de nascimento *</Label>
         <Input
           inputMode="numeric"
           autoComplete="bday"
@@ -219,122 +432,9 @@ export function ShippingAddressFields({
           <p className="text-[10px] text-red-400">Data inválida.</p>
         ) : (
           <p className="text-[10px] text-muted-foreground/60">
-            Exigida pela alfândega para liberar produtos importados.
+            Do mesmo titular do CPF. Exigida pela alfândega para liberar produtos importados.
           </p>
         )}
-      </div>
-
-      <div className="space-y-2">
-        <Label>Telefone de contato *</Label>
-        <Input
-          inputMode="numeric"
-          disabled={disabled}
-          value={form.phone}
-          onChange={(e) => set("phone", formatPhoneInput(e.target.value))}
-          placeholder="(00) 00000-0000"
-          maxLength={15}
-          className="border-border/80 bg-muted/30"
-        />
-        <p className="text-[10px] text-muted-foreground/60">
-          Usado pela transportadora em caso de problema na entrega.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label>CEP *</Label>
-          <div className="relative">
-            <Input
-              inputMode="numeric"
-              disabled={disabled}
-              value={form.postalCode}
-              onChange={(e) => handleCepChange(e.target.value)}
-              placeholder="00000-000"
-              maxLength={9}
-              className="border-border/80 bg-muted/30"
-            />
-            {cepLoading && (
-              <Loader2 className="absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-            )}
-          </div>
-          {cepError && <p className="text-[10px] text-red-400">{cepError}</p>}
-        </div>
-        <div className="space-y-2">
-          <Label>Número *</Label>
-          <Input
-            maxLength={20}
-            disabled={disabled}
-            value={form.number}
-            onChange={(e) => set("number", e.target.value)}
-            placeholder="123"
-            className="border-border/80 bg-muted/30"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label>Endereço *</Label>
-        <Input
-          maxLength={200}
-          disabled={disabled}
-          value={form.street}
-          onChange={(e) => set("street", e.target.value)}
-          placeholder="Rua, avenida..."
-          className="border-border/80 bg-muted/30"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Complemento</Label>
-        <Input
-          maxLength={100}
-          disabled={disabled}
-          value={form.complement}
-          onChange={(e) => set("complement", e.target.value)}
-          placeholder="Apto, bloco, referência... (opcional)"
-          className="border-border/80 bg-muted/30"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label>Bairro *</Label>
-        <Input
-          maxLength={100}
-          disabled={disabled}
-          value={form.neighborhood}
-          onChange={(e) => set("neighborhood", e.target.value)}
-          placeholder="Seu bairro"
-          className="border-border/80 bg-muted/30"
-        />
-      </div>
-
-      <div className="grid grid-cols-3 gap-3">
-        <div className="col-span-2 space-y-2">
-          <Label>Cidade *</Label>
-          <Input
-            maxLength={100}
-            disabled={disabled}
-            value={form.city}
-            onChange={(e) => set("city", e.target.value)}
-            placeholder="Sua cidade"
-            className="border-border/80 bg-muted/30"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label>UF *</Label>
-          <Select value={form.state} onValueChange={(v) => set("state", v)} disabled={disabled}>
-            <SelectTrigger className="w-full border-border/80 bg-muted/30">
-              <SelectValue placeholder="UF" />
-            </SelectTrigger>
-            <SelectContent>
-              {BR_STATES.map((state) => (
-                <SelectItem key={state.uf} value={state.uf}>
-                  {state.uf}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
     </div>
   )

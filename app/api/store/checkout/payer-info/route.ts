@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
   const { data: profile } = await db
     .from("user_profiles")
     .select(
-      "full_name, cpf, phone, postal_code, street, number, complement, neighborhood, city, state, shipping_recipient, shipping_birth_date, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
+      "full_name, cpf, phone, postal_code, street, number, complement, neighborhood, city, state, shipping_recipient, shipping_cpf, shipping_birth_date, shipping_residence_type, shipping_phone, shipping_postal_code, shipping_street, shipping_number, shipping_complement, shipping_neighborhood, shipping_city, shipping_state"
     )
     .eq("id", user.id)
     .single()
@@ -75,7 +75,9 @@ export async function GET(request: NextRequest) {
     // despachar é sempre o snapshot no pedido.
     shipping: {
       recipient: profile?.shipping_recipient ?? null,
+      cpf: profile?.shipping_cpf ?? null,
       birthDate: profile?.shipping_birth_date ?? null,
+      residenceType: profile?.shipping_residence_type ?? null,
       phone: profile?.shipping_phone ?? null,
       postalCode: profile?.shipping_postal_code ?? null,
       street: profile?.shipping_street ?? null,

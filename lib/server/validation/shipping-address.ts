@@ -1,6 +1,8 @@
 import "server-only"
 import * as z from "zod"
 
+import { isValidCPF } from "@/lib/pix-key"
+
 /**
  * UFs válidas — o `length(2)` sozinho aceitaria "XX" e mandaria um pedido
  * impossível de despachar para a fila do admin.
@@ -24,58 +26,76 @@ const BR_UFS = new Set([
  * lixo. Um objeto parcial é recusado por inteiro (ver
  * `parseOptionalShippingAddress`).
  */
-export const shippingAddressSchema = z.object({
-  shippingRecipient: z
-    .string("Informe o nome de quem vai receber.")
-    .trim()
-    .min(2, "Informe o nome de quem vai receber.")
-    .max(200, "Nome de quem recebe muito longo."),
-  // Exigida pela alfândega na importação. É de quem RECEBE, não do pagador:
-  // por isso mora no endereço de entrega, junto do nome do destinatário.
-  shippingBirthDate: z
-    .string("Informe a data de nascimento de quem vai receber.")
-    .trim()
-    .min(1, "Informe a data de nascimento de quem vai receber.")
-    .refine(isValidBirthDate, "Informe uma data de nascimento válida."),
-  shippingPhone: z
-    .string("Informe um telefone válido.")
-    .transform((value) => value.replace(/\D/g, ""))
-    .refine(
-      (value) => value.length === 10 || value.length === 11,
-      "Informe um telefone válido."
-    ),
-  shippingPostalCode: z
-    .string("Informe um CEP válido.")
-    .transform((value) => value.replace(/\D/g, ""))
-    .refine((value) => value.length === 8, "Informe um CEP válido."),
-  shippingStreet: z
-    .string("Informe o endereço de entrega.")
-    .trim()
-    .min(2, "Informe o endereço de entrega.")
-    .max(200, "Endereço muito longo."),
-  shippingNumber: z
-    .string("Informe o número.")
-    .trim()
-    .min(1, "Informe o número.")
-    .max(20, "Número muito longo."),
-  shippingComplement: z.string().trim().max(100, "Complemento muito longo.").optional(),
-  shippingNeighborhood: z
-    .string("Informe o bairro.")
-    .trim()
-    .min(1, "Informe o bairro.")
-    .max(100, "Bairro muito longo."),
-  shippingCity: z
-    .string("Informe a cidade.")
-    .trim()
-    .min(1, "Informe a cidade.")
-    .max(100, "Cidade muito longa."),
-  shippingState: z
-    .string("Informe o estado (UF).")
-    .trim()
-    .length(2, "Informe o estado (UF).")
-    .transform((value) => value.toUpperCase())
-    .refine((value) => BR_UFS.has(value), "Informe um estado (UF) válido."),
-})
+export const SHIPPING_RESIDENCE_TYPES = ["house", "apartment"] as const
+
+export const shippingAddressSchema = z
+  .object({
+    shippingRecipient: z
+      .string("Informe o nome completo de quem vai receber.")
+      .trim()
+      .min(2, "Informe o nome completo de quem vai receber.")
+      .max(200, "Nome de quem recebe muito longo.")
+      // Nome COMPLETO: a alfândega confere contra o CPF, e só o primeiro nome
+      // não casa com o cadastro da Receita.
+      .refine((value) => value.split(/\s+/).length >= 2, "Informe o nome completo (nome e sobrenome)."),
+    shippingPostalCode: z
+      .string("Informe um CEP válido.")
+      .transform((value) => value.replace(/\D/g, ""))
+      .refine((value) => value.length === 8, "Informe um CEP válido."),
+    shippingResidenceType: z.enum(SHIPPING_RESIDENCE_TYPES, "Informe se é casa ou apartamento."),
+    shippingStreet: z
+      .string("Informe o endereço de entrega.")
+      .trim()
+      .min(2, "Informe o endereço de entrega.")
+      .max(200, "Endereço muito longo."),
+    shippingNumber: z
+      .string("Informe o número.")
+      .trim()
+      .min(1, "Informe o número.")
+      .max(20, "Número muito longo."),
+    shippingComplement: z.string().trim().max(100, "Complemento muito longo.").optional(),
+    shippingNeighborhood: z
+      .string("Informe o bairro.")
+      .trim()
+      .min(1, "Informe o bairro.")
+      .max(100, "Bairro muito longo."),
+    shippingCity: z
+      .string("Informe a cidade.")
+      .trim()
+      .min(1, "Informe a cidade.")
+      .max(100, "Cidade muito longa."),
+    shippingState: z
+      .string("Informe o estado (UF).")
+      .trim()
+      .length(2, "Informe o estado (UF).")
+      .transform((value) => value.toUpperCase())
+      .refine((value) => BR_UFS.has(value), "Informe um estado (UF) válido."),
+    // CPF, celular e nascimento de quem RECEBE, exigidos na importação. Não
+    // são os do pagador: por isso moram no endereço de entrega, junto do nome
+    // do destinatário, e não no CPF da cobrança. A ordem das chaves é a do
+    // formulário, para o primeiro erro devolvido ser o primeiro campo da tela.
+    shippingCpf: z
+      .string("Informe o CPF de quem vai receber.")
+      .transform((value) => value.replace(/\D/g, ""))
+      .refine(isValidCPF, "Informe um CPF válido."),
+    shippingPhone: z
+      .string("Informe um celular válido com DDD.")
+      .transform((value) => value.replace(/\D/g, ""))
+      // Celular: DDD + 9 dígitos começando em 9. Fixo não recebe o SMS/WhatsApp
+      // da transportadora.
+      .refine((value) => /^\d{2}9\d{8}$/.test(value), "Informe um celular válido com DDD."),
+    shippingBirthDate: z
+      .string("Informe a data de nascimento de quem vai receber.")
+      .trim()
+      .min(1, "Informe a data de nascimento de quem vai receber.")
+      .refine(isValidBirthDate, "Informe uma data de nascimento válida."),
+  })
+  // Apartamento sem número do apto/bloco volta para o remetente: o
+  // complemento, opcional em casa, passa a ser obrigatório.
+  .refine(
+    (value) => value.shippingResidenceType !== "apartment" || Boolean(value.shippingComplement),
+    { message: "Informe o apartamento e o bloco no complemento.", path: ["shippingComplement"] }
+  )
 
 export type ShippingAddressInput = z.infer<typeof shippingAddressSchema>
 
@@ -98,7 +118,9 @@ function isValidBirthDate(value: string): boolean {
 export function shippingAddressColumns(address: ShippingAddressInput) {
   return {
     shipping_recipient: address.shippingRecipient,
+    shipping_cpf: address.shippingCpf,
     shipping_birth_date: address.shippingBirthDate,
+    shipping_residence_type: address.shippingResidenceType,
     shipping_phone: address.shippingPhone,
     shipping_postal_code: address.shippingPostalCode,
     shipping_street: address.shippingStreet,

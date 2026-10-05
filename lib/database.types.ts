@@ -171,6 +171,8 @@ export type Database = {
           shipping_recipient: string | null
           /** Coluna `date` ("AAAA-MM-DD") de quem recebe; a alfândega exige na importação. */
           shipping_birth_date: string | null
+          shipping_cpf: string | null
+          shipping_residence_type: string | null
           shipping_phone: string | null
           shipping_postal_code: string | null
           shipping_street: string | null
@@ -1261,6 +1263,10 @@ export type Database = {
           is_launch: boolean
           /** Último dia como lançamento (`YYYY-MM-DD`); nulo = até desmarcar. */
           launch_until: string | null
+          /** Fim do preço promocional de pré-venda (ISO). Nulo = pré-venda sem prazo. */
+          preorder_early_ends_at: string | null
+          /** Fim da pré-venda (early + 7 dias). Depois dele o produto vira `normal`. */
+          preorder_ends_at: string | null
           created_at: string
           updated_at: string
         }
@@ -1299,6 +1305,8 @@ export type Database = {
           preorder_batch_started_at?: string | null
           is_launch?: boolean
           launch_until?: string | null
+          preorder_early_ends_at?: string | null
+          preorder_ends_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1337,6 +1345,8 @@ export type Database = {
           preorder_batch_started_at?: string | null
           is_launch?: boolean
           launch_until?: string | null
+          preorder_early_ends_at?: string | null
+          preorder_ends_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1713,6 +1723,54 @@ export type Database = {
           created_at?: string
         }
       }
+      store_testimonials: {
+        Relationships: []
+        Row: {
+          id: string
+          customer_name: string
+          source: "whatsapp" | "instagram" | "discord" | "marketplace" | "other"
+          product_id: string | null
+          product_label: string | null
+          rating: number
+          body: string
+          proof_image_url: string | null
+          purchased_on: string | null
+          is_published: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          customer_name: string
+          source?: "whatsapp" | "instagram" | "discord" | "marketplace" | "other"
+          product_id?: string | null
+          product_label?: string | null
+          rating: number
+          body: string
+          proof_image_url?: string | null
+          purchased_on?: string | null
+          is_published?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          customer_name?: string
+          source?: "whatsapp" | "instagram" | "discord" | "marketplace" | "other"
+          product_id?: string | null
+          product_label?: string | null
+          rating?: number
+          body?: string
+          proof_image_url?: string | null
+          purchased_on?: string | null
+          is_published?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
       store_product_reviews: {
         Relationships: []
         Row: {
@@ -1885,6 +1943,8 @@ export type Database = {
            */
           shipping_recipient: string | null
           shipping_birth_date: string | null
+          shipping_cpf: string | null
+          shipping_residence_type: string | null
           shipping_phone: string | null
           shipping_postal_code: string | null
           shipping_street: string | null
@@ -1941,6 +2001,8 @@ export type Database = {
           aura_cost_paid?: number | null
           shipping_recipient?: string | null
           shipping_birth_date?: string | null
+          shipping_cpf?: string | null
+          shipping_residence_type?: string | null
           shipping_phone?: string | null
           shipping_postal_code?: string | null
           shipping_street?: string | null
@@ -1991,6 +2053,8 @@ export type Database = {
           aura_cost_paid?: number | null
           shipping_recipient?: string | null
           shipping_birth_date?: string | null
+          shipping_cpf?: string | null
+          shipping_residence_type?: string | null
           shipping_phone?: string | null
           shipping_postal_code?: string | null
           shipping_street?: string | null
@@ -3261,6 +3325,10 @@ export type Database = {
       prune_offers_cache: {
         Args: { retention_days?: number }
         Returns: undefined
+      }
+      advance_preorder_phases: {
+        Args: Record<PropertyKey, never>
+        Returns: { raised: number; ended: number }
       }
     }
   }

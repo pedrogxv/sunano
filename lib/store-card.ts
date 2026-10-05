@@ -249,7 +249,7 @@ export function deriveCardHighlights(category: string | null, attrs: StoreProduc
     )
   } else if (group === "teclado") {
     candidates.push(
-      attrs.keyboardType === "magnetic" ? "Hall Effect" : attrs.keyboardType === "mechanical" ? "Mecânico" : null,
+      attrs.keyboardType === "magnetic" ? "Magnético" : attrs.keyboardType === "mechanical" ? "Mecânico" : null,
       pollingLabel(attrs.pollingHz),
       attrs.caseMaterial ? CASE_LABEL[attrs.caseMaterial] ?? null : null,
       attrs.layout ? LAYOUT_LABEL[attrs.layout] : null,

@@ -134,7 +134,8 @@ function StandardProductCard(props: ProductCardProps) {
   const unavailableLabel = preorderUnavailable && preorder ? PREORDER_STATUS_LABEL[preorder.status] : "Esgotado"
   const UnavailableIcon = preorderUnavailable && preorder ? PREORDER_STATUS_STYLE[preorder.status].icon : PackageX
   const singlePrice = isSinglePriceProduct(props)
-  const image = activeVariant?.image_url ?? props.images?.[0] ?? null
+  // A foto do produto manda; a da variante (cor/versão) só entra sem capa.
+  const image = props.images?.[0] ?? activeVariant?.image_url ?? null
   const stock = activeVariant ? activeVariant.stock : props.stock
   const lowStock = !outOfStock && stock !== null && stock > 0 && stock <= LOW_STOCK_MAX_UNITS
   const isPreOrder = props.sale_type === "pre_order"
@@ -345,11 +346,11 @@ function StandardProductCard(props: ProductCardProps) {
               )}
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <p className={cn(
-                  "font-display font-bold leading-tight",
-                  showcase ? "text-[32px]" : "text-xl",
-                  hasDiscount ? "text-emerald-400" : "text-white"
+                  "font-display font-bold leading-tight text-white",
+                  showcase ? "text-[32px]" : "text-xl"
                 )}>
                   {formatBRL(effectivePriceCents)}
+                  {singlePrice && <span aria-hidden="true">*</span>}
                 </p>
                 {!singlePrice && (
                   <span className={cn(
@@ -364,6 +365,11 @@ function StandardProductCard(props: ProductCardProps) {
                   ? `Mesmo preço no cartão${cardMaxInstallments > 1 ? `, em até ${cardMaxInstallments}x sem juros` : ""}`
                   : `ou ${formatBRL(computeItemCardPriceCents(effectivePriceCents, cardSurchargePercent, false))} no cartão${cardMaxInstallments > 1 ? ` em até ${cardMaxInstallments}x sem juros` : ""}`}
               </p>
+              {singlePrice && (
+                <p className={cn("text-[#7a7a7a]", showcase ? "text-[12px]" : "text-[10px]")}>
+                  * Valor de consulta, não representa o valor final
+                </p>
+              )}
             </div>
 
             {/* Frete grátis tem destaque próprio (o checkout não cobra frete;

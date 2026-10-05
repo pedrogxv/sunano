@@ -19,15 +19,18 @@ import {
   ShippingAddressFields,
   isShippingFormComplete,
   isoToBirthDateInput,
+  toShippingResidenceType,
   type ShippingForm,
 } from "@/components/store/ShippingAddressFields"
-import { formatCepInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
+import { formatCepInput, formatCpfInput, formatPhoneInput } from "@/components/store/CheckoutPayerCard"
 
 
 export type PrefillShipping = {
   recipient: string | null
+  cpf: string | null
   /** "AAAA-MM-DD". */
   birthDate: string | null
+  residenceType: string | null
   phone: string | null
   postalCode: string | null
   street: string | null
@@ -43,15 +46,17 @@ function prefillToForm(prefill: PrefillShipping): ShippingForm {
   if (!prefill || !prefill.postalCode) return EMPTY_SHIPPING_FORM
   return {
     recipient: prefill.recipient ?? "",
-    birthDate: isoToBirthDateInput(prefill.birthDate),
-    phone: formatPhoneInput(prefill.phone ?? ""),
     postalCode: formatCepInput(prefill.postalCode ?? ""),
+    residenceType: toShippingResidenceType(prefill.residenceType),
     street: prefill.street ?? "",
     number: prefill.number ?? "",
     complement: prefill.complement ?? "",
     neighborhood: prefill.neighborhood ?? "",
     city: prefill.city ?? "",
     state: prefill.state ?? "",
+    cpf: formatCpfInput(prefill.cpf ?? ""),
+    phone: formatPhoneInput(prefill.phone ?? ""),
+    birthDate: isoToBirthDateInput(prefill.birthDate),
   }
 }
 

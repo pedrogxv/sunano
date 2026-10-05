@@ -110,7 +110,9 @@ const checkoutBodySchema = z.object({
   // precisa distinguir "não mandou nada" (legítimo enquanto é opcional) de
   // "mandou pela metade" (recusado).
   shippingRecipient: z.unknown().optional(),
+  shippingCpf: z.unknown().optional(),
   shippingBirthDate: z.unknown().optional(),
+  shippingResidenceType: z.unknown().optional(),
   shippingPhone: z.unknown().optional(),
   shippingPostalCode: z.unknown().optional(),
   shippingStreet: z.unknown().optional(),

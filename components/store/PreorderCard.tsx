@@ -7,6 +7,7 @@ import { ArrowRight, CalendarDays, Package, Rocket } from "lucide-react"
 
 import { useCart } from "@/components/providers/cart-context"
 import { FavoriteButton } from "@/components/store/FavoriteButton"
+import { PreorderCountdown } from "@/components/store/PreorderCountdown"
 import { PreorderAvailability, PreorderStatusChip } from "@/components/store/PreorderLotPanel"
 import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import { RouteLink } from "@/components/ui/route-link"
@@ -41,7 +42,7 @@ export function PreorderCard(
   const status = preorder?.status ?? "open"
   const open = status === "open"
   const activeVariant = cardActiveVariant(props)
-  const image = activeVariant?.image_url ?? props.images?.[0] ?? null
+  const image = props.images?.[0] ?? activeVariant?.image_url ?? null
   const { effectiveCents, baseCents, hasDiscount } = computeEffectivePrice(props, activeVariant)
   const requiresChoice = props.variants.length > 1 || props.has_option_groups
   const { icon: CategoryIcon, tint } = getCategoryIcon(props.category)
@@ -136,6 +137,8 @@ export function PreorderCard(
             "Envio quando o lote chegar"
           )}
         </p>
+
+        {preorder && open && <PreorderCountdown info={preorder} compact />}
 
         {preorder && <PreorderAvailability limit={preorder.limit} remaining={preorder.remaining} status={status} compact />}
 

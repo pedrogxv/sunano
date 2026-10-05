@@ -757,14 +757,18 @@ function OrderDetailsDialog({
                   <p className="text-xs text-muted-foreground">
                     {formatShippingAddressLine(order.shipping_address)}
                   </p>
-                  {/* Endereço gravado antes do campo existir. A alfândega pede
-                      a data na importação, então vale pedir enquanto o pedido
-                      ainda aceita alteração. */}
-                  {!order.shipping_address.birth_date && SHIPPING_EDITABLE.includes(order.status) && (
-                    <p className="text-xs text-amber-400">
-                      Falta a data de nascimento de quem recebe, exigida pela alfândega em produtos importados.
-                    </p>
-                  )}
+                  {/* Endereço gravado antes de algum campo existir. A importação
+                      exige todos, então vale pedir enquanto o pedido ainda
+                      aceita alteração. */}
+                  {(!order.shipping_address.cpf ||
+                    !order.shipping_address.birth_date ||
+                    !order.shipping_address.residence_type) &&
+                    SHIPPING_EDITABLE.includes(order.status) && (
+                      <p className="text-xs text-amber-400">
+                        Faltam dados de quem recebe (CPF, data de nascimento ou casa/apartamento), exigidos pela
+                        alfândega em produtos importados.
+                      </p>
+                    )}
                 </>
               ) : (
                 <p className="text-xs text-amber-400">

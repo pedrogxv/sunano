@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { CARD_SURFACE } from "@/lib/ui-styles"
 import {
+  SHIPPING_RESIDENCE_TYPE_LABELS,
   ShippingAddressFields,
   formatShippingAddressLine,
   isShippingFormComplete,
@@ -99,8 +100,8 @@ export function CheckoutShippingCard({
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">
                     {form.recipient}
                   </p>
-                  <p className="text-[11px] text-muted-foreground">Nascimento: {form.birthDate}</p>
                   <p className="text-xs text-foreground">
+                    {form.residenceType && `${SHIPPING_RESIDENCE_TYPE_LABELS[form.residenceType]} · `}
                     {formatShippingAddressLine({
                       street: form.street,
                       number: form.number,
@@ -110,6 +111,9 @@ export function CheckoutShippingCard({
                       state: form.state,
                       postal_code: form.postalCode,
                     })}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    CPF: {form.cpf} · Celular: {form.phone} · Nascimento: {form.birthDate}
                   </p>
                 </div>
               </div>

@@ -9,6 +9,7 @@ import { isProfileIndexable } from "@/lib/indexability"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { escapeLikePattern } from "@/lib/server/repositories/_shared"
 import { removeReplacedStorageObjects } from "@/lib/server/storage-cleanup"
+import { isOwnProfileMediaObject } from "@/lib/server/profile-media-url"
 import {
   coerceMediaAdjustments,
   DEFAULT_ADJUSTMENTS,
@@ -1858,13 +1859,13 @@ export async function updateUserProfileSettings(
       onConflict: "id",
     })
     if (retry.error) throw retry.error
-    await cleanupReplacedProfileMedia(previousMedia, changes)
+    await cleanupReplacedProfileMedia(userId, previousMedia, changes)
     return
   }
   if (error) throw error
   // Só depois do upsert dar certo: se a gravação falhar, o arquivo antigo
   // continua sendo o que o perfil exibe e não pode ser apagado.
-  await cleanupReplacedProfileMedia(previousMedia, changes)
+  await cleanupReplacedProfileMedia(userId, previousMedia, changes)
 }
 
 type ProfileMediaUrls = {
@@ -1881,6 +1882,7 @@ type ProfileMediaUrls = {
  * caso de a mesma arte ser usada em dois campos.
  */
 async function cleanupReplacedProfileMedia(
+  userId: string,
   previous: ProfileMediaUrls | null,
   changes: {
     avatarUrl?: string | null
@@ -1896,11 +1898,18 @@ async function cleanupReplacedProfileMedia(
   if (changes.miniBannerUrl !== undefined)
     replaced.push(previous.mini_banner_url)
 
-  await removeReplacedStorageObjects(replaced, [
-    changes.avatarUrl ?? previous.avatar_url,
-    changes.bannerUrl ?? previous.banner_url,
-    changes.miniBannerUrl ?? previous.mini_banner_url,
-  ])
+  // Só sai do bucket o que o upload de mídia DESTE usuário gerou: a coluna
+  // guarda texto que o próprio usuário (ou o admin) gravou, e apontar para o
+  // arquivo de outra pessoa não pode virar um jeito de apagá-lo.
+  await removeReplacedStorageObjects(
+    replaced,
+    [
+      changes.avatarUrl ?? previous.avatar_url,
+      changes.bannerUrl ?? previous.banner_url,
+      changes.miniBannerUrl ?? previous.mini_banner_url,
+    ],
+    (object) => isOwnProfileMediaObject(object, userId)
+  )
 }
 
 /**
@@ -2360,9 +2369,14 @@ export async function listAdminUsersPaginated(
   )
   const page = Math.max(1, Math.trunc(filters.page ?? 1))
 
+  // A função faz `ilike '%' || p_search || '%'` sem escapar nada: sem isto,
+  // buscar "_" ou "%" casa com todo usuário. O escape não atrapalha o atalho
+  // por UUID (`b.id::text = p_search`), que não tem `\`, `%` nem `_`.
+  const search = filters.search?.trim()
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (db as any).rpc("admin_list_users", {
-    p_search: filters.search?.trim() || null,
+    p_search: search ? escapeLikePattern(search) : null,
     p_role: filters.role && filters.role !== "" ? filters.role : "all",
     p_status: filters.status ?? "all",
     p_sort: filters.sort ?? "recent",

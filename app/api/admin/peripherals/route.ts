@@ -20,6 +20,10 @@ import {
 } from "@/lib/peripheral-expert"
 import { sanitizeTagsForCategory, type Category } from "@/lib/tag-options"
 import { revalidatePeripheral } from "@/lib/server/seo/revalidate-public"
+import {
+  findDuplicatePeripheral,
+  PERIPHERAL_DUPLICATE_MESSAGE,
+} from "@/lib/server/peripherals/duplicate"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -154,6 +158,19 @@ export async function POST(request: NextRequest) {
   }
 
   const db = createSupabaseAdminClient()
+
+  const duplicateId = await findDuplicatePeripheral(db, {
+    name: parsed.data.name,
+    brandId: parsed.data.brand_id,
+    category: parsed.data.category,
+  })
+  if (duplicateId) {
+    return NextResponse.json(
+      { error: PERIPHERAL_DUPLICATE_MESSAGE, field: "name", duplicateId },
+      { status: 409 }
+    )
+  }
+
   const { data, error } = await (db.from("peripherals") as any)
     .insert([insertData])
     .select(DEFAULT_COLUMNS)

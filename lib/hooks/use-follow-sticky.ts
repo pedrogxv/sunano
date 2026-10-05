@@ -10,10 +10,15 @@ import { useEffect, useRef } from "react"
  * ele prende a sidebar alta e o rodapé dela fica inalcançável; ancorado pelo
  * rodapé (`bottom`) ela só gruda no fim da rolagem e não parece fixa.
  *
- * A saída é alternar a âncora conforme a direção do scroll: descendo, o
- * elemento sobe junto até o rodapé dele encostar na base da viewport;
- * subindo, desce junto até o topo reencostar no header. Entre as trocas ele
- * fica "solto" num offset absoluto, o que dá a sensação de arrasto natural.
+ * A saída é mover o `top` do próprio sticky junto com a rolagem: descendo, o
+ * `top` cai (fica negativo) e o elemento sobe com a página até o rodapé dele
+ * encostar na base da viewport; subindo, o `top` volta até o topo reencostar
+ * no header. Entre os dois limites ele anda junto com a página, o que dá a
+ * sensação de arrasto natural.
+ *
+ * Nunca com `transform`: o deslocamento do sticky já acompanha o scroll, e o
+ * `translateY` somava por cima dele. A sidebar ficava presa no topo com os
+ * últimos cards fora da tela e, rolando mais, escorregava para baixo.
  *
  * Elementos que cabem na viewport pulam toda essa lógica e usam sticky comum.
  *
@@ -27,12 +32,9 @@ export function useFollowSticky<T extends HTMLElement>(topGap = 0, bottomGap = 1
     const el = ref.current
     if (!el) return
 
-    // Respeita quem pediu menos movimento na interface.
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
-
     let lastScrollY = window.scrollY
-    // Offset atual do elemento em relação ao topo do container pai.
-    let translate = 0
+    // Último `top` escrito pelo hook; `null` = vale o `top` do CSS.
+    let top: number | null = null
     let frame = 0
 
     function apply() {
@@ -40,56 +42,42 @@ export function useFollowSticky<T extends HTMLElement>(topGap = 0, bottomGap = 1
       const node = ref.current
       if (!node) return
 
-      const parent = node.parentElement
-      if (!parent) return
-
-      // Abaixo de `lg` a sidebar é estática/dialog — não mexe.
-      if (window.innerWidth < 1024) {
-        node.style.transform = ""
-        translate = 0
-        return
-      }
-
-      // O próprio sticky do CSS já resolve `--sticky-header-h`; ler o `top`
-      // computado evita interpretar a var na mão. Ela troca de unidade
-      // conforme o contexto — `4rem` no CSS base, `px` quando o
-      // ChangelogBanner a sobrescreve — e muda quando o banner some.
-      const stickyTop = (parseFloat(getComputedStyle(node).top) || 0) + topGap
-
-      const viewportH = window.innerHeight
-      const elH = node.offsetHeight
       const scrollY = window.scrollY
       const delta = scrollY - lastScrollY
       lastScrollY = scrollY
 
-      // Cabe na tela: sticky nativo pelo topo já basta.
-      if (elH + stickyTop <= viewportH) {
-        node.style.transform = ""
-        translate = 0
+      // Limpa o inline antes de medir: o `top` computado tem de ser o do CSS,
+      // não o que este hook escreveu no frame anterior. Ler o computado evita
+      // interpretar `--sticky-header-h` na mão: ela troca de unidade conforme
+      // o contexto (`4rem` no CSS base, `px` quando o ChangelogBanner a
+      // sobrescreve) e muda quando o banner some.
+      node.style.top = ""
+
+      // Abaixo de `lg` a sidebar é estática/dialog — não mexe.
+      if (window.innerWidth < 1024) {
+        top = null
         return
       }
 
-      // Quanto o elemento pode deslizar dentro do pai antes de passar do fim.
-      const maxTranslate = Math.max(0, parent.offsetHeight - elH)
-      // Limites de deslize: rodapé encostando na base / topo encostando no header.
-      const parentTop = parent.getBoundingClientRect().top + scrollY
-      const lowerBound = scrollY + viewportH - bottomGap - elH - parentTop
-      const upperBound = scrollY + stickyTop - parentTop
+      const stickyTop = (parseFloat(getComputedStyle(node).top) || 0) + topGap
+      const viewportH = window.innerHeight
+      const elH = node.offsetHeight
 
-      if (delta > 0) {
-        // Descendo: pode avançar até o rodapé alinhar com a base da viewport.
-        translate = Math.min(Math.max(translate, 0), Math.max(0, lowerBound))
-      } else if (delta < 0) {
-        // Subindo: recua até o topo alinhar com o header.
-        translate = Math.max(Math.min(translate, upperBound), 0)
+      // Cabe na tela: sticky nativo pelo topo já basta.
+      if (elH + stickyTop <= viewportH) {
+        top = null
+        return
       }
 
-      translate = Math.min(Math.max(translate, 0), maxTranslate)
-      node.style.transform = translate > 0 ? `translateY(${translate}px)` : ""
+      // `top` mais baixo possível: rodapé encostado na base da viewport.
+      const minTop = Math.min(stickyTop, viewportH - bottomGap - elH)
+      top = Math.min(Math.max((top ?? stickyTop) - delta, minTop), stickyTop)
+      node.style.top = `${top}px`
     }
 
+    // Sem checar `prefers-reduced-motion`: não há animação, a sidebar só rola
+    // junto com a página. Desligar o hook ali deixava o rodapé inalcançável.
     function onScroll() {
-      if (reduceMotion.matches) return
       // Uma atualização por frame — scroll dispara muito mais que isso.
       if (frame === 0) frame = window.requestAnimationFrame(apply)
     }
@@ -107,6 +95,7 @@ export function useFollowSticky<T extends HTMLElement>(topGap = 0, bottomGap = 1
       window.removeEventListener("resize", onScroll)
       observer.disconnect()
       if (frame) window.cancelAnimationFrame(frame)
+      el.style.top = ""
     }
   }, [topGap, bottomGap])
 

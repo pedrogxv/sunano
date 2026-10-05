@@ -216,6 +216,25 @@ export async function createSupportTicket(params: {
     }
   }
 
+  // O pedido vinculado tem de ser do próprio usuário. O `orderId` vem do corpo
+  // e a equipe lê o chamado ao lado do pedido: sem isto, dava para abrir um
+  // chamado "do pedido de outra pessoa" e usá-lo contra o suporte (engenharia
+  // social), e a tela do chamado confirmava que o pedido existe.
+  if (params.orderId) {
+    const { data: order, error: orderError } = await db
+      .from("store_orders")
+      .select("id, metadata")
+      .eq("id", params.orderId)
+      .maybeSingle()
+    if (orderError) {
+      console.error("[support-repository] createSupportTicket order lookup:", orderError)
+      return { ok: false, error: "Não foi possível abrir o chamado.", status: 500 }
+    }
+    if (!order || orderOwnerId(order.metadata as Record<string, unknown> | null) !== params.userId) {
+      return { ok: false, error: "Pedido não encontrado.", status: 404 }
+    }
+  }
+
   const { data: ticket, error: ticketError } = await db
     .from("support_tickets")
     .insert({

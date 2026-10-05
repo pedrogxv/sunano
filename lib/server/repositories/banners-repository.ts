@@ -24,6 +24,10 @@ export const MAX_ACTIVE_BANNERS = 7
 /** Bucket público onde as artes dos banners são guardadas. */
 const STORAGE_BUCKET = "peripherals"
 
+/** Nome gerado por `/api/admin/banners/upload-image`. */
+const HOME_BANNER_FILE_RE =
+  /^home-banner-(desktop|mobile)-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]{2,5}$/i
+
 export type HomeBanner = {
   id: string
   /** "image" = banner normal. "hero" = o bloco fixo "Periféricos sem mistério" (singleton, sem imagem própria). */
@@ -295,7 +299,11 @@ async function removeUnreferencedImages(urls: string[]): Promise<void> {
 
       if ((count ?? 0) > 0) continue
 
-      paths.push(decodeURIComponent(url.slice(markerIndex + prefix.length).split("?")[0]))
+      // O bucket é compartilhado (mídia de perfil, foto de periférico, logo de
+      // software): só sai daqui o que o upload de banner gerou.
+      const path = decodeURIComponent(url.slice(markerIndex + prefix.length).split("?")[0])
+      if (!HOME_BANNER_FILE_RE.test(path)) continue
+      paths.push(path)
     }
 
     if (paths.length > 0) {

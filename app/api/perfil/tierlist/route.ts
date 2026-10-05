@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 
 import { requireVipUser } from "@/lib/server/require-vip-user"
-import { upsertTierlistItem, removeTierlistItem } from "@/lib/server/repositories/user-tierlist-repository"
+import {
+  upsertTierlistItem,
+  removeTierlistItem,
+  TierlistTierNotOwnedError,
+} from "@/lib/server/repositories/user-tierlist-repository"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -32,6 +36,9 @@ export async function POST(request: NextRequest) {
     await upsertTierlistItem(auth.userId, parsed.data.peripheralId, parsed.data.tierId, parsed.data.position)
     return NextResponse.json({ ok: true })
   } catch (err) {
+    if (err instanceof TierlistTierNotOwnedError) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
+    }
     console.error("[perfil/tierlist] upsert:", err)
     return NextResponse.json({ error: "Não foi possível salvar o item." }, { status: 500 })
   }

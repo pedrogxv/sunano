@@ -141,7 +141,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=seu-chave-anonima
 
 **Teclado:**
 - Layout (60%, 75%, TKL, Full-size)
-- Profile (Rapid Trigger, Hall Effect, etc)
+- Profile (Rapid Trigger, Magnético, etc)
 - Connectivity (wired/wireless)
 
 **Mousepad:**

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { createSupabaseServerClient } from "@/lib/server/supabase/server-client"
+import { ADMIN_AVATAR_PREFIX } from "@/lib/server/profile-media-url"
 import { checkRateLimit } from "@/lib/server/rate-limit"
 import { validateImageUpload } from "@/lib/server/upload-validation"
 import {
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
       IMAGE_PRESETS.avatar
     )
 
-    const fileName = `admin-avatar-${authData.user.id}-${Date.now()}.${compressed.extension}`
+    const fileName = `${ADMIN_AVATAR_PREFIX}-${authData.user.id}-${Date.now()}.${compressed.extension}`
 
     // Admin client: storage.objects não tem policy para cliente
     // (20261104000000); a permissão profile_write já foi conferida acima.

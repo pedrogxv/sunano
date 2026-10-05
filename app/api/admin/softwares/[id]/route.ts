@@ -9,7 +9,7 @@ import {
 } from "@/lib/server/repositories/softwares-repository"
 import { removeImageIfUnreferenced, removeReplacedStorageObjects } from "@/lib/server/storage-cleanup"
 
-import { softwarePayload } from "../schema"
+import { isSoftwareLogoObject, softwarePayload } from "../schema"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -45,7 +45,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
 
-  await removeReplacedStorageObjects([current.logoUrl], [result.software.logoUrl])
+  await removeReplacedStorageObjects([current.logoUrl], [result.software.logoUrl], isSoftwareLogoObject)
   return NextResponse.json({ software: result.software })
 }
 
@@ -68,6 +68,6 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
     return NextResponse.json({ error: result.error }, { status: result.status })
   }
 
-  await removeImageIfUnreferenced(result.logoUrl, "softwares", "logo_url")
+  await removeImageIfUnreferenced(result.logoUrl, "softwares", "logo_url", isSoftwareLogoObject)
   return NextResponse.json({ ok: true })
 }

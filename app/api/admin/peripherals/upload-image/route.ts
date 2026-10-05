@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { newPeripheralImageName, PERIPHERAL_IMAGE_BUCKET } from "@/lib/server/peripheral-image"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { validateImageUpload } from "@/lib/server/upload-validation"
 import {
@@ -68,12 +69,12 @@ export async function POST(request: NextRequest) {
     IMAGE_PRESETS.product
   )
 
-  const filename = `${Date.now()}-${crypto.randomUUID()}.${compressed.extension}`
+  const filename = newPeripheralImageName(compressed.extension)
 
   const db = createSupabaseAdminClient()
 
   const { error } = await db.storage
-    .from("peripherals")
+    .from(PERIPHERAL_IMAGE_BUCKET)
     .upload(filename, compressed.bytes, {
       contentType: compressed.mime,
       cacheControl: IMMUTABLE_CACHE_CONTROL,
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
 
   const {
     data: { publicUrl },
-  } = db.storage.from("peripherals").getPublicUrl(filename)
+  } = db.storage.from(PERIPHERAL_IMAGE_BUCKET).getPublicUrl(filename)
 
   return NextResponse.json({ ok: true, publicUrl })
 }

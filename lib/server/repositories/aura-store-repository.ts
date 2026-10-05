@@ -6,6 +6,7 @@ import { sendOrderEmail } from "@/lib/server/repositories/order-emails-repositor
 import { parseSlug } from "@/lib/format"
 import { validateDisplayName } from "@/lib/profile-name"
 import { isDisplayNameAvailable } from "@/lib/server/repositories/users-repository"
+import { isUuid } from "@/lib/server/repositories/_shared"
 import {
   shippingAddressColumns,
   type ShippingAddressInput,
@@ -1128,6 +1129,24 @@ export type ListAuraPurchasesResult = {
 const PURCHASE_SELECT =
   "id, created_at, item_id, item_name, item_slug, item_kind, list_price, amount_paid, vip_discount_applied, balance_before, balance_after, user_id"
 
+/** `new Date().toISOString()`, que é como `nextCursor` é montado (até microssegundos). */
+const CURSOR_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$/
+
+/**
+ * Cursor do histórico de compras: `<timestamp ISO>|<uuid>`. O valor entra
+ * direto na gramática do `.or()` do PostgREST, então só o formato exato
+ * passa. Um `z.string().max(120)` na rota deixava o admin acrescentar
+ * condições ao filtro (`...|x),user_id.neq.y`).
+ */
+export function parseAuraPurchaseCursor(raw: string): { createdAt: string; id: string } | null {
+  const sep = raw.lastIndexOf("|")
+  if (sep <= 0) return null
+  const createdAt = raw.slice(0, sep)
+  const id = raw.slice(sep + 1)
+  if (!CURSOR_TIMESTAMP_RE.test(createdAt) || !isUuid(id)) return null
+  return { createdAt, id }
+}
+
 /**
  * Histórico paginado por keyset (`created_at desc, id desc`) — sem `offset`,
  * escala com a tabela crescendo. Filtros opcionais por item, comprador e
@@ -1157,16 +1176,14 @@ export async function listAuraPurchases(
     .order("id", { ascending: false })
     .limit(limit + 1)
 
-  if (params.cursor) {
-    const sep = params.cursor.lastIndexOf("|")
-    if (sep > 0) {
-      const cAt = params.cursor.slice(0, sep)
-      const cId = params.cursor.slice(sep + 1)
-      // (created_at, id) < (cursor) em ordem decrescente.
-      pageQuery = pageQuery.or(
-        `created_at.lt.${cAt},and(created_at.eq.${cAt},id.lt.${cId})`
-      )
-    }
+  const cursor = params.cursor ? parseAuraPurchaseCursor(params.cursor) : null
+  if (cursor) {
+    // (created_at, id) < (cursor) em ordem decrescente. Os dois valores já
+    // passaram pelo formato estrito do `parseAuraPurchaseCursor`: nada de
+    // vírgula ou parêntese chega à gramática do `.or()`.
+    pageQuery = pageQuery.or(
+      `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`
+    )
   }
 
   const { data: pageData, error: pageError } = await pageQuery

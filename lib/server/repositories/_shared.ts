@@ -18,9 +18,33 @@ export function escapeOrFilterValue(value: string): string {
  *
  * Dentro de `.or()`, aplique `escapeOrFilterValue` por cima deste: o
  * PostgREST desfaz um nível de barra no valor entre aspas.
+ *
+ * O `*` vira `_`: em `like`/`ilike` o PostgREST troca todo `*` por `%` e não
+ * tem escape para ele (`\*` vira `\%`, o sinal de porcento literal). Sem a
+ * troca, um `*` no meio do termo cobria um trecho de qualquer tamanho; com
+ * `_` ele vale um caractere só naquela posição, o próprio `*` incluído. Um
+ * termo feito só de `*` continua casando com quase tudo, como qualquer termo
+ * de uma letra.
  */
 export function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, "\\$&")
+  return value.replace(/[\\%_]/g, "\\$&").replace(/\*/g, "_")
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export function isUuid(value: string): boolean {
+  return UUID_RE.test(value)
+}
+
+/**
+ * Só UUIDs válidos, sem repetição e limitados a `max`. Obrigatório antes de
+ * interpolar ids vindos da query string em `.or()`: a lista de um `in.(...)`
+ * dentro do `.or()` aceita `)` e `,` e deixa o chamador acrescentar condições
+ * a qualquer coluna da tabela. UUID só tem hex e hífen, então não carrega
+ * gramática do PostgREST.
+ */
+export function onlyUuids(values: string[], max = 500): string[] {
+  return [...new Set(values.filter(isUuid))].slice(0, max)
 }
 
 /** SQLSTATE de `raise exception` sem errcode explícito (triggers do projeto). */

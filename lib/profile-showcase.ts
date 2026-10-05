@@ -261,6 +261,41 @@ export type ProfileShowcase = {
 /** Limite de caracteres da bio (espelha o CHECK constraint da tabela). */
 export const BIO_MAX_LENGTH = 160
 
+/**
+ * Teto de linhas da bio. O perfil público respeita a quebra de linha, e 160
+ * caracteres de "a\n" viravam 80 linhas empurrando a vitrine para baixo.
+ */
+export const BIO_MAX_LINES = 5
+
+/**
+ * Funde as linhas além do teto na última, com espaço: colar um texto de 8
+ * linhas não perde o fim, só deixa de quebrar. Usado no editor a cada
+ * digitação, então não mexe em espaço nem em linha em branco (apagaria o
+ * espaço que a pessoa acabou de digitar).
+ */
+export function limitBioLines(bio: string): string {
+  const lines = bio.split("\n")
+  if (lines.length <= BIO_MAX_LINES) return bio
+  const head = lines.slice(0, BIO_MAX_LINES - 1)
+  const tail = lines.slice(BIO_MAX_LINES - 1).join(" ")
+  return [...head, tail].join("\n")
+}
+
+/**
+ * Forma gravada da bio: quebra de linha única (`\n`), sem espaço sobrando no
+ * fim das linhas, no máximo uma linha em branco seguida e o teto de linhas.
+ */
+export function normalizeBio(bio: string): string {
+  const cleaned = bio
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+  return limitBioLines(cleaned)
+}
+
 /** Limite de caracteres dos handles de redes sociais (espelha o CHECK constraint da tabela). */
 export const SOCIAL_HANDLE_MAX_LENGTH = 30
 

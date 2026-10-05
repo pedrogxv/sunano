@@ -9,6 +9,7 @@ import {
   dbErrorResponse,
 } from "@/lib/db-errors"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { isPeripheralImageObject } from "@/lib/server/peripheral-image"
 import {
   removeImageIfUnreferenced,
   removeReplacedStorageObjects,
@@ -24,6 +25,11 @@ import {
 } from "@/lib/peripheral-expert"
 import { sanitizeTagsForCategory, type Category } from "@/lib/tag-options"
 import { revalidatePeripheral } from "@/lib/server/seo/revalidate-public"
+import {
+  findDuplicatePeripheral,
+  normalizePeripheralName,
+  PERIPHERAL_DUPLICATE_MESSAGE,
+} from "@/lib/server/peripherals/duplicate"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -151,9 +157,36 @@ export async function PATCH(
   const { data: current } = await (db.from("peripherals") as any)
     // `name` entra junto de `category`/`specs` porque a revalidação da rota
     // pública precisa remontar o slug (`nome--id`) da ficha que foi apagada.
-    .select("id, name, category, specs, image_url")
+    .select("id, name, brand_id, category, specs, image_url")
     .eq("id", id)
     .single()
+
+  // Só confere duplicata quando nome, marca ou categoria MUDAM: o formulário
+  // reenvia os três a cada save, e um cadastro duplicado antigo ficaria
+  // impossível de editar (inclusive para renomear e desfazer a duplicata).
+  if (current) {
+    const nextName = parsed.data.name ?? current.name
+    const nextBrandId = parsed.data.brand_id ?? current.brand_id
+    const nextCategory = parsed.data.category ?? current.category
+    const identityChanged =
+      normalizePeripheralName(nextName) !== normalizePeripheralName(current.name) ||
+      nextBrandId !== current.brand_id ||
+      nextCategory !== current.category
+    if (identityChanged) {
+      const duplicateId = await findDuplicatePeripheral(db, {
+        name: nextName,
+        brandId: nextBrandId,
+        category: nextCategory,
+        excludeId: id,
+      })
+      if (duplicateId) {
+        return NextResponse.json(
+          { error: PERIPHERAL_DUPLICATE_MESSAGE, field: "name", duplicateId },
+          { status: 409 }
+        )
+      }
+    }
+  }
 
   // Teto do comentário de especialista: vale para texto NOVO, nunca para o que já está no
   // banco. O board da tierlist manda `specs` INTEIRO a cada arrastada (ver
@@ -202,7 +235,7 @@ export async function PATCH(
   // Trocar a foto grava um path novo no bucket; sem isso a anterior ficaria
   // paga e sem exibição (ver lib/server/storage-cleanup.ts).
   if (current && parsed.data.image_url !== undefined) {
-    await removeReplacedStorageObjects([current.image_url], [parsed.data.image_url])
+    await removeReplacedStorageObjects([current.image_url], [parsed.data.image_url], isPeripheralImageObject)
   }
 
   if (current) {
@@ -270,7 +303,7 @@ export async function DELETE(
 
   // A ficha se foi; a foto no bucket continuaria sendo cobrada.
   if (current) {
-    await removeImageIfUnreferenced(current.image_url, "peripherals", "image_url")
+    await removeImageIfUnreferenced(current.image_url, "peripherals", "image_url", isPeripheralImageObject)
   }
 
   if (current) {

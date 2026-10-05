@@ -4,6 +4,7 @@ import { RouteLink } from "@/components/ui/route-link"
 import {
   ArrowRight,
   Crown,
+  Info,
   MessageCircle,
   Package,
   PlayCircle,
@@ -413,6 +414,20 @@ export default async function HomePage() {
           </div>
         )}
       </section>
+
+      <RouteLink
+        href="/informacoes"
+        className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-sm transition-all hover:border-foreground/20 hover:bg-accent"
+      >
+        <Info className="size-[18px] shrink-0 text-muted-foreground group-hover:text-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="block font-medium text-foreground/90">Central de Informações</span>
+          <span className="block text-xs text-muted-foreground">
+            Termos, privacidade, trocas e devoluções, Aura e Trust Factor
+          </span>
+        </span>
+        <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </RouteLink>
     </div>
   )
 }

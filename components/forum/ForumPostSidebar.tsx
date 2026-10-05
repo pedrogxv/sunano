@@ -75,7 +75,7 @@ export function ForumPostSidebar({
   return (
     <aside
       ref={stickyRef}
-      className="lg:sticky lg:top-[calc(var(--sticky-header-h)+1rem)] lg:self-start lg:will-change-transform"
+      className="lg:sticky lg:top-[calc(var(--sticky-header-h)+1rem)] lg:self-start"
     >
       <div className="space-y-4">
       {/* Card da categoria — equivalente ao "r/keyboards" do Reddit */}

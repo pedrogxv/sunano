@@ -199,7 +199,7 @@ export function ForumSidebar({ topActive, moderators }: ForumSidebarProps) {
   return (
     <aside
       ref={stickyRef}
-      className="hidden w-72 shrink-0 lg:sticky lg:top-[calc(var(--sticky-header-h)+1rem)] lg:block lg:self-start lg:will-change-transform"
+      className="hidden w-72 shrink-0 lg:sticky lg:top-[calc(var(--sticky-header-h)+1rem)] lg:block lg:self-start"
     >
       <div className="space-y-4">
         <DescriptionCard />

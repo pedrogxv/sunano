@@ -63,6 +63,84 @@ conteúdo público listadas em `supabase/tests/security_invariants.sql`.
   `npx supabase db query --linked -f supabase/tests/security_invariants.sql`
   tem que voltar sem nenhuma linha.
 
+# Filtro do PostgREST: valor de fora no `.or()`
+
+O app não tem driver SQL cru; o vetor de injeção é a **gramática do `.or()`**
+(`or=(a.eq.1,b.in.(2,3))`). `.eq`, `.in`, `.ilike` e afins gravam UM parâmetro
+com o valor já escapado e não encadeiam condição. O `.or()` recebe a gramática
+inteira numa string: vírgula, parêntese e ponto no valor viram condição nova em
+QUALQUER coluna da tabela.
+
+- **Texto livre** (busca, nome, URL): `escapeOrFilterValue(escapeLikePattern(x))`
+  de `lib/server/repositories/_shared.ts`, entre aspas duplas
+  (`col.ilike."%${termo}%"`). Sem `escapeLikePattern`, buscar `_` ou `%` casa
+  com a tabela inteira.
+- **Id** (lista de ids, cursor de paginação): nunca escape, **valide o formato**.
+  `onlyUuids(ids)` para lista; regex estrita para cursor (ver
+  `parseAuraPurchaseCursor`). `escapeOrFilterValue` não protege um
+  `in.(a,b)` sem aspas.
+- **Valor gerado no servidor** (`new Date().toISOString()`, número já passado
+  por `Number.isFinite`) pode ir direto.
+- Validar no **repositório**, não só na rota: o repositório é quem monta a
+  string, e a próxima rota que o chamar esquece o filtro. `z.string().max(n)`
+  limita tamanho, não gramática.
+- Função SQL com `ilike '%' || p_x || '%'` não escapa curinga: o chamador passa
+  `escapeLikePattern(x)` (ver `listAdminUsersPaginated`).
+- No PostgREST, `*` em `like`/`ilike` vira `%` e não tem escape.
+  `escapeLikePattern` já o troca por `_`; não monte padrão de busca sem ele.
+- `EXECUTE` dinâmico só em migration (DDL sobre catálogo, com `%I`). Função de
+  runtime que monte SQL com texto do usuário não entra.
+
+# Id e URL vindos do cliente: a rota é a RLS
+
+Tudo passa por `service_role`, então nenhuma policy barra um id trocado. Quem
+barra é a rota/repositório, e o banco só ajuda se o FK for escrito para isso.
+
+- **Id que aponta para linha de outra tabela** (`tierId`, `orderId`, `itemId`):
+  confira que a linha É DO USUÁRIO antes de gravar (`.eq("id", x).eq("user_id",
+  userId)`). `references t(id)` só garante que a linha existe; o item do usuário
+  A apontava para o tier do B e travava o B de apagar o próprio tier. Em tabela
+  nova, FK composto `(user_id, x_id) references t(user_id, id)` (ver
+  `20261217000000`).
+- **Ler por id** só devolve se `user_id` bate; mesma resposta (404) para "não
+  existe" e "não é seu".
+- **URL de anexo**: UM parser valida e assina. Validar com `includes` e assinar
+  pelo último `/support/` deixou o anexo de outro usuário passar pela
+  validação e ser assinado. Host da nossa origem, caminho ancorado, nome exato
+  (`isOwnStorageObject`, `support-media.ts`), nunca `includes`.
+- **Validador de posse escrito e nunca chamado** é o mesmo que não existir:
+  `isOwnedAdminSupportImageUrl` ficou sem chamador. Ao criar um, ligue-o no
+  mesmo commit.
+- **Apagar do Storage a partir de URL gravada** passa SEMPRE pelo predicado
+  `canRemove` de `lib/server/storage-cleanup.ts` (obrigatório): o fluxo diz o
+  bucket e o formato de nome que ELE gera, e só isso sai. A coluna é texto
+  que alguém gravou; quando bastava a URL ser do nosso Storage, qualquer
+  usuário gravava no próprio avatar a URL de um arquivo alheio e a troca
+  seguinte o apagava com service_role. Os buckets são compartilhados
+  (`peripherals` guarda mídia de perfil, foto de periférico, banner, logo):
+  bucket certo não basta, o nome também.
+- **Nome de arquivo vindo do corpo** (finalizar upload, anexo) confere o
+  formato EXATO (`<prefixo>-<userId>-<timestamp>.<ext>`), nunca só o prefixo:
+  o nome vai para a URL das chamadas ao Storage.
+
+# Periférico: uma linha é um produto
+
+Cada linha de `peripherals` é UM produto, com a própria ficha, tier e
+reviews. Nome igual não quer dizer produto igual.
+
+- **Nunca agrupe fichas por nome + marca.** A página do ATK Duckbill
+  mousepad mostrava "Classificações: Mouse A / Mousepad S" porque juntava
+  as linhas de mesmo nome, e o ATK Duckbill mouse é OUTRO produto. A ficha
+  mostra só a classificação da própria linha. Precisa ligar dois produtos
+  (mouse e mousepad da mesma linha, switch do teclado)? Vínculo explícito
+  por id, como `details.switchPeripheralId`, nunca por texto.
+- **Duplicata é nome + marca + CATEGORIA.** O mesmo nome em categorias
+  diferentes é permitido (o caso acima). Duas vezes na mesma categoria vira
+  duas fichas e reviews divididas: `findDuplicatePeripheral`
+  (`lib/server/peripherals/duplicate.ts`) recusa com 409 no POST e no PATCH
+  que muda nome/marca/categoria. Caminho novo que grava em `peripherals`
+  chama o mesmo helper.
+
 # Símbolo da Aura — SEMPRE o componente central
 
 **Toda** referência nova à Aura (saldo, custo, preço, contador, ranking,

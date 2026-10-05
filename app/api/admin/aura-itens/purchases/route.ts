@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import * as z from "zod"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
-import { listAuraPurchases } from "@/lib/server/repositories/aura-store-repository"
+import { listAuraPurchases, parseAuraPurchaseCursor } from "@/lib/server/repositories/aura-store-repository"
 import { searchUserProfiles } from "@/lib/server/repositories/users-repository"
 
 /**
@@ -19,7 +19,11 @@ const querySchema = z.object({
   itemId: z.string().uuid().optional(),
   userId: z.string().uuid().optional(),
   kind: z.enum(["avatar_frame", "vip_month", "display_name_change", "streak_shield"]).optional(),
-  cursor: z.string().max(120).optional(),
+  cursor: z
+    .string()
+    .max(120)
+    .refine((value) => parseAuraPurchaseCursor(value) !== null, "Cursor inválido.")
+    .optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
   users: z.string().trim().min(2).max(60).optional(),
 })

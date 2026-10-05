@@ -105,16 +105,6 @@ export interface PeripheralDetailViewLinkedSwitch {
   name: string
 }
 
-/** Uma linha de classificação: o mesmo produto pode existir em mais de uma
- *  categoria da tierlist (cadastrado como mais de uma linha na tabela), cada
- *  uma com seu próprio tier. */
-export interface PeripheralDetailViewClassification {
-  id: string
-  name: string
-  category: string
-  tier: string | null
-}
-
 interface PeripheralDetailViewProps {
   data: PeripheralDetailViewData
   rankBadge?: { position: number; total: number } | null
@@ -126,10 +116,6 @@ interface PeripheralDetailViewProps {
    *  `linkedStore` é o principal — quando omitido, cai para o primeiro daqui. */
   linkedStores?: PeripheralDetailViewLinkedProduct[]
   linkedSwitch?: PeripheralDetailViewLinkedSwitch | null
-  /** Todas as classificações deste produto (por nome+marca), incluindo a
-   *  categoria atual. Se omitido, cai de volta para a classificação única de
-   *  `data` (usado pelo preview do form de admin). */
-  classifications?: PeripheralDetailViewClassification[]
   /** Destino do badge/link de ranking. Passe "/admin/ranking" ao renderizar
    *  dentro do painel admin, senão o clique sai para o site público. */
   rankingHref?: string
@@ -739,7 +725,6 @@ export function PeripheralDetailView({
   linkedStore = null,
   linkedStores,
   linkedSwitch = null,
-  classifications = [],
   rankingHref = "/ranking",
 }: PeripheralDetailViewProps) {
   const t = useT()
@@ -1011,11 +996,6 @@ export function PeripheralDetailView({
   const specCardCount =
     1 + (performanceRows.length > 0 ? 1 : 0) + (showShape ? 1 : 0) + (isSwitch ? 1 : 0) + (showTuningCurve ? 1 : 0)
 
-  const classificationsList = classifications.length > 0
-    ? classifications
-    : [{ id: data.id, name: data.name, category: data.category, tier: data.tier }]
-  const hasMultipleClassifications = classificationsList.length > 1
-
   // Dentro da própria categoria (ex.: mouse), o mesmo produto pode ser ranqueado
   // em mais de um "modo" (Geral, Magnético, Custo-Benefício...), cada um com seu
   // tier — ver RANKING_MODES_BY_CATEGORY. A página de detalhe mostra só o modo
@@ -1050,56 +1030,7 @@ export function PeripheralDetailView({
     <div className="@container/pdv">
     <div className="grid gap-4 @2xl/pdv:grid-cols-[320px_minmax(0,1fr)]">
             <div className="space-y-3">
-              {hasMultipleClassifications ? (
-                <div className="rounded-2xl border border-border bg-card p-3">
-                  <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                    Classificações
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {classificationsList.map((classification) => {
-                      const isCurrent = classification.id === data.id
-                      const style = classification.tier
-                        ? TIER_THEMES[classification.tier as keyof typeof TIER_THEMES]
-                        : null
-                      const tile = (
-                        <div
-                          className={cn(
-                            "rounded-xl px-2.5 py-2.5 text-center transition",
-                            style
-                              ? cn("bg-gradient-to-br", style.accent, style.textColor)
-                              : "border border-border bg-muted/40",
-                            isCurrent && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-                            !isCurrent && "hover:opacity-90",
-                          )}
-                        >
-                          <p
-                            className={cn(
-                              "text-[9px] font-semibold uppercase tracking-wide",
-                              style ? "opacity-70" : "text-muted-foreground",
-                            )}
-                          >
-                            {categoryLabel(classification.category)}
-                          </p>
-                          <p className={cn("text-lg font-bold leading-tight", !style && "text-foreground")}>
-                            {classification.tier ? tierLabel(mapTier(classification.tier), classification.category) : t.peripheralDetail.underReview}
-                          </p>
-                        </div>
-                      )
-                      return isCurrent ? (
-                        <div key={classification.id}>{tile}</div>
-                      ) : (
-                        <Link
-                          key={classification.id}
-                          href={`/perifericos/${buildPeripheralSlug(classification.name, classification.id)}`}
-                          aria-label={`Ver classificação em ${categoryLabel(classification.category)}`}
-                        >
-                          {tile}
-                        </Link>
-                      )
-                    })}
-                  </div>
-                </div>
-              ) : tierStyle ? (
+              {tierStyle ? (
                 <div className={cn("rounded-2xl bg-gradient-to-br px-4 py-3 text-center", tierStyle.accent, tierStyle.textColor)}>
                   <p className="text-[10px] font-semibold uppercase tracking-widest opacity-60 mb-1">{t.peripheralDetail.classification}</p>
                   <p className="text-3xl font-bold tracking-tight leading-none">

@@ -1,5 +1,6 @@
 import "server-only"
 
+import { getStoragePublicOrigin } from "@/lib/server/storage-origin"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
@@ -18,46 +19,83 @@ export const ALLOWED_SUPPORT_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "ima
 const SIGNED_URL_TTL_SECONDS = 60 * 10
 
 /**
+ * Caminhos de um objeto do bucket `support`: assinado (o que o upload devolve)
+ * ou público (mensagens gravadas antes de o bucket virar privado).
+ */
+const SUPPORT_OBJECT_PATHS = [
+  "/storage/v1/object/sign/support/",
+  "/storage/v1/object/public/support/",
+]
+
+/** `<timestamp>.<ext>`, o que sobra do nome depois de `support-<uid>-`. */
+const SUPPORT_FILE_TAIL_RE = /^\d+\.[a-z0-9]{2,5}$/i
+
+/**
+ * Nome do objeto dentro do bucket `support`, tirado de uma URL do nosso
+ * Storage. É A ÚNICA regra de leitura de URL de anexo: a validação de posse e a
+ * assinatura (`signSupportImageUrls`) passam por aqui. Quando eram duas regras,
+ * a validação aceitava `.../support/support-<meu-id>-x/support/support-<id-de-
+ * outro>-y.png` (via `includes`) e a assinatura, que olhava o ÚLTIMO
+ * `/support/`, assinava o anexo da outra pessoa.
+ *
+ * Âncora no início do caminho, nome sem `/`. `requireOwnOrigin = false` só na
+ * leitura de linha já gravada: o host nunca foi o que importa para assinar, e
+ * exigir a origem atual sumiria com anexo antigo se o domínio do projeto mudar.
+ */
+function supportObjectName(url: string, requireOwnOrigin: boolean): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+
+  const origin = getStoragePublicOrigin()
+  if (requireOwnOrigin && origin && parsed.origin !== origin) return null
+
+  const prefix = SUPPORT_OBJECT_PATHS.find((candidate) => parsed.pathname.startsWith(candidate))
+  if (!prefix) return null
+
+  let name: string
+  try {
+    name = decodeURIComponent(parsed.pathname.slice(prefix.length))
+  } catch {
+    return null
+  }
+  return name.length > 0 && !name.includes("/") ? name : null
+}
+
+function isSupportFileOf(url: string, namePrefix: string): boolean {
+  const name = supportObjectName(url, true)
+  if (!name || !name.startsWith(namePrefix)) return false
+  return SUPPORT_FILE_TAIL_RE.test(name.slice(namePrefix.length))
+}
+
+/**
  * Confere que a URL enviada pelo cliente veio mesmo de um upload feito por
  * este usuário em `/api/support/upload-image` — sem isso, o body do POST de
  * ticket/mensagem aceitaria qualquer URL externa, inflando o anexo sem nunca
  * passar pela validação de tamanho/MIME, ou a URL do upload de outra pessoa.
+ * Host, bucket e nome exato (`support-<uid>-<timestamp>.<ext>`).
  */
 export function isOwnedSupportImageUrl(url: string, userId: string): boolean {
-  try {
-    const { pathname } = new URL(url)
-    return pathname.includes(`/support/support-${userId}-`)
-  } catch {
-    return false
-  }
+  return isSupportFileOf(url, `support-${userId}-`)
 }
 
 /** Mesma checagem, para anexos enviados pelo admin em `/api/admin/support/upload-image`. */
 export function isOwnedAdminSupportImageUrl(url: string, adminId: string): boolean {
-  try {
-    const { pathname } = new URL(url)
-    return pathname.includes(`/support/support-admin-${adminId}-`)
-  } catch {
-    return false
-  }
+  return isSupportFileOf(url, `support-admin-${adminId}-`)
 }
 
 /**
- * Nome do objeto dentro do bucket `support`, extraído da URL pública salva em
- * `support_messages.image_urls` (gravada antes do bucket virar privado — ver
- * 20260906000000_support_bucket_private.sql). Extrair por string em vez de
- * mudar o que é gravado no banco evita migrar o histórico de mensagens.
+ * Nome do objeto dentro do bucket `support`, extraído da URL salva em
+ * `support_messages.image_urls` (a pública, gravada antes do bucket virar
+ * privado, ou a assinada; ver 20260906000000_support_bucket_private.sql).
+ * Extrair por string em vez de mudar o que é gravado no banco evita migrar o
+ * histórico de mensagens.
  */
 function extractSupportObjectName(url: string): string | null {
-  try {
-    const { pathname } = new URL(url)
-    const marker = "/support/"
-    const idx = pathname.lastIndexOf(marker)
-    if (idx === -1) return null
-    return decodeURIComponent(pathname.slice(idx + marker.length))
-  } catch {
-    return null
-  }
+  return supportObjectName(url, false)
 }
 
 /**

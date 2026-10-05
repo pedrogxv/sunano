@@ -1,6 +1,76 @@
 import "server-only"
 
-import { getStoragePublicOrigin } from "@/lib/server/storage-origin"
+import type { StorageObjectRef } from "@/lib/server/storage-cleanup"
+import { getStoragePublicOrigin, isOwnStorageObject } from "@/lib/server/storage-origin"
+
+/** Bucket da mídia de perfil (`profile-media-upload.ts`). */
+export const PROFILE_MEDIA_BUCKET = "peripherals"
+
+/** Prefixo do arquivo por campo: `<prefixo>-<userId>-<timestamp>.<ext>`. */
+export const PROFILE_MEDIA_PREFIX = {
+  avatar: "user-avatar",
+  banner: "user-banner",
+  "mini-banner": "user-mini-banner",
+} as const
+
+/**
+ * Foto do painel (`/api/admin/profile/upload-avatar`), no mesmo bucket. O
+ * editor do perfil a recebe como foto enquanto o perfil não tem uma própria, e
+ * a devolve no POST: por isso pode ser GRAVADA no perfil, mas nunca é apagada
+ * pela limpeza do perfil (o arquivo é do `admin_profiles`).
+ */
+export const ADMIN_AVATAR_PREFIX = "admin-avatar"
+
+/** `<timestamp>.<ext>`, o que sobra do nome depois de `<prefixo>-<userId>-`. */
+const FILE_TAIL_RE = /^\d+\.[a-z0-9]{2,5}$/i
+
+/**
+ * `true` se `name` é exatamente `<prefixo>-<userId>-<timestamp>.<ext>`, sem
+ * barra nem outro segmento. Prefixo sozinho não basta: o nome vai para a URL
+ * das chamadas ao Storage, e só o formato exato garante que o objeto tocado é
+ * o que o upload deste usuário gerou.
+ */
+export function isProfileMediaFileOf(name: string, prefix: string, userId: string): boolean {
+  const head = `${prefix}-${userId}-`
+  return name.startsWith(head) && FILE_TAIL_RE.test(name.slice(head.length))
+}
+
+/**
+ * Objeto que o upload de mídia de perfil gerou para ESTE usuário, em qualquer
+ * dos três campos (o mini banner pode reaproveitar o arquivo do banner). É o
+ * que a troca de avatar/banner pode apagar: sem essa trava, a limpeza apagava
+ * o arquivo de quem quer que a URL gravada apontasse.
+ */
+export function isOwnProfileMediaObject(object: StorageObjectRef, userId: string): boolean {
+  if (object.bucket !== PROFILE_MEDIA_BUCKET) return false
+  return Object.values(PROFILE_MEDIA_PREFIX).some((prefix) => isProfileMediaFileOf(object.path, prefix, userId))
+}
+
+/**
+ * URL do nosso Storage que o usuário pode gravar no próprio perfil: o upload
+ * dele, ou a foto do painel dele. A origem sozinha deixava gravar a URL de
+ * qualquer arquivo do Storage.
+ */
+export function isOwnProfileMediaUrl(url: string, userId: string): boolean {
+  return isOwnStorageObject(
+    url,
+    PROFILE_MEDIA_BUCKET,
+    (name) =>
+      isOwnProfileMediaObject({ bucket: PROFILE_MEDIA_BUCKET, path: name }, userId) ||
+      isProfileMediaFileOf(name, ADMIN_AVATAR_PREFIX, userId)
+  )
+}
+
+/** `true` se a URL aponta para o nosso Storage (qualquer bucket). */
+export function isOurStorageUrl(url: string): boolean {
+  const origin = getStoragePublicOrigin()
+  if (!origin) return false
+  try {
+    return new URL(url).origin === origin
+  } catch {
+    return false
+  }
+}
 
 /**
  * Valida a URL de avatar/banner/mini-banner ANTES de gravá-la no perfil.

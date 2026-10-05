@@ -40,10 +40,13 @@ export function isOwnStorageObject(
   const origin = getStoragePublicOrigin()
   if (origin && parsed.origin !== origin) return false
 
+  // Ancorado no início do caminho: com `indexOf`, um caminho que só CONTÉM o
+  // segmento (`/storage/v1/object/public/support/x/storage/v1/object/public/
+  // comments/comment-<uid>-1.png`) passava, embora o objeto de verdade fosse
+  // outro, em outro bucket.
   const marker = `/storage/v1/object/public/${bucket}/`
-  const idx = parsed.pathname.indexOf(marker)
-  if (idx === -1) return false
+  if (!parsed.pathname.startsWith(marker)) return false
 
-  const fileName = parsed.pathname.slice(idx + marker.length)
+  const fileName = parsed.pathname.slice(marker.length)
   return fileName.length > 0 && pathPredicate(fileName)
 }

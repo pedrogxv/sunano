@@ -7,6 +7,7 @@ import { Inbox } from "lucide-react"
 import { PeripheralRequestStatusBadge } from "@/components/peripherals/requests/PeripheralRequestStatusBadge"
 import { Button } from "@/components/ui/button"
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { checkContent } from "@/lib/content-filter"
 import {
   PERIPHERAL_REQUEST_STATUSES,
   PERIPHERAL_REQUEST_STATUS_LABEL,
@@ -121,7 +122,7 @@ export default async function AdminPeripheralRequestsPage({
                     </p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-sm text-foreground">{request.user_display_name ?? "Usuário"}</p>
+                    <p className="text-sm text-foreground">{checkContent(request.user_display_name ?? "Usuário").censored}</p>
                   </td>
                   <td className="px-4 py-3">
                     <PeripheralRequestStatusBadge status={request.status} />

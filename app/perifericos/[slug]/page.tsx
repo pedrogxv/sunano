@@ -148,15 +148,10 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
   const rankIndex = rankedInCategory.findIndex((p) => p.id === data.id)
   const rankBadge = rankIndex >= 0 ? { position: rankIndex + 1, total: rankedInCategory.length } : null
 
-  // Um mesmo produto às vezes é cadastrado mais de uma vez em categorias
-  // diferentes da tierlist (ex.: "ATK Duckbill" como mouse E como mousepad,
-  // cada linha com seu próprio tier). Agrupa por nome+marca pra mostrar
-  // todas as classificações desse produto na página, não só a da categoria
-  // que originou esta URL.
-  const classifications = allPeripherals
-    .filter((p) => p.name.trim().toLowerCase() === data.name.trim().toLowerCase() && p.brandId === data.brandId)
-    .map((p) => ({ id: p.id, name: p.name, category: p.category, tier: p.tier }))
-    .sort((a, b) => a.category.localeCompare(b.category))
+  // A ficha mostra só a classificação DESTA linha. Agrupar por nome+marca
+  // ("o mesmo produto em outra categoria") juntava produtos diferentes: o
+  // ATK Duckbill mouse e o ATK Duckbill mousepad são dois itens, e a página
+  // do mousepad exibia o tier do mouse como se fosse dele.
 
   /**
    * JSON-LD Product: a ficha de periférico competia na SERP como link de texto
@@ -252,7 +247,6 @@ export default async function PerifericoPage({ params }: PerifericoPageProps) {
         linkedStore={linkedStore}
         linkedStores={linkedStores}
         linkedSwitch={linkedSwitch ? { id: linkedSwitch.id, name: linkedSwitch.name } : null}
-        classifications={classifications}
       />
     </div>
   )

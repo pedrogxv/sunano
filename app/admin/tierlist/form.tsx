@@ -2818,7 +2818,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Features</label>
-                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Rapid Trigger, Hall Effect, RGB..." {...form.register("features")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Rapid Trigger, Magnético, RGB..." {...form.register("features")} />
                 </div>
               </>
             )}
@@ -2975,7 +2975,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Features</label>
-                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Rapid Trigger, Hall Effect, RGB..." {...form.register("features")} />
+                  <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Rapid Trigger, Magnético, RGB..." {...form.register("features")} />
                 </div>
               </>
             )}

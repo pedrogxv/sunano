@@ -1,5 +1,6 @@
 import "server-only"
 
+import { getStoragePublicOrigin } from "@/lib/server/storage-origin"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
@@ -23,23 +24,54 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 /** Buckets cujos objetos este helper pode remover. */
 const PUBLIC_OBJECT_SEGMENT = "/storage/v1/object/public/"
 
+/** Um objeto do Storage: o bucket e o nome dentro dele. */
+export type StorageObjectRef = { bucket: string; path: string }
+
 /**
- * Path do objeto dentro do bucket, ou `null` se a URL não for do nosso Storage.
+ * Quais objetos um fluxo pode apagar. É obrigatório em toda chamada porque a
+ * URL que chega aqui é o valor ANTIGO de uma coluna, e coluna é texto que
+ * alguém gravou: enquanto bastava a URL parecer do nosso Storage, qualquer
+ * usuário gravava no próprio avatar a URL de um arquivo alheio (foto de
+ * produto, avatar de outra pessoa, anexo do bucket privado `support`) e a
+ * troca seguinte o apagava com service_role. Cada chamador declara o bucket e
+ * o formato de nome que ELE gera, e só isso sai do bucket.
+ */
+export type CanRemoveStorageObject = (object: StorageObjectRef) => boolean
+
+/**
+ * Bucket e nome do objeto, ou `null` se a URL não for do nosso Storage.
  *
  * Avatar vindo do login social (Google/Discord) e URL colada à mão caem aqui e
- * são ignorados — apagar não é sequer possível, mas o `null` evita montar um
- * path sem sentido a partir de um host de terceiro.
+ * são ignorados. A origem tem de ser a do nosso projeto e o caminho começa no
+ * segmento público: procurar o segmento em qualquer ponto da string aceitava
+ * `https://lh3.googleusercontent.com/storage/v1/object/public/<bucket>/<x>`,
+ * que passa pela allowlist de host de OAuth e apagava `<x>` do NOSSO bucket.
  */
-function parseStorageUrl(url: string): { bucket: string; path: string } | null {
-  const markerIndex = url.indexOf(PUBLIC_OBJECT_SEGMENT)
-  if (markerIndex === -1) return null
+function parseStorageUrl(url: string): StorageObjectRef | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
 
-  const rest = url.slice(markerIndex + PUBLIC_OBJECT_SEGMENT.length).split("?")[0]
+  // Sem a origem configurada não há como saber o que é nosso: na dúvida,
+  // nada sai do bucket (o cleanup-orphaned-storage.ts recolhe depois).
+  const origin = getStoragePublicOrigin()
+  if (!origin || parsed.origin !== origin) return null
+  if (!parsed.pathname.startsWith(PUBLIC_OBJECT_SEGMENT)) return null
+
+  const rest = parsed.pathname.slice(PUBLIC_OBJECT_SEGMENT.length)
   const slashIndex = rest.indexOf("/")
   if (slashIndex <= 0) return null
 
   const bucket = rest.slice(0, slashIndex)
-  const path = decodeURIComponent(rest.slice(slashIndex + 1))
+  let path: string
+  try {
+    path = decodeURIComponent(rest.slice(slashIndex + 1))
+  } catch {
+    return null
+  }
   if (!bucket || !path) return null
   return { bucket, path }
 }
@@ -54,7 +86,8 @@ function parseStorageUrl(url: string): { bucket: string; path: string } | null {
  */
 export async function removeReplacedStorageObjects(
   previousUrls: Array<string | null | undefined>,
-  stillReferenced: Array<string | null | undefined>
+  stillReferenced: Array<string | null | undefined>,
+  canRemove: CanRemoveStorageObject
 ): Promise<void> {
   const keep = new Set(stillReferenced.filter((url): url is string => Boolean(url)))
 
@@ -62,7 +95,7 @@ export async function removeReplacedStorageObjects(
   for (const url of previousUrls) {
     if (!url || keep.has(url)) continue
     const parsed = parseStorageUrl(url)
-    if (!parsed) continue
+    if (!parsed || !canRemove(parsed)) continue
     const paths = byBucket.get(parsed.bucket) ?? []
     paths.push(parsed.path)
     byBucket.set(parsed.bucket, paths)
@@ -92,11 +125,12 @@ export async function removeReplacedStorageObjects(
 export async function removeImageIfUnreferenced(
   url: string | null | undefined,
   table: string,
-  column: string
+  column: string,
+  canRemove: CanRemoveStorageObject
 ): Promise<void> {
   if (!url) return
   const parsed = parseStorageUrl(url)
-  if (!parsed) return
+  if (!parsed || !canRemove(parsed)) return
 
   try {
     const db = createSupabaseAdminClient()

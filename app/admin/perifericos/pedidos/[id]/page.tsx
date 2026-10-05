@@ -9,6 +9,7 @@ import { PeripheralRequestReviewForm } from "@/components/admin/PeripheralReques
 import { PeripheralRequestStatusBadge } from "@/components/peripherals/requests/PeripheralRequestStatusBadge"
 import { AuraAmount } from "@/components/ui/AuraIcon"
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { checkContent } from "@/lib/content-filter"
 import { peripheralRequestNumber } from "@/lib/peripheral-requests"
 import { safeHref } from "@/lib/safe-url"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
@@ -47,7 +48,7 @@ export default async function AdminPeripheralRequestPage({ params }: { params: P
           {request.brand_name} {request.model_name}
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {request.user_display_name ?? "Usuário"}
+          {checkContent(request.user_display_name ?? "Usuário").censored}
           {request.user_email ? ` · ${request.user_email}` : ""}
           {" · "}
           {formatDistanceToNow(new Date(request.created_at), { addSuffix: true, locale: ptBR })}

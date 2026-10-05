@@ -6,8 +6,17 @@ import { checkContent, CONTENT_FILTER_MESSAGE } from "@/lib/content-filter"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { coerceMediaAdjustments, DEFAULT_ADJUSTMENTS } from "@/lib/profile-media-adjust"
 import { slugifyDisplayName } from "@/lib/profile-name"
-import { BIO_MAX_LENGTH, normalizeSocialHandle, SOCIAL_HANDLE_PATTERN } from "@/lib/profile-showcase"
-import { isAllowedProfileMediaUrl } from "@/lib/server/profile-media-url"
+import {
+  BIO_MAX_LENGTH,
+  normalizeBio,
+  normalizeSocialHandle,
+  SOCIAL_HANDLE_PATTERN,
+} from "@/lib/profile-showcase"
+import {
+  isAllowedProfileMediaUrl,
+  isOurStorageUrl,
+  isOwnProfileMediaUrl,
+} from "@/lib/server/profile-media-url"
 import {
   getAdminProfileSummary,
   getUserProfileSettings,
@@ -38,6 +47,7 @@ const profileSchema = z.object({
     .string()
     .trim()
     .max(BIO_MAX_LENGTH, `Bio deve ter no máximo ${BIO_MAX_LENGTH} caracteres`)
+    .transform(normalizeBio)
     .nullable()
     .optional(),
   // Aceita handle solto ("@user") ou URL colada — normalizado abaixo antes de salvar.
@@ -186,6 +196,24 @@ export async function POST(request: Request) {
 
     const email = authData.user.email ?? null
     const existingSettings = await getUserProfileSettings(authData.user.id)
+
+    // URL do nosso Storage só entra se for upload DESTE usuário. A checagem de
+    // origem acima aceitava a URL de qualquer arquivo do Storage, e a troca
+    // seguinte o apagava (limpeza de mídia substituída). O valor que já estava
+    // gravado passa: o editor reenvia os três campos a cada salvamento.
+    for (const [field, value] of [
+      ["avatar_url", parsed.data.avatar_url],
+      ["banner_url", parsed.data.banner_url],
+      ["mini_banner_url", parsed.data.mini_banner_url],
+    ] as const) {
+      if (!value || value === existingSettings?.[field]) continue
+      if (isOurStorageUrl(value) && !isOwnProfileMediaUrl(value, authData.user.id)) {
+        return NextResponse.json(
+          { error: "URL de imagem não permitida. Envie a imagem pelo próprio site.", field },
+          { status: 400 }
+        )
+      }
+    }
 
     if (parsed.data.bio && checkContent(parsed.data.bio).blocked) {
       return NextResponse.json({ error: CONTENT_FILTER_MESSAGE, field: "bio" }, { status: 400 })

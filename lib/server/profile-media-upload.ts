@@ -9,6 +9,11 @@ import {
   IMMUTABLE_CACHE_CONTROL,
 } from "@/lib/server/image-compression"
 import { isKlipyGifUrl } from "@/lib/klipy"
+import {
+  isProfileMediaFileOf,
+  PROFILE_MEDIA_BUCKET,
+  PROFILE_MEDIA_PREFIX,
+} from "@/lib/server/profile-media-url"
 import { detectImageType } from "@/lib/server/upload-validation"
 import { UPLOAD_LIMITS, uploadTooLargeMessage } from "@/lib/upload-limits"
 
@@ -26,7 +31,7 @@ import { UPLOAD_LIMITS, uploadTooLargeMessage } from "@/lib/upload-limits"
  *     Arquivo inválido é apagado do bucket, nunca fica exposto.
  */
 
-const BUCKET = "peripherals"
+const BUCKET = PROFILE_MEDIA_BUCKET
 
 export type ProfileMediaField = "avatar" | "banner" | "mini-banner"
 
@@ -38,17 +43,17 @@ type FieldConfig = {
 
 const FIELD_CONFIG: Record<ProfileMediaField, FieldConfig> = {
   avatar: {
-    prefix: "user-avatar",
+    prefix: PROFILE_MEDIA_PREFIX.avatar,
     maxSizeBytes: UPLOAD_LIMITS.profileMedia,
     gifErrorMessage: "Foto de perfil animada (GIF) é exclusiva para membros VIP.",
   },
   banner: {
-    prefix: "user-banner",
+    prefix: PROFILE_MEDIA_PREFIX.banner,
     maxSizeBytes: UPLOAD_LIMITS.profileMedia,
     gifErrorMessage: "Banner animado (GIF) é exclusivo para membros VIP.",
   },
   "mini-banner": {
-    prefix: "user-mini-banner",
+    prefix: PROFILE_MEDIA_PREFIX["mini-banner"],
     maxSizeBytes: UPLOAD_LIMITS.profileMedia,
     gifErrorMessage: "Fundo animado (GIF) no Mini Perfil é exclusivo para membros VIP.",
   },
@@ -131,8 +136,9 @@ export async function finalizeProfileMediaUpload(
   const config = FIELD_CONFIG[field]
 
   // O path é gerado pelo passo anterior com o prefixo do usuário — confere
-  // que ninguém está tentando confirmar um objeto que não pediu.
-  if (!path.startsWith(`${config.prefix}-${userId}-`)) {
+  // que ninguém está tentando confirmar um objeto que não pediu. Formato
+  // exato, não só o prefixo: o path chega do corpo da requisição.
+  if (!isProfileMediaFileOf(path, config.prefix, userId)) {
     return { ok: false, error: "Upload inválido.", status: 400 }
   }
 

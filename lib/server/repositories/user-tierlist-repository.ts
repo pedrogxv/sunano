@@ -201,7 +201,24 @@ export async function getUserTierlistItemCount(userId: string): Promise<number> 
   return count ?? 0
 }
 
-/** Adiciona ou move um item para um tier/posição — dono só, checagem de VIP feita na rota (defesa em profundidade com a RLS). */
+/** O `tierId` enviado não é um tier do próprio usuário (inexistente ou de outra pessoa). */
+export class TierlistTierNotOwnedError extends Error {
+  constructor() {
+    super("Tier inválido.")
+    this.name = "TierlistTierNotOwnedError"
+  }
+}
+
+/**
+ * Adiciona ou move um item para um tier/posição. Dono só; a checagem de VIP é
+ * da rota.
+ *
+ * O tier tem de ser DO USUÁRIO: o FK de `tier_id` só exige que o tier exista,
+ * e `replace_user_tierlist_tiers` recusa apagar tier com item apontando para
+ * ele. Sem esta checagem, qualquer VIP pendurava um item no tier de outra
+ * pessoa e a travava de remover aquele tier. O FK composto
+ * `user_tierlist_items_user_tier_fkey` (20261217000000) é a segunda barreira.
+ */
 export async function upsertTierlistItem(
   userId: string,
   peripheralId: string,
@@ -209,6 +226,16 @@ export async function upsertTierlistItem(
   position: number
 ): Promise<void> {
   const db = createSupabaseAdminClient()
+
+  const { data: tier, error: tierError } = await db
+    .from("user_tierlist_tiers")
+    .select("id")
+    .eq("id", tierId)
+    .eq("user_id", userId)
+    .maybeSingle()
+  if (tierError) throw tierError
+  if (!tier) throw new TierlistTierNotOwnedError()
+
   const { error } = await db
     .from("user_tierlist_items")
     .upsert(

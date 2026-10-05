@@ -10,7 +10,6 @@ import {
   BookOpen,
   Crown,
   Home,
-  Info,
   Medal,
   MessageCircle,
   Mouse,
@@ -253,15 +252,6 @@ export function PublicSidebar() {
                 {t.nav.offers}
               </span>
             </RouteLink>
-
-            {/* Hub dos documentos legais/institucionais. Um link só; as
-                páginas individuais seguem em suas URLs próprias. */}
-            <NavLink
-              item={{ href: "/informacoes", label: t.nav.info, icon: Info }}
-              isActive={isActive("/informacoes")}
-              collapsed={isCollapsed}
-              onClick={close}
-            />
           </div>
 
           {/* Periféricos */}

@@ -9,6 +9,7 @@ import { getTierCapabilities, isVipActive, profileMediaProxyUrl } from "@/lib/ac
 import { profileFrameOf, type ProfileFrameIdentity } from "@/lib/profile-frames"
 import { getVipFounderOwners } from "@/lib/server/repositories/vip-founder-repository"
 import { getUserStreakPairsByUser } from "@/lib/server/repositories/achievements-repository"
+import { onlyUuids } from "@/lib/server/repositories/_shared"
 
 type AuraLedgerReason = Database["public"]["Tables"]["aura_ledger"]["Row"]["reason"]
 
@@ -433,14 +434,16 @@ export async function creditPeripheralCommentCreationAura(userId: string, periph
 /** Quais comentários de periférico (dentre os informados) o usuário atual já curtiu/descurtiu. */
 export async function getUserPeripheralCommentAuraGiven(userId: string, commentIds: string[]): Promise<ReactionSets> {
   const reactions: ReactionSets = { liked: new Set(), disliked: new Set() }
-  if (commentIds.length === 0) return reactions
+  // Um id fora do formato faria o Postgres recusar o lote inteiro (22P02).
+  const ids = onlyUuids(commentIds)
+  if (ids.length === 0) return reactions
 
   const db = createSupabaseAdminClient()
   const { data } = await db
     .from("peripheral_aura")
     .select("comment_id, kind")
     .eq("giver_id", userId)
-    .in("comment_id", commentIds)
+    .in("comment_id", ids)
 
   for (const row of data ?? []) {
     ;(row.kind === "dislike" ? reactions.disliked : reactions.liked).add(row.comment_id)
@@ -542,8 +545,10 @@ export async function getUserAuraGiven(
 }> {
   const comments: ReactionSets = { liked: new Set(), disliked: new Set() }
   const blogComments: ReactionSets = { liked: new Set(), disliked: new Set() }
-  const commentIds = targets.commentIds ?? []
-  const blogCommentIds = targets.blogCommentIds ?? []
+  // Os ids vão interpolados no `.or()` abaixo, e chegam da query string das
+  // rotas de hidratação: só UUID passa (ver `onlyUuids`).
+  const commentIds = onlyUuids(targets.commentIds ?? [])
+  const blogCommentIds = onlyUuids(targets.blogCommentIds ?? [])
   if (commentIds.length === 0 && blogCommentIds.length === 0) {
     return { comments, blogComments }
   }

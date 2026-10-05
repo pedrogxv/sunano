@@ -6,6 +6,11 @@ import { isOwnStorageObject } from "@/lib/server/storage-origin"
 export const SOFTWARE_LOGO_BUCKET = "peripherals"
 export const SOFTWARE_LOGO_PREFIX = "software-logo-"
 
+/** O que a limpeza de logo pode apagar: só o que o upload de logo gerou. */
+export function isSoftwareLogoObject(object: { bucket: string; path: string }): boolean {
+  return object.bucket === SOFTWARE_LOGO_BUCKET && object.path.startsWith(SOFTWARE_LOGO_PREFIX)
+}
+
 function isHttpUrl(value: string): boolean {
   try {
     const { protocol } = new URL(value)

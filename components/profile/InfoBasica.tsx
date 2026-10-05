@@ -151,7 +151,14 @@ export function InfoBasica({
         <p className="text-xs text-muted-foreground/60">Membro desde {joinedLabel}</p>
       )}
 
-      {bio && <p className="mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">{bio}</p>}
+      {/* `pre-line` respeita a quebra de linha que a pessoa digitou no editor
+          (o teto de linhas é do `normalizeBio`). Mini perfil e sidebar do
+          fórum continuam numa linha corrida: lá cabem só 2 linhas. */}
+      {bio && (
+        <p className="mt-1 max-w-md whitespace-pre-line break-words text-sm leading-relaxed text-muted-foreground">
+          {bio}
+        </p>
+      )}
     </div>
   )
 }

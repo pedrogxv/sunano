@@ -13,7 +13,7 @@ import {
   postAdminSupportReply,
   reopenSupportTicket,
 } from "@/lib/server/repositories/support-repository"
-import { MAX_SUPPORT_IMAGES_PER_MESSAGE } from "@/lib/server/support-media"
+import { isOwnedAdminSupportImageUrl, MAX_SUPPORT_IMAGES_PER_MESSAGE } from "@/lib/server/support-media"
 import { BackBreadcrumb } from "@/components/admin/BackBreadcrumb"
 import { SupportReplyImageUpload } from "@/components/admin/SupportReplyImageUpload"
 import { SupportReplySubmitButton } from "@/components/admin/SupportReplySubmitButton"
@@ -36,10 +36,13 @@ async function replyAction(ticketId: string, formData: FormData) {
 
   const body = String(formData.get("body") ?? "").trim()
   if (!body) return
+  // Só anexo que ESTE admin subiu em /api/admin/support/upload-image. Sem o
+  // filtro, a action aceitava o nome de qualquer objeto do bucket `support` e
+  // a leitura o assinava para o cliente, expondo o print de outro cliente.
   const imageUrls = formData
     .getAll("imageUrls")
     .map(String)
-    .filter(Boolean)
+    .filter((url) => url && isOwnedAdminSupportImageUrl(url, auth.profile!.id))
     .slice(0, MAX_SUPPORT_IMAGES_PER_MESSAGE)
 
   await postAdminSupportReply({

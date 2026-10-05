@@ -47,6 +47,8 @@ import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import { profileFrameOf, type ProfileFrameIdentity } from "@/lib/profile-frames"
 import {
   BIO_MAX_LENGTH,
+  BIO_MAX_LINES,
+  limitBioLines,
   normalizeSocialHandle,
   type ProfileShowcase,
   type SetupItem,
@@ -738,9 +740,16 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                   </div>
                   <Textarea
                     value={bio}
-                    onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX_LENGTH))}
+                    onChange={(e) => setBio(limitBioLines(e.target.value).slice(0, BIO_MAX_LENGTH))}
+                    onKeyDown={(e) => {
+                      // No teto de linhas o Enter não faz nada, em vez de virar
+                      // espaço pelo `limitBioLines` e jogar o cursor pro fim.
+                      if (e.key === "Enter" && bio.split("\n").length >= BIO_MAX_LINES) {
+                        e.preventDefault()
+                      }
+                    }}
                     className="border-border bg-background min-h-24 resize-none"
-                    placeholder="Uma linha sobre você: aparece no seu perfil público."
+                    placeholder="Um pouco sobre você: aparece no seu perfil público."
                     maxLength={BIO_MAX_LENGTH}
                   />
                 </div>
@@ -1340,7 +1349,7 @@ function ProfilePagePreview({
               ocupa o mesmo espaço para o layout não pular ao digitar. */}
           <p
             className={cn(
-              "mt-2 line-clamp-2 max-w-xs text-xs leading-relaxed",
+              "mt-2 max-w-xs whitespace-pre-line break-words text-xs leading-relaxed",
               bio.trim() ? "text-muted-foreground" : "italic text-muted-foreground/40"
             )}
           >

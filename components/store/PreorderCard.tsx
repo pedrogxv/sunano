@@ -76,10 +76,13 @@ export function PreorderCard(
   return (
     <article
       className={cn(
-        "@container group relative flex h-full flex-col overflow-hidden rounded-[22px] border bg-gradient-to-b to-card transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1",
+        "@container group relative flex h-full flex-col overflow-hidden rounded-[22px] border transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-1",
+        // Aberta: borda dourada com brilho girando (`.preorder-gold-card` em
+        // globals.css). Lote fechado não chama a atenção para o que não dá
+        // para reservar.
         open
-          ? "border-amber-400/30 from-amber-400/[0.09] hover:border-amber-400/60 hover:shadow-[0_20px_50px_-24px_rgba(251,191,36,0.45)]"
-          : "border-[#2a2a2a] from-white/[0.03] hover:border-white/20"
+          ? "preorder-gold-card"
+          : "border-[#2a2a2a] bg-gradient-to-b from-white/[0.03] to-card hover:border-white/20"
       )}
     >
       <Link href={href} className="relative block aspect-[4/3] overflow-hidden">
@@ -147,7 +150,7 @@ export function PreorderCard(
             <button
               type="button"
               onClick={handleReserve}
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-300 to-amber-500 text-[13.5px] font-bold text-[#1a1200] transition-[filter] hover:brightness-105"
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-yellow-200 via-amber-300 to-amber-500 text-[13.5px] font-bold text-[#1a1200] transition-[filter] hover:brightness-105"
             >
               <Rocket className="size-4 shrink-0" />
               {/* Na grade de 2 colunas do celular o card tem ~165px: o rótulo

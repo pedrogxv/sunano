@@ -277,7 +277,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                 </p>
               )}
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                <p className="font-display text-[40px] font-bold leading-none text-emerald-400">{formatBRL(effectiveCents)}</p>
+                <p className="font-display text-[40px] font-bold leading-none text-white">{formatBRL(effectiveCents)}</p>
                 {!singlePrice && <span className="text-sm font-semibold text-emerald-400/90">no PIX</span>}
                 {hasDiscount && (
                   <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white">-{discountPercent}%</span>
@@ -300,13 +300,18 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                       {pixDiscountPercent}% de desconto à vista no PIX
                     </p>
                   )}
+                  {/* Com parcelamento, só a parcela: o total do cartão ao lado
+                      do preço do PIX virava um segundo preço disputando o
+                      olhar. Sem parcelas, o total é a única informação. */}
                   <p className="mt-2 text-sm text-muted-foreground">
-                    ou <span className="font-semibold text-foreground">{formatBRL(cardPriceCents)}</span> no cartão
-                    {cardMaxInstallments > 1 && (
+                    {cardMaxInstallments > 1 ? (
                       <>
-                        {" "}
-                        em até <span className="font-semibold text-foreground">{cardMaxInstallments}x de {formatBRL(Math.ceil(cardPriceCents / cardMaxInstallments))}</span>{" "}
+                        ou no cartão em até <span className="font-semibold text-foreground">{cardMaxInstallments}x de {formatBRL(Math.ceil(cardPriceCents / cardMaxInstallments))}</span>{" "}
                         sem juros
+                      </>
+                    ) : (
+                      <>
+                        ou <span className="font-semibold text-foreground">{formatBRL(cardPriceCents)}</span> no cartão
                       </>
                     )}
                   </p>

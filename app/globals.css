@@ -2864,3 +2864,76 @@ button:not(:disabled):hover .aura-icon-holder {
     animation: none;
   }
 }
+
+/* ════════════════════════════════════════════
+   Card de pré-venda aberta (PreorderCard.tsx): borda dourada com um brilho
+   dando voltas, o mesmo "picture frame" do `.checkout-affiliate-card`.
+
+   Diferença: aqui quem gira é o ÂNGULO do gradiente (`@property`), não um
+   quadrado. O card é alto e estreito (~165×450 na grade do celular) e um
+   quadrado de 200% da largura não cobre a diagonal: os cantos ficavam sem
+   cor a cada meia volta. A camada tem o tamanho exato do card, então serve
+   para qualquer proporção.
+
+   O resto do arco não é transparente: fica um dourado baixo, para a borda
+   nunca sumir onde o brilho não está passando.
+   ════════════════════════════════════════════ */
+@property --preorder-gold-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes preorder-gold-border-spin {
+  to { --preorder-gold-angle: 360deg; }
+}
+
+.preorder-gold-card {
+  isolation: isolate;
+  border-color: transparent;
+  box-shadow: 0 0 28px -10px oklch(0.82 0.15 85 / 0.5);
+}
+
+.preorder-gold-card:hover {
+  box-shadow: 0 22px 50px -22px oklch(0.82 0.15 85 / 0.6), 0 0 32px -8px oklch(0.82 0.15 85 / 0.55);
+}
+
+.preorder-gold-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--preorder-gold-angle),
+    oklch(0.95 0.09 95),
+    oklch(0.84 0.16 85) 8%,
+    oklch(0.7 0.14 70) 18%,
+    oklch(0.55 0.1 70 / 0.45) 30%,
+    oklch(0.55 0.1 70 / 0.45) 70%,
+    oklch(0.7 0.14 70) 82%,
+    oklch(0.84 0.16 85) 92%,
+    oklch(0.95 0.09 95)
+  );
+  pointer-events: none;
+  animation: preorder-gold-border-spin 4s linear infinite;
+}
+
+.preorder-gold-card::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  z-index: -1;
+  border-radius: calc(22px - 1.5px);
+  background:
+    radial-gradient(120% 55% at 50% 0%, oklch(0.82 0.15 85 / 0.16), transparent 70%),
+    linear-gradient(to bottom, oklch(0.82 0.15 85 / 0.07), transparent 60%),
+    var(--card);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preorder-gold-card::before {
+    animation: none;
+  }
+}

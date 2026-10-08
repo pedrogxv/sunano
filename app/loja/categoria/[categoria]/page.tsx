@@ -11,7 +11,7 @@ import { categoryPageScope, hasCategoryPage } from "@/lib/store-catalog"
 import { ShoppingBag } from "lucide-react"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import {
-  isStoreBrowsingBlocked,
+  isStoreBrowsingBlockedForCachedRoute,
   storeMaintenanceMetadata,
 } from "@/lib/server/auth/store-maintenance-gate"
 import { getStoreLaunchAt } from "@/lib/store-maintenance"
@@ -58,7 +58,8 @@ export async function generateMetadata({ params }: CategoriaPageProps): Promise<
 export default async function LojaCategoriaPage({ params }: CategoriaPageProps) {
   // Mesma tela de manutenção de `/loja` — sem ela esta rota servia o catálogo
   // inteiro da categoria com HTTP 200 enquanto a Loja dizia "Coming soon".
-  if (await isStoreBrowsingBlocked()) {
+  // Sem cookie: a rota é ISR (ver `isStoreBrowsingBlockedForCachedRoute`).
+  if (isStoreBrowsingBlockedForCachedRoute()) {
     return (
       <ComingSoon
         icon={ShoppingBag}

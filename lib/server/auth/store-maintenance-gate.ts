@@ -48,6 +48,21 @@ export async function isStoreBrowsingBlocked(): Promise<boolean> {
 }
 
 /**
+ * Variante de `isStoreBrowsingBlocked` para rota em cache (ISR com
+ * `generateStaticParams`, como `/loja/categoria/[categoria]`).
+ *
+ * O bypass por `store_access` lê o cookie de sessão, e cookie numa página
+ * em cache derruba a renderização com 500 (aconteceu em 08/10/2026, primeiro
+ * fechamento com a página de categoria já em ISR). A página é a mesma para
+ * todo visitante, então ali a manutenção vale para todo mundo, equipe
+ * inclusive; quem tem `store_access` continua navegando pela Home e pela
+ * página do produto, que são dinâmicas.
+ */
+export function isStoreBrowsingBlockedForCachedRoute(): boolean {
+  return isStoreMaintenanceEnabled()
+}
+
+/**
  * Recusa das rotas de API da Loja enquanto ela estiver fechada para ESTE
  * visitante, pelo mesmo critério das páginas. Devolve `null` quando a rota
  * pode seguir:

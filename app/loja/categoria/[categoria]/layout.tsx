@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation"
 import { getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
-import { isStoreBrowsingBlocked } from "@/lib/server/auth/store-maintenance-gate"
+import { isStoreBrowsingBlockedForCachedRoute } from "@/lib/server/auth/store-maintenance-gate"
 import { hasCategoryPage } from "@/lib/store-catalog"
 
 /**
@@ -15,8 +15,9 @@ export default async function LojaCategoriaLayout({
   children: React.ReactNode
   params: Promise<{ categoria: string }>
 }) {
-  // Em manutenção a página mostra o "Coming soon" para qualquer slug.
-  if (!(await isStoreBrowsingBlocked())) {
+  // Em manutenção a página mostra o "Coming soon" para qualquer slug. Sem
+  // cookie aqui: a rota é ISR (ver `isStoreBrowsingBlockedForCachedRoute`).
+  if (!isStoreBrowsingBlockedForCachedRoute()) {
     const { categoria } = await params
     const filterOptions = await getStoreFilterOptions("store")
     // Mesma regra da página: `audio` é página de grupo, não categoria do banco.

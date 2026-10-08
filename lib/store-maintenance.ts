@@ -17,7 +17,12 @@
 // O fallback para NEXT_PUBLIC_STORE_MAINTENANCE_MODE abaixo é só rede de
 // segurança para leitura em client legado; não dependa dele em código novo.
 
+// Fechamento de emergência (08/10/2026, problema com a Asaas). Ganha da env:
+// volte para `false` e publique para reabrir.
+const STORE_FORCED_CLOSED = true
+
 export function isStoreMaintenanceEnabled() {
+  if (STORE_FORCED_CLOSED) return true
   const value = process.env.STORE_MAINTENANCE_MODE ?? process.env.NEXT_PUBLIC_STORE_MAINTENANCE_MODE
   return value === "true"
 }

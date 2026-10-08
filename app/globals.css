@@ -407,6 +407,36 @@ button,
   }
 }
 
+/* Chama do selo "Mais vendido" dos cards da Loja (STORE_CARD_BADGE.best_seller).
+   Fogo de "em alta", não a moeda: por isso não reaproveita .nav-fire-icon, que
+   é o da Aura na sidebar. Cresce e brilha como labareda, a partir da base. */
+@keyframes store-badge-flame-flicker {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    filter: drop-shadow(0 0 1px oklch(0.9 0.16 85 / 0.6));
+  }
+  30% {
+    transform: scale(1.22) rotate(-6deg);
+    filter: drop-shadow(0 0 4px oklch(0.92 0.17 90 / 0.95));
+  }
+  60% {
+    transform: scale(1.08) rotate(4deg);
+    filter: drop-shadow(0 0 2px oklch(0.9 0.16 85 / 0.75));
+  }
+}
+
+.store-badge-flame {
+  transform-origin: 50% 85%;
+  animation: store-badge-flame-flicker 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .store-badge-flame {
+    animation: none;
+    filter: drop-shadow(0 0 2px oklch(0.92 0.17 90 / 0.8));
+  }
+}
+
 /* Item "Promoções" da sidebar — mesma técnica de .nav-fire-*, paleta azul elétrica
    em vez de fogo (Promoções não compete visualmente com a Central de Aura). */
 @keyframes bolt-text-flow {
@@ -2932,8 +2962,55 @@ button:not(:disabled):hover .aura-icon-holder {
   pointer-events: none;
 }
 
+/* Lançamento: o mesmo card da pré-venda, em violeta (a cor do selo
+   "Lançamento"). Reaproveita o ângulo e o giro do dourado. */
+.launch-violet-card {
+  isolation: isolate;
+  border-color: transparent;
+  box-shadow: 0 0 28px -10px oklch(0.7 0.18 300 / 0.5);
+}
+
+.launch-violet-card:hover {
+  box-shadow: 0 22px 50px -22px oklch(0.7 0.18 300 / 0.6), 0 0 32px -8px oklch(0.7 0.18 300 / 0.55);
+}
+
+.launch-violet-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--preorder-gold-angle),
+    oklch(0.9 0.08 305),
+    oklch(0.74 0.18 300) 8%,
+    oklch(0.58 0.2 295) 18%,
+    oklch(0.45 0.12 295 / 0.45) 30%,
+    oklch(0.45 0.12 295 / 0.45) 70%,
+    oklch(0.58 0.2 295) 82%,
+    oklch(0.74 0.18 300) 92%,
+    oklch(0.9 0.08 305)
+  );
+  pointer-events: none;
+  animation: preorder-gold-border-spin 4s linear infinite;
+}
+
+.launch-violet-card::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  z-index: -1;
+  border-radius: calc(22px - 1.5px);
+  background:
+    radial-gradient(120% 55% at 50% 0%, oklch(0.7 0.18 300 / 0.16), transparent 70%),
+    linear-gradient(to bottom, oklch(0.7 0.18 300 / 0.07), transparent 60%),
+    var(--card);
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .preorder-gold-card::before {
+  .preorder-gold-card::before,
+  .launch-violet-card::before {
     animation: none;
   }
 }

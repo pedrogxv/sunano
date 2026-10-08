@@ -238,26 +238,26 @@ export type StoreHeroSettings = {
 export const DEFAULT_HERO_SEALS: StoreHeroSeal[] = [
   {
     icon: "tested",
-    title: "Produtos testados",
-    description: "Cada item passa pela bancada antes de ser anunciado.",
+    title: "Produtos Aprovados",
+    description: "Periféricos que realmente melhoram seu nível.",
     link: null,
   },
   {
     icon: "reviews",
     title: "Reviews independentes",
-    description: "Prós e contras de verdade, nos vídeos do canal.",
+    description: "Opinião honesta e análises completas em vídeos no canal.",
     link: "/videos",
   },
   {
     icon: "curation",
     title: "Curadoria Sunano",
-    description: "Selecionados e comparados pela equipe Sunano.",
+    description: "Selecionados e aprovados pelo Sunano.",
     link: STORE_CURATION_HREF,
   },
   {
     icon: "database",
-    title: "Database completo",
-    description: "Specs e comparativos de cada periférico.",
+    title: "Database Completa e Original",
+    description: "Sem copiar ou imitar outras pessoas.",
     link: "/perifericos",
   },
 ]

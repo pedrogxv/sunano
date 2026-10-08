@@ -8,7 +8,6 @@ import {
   listBestSellingProducts,
   listLaunchAndPreorderProducts,
 } from "@/lib/server/repositories/store-repository"
-import { listActiveBannersBySection } from "@/lib/server/repositories/store-banners-repository"
 import { getStoreHeroTrust, listLiveHeroSlides } from "@/lib/server/repositories/store-hero-repository"
 import { StoreContent } from "@/components/store/StoreContent"
 import { ItemListJsonLd } from "@/components/seo/JsonLd"
@@ -64,7 +63,6 @@ export default async function LojaPage() {
     { items: siteItems },
     { items: serviceItems },
     bestSellingItems,
-    sectionBanners,
     heroSlides,
     heroTrust,
   ] = await Promise.all([
@@ -93,8 +91,7 @@ export default async function LojaPage() {
       page: 1,
       pageSize: 12,
     }),
-    listBestSellingProducts(12),
-    listActiveBannersBySection(),
+    listBestSellingProducts(),
     listLiveHeroSlides(),
     getStoreHeroTrust(),
   ])
@@ -130,7 +127,6 @@ export default async function LojaPage() {
         siteItems={siteItems}
         serviceItems={serviceItems}
         bestSellingItems={bestSellingItems}
-        sectionBanners={sectionBanners}
         pageSize={PAGE_SIZE}
       />
     </Suspense>

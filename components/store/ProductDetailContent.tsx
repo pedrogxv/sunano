@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { getCategoryLabel } from "@/lib/store-category-icons"
 import { LOW_STOCK_MAX_UNITS, STORE_CARD_BADGE } from "@/lib/store-card"
+import { saleWindowPriceAfter } from "@/lib/store-sale-window"
 import { hasFreeShipping } from "@/lib/store-shipping"
 import { PREORDER_CTA_LABEL, PREORDER_STATUS_HINT, PREORDER_STATUS_LABEL, preorderRemaining } from "@/lib/store-preorder"
 import { purchaseAuraFor } from "@/lib/store-purchase-aura"
@@ -25,8 +26,8 @@ import { ProductDeliveryInfo } from "@/components/store/ProductDeliveryInfo"
 import { ProductGallery } from "@/components/store/ProductGallery"
 import { ProductPurchaseBenefits } from "@/components/store/ProductPurchaseBenefits"
 import { PreorderLotPanel, PreorderStatusChip } from "@/components/store/PreorderLotPanel"
+import { SaleWindowCountdown } from "@/components/store/SaleWindowCountdown"
 import { useProductSelection } from "@/components/store/use-product-selection"
-import { FavoriteButton } from "@/components/store/FavoriteButton"
 import { FormattedText } from "@/components/ui/formatted-text"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
 import { ProductBreadcrumb } from "@/components/store/ProductBreadcrumb"
@@ -99,6 +100,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
   const preorder = product.preorder
   const { effectiveCents, baseCents, hasDiscount, discountPercent } = selection.price
   const cardPriceCents = computeItemCardPriceCents(effectiveCents, cardSurchargePercent, singlePrice)
+  const priceAfterCents = product.sale_window ? saleWindowPriceAfter(product.sale_window, baseCents, effectiveCents) : null
   const pixDiscountPercent = singlePrice ? 0 : cardSurchargePercent
   const freeShipping = hasFreeShipping(product)
 
@@ -195,6 +197,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
               videoUrl={product.video_url}
               productName={product.name}
               category={product.category}
+              soldOut={product.is_sold_out || selection.soldOut || preorderStatus === "sold_out"}
             />
           </div>
 
@@ -224,12 +227,9 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                     {[product.brand, getCategoryLabel(product.category)].filter(Boolean).join(" · ")}
                   </p>
                 )}
-                <div className="flex items-start justify-between gap-4">
-                  <h1 className="font-display text-[30px] font-bold leading-[1.08] tracking-tight text-foreground sm:text-[36px]">
-                    {product.name}
-                  </h1>
-                  <FavoriteButton productId={product.id} productName={product.name} variant="inline" className="mt-1 h-10" />
-                </div>
+                <h1 className="font-display text-[30px] font-bold leading-[1.08] tracking-tight text-foreground sm:text-[36px]">
+                  {product.name}
+                </h1>
               </div>
 
               {(pick.versionLabel || selection.skuCode) && (
@@ -319,7 +319,15 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
               )}
             </div>
 
-            {preorder && preorderStatus && <PreorderLotPanel info={preorder} status={preorderStatus} />}
+            {preorder && preorderStatus && (
+              <PreorderLotPanel info={preorder} status={preorderStatus} saleWindow={product.sale_window} priceAfterCents={priceAfterCents} />
+            )}
+
+            {/* Lançamento com prazo: a mesma contagem do card, com o preço que
+                vale depois. Sem prazo, a pílula ao lado do nome basta. */}
+            {!preorder && product.is_launch && (
+              <SaleWindowCountdown saleWindow={product.sale_window} kind="launch" priceAfterCents={priceAfterCents} className="rounded-2xl px-5 py-3" />
+            )}
 
             {variants.length > 0 && (
               <div className="space-y-2.5">
@@ -536,7 +544,13 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
         </div>
 
         <section id="avaliacoes" className="mt-14 scroll-mt-24">
-          <ProductReviews productId={product.id} productSlug={product.slug} productType={product.type} />
+          <ProductReviews
+            productId={product.id}
+            productSlug={product.slug}
+            productName={product.name}
+            productImage={product.images?.[0] ?? null}
+            productType={product.type}
+          />
         </section>
       </div>
     </>

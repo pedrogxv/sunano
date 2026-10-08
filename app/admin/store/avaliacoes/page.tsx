@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { Eye, EyeOff, ImagePlus, Pencil, Plus, Star, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { ReviewGrantsSection } from "@/components/admin/store/ReviewGrantsSection"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import BoxLoader from "@/components/ui/box-loader"
 import { Button } from "@/components/ui/button"
@@ -76,7 +77,7 @@ function toPayload(d: Draft, productId: string | null) {
 }
 
 export default function AdminStoreTestimonialsPage() {
-  usePageHeader("Avaliações da Loja", "Depoimentos de clientes que compraram fora do site.")
+  usePageHeader("Avaliações da Loja", "Clientes que compraram fora do site: liberar avaliação ou cadastrar depoimento.")
 
   const [items, setItems] = useState<StoreTestimonial[] | null>(null)
   const [editing, setEditing] = useState<StoreTestimonial | "new" | null>(null)
@@ -182,12 +183,18 @@ export default function AdminStoreTestimonialsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 p-4 sm:p-6">
-      <div className="flex items-start justify-between gap-3">
-        <p className="max-w-xl text-sm text-muted-foreground">
+      <ReviewGrantsSection />
+
+      <div className="mt-4 flex items-start justify-between gap-3 border-t border-border pt-6">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-base font-bold">Depoimentos (cliente sem conta)</h2>
+          <p className="max-w-xl text-sm text-muted-foreground">
           Use só depoimentos reais, de gente que de fato comprou. Eles aparecem em /loja/avaliacoes como
           &quot;Cliente Sunano&quot;, separados das avaliações com compra verificada no site. Anexar o print da
-          conversa ou a foto do produto recebido dá muito mais credibilidade.
-        </p>
+          conversa ou a foto do produto recebido dá muito mais credibilidade. Se o cliente tem conta no site,
+          prefira liberar a avaliação acima: ele escreve com as próprias palavras e ganha Aura.
+          </p>
+        </div>
         <Button onClick={openNew} className="shrink-0">
           <Plus className="size-4" /> Novo
         </Button>

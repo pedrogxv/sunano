@@ -363,7 +363,7 @@ export default function AdminSupportPage() {
     setDateTo("")
   }
 
-  usePageHeader("Suporte", "Chamados abertos pelos clientes da loja.")
+  usePageHeader("Ticket", "Chamados abertos pelos clientes da loja.")
 
   return (
     <div className="space-y-6">

@@ -16,6 +16,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   Sparkles,
+  Star,
   Truck,
   X,
   XCircle,
@@ -67,6 +68,10 @@ import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { OrderShippingAddressDialog } from "@/components/store/OrderShippingAddressDialog"
 import { OrderTimeline } from "@/components/store/OrderTimeline"
+import { PendingStoreReviews, usePendingStoreReviews } from "@/components/store/PendingStoreReviews"
+import { StoreReviewForm } from "@/components/store/StoreReviewForm"
+// `import type` é apagado no build: não puxa `server-only` para o bundle.
+import type { PendingProductReview } from "@/lib/server/repositories/store-reviews-repository"
 import { formatShippingAddressLine } from "@/components/store/ShippingAddressFields"
 import {
   ORDER_PAID_STATUSES,
@@ -401,19 +406,34 @@ const STATUS_ACCENT: Record<UserOrder["status"], string> = {
   expired: "from-orange-500/60",
 }
 
+/** Pedido concluído: entregue, ou pago quando não há o que entregar. Espelha `listPendingReviewsForUser`. */
+function isOrderCompleted(order: UserOrder): boolean {
+  return order.status === "delivered" || (order.status === "paid" && !order.requires_shipping_address)
+}
+
 function OrderCard({
   order,
+  pendingReviews,
+  onReview,
   onViewDetails,
   onCancelled,
   onDelivered,
   onEditShipping,
 }: {
   order: UserOrder
+  /** Produtos AINDA não avaliados que a pessoa pode avaliar (todos os pedidos). */
+  pendingReviews: Map<string, PendingProductReview>
+  onReview: (item: PendingProductReview) => void
   onViewDetails: (order: UserOrder) => void
   onCancelled: () => void
   onDelivered: () => void
   onEditShipping: (order: UserOrder) => void
 }) {
+  const toReview = isOrderCompleted(order)
+    ? [...new Set(order.items.map((i) => i.id).filter((id): id is string => Boolean(id)))]
+        .map((id) => pendingReviews.get(id))
+        .filter((item): item is PendingProductReview => Boolean(item))
+    : []
   const itemCount = order.items.reduce((sum, i) => sum + (i.quantity ?? 1), 0)
   const summary = order.items.map((i) => i.name).filter(Boolean).join(", ")
   const missingAddress = isMissingShippingAddress(order)
@@ -526,6 +546,31 @@ function OrderCard({
       {order.status === "shipped" && (
         <div className="flex flex-wrap items-center gap-2 border-t border-border/60 px-4 py-2.5 pl-5">
           <ConfirmDeliveryButton order={order} onConfirmed={onDelivered} />
+        </div>
+      )}
+
+      {/* Convite de avaliação no pedido que acabou de ser concluído: é onde a
+          pessoa está olhando quando o pacote chega. Some sozinho quando
+          todos os itens estiverem avaliados. */}
+      {toReview.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-amber-400/25 bg-amber-400/[0.06] px-4 py-2.5 pl-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-[11px] text-amber-200/90">
+            <span className="font-semibold text-amber-300">Avalie sua experiência comprando com a gente.</span> Ajude
+            quem quer comprar e farme Aura com sua avaliação.
+          </p>
+          <div className="flex shrink-0 flex-wrap gap-1.5">
+            {toReview.map((item) => (
+              <button
+                key={item.productId}
+                type="button"
+                onClick={() => onReview(item)}
+                className="inline-flex max-w-[220px] items-center gap-1.5 rounded-lg border border-amber-400/40 bg-amber-400/10 px-2.5 py-1 text-xs font-semibold text-amber-300 transition-colors hover:bg-amber-400/20"
+              >
+                <Star className="size-3.5 shrink-0" />
+                <span className="truncate">{toReview.length === 1 ? "Avaliar" : item.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -933,6 +978,16 @@ export default function PedidosPage() {
     },
   })
   const [selectedOrder, setSelectedOrder] = useState<UserOrder | null>(null)
+  const { pending: pendingReviews, reload: reloadPendingReviews } = usePendingStoreReviews()
+  const pendingReviewsById = new Map(pendingReviews.map((item) => [item.productId, item]))
+  const [reviewTarget, setReviewTarget] = useState<PendingProductReview | null>(null)
+
+  // Confirmar o recebimento é o momento de convidar para avaliar: recarrega
+  // o convite junto com a lista, senão ele só aparecia num próximo acesso.
+  function handleDelivered() {
+    refetch()
+    void reloadPendingReviews()
+  }
   // Pedido cujo endereço de entrega está sendo informado/corrigido.
   const [shippingOrder, setShippingOrder] = useState<UserOrder | null>(null)
 
@@ -1039,6 +1094,8 @@ export default function PedidosPage() {
           </button>
         )}
 
+        <PendingStoreReviews pending={pendingReviews} onReview={setReviewTarget} />
+
         <div className="mb-3">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -1141,9 +1198,11 @@ export default function PedidosPage() {
                 <OrderCard
                   key={order.id}
                   order={order}
+                  pendingReviews={pendingReviewsById}
+                  onReview={setReviewTarget}
                   onViewDetails={setSelectedOrder}
                   onCancelled={refetch}
-                  onDelivered={refetch}
+                  onDelivered={handleDelivered}
                   onEditShipping={setShippingOrder}
                 />
               ))}
@@ -1186,7 +1245,7 @@ export default function PedidosPage() {
         order={selectedOrder}
         onOpenChange={(open) => !open && setSelectedOrder(null)}
         onCancelled={refetch}
-        onDelivered={refetch}
+        onDelivered={handleDelivered}
         onEditShipping={(order) => {
           // Fecha o detalhe antes de abrir o endereço: dois dialogs
           // empilhados brigam pelo foco e pelo scroll lock.
@@ -1201,6 +1260,21 @@ export default function PedidosPage() {
         open={shippingOrder !== null}
         onOpenChange={(open) => !open && setShippingOrder(null)}
         onSaved={refetch}
+      />
+
+      <StoreReviewForm
+        target={reviewTarget}
+        onClose={() => setReviewTarget(null)}
+        onSubmitted={(auraRewarded) => {
+          setReviewTarget(null)
+          toast.success("Avaliação publicada!", {
+            description:
+              auraRewarded > 0
+                ? `Você ganhou ${auraRewarded} de Aura. Valeu por ajudar quem vai comprar!`
+                : "Valeu por ajudar quem vai comprar!",
+          })
+          void reloadPendingReviews()
+        }}
       />
     </div>
   )

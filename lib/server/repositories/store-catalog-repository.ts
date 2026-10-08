@@ -6,9 +6,11 @@ import { listAllPeripherals, type PeripheralRecord } from "@/lib/server/reposito
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   catalogConfigFor,
+  categoryPagesIncluding,
   EMPTY_ATTRIBUTES,
   matchesCatalogSelection,
   priceInBand,
+  type CatalogGroupConfig,
   type CatalogSelection,
   type StoreCatalogFacetCounts,
   type StoreProductAttributes,
@@ -302,30 +304,40 @@ export async function getCatalogFacetCounts(
   const index = await getStoreCatalogIndex()
   const counts: Record<string, StoreCatalogFacetCounts> = {}
 
+  // A contagem é por PÁGINA de categoria: o glasspad conta também na de
+  // Mousepad, que o lista (`categoryPageScope`). Senão o chip "Speed 1" da
+  // página levaria a uma grade com dois.
   for (const product of products) {
     if (!product.category) continue
-    const config = catalogConfigFor(product.category)
-    if (!config) continue
     const attributes = index[product.id]?.attributes ?? EMPTY_ATTRIBUTES
-
-    let entry = counts[product.category]
-    if (!entry) counts[product.category] = entry = { collections: {}, facets: {}, priceBands: {} }
-
-    for (const collection of config.collections) {
-      if (collection.match(attributes)) entry.collections[collection.key] = (entry.collections[collection.key] ?? 0) + 1
-    }
-    for (const facet of config.facets) {
-      const value = facet.valueOf(attributes)
-      if (value == null) continue
-      const facetCounts = (entry.facets[facet.key] ??= {})
-      facetCounts[value] = (facetCounts[value] ?? 0) + 1
-    }
-    const bands = [...config.priceBands, ...config.quickFilters.flatMap((quick) => (quick.kind === "price" ? [quick.band] : []))]
-    for (const priceBand of bands) {
-      if (priceInBand(product.effectiveCents, priceBand)) {
-        entry.priceBands[priceBand.key] = (entry.priceBands[priceBand.key] ?? 0) + 1
-      }
+    for (const page of categoryPagesIncluding(product.category)) {
+      const config = catalogConfigFor(page)
+      if (!config) continue
+      countCatalogFacets((counts[page] ??= { collections: {}, facets: {}, priceBands: {} }), config, attributes, product.effectiveCents)
     }
   }
   return counts
+}
+
+function countCatalogFacets(
+  entry: StoreCatalogFacetCounts,
+  config: CatalogGroupConfig,
+  attributes: StoreProductAttributes,
+  effectiveCents: number
+) {
+  for (const collection of config.collections) {
+    if (collection.match(attributes)) entry.collections[collection.key] = (entry.collections[collection.key] ?? 0) + 1
+  }
+  for (const facet of config.facets) {
+    const value = facet.valueOf(attributes)
+    if (value == null) continue
+    const facetCounts = (entry.facets[facet.key] ??= {})
+    facetCounts[value] = (facetCounts[value] ?? 0) + 1
+  }
+  const bands = [...config.priceBands, ...config.quickFilters.flatMap((quick) => (quick.kind === "price" ? [quick.band] : []))]
+  for (const priceBand of bands) {
+    if (priceInBand(effectiveCents, priceBand)) {
+      entry.priceBands[priceBand.key] = (entry.priceBands[priceBand.key] ?? 0) + 1
+    }
+  }
 }

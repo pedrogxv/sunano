@@ -46,6 +46,28 @@ export const ORDER_PAID_STATUSES: OrderStatusValue[] = [
   "delivered",
 ]
 
+/**
+ * Abas da fila do admin. "Ativos" é tudo que ainda pede ação de alguém
+ * (pagar, informar endereço, enviar, receber); os demais são o fim do fluxo.
+ * Lido pela tela (abas e contagem) e pela rota (filtro), para as duas
+ * recortarem igual.
+ */
+export type OrderStatusGroup = "active" | "completed" | "expired" | "cancelled" | "refunded" | "all"
+
+export const ORDER_STATUS_GROUPS: Record<Exclude<OrderStatusGroup, "all">, OrderStatusValue[]> = {
+  active: ["pending", "awaiting_shipping_info", "paid", "shipped"],
+  completed: ["delivered"],
+  expired: ["expired"],
+  cancelled: ["cancelled"],
+  refunded: ["refunded"],
+}
+
+export function parseOrderStatusGroup(value: string | null | undefined): OrderStatusGroup {
+  return value === "all" || (value != null && Object.hasOwn(ORDER_STATUS_GROUPS, value))
+    ? (value as OrderStatusGroup)
+    : "all"
+}
+
 export function orderStatusLabel(status: OrderStatusValue, requiresShipping = true): string {
   return (!requiresShipping && SERVICE_LABEL[status]) || ORDER_STATUS_LABEL[status] || status
 }

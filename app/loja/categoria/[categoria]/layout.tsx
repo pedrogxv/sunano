@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 import { isStoreBrowsingBlocked } from "@/lib/server/auth/store-maintenance-gate"
+import { hasCategoryPage } from "@/lib/store-catalog"
 
 /**
  * Valida a categoria ANTES do `loading.tsx`: o layout fica fora do boundary
@@ -18,7 +19,8 @@ export default async function LojaCategoriaLayout({
   if (!(await isStoreBrowsingBlocked())) {
     const { categoria } = await params
     const filterOptions = await getStoreFilterOptions("store")
-    if (!filterOptions.categories.includes(decodeURIComponent(categoria))) notFound()
+    // Mesma regra da página: `audio` é página de grupo, não categoria do banco.
+    if (!hasCategoryPage(decodeURIComponent(categoria), filterOptions.categories)) notFound()
   }
   return children
 }

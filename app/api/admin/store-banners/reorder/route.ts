@@ -10,11 +10,11 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
 const reorderSchema = z.object({
-  section: z.enum(["main", "best_sellers", "pre_sale", "ready_stock", "site_items"]),
+  category: z.string().trim().min(1).max(60),
   ids: z.array(z.uuid("Identificador de banner inválido.")).min(1, "Envie ao menos um banner."),
 })
 
-/** Recebe os ids na ordem desejada e regrava `sort_order` dentro de uma seção. */
+/** Recebe os ids na ordem desejada e regrava `sort_order` dentro de uma categoria. */
 export async function PATCH(request: NextRequest) {
   const auth = await getAuthorizedProfile()
   if (auth.error || !auth.profile) {
@@ -34,7 +34,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   try {
-    await reorderBanners(parsed.data.section, parsed.data.ids)
+    await reorderBanners(parsed.data.category, parsed.data.ids)
     return NextResponse.json({ ok: true })
   } catch (error) {
     const { body, status } = dbErrorResponse(error, "Erro ao reordenar banners.")

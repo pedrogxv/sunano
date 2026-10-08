@@ -555,6 +555,8 @@ export type AdminOrderListResult = {
  */
 export async function listOrdersForAdmin(filters?: {
   status?: OrderStatus
+  /** Aba da fila ("Ativos", "Concluídos"...). Combina com `status` quando os dois vêm. */
+  statuses?: OrderStatus[]
   productId?: string
   userQuery?: string
   userId?: string
@@ -579,6 +581,7 @@ export async function listOrdersForAdmin(filters?: {
   )
 
   if (filters?.status) query = query.eq("status", filters.status)
+  if (filters?.statuses?.length) query = query.in("status", filters.statuses)
   const requiresShipping = requiresShippingFor(filters?.kind ?? "all")
   if (requiresShipping !== null) query = query.eq("requires_shipping_address", requiresShipping)
   if (filters?.userQuery?.trim()) {

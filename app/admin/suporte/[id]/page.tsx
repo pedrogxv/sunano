@@ -93,7 +93,7 @@ export default async function AdminSupportTicketPage({ params }: { params: Promi
 
   return (
     <div className="space-y-6">
-      <BackBreadcrumb href="/admin/suporte" parentLabel="Suporte" currentLabel={ticket.subject} />
+      <BackBreadcrumb href="/admin/suporte" parentLabel="Ticket" currentLabel={ticket.subject} />
 
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">

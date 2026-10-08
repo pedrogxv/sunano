@@ -1,9 +1,10 @@
 /**
  * Aura que uma compra na Loja rende: 1 a cada R$ 10 do preço PIX, creditada
- * na entrega (ou no pagamento, quando não há entrega). Decidido em 01/10/2026.
+ * na confirmação do pagamento e estornada se o pedido for cancelado ou
+ * reembolsado (07/10/2026; antes era na entrega).
  *
  * Espelha `v_cents_per_aura` em `trg_reward_store_purchase_aura`
- * (migration 20261213000002). O do banco é o que vale: mudar um sem o outro
+ * (migration 20261223000000). O do banco é o que vale: mudar um sem o outro
  * faz a página prometer uma Aura que a compra não credita.
  */
 export const STORE_PURCHASE_CENTS_PER_AURA = 1000

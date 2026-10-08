@@ -95,11 +95,11 @@ export function ProductPurchaseBenefits({ freeShipping, singlePrice, aura, class
             </AuraIconHolder>
           </span>
           <span className="min-w-0">
-            <span className="flex items-center gap-1 text-[13px] font-bold leading-tight text-foreground">
-              Ganhe <AuraAmount value={aura} size="sm" tone="brand" className="font-bold" />
+            <span className="flex flex-wrap items-center gap-1 text-[13px] font-bold leading-tight text-foreground">
+              Você farma <AuraAmount value={aura} size="sm" tone="brand" className="font-bold" /> com essa compra
             </span>
             <span className="mt-0.5 block text-[11px] leading-tight text-muted-foreground">
-              {singlePrice ? "Creditada no pagamento" : "Creditada na entrega"}
+              Recebe após a confirmação do pagamento
             </span>
           </span>
         </div>

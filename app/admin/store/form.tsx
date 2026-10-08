@@ -12,7 +12,7 @@ import {
 import { restrictToParentElement } from "@dnd-kit/modifiers"
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Ban, BadgeCheck, Boxes, GripVertical, Loader2, Megaphone, Minus, Plus, RefreshCcw, Rocket, Sparkles, Trash2, Upload, X } from "lucide-react"
+import { Ban, BadgeCheck, Boxes, GripVertical, Loader2, Megaphone, Minus, Plus, RefreshCcw, Rocket, Sparkles, Timer, Trash2, Upload, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,9 +37,6 @@ import { EmojiPicker } from "@/components/ui/emoji-picker"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
 import {
-  BEST_SELLER_MIN_UNITS,
-  BEST_SELLER_TOP,
-  BEST_SELLER_WINDOW_DAYS,
   CARD_HIGHLIGHT_MAX_CHARS,
   LOW_STOCK_MAX_UNITS,
   NEW_PRODUCT_DAYS,
@@ -47,7 +44,13 @@ import {
   STORE_CARD_BADGE_CHOICE_LABEL,
   STORE_CARD_BADGE_CHOICES,
 } from "@/lib/store-card"
-import { PREORDER_REGULAR_DAYS, PREORDER_STATUSES, PREORDER_STATUS_LABEL, type PreorderStatus } from "@/lib/store-preorder"
+import { PREORDER_STATUSES, PREORDER_STATUS_LABEL, type PreorderStatus } from "@/lib/store-preorder"
+import {
+  SALE_WINDOW_END_ACTION_LABEL,
+  SALE_WINDOW_END_ACTIONS,
+  SALE_WINDOW_PRESET_DAYS,
+  type SaleWindowEndAction,
+} from "@/lib/store-sale-window"
 import {
   buildCombinations,
   isEmptySkuDraft,
@@ -147,8 +150,10 @@ export interface StoreProduct {
   preorder_ships_at?: string | null
   preorder_status?: PreorderStatus
   is_launch?: boolean
-  launch_until?: string | null
-  preorder_early_ends_at?: string | null
+  /** Prazo da pré-venda/lançamento (migration 20261220000000). */
+  sale_window_ends_at?: string | null
+  sale_window_end_action?: SaleWindowEndAction
+  sale_window_end_price_cents?: number | null
 }
 
 /** Combinação salva (store_product_skus), como a API de edição devolve. */
@@ -297,6 +302,19 @@ function isoToLocalInput(iso: string | null | undefined): string {
   if (Number.isNaN(date.getTime())) return ""
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 16)
+}
+
+/** "1.150,90" / "1150.9" em centavos; vazio ou inválido = null. */
+function brlToCents(value: string): number | null {
+  const cents = Math.round(parseFloat(value.replace(",", ".")) * 100)
+  return Number.isFinite(cents) && cents > 0 ? cents : null
+}
+
+/** Agora + N dias, na hora cheia, no formato do `datetime-local`. */
+function localInputDaysFromNow(days: number): string {
+  const date = new Date(Date.now() + days * 86_400_000)
+  date.setMinutes(0, 0, 0)
+  return isoToLocalInput(date.toISOString())
 }
 
 function buildAutofillFromPeripheral(p: PeripheralFullData): {
@@ -480,8 +498,10 @@ export function StoreProductForm({
     preorder_ships_at: product?.preorder_ships_at ?? "",
     preorder_status: product?.preorder_status ?? "open",
     is_launch: product?.is_launch ?? false,
-    launch_until: product?.launch_until ?? "",
-    preorder_early_ends_at: isoToLocalInput(product?.preorder_early_ends_at),
+    sale_window_ends_at: isoToLocalInput(product?.sale_window_ends_at),
+    sale_window_end_action: product?.sale_window_end_action ?? ("keep" as SaleWindowEndAction),
+    sale_window_end_price_brl:
+      product?.sale_window_end_price_cents != null ? (product.sale_window_end_price_cents / 100).toFixed(2) : "",
   })
   // "Abrir novo lote": vira `start_new_batch` no save (a contagem do teto
   // recomeça). Não é coluna, então não mora em formData.
@@ -853,27 +873,33 @@ export function StoreProductForm({
    * migration 20261213000001, e só vão no corpo quando mudaram, para um
    * deploy antes dela não quebrar o save de quem nem mexeu nesses campos.
    */
-  function pageFieldsPayload(): Record<string, string | boolean | null> {
-    const current: Record<string, string | boolean | null> = {
+  function pageFieldsPayload(): Record<string, string | number | boolean | null> {
+    // O prazo só existe em pré-venda ou lançamento; fora disso vai limpo.
+    const hasWindow = (formData.sale_type === "pre_order" || formData.is_launch) && formData.sale_window_ends_at !== ""
+    const endAction: SaleWindowEndAction = hasWindow ? formData.sale_window_end_action : "keep"
+    const current: Record<string, string | number | boolean | null> = {
       sku: formData.sku.trim() || null,
       preorder_batch_name: formData.preorder_batch_name.trim() || null,
       preorder_ships_at: formData.preorder_ships_at || null,
       preorder_status: formData.preorder_status,
       is_launch: formData.is_launch,
-      launch_until: formData.is_launch ? formData.launch_until || null : null,
-      preorder_early_ends_at:
-        formData.sale_type === "pre_order" && formData.preorder_early_ends_at
-          ? new Date(formData.preorder_early_ends_at).toISOString()
-          : null,
+      sale_window_ends_at: hasWindow ? new Date(formData.sale_window_ends_at).toISOString() : null,
+      sale_window_end_action: endAction,
+      sale_window_end_price_cents: endAction === "set_price" ? brlToCents(formData.sale_window_end_price_brl) : null,
     }
-    const saved: Record<string, string | boolean | null> = {
+    // O input do form tem precisão de minuto: o salvo é comparado na mesma
+    // régua, senão um prazo com segundos iria no corpo a cada save (e seria
+    // recusado se já tivesse passado).
+    const savedEndsAt = isoToLocalInput(product?.sale_window_ends_at)
+    const saved: Record<string, string | number | boolean | null> = {
       sku: product?.sku ?? null,
       preorder_batch_name: product?.preorder_batch_name ?? null,
       preorder_ships_at: product?.preorder_ships_at ?? null,
       preorder_status: product?.preorder_status ?? "open",
       is_launch: product?.is_launch ?? false,
-      launch_until: product?.launch_until ?? null,
-      preorder_early_ends_at: product?.preorder_early_ends_at ? new Date(product.preorder_early_ends_at).toISOString() : null,
+      sale_window_ends_at: savedEndsAt ? new Date(savedEndsAt).toISOString() : null,
+      sale_window_end_action: product?.sale_window_end_action ?? "keep",
+      sale_window_end_price_cents: product?.sale_window_end_price_cents ?? null,
     }
     return Object.fromEntries(Object.entries(current).filter(([key, value]) => value !== saved[key]))
   }
@@ -1366,6 +1392,103 @@ export function StoreProductForm({
 
   const hasCombinations = variants.some((v) => v.label.trim()) || variantGroups.some((g) => g.options.some((o) => o.label.trim()))
 
+  // Prazo: o mesmo bloco para pré-venda (dentro do lote) e lançamento (embaixo
+  // da marcação). O produto fica na seção até a data e vira Normal sozinho
+  // (cron `close_store_sale_windows`); o preço muda conforme a escolha.
+  const windowKind = formData.sale_type === "pre_order" ? "preorder" : formData.is_launch ? "launch" : null
+  const windowEndsMs = formData.sale_window_ends_at ? Date.parse(formData.sale_window_ends_at) : null
+  const currentPixCents = promoPriceCentsPreview > 0 && promoPriceCentsPreview < priceCentsPreview ? promoPriceCentsPreview : priceCentsPreview
+  const windowPriceAfterCents =
+    formData.sale_window_end_action === "end_promo"
+      ? priceCentsPreview
+      : formData.sale_window_end_action === "set_price"
+        ? brlToCents(formData.sale_window_end_price_brl)
+        : currentPixCents
+  const windowNoun = windowKind === "preorder" ? "pré-venda" : "lançamento"
+  const saleWindowFields = windowKind && (
+    <div className="space-y-3 rounded-lg border border-border/60 bg-background/40 p-3">
+      <div className="flex items-center gap-2">
+        <Timer className={cn("size-4", windowKind === "preorder" ? "text-amber-400" : "text-violet-400")} />
+        <p className="text-sm font-semibold text-foreground">Prazo {windowKind === "preorder" ? "da pré-venda" : "do lançamento"}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          type="datetime-local"
+          value={formData.sale_window_ends_at}
+          onChange={(e) => set("sale_window_ends_at", e.target.value)}
+          className="h-9 max-w-[240px] border-border bg-muted/20 text-sm"
+        />
+        {SALE_WINDOW_PRESET_DAYS.map((days) => (
+          <button
+            key={days}
+            type="button"
+            onClick={() => set("sale_window_ends_at", localInputDaysFromNow(days))}
+            className="h-8 rounded-md border border-border px-2.5 text-[11px] font-semibold text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          >
+            {days} dias
+          </button>
+        ))}
+        {formData.sale_window_ends_at && (
+          <button
+            type="button"
+            onClick={() => set("sale_window_ends_at", "")}
+            className="text-[11px] text-muted-foreground underline hover:text-foreground"
+          >
+            Sem prazo
+          </button>
+        )}
+      </div>
+      {formData.sale_window_ends_at ? (
+        <>
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">No fim do prazo</Label>
+              <Select value={formData.sale_window_end_action} onValueChange={(v) => set("sale_window_end_action", v)}>
+                <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SALE_WINDOW_END_ACTIONS.map((action) => (
+                    <SelectItem key={action} value={action}>
+                      {SALE_WINDOW_END_ACTION_LABEL[action]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {formData.sale_window_end_action === "set_price" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Preço depois do prazo (PIX)</Label>
+                <Input
+                  inputMode="decimal"
+                  value={formData.sale_window_end_price_brl}
+                  onChange={(e) => set("sale_window_end_price_brl", e.target.value)}
+                  placeholder="Ex: 1399,90"
+                  className="h-9 border-border bg-muted/20 text-sm"
+                />
+              </div>
+            )}
+          </div>
+          <p className={cn("text-[10px]", windowEndsMs !== null && windowEndsMs <= Date.now() ? "text-red-400" : "text-muted-foreground")}>
+            {windowEndsMs !== null && windowEndsMs <= Date.now()
+              ? "Essa data já passou. Escolha uma data no futuro."
+              : `A loja mostra a contagem. Em ${new Date(formData.sale_window_ends_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} o produto vira Normal e sai da seção sozinho${
+                  formData.sale_window_end_action === "keep"
+                    ? ", com o mesmo preço."
+                    : windowPriceAfterCents
+                      ? `, e o preço no PIX passa de ${formatBRL(currentPixCents)} para ${formatBRL(windowPriceAfterCents)}.`
+                      : "."
+                }${formData.sale_window_end_action !== "keep" ? " Promoções das cores e combinações são apagadas junto." : ""}`}
+          </p>
+        </>
+      ) : (
+        <p className="text-[10px] text-muted-foreground">
+          Vazio = sem prazo e sem contagem: fica como {windowNoun} até você trocar à mão.
+        </p>
+      )}
+    </div>
+  )
+
   // Lote da pré-venda: o mesmo bloco na criação e na edição (a edição não
   // mostrava nem o limite de reservas).
   const preorderFields = formData.sale_type === "pre_order" && (
@@ -1376,8 +1499,7 @@ export function StoreProductForm({
       </div>
       <p className="text-[10px] text-amber-400">
         Produto ainda sem estoque físico. Sem prazo, troque para &ldquo;Normal&rdquo; à mão quando a pré-venda acabar; com
-        o &ldquo;Fim do preço de lançamento&rdquo; preenchido, a troca é automática. O anúncio, reviews e vendas já feitas
-        continuam os mesmos.
+        o prazo preenchido, a troca é automática. O anúncio, reviews e vendas já feitas continuam os mesmos.
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         <div className="space-y-1.5">
@@ -1417,31 +1539,6 @@ export function StoreProductForm({
             className="h-9 border-border bg-muted/20 text-sm"
           />
         </div>
-        <div className="space-y-1.5 md:col-span-2">
-          <Label className="text-xs">Fim do preço de lançamento</Label>
-          <div className="flex items-center gap-2">
-            <Input
-              type="datetime-local"
-              value={formData.preorder_early_ends_at}
-              onChange={(e) => set("preorder_early_ends_at", e.target.value)}
-              className="h-9 max-w-[240px] border-border bg-muted/20 text-sm"
-            />
-            {formData.preorder_early_ends_at && (
-              <button
-                type="button"
-                onClick={() => set("preorder_early_ends_at", "")}
-                className="text-[11px] text-muted-foreground underline hover:text-foreground"
-              >
-                Sem prazo
-              </button>
-            )}
-          </div>
-          <p className="text-[10px] text-muted-foreground">
-            {formData.preorder_early_ends_at
-              ? `A loja mostra a contagem. Nesta data o preço promocional é apagado (o preço sobe para o preço base) e a pré-venda segue por mais ${PREORDER_REGULAR_DAYS} dias, até ${new Date(Date.parse(formData.preorder_early_ends_at) + PREORDER_REGULAR_DAYS * 86_400_000).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. Depois disso o produto vira Normal e sai da seção sozinho. Promoção cadastrada depois do fim do desconto é apagada.`
-              : "Vazio = pré-venda sem prazo (você troca para Normal à mão). Com data, o preço promocional vale como desconto inicial."}
-          </p>
-        </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Limite de reservas do lote</Label>
           <Input
@@ -1458,6 +1555,7 @@ export function StoreProductForm({
           </p>
         </div>
       </div>
+      {saleWindowFields}
       {product && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-3">
           <p className="text-[11px] text-muted-foreground">
@@ -1839,7 +1937,7 @@ export function StoreProductForm({
             </Select>
             <p className="text-[10px] text-muted-foreground/70">
               Um selo por produto. No automático, nesta ordem: Estoque baixo (até {LOW_STOCK_MAX_UNITS} unidades), Mais
-              vendido (top {BEST_SELLER_TOP} em vendas nos últimos {BEST_SELLER_WINDOW_DAYS} dias, com {BEST_SELLER_MIN_UNITS}+ unidades), Melhor
+              vendido (está na seção &quot;Mais vendidos&quot; da Home, fixado ou pelas vendas), Melhor
               custo-benefício (tag do Database) e Novo (até {NEW_PRODUCT_DAYS} dias). Pré-venda aparece sempre, por cima da
               escolha; esgotado fica sem selo.
             </p>
@@ -1870,23 +1968,12 @@ export function StoreProductForm({
                 Lançamento
               </span>
               <span className="block text-[10px] text-muted-foreground/70">
-                Aparece em &ldquo;Lançamentos e Pré-venda&rdquo; na Home, com o selo &ldquo;Lançamento&rdquo; no card. Pré-venda já
+                Aparece em &ldquo;DROPS com SUNANO&rdquo; na Home, no card roxo de lançamento (em toda a Loja). Pré-venda já
                 entra na seção sozinha.
               </span>
             </span>
           </label>
-          {formData.is_launch && (
-            <div className="space-y-1.5">
-              <Label className="text-xs">Sai da seção depois de</Label>
-              <Input
-                type="date"
-                value={formData.launch_until}
-                onChange={(e) => set("launch_until", e.target.value)}
-                className="h-9 border-border bg-muted/20 text-sm"
-              />
-              <p className="text-[10px] text-muted-foreground/70">Vazio = até você desmarcar.</p>
-            </div>
-          )}
+          {formData.is_launch && formData.sale_type !== "pre_order" && <div className="md:col-span-2">{saleWindowFields}</div>}
         </div>
       </div>
 

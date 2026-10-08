@@ -11,8 +11,8 @@ import {
 
 /**
  * "Avise-me quando voltar" de um produto esgotado da Loja. Exige login: o
- * aviso é entregue pelo sino de notificações do site, que só existe para
- * usuário autenticado.
+ * aviso é entregue pelo sino de notificações do site e pelo e-mail da conta,
+ * que só existem para usuário autenticado.
  */
 
 const bodySchema = z.object({

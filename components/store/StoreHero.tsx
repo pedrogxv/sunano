@@ -54,8 +54,8 @@ import type { StoreProductCard } from "@/lib/server/repositories/store-repositor
  * Slide com fim de campanha sai da tela sozinho quando o prazo vence, sem
  * esperar o cache da página (revalidate de 60s) nem um recarregamento.
  *
- * Colada embaixo vem a faixa de selos de curadoria (Produtos testados,
- * Reviews independentes, Curadoria Sunano, Database completo) com a nota dos
+ * Colada embaixo vem a faixa de selos de curadoria (Produtos Aprovados,
+ * Reviews independentes, Curadoria Sunano, Database Completa e Original) com a nota dos
  * compradores. Ela vale também para a arte estática: é o motivo de comprar
  * aqui, não a campanha da semana.
  */

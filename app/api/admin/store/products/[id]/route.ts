@@ -13,7 +13,7 @@ import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repo
 import { CARD_HIGHLIGHT_MAX_CHARS, CARD_HIGHLIGHTS_MAX, sanitizeCardHighlights, STORE_CARD_BADGE_CHOICES } from "@/lib/store-card"
 import { STORE_SHOWCASE_SLOTS } from "@/lib/store-showcase"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
-import { productPageFieldsShape, skuConflictMessage, withPreorderEnd } from "@/lib/server/validation/store-product-page"
+import { productPageFieldsShape, saleWindowPriceIssue, skuConflictMessage } from "@/lib/server/validation/store-product-page"
 import type { Database } from "@/lib/database.types"
 
 type StoreProductUpdate = Database["public"]["Tables"]["store_products"]["Update"]
@@ -185,8 +185,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     )
   }
 
-  const { start_new_batch: startNewBatch, ...rawFields } = parsed.data
-  const fields = withPreorderEnd(rawFields)
+  const { start_new_batch: startNewBatch, ...fields } = parsed.data
+  const windowIssue = saleWindowPriceIssue(fields)
+  if (windowIssue) {
+    return NextResponse.json({ error: windowIssue }, { status: 400 })
+  }
   const allowed = Object.keys(fields) as (keyof StoreProductUpdate)[]
   const patch: StoreProductUpdate = {}
   for (const key of allowed) {

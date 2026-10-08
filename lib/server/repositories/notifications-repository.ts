@@ -3,6 +3,7 @@ import "server-only"
 import type { NotificationEntityType, NotificationType } from "@/lib/database.types"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { orderStatusDescription, orderStatusLabel, type OrderStatusValue } from "@/lib/order-status"
+import { STORE_REVIEW_AURA, STORE_REVIEW_WITH_PHOTO_AURA } from "@/lib/store-review-aura"
 
 /**
  * Repositório de notificações. A produção das notificações é toda por trigger
@@ -235,19 +236,26 @@ export async function notifyOrderStatusChange(params: {
   // assunto; o convite de volta é o que transforma isso em venda (a página
   // de pedidos tem o botão "Comprar de novo", que repõe o carrinho).
   const isExpired = params.status === "expired"
+  // Pedido concluído (entregue, ou pago quando não há entrega) é o momento de
+  // pedir a avaliação: o link cai no convite do topo de Meus Pedidos.
+  const isCompleted = status === "delivered" || (status === "paid" && !requiresShipping)
 
   const { error } = await db.from("notifications").insert({
     user_id: params.userId,
     type: "order_status",
     entity_type: "order",
     entity_id: params.orderId,
-    link: isExpired ? "/conta/pedidos?status=expired" : "/conta/pedidos",
+    link: isExpired ? "/conta/pedidos?status=expired" : isCompleted ? "/conta/pedidos#avaliar" : "/conta/pedidos",
     title: isExpired
       ? `Seu pedido #${shortId} expirou`
-      : `Pedido #${shortId} atualizado`,
+      : isCompleted
+        ? `Pedido #${shortId} concluído: avalie sua experiência`
+        : `Pedido #${shortId} atualizado`,
     body: isExpired
       ? "O prazo do pagamento acabou e os itens voltaram ao estoque. Você pode refazer a compra em um clique."
-      : statusText,
+      : isCompleted
+        ? `Ajude quem quer comprar e farme Aura com sua avaliação: +${STORE_REVIEW_AURA}, ou +${STORE_REVIEW_WITH_PHOTO_AURA} com foto.`
+        : statusText,
   })
 
   if (error) {

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ChevronLeft, ChevronRight, Play, ZoomIn } from "lucide-react"
 
+import { SoldOutStamp } from "@/components/store/SoldOutStamp"
 import { MediaViewer } from "@/components/ui/media-viewer"
 import { markImageSettled } from "@/lib/image-settled"
 import { getCategoryIcon } from "@/lib/store-category-icons"
@@ -18,6 +19,8 @@ interface ProductGalleryProps {
   videoUrl: string | null
   productName: string
   category: string | null
+  /** Produto (ou a combinação escolhida) esgotado: fotos em cinza com o carimbo. */
+  soldOut?: boolean
 }
 
 /**
@@ -30,7 +33,7 @@ interface ProductGalleryProps {
  * galeria pela primeira foto (`key`), e ela volta para o começo mostrando a
  * versão escolhida, em vez de ficar na 4ª foto de outra versão.
  */
-export function ProductGallery({ images, videoUrl, productName, category }: ProductGalleryProps) {
+export function ProductGallery({ images, videoUrl, productName, category, soldOut = false }: ProductGalleryProps) {
   const videoId = videoUrl ? extractYoutubeVideoId(videoUrl) : null
   const items: GalleryItem[] = images.map((src) => ({ kind: "image" as const, src }))
   if (videoId) items.splice(Math.min(1, items.length), 0, { kind: "video", videoId })
@@ -94,9 +97,11 @@ export function ProductGallery({ images, videoUrl, productName, category }: Prod
               onError={() => setLoadedSrc(current.src)}
               className={cn(
                 "h-full w-full object-contain p-6 transition-opacity duration-150 sm:p-8",
-                loadedSrc === current.src ? "opacity-100" : "opacity-0"
+                loadedSrc === current.src ? (soldOut ? "opacity-45 grayscale" : "opacity-100") : "opacity-0"
               )}
             />
+            {/* O lightbox continua colorido: quem amplia quer ver o produto. */}
+            {soldOut && <SoldOutStamp size="lg" />}
             <span className="absolute right-4 top-4 hidden size-11 items-center justify-center rounded-full bg-black/60 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover/stage:opacity-100 sm:flex">
               <ZoomIn className="size-5" />
             </span>
@@ -151,7 +156,7 @@ export function ProductGallery({ images, videoUrl, productName, category }: Prod
             >
               {item.kind === "image" ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={item.src} alt="" className="h-full w-full object-contain p-1.5" loading="lazy" decoding="async" />
+                <img src={item.src} alt="" className={cn("h-full w-full object-contain p-1.5", soldOut && "opacity-50 grayscale")} loading="lazy" decoding="async" />
               ) : (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}

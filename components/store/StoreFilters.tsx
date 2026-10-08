@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Slider } from "@/components/ui/slider"
-import { findPriceBand, STORE_SORT_OPTIONS, type CatalogGroupConfig, type StoreSortKey } from "@/lib/store-catalog"
+import { categoryPageScope, findPriceBand, STORE_SORT_OPTIONS, type CatalogGroupConfig, type StoreSortKey } from "@/lib/store-catalog"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import type { StoreFacetCounts } from "@/lib/server/repositories/store-repository"
 
@@ -108,7 +108,8 @@ export function buildPriceBands(maxPrice: number): { label: string; min: number;
 export function countActiveFilters(state: StoreFilterState, lockedCategory: string | null, lockedBrand: string | null): number {
   return (
     (state.query.trim() ? 1 : 0) +
-    state.categories.filter((c) => c !== lockedCategory).length +
+    // As categorias que a página já inclui (glasspad em Mousepad) são recorte, não filtro.
+    state.categories.filter((c) => !lockedCategory || !categoryPageScope(lockedCategory).includes(c)).length +
     state.brands.filter((b) => b !== lockedBrand).length +
     state.conditions.length +
     state.saleTypes.length +
@@ -701,7 +702,7 @@ export function buildActiveChips(
     })
   }
   for (const category of state.categories) {
-    if (category === lockedCategory) continue
+    if (lockedCategory && categoryPageScope(lockedCategory).includes(category)) continue
     chips.push({
       key: `cat:${category}`,
       group: "Categoria",

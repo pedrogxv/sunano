@@ -2,34 +2,38 @@ import "server-only"
 
 import { escapeOrFilterValue } from "@/lib/server/repositories/_shared"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
+import { revalidateStorefront } from "@/lib/server/seo/revalidate-public"
 
 /**
- * Repositório dos banners de carrossel das seções da Loja — acesso à tabela
+ * Repositório dos banners de carrossel da Loja — acesso à tabela
  * `store_section_banners`.
  *
- * Cada seção (`main`, `best_sellers`, `pre_sale`, `ready_stock`, `site_items`)
- * tem sua própria fila de banners, com `sort_order` independente das outras —
- * ao contrário de `home_banners` (Home global, uma fila só, limite de 7
- * ativos), aqui não há teto de banners ativos por seção. `main` é o hero do
- * topo da Loja — sem banner ativo, cai na imagem estática de sempre em vez
- * de virar grid (não existe "grid" pro hero).
+ * O único lugar onde eles aparecem hoje é o topo de cada página de categoria
+ * (`section = 'category'` + a coluna `category`, migration `20261221000000`),
+ * no lugar do cabeçalho padrão. Cada categoria tem a própria fila, com
+ * `sort_order` independente das outras.
+ *
+ * As seções antigas (`main`, `best_sellers`, `pre_sale`, `ready_stock`,
+ * `site_items`) eram carrosséis no meio da Home e saíram do ar. Continuam
+ * válidas no banco para os banners que já existiam nelas não sumirem: o
+ * painel os lista à parte e deixa movê-los para uma categoria.
  */
 
 const STORAGE_BUCKET = "store-banners"
 
-export type StoreBannerSection = "main" | "best_sellers" | "pre_sale" | "ready_stock" | "site_items"
-
-export const STORE_BANNER_SECTIONS: StoreBannerSection[] = [
-  "main",
-  "best_sellers",
-  "pre_sale",
-  "ready_stock",
-  "site_items",
-]
+export type StoreBannerSection =
+  | "category"
+  | "main"
+  | "best_sellers"
+  | "pre_sale"
+  | "ready_stock"
+  | "site_items"
 
 export type StoreSectionBanner = {
   id: string
   section: StoreBannerSection
+  /** Só na seção `category`: o valor de `store_products.category`. */
+  category: string | null
   image_url: string | null
   video_url: string | null
   title: string
@@ -42,8 +46,9 @@ export type StoreSectionBanner = {
   updated_at: string
 }
 
+/** Todo banner novo (ou movido) é de categoria; as seções antigas não recebem mais nada. */
 export type StoreBannerWriteInput = {
-  section: StoreBannerSection
+  category: string
   imageUrl: string | null
   videoUrl: string | null
   title: string
@@ -54,37 +59,26 @@ export type StoreBannerWriteInput = {
 }
 
 const COLUMNS =
-  "id, section, image_url, video_url, title, subtitle, cta_text, cta_link, sort_order, is_active, created_at, updated_at"
+  "id, section, category, image_url, video_url, title, subtitle, cta_text, cta_link, sort_order, is_active, created_at, updated_at"
 
-function emptyGroups(): Record<StoreBannerSection, StoreSectionBanner[]> {
-  return { main: [], best_sellers: [], pre_sale: [], ready_stock: [], site_items: [] }
-}
-
-/**
- * Banners ativos de todas as seções, já agrupados — uma query só a partir de
- * `app/loja/page.tsx` em vez de uma por seção.
- */
-export async function listActiveBannersBySection(): Promise<
-  Record<StoreBannerSection, StoreSectionBanner[]>
-> {
+/** Banners ativos do topo de uma categoria, na ordem do painel. */
+export async function listActiveCategoryBanners(category: string): Promise<StoreSectionBanner[]> {
   const db = createSupabaseAdminClient()
   const { data, error } = await db
     .from("store_section_banners")
     .select(COLUMNS)
+    .eq("section", "category")
+    .eq("category", category)
     .eq("is_active", true)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true })
 
   if (error) {
-    console.error("[store-banners-repository] listActiveBannersBySection:", error)
+    console.error("[store-banners-repository] listActiveCategoryBanners:", error)
     throw error
   }
 
-  const grouped = emptyGroups()
-  for (const row of (data ?? []) as StoreSectionBanner[]) {
-    grouped[row.section].push(row)
-  }
-  return grouped
+  return (data ?? []) as StoreSectionBanner[]
 }
 
 /** Todos os banners (inclusive inativos), ordenados por seção — visão do painel. */
@@ -105,23 +99,29 @@ export async function listAllBanners(): Promise<StoreSectionBanner[]> {
   return (data ?? []) as StoreSectionBanner[]
 }
 
-/** Cria um banner no fim da fila da sua seção. */
-export async function createBanner(input: StoreBannerWriteInput): Promise<StoreSectionBanner> {
+/** Maior `sort_order` da fila da categoria + 1: o banner entra no fim. */
+async function nextCategorySortOrder(category: string): Promise<number> {
   const db = createSupabaseAdminClient()
-
-  // Fim da fila: maior sort_order existente NA MESMA SEÇÃO + 1.
   const { data: last } = await db
     .from("store_section_banners")
     .select("sort_order")
-    .eq("section", input.section)
+    .eq("section", "category")
+    .eq("category", category)
     .order("sort_order", { ascending: false })
     .limit(1)
     .maybeSingle()
+  return (last?.sort_order ?? -1) + 1
+}
+
+/** Cria um banner no fim da fila da sua categoria. */
+export async function createBanner(input: StoreBannerWriteInput): Promise<StoreSectionBanner> {
+  const db = createSupabaseAdminClient()
 
   const { data, error } = await db
     .from("store_section_banners")
     .insert({
-      section: input.section,
+      section: "category",
+      category: input.category,
       image_url: input.imageUrl,
       video_url: input.videoUrl,
       title: input.title,
@@ -129,7 +129,7 @@ export async function createBanner(input: StoreBannerWriteInput): Promise<StoreS
       cta_text: input.ctaText,
       cta_link: input.ctaLink,
       is_active: input.isActive,
-      sort_order: (last?.sort_order ?? -1) + 1,
+      sort_order: await nextCategorySortOrder(input.category),
     })
     .select(COLUMNS)
     .single()
@@ -139,10 +139,15 @@ export async function createBanner(input: StoreBannerWriteInput): Promise<StoreS
     throw error
   }
 
+  revalidateStorefront()
   return data as StoreSectionBanner
 }
 
-/** Atualiza qualquer subconjunto dos campos de um banner. */
+/**
+ * Atualiza qualquer subconjunto dos campos de um banner. Trocar a categoria
+ * (ou dar uma a um banner de seção antiga) move o banner para o FIM da fila
+ * da categoria nova: o `sort_order` da antiga não diz nada lá.
+ */
 export async function updateBanner(
   id: string,
   patch: Partial<StoreBannerWriteInput>
@@ -151,12 +156,23 @@ export async function updateBanner(
 
   // Antes de trocar a mídia, guarda a antiga para remover do storage depois.
   const previous =
-    patch.imageUrl !== undefined || patch.videoUrl !== undefined ? await findBannerById(id) : null
+    patch.imageUrl !== undefined || patch.videoUrl !== undefined || patch.category !== undefined
+      ? await findBannerById(id)
+      : null
+  const moving =
+    patch.category !== undefined &&
+    (previous?.section !== "category" || previous?.category !== patch.category)
 
   const { data, error } = await db
     .from("store_section_banners")
     .update({
-      ...(patch.section !== undefined ? { section: patch.section } : {}),
+      ...(moving
+        ? {
+            section: "category",
+            category: patch.category,
+            sort_order: await nextCategorySortOrder(patch.category!),
+          }
+        : {}),
       ...(patch.imageUrl !== undefined ? { image_url: patch.imageUrl } : {}),
       ...(patch.videoUrl !== undefined ? { video_url: patch.videoUrl } : {}),
       ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -176,6 +192,8 @@ export async function updateBanner(
   if (!data) {
     throw new Error("Banner não encontrado.")
   }
+
+  revalidateStorefront()
 
   const updated = data as StoreSectionBanner
   if (previous) {
@@ -206,6 +224,7 @@ export async function deleteBanner(id: string): Promise<void> {
     console.error("[store-banners-repository] deleteBanner:", error)
     throw error
   }
+  revalidateStorefront()
 
   if (banner) {
     await removeUnreferencedMedia(
@@ -266,15 +285,12 @@ async function removeUnreferencedMedia(urls: string[]): Promise<void> {
 }
 
 /**
- * Reordena os banners de UMA seção. Recebe os ids na ordem desejada e grava
- * o índice de cada um em `sort_order`; ids desconhecidos são ignorados pelo
- * `.eq`. `sort_order` não é comparável entre seções diferentes, então a
- * reordenação nunca mexe fora da seção informada.
+ * Reordena os banners de UMA categoria. Recebe os ids na ordem desejada e
+ * grava o índice de cada um em `sort_order`; ids desconhecidos são ignorados
+ * pelo `.eq`. `sort_order` não é comparável entre categorias diferentes, então
+ * a reordenação nunca mexe fora da categoria informada.
  */
-export async function reorderBanners(
-  section: StoreBannerSection,
-  orderedIds: string[]
-): Promise<void> {
+export async function reorderBanners(category: string, orderedIds: string[]): Promise<void> {
   const db = createSupabaseAdminClient()
 
   const results = await Promise.all(
@@ -283,7 +299,8 @@ export async function reorderBanners(
         .from("store_section_banners")
         .update({ sort_order: index })
         .eq("id", id)
-        .eq("section", section)
+        .eq("section", "category")
+        .eq("category", category)
     )
   )
 
@@ -292,4 +309,5 @@ export async function reorderBanners(
     console.error("[store-banners-repository] reorderBanners:", failed.error)
     throw failed.error
   }
+  revalidateStorefront()
 }

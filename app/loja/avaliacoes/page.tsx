@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { buildMetadata } from "@/lib/seo"
 import { Suspense } from "react"
 import { getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
-import { getStoreWideReviewAggregate, listStoreWideReviews } from "@/lib/server/repositories/store-reviews-repository"
+import { aggregateRatings, listStoreWideReviews } from "@/lib/server/repositories/store-reviews-repository"
 import { listPublishedTestimonials } from "@/lib/server/repositories/store-testimonials-repository"
 import { StoreReviewsContent } from "@/components/store/StoreReviewsContent"
 import { ShoppingBag } from "lucide-react"
@@ -22,7 +22,7 @@ export function generateMetadata(): Metadata {
     storeMaintenanceMetadata({ title: "Loja", path: "/loja/avaliacoes" }) ??
     buildMetadata({
       title: "Avaliações - Loja",
-      description: "Veja as avaliações de quem já comprou na Loja Sunano: notas e comentários reais de compradores verificados.",
+      description: "Veja a nota geral da Loja Sunano e todas as avaliações de quem já comprou: notas, fotos e comentários reais de clientes.",
       path: "/loja/avaliacoes",
       eyebrow: "Loja",
       subtitle: "Avaliações de compradores",
@@ -45,12 +45,14 @@ export default async function LojaAvaliacoesPage() {
     )
   }
 
-  const [filterOptions, aggregate, reviews, testimonials] = await Promise.all([
+  const [filterOptions, reviews, testimonials] = await Promise.all([
     getStoreFilterOptions("store"),
-    getStoreWideReviewAggregate(),
-    listStoreWideReviews(60),
-    listPublishedTestimonials(60),
+    listStoreWideReviews(),
+    listPublishedTestimonials(500),
   ])
+  // Nota e distribuição saem da MESMA lista que a página mostra, então a
+  // contagem de cada filtro bate com os cards que ele exibe.
+  const aggregate = aggregateRatings([...reviews, ...testimonials].map((r) => r.rating))
 
   return (
     <Suspense>

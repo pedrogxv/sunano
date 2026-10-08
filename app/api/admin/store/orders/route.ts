@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
+import { ORDER_STATUS_GROUPS, parseOrderStatusGroup } from "@/lib/order-status"
 import {
   countOrdersByStatus,
   listOrdersForAdmin,
@@ -32,6 +33,10 @@ export async function GET(request: NextRequest) {
   const status = statusParam && VALID_STATUSES.includes(statusParam as OrderStatus)
     ? (statusParam as OrderStatus)
     : undefined
+  // Aba da fila. Sem o parâmetro = todos os status (compatível com quem já
+  // chamava a rota antes das abas).
+  const group = parseOrderStatusGroup(url.searchParams.get("group"))
+  const statuses = group === "all" ? undefined : ORDER_STATUS_GROUPS[group]
   const productId = url.searchParams.get("productId") ?? undefined
   const userQuery = url.searchParams.get("q") ?? undefined
   const userId = url.searchParams.get("userId") ?? undefined
@@ -47,7 +52,7 @@ export async function GET(request: NextRequest) {
   const pageSize = Number(url.searchParams.get("pageSize") ?? "20") || 20
 
   const [{ orders, total }, counts] = await Promise.all([
-    listOrdersForAdmin({ status, productId, userQuery, userId, dateFrom, dateTo, missingShipping, environment, kind, page, pageSize }),
+    listOrdersForAdmin({ status, statuses, productId, userQuery, userId, dateFrom, dateTo, missingShipping, environment, kind, page, pageSize }),
     countOrdersByStatus(environment, kind),
   ])
   return NextResponse.json({ ok: true, orders, total, page, pageSize, counts, environment, kind })

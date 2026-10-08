@@ -8,7 +8,7 @@ export function classifyStoreNavGroup(category: string): StoreNavGroup {
   if (/mouse\s*pad|glasspad/i.test(category)) return "mousepad"
   if (/mouse/i.test(category)) return "mouse"
   if (/teclado|keyboard/i.test(category)) return "teclado"
-  if (/headset|fone|headphone|\biem\b|\bdac\b/i.test(category)) return "audio"
+  if (/headset|fone|headphone|\biem\b|\bdac\b|^audio$/i.test(category)) return "audio"
   return "outros"
 }
 
@@ -21,7 +21,7 @@ const CATEGORY_ICON_RULES: { match: RegExp; icon: LucideIcon; tint: string }[] =
   { match: /mouse\s*pad|glasspad/i, icon: RectangleHorizontal, tint: "oklch(0.7 0.15 160)" },
   { match: /mouse/i, icon: Mouse, tint: "oklch(0.75 0.15 195)" },
   { match: /teclado|keyboard/i, icon: Keyboard, tint: "oklch(0.8 0.15 85)" },
-  { match: /headset|fone|headphone|\biem\b|\bdac\b/i, icon: Headphones, tint: "oklch(0.7 0.15 340)" },
+  { match: /headset|fone|headphone|\biem\b|\bdac\b|^audio$/i, icon: Headphones, tint: "oklch(0.7 0.15 340)" },
   { match: /monitor/i, icon: Monitor, tint: "oklch(0.72 0.14 260)" },
   { match: /webcam|câmera|camera/i, icon: Camera, tint: "oklch(0.75 0.15 195)" },
   { match: /microfone|mic\b/i, icon: Mic, tint: "oklch(0.7 0.15 25)" },
@@ -49,6 +49,8 @@ const STORE_CATEGORY_LABELS: Record<string, string> = {
   iem: "IEM",
   switches: "Switches",
   dac_amp: "DAC/AMP",
+  // Página de grupo (`GROUP_PAGES` em lib/store-catalog.ts), não categoria do admin.
+  audio: "Áudio",
   feet: "Feet",
   acessorio: "Acessório",
   services: "Serviços",

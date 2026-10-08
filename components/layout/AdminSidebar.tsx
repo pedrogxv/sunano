@@ -30,6 +30,7 @@ import {
   Settings,
   ShoppingBag,
   Tag,
+  Ticket,
   Trophy,
   Users,
   Wrench,
@@ -99,6 +100,15 @@ export function AdminSidebar() {
       label: t.admin.sidebar.general,
       items: [
         { href: "/admin", label: "Dashboard", icon: Home, permission: "dashboard_read" },
+        {
+          href: "/admin/suporte",
+          label: "Suporte",
+          icon: LifeBuoy,
+          children: [
+            { href: "/admin/perifericos/pedidos", label: "Cadastros", icon: Inbox,  permission: "peripherals_read", badgeCount: peripheralRequestsPendingCount },
+            { href: "/admin/suporte",             label: "Ticket",    icon: Ticket, permission: "support_read",     badgeCount: supportAwaitingCount },
+          ],
+        },
       ],
     },
     {
@@ -106,7 +116,6 @@ export function AdminSidebar() {
       items: [
         { href: "/admin/tierlist",    label: "Tierlist",                       icon: Trophy,     permission: "peripherals_read" },
         { href: "/admin/perifericos", label: t.admin.sidebar.peripherals,      icon: Mouse,      permission: "peripherals_read" },
-        { href: "/admin/perifericos/pedidos", label: "Cadastros",                icon: Inbox,      permission: "peripherals_read", badgeCount: peripheralRequestsPendingCount },
         { href: "/admin/ranking",     label: "Ranking",                        icon: BarChart2,  permission: "peripherals_read" },
         { href: "/admin/brands",      label: "Marcas",                         icon: Tag,        permission: "brands_read" },
         { href: "/admin/softwares",   label: "Softwares",                      icon: AppWindow,  permission: "brands_read" },
@@ -148,7 +157,6 @@ export function AdminSidebar() {
             { href: "/admin/store/avaliacoes", label: "Avaliações", icon: Star, permission: "store_read" },
             { href: "/admin/store/banners", label: "Banners",  icon: GalleryHorizontalEnd, permission: "store_read" },
             { href: "/admin/store/orders",  label: "Pedidos",  icon: Package,              permission: "store_read", badgeCount: paidOrdersAwaitingCount },
-            { href: "/admin/suporte",       label: "Suporte",  icon: LifeBuoy,              permission: "support_read", badgeCount: supportAwaitingCount },
           ],
         },
         { href: "/admin/vips",   label: "VIPs",                         icon: Crown,       permission: "vip_read" },
@@ -264,6 +272,10 @@ export function AdminSidebar() {
     return sorted.find((child) => isActive(child.href))?.href ?? null
   }
 
+  const allHrefs = navGroups.flatMap((group) =>
+    group.items.flatMap((item) => [item.href, ...(item.children ?? []).map((child) => child.href)])
+  )
+
   function canSee(item: NavItem) {
     if (item.requiresWebMaster) return isWebMaster(profile)
     if (!item.permission) return true
@@ -305,9 +317,9 @@ export function AdminSidebar() {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 pb-4">
           {isLoadingProfile ? (
-            // Espelha: Geral(1), Periféricos(3), Conteúdo(2), Loja(2), Sistema(2), Ações(1)
+            // Espelha: Geral(2), Periféricos(3), Conteúdo(2), Loja(2), Sistema(2), Ações(1)
             <div className="pt-1">
-              {[1, 3, 2, 2, 2, 1].map((count, gi) => (
+              {[2, 3, 2, 2, 2, 1].map((count, gi) => (
                 <div key={gi}>
                   {isCollapsed ? (
                     <div className="my-2 h-px bg-muted/20" />
@@ -416,13 +428,13 @@ export function AdminSidebar() {
                         )
                       }
 
-                      // "/admin/perifericos" é prefixo de "/admin/perifericos/pedidos":
-                      // sem isto, os dois itens acendem juntos na fila de pedidos.
+                      // "/admin/perifericos" é prefixo de "/admin/perifericos/pedidos"
+                      // (Cadastros, dentro de Suporte): sem isto, Periféricos acende
+                      // junto na fila de pedidos. Confere o menu inteiro, filhos
+                      // inclusive, porque o item mais específico mora em outro grupo.
                       const active =
                         isActive(item.href) &&
-                        !visible.some(
-                          (other) => other !== item && other.href.length > item.href.length && isActive(other.href)
-                        )
+                        !allHrefs.some((href) => href.length > item.href.length && isActive(href))
                       return (
                         <RouteLink
                           key={item.href}

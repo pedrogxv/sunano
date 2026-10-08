@@ -13,7 +13,7 @@ import {
 import { parseSlug } from "@/lib/format"
 import { CARD_HIGHLIGHT_MAX_CHARS, CARD_HIGHLIGHTS_MAX, sanitizeCardHighlights, STORE_CARD_BADGE_CHOICES } from "@/lib/store-card"
 import { isValidYoutubeUrl } from "@/lib/youtube-url"
-import { productPageFieldsShape, skuConflictMessage, withPreorderEnd } from "@/lib/server/validation/store-product-page"
+import { productPageFieldsShape, saleWindowPriceIssue, skuConflictMessage } from "@/lib/server/validation/store-product-page"
 
 const MAX_PRODUCT_IMAGES = 8
 const MAX_STOCK = 999_999
@@ -135,18 +135,21 @@ export async function POST(request: NextRequest) {
     name, description, price_cents, promo_price_cents, stock, images, category, brand, condition,
     condition_notes, sale_type, preorder_limit, is_active, is_sold_out, features, video_url,
     requires_shipping, card_badge, card_highlights,
-    sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch, launch_until,
-    preorder_early_ends_at,
+    sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch,
+    sale_window_ends_at, sale_window_end_action, sale_window_end_price_cents,
   } = parsed.data
   // Campos da página do produto (20261213000001) só entram quando vieram,
   // como o selo do card: o form omite o que ficou no padrão.
-  const pageFields = withPreorderEnd(
-    Object.fromEntries(
-      Object.entries({
-        sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch, launch_until, preorder_early_ends_at,
-      }).filter(([, value]) => value !== undefined)
-    ) as { preorder_early_ends_at?: string | null }
+  const pageFields = Object.fromEntries(
+    Object.entries({
+      sku, preorder_batch_name, preorder_ships_at, preorder_status, is_launch,
+      sale_window_ends_at, sale_window_end_action, sale_window_end_price_cents,
+    }).filter(([, value]) => value !== undefined)
   )
+  const windowIssue = saleWindowPriceIssue({ sale_window_end_action, sale_window_end_price_cents })
+  if (windowIssue) {
+    return NextResponse.json({ error: windowIssue }, { status: 400 })
+  }
 
   if (promo_price_cents != null && promo_price_cents >= price_cents) {
     return NextResponse.json(

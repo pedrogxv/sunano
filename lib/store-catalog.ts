@@ -392,6 +392,67 @@ const CATALOG_CONFIG: Partial<Record<StoreNavGroup, CatalogGroupConfig>> = {
   mousepad: MOUSEPAD_CONFIG,
 }
 
+/**
+ * Categorias que a página de uma categoria mostra junto da própria. Quem clica
+ * em "Mousepad" quer ver todos, de tecido e de vidro; `/loja/categoria/glasspad`
+ * (o atalho "Glasspad" do menu) continua só vidro. Lido pela página (SSR), pela
+ * grade (fetch e filtros) e pelo repositório (contagens), para os três
+ * recortarem igual.
+ */
+const CATEGORY_PAGE_INCLUDES: Record<string, string[]> = {
+  mousepad: ["glasspad"],
+}
+
+/**
+ * Páginas de GRUPO, sem categoria própria no banco: nenhum produto é
+ * cadastrado como "audio", mas `/loja/categoria/audio` lista Headset + IEM.
+ * Não dava para fazer como em Mousepad (Headset incluir IEM): o atalho
+ * "Headset" do menu passaria a mostrar IEM também.
+ */
+const GROUP_PAGES: Record<string, string[]> = {
+  audio: ["headset", "iem"],
+}
+
+/** Para onde vai o clique no nome do grupo no menu da Loja (e o "Ver todos" dele). */
+const NAV_GROUP_LANDING: Partial<Record<StoreNavGroup, string>> = {
+  mousepad: "mousepad",
+  audio: "audio",
+}
+
+/** Categorias que a página de `category` lista: ela mesma e as que ela inclui. */
+export function categoryPageScope(category: string): string[] {
+  return GROUP_PAGES[category] ?? [category, ...(CATEGORY_PAGE_INCLUDES[category] ?? [])]
+}
+
+/** Páginas de categoria em que um produto de `category` aparece: a dela e as que a incluem. */
+export function categoryPagesIncluding(category: string): string[] {
+  return [
+    category,
+    ...Object.entries({ ...CATEGORY_PAGE_INCLUDES, ...GROUP_PAGES }).flatMap(([page, included]) =>
+      included.includes(category) ? [page] : []
+    ),
+  ]
+}
+
+/** Página de categoria existe quando lista ao menos uma categoria com produto. */
+export function hasCategoryPage(category: string, categoriesWithProducts: string[]): boolean {
+  return categoryPageScope(category).some((c) => categoriesWithProducts.includes(c))
+}
+
+/** Páginas de grupo com produto (`GROUP_PAGES`), para o sitemap. */
+export function groupPagesWithProducts(categoriesWithProducts: string[]): string[] {
+  return Object.keys(GROUP_PAGES).filter((page) => hasCategoryPage(page, categoriesWithProducts))
+}
+
+/**
+ * Página que o nome do grupo abre: a de grupo (Áudio) ou a que inclui as
+ * outras (Mousepad). Sem uma delas, a categoria com mais produtos do grupo.
+ */
+export function navGroupLanding(group: StoreNavGroup, groupCategories: string[], primaryCategory: string): string {
+  const landing = NAV_GROUP_LANDING[group]
+  return landing && hasCategoryPage(landing, groupCategories) ? landing : primaryCategory
+}
+
 export function catalogConfigFor(category: string | null | undefined): CatalogGroupConfig | null {
   if (!category) return null
   return CATALOG_CONFIG[classifyStoreNavGroup(category)] ?? null

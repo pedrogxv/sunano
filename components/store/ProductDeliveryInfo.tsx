@@ -29,8 +29,8 @@ export function ProductDeliveryInfo({ preOrder }: ProductDeliveryInfoProps) {
       </span>
       {preOrder ? (
         <div>
-          <p className="text-[15px] font-semibold text-foreground">Envio quando o lote chegar</p>
-          <p className="text-[13px] text-muted-foreground">A partir da chegada, a entrega leva até {days} dias úteis.</p>
+          <p className="text-[15px] font-semibold text-foreground">Envios a partir do dia de Lançamento</p>
+          <p className="text-[13px] text-muted-foreground">A partir do lançamento, a entrega leva até {days} dias úteis.</p>
         </div>
       ) : (
         <div>

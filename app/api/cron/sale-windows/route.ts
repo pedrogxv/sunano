@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 export const maxDuration = 30
 
-// Avança as pré-vendas com prazo (migration 20261215000000): fim do desconto
-// inicial apaga a promoção, fim do prazo devolve o produto ao catálogo. A
+// Fecha o prazo das pré-vendas e lançamentos (migration 20261220000000): muda
+// o preço conforme o admin escolheu e devolve o produto ao catálogo comum. A
 // regra inteira mora na função SQL; aqui só se dispara. Mesmo padrão de
 // /api/cron/vip-expiration (Bearer CRON_SECRET, fail closed).
 export async function GET(request: NextRequest) {
@@ -16,10 +16,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const { data, error } = await createSupabaseAdminClient().rpc("advance_preorder_phases")
+  const { data, error } = await createSupabaseAdminClient().rpc("close_store_sale_windows")
   if (error) {
-    console.error("[cron/preorder-phases]", error)
-    return NextResponse.json({ error: "Falha ao avançar as pré-vendas." }, { status: 500 })
+    console.error("[cron/sale-windows]", error)
+    return NextResponse.json({ error: "Falha ao fechar os prazos de pré-venda e lançamento." }, { status: 500 })
   }
   return NextResponse.json({ ok: true, ...data })
 }

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { ArrowRight, ChevronLeft, ChevronRight, Home, LifeBuoy, Package, ShoppingCart, Star, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCategoryIcon, getCategoryLabel, classifyStoreNavGroup, type StoreNavGroup } from "@/lib/store-category-icons"
-import { catalogConfigForGroup, catalogHref } from "@/lib/store-catalog"
+import { catalogConfigForGroup, catalogHref, navGroupLanding } from "@/lib/store-catalog"
 import { formatBRL } from "@/lib/format"
 import { computeCardDisplayPrice } from "@/lib/store-pricing"
 import { useCart } from "@/components/providers/cart-context"
@@ -77,7 +77,7 @@ function MenuLink({ href, label, count, onNavigate }: { href: string; label: str
 }
 
 /**
- * Ação da direita do menu (Favoritos, Carrinho, Pedidos, Suporte). O rótulo
+ * Ação da direita do menu (Carrinho, Pedidos, Suporte). O rótulo
  * só aparece quando o MENU tem largura para ele (container query, não
  * viewport): com a sidebar do site aberta, 1440px de tela não sobram 1240px
  * para o menu, e o rótulo empurraria as categorias para fora.
@@ -148,13 +148,17 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
   }
   const groupsWithCategories = GROUP_ORDER.filter((group) => (grouped.get(group)?.length ?? 0) > 0)
 
+  // Categoria "principal" do grupo (a com mais produtos): é para onde vão o
+  // clique no nome do grupo e os atalhos de tipo e de preço. Mousepad junta
+  // mousepad + glasspad; o glasspad entra como item próprio na coluna de tipos.
+  const primaryCategoryOf = (groupCategories: string[]) =>
+    [...groupCategories].sort((a, b) => (categoryCounts[b] ?? 0) - (categoryCounts[a] ?? 0))[0] ?? null
+
   const openGroup = hovered
   const openCategories = openGroup ? grouped.get(openGroup) ?? [] : []
   const openCount = openCategories.reduce((sum, c) => sum + (categoryCounts[c] ?? 0), 0)
-  // Categoria "principal" do grupo (a com mais produtos): é para onde vão os
-  // atalhos de tipo e de preço. Mousepad junta mousepad + glasspad; o glasspad
-  // entra como item próprio na coluna de tipos.
-  const primaryCategory = [...openCategories].sort((a, b) => (categoryCounts[b] ?? 0) - (categoryCounts[a] ?? 0))[0] ?? null
+  const primaryCategory = primaryCategoryOf(openCategories)
+  const openLanding = openGroup && primaryCategory ? navGroupLanding(openGroup, openCategories, primaryCategory) : null
   const catalog = openGroup ? catalogConfigForGroup(openGroup) : null
   const catalogCounts = primaryCategory ? data.catalogFacetsByCategory?.[primaryCategory] : undefined
   const openBrands = openCategories.length
@@ -215,7 +219,7 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
         da tela: a sidebar do site (aberta ou recolhida) muda quanto sobra. */}
     <div className="@container relative" onMouseLeave={() => hoverGroup(null)}>
       {/* Desktop: 3 blocos: Busca | Home + categorias (centralizados) |
-          Favoritos, Carrinho, Pedidos, Suporte. A busca mora à esquerda para
+          Carrinho, Pedidos, Suporte. A busca mora à esquerda para
           o bloco de categorias ficar no meio com espaço dos dois lados. */}
       <nav className="hidden grid-cols-[1fr_auto_1fr] items-center gap-x-6 border-b border-[#262626] bg-card px-4 @min-[920px]:grid @min-[1100px]:px-8">
         <div className="flex min-w-0" onMouseEnter={() => hoverGroup(null)}>
@@ -242,38 +246,27 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
           {groupsWithCategories.map((group) => {
             const groupCategories = grouped.get(group) ?? []
             const isOpen = hovered === group
-            const isActive = groupCategories.includes(activeCategory ?? "")
+            // Mousepad junta mousepad + glasspad; Áudio abre a página de grupo
+            // (Headset + IEM). Ver `navGroupLanding`.
+            const landing = navGroupLanding(group, groupCategories, primaryCategoryOf(groupCategories) ?? groupCategories[0])
+            const isActive = activeCategory != null && (groupCategories.includes(activeCategory) || activeCategory === landing)
             const highlighted = isActive || isOpen
             const tint = groupCategories.length === 1 ? getCategoryIcon(groupCategories[0]).tint : "oklch(0.75 0.15 195)"
-            const singleHref = groupCategories.length === 1 ? `/loja/categoria/${encodeURIComponent(groupCategories[0])}` : undefined
-
-            const content = GROUP_LABEL[group]
-
-            const sharedClass = cn(
-              "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
-              highlighted ? "font-bold text-white" : "font-semibold text-[#b4b4b4] hover:text-white"
-            )
-
-            return singleHref ? (
+            // Grupo com mais de uma categoria também é link: era um <button>
+            // só de hover, e o clique não fazia nada.
+            return (
               <Link
                 key={group}
-                href={singleHref}
+                href={catalogHref(landing)}
                 onMouseEnter={() => hoverGroup(group)}
                 style={{ borderColor: highlighted ? tint : "transparent" }}
-                className={sharedClass}
+                className={cn(
+                  "flex h-[54px] shrink-0 items-center gap-[5px] border-b-2 text-[13.5px] transition-colors",
+                  highlighted ? "font-bold text-white" : "font-semibold text-[#b4b4b4] hover:text-white"
+                )}
               >
-                {content}
+                {GROUP_LABEL[group]}
               </Link>
-            ) : (
-              <button
-                key={group}
-                type="button"
-                onMouseEnter={() => hoverGroup(group)}
-                style={{ borderColor: highlighted ? tint : "transparent" }}
-                className={sharedClass}
-              >
-                {content}
-              </button>
             )
           })}
           <Link
@@ -321,11 +314,12 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
         </Link>
         {groupsWithCategories.map((group) => {
           const groupCategories = grouped.get(group) ?? []
-          const isActive = groupCategories.includes(activeCategory ?? "")
+          const landing = navGroupLanding(group, groupCategories, primaryCategoryOf(groupCategories) ?? groupCategories[0])
+          const isActive = activeCategory != null && (groupCategories.includes(activeCategory) || activeCategory === landing)
           return (
             <Link
               key={group}
-              href={`/loja/categoria/${encodeURIComponent(groupCategories[0])}`}
+              href={catalogHref(landing)}
               className={cn(
                 "inline-flex h-[34px] shrink-0 items-center rounded-full px-[15px] text-[12.5px] transition-colors",
                 isActive
@@ -421,14 +415,14 @@ export function StoreCategoryNav({ data, activeCategory }: StoreCategoryNavProps
                 </div>
               )}
 
-              {primaryCategory && (
+              {openLanding && openGroup && (
                 <RouteLink
-                  href={catalogHref(primaryCategory)}
+                  href={catalogHref(openLanding)}
                   onClick={() => hoverGroup(null)}
-                  style={{ color: getCategoryIcon(primaryCategory).tint }}
+                  style={{ color: getCategoryIcon(openLanding).tint }}
                   className="col-span-full inline-flex w-fit cursor-pointer items-center gap-[7px] text-[12.5px] font-bold transition-opacity hover:opacity-80"
                 >
-                  Ver todos{openCategories.length === 1 ? ` os ${openCount}` : ` em ${getCategoryLabel(primaryCategory)}`}
+                  Ver todos{openCategories.length === 1 ? ` os ${openCount}` : ` em ${GROUP_LABEL[openGroup]}`}
                   <ArrowRight className="size-[13px]" strokeWidth={2.2} />
                 </RouteLink>
               )}

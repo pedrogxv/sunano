@@ -7,7 +7,8 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
  *
  * Este arquivo só cuida da inscrição: o disparo do aviso é feito por trigger no
  * banco quando o produto (ou a cor) sai do estado esgotado, reaproveitando
- * `push_notification` — mesmo caminho das outras notificações do site.
+ * `push_notification` — mesmo caminho das outras notificações do site. O
+ * e-mail sai depois, de `restock-emails-repository.ts`.
  *
  * `variantId` null significa "me avise quando qualquer cor voltar".
  */

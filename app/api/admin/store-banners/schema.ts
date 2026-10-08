@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 import { BANNER_LINK_HINT, isValidBannerLink, normalizeBannerLink } from "@/lib/banner-link"
+import { getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 
 /**
  * Schemas compartilhados entre `POST /api/admin/store-banners` e
@@ -8,7 +9,19 @@ import { BANNER_LINK_HINT, isValidBannerLink, normalizeBannerLink } from "@/lib/
  * mesmo conjunto de campos, mudando só o que é obrigatório.
  */
 
-const SECTIONS = ["main", "best_sellers", "pre_sale", "ready_stock", "site_items"] as const
+// O formato barra lixo; quem diz se a categoria EXISTE é `isStoreCategory`,
+// chamada pela rota (precisa do banco).
+const category = z.string().trim().min(1, "Escolha a categoria.").max(60, "Categoria inválida.")
+
+/**
+ * A categoria tem de ser uma das que a Loja de fato publica: são as mesmas
+ * que `/loja/categoria/[categoria]` aceita (o resto é 404), então um banner
+ * em outra nunca apareceria.
+ */
+export async function isStoreCategory(value: string): Promise<boolean> {
+  const { categories } = await getStoreFilterOptions("store")
+  return categories.includes(value)
+}
 
 const nullableTrimmed = (max: number, message: string) =>
   z
@@ -25,7 +38,7 @@ const ctaLink = z
 
 export const createStoreBannerSchema = z
   .object({
-    section: z.enum(SECTIONS),
+    category,
     imageUrl: z
       .string()
       .nullish()
@@ -74,7 +87,8 @@ const editableCtaLink = z
 
 export const updateStoreBannerSchema = z
   .object({
-    section: z.enum(SECTIONS).optional(),
+    // Também é como um banner de seção antiga (fora do ar) volta a aparecer.
+    category: category.optional(),
     imageUrl: z
       .string()
       .nullable()

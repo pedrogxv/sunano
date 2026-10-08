@@ -72,7 +72,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
-import { orderStatusLabel } from "@/lib/order-status"
+import { ORDER_STATUS_GROUPS, orderStatusLabel, type OrderStatusGroup } from "@/lib/order-status"
 import { formatCpfInput } from "@/components/store/CheckoutPayerCard"
 import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
@@ -284,6 +284,28 @@ const STATUS_FILTERS: Array<{ value: OrderStatus | "all"; label: string; icon: R
   { value: "refunded", label: "Reembolsado", icon: RotateCcw },
   { value: "expired", label: "Expirado", icon: AlertCircle },
 ]
+
+/**
+ * Abas de status. Abre em "Ativos": o que ainda pede ação é o trabalho do
+ * dia, e expirado/cancelado/reembolsado só enchiam a fila. Os status de
+ * cada aba moram em `ORDER_STATUS_GROUPS` (a rota recorta pelo mesmo mapa).
+ */
+const STATUS_GROUP_TABS: Array<{ value: OrderStatusGroup; label: string; icon: React.ElementType }> = [
+  { value: "active", label: "Ativos", icon: Clock },
+  { value: "completed", label: "Concluídos", icon: PackageCheck },
+  { value: "expired", label: "Expirados", icon: AlertCircle },
+  { value: "cancelled", label: "Cancelados", icon: Ban },
+  { value: "refunded", label: "Reembolsados", icon: RotateCcw },
+  { value: "all", label: "Todos", icon: Package },
+]
+
+function statusesOfGroup(group: OrderStatusGroup): OrderStatus[] {
+  return group === "all" ? STATUS_FILTERS.flatMap((f) => (f.value === "all" ? [] : [f.value])) : ORDER_STATUS_GROUPS[group]
+}
+
+function groupCount(counts: Record<OrderStatus | "all", number>, group: OrderStatusGroup): number {
+  return group === "all" ? counts.all : ORDER_STATUS_GROUPS[group].reduce((sum, status) => sum + (counts[status] ?? 0), 0)
+}
 
 const PAGE_SIZE = 20
 
@@ -640,6 +662,9 @@ export default function AdminOrdersPage() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Aba, não filtro: "Limpar filtros" não mexe nela.
+  const [statusGroup, setStatusGroup] = useState<OrderStatusGroup>("active")
+  // Etapa dentro da aba (só aparece quando a aba tem mais de um status).
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all")
   const [productFilter, setProductFilter] = useState<OrderProductOption | null>(null)
   const [userQuery, setUserQuery] = useState("")
@@ -665,6 +690,7 @@ export default function AdminOrdersPage() {
     setError(null)
     try {
       const params = new URLSearchParams()
+      if (statusGroup !== "all") params.set("group", statusGroup)
       if (statusFilter !== "all") params.set("status", statusFilter)
       if (productFilter) params.set("productId", productFilter.id)
       if (userQuery.trim()) params.set("q", userQuery.trim())
@@ -695,7 +721,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false)
     }
-  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, kind, page])
+  }, [statusGroup, statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, kind, page])
 
   useEffect(() => {
     const timeout = setTimeout(load, userQuery ? 350 : 0)
@@ -705,7 +731,27 @@ export default function AdminOrdersPage() {
   // Qualquer mudança de filtro volta pra primeira página.
   useEffect(() => {
     setPage(1)
-  }, [statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, kind])
+  }, [statusGroup, statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, kind])
+
+  const groupStatuses = statusesOfGroup(statusGroup)
+  const statusOptions = STATUS_FILTERS.filter((f) => f.value === "all" || groupStatuses.includes(f.value))
+
+  function changeStatusGroup(group: OrderStatusGroup) {
+    setStatusGroup(group)
+    // A etapa escolhida pode não existir na aba nova.
+    setStatusFilter("all")
+    // "Sem endereço" é fila de pedido pago: fora de Ativos/Todos só daria vazio.
+    if (group !== "active" && group !== "all") setMissingShippingOnly(false)
+  }
+
+  function toggleMissingShipping() {
+    const next = !missingShippingOnly
+    setMissingShippingOnly(next)
+    if (next && statusGroup !== "active" && statusGroup !== "all") {
+      setStatusGroup("active")
+      setStatusFilter("all")
+    }
+  }
 
   // Trocar de ambiente invalida o cliente escolhido: ele pode não ter pedido
   // nenhum do outro lado, e a fila voltaria vazia sem explicação.
@@ -748,6 +794,20 @@ export default function AdminOrdersPage() {
         </TabsList>
       </Tabs>
 
+      <Tabs value={statusGroup} onValueChange={(value) => changeStatusGroup(value as OrderStatusGroup)}>
+        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <TabsList>
+            {STATUS_GROUP_TABS.map(({ value, label, icon: Icon }) => (
+              <TabsTrigger key={value} value={value} className="gap-1.5">
+                <Icon className="size-3.5" />
+                {label}
+                <span className="text-muted-foreground">({groupCount(counts, value)})</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
+      </Tabs>
+
       {/* Filtros */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -766,13 +826,16 @@ export default function AdminOrdersPage() {
             environment={environment}
           />
           <ProductFilterCombobox value={productFilter} onChange={setProductFilter} />
+          {statusOptions.length > 2 && (
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | "all")}>
             <SelectTrigger className="w-full border-border bg-card text-sm sm:w-64">
               <SelectValue>
                 {(() => {
-                  const current = STATUS_FILTERS.find((f) => f.value === statusFilter)
+                  const current = statusOptions.find((f) => f.value === statusFilter)
                   if (!current) return null
                   const Icon = current.icon
+                  const label = current.value === "all" ? "Todas as etapas" : current.label
+                  const count = current.value === "all" ? groupCount(counts, statusGroup) : counts[current.value] ?? 0
                   return (
                     <span className="flex items-center gap-2">
                       <span className="text-muted-foreground">Status:</span>
@@ -784,15 +847,15 @@ export default function AdminOrdersPage() {
                       >
                         <Icon className="size-3" />
                       </span>
-                      <span>{current.label}</span>
-                      <span className="text-muted-foreground">({counts[current.value] ?? 0})</span>
+                      <span>{label}</span>
+                      <span className="text-muted-foreground">({count})</span>
                     </span>
                   )
                 })()}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              {STATUS_FILTERS.map(({ value, label, icon: Icon }) => (
+              {statusOptions.map(({ value, label, icon: Icon }) => (
                 <SelectItem key={value} value={value}>
                   <span className="flex items-center gap-2">
                     <span
@@ -803,13 +866,16 @@ export default function AdminOrdersPage() {
                     >
                       <Icon className="size-3" />
                     </span>
-                    <span>{label}</span>
-                    <span className="text-muted-foreground">({counts[value] ?? 0})</span>
+                    <span>{value === "all" ? "Todas as etapas" : label}</span>
+                    <span className="text-muted-foreground">
+                      ({value === "all" ? groupCount(counts, statusGroup) : counts[value] ?? 0})
+                    </span>
                   </span>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -849,7 +915,7 @@ export default function AdminOrdersPage() {
             type="button"
             variant={missingShippingOnly ? "default" : "outline"}
             size="sm"
-            onClick={() => setMissingShippingOnly((v) => !v)}
+            onClick={toggleMissingShipping}
             className={cn(
               "gap-1.5",
               missingShippingOnly && "bg-amber-500 text-black hover:bg-amber-400"

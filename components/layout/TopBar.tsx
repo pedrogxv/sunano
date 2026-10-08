@@ -53,7 +53,7 @@ const ADMIN_PAGE_DEFAULTS: Record<string, PageDefaults> = {
   "/admin/store/commerce-bar": { title: "Barra comercial", description: "Benefícios e campanha abaixo do menu da Loja." },
   "/admin/vips":        { title: "VIPs", description: "Assinaturas VIP: estado na Asaas, cobranças e concessão manual." },
   "/admin/forum":       { title: "Fórum (moderação)", description: "Modere posts, comentários e regras da comunidade." },
-  "/admin/suporte":     { title: "Suporte", description: "Veja e responda aos chamados abertos pelos clientes." },
+  "/admin/suporte":     { title: "Ticket", description: "Veja e responda aos chamados abertos pelos clientes." },
   "/admin/perifericos/pedidos": { title: "Cadastros", description: "Pedidos da comunidade para cadastrar periféricos que ainda não estão na wiki." },
   "/admin/forum/denuncias": { title: "Denúncias", description: "Posts e comentários denunciados pela comunidade." },
   "/admin/eventos":     { title: "Conquistas", description: "Gerencie as conquistas que concedem medalhas automaticamente." },
@@ -102,7 +102,7 @@ function getPageDefaults(pathname: string, t: Dict): PageDefaults {
   if (pathname.startsWith("/admin/tierlist/new"))    return { title: "Novo periférico", description: "Adicione um novo periférico à tierlist." }
   if (pathname.startsWith("/admin/tierlist/"))       return { title: "Editar periférico", description: "Atualize as informações do periférico." }
   if (pathname.startsWith("/admin/forum/"))      return { title: "Moderar post", description: "Edite, oculte ou bloqueie um post do fórum." }
-  if (pathname.startsWith("/admin/suporte/"))    return { title: "Suporte", description: "Veja e responda aos chamados abertos pelos clientes." }
+  if (pathname.startsWith("/admin/suporte/"))    return { title: "Ticket", description: "Veja e responda aos chamados abertos pelos clientes." }
   if (pathname.startsWith("/admin/eventos/new")) return { title: "Nova conquista", description: "Crie uma conquista e a medalha concedida por ela." }
   if (pathname.startsWith("/admin/eventos/"))    return { title: "Editar conquista", description: "Atualize os dados da conquista e da medalha." }
   if (pathname.startsWith("/admin/"))            return { title: "Admin" }

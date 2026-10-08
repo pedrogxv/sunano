@@ -3,9 +3,11 @@ import { buildMetadata } from "@/lib/seo"
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import { listStoreProductsPaginated, getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
+import { listActiveCategoryBanners } from "@/lib/server/repositories/store-banners-repository"
 import { StoreContent } from "@/components/store/StoreContent"
 import { BreadcrumbJsonLd, ItemListJsonLd } from "@/components/seo/JsonLd"
 import { getCategoryLabel } from "@/lib/store-category-icons"
+import { categoryPageScope, hasCategoryPage } from "@/lib/store-catalog"
 import { ShoppingBag } from "lucide-react"
 import { ComingSoon } from "@/components/store/ComingSoon"
 import {
@@ -72,14 +74,16 @@ export default async function LojaCategoriaPage({ params }: CategoriaPageProps) 
   const category = decodeURIComponent(categoria)
 
   const filterOptions = await getStoreFilterOptions("store")
-  if (!filterOptions.categories.includes(category)) {
+  // `audio` não é categoria do banco: é página de grupo (Headset + IEM).
+  if (!hasCategoryPage(category, filterOptions.categories)) {
     notFound()
   }
 
-  const [{ items, total }, { items: featuredItems }] = await Promise.all([
+  const [{ items, total }, { items: featuredItems }, categoryBanners] = await Promise.all([
     listStoreProductsPaginated({
       type: "store",
-      categories: [category],
+      // Mousepad lista também os de vidro; Áudio, Headset + IEM (ver `categoryPageScope`).
+      categories: categoryPageScope(category),
       page: 1,
       pageSize: PAGE_SIZE,
     }),
@@ -89,6 +93,9 @@ export default async function LojaCategoriaPage({ params }: CategoriaPageProps) 
       page: 1,
       pageSize: 8,
     }),
+    // Banner é enfeite: se a leitura falhar, a categoria sai com o cabeçalho
+    // padrão em vez de derrubar a página inteira.
+    listActiveCategoryBanners(category).catch(() => []),
   ])
 
   return (
@@ -116,6 +123,7 @@ export default async function LojaCategoriaPage({ params }: CategoriaPageProps) 
           initialFeatured={featuredItems}
           pageSize={PAGE_SIZE}
           banner={{ type: "category", value: category }}
+          categoryBanners={categoryBanners}
         />
       </Suspense>
     </>

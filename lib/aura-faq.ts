@@ -14,7 +14,8 @@
  * - Inscrição YouTube: `confirm_youtube_subscription` (20260921120000_youtube_subscription_achievement.sql)
  * - Membro do Discord: `confirm_discord_membership` (20261015000000_discord_membership_achievement.sql)
  * - Indicação de amigo: `validate_referral` (20261023000000_referral_program.sql) — 50 direto + 20 indireto
- * - Compra na Loja: `trg_reward_store_purchase_aura` (20261213000002_store_purchase_aura.sql) — 1 a cada R$ 10
+ * - Compra na Loja: `trg_reward_store_purchase_aura` (20261223000000_store_purchase_aura_on_payment.sql) — 1 a cada R$ 10
+ * - Avaliação de produto da Loja: `trg_reward_store_review_aura` (20261219000000_store_review_aura_photos_grants.sql): 10, ou 20 com foto
  * - Conquistas por trilha: seeds de `20260808_achievements_streak.sql` e `20260919000000_aura_earned_achievements.sql`,
  *   creditadas por `check_and_award_track_achievements` (20260930000000_aura_fixed_rewards.sql)
  *
@@ -89,7 +90,13 @@ export const AURA_GAIN_ENTRIES: AuraFaqEntry[] = [
     id: "store-purchase",
     question: "Comprar na Loja",
     answer:
-      "+1 de Aura a cada R$ 10 do preço no PIX (R$ 700 rendem 70), creditada quando o pedido é entregue. Serviço, que não tem entrega, credita no pagamento. Valor fixo, não passa pelo multiplicador, e pagar no cartão rende o mesmo que no PIX.",
+      "+1 de Aura a cada R$ 10 do preço no PIX (R$ 700 rendem 70), creditada quando o pagamento é confirmado. Se o pedido for cancelado ou reembolsado, a Aura da compra é retirada do saldo (no reembolso parcial, só a parte devolvida). Valor fixo, não passa pelo multiplicador, e pagar no cartão rende o mesmo que no PIX.",
+  },
+  {
+    id: "store-review",
+    question: "Avaliar um produto que você comprou na Loja",
+    answer:
+      "+10 de Aura, ou +20 se a avaliação tiver pelo menos uma foto. 1 vez por produto. Valor fixo, não passa pelo multiplicador. O convite aparece em Meus Pedidos quando o pedido é concluído.",
   },
   {
     id: "achievements",

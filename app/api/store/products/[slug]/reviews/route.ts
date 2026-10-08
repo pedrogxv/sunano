@@ -6,16 +6,19 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   createReview,
   getReviewAggregate,
+  getReviewEligibility,
   getSunanoReview,
   getUserReviewForProduct,
-  hasVerifiedPurchase,
   listPublishedReviews,
 } from "@/lib/server/repositories/store-reviews-repository"
+import { isOwnedStoreReviewImageUrl } from "@/lib/server/store-review-media"
+import { MAX_STORE_REVIEW_IMAGES } from "@/lib/store-review-aura"
 
 const createReviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
   title: z.string().trim().max(150).optional().nullable(),
-  body: z.string().trim().min(1).max(4000),
+  body: z.string().trim().min(1, "Escreva o que você achou do produto.").max(4000),
+  imageUrls: z.array(z.string().url().max(500)).max(MAX_STORE_REVIEW_IMAGES).optional().default([]),
 })
 
 async function resolveProductId(slug: string): Promise<string | null> {
@@ -39,7 +42,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ slu
     getReviewAggregate(productId),
     getSunanoReview(productId),
     user ? getUserReviewForProduct(user.id, productId) : Promise.resolve(null),
-    user ? hasVerifiedPurchase(user.id, productId) : Promise.resolve({ verified: false, orderId: null }),
+    user ? getReviewEligibility(user.id, productId) : Promise.resolve({ eligible: false as const }),
   ])
 
   return NextResponse.json({
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ slu
     aggregate,
     sunanoReview,
     userReview,
-    canReview: Boolean(user) && eligibility.verified && !userReview,
+    canReview: Boolean(user) && eligibility.eligible && !userReview,
   })
 }
 
@@ -67,8 +70,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sl
     return NextResponse.json({ error: "Você já avaliou este produto." }, { status: 409 })
   }
 
-  const { verified, orderId } = await hasVerifiedPurchase(user.id, productId)
-  if (!verified) {
+  const eligibility = await getReviewEligibility(user.id, productId)
+  if (!eligibility.eligible) {
     return NextResponse.json(
       { error: "Só quem comprou o produto pode avaliá-lo." },
       { status: 403 }
@@ -83,17 +86,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sl
     )
   }
 
+  const imageUrls = [...new Set(parsed.data.imageUrls)]
+  if (imageUrls.some((url) => !isOwnedStoreReviewImageUrl(url, user.id))) {
+    return NextResponse.json({ error: "Foto inválida. Envie a foto de novo." }, { status: 400 })
+  }
+
   try {
     const review = await createReview({
       productId,
       userId: user.id,
-      orderId,
+      orderId: eligibility.orderId,
+      origin: eligibility.origin,
       rating: parsed.data.rating,
       title: parsed.data.title || null,
       body: parsed.data.body,
-      isVerified: true,
+      imageUrls,
     })
-    return NextResponse.json({ review })
+    // `auraRewarded` vem do trigger (20261219000000): é o que de fato
+    // entrou na carteira, não o que a tela prometeu.
+    return NextResponse.json({ review, auraRewarded: review.aura_rewarded ?? 0 })
   } catch {
     return NextResponse.json({ error: "Erro ao salvar avaliação." }, { status: 500 })
   }

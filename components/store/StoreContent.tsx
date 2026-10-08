@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, ShieldCheck, Sparkles, Star, Tag, TrendingUp, Wrench } from "lucide-react"
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, ShieldCheck, Sparkles, Star, Tag, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { LaunchPreorderSection } from "@/components/store/LaunchPreorderSection"
@@ -28,6 +28,7 @@ import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { getCategoryIcon, getCategoryLabel } from "@/lib/store-category-icons"
 import {
   catalogConfigFor,
+  categoryPageScope,
   findPriceBand,
   parseCatalogParams,
   writeCatalogParams,
@@ -35,7 +36,7 @@ import {
 } from "@/lib/store-catalog"
 import type { StoreHeroTrust, StoreHeroView } from "@/lib/store-hero"
 import type { StoreProductCard, StoreFilterOptions } from "@/lib/server/repositories/store-repository"
-import type { StoreBannerSection, StoreSectionBanner } from "@/lib/server/repositories/store-banners-repository"
+import type { StoreSectionBanner } from "@/lib/server/repositories/store-banners-repository"
 import SectionBannerCarousel, { type SectionCarouselBanner } from "@/components/store/SectionBannerCarousel"
 
 /** Contexto de "loja filtrada" (landing de categoria ou marca) — troca o hero
@@ -63,21 +64,13 @@ interface StoreContentProps {
   serviceItems?: StoreProductCard[]
   /** Mais vendidos nos últimos 90 dias (get_top_selling_products) — primeira seção da Home. */
   bestSellingItems?: StoreProductCard[]
-  /** Banners ativos por seção — quando uma seção tem ao menos 1, ela vira carrossel em vez de grid. */
-  sectionBanners?: Record<StoreBannerSection, StoreSectionBanner[]>
+  /** Banners do topo da landing de categoria (/admin/store/banners). Vazio = cabeçalho padrão. */
+  categoryBanners?: StoreSectionBanner[]
   pageSize: number
   banner?: StoreBanner
   /** Categoria pré-selecionada vinda de `?categoria=` — usado na landing de marca
    *  quando se chega via um link "marca dentro de categoria" (ex: menu de navegação). */
   initialCategory?: string | null
-}
-
-const EMPTY_SECTION_BANNERS: Record<StoreBannerSection, StoreSectionBanner[]> = {
-  main: [],
-  best_sellers: [],
-  pre_sale: [],
-  ready_stock: [],
-  site_items: [],
 }
 
 /** Mapeia as colunas snake_case do banco para as props camelCase do carrossel. */
@@ -165,33 +158,6 @@ function StoreBannerHero({
   )
 }
 
-/**
- * Cabeçalho (eyebrow + título) das seções dinâmicas da Home da Loja — o mesmo
- * usado dentro de `ProductCarouselSection`, mas extraído para também ficar
- * acima de `SectionBannerCarousel`, que não tem cabeçalho próprio.
- */
-function SectionHeading({
-  eyebrow,
-  title,
-  icon: Icon,
-  iconClassName,
-}: {
-  eyebrow: string
-  title: string
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
-  iconClassName: string
-}) {
-  return (
-    <div className="flex flex-col gap-[3px] sm:gap-1">
-      <p className="flex items-center gap-[5px] text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] text-[#7a7a7a] sm:gap-1.5 sm:text-[10.5px]">
-        <Icon className={cn("size-[11px] shrink-0 sm:size-3", iconClassName)} strokeWidth={2.2} />
-        {eyebrow}
-      </p>
-      <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">{title}</h2>
-    </div>
-  )
-}
-
 /** Carrossel horizontal reutilizado pelas seções de produto da Home (pré-venda, mais vendidos, pronta entrega, etc). */
 function ProductCarouselSection({
   items,
@@ -259,7 +225,7 @@ function ProductCarouselSection({
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], launchItems = [], heroSlides = [], heroTrust, siteItems = [], serviceItems = [], bestSellingItems = [], sectionBanners = EMPTY_SECTION_BANNERS, pageSize, banner, initialCategory = null }: StoreContentProps) {
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], launchItems = [], heroSlides = [], heroTrust, siteItems = [], serviceItems = [], bestSellingItems = [], categoryBanners = [], pageSize, banner, initialCategory = null }: StoreContentProps) {
   const searchParams = useSearchParams()
 
   // A TopBar cai no fallback "Sunano" sem isso — /loja não está no mapa de
@@ -274,6 +240,8 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   // um combo onde dava pra somar "teclado" e receber uma grade que não tem nada
   // a ver com a página. Mesma regra pra marca em /loja/marca/<x>.
   const lockedCategory = banner?.type === "category" ? banner.value : null
+  // O que a página lista: a categoria e as que ela inclui (Mousepad + Glasspad).
+  const lockedCategories = useMemo(() => (lockedCategory ? categoryPageScope(lockedCategory) : null), [lockedCategory])
   const lockedBrand = banner?.type === "brand" ? banner.value : null
   // Página de categoria com catálogo próprio (Mouse, Teclado, Mousepad): tipos,
   // facetas do Database, chips rápidos e barra lateral. Ver lib/store-catalog.ts.
@@ -292,7 +260,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const [filters, setFilters] = useState<StoreFilterState>(() => ({
     ...EMPTY_STORE_FILTERS,
     query: searchParams.get("q") ?? "",
-    categories: lockedCategory ? [lockedCategory] : initialCategory ? [initialCategory] : [],
+    categories: lockedCategories ?? (initialCategory ? [initialCategory] : []),
     brands: lockedBrand ? [lockedBrand] : initialUrlState?.brands ?? [],
     collections: initialUrlState?.collections ?? [],
     catalogFacets: initialUrlState?.facets ?? {},
@@ -303,7 +271,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
   const resetFilters = () =>
     setFilters({
       ...EMPTY_STORE_FILTERS,
-      categories: lockedCategory ? [lockedCategory] : [],
+      categories: lockedCategories ?? [],
       brands: lockedBrand ? [lockedBrand] : [],
     })
 
@@ -535,22 +503,23 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
     }
   }, [initialItems, initialFeatured])
 
-  const activeCategory = filters.categories.length === 1 ? filters.categories[0] : null
+  // Na página de categoria é ela, mesmo listando mais de uma (Mousepad + Glasspad).
+  const activeCategory = lockedCategory ?? (filters.categories.length === 1 ? filters.categories[0] : null)
   const activeFiltersCount = countActiveFilters(filters, lockedCategory, lockedBrand)
 
-  // Catálogo: landings de categoria/marca sempre mostram; na Home só com uma
-  // busca ativa (StoreSearchBox navega pra cá com ?q=...#produtos) ou com o
-  // recorte de ofertas do Hero (?ofertas=1#produtos).
-  const showCatalog = Boolean(banner) || Boolean(filters.query.trim()) || filters.promoOnly
+  // Catálogo: aparece em toda página da Loja. Na Home ele fecha a página
+  // depois das seções (no lugar do antigo "Comprar por categoria") e é o
+  // destino da busca (?q=...#produtos) e do "Ver ofertas" do Hero
+  // (?ofertas=1#produtos).
   const catalogRef = useRef<HTMLElement>(null)
 
   // A âncora #produtos chega antes de o catálogo existir (ele só aparece
   // depois que o filtro da URL entra no estado), então a rolagem do navegador
   // não acha o alvo. Rola aqui, quando a seção passa a existir.
   useEffect(() => {
-    if (!showCatalog || banner || window.location.hash !== "#produtos") return
+    if (banner || window.location.hash !== "#produtos") return
     catalogRef.current?.scrollIntoView({ block: "start" })
-  }, [showCatalog, banner, urlQuery, urlOffers])
+  }, [banner, urlQuery, urlOffers])
 
   // Com poucos itens todos já cabem na tela sem rolar — "ver tudo" e as setas
   // de carrossel não fazem sentido até que sobre item fora da área visível.
@@ -663,10 +632,22 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           de exemplo, tudo a partir do que já está carregado no cliente. */}
       <StoreCategoryNav data={filterOptions} activeCategory={activeCategory} />
 
-      {banner ? (
+      {banner?.type === "category" && categoryBanners.length > 0 ? (
+        /* Banner da categoria (/admin/store/banners) no lugar do cabeçalho
+           padrão. O h1 fica para leitor de tela e busca: o título do banner
+           é arte, não diz em que página a pessoa está. */
+        <div className="mx-auto w-full max-w-7xl px-4 pt-5 sm:pt-6 lg:px-8">
+          <h1 className="sr-only">{getCategoryLabel(banner.value)}</h1>
+          <SectionBannerCarousel banners={toCarouselBanners(categoryBanners)} />
+        </div>
+      ) : banner ? (
         <StoreBannerHero
           banner={banner}
-          productCount={banner.type === "category" ? (initialFilterOptions.categoryCounts[banner.value] ?? total) : total}
+          productCount={
+            lockedCategories
+              ? lockedCategories.reduce((sum, category) => sum + (initialFilterOptions.categoryCounts[category] ?? 0), 0)
+              : total
+          }
           activeCategory={activeCategory}
         />
       ) : (
@@ -742,46 +723,24 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             vazia). Pré-venda vem primeiro. */}
         {!banner && (
           <>
-            {/* Banner da seção, quando o admin cadastrou um, vem antes dos
-                cards: ele é a vitrine do lançamento, e os cards são o que dá
-                para reservar agora. Antes o banner SUBSTITUÍA os produtos. */}
-            <LaunchPreorderSection
-              preorders={preOrderItems}
-              launches={launchItems}
-              banner={
-                sectionBanners.pre_sale.length > 0 ? (
-                  <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.pre_sale)} />
-                ) : null
-              }
+            {/* Só produto aqui. Banner de vitrine mora no topo da landing
+                de cada categoria (`categoryBanners`); no meio da Home ele
+                tomava o lugar dos cards. */}
+            <LaunchPreorderSection preorders={preOrderItems} launches={launchItems} />
+            <ProductCarouselSection
+              items={bestSellingItems}
+              eyebrow="Popularidade"
+              title="Mais vendidos"
+              icon={Flame}
+              iconClassName="fill-current text-orange-500"
             />
-            {sectionBanners.best_sellers.length > 0 ? (
-              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-                <SectionHeading eyebrow="Popularidade" title="Mais vendidos" icon={TrendingUp} iconClassName="text-amber-400" />
-                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.best_sellers)} />
-              </section>
-            ) : (
-              <ProductCarouselSection
-                items={bestSellingItems}
-                eyebrow="Popularidade"
-                title="Mais vendidos"
-                icon={TrendingUp}
-                iconClassName="text-amber-400"
-              />
-            )}
-            {sectionBanners.site_items.length > 0 ? (
-              <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-                <SectionHeading eyebrow="Sunano" title="Itens para o site 🤝" icon={Handshake} iconClassName="text-sky-400" />
-                <SectionBannerCarousel banners={toCarouselBanners(sectionBanners.site_items)} />
-              </section>
-            ) : (
-              <ProductCarouselSection
-                items={siteItems}
-                eyebrow="Sunano"
-                title="Itens para o site 🤝"
-                icon={Handshake}
-                iconClassName="text-sky-400"
-              />
-            )}
+            <ProductCarouselSection
+              items={siteItems}
+              eyebrow="Sunano"
+              title="Itens para o site 🤝"
+              icon={Handshake}
+              iconClassName="text-sky-400"
+            />
             <ProductCarouselSection
               items={serviceItems}
               eyebrow="Sunano"
@@ -793,9 +752,8 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
           </>
         )}
 
-        {/* Catálogo: ver `showCatalog`. Sem ele a busca e o "Ver ofertas"
-            do Hero ficariam sem lugar pra mostrar resultado na Home. */}
-        {showCatalog && isCategoryPage && (
+        {/* Catálogo: ver o comentário de `catalogRef`. */}
+        {isCategoryPage && (
         <section ref={catalogRef} id="produtos" className="flex scroll-mt-20 flex-col gap-4">
           {/* Topo: filtros rápidos ("Para FPS", "Ultraleves", "Até R$500"). */}
           <StoreQuickFilters config={catalogConfig} counts={catalogCounts} state={filters} onChange={patchFilters} />
@@ -875,7 +833,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         </section>
         )}
 
-        {showCatalog && !isCategoryPage && (
+        {!isCategoryPage && (
         <section ref={catalogRef} id="produtos" className="flex scroll-mt-20 flex-col gap-3.5 sm:gap-[18px]">
           <div className="flex flex-col gap-[3px] sm:gap-1">
             <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Catálogo completo</p>
@@ -899,10 +857,10 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
         </section>
         )}
 
-        {/* Categorias — só aparece na Loja geral. Na landing de categoria a
-            navegação já vive inteira no menu do header (StoreCategoryNav),
-            sem repetir a mesma lista aqui embaixo. */}
-        {filterOptions.categories.length > 0 && banner?.type !== "category" && (
+        {/* Categorias — só na landing de marca. Na Home o fim da página é o
+            catálogo de produtos, e na de categoria a navegação já vive inteira
+            no menu do header (StoreCategoryNav). */}
+        {filterOptions.categories.length > 0 && banner?.type === "brand" && (
           <section className="flex flex-col gap-3.5 sm:gap-[18px]">
             <div className="flex flex-col gap-[3px] sm:gap-1">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:text-[10.5px]">Navegar</p>

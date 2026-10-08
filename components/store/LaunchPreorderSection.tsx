@@ -3,8 +3,8 @@
 import { useRef } from "react"
 import { ChevronLeft, ChevronRight, Megaphone, Rocket } from "lucide-react"
 
+import { LaunchCard } from "@/components/store/LaunchCard"
 import { PreorderCard } from "@/components/store/PreorderCard"
-import { ProductCard } from "@/components/store/ProductCard"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 
 function Row({
@@ -24,8 +24,8 @@ function Row({
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between gap-3">
-        <p className="flex items-center gap-1.5 text-[12px] font-bold text-[#bdbdbd]">
-          <Icon className={`size-3.5 ${iconClassName}`} strokeWidth={2.2} />
+        <p className="flex items-center gap-2 text-[15px] font-bold text-[#dcdcdc] sm:text-[17px]">
+          <Icon className={`size-4 sm:size-[18px] ${iconClassName}`} strokeWidth={2.2} />
           {label}
         </p>
         {count > 3 && (
@@ -57,35 +57,31 @@ function Row({
 }
 
 /**
- * "Lançamentos e Pré-venda" da Home. Pré-venda vem no card próprio
+ * "DROPS com SUNANO" da Home (lançamentos e pré-venda). Pré-venda vem no card próprio
  * (`PreorderCard`: lote, previsão, quanto sobra, "Reservar na pré-venda");
- * lançamento é produto à venda, no card normal com o selo "Lançamento".
+ * lançamento é produto à venda, no `LaunchCard` (o mesmo card em violeta).
+ * Os dois mostram a contagem do prazo (lib/store-sale-window.ts).
  * Separadas em duas fileiras porque são compras diferentes: uma chega quando
  * o lote chegar, a outra sai em até 15 dias úteis.
  */
 export function LaunchPreorderSection({
   preorders,
   launches,
-  banner,
 }: {
   preorders: StoreProductCard[]
   launches: StoreProductCard[]
-  /** Banner de pré-venda cadastrado no admin, acima dos cards. */
-  banner?: React.ReactNode
 }) {
-  if (preorders.length === 0 && launches.length === 0 && !banner) return null
+  if (preorders.length === 0 && launches.length === 0) return null
 
   return (
     <section className="flex flex-col gap-4 sm:gap-5">
       <div className="flex flex-col gap-[3px] sm:gap-1">
         <p className="flex items-center gap-[5px] text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] text-[#7a7a7a] sm:gap-1.5 sm:text-[10.5px]">
           <Rocket className="size-[11px] shrink-0 text-amber-400 sm:size-3" strokeWidth={2.2} />
-          Chegando agora
+          Novidades
         </p>
-        <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">Lançamentos e Pré-venda</h2>
+        <h2 className="font-display text-[21px] font-bold text-white sm:text-[26px]">DROPS com SUNANO</h2>
       </div>
-
-      {banner}
 
       {preorders.length > 0 && (
         <Row label="Pré-venda" icon={Rocket} iconClassName="text-amber-400" count={preorders.length}>
@@ -100,8 +96,8 @@ export function LaunchPreorderSection({
       {launches.length > 0 && (
         <Row label="Lançamentos" icon={Megaphone} iconClassName="text-violet-400" count={launches.length}>
           {launches.map((product) => (
-            <div key={product.id} className="w-[188px] shrink-0 sm:w-[258px]">
-              <ProductCard {...product} />
+            <div key={product.id} className="w-[250px] shrink-0 sm:w-[290px]">
+              <LaunchCard {...product} />
             </div>
           ))}
         </Row>

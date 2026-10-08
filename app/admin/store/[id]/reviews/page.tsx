@@ -24,9 +24,11 @@ interface ProductReview {
   title: string | null
   body: string
   is_verified_purchase: boolean
+  origin: "order" | "grant"
+  image_urls: string[]
   status: "published" | "hidden"
   created_at: string
-  author: { display_name: string | null; avatar_url: string | null } | null
+  author_display_name: string
 }
 
 interface SunanoReview {
@@ -249,10 +251,16 @@ export default function AdminProductReviewsPage() {
                   <div className="space-y-1.5">
                     <div className="flex items-center gap-2">
                       <StarRow value={review.rating} />
-                      {review.is_verified_purchase && (
-                        <Badge variant="secondary" className="bg-emerald-500/10 text-[10px] text-emerald-400">
-                          Compra verificada
+                      {review.origin === "grant" ? (
+                        <Badge variant="secondary" className="bg-sky-500/10 text-[10px] text-sky-400">
+                          Cliente Sunano (liberada)
                         </Badge>
+                      ) : (
+                        review.is_verified_purchase && (
+                          <Badge variant="secondary" className="bg-emerald-500/10 text-[10px] text-emerald-400">
+                            Compra verificada
+                          </Badge>
+                        )
                       )}
                       <Badge
                         variant="secondary"
@@ -268,8 +276,18 @@ export default function AdminProductReviewsPage() {
                     </div>
                     {review.title && <p className="text-sm font-semibold text-foreground">{review.title}</p>}
                     <p className="text-sm text-muted-foreground">{review.body}</p>
+                    {review.image_urls.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {review.image_urls.map((url) => (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={url} alt="" className="size-16 rounded-md border border-border object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[10px] text-muted-foreground/60">
-                      {review.author?.display_name ?? "Usuário"} · {new Date(review.created_at).toLocaleDateString("pt-BR")}
+                      {review.author_display_name} · {new Date(review.created_at).toLocaleDateString("pt-BR")}
                     </p>
                   </div>
                   <Button

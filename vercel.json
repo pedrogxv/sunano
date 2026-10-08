@@ -18,7 +18,11 @@
       "schedule": "*/5 * * * *"
     },
     {
-      "path": "/api/cron/preorder-phases",
+      "path": "/api/cron/sale-windows",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/restock-emails",
       "schedule": "*/5 * * * *"
     },
     {

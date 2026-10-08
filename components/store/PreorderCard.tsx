@@ -6,9 +6,9 @@ import { useRouter } from "next/navigation"
 import { ArrowRight, CalendarDays, Package, Rocket } from "lucide-react"
 
 import { useCart } from "@/components/providers/cart-context"
-import { FavoriteButton } from "@/components/store/FavoriteButton"
-import { PreorderCountdown } from "@/components/store/PreorderCountdown"
 import { PreorderAvailability, PreorderStatusChip } from "@/components/store/PreorderLotPanel"
+import { SaleWindowCountdown } from "@/components/store/SaleWindowCountdown"
+import { SoldOutStamp } from "@/components/store/SoldOutStamp"
 import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import { RouteLink } from "@/components/ui/route-link"
 import { formatBRL } from "@/lib/format"
@@ -28,12 +28,7 @@ import type { StoreProductCard } from "@/lib/server/repositories/store-repositor
  * como na página). Lote que não está aberto troca o botão por "Ver detalhes",
  * onde mora o "avise-me".
  */
-export function PreorderCard(
-  props: StoreProductCard & {
-    /** Pede confirmação ao desfavoritar (lista de favoritos, onde o card some ao clicar). */
-    confirmFavoriteRemoval?: boolean
-  }
-) {
+export function PreorderCard(props: StoreProductCard) {
   const router = useRouter()
   const { add } = useCart()
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -41,6 +36,7 @@ export function PreorderCard(
   const preorder = props.preorder
   const status = preorder?.status ?? "open"
   const open = status === "open"
+  const soldOut = status === "sold_out"
   const activeVariant = cardActiveVariant(props)
   const image = props.images?.[0] ?? activeVariant?.image_url ?? null
   const { effectiveCents, baseCents, hasDiscount } = computeEffectivePrice(props, activeVariant)
@@ -82,7 +78,11 @@ export function PreorderCard(
         // para reservar.
         open
           ? "preorder-gold-card"
-          : "border-[#2a2a2a] bg-gradient-to-b from-white/[0.03] to-card hover:border-white/20"
+          : "border-[#2a2a2a] bg-gradient-to-b from-white/[0.03] to-card hover:border-white/20",
+        // Esgotado sai de cena inteiro, como anúncio vendido no Xianyu: o
+        // dourado da pré-venda (rótulo, calendário) vira cinza junto da foto,
+        // e o carimbo no meio é a única mensagem.
+        soldOut && "grayscale"
       )}
     >
       <Link href={href} className="relative block aspect-[4/3] overflow-hidden">
@@ -95,7 +95,8 @@ export function PreorderCard(
             decoding="async"
             className={cn(
               "h-full w-full object-contain p-4 transition-transform duration-300 group-hover:scale-105",
-              !open && "opacity-60 grayscale"
+              !open && "opacity-60 grayscale",
+              soldOut && "opacity-40"
             )}
           />
         ) : (
@@ -106,7 +107,11 @@ export function PreorderCard(
             <CategoryIcon className="size-24 opacity-50" style={{ color: tint }} strokeWidth={1.15} />
           </div>
         )}
-        <PreorderStatusChip status={status} className="absolute left-3 top-3 max-w-[calc(100%-4rem)] shadow-md shadow-black/30 backdrop-blur-sm" />
+        {soldOut ? (
+          <SoldOutStamp />
+        ) : (
+          <PreorderStatusChip status={status} className="absolute left-3 top-3 max-w-[calc(100%-4rem)] shadow-md shadow-black/30 backdrop-blur-sm" />
+        )}
       </Link>
 
       <div className="flex flex-1 flex-col gap-3 px-4 pb-4 pt-1">
@@ -137,11 +142,11 @@ export function PreorderCard(
               Previsão de envio: <span className="font-semibold text-foreground">{formatPreorderShipDate(preorder.shipsAt)}</span>
             </span>
           ) : (
-            "Envio quando o lote chegar"
+            "Envios a partir do dia de Lançamento"
           )}
         </p>
 
-        {preorder && open && <PreorderCountdown info={preorder} compact />}
+        {open && <SaleWindowCountdown saleWindow={props.sale_window} kind="preorder" compact />}
 
         {preorder && <PreorderAvailability limit={preorder.limit} remaining={preorder.remaining} status={status} compact />}
 
@@ -169,13 +174,6 @@ export function PreorderCard(
           )}
         </div>
       </div>
-
-      <FavoriteButton
-        productId={props.id}
-        productName={props.name}
-        confirmRemoval={props.confirmFavoriteRemoval}
-        className="absolute right-3 top-3 z-[3]"
-      />
 
       {requiresChoice && (
         <VariantPickerDialog

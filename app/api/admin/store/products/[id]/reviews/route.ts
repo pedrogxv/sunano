@@ -32,7 +32,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Acesso negado" }, { status: 403 })
   }
 
-  await context.params
+  const { id } = await context.params
   const parsed = patchSchema.safeParse(await request.json())
   if (!parsed.success) {
     return NextResponse.json(
@@ -42,7 +42,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   }
 
   try {
-    await updateReviewStatus(parsed.data.reviewId, parsed.data.status)
+    await updateReviewStatus(id, parsed.data.reviewId, parsed.data.status)
   } catch {
     return NextResponse.json({ error: "Erro ao moderar avaliação." }, { status: 500 })
   }

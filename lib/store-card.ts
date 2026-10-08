@@ -1,4 +1,4 @@
-import { BadgeCheck, Gem, Megaphone, Rocket, Sparkles, ThumbsUp, Timer, TrendingUp, type LucideIcon } from "lucide-react"
+import { BadgeCheck, Flame, Gem, Megaphone, Rocket, Sparkles, ThumbsUp, Timer, type LucideIcon } from "lucide-react"
 
 import type { StoreProductAttributes } from "@/lib/store-catalog"
 import { classifyStoreNavGroup } from "@/lib/store-category-icons"
@@ -7,7 +7,7 @@ import { getTagLabel } from "@/lib/tag-options"
 /**
  * Card da vitrine: o selo principal e as características técnicas. Módulo
  * puro; o servidor resolve (store-repository) e o card só desenha, então a
- * vitrine, os favoritos e o Hero mostram o mesmo selo para o mesmo produto.
+ * vitrine e o Hero mostram o mesmo selo para o mesmo produto.
  */
 
 // ────────────────────────────────────────────
@@ -28,11 +28,13 @@ export type StoreCardBadge =
  * O que o admin pode escolher (`store_products.card_badge`). Nulo = automático.
  * `none` é a ESCOLHA de não ter selo, não ausência de escolha.
  *
- * Pré-venda, Estoque baixo e Mais vendido ficam de fora: são FATOS sobre o
- * produto, não curadoria. Escolhidos à mão, o card diria "Estoque baixo" com
- * 40 unidades na prateleira, ou "Mais vendido" com uma venda.
+ * Pré-venda e Estoque baixo ficam de fora: são ESTADOS do produto, não
+ * curadoria. Escolhido à mão, o card diria "Estoque baixo" com 40 unidades
+ * na prateleira. "Mais vendido" entra por decisão do dono da Loja: o
+ * automático exige volume que a Loja recém aberta ainda não tem, e o selo
+ * nunca aparecia. O banco aceita os mesmos valores (migration 20261222000000).
  */
-export const STORE_CARD_BADGE_CHOICES = ["sunano_choice", "limited_edition", "best_value", "new", "none"] as const
+export const STORE_CARD_BADGE_CHOICES = ["sunano_choice", "limited_edition", "best_seller", "best_value", "new", "none"] as const
 
 export type StoreCardBadgeChoice = (typeof STORE_CARD_BADGE_CHOICES)[number]
 
@@ -43,9 +45,16 @@ export function isStoreCardBadgeChoice(value: unknown): value is StoreCardBadgeC
 /**
  * Fundo sólido em todos: a foto do produto às vezes é um quadrado branco, às
  * vezes um recorte no escuro, e o selo precisa ler nos dois. Cada selo tem a
- * sua cor; nenhum usa laranja + chama, que é a Aura.
+ * sua cor.
+ *
+ * "Mais vendido" é fogo no sentido de "em alta" (como a aba do fórum), não a
+ * moeda: `Flame` do lucide e gradiente vermelho→âmbar, nunca o `AuraIcon`.
+ * Não ponha preço em Aura dentro desse selo, senão ele vira a moeda.
  */
-export const STORE_CARD_BADGE: Record<StoreCardBadge, { label: string; icon: LucideIcon; className: string }> = {
+export const STORE_CARD_BADGE: Record<
+  StoreCardBadge,
+  { label: string; icon: LucideIcon; className: string; iconClassName?: string }
+> = {
   pre_order: { label: "Pré-venda", icon: Rocket, className: "bg-amber-400 text-[#1a1200]" },
   launch: { label: "Lançamento", icon: Megaphone, className: "bg-violet-400 text-violet-950" },
   sunano_choice: {
@@ -55,7 +64,14 @@ export const STORE_CARD_BADGE: Record<StoreCardBadge, { label: string; icon: Luc
   },
   limited_edition: { label: "Edição limitada", icon: Gem, className: "bg-yellow-200 text-yellow-950" },
   low_stock: { label: "Estoque baixo", icon: Timer, className: "bg-red-500 text-white" },
-  best_seller: { label: "Mais vendido", icon: TrendingUp, className: "bg-sky-400 text-[#04121c]" },
+  best_seller: {
+    label: "Mais vendido",
+    icon: Flame,
+    className: "bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 text-white [&_svg]:fill-amber-200",
+    // Chama pulsando (globals.css): é o único selo animado, para "em alta"
+    // puxar o olho. Animar os outros tiraria o destaque deste.
+    iconClassName: "store-badge-flame",
+  },
   best_value: { label: "Melhor custo-benefício", icon: ThumbsUp, className: "bg-emerald-400 text-emerald-950" },
   new: { label: "Novo", icon: Sparkles, className: "bg-lime-300 text-lime-950" },
 }
@@ -63,6 +79,7 @@ export const STORE_CARD_BADGE: Record<StoreCardBadge, { label: string; icon: Luc
 export const STORE_CARD_BADGE_CHOICE_LABEL: Record<StoreCardBadgeChoice, string> = {
   sunano_choice: STORE_CARD_BADGE.sunano_choice.label,
   limited_edition: STORE_CARD_BADGE.limited_edition.label,
+  best_seller: STORE_CARD_BADGE.best_seller.label,
   best_value: STORE_CARD_BADGE.best_value.label,
   new: STORE_CARD_BADGE.new.label,
   none: "Sem selo",
@@ -72,11 +89,6 @@ export const STORE_CARD_BADGE_CHOICE_LABEL: Record<StoreCardBadgeChoice, string>
 export const LOW_STOCK_MAX_UNITS = 3
 /** Produto cadastrado há até N dias conta como novo. */
 export const NEW_PRODUCT_DAYS = 30
-/** "Mais vendido" automático: só o pódio de vendas, e com volume de verdade. */
-export const BEST_SELLER_TOP = 3
-export const BEST_SELLER_MIN_UNITS = 5
-/** Mesma janela da seção "Mais vendidos" da Home (`listBestSellingProducts`). */
-export const BEST_SELLER_WINDOW_DAYS = 90
 
 export type CardBadgeFacts = {
   soldOut: boolean
@@ -85,7 +97,7 @@ export type CardBadgeFacts = {
   choice: StoreCardBadgeChoice | null
   /** Estoque da variante que o card anuncia; `null` = sem controle. */
   stock: number | null
-  /** No pódio de vendas (`BEST_SELLER_TOP`, com `BEST_SELLER_MIN_UNITS`). */
+  /** Está na seção "Mais vendidos" da Home (fixado ou no ranking de vendas). */
   isBestSeller: boolean
   /** Tag "Custo-Benefício" do periférico no Database. */
   isBestValue: boolean

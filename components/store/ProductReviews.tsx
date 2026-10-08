@@ -2,22 +2,15 @@
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { Loader2, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { cn } from "@/lib/utils"
+import { AuraAmount } from "@/components/ui/AuraIcon"
+import { StarRow, StoreReviewCard, entryFromReview } from "@/components/store/StoreReviewCard"
+import { StoreReviewForm, type StoreReviewTarget } from "@/components/store/StoreReviewForm"
+import { STORE_REVIEW_WITH_PHOTO_AURA } from "@/lib/store-review-aura"
 import { extractYoutubeVideoId } from "@/lib/youtube-url"
-
-interface ProductReview {
-  id: string
-  rating: number
-  title: string | null
-  body: string
-  is_verified_purchase: boolean
-  created_at: string
-  author: { display_name: string | null; avatar_url: string | null } | null
-}
+// `import type` é apagado no build: não puxa `server-only` para o bundle.
+import type { ProductReview } from "@/lib/server/repositories/store-reviews-repository"
 
 interface SunanoReview {
   rating: number | null
@@ -30,32 +23,24 @@ interface ReviewsResponse {
   reviews: ProductReview[]
   aggregate: { avgRating: number; count: number }
   sunanoReview: SunanoReview | null
-  userReview: ProductReview | null
+  userReview: { id: string } | null
   canReview: boolean
-}
-
-function StarRow({ value, size = "size-4" }: { value: number; size?: string }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star key={n} className={cn(size, n <= value ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
-      ))}
-    </div>
-  )
 }
 
 export function ProductReviews({
   productSlug,
+  productName,
+  productImage,
 }: {
   productId: string
   productSlug: string
+  productName: string
+  productImage?: string | null
   productType: "store"
 }) {
   const [data, setData] = useState<ReviewsResponse | null>(null)
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [form, setForm] = useState({ rating: 5, title: "", body: "" })
+  const [target, setTarget] = useState<StoreReviewTarget | null>(null)
 
   async function load() {
     setLoading(true)
@@ -75,28 +60,12 @@ export function ProductReviews({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productSlug])
 
-  async function submitReview() {
-    if (!form.body.trim()) {
-      toast.error("Escreva um comentário sobre o produto")
-      return
-    }
-    setSubmitting(true)
-    try {
-      const res = await fetch(`/api/store/products/${productSlug}/reviews`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating: form.rating, title: form.title.trim() || null, body: form.body.trim() }),
-      })
-      const json = (await res.json()) as { error?: string }
-      if (!res.ok) throw new Error(json.error ?? "Erro ao enviar avaliação")
-      toast.success("Avaliação enviada!")
-      setShowForm(false)
-      load()
-    } catch (err) {
-      toast.error("Erro ao enviar avaliação", { description: err instanceof Error ? err.message : undefined })
-    } finally {
-      setSubmitting(false)
-    }
+  function handleSubmitted(auraRewarded: number) {
+    setTarget(null)
+    toast.success("Avaliação enviada!", {
+      description: auraRewarded > 0 ? `Você ganhou ${auraRewarded} de Aura. Valeu por ajudar quem vai comprar!` : undefined,
+    })
+    load()
   }
 
   if (loading || !data) return null
@@ -143,48 +112,17 @@ export function ProductReviews({
               </div>
             )}
           </div>
-          {data.canReview && !showForm && (
-            <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
-              Avaliar produto
+          {data.canReview && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setTarget({ slug: productSlug, name: productName, image: productImage })}
+            >
+              Avaliar e ganhar até <AuraAmount value={STORE_REVIEW_WITH_PHOTO_AURA} size="sm" tone="brand" />
             </Button>
           )}
         </div>
-
-        {showForm && (
-          <div className="mb-6 space-y-3 rounded-xl border border-border bg-muted/10 p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground">Sua nota:</span>
-              <div className="flex gap-0.5">
-                {[1, 2, 3, 4, 5].map((n) => (
-                  <button key={n} type="button" onClick={() => setForm((prev) => ({ ...prev, rating: n }))}>
-                    <Star className={cn("size-5", n <= form.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40")} />
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Input
-              placeholder="Título (opcional)"
-              value={form.title}
-              onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-            />
-            <textarea
-              placeholder="O que você achou do produto?"
-              value={form.body}
-              onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))}
-              rows={4}
-              className="flex w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowForm(false)} disabled={submitting}>
-                Cancelar
-              </Button>
-              <Button size="sm" onClick={submitReview} disabled={submitting} className="gap-1.5">
-                {submitting && <Loader2 className="size-3.5 animate-spin" />}
-                Enviar avaliação
-              </Button>
-            </div>
-          </div>
-        )}
 
         {data.reviews.length === 0 ? (
           <p className="rounded-xl border border-border py-8 text-center text-sm text-muted-foreground">
@@ -192,27 +130,15 @@ export function ProductReviews({
             {!data.canReview && "Compre e volte para avaliar!"}
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             {data.reviews.map((review) => (
-              <div key={review.id} className="rounded-xl border border-border bg-card p-4">
-                <div className="flex items-center gap-2">
-                  <StarRow value={review.rating} />
-                  {review.is_verified_purchase && (
-                    <Badge variant="secondary" className="bg-emerald-500/10 text-[10px] text-emerald-400">
-                      Compra verificada
-                    </Badge>
-                  )}
-                </div>
-                {review.title && <p className="mt-1.5 text-sm font-semibold text-foreground">{review.title}</p>}
-                <p className="mt-1 text-sm text-muted-foreground">{review.body}</p>
-                <p className="mt-2 text-[10px] text-muted-foreground/60">
-                  {review.author?.display_name ?? "Usuário"} · {new Date(review.created_at).toLocaleDateString("pt-BR")}
-                </p>
-              </div>
+              <StoreReviewCard key={review.id} entry={entryFromReview(review)} />
             ))}
           </div>
         )}
       </div>
+
+      <StoreReviewForm target={target} onClose={() => setTarget(null)} onSubmitted={handleSubmitted} />
     </div>
   )
 }

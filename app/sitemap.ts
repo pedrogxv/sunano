@@ -13,6 +13,7 @@ import { profilePath } from "@/lib/profile-name"
 import { ALL_CATEGORIES, CATEGORY_PLURAL_LABELS } from "@/lib/tag-options"
 import { TIERLIST_CATEGORY_SLUGS } from "@/lib/tierlist-categories"
 import { SITE_URL } from "@/lib/site-url"
+import { groupPagesWithProducts } from "@/lib/store-catalog"
 
 
 /**
@@ -243,7 +244,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
    * categorias de nicho (headset, IEM, glasspad), que são onde a busca de
    * cauda longa tem menos concorrência.
    */
-  const storeCategoryEntries: MetadataRoute.Sitemap = (storeFilterOptions?.categories ?? []).map(
+  const storeCategories = storeFilterOptions?.categories ?? []
+  // Mais as páginas de grupo (Áudio), que não são categoria do banco.
+  const storeCategoryEntries: MetadataRoute.Sitemap = [...storeCategories, ...groupPagesWithProducts(storeCategories)].map(
     (category) => ({
       url: `${SITE_URL}/loja/categoria/${encodeURIComponent(category)}`,
       changeFrequency: "daily" as const,

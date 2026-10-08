@@ -4,13 +4,17 @@ import { hasAdminPermission } from "@/lib/admin-permissions"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { createBanner, listAllBanners } from "@/lib/server/repositories/store-banners-repository"
+import { getStoreFilterOptions } from "@/lib/server/repositories/store-repository"
 
-import { createStoreBannerSchema } from "./schema"
+import { createStoreBannerSchema, isStoreCategory } from "./schema"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
 
-/** Lista todos os banners de seção da Loja (ativos e inativos) para o painel. */
+/**
+ * Lista todos os banners da Loja (ativos e inativos) para o painel, junto das
+ * categorias publicadas, que são as abas e as opções de destino.
+ */
 export async function GET() {
   const auth = await getAuthorizedProfile()
   if (auth.error || !auth.profile) {
@@ -21,15 +25,15 @@ export async function GET() {
   }
 
   try {
-    const banners = await listAllBanners()
-    return NextResponse.json({ banners })
+    const [banners, { categories }] = await Promise.all([listAllBanners(), getStoreFilterOptions("store")])
+    return NextResponse.json({ banners, categories })
   } catch (error) {
     const { body, status } = dbErrorResponse(error, "Erro ao listar banners.")
     return NextResponse.json(body, { status })
   }
 }
 
-/** Cria um banner no fim da fila da seção informada. */
+/** Cria um banner no fim da fila da categoria informada. */
 export async function POST(request: NextRequest) {
   const auth = await getAuthorizedProfile()
   if (auth.error || !auth.profile) {
@@ -48,9 +52,13 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  if (!(await isStoreCategory(parsed.data.category))) {
+    return NextResponse.json({ error: "Categoria não existe na Loja." }, { status: 400 })
+  }
+
   try {
     const banner = await createBanner({
-      section: parsed.data.section,
+      category: parsed.data.category,
       imageUrl: parsed.data.imageUrl ?? null,
       videoUrl: parsed.data.videoUrl ?? null,
       title: parsed.data.title,

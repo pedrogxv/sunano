@@ -1,6 +1,6 @@
 import { CalendarDays, Package } from "lucide-react"
 
-import { PreorderCountdown } from "@/components/store/PreorderCountdown"
+import { SaleWindowCountdown } from "@/components/store/SaleWindowCountdown"
 import {
   formatPreorderShipDate,
   PREORDER_STATUS_HINT,
@@ -10,6 +10,7 @@ import {
   type PreorderInfo,
   type PreorderStatus,
 } from "@/lib/store-preorder"
+import type { SaleWindow } from "@/lib/store-sale-window"
 import { cn } from "@/lib/utils"
 
 /** Pílula do status do lote. A mesma na página, no card e na seção da Home. */
@@ -68,7 +69,18 @@ export function PreorderAvailability({
  * produto (`PreorderStatusChip`); repetida aqui, eram duas pílulas iguais a
  * um palmo de distância.
  */
-export function PreorderLotPanel({ info, status }: { info: PreorderInfo; status: PreorderStatus }) {
+export function PreorderLotPanel({
+  info,
+  status,
+  saleWindow,
+  priceAfterCents,
+}: {
+  info: PreorderInfo
+  status: PreorderStatus
+  saleWindow: SaleWindow | null
+  /** Preço PIX depois do prazo, quando muda (`saleWindowPriceAfter`). */
+  priceAfterCents: number | null
+}) {
   return (
     <div className="space-y-3 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/[0.08] via-transparent to-transparent px-5 py-4">
       <p className="flex items-center gap-2 text-sm font-bold text-foreground">
@@ -87,7 +99,7 @@ export function PreorderLotPanel({ info, status }: { info: PreorderInfo; status:
         </p>
       )}
 
-      {status === "open" && <PreorderCountdown info={info} />}
+      {status === "open" && <SaleWindowCountdown saleWindow={saleWindow} kind="preorder" priceAfterCents={priceAfterCents} />}
 
       <PreorderAvailability limit={info.limit} remaining={preorderRemaining(info)} status={status} />
     </div>

@@ -7,6 +7,7 @@ import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, range
 import { getPeripheralRankById, type PeripheralRank } from "@/lib/server/repositories/peripherals-repository"
 import { getCatalogFacetCounts, getStoreCatalogIndex, matchCatalogProductIds } from "@/lib/server/repositories/store-catalog-repository"
 import {
+  categoryPagesIncluding,
   EMPTY_ATTRIBUTES,
   hasCatalogSelection,
   type CatalogSelection,
@@ -14,9 +15,6 @@ import {
   type StoreSortKey,
 } from "@/lib/store-catalog"
 import {
-  BEST_SELLER_MIN_UNITS,
-  BEST_SELLER_TOP,
-  BEST_SELLER_WINDOW_DAYS,
   deriveCardHighlights,
   isStoreCardBadgeChoice,
   NEW_PRODUCT_DAYS,
@@ -28,14 +26,13 @@ import { cardActiveVariant, computeCardDisplayPrice, isCardSoldOut, isSinglePric
 import { buildStoreSearchPlan } from "@/lib/store-search"
 import {
   effectivePreorderStatus,
-  isLaunchActive,
   isPreorderStatus,
   preorderRemaining,
   type PreorderInfo,
   type PreorderStatus,
 } from "@/lib/store-preorder"
 import { STORE_SHOWCASE_SLOTS } from "@/lib/store-showcase"
-import { todayKeySaoPaulo } from "@/lib/store-shipping"
+import { isLaunchActive, toSaleWindow, type SaleWindow } from "@/lib/store-sale-window"
 import { findSku, resolveSelection, skuKey, type StoreSku } from "@/lib/store-sku"
 
 /**
@@ -85,6 +82,8 @@ export type StoreProductCard = {
   preorder: StoreCardPreorder | null
   /** Marcado como Lançamento no admin e ainda no prazo. */
   is_launch: boolean
+  /** Prazo da pré-venda/lançamento, para a contagem. `null` = sem prazo, ou o produto não é nenhum dos dois. */
+  sale_window: SaleWindow | null
 }
 
 export type StoreCardRating = { average: number; count: number }
@@ -97,9 +96,6 @@ export type StoreCardPreorder = {
   limit: number | null
   /** `null` = lote sem teto. */
   remaining: number | null
-  /** Prazo da pré-venda (ISO), para a contagem do card. Ver `preorderCountdown`. */
-  earlyEndsAt: string | null
-  endsAt: string | null
 }
 
 /**
@@ -108,7 +104,7 @@ export type StoreCardPreorder = {
  * propósito: toda listagem nova tem de passar por ele, senão o TypeScript
  * reclama, em vez de a tela sair sem selo e sem nota sem ninguém notar.
  */
-type CardDisplayFields = "rating" | "badge" | "highlights" | "preorder" | "is_launch"
+type CardDisplayFields = "rating" | "badge" | "highlights" | "preorder" | "is_launch" | "sale_window"
 
 type StoreProductCardBase = Omit<StoreProductCard, CardDisplayFields>
 
@@ -225,28 +221,19 @@ async function getCardChoices(ids: string[]): Promise<Map<string, { badge: unkno
 }
 
 /**
- * Pódio de vendas para o selo "Mais vendido": só os `BEST_SELLER_TOP`
- * primeiros, e só com `BEST_SELLER_MIN_UNITS` vendidas. Com a Loja recém
- * aberta, o "1º" vendeu 1 unidade: chamar isso de mais vendido seria
- * anunciar o que não aconteceu.
- *
- * "Fixar em Mais vendidos" NÃO dá o selo: o pino decide a ordem da seção da
- * Home (curadoria), o selo afirma um número de vendas. Com os dois juntos,
- * todo card da seção saía com "Mais vendido" e o selo não dizia mais nada.
+ * Selo "Mais vendido": quem está na seção "Mais vendidos" da Home (fixados +
+ * ranking de vendas, ver `getBestSellingSectionIds`). O selo e a seção leem a
+ * MESMA lista, então o produto que a Home chama de mais vendido sai com o
+ * selo em toda listagem, e nenhum outro sai. Decisão do dono da Loja
+ * (07/10/2026): antes o selo exigia top 3 com 5+ unidades e, com a Loja
+ * recém aberta, nunca aparecia.
  *
  * Em cache por 5 min: a rota de produtos é dinâmica, e sem ele cada clique
  * de filtro somaria os pedidos de 90 dias.
  */
 const getBestSellerBadgeIds = unstable_cache(
-  async (): Promise<string[]> => {
-    const units = await getUnitsSoldByProduct(BEST_SELLER_WINDOW_DAYS)
-    return [...units.entries()]
-      .filter(([, sold]) => sold >= BEST_SELLER_MIN_UNITS)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, BEST_SELLER_TOP)
-      .map(([id]) => id)
-  },
-  ["store-repository:getBestSellerBadgeIds"],
+  async (): Promise<string[]> => getBestSellingSectionIds(BEST_SELLING_SECTION_SIZE),
+  ["store-repository:getBestSellerBadgeIds:section"],
   { revalidate: 300 }
 )
 
@@ -267,8 +254,8 @@ async function withCardDisplay(items: StoreProductCardBase[]): Promise<StoreProd
     getLaunchAndPreorderInfo(items),
     getDefaultVariantSkus(items),
   ])
-  const newSince = Date.now() - NEW_PRODUCT_DAYS * DAY_MS
-  const today = todayKeySaoPaulo()
+  const now = Date.now()
+  const newSince = now - NEW_PRODUCT_DAYS * DAY_MS
 
   return items.map((rawItem) => {
     const item = withDefaultSkus(rawItem, defaultSkus)
@@ -280,6 +267,7 @@ async function withCardDisplay(items: StoreProductCardBase[]): Promise<StoreProd
     const soldOut = isCardSoldOut(item)
     const preorder =
       item.sale_type === "pre_order" ? toCardPreorder(extras?.preorder ?? DEFAULT_PREORDER_INFO, soldOut) : null
+    const isLaunch = extras ? isLaunchActive(extras, now) : false
 
     return {
       ...item,
@@ -294,17 +282,18 @@ async function withCardDisplay(items: StoreProductCardBase[]): Promise<StoreProd
         isBestSeller: bestSellers.includes(item.id),
         isBestValue: attributes.tags.includes("value"),
         isNew: item.condition === "new" && Date.parse(item.created_at) >= newSince,
-        isLaunch: extras ? isLaunchActive(extras, today) : false,
+        isLaunch,
       }),
       highlights: manualHighlights.length > 0 ? manualHighlights : deriveCardHighlights(item.category, attributes),
       preorder,
-      is_launch: extras ? isLaunchActive(extras, today) : false,
+      is_launch: isLaunch,
+      sale_window: (preorder || isLaunch) && extras ? extras.sale_window : null,
     }
   })
 }
 
 /** Pré-venda sem as colunas do lote (código no ar antes da migration 20261213000001): lote aberto, sem teto. */
-const DEFAULT_PREORDER_INFO: PreorderInfo = { status: "open", batchName: null, shipsAt: null, limit: null, reserved: 0, earlyEndsAt: null, endsAt: null }
+const DEFAULT_PREORDER_INFO: PreorderInfo = { status: "open", batchName: null, shipsAt: null, limit: null, reserved: 0 }
 
 function toCardPreorder(info: PreorderInfo, productSoldOut: boolean): StoreCardPreorder {
   return {
@@ -313,14 +302,13 @@ function toCardPreorder(info: PreorderInfo, productSoldOut: boolean): StoreCardP
     shipsAt: info.shipsAt,
     limit: info.limit,
     remaining: preorderRemaining(info),
-    earlyEndsAt: info.earlyEndsAt,
-    endsAt: info.endsAt,
   }
 }
 
 type LaunchAndPreorderInfo = {
   is_launch: boolean
-  launch_until: string | null
+  sale_window_ends_at: string | null
+  sale_window: SaleWindow | null
   preorder: PreorderInfo | null
 }
 
@@ -342,7 +330,7 @@ export async function getLaunchAndPreorderInfo(
   const [{ data, error }, reserved] = await Promise.all([
     db
       .from("store_products")
-      .select("id, is_launch, launch_until, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit, preorder_early_ends_at, preorder_ends_at")
+      .select("id, is_launch, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit, sale_window_ends_at, sale_window_end_action, sale_window_end_price_cents")
       .in(
         "id",
         items.map((item) => item.id)
@@ -357,7 +345,8 @@ export async function getLaunchAndPreorderInfo(
   for (const row of data ?? []) {
     result.set(row.id, {
       is_launch: Boolean(row.is_launch),
-      launch_until: row.launch_until ?? null,
+      sale_window_ends_at: row.sale_window_ends_at ?? null,
+      sale_window: toSaleWindow(row),
       preorder: preorderIds.includes(row.id)
         ? {
             status: isPreorderStatus(row.preorder_status) ? row.preorder_status : "open",
@@ -365,8 +354,6 @@ export async function getLaunchAndPreorderInfo(
             shipsAt: row.preorder_ships_at ?? null,
             limit: row.preorder_limit ?? null,
             reserved: reserved.get(row.id) ?? 0,
-            earlyEndsAt: row.preorder_early_ends_at ?? null,
-            endsAt: row.preorder_ends_at ?? null,
           }
         : null,
     })
@@ -794,7 +781,7 @@ const PREORDER_SECTION_ORDER: Record<PreorderStatus, number> = {
  * lote em breve" e "Esgotado" ficam (com o status no card): é a vitrine do
  * que vem aí, e é dali que sai o "avise-me".
  *
- * Lançamentos: os marcados no admin e ainda no prazo (`launch_until`), fora
+ * Lançamentos: os marcados no admin e ainda no prazo (`sale_window_ends_at`), fora
  * os que já aparecem como pré-venda.
  */
 export async function listLaunchAndPreorderProducts(
@@ -805,7 +792,7 @@ export async function listLaunchAndPreorderProducts(
     listStoreProductsPaginated({ type: "store", saleType: "pre_order", page: 1, pageSize: 48 }),
     db
       .from("store_products")
-      .select("id, launch_until")
+      .select("id, sale_window_ends_at")
       .eq("type", "store")
       .eq("is_active", true)
       .eq("is_launch", true)
@@ -819,9 +806,9 @@ export async function listLaunchAndPreorderProducts(
     .sort((a, b) => PREORDER_SECTION_ORDER[a.preorder?.status ?? "open"] - PREORDER_SECTION_ORDER[b.preorder?.status ?? "open"])
     .slice(0, limit)
 
-  const today = todayKeySaoPaulo()
+  const now = Date.now()
   const launchIds = (launchRows ?? [])
-    .filter((row) => isLaunchActive({ is_launch: true, launch_until: row.launch_until }, today))
+    .filter((row) => isLaunchActive({ is_launch: true, sale_window_ends_at: row.sale_window_ends_at }, now))
     .map((row) => row.id)
   const launches =
     launchIds.length > 0
@@ -845,7 +832,27 @@ export async function listLaunchAndPreorderProducts(
  * admin) — dá pro admin garantir que um produto específico apareça aqui
  * mesmo sem vendas suficientes nos últimos 90 dias, e na ordem que quiser.
  */
-export async function listBestSellingProducts(limit = 12): Promise<StoreProductCard[]> {
+export async function listBestSellingProducts(limit = BEST_SELLING_SECTION_SIZE): Promise<StoreProductCard[]> {
+  const orderedIds = await getBestSellingSectionIds(limit)
+  if (orderedIds.length === 0) return []
+
+  const { items } = await listStoreProductsPaginated({ type: "store", productIds: orderedIds, pageSize: orderedIds.length })
+  const rank = new Map(orderedIds.map((id, index) => [id, index]))
+  return items
+    .filter((item) => rank.has(item.id))
+    .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!)
+}
+
+/** Cards da seção "Mais vendidos" da Home. O selo "Mais vendido" usa o mesmo tamanho. */
+const BEST_SELLING_SECTION_SIZE = 12
+
+/**
+ * Ids da seção "Mais vendidos", na ordem: fixados primeiro, depois o ranking
+ * de vendas. Só ids (sem `withCardDisplay`), porque o selo do card também
+ * lê daqui e montar o card chamaria a si mesmo. Pode trazer id inativo ou de
+ * bazar: a listagem os descarta, e no selo eles não casam com card nenhum.
+ */
+async function getBestSellingSectionIds(limit: number): Promise<string[]> {
   const db = createSupabaseAdminClient()
   const from = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
 
@@ -868,14 +875,7 @@ export async function listBestSellingProducts(limit = 12): Promise<StoreProductC
 
   const pinnedIds = ((pinnedRows ?? []) as { id: string }[]).map((row) => row.id)
   const rankedIds = ((rankedRows ?? []) as { product_id: string }[]).map((row) => row.product_id)
-  const orderedIds = [...pinnedIds, ...rankedIds.filter((id) => !pinnedIds.includes(id))].slice(0, limit)
-  if (orderedIds.length === 0) return []
-
-  const { items } = await listStoreProductsPaginated({ type: "store", productIds: orderedIds, pageSize: orderedIds.length })
-  const rank = new Map(orderedIds.map((id, index) => [id, index]))
-  return items
-    .filter((item) => rank.has(item.id))
-    .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!)
+  return [...pinnedIds, ...rankedIds.filter((id) => !pinnedIds.includes(id))].slice(0, limit)
 }
 
 /**
@@ -1027,7 +1027,7 @@ export type StoreFilterOptions = {
    * Até 3 produtos em destaque por categoria, para o card da direita do mega
    * menu: os marcados como destaque pelo admin primeiro, depois maior
    * desconto, depois os mais recentes. Vem do servidor para o card existir em
-   * toda página da Loja (avaliações, favoritos), não só onde a grade já
+   * toda página da Loja (avaliações, busca), não só onde a grade já
    * carregou produto daquela categoria.
    */
   menuHighlights: Record<string, StoreProductCard[]>
@@ -1100,8 +1100,13 @@ async function loadStoreFilterOptions(type?: "store"): Promise<StoreFilterOption
   const countByType = { store: 0, all: 0 }
 
   const all = createFacetAccumulator()
+  // Por PÁGINA de categoria (`categoryPageScope`): o glasspad entra também nas
+  // facetas da página de Mousepad, que o lista.
   const byCategory = new Map<string, FacetAccumulator>()
   const byBrand = new Map<string, FacetAccumulator>()
+  // Marcas da categoria em si, para o mega menu: ele já soma as categorias do
+  // grupo, e a de página contaria o glasspad duas vezes.
+  const ownBrandCounts = new Map<string, Record<string, number>>()
 
   for (const row of rows) {
     if (row.category) {
@@ -1114,9 +1119,16 @@ async function loadStoreFilterOptions(type?: "store"): Promise<StoreFilterOption
 
     accumulateFacet(all, row)
     if (row.category) {
-      let acc = byCategory.get(row.category)
-      if (!acc) byCategory.set(row.category, (acc = createFacetAccumulator()))
-      accumulateFacet(acc, row)
+      for (const page of categoryPagesIncluding(row.category)) {
+        let acc = byCategory.get(page)
+        if (!acc) byCategory.set(page, (acc = createFacetAccumulator()))
+        accumulateFacet(acc, row)
+      }
+      if (row.brand) {
+        const own = ownBrandCounts.get(row.category) ?? {}
+        own[row.brand] = (own[row.brand] ?? 0) + 1
+        ownBrandCounts.set(row.category, own)
+      }
     }
     if (row.brand) {
       let acc = byBrand.get(row.brand)
@@ -1131,11 +1143,11 @@ async function loadStoreFilterOptions(type?: "store"): Promise<StoreFilterOption
   const facetsByBrand: Record<string, StoreFacetCounts> = {}
   for (const [brand, acc] of byBrand) facetsByBrand[brand] = finalizeFacets(acc)
 
-  // O mega menu já consumia essa forma antes das facetas existirem — sai delas
-  // agora em vez de um segundo acumulador com a mesma contagem.
   const brandsByCategory: Record<string, { brand: string; count: number }[]> = {}
-  for (const [category, categoryFacets] of Object.entries(facetsByCategory)) {
-    brandsByCategory[category] = categoryFacets.brands
+  for (const [category, counts] of ownBrandCounts) {
+    brandsByCategory[category] = Object.entries(counts)
+      .map(([brand, count]) => ({ brand, count }))
+      .sort((a, b) => b.count - a.count || a.brand.localeCompare(b.brand))
   }
 
   const effectiveCentsOf = (row: FacetRow) =>
@@ -1447,6 +1459,8 @@ export type StoreProductDetail = {
   preorder: PreorderInfo | null
   /** Marcado como Lançamento e ainda no prazo. */
   is_launch: boolean
+  /** Prazo da pré-venda/lançamento (ver lib/store-sale-window.ts). */
+  sale_window: SaleWindow | null
 }
 
 export type StoreProductSpec = {
@@ -1527,7 +1541,7 @@ export const getStoreProductDetail = cache(async (
   }
   if (!product) return null
 
-  const baseDetail = product as unknown as Omit<StoreProductDetail, "sku" | "preorder" | "is_launch">
+  const baseDetail = product as unknown as Omit<StoreProductDetail, "sku" | "preorder" | "is_launch" | "sale_window">
   let linkedPeripheral: LinkedPeripheralRef | null = null
 
   const [extras, skuRows, specsResult, variantsResult, variantGroupsResult, peripheralsResult, peripheralResult] =
@@ -1654,21 +1668,23 @@ export const getStoreProductDetail = cache(async (
 async function getProductPageExtras(
   productId: string,
   saleType: StoreSaleType
-): Promise<Pick<StoreProductDetail, "sku" | "preorder" | "is_launch">> {
+): Promise<Pick<StoreProductDetail, "sku" | "preorder" | "is_launch" | "sale_window">> {
   const db = createSupabaseAdminClient()
   const [{ data, error }, reserved] = await Promise.all([
     db
       .from("store_products")
-      .select("sku, is_launch, launch_until, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit, preorder_early_ends_at, preorder_ends_at")
+      .select("sku, is_launch, preorder_status, preorder_batch_name, preorder_ships_at, preorder_limit, sale_window_ends_at, sale_window_end_action, sale_window_end_price_cents")
       .eq("id", productId)
       .maybeSingle(),
     saleType === "pre_order" ? getPreorderReserved([productId]) : Promise.resolve(new Map<string, number>()),
   ])
   if (error) console.error("[store-repository] getProductPageExtras:", error)
+  const isLaunch = data ? isLaunchActive(data, Date.now()) : false
 
   return {
     sku: data?.sku ?? null,
-    is_launch: data ? isLaunchActive(data, todayKeySaoPaulo()) : false,
+    is_launch: isLaunch,
+    sale_window: (saleType === "pre_order" || isLaunch) && data ? toSaleWindow(data) : null,
     preorder:
       saleType === "pre_order"
         ? {
@@ -1677,8 +1693,6 @@ async function getProductPageExtras(
             shipsAt: data?.preorder_ships_at ?? null,
             limit: data?.preorder_limit ?? null,
             reserved: reserved.get(productId) ?? 0,
-            earlyEndsAt: data?.preorder_early_ends_at ?? null,
-            endsAt: data?.preorder_ends_at ?? null,
           }
         : null,
   }

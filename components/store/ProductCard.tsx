@@ -16,8 +16,9 @@ import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import { useCart } from "@/components/providers/cart-context"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StarRating } from "@/components/ui/star-rating"
+import { SoldOutStamp } from "@/components/store/SoldOutStamp"
 import { RouteLink } from "@/components/ui/route-link"
-import { FavoriteButton } from "@/components/store/FavoriteButton"
+import { LaunchCard } from "@/components/store/LaunchCard"
 import { PreorderCard } from "@/components/store/PreorderCard"
 import { VariantPickerDialog } from "@/components/store/VariantPickerDialog"
 import type { StoreCardRating, StoreProductCard } from "@/lib/server/repositories/store-repository"
@@ -31,13 +32,11 @@ const CONDITION_LABEL: Record<"new" | "used" | "opened", string> = {
 type ProductCardProps = StoreProductCard & {
   /** `showcase`: cartão grande e mais vistoso, para seções com poucos itens (Serviços). */
   variant?: "default" | "showcase"
-  /** Pede confirmação ao desfavoritar (lista de favoritos, onde o card some ao clicar). */
-  confirmFavoriteRemoval?: boolean
 }
 
 /** O selo principal, no canto da foto. Cor, ícone e texto vêm de `STORE_CARD_BADGE`. */
 function CardBadge({ badge, large }: { badge: StoreCardBadge; large?: boolean }) {
-  const { label, icon: Icon, className } = STORE_CARD_BADGE[badge]
+  const { label, icon: Icon, className, iconClassName } = STORE_CARD_BADGE[badge]
   return (
     <span
       className={cn(
@@ -46,7 +45,7 @@ function CardBadge({ badge, large }: { badge: StoreCardBadge; large?: boolean })
         className
       )}
     >
-      <Icon className={cn("shrink-0", large ? "size-3" : "size-2.5")} strokeWidth={2.5} />
+      <Icon className={cn("shrink-0", large ? "size-3" : "size-2.5", iconClassName)} strokeWidth={2.5} />
       <span className="truncate">{label}</span>
     </span>
   )
@@ -92,14 +91,20 @@ function CardHighlights({ items }: { items: { label: string; tone?: "condition" 
 
 /**
  * O card de produto da Loja inteira. Pré-venda sai sempre no `PreorderCard`
- * (lote, previsão, quanto sobra, "Reservar na pré-venda"): antes só a seção da
- * Home o usava, e a mesma pré-venda aparecia com um card na Home e com outro
- * na listagem de categoria, marca, favoritos e busca. Decidir aqui, e não em
+ * (lote, previsão, quanto sobra, "Reservar na pré-venda") e Lançamento no
+ * `LaunchCard` (o mesmo desenho em violeta, com a contagem): antes só a seção
+ * da Home os usava, e o mesmo produto aparecia com um card na Home e com outro
+ * na listagem de categoria, marca e busca. Decidir aqui, e não em
  * cada tela, é o que impede a próxima listagem de repetir a divergência.
  */
 export function ProductCard(props: ProductCardProps) {
-  if (props.sale_type === "pre_order" && props.variant !== "showcase") {
-    return <PreorderCard {...props} confirmFavoriteRemoval={props.confirmFavoriteRemoval} />
+  if (props.variant !== "showcase") {
+    if (props.sale_type === "pre_order") {
+      return <PreorderCard {...props} />
+    }
+    if (props.is_launch) {
+      return <LaunchCard {...props} />
+    }
   }
   return <StandardProductCard {...props} />
 }
@@ -208,7 +213,7 @@ function StandardProductCard(props: ProductCardProps) {
               ? `Restam ${preorder.remaining} no lote`
               : preorder?.shipsAt
                 ? `Envio previsto: ${formatPreorderShipDate(preorder.shipsAt)}`
-                : "Pré-venda: envio quando o lote chegar",
+                : "Pré-venda: envios a partir do dia de Lançamento",
           tone: "text-amber-300",
           dot: "bg-amber-400",
         }
@@ -233,7 +238,9 @@ function StandardProductCard(props: ProductCardProps) {
           "relative z-0 flex h-full flex-col overflow-hidden border bg-card transition-[transform,border-color,box-shadow] duration-200",
           showcase
             ? "rounded-[26px] border-[#2c2c2c] bg-gradient-to-b from-[#1a1a1f] to-card group-hover:-translate-y-1.5 group-hover:border-violet-400/40 group-hover:shadow-[0_22px_60px_-24px_rgba(167,139,250,0.5)]"
-            : "rounded-[18px] border-[#262626] group-hover:-translate-y-1 group-hover:border-white/25 group-hover:shadow-xl group-hover:shadow-black/40"
+            : "rounded-[18px] border-[#262626] group-hover:-translate-y-1 group-hover:border-white/25 group-hover:shadow-xl group-hover:shadow-black/40",
+          // Esgotado sai de cena inteiro (rótulo, borda, frete), como no card de pré-venda.
+          soldOut && "grayscale"
         )}>
           {/* Imagem sem placa própria: o fundo é o do card, então a foto (quase
               sempre PNG recortado em fundo branco) não fica dentro de um
@@ -297,7 +304,12 @@ function StandardProductCard(props: ProductCardProps) {
                 etiqueta fica em contraste cheio por cima. O card inteiro NÃO perde
                 opacidade: era isso que deixava a própria etiqueta a 55% e o preço
                 ilegível — a mensagem que mais precisa ser lida saía a mais fraca. */}
-            {outOfStock && (
+            {/* Esgotado de verdade ganha o carimbo inclinado, o mesmo do card de
+                pré-venda e da galeria; lote fechado ("Novo lote em breve")
+                segue com a pílula, que diz o status do lote. */}
+            {soldOut ? (
+              <SoldOutStamp size={showcase ? "lg" : "md"} className="z-[2]" />
+            ) : outOfStock && (
               <div className="absolute inset-0 z-[2] flex items-center justify-center bg-gradient-to-b from-black/25 via-black/45 to-black/65">
                 <span className={cn(
                   "flex items-center gap-1.5 rounded-full border border-white/25 bg-black/75 font-display font-bold uppercase text-white shadow-lg shadow-black/60 backdrop-blur-[2px]",
@@ -398,15 +410,6 @@ function StandardProductCard(props: ProductCardProps) {
           </div>
         </div>
       </Link>
-      <FavoriteButton
-        productId={props.id}
-        productName={props.name}
-        confirmRemoval={props.confirmFavoriteRemoval}
-        className={cn(
-          "absolute z-[3] transition-transform duration-200",
-          showcase ? "right-5 top-5 group-hover:-translate-y-1.5" : "right-2.5 top-2.5 group-hover:-translate-y-1"
-        )}
-      />
 
       {/* Ações rápidas (desktop): no rodapé da foto, só com o mouse em cima.
           O `hover` do Tailwind 4 só existe em aparelho com mouse, então no

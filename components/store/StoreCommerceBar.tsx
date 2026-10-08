@@ -187,7 +187,7 @@ function MobileBenefits({ benefits }: { benefits: StoreCommerceBenefit[] }) {
   )
 }
 
-const NON_PRODUCT_LOJA_SEGMENTS = new Set(["avaliacoes", "categoria", "favoritos", "marca"])
+const NON_PRODUCT_LOJA_SEGMENTS = new Set(["avaliacoes", "categoria", "marca"])
 
 /** `/loja/<slug>` é produto; as demais rotas de um segmento são listagens. */
 function isProductDetailPath(pathname: string | null) {

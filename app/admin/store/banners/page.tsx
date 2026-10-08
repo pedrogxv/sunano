@@ -47,32 +47,26 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { BANNER_LINK_HINT, isValidBannerLink } from "@/lib/banner-link"
-import type { StoreBannerSection } from "@/lib/server/repositories/store-banners-repository"
+import type { StoreBannerSection, StoreSectionBanner } from "@/lib/server/repositories/store-banners-repository"
+import { getCategoryLabel } from "@/lib/store-category-icons"
 import { cn } from "@/lib/utils"
 
-type Banner = {
-  id: string
-  section: StoreBannerSection
-  image_url: string | null
-  video_url: string | null
-  title: string
-  subtitle: string | null
-  cta_text: string | null
-  cta_link: string | null
-  sort_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+type Banner = StoreSectionBanner
 
-// "main" (topo da Loja) virou o Hero, com tela própria em /admin/store/hero.
-// "ready_stock" saiu junto com a seção "Pronta entrega" da vitrine. Os dois
-// continuam válidos no banco (CHECK da tabela); só não são mais editáveis
-// aqui nem exibidos na Loja.
-const SECTIONS: StoreBannerSection[] = ["pre_sale", "best_sellers", "site_items"]
+// Os banners só aparecem no topo das páginas de categoria. As seções antigas
+// (carrosséis no meio da Home) saíram do ar; o que já estava nelas fica na
+// aba "Fora do ar", de onde dá para mover para uma categoria.
+const LEGACY_TAB = "__legacy"
 
-const SECTION_LABELS: Record<StoreBannerSection, string> = {
+const LEGACY_SECTION_LABELS: Record<Exclude<StoreBannerSection, "category">, string> = {
   main: "Topo da Loja",
   best_sellers: "Mais vendidos",
   pre_sale: "Pré-venda",
@@ -80,7 +74,14 @@ const SECTION_LABELS: Record<StoreBannerSection, string> = {
   site_items: "Itens para o site",
 }
 
+function originLabel(banner: Banner): string {
+  return banner.section === "category"
+    ? getCategoryLabel(banner.category)
+    : LEGACY_SECTION_LABELS[banner.section]
+}
+
 type FormState = {
+  category: string
   imageUrl: string
   videoUrl: string
   title: string
@@ -91,6 +92,7 @@ type FormState = {
 }
 
 const EMPTY_FORM: FormState = {
+  category: "",
   imageUrl: "",
   videoUrl: "",
   title: "",
@@ -110,9 +112,12 @@ function SortableBannerRow({
   onToggle,
   onDelete,
   isBusy,
+  sortable = true,
 }: {
   banner: Banner
   position: number
+  /** Fora do ar não tem fila: sem alça de arrastar. */
+  sortable?: boolean
   onEdit: (banner: Banner) => void
   onToggle: (banner: Banner) => void
   onDelete: (banner: Banner) => void
@@ -132,19 +137,23 @@ function SortableBannerRow({
         !banner.is_active && "opacity-60"
       )}
     >
-      <button
-        type="button"
-        aria-label={`Reordenar banner ${position}`}
-        className="cursor-grab touch-none rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" />
-      </button>
+      {sortable && (
+        <>
+          <button
+            type="button"
+            aria-label={`Reordenar banner ${position}`}
+            className="cursor-grab touch-none rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="size-4" />
+          </button>
 
-      <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">
-        {position}
-      </span>
+          <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">
+            {position}
+          </span>
+        </>
+      )}
 
       <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-muted">
         {banner.image_url ? (
@@ -165,7 +174,9 @@ function SortableBannerRow({
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-foreground">{banner.title}</p>
         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          {banner.cta_link ? (
+          {!sortable ? (
+            <span>Era de &ldquo;{originLabel(banner)}&rdquo;. Edite e escolha uma categoria.</span>
+          ) : banner.cta_link ? (
             <>
               <Link2 className="size-3 shrink-0" />
               <span className="truncate">{banner.cta_link}</span>
@@ -217,11 +228,13 @@ function SortableBannerRow({
 // ────────────────────────────────────────────
 export default function AdminStoreBannersPage() {
   const [banners, setBanners] = useState<Banner[]>([])
+  const [categories, setCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  const [activeSection, setActiveSection] = useState<StoreBannerSection>("pre_sale")
+  // Uma categoria (valor de `store_products.category`) ou LEGACY_TAB.
+  const [activeTab, setActiveTab] = useState<string>("")
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Banner | null>(null)
@@ -238,7 +251,7 @@ export default function AdminStoreBannersPage() {
 
   usePageHeader(
     "Banners da Loja",
-    "Carrossel de cada seção da Home da Loja. Sem banner cadastrado, a seção volta ao formato de lista. O topo da Loja agora é o Hero."
+    "Carrossel no topo de cada página de categoria. Sem banner, a categoria mostra o cabeçalho padrão. O topo da Home é o Hero."
   )
 
   const load = useCallback(async () => {
@@ -246,9 +259,17 @@ export default function AdminStoreBannersPage() {
     setError(null)
     try {
       const res = await fetch("/api/admin/store-banners")
-      const data = (await res.json()) as { banners?: Banner[]; error?: string }
+      const data = (await res.json()) as { banners?: Banner[]; categories?: string[]; error?: string }
       if (!res.ok) throw new Error(data.error ?? "Erro ao carregar banners.")
-      setBanners(data.banners ?? [])
+      const list = data.banners ?? []
+      // Categoria que saiu da Loja (sem produto ativo) mas ainda tem banner
+      // continua com aba: senão o banner ficaria sem onde ser achado.
+      const tabs = new Set(data.categories ?? [])
+      for (const banner of list) if (banner.category) tabs.add(banner.category)
+      const sorted = [...tabs].sort((a, b) => getCategoryLabel(a).localeCompare(getCategoryLabel(b)))
+      setBanners(list)
+      setCategories(sorted)
+      setActiveTab((current) => current || sorted[0] || LEGACY_TAB)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao carregar banners."
       setError(message)
@@ -262,19 +283,25 @@ export default function AdminStoreBannersPage() {
     load()
   }, [load])
 
-  const sectionBanners = banners
-    .filter((banner) => banner.section === activeSection)
-    .sort((a, b) => a.sort_order - b.sort_order)
+  const isLegacyTab = activeTab === LEGACY_TAB
+  const legacyBanners = banners.filter((banner) => banner.section !== "category")
+  const sectionBanners = isLegacyTab
+    ? legacyBanners
+    : banners
+        .filter((banner) => banner.section === "category" && banner.category === activeTab)
+        .sort((a, b) => a.sort_order - b.sort_order)
+  const activeTabLabel = isLegacyTab ? "Fora do ar" : getCategoryLabel(activeTab)
 
   function openCreate() {
     setEditing(null)
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, category: isLegacyTab ? "" : activeTab })
     setFormOpen(true)
   }
 
   function openEdit(banner: Banner) {
     setEditing(banner)
     setForm({
+      category: banner.category ?? "",
       imageUrl: banner.image_url ?? "",
       videoUrl: banner.video_url ?? "",
       title: banner.title,
@@ -309,6 +336,10 @@ export default function AdminStoreBannersPage() {
   }
 
   async function handleSave() {
+    if (!form.category) {
+      toast.error("Escolha a categoria do banner.")
+      return
+    }
     if (!form.title.trim()) {
       toast.error("Envie o título do banner.")
       return
@@ -326,7 +357,9 @@ export default function AdminStoreBannersPage() {
     setSaving(true)
     try {
       const payload = {
-        section: activeSection,
+        // Na edição só vai se mudou: categoria que perdeu os produtos ativos
+        // continua com aba, e reenviá-la faria a rota recusar o save inteiro.
+        category: editing && editing.category === form.category ? undefined : form.category,
         imageUrl: form.imageUrl.trim() || null,
         videoUrl: form.videoUrl.trim() || null,
         title: form.title.trim(),
@@ -347,6 +380,8 @@ export default function AdminStoreBannersPage() {
       if (!res.ok) throw new Error(data.error ?? "Erro ao salvar banner.")
 
       toast.success(editing ? "Banner atualizado" : "Banner criado")
+      // Mudou de categoria: a aba segue o banner, senão ele "some" da tela.
+      if (form.category !== activeTab) setActiveTab(form.category)
       setFormOpen(false)
       setEditing(null)
       setForm(EMPTY_FORM)
@@ -406,6 +441,8 @@ export default function AdminStoreBannersPage() {
     const { active, over } = event
     if (!over || active.id === over.id) return
 
+    if (isLegacyTab) return
+
     const oldIndex = sectionBanners.findIndex((banner) => banner.id === active.id)
     const newIndex = sectionBanners.findIndex((banner) => banner.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
@@ -422,7 +459,7 @@ export default function AdminStoreBannersPage() {
       const res = await fetch("/api/admin/store-banners/reorder", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section: activeSection, ids: reordered.map((banner) => banner.id) }),
+        body: JSON.stringify({ category: activeTab, ids: reordered.map((banner) => banner.id) }),
       })
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null
@@ -437,31 +474,46 @@ export default function AdminStoreBannersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Abas de seção */}
+      {/* Abas de categoria */}
       <div className="flex flex-wrap gap-2">
-        {SECTIONS.map((section) => (
-          <button
-            key={section}
-            type="button"
-            onClick={() => setActiveSection(section)}
-            className={cn(
-              "rounded-xl border px-3.5 py-2 text-xs font-bold transition-colors",
-              activeSection === section
-                ? "border-primary/40 bg-primary/10 text-foreground"
-                : "border-border text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {SECTION_LABELS[section]}
-          </button>
-        ))}
+        {[...categories, ...(legacyBanners.length > 0 ? [LEGACY_TAB] : [])].map((tab) => {
+          const count =
+            tab === LEGACY_TAB
+              ? legacyBanners.length
+              : banners.filter((banner) => banner.section === "category" && banner.category === tab).length
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-colors",
+                activeTab === tab
+                  ? "border-primary/40 bg-primary/10 text-foreground"
+                  : "border-border text-muted-foreground hover:text-foreground",
+                tab === LEGACY_TAB && "border-dashed"
+              )}
+            >
+              {tab === LEGACY_TAB ? "Fora do ar" : getCategoryLabel(tab)}
+              {count > 0 && <span className="text-[10px] text-muted-foreground">{count}</span>}
+            </button>
+          )
+        })}
       </div>
 
-      <div className="flex justify-end">
-        <Button className="gap-2" onClick={openCreate}>
-          <Plus className="size-4" />
-          Adicionar banner
-        </Button>
-      </div>
+      {isLegacyTab ? (
+        <p className="text-xs text-muted-foreground">
+          Banners das seções que ficavam no meio da Home. Eles não aparecem mais na Loja: edite um e
+          escolha a categoria em que ele deve aparecer.
+        </p>
+      ) : (
+        <div className="flex justify-end">
+          <Button className="gap-2" onClick={openCreate} disabled={!activeTab}>
+            <Plus className="size-4" />
+            Adicionar banner
+          </Button>
+        </div>
+      )}
 
       {error && (
         <Alert className="border-red-500/30 bg-red-500/10 py-2">
@@ -480,16 +532,31 @@ export default function AdminStoreBannersPage() {
           <GalleryHorizontalEnd className="size-10 text-muted-foreground" />
           <div>
             <p className="text-sm text-muted-foreground">
-              Nenhum banner em &ldquo;{SECTION_LABELS[activeSection]}&rdquo;
+              Nenhum banner em &ldquo;{activeTabLabel}&rdquo;
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Sem banner cadastrado, a seção mostra a lista de produtos normalmente.
+              Sem banner cadastrado, a categoria mostra o cabeçalho padrão.
             </p>
           </div>
-          <Button variant="outline" size="sm" className="gap-2" onClick={openCreate}>
+          <Button variant="outline" size="sm" className="gap-2" onClick={openCreate} disabled={!activeTab}>
             <Plus className="size-3.5" />
             Criar banner
           </Button>
+        </div>
+      ) : isLegacyTab ? (
+        <div className="space-y-2">
+          {sectionBanners.map((banner, index) => (
+            <SortableBannerRow
+              key={banner.id}
+              banner={banner}
+              position={index + 1}
+              onEdit={openEdit}
+              onToggle={handleToggle}
+              onDelete={setDeleteTarget}
+              isBusy={busy}
+              sortable={false}
+            />
+          ))}
         </div>
       ) : (
         <DndContext
@@ -524,10 +591,30 @@ export default function AdminStoreBannersPage() {
         <DialogContent className="max-h-[90vh] overflow-y-auto border border-border bg-card sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? "Editar banner" : "Novo banner"}</DialogTitle>
-            <DialogDescription>Seção: {SECTION_LABELS[activeSection]}</DialogDescription>
+            <DialogDescription>Aparece no topo da página da categoria escolhida.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Categoria */}
+            <div className="space-y-2">
+              <Label>Categoria</Label>
+              <Select
+                value={form.category}
+                onValueChange={(value) => setForm((prev) => ({ ...prev, category: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolha a categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {categories.map((category) => (
+                    <SelectItem key={category} value={category}>
+                      {getCategoryLabel(category)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Vídeo */}
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5">
@@ -679,7 +766,7 @@ export default function AdminStoreBannersPage() {
               <div>
                 <p className="text-sm font-medium text-foreground">Banner ativo</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Libera o banner para o carrossel da seção.
+                  Libera o banner para o carrossel da categoria.
                 </p>
               </div>
               <button
@@ -709,7 +796,7 @@ export default function AdminStoreBannersPage() {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={saving || uploading !== null || (!form.imageUrl && !form.videoUrl)}
+              disabled={saving || uploading !== null || !form.category || (!form.imageUrl && !form.videoUrl)}
             >
               {saving ? "Salvando..." : editing ? "Salvar alterações" : "Criar banner"}
             </Button>

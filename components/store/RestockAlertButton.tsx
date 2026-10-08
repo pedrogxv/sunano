@@ -12,7 +12,9 @@ import { useAuthUser } from "@/components/providers/auth-context"
  *
  * O aviso chega pelo sino de notificações do site (tipo `store_restock`),
  * disparado por trigger no banco quando o produto — ou a cor inscrita — sai do
- * estado esgotado. Por isso exige login: sem conta não há onde entregar.
+ * estado esgotado, e por e-mail no e-mail da conta (cron
+ * `/api/cron/restock-emails`). Por isso exige login: sem conta não há onde
+ * entregar.
  *
  * `variantId` null significa "qualquer cor". Quando o produto tem cores e a
  * esgotada é só a selecionada, a inscrição é dessa cor específica.
@@ -74,8 +76,8 @@ export function RestockAlertButton({
       toast.success(
         next
           ? variantLabel
-            ? `Avisaremos quando "${variantLabel}" voltar.`
-            : "Avisaremos quando o produto voltar."
+            ? `Avisaremos por e-mail e no site quando "${variantLabel}" voltar.`
+            : "Avisaremos por e-mail e no site quando o produto voltar."
           : "Aviso desativado."
       )
     } catch (error) {

@@ -1119,6 +1119,8 @@ export type Database = {
             | "referral_indirect"
             | "aura_peripheral_redeemed"
             | "store_purchase"
+            | "store_purchase_reversal"
+            | "store_review"
           source_post_id: string | null
           source_comment_id: string | null
           source_blog_post_id: string | null
@@ -1126,8 +1128,10 @@ export type Database = {
           source_peripheral_id: string | null
           source_peripheral_comment_id: string | null
           source_peripheral_review_id: string | null
-          /** Pedido da Loja que rendeu a Aura (`reason = 'store_purchase'`). */
+          /** Pedido da Loja que rendeu (ou estornou) a Aura (`store_purchase`/`store_purchase_reversal`). */
           source_order_id: string | null
+          /** Produto avaliado que rendeu a Aura (`reason = 'store_review'`). */
+          source_store_product_id?: string | null
           giver_id: string | null
           created_at: string
         }
@@ -1261,12 +1265,12 @@ export type Database = {
           preorder_batch_started_at: string | null
           /** Entra na seção "Lançamentos e Pré-venda" da Home. */
           is_launch: boolean
-          /** Último dia como lançamento (`YYYY-MM-DD`); nulo = até desmarcar. */
-          launch_until: string | null
-          /** Fim do preço promocional de pré-venda (ISO). Nulo = pré-venda sem prazo. */
-          preorder_early_ends_at: string | null
-          /** Fim da pré-venda (early + 7 dias). Depois dele o produto vira `normal`. */
-          preorder_ends_at: string | null
+          /** Fim da pré-venda/lançamento (ISO). Depois dele o cron vira o produto normal. Nulo = sem prazo. */
+          sale_window_ends_at: string | null
+          /** O que acontece com o preço no fim do prazo. */
+          sale_window_end_action: "keep" | "end_promo" | "set_price"
+          /** Preço PIX depois do prazo, só com `set_price`. */
+          sale_window_end_price_cents: number | null
           created_at: string
           updated_at: string
         }
@@ -1304,9 +1308,9 @@ export type Database = {
           preorder_status?: "open" | "sold_out" | "next_batch_soon" | "closed" | "shipping"
           preorder_batch_started_at?: string | null
           is_launch?: boolean
-          launch_until?: string | null
-          preorder_early_ends_at?: string | null
-          preorder_ends_at?: string | null
+          sale_window_ends_at?: string | null
+          sale_window_end_action?: "keep" | "end_promo" | "set_price"
+          sale_window_end_price_cents?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1344,9 +1348,9 @@ export type Database = {
           preorder_status?: "open" | "sold_out" | "next_batch_soon" | "closed" | "shipping"
           preorder_batch_started_at?: string | null
           is_launch?: boolean
-          launch_until?: string | null
-          preorder_early_ends_at?: string | null
-          preorder_ends_at?: string | null
+          sale_window_ends_at?: string | null
+          sale_window_end_action?: "keep" | "end_promo" | "set_price"
+          sale_window_end_price_cents?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -1638,6 +1642,8 @@ export type Database = {
           /** null = inscrito no produto inteiro ("qualquer cor"). */
           variant_id: string | null
           notified_at: string | null
+          /** E-mail do aviso enviado (ou descartado). null com `notified_at` = pendente. */
+          emailed_at: string | null
           created_at: string
         }
         Insert: {
@@ -1646,6 +1652,7 @@ export type Database = {
           product_id: string
           variant_id?: string | null
           notified_at?: string | null
+          emailed_at?: string | null
           created_at?: string
         }
         Update: {
@@ -1654,6 +1661,7 @@ export type Database = {
           product_id?: string
           variant_id?: string | null
           notified_at?: string | null
+          emailed_at?: string | null
           created_at?: string
         }
       }
@@ -1723,6 +1731,26 @@ export type Database = {
           created_at?: string
         }
       }
+      store_review_grants: {
+        Relationships: []
+        Row: {
+          id: string
+          user_id: string
+          product_id: string
+          granted_by: string | null
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          product_id: string
+          granted_by?: string | null
+          note?: string | null
+          created_at?: string
+        }
+        Update: Partial<Database["public"]["Tables"]["store_review_grants"]["Insert"]>
+      }
       store_testimonials: {
         Relationships: []
         Row: {
@@ -1782,6 +1810,10 @@ export type Database = {
           title: string | null
           body: string
           is_verified_purchase: boolean
+          /** `grant` = liberada pelo admin para cliente que comprou fora do site (20261219000000). */
+          origin: "order" | "grant"
+          image_urls: string[]
+          aura_rewarded: number | null
           status: "published" | "hidden"
           created_at: string
           updated_at: string
@@ -1795,6 +1827,9 @@ export type Database = {
           title?: string | null
           body: string
           is_verified_purchase?: boolean
+          origin?: "order" | "grant"
+          image_urls?: string[]
+          aura_rewarded?: number | null
           status?: "published" | "hidden"
           created_at?: string
           updated_at?: string
@@ -1808,6 +1843,9 @@ export type Database = {
           title?: string | null
           body?: string
           is_verified_purchase?: boolean
+          origin?: "order" | "grant"
+          image_urls?: string[]
+          aura_rewarded?: number | null
           status?: "published" | "hidden"
           created_at?: string
           updated_at?: string
@@ -2542,6 +2580,7 @@ export type Database = {
         Row: {
           id: string
           section: string
+          category: string | null
           image_url: string | null
           video_url: string | null
           title: string
@@ -2556,6 +2595,7 @@ export type Database = {
         Insert: {
           id?: string
           section: string
+          category?: string | null
           image_url?: string | null
           video_url?: string | null
           title: string
@@ -2570,6 +2610,7 @@ export type Database = {
         Update: {
           id?: string
           section?: string
+          category?: string | null
           image_url?: string | null
           video_url?: string | null
           title?: string
@@ -3326,9 +3367,9 @@ export type Database = {
         Args: { retention_days?: number }
         Returns: undefined
       }
-      advance_preorder_phases: {
+      close_store_sale_windows: {
         Args: Record<PropertyKey, never>
-        Returns: { raised: number; ended: number }
+        Returns: { closed: number }
       }
     }
   }

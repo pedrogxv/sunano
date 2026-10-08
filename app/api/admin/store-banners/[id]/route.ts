@@ -5,7 +5,7 @@ import { dbErrorResponse } from "@/lib/db-errors"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { deleteBanner, updateBanner } from "@/lib/server/repositories/store-banners-repository"
 
-import { updateStoreBannerSchema } from "../schema"
+import { isStoreCategory, updateStoreBannerSchema } from "../schema"
 
 export const dynamic = "force-dynamic"
 export const runtime = "nodejs"
@@ -28,6 +28,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       { error: parsed.error.issues[0]?.message ?? "Dados inválidos." },
       { status: 400 }
     )
+  }
+
+  if (parsed.data.category !== undefined && !(await isStoreCategory(parsed.data.category))) {
+    return NextResponse.json({ error: "Categoria não existe na Loja." }, { status: 400 })
   }
 
   try {

@@ -12,10 +12,10 @@ import { tierLabel as tierDisplayLabel } from "@/lib/tier-utils"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 
-export type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc"
+export type RatingKey = "overall" | "performance" | "build" | "value" | "software" | "battery" | "qc" | "maintenance"
 export type Ratings = Partial<Record<RatingKey, number>>
 
-const RATING_ORDER: RatingKey[] = ["overall", "performance", "build", "value", "software", "battery", "qc"]
+const RATING_ORDER: RatingKey[] = ["overall", "performance", "build", "value", "software", "battery", "qc", "maintenance"]
 
 const RATING_LABELS_PT: Record<RatingKey, string> = {
   overall: "Geral",
@@ -25,6 +25,7 @@ const RATING_LABELS_PT: Record<RatingKey, string> = {
   software: "Software",
   battery: "Bateria",
   qc: "Controle de Qualidade",
+  maintenance: "Manutenção",
 }
 
 const RATING_LABELS_EN: Record<RatingKey, string> = {
@@ -35,6 +36,7 @@ const RATING_LABELS_EN: Record<RatingKey, string> = {
   software: "Software",
   battery: "Battery",
   qc: "QC",
+  maintenance: "Maintenance",
 }
 
 const TAG_LABELS: Record<Tag, { en: string; pt: string }> = {
@@ -125,6 +127,9 @@ const TAG_LABELS: Record<Tag, { en: string; pt: string }> = {
   boa_isolacao: { en: "Good Isolation", pt: "Boa Isolação" },
   driver_flex: { en: "Driver Flex", pt: "Driver Flex" },
   planar: { en: "Planar", pt: "Planar" },
+  artista: { en: "Artist", pt: "Artista" },
+  full_silicone: { en: "Full Silicone", pt: "Full Silicone" },
+  silencioso: { en: "Quiet", pt: "Silencioso" },
 }
 
 export interface TierItemTooltipContentProps {
@@ -216,11 +221,19 @@ export function TierItemTooltipContent({
   const ratingEntries = ratings
     ? RATING_ORDER.filter((key, index) => RATING_ORDER.indexOf(key) === index)
         .filter((key) => typeof ratings[key] === "number")
+        // O slot de manutenção só tem nome público em glasspad (Embalagem).
+        .filter((key) => key !== "maintenance" || categoryLabel === "glasspad")
         .map((key) => {
           let label = key === "battery" ? batteryLabel : labels[key]
           if (categoryLabel === "mousepad") {
             if (key === "software") label = "Base"
             if (key === "build") label = en ? "Surface" : "Superfície"
+          }
+          if (categoryLabel === "glasspad") {
+            if (key === "software") label = "Base"
+            if (key === "build") label = en ? "Surface" : "Superfície"
+            if (key === "battery") label = en ? "Speed" : "Velocidade"
+            if (key === "maintenance") label = en ? "Packaging" : "Embalagem"
           }
           // Fonte: as mesmas notas com o nome que a categoria usa (ver o formulário
           // de admin e a página do periférico).

@@ -311,7 +311,7 @@ type ModeConfig = {
   fallbackSort: (items: Peripheral[]) => Peripheral[]
 }
 
-const RATING_KEYS: RatingKey[] = ["overall", "performance", "build", "value", "software", "battery", "qc"]
+const RATING_KEYS: RatingKey[] = ["overall", "performance", "build", "value", "software", "battery", "qc", "maintenance"]
 
 function extractRatings(item: Peripheral): Ratings {
   const details = (item.specs as Record<string, unknown> | undefined)?.details as

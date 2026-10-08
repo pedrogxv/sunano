@@ -88,7 +88,7 @@ type KeyboardType = "mechanical" | "magnetic" | "optical"
 type PadType = "speed" | "control" | "hybrid"
 type Surface = PadType | "glass" | "cloth"
 type PanelType = "ips" | "tn" | "va" | "oled" | "other"
-type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones" | "v_shaped" | "u_shaped" | "neutro" | "neutro_quente" | "quente" | "escuro" | "basshead" | "vocal_forward" | "harman" | "ief_neutral" | "jm_1" | "sub_bass_focus" | "mid_bass_focus" | "punchy" | "smooth" | "arejado" | "sibilante" | "detalhado" | "palco_amplo" | "boa_separacao" | "metal" | "resina" | "plastico" | "shell_pequeno" | "shell_grande" | "deep_fit" | "boa_isolacao" | "driver_flex" | "planar"
+type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones" | "v_shaped" | "u_shaped" | "neutro" | "neutro_quente" | "quente" | "escuro" | "basshead" | "vocal_forward" | "harman" | "ief_neutral" | "jm_1" | "sub_bass_focus" | "mid_bass_focus" | "punchy" | "smooth" | "arejado" | "sibilante" | "detalhado" | "palco_amplo" | "boa_separacao" | "metal" | "resina" | "plastico" | "shell_pequeno" | "shell_grande" | "deep_fit" | "boa_isolacao" | "driver_flex" | "planar" | "artista" | "full_silicone" | "silencioso"
 
 type Peripheral = {
   id: string
@@ -240,6 +240,9 @@ const TAG_LABELS: Record<Tag, string> = {
   boa_isolacao: "Boa Isolação",
   driver_flex: "Driver Flex",
   planar: "Planar",
+  artista: "Artista",
+  full_silicone: "Full Silicone",
+  silencioso: "Silencioso",
 }
 
 function formatTagLabel(tag: Tag, category?: string) {

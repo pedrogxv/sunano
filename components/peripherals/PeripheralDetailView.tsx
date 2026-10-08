@@ -5,7 +5,7 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { RouteLink } from "@/components/ui/route-link"
-import { Activity, AudioLines, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Ruler, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
+import { Activity, AudioLines, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Palette, Ruler, Video, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
 import { AuraIcon } from "@/components/ui/AuraIcon"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -36,6 +36,8 @@ import { SWITCH_PRICE_TIER_LABEL } from "@/lib/switch-price-tier"
 import { CATEGORY_PLURAL_LABELS, getTagLabel, type Category, type Tag } from "@/lib/tag-options"
 import { AuthorAvatarLink, AuthorNameLink } from "@/components/profile/AuthorLink"
 import { parseExpertAuthor } from "@/lib/peripheral-expert"
+import { parseGlasspadArt } from "@/lib/glasspad-art"
+import { safeHref } from "@/lib/safe-url"
 import { profileFrameOf } from "@/lib/profile-frames"
 import type { ForumPostMention } from "@/lib/server/repositories/forum-peripherals-repository"
 import {
@@ -336,6 +338,15 @@ const INFO_ACCENT_STYLES: Record<InfoAccent, { icon: string; iconBg: string }> =
   teal: { icon: "text-teal-400", iconBg: "bg-teal-400/10" },
   lime: { icon: "text-lime-400", iconBg: "bg-lime-400/10" },
   fuchsia: { icon: "text-fuchsia-400", iconBg: "bg-fuchsia-400/10" },
+}
+
+function ArtRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right font-medium text-foreground">{value}</span>
+    </div>
+  )
 }
 
 function InfoCardTitle({
@@ -767,6 +778,7 @@ export function PeripheralDetailView({
     performance: normalizeRating(details?.ratings?.performance ?? details.ratingPerformance),
     qc: normalizeRating(details?.ratings?.qc ?? details.ratingQc),
     value: normalizeRating(details?.ratings?.value ?? details.ratingValue),
+    maintenance: normalizeRating(details?.ratings?.maintenance),
   }
 
   const reviewUrl = details.reviewUrl
@@ -783,6 +795,11 @@ export function PeripheralDetailView({
   // Fonte: a ficha é um relatório de bancada (ver lib/psu-specs.ts). Cada cenário
   // de carga vira um card próprio, e um cenário que nunca foi medido não aparece.
   const isPsu = data.category === "psu"
+  // Glasspad: mesmos slots de nota com nomes próprios, e o de manutenção vira
+  // Embalagem (ver o formulário de admin).
+  const isGlasspad = data.category === "glasspad"
+  const glasspadArt = isGlasspad ? parseGlasspadArt(details.art) : undefined
+  const artistSocialHref = safeHref(glasspadArt?.artistSocial)
   const psu = (details.psu ?? {}) as PsuSpecs
   const psuCertBadges = isPsu
     ? [
@@ -993,8 +1010,14 @@ export function PeripheralDetailView({
 
   const showTuningCurve = isIem && !!tuningCurveImage
 
+  // Mousepad/glasspad: clipe do deslize. `blob:` é o arquivo ainda não enviado no
+  // preview do admin; no site só chega a URL do Storage.
+  const glideVideoRaw = typeof details.glideVideo === "string" ? details.glideVideo.trim() : ""
+  const glideVideo = /^(https?:|blob:)/i.test(glideVideoRaw) ? glideVideoRaw : ""
+  const showGlide = (data.category === "mousepad" || isGlasspad) && !!glideVideo
+
   const specCardCount =
-    1 + (performanceRows.length > 0 ? 1 : 0) + (showShape ? 1 : 0) + (isSwitch ? 1 : 0) + (showTuningCurve ? 1 : 0)
+    1 + (performanceRows.length > 0 ? 1 : 0) + (showShape ? 1 : 0) + (isSwitch ? 1 : 0) + (showTuningCurve ? 1 : 0) + (showGlide ? 1 : 0)
 
   // Dentro da própria categoria (ex.: mouse), o mesmo produto pode ser ranqueado
   // em mais de um "modo" (Geral, Magnético, Custo-Benefício...), cada um com seu
@@ -1067,15 +1090,18 @@ export function PeripheralDetailView({
                   ) : (
                   <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                     {data.category !== "pcb" && (
-                      <RatingRow label={isPsu ? t.peripheralDetail.ratingComponents : data.category === "mousepad" ? t.peripheralDetail.ratingSurface : t.peripheralDetail.ratingBuild} rating={ratings.build} />
+                      <RatingRow label={isPsu ? t.peripheralDetail.ratingComponents : data.category === "mousepad" || isGlasspad ? t.peripheralDetail.ratingSurface : t.peripheralDetail.ratingBuild} rating={ratings.build} />
                     )}
-                    <RatingRow label={isPsu ? t.peripheralDetail.ratingEfficiency : data.category === "mousepad" ? t.peripheralDetail.ratingBase : t.peripheralDetail.ratingSoftware} rating={ratings.software} />
+                    <RatingRow label={isPsu ? t.peripheralDetail.ratingEfficiency : data.category === "mousepad" || isGlasspad ? t.peripheralDetail.ratingBase : t.peripheralDetail.ratingSoftware} rating={ratings.software} />
                     {data.category !== "pcb" && (
-                      <RatingRow label={isPsu ? t.peripheralDetail.ratingWarranty : data.category === "keyboard" ? t.peripheralDetail.ratingTyping : data.category === "mousepad" ? t.peripheralDetail.ratingStitching : t.peripheralDetail.ratingBattery} rating={ratings.battery} />
+                      <RatingRow label={isPsu ? t.peripheralDetail.ratingWarranty : data.category === "keyboard" ? t.peripheralDetail.ratingTyping : data.category === "mousepad" ? t.peripheralDetail.ratingStitching : isGlasspad ? t.peripheralDetail.ratingSpeed : t.peripheralDetail.ratingBattery} rating={ratings.battery} />
                     )}
                     <RatingRow label={isPsu ? t.peripheralDetail.ratingRipple : t.peripheralDetail.ratingPerformance} rating={ratings.performance} />
                     <RatingRow label={t.peripheralDetail.ratingQc} rating={ratings.qc} />
                     <RatingRow label={t.peripheralDetail.ratingValue} rating={ratings.value} />
+                    {isGlasspad && (
+                      <RatingRow label={t.peripheralDetail.ratingPackaging} rating={ratings.maintenance} />
+                    )}
                   </div>
                   )}
                 </CardContent>
@@ -1083,13 +1109,61 @@ export function PeripheralDetailView({
 
               {/* Fonte não tem software próprio nem review em vídeo — os dois cards
                   saem da página (e os campos correspondentes, do formulário de admin). */}
-              {!isPsu && (
+              {!isPsu && !isGlasspad && (
                 <Card className="border-border/60 bg-secondary/50">
                   <CardHeader>
                     <InfoCardTitle icon={Package} accent="sky">{t.peripheralDetail.software}</InfoCardTitle>
                   </CardHeader>
                   <CardContent className="text-sm text-muted-foreground break-words whitespace-pre-wrap">
                     {softwareInfo ? linkifyText(softwareInfo) : t.peripheralDetail.softwareEmpty}
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Glasspad: Arte e raridade no lugar do Software. Sem nada preenchido no
+                  admin, o card não aparece. */}
+              {glasspadArt && (
+                <Card className="border-border/60 bg-secondary/50">
+                  <CardHeader>
+                    <InfoCardTitle icon={Palette} accent="fuchsia">{t.peripheralDetail.artAndRarity}</InfoCardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    {glasspadArt.byArtist && (
+                      <ArtRow label={t.peripheralDetail.artByArtist} value={glasspadArt.byArtist === "yes" ? t.peripheralDetail.answerYes : t.peripheralDetail.answerNo} />
+                    )}
+                    {glasspadArt.byArtist === "yes" && (glasspadArt.artistName || glasspadArt.artistBio || artistSocialHref) && (
+                      <div className="space-y-1 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
+                        {glasspadArt.artistName && <p className="font-semibold text-foreground">{glasspadArt.artistName}</p>}
+                        {glasspadArt.artistBio && (
+                          <p className="text-xs text-muted-foreground break-words whitespace-pre-wrap">{glasspadArt.artistBio}</p>
+                        )}
+                        {artistSocialHref && (
+                          <a
+                            href={artistSocialHref}
+                            target="_blank"
+                            rel="noreferrer nofollow"
+                            className="inline-block text-xs font-medium text-fuchsia-300 hover:underline"
+                          >
+                            {t.peripheralDetail.artArtistSocial} →
+                          </a>
+                        )}
+                      </div>
+                    )}
+                    {glasspadArt.usesAi && (
+                      <ArtRow label={t.peripheralDetail.artAiUsage} value={glasspadArt.usesAi === "yes" ? t.peripheralDetail.answerYes : t.peripheralDetail.answerNo} />
+                    )}
+                    {glasspadArt.limitedDrop && (
+                      <ArtRow label={t.peripheralDetail.artLimitedDrop} value={glasspadArt.limitedDrop === "yes" ? t.peripheralDetail.answerYes : t.peripheralDetail.answerNo} />
+                    )}
+                    {glasspadArt.dropQuantity != null && (
+                      <ArtRow
+                        label={t.peripheralDetail.artDropQuantity}
+                        value={`${glasspadArt.dropQuantity.toLocaleString(locale)} ${t.peripheralDetail.artDropUnits}`}
+                      />
+                    )}
+                    {glasspadArt.launchCountry && (
+                      <ArtRow label={t.peripheralDetail.artLaunchCountry} value={glasspadArt.launchCountry} />
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -1414,6 +1488,30 @@ export function PeripheralDetailView({
                           fill
                           sizes="(max-width: 768px) 100vw, 360px"
                           className="object-contain p-2"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {showGlide && (
+                  <Card size="sm" className="mb-3 break-inside-avoid border-border/60 bg-secondary/50">
+                    <CardHeader>
+                      <InfoCardTitle icon={Video} accent="cyan">{t.peripheralDetail.glide}</InfoCardTitle>
+                      <CardDescription className="text-xs">{t.peripheralDetail.glideDesc}</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="aspect-video overflow-hidden rounded-xl border border-border bg-black">
+                        <video
+                          key={glideVideo}
+                          src={glideVideo}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="metadata"
+                          aria-label={`${t.peripheralDetail.glide}: ${data.name}`}
+                          className="h-full w-full object-cover"
                         />
                       </div>
                     </CardContent>

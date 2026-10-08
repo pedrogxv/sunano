@@ -6,7 +6,7 @@
 
 import type { RatingKey, Ratings } from "@/components/tierlist/TierItemTooltipContent"
 
-const RATING_KEYS: RatingKey[] = ["overall", "performance", "build", "value", "software", "battery", "qc"]
+const RATING_KEYS: RatingKey[] = ["overall", "performance", "build", "value", "software", "battery", "qc", "maintenance"]
 
 export function extractPeripheralRatings(specs: unknown): Ratings {
   const details = (specs as { details?: { ratings?: Record<string, number> } } | null | undefined)?.details

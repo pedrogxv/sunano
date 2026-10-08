@@ -17,7 +17,7 @@ export type Category = "keyboard" | "pcb" | "mouse" | "mousepad" | "glasspad" | 
 
 export const ALL_CATEGORIES: Category[] = ["keyboard", "pcb", "mouse", "mousepad", "glasspad", "iem", "headset", "feet", "chairs", "monitors", "switches", "dac_amp", "psu"]
 
-export type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "wired" | "wireless" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones" | "v_shaped" | "u_shaped" | "neutro" | "neutro_quente" | "quente" | "escuro" | "basshead" | "vocal_forward" | "harman" | "ief_neutral" | "jm_1" | "sub_bass_focus" | "mid_bass_focus" | "punchy" | "smooth" | "arejado" | "sibilante" | "detalhado" | "palco_amplo" | "boa_separacao" | "metal" | "resina" | "plastico" | "shell_pequeno" | "shell_grande" | "deep_fit" | "boa_isolacao" | "driver_flex" | "planar"
+export type Tag = "competitive" | "versatile" | "value" | "cheap" | "expensive" | "light" | "heavy" | "unbalanced" | "dpi_deviation" | "wobble_high" | "wobble_low" | "scroll_hard" | "scroll_soft" | "trimode" | "stable" | "unstable" | "8_80" | "poron" | "borracha" | "grosso" | "fino" | "rapido" | "devagar" | "hibrido" | "aspero" | "liso" | "mug" | "macio" | "afetado_umidade" | "ultrapassado" | "raro" | "fibra_carbono" | "control" | "speed" | "silicone" | "ia" | "white_label" | "ips" | "va" | "tn" | "oled" | "miniled" | "fhd" | "qhd" | "4k" | "headphone" | "wired" | "wireless" | "padrao_atx" | "full_modular" | "semi_modular" | "white_noise" | "bom_ripple" | "ripple_ruim" | "fonte_instavel" | "80_plus" | "selo_cybenetics" | "capacitor_japones" | "v_shaped" | "u_shaped" | "neutro" | "neutro_quente" | "quente" | "escuro" | "basshead" | "vocal_forward" | "harman" | "ief_neutral" | "jm_1" | "sub_bass_focus" | "mid_bass_focus" | "punchy" | "smooth" | "arejado" | "sibilante" | "detalhado" | "palco_amplo" | "boa_separacao" | "metal" | "resina" | "plastico" | "shell_pequeno" | "shell_grande" | "deep_fit" | "boa_isolacao" | "driver_flex" | "planar" | "artista" | "full_silicone" | "silencioso"
 
 export type TagOption = { key: Tag; en: string; pt: string; color: string }
 
@@ -93,11 +93,13 @@ export const MOUSEPAD_TAGS_OPTIONS: TagOption[] = [
 // acima quando a categoria selecionada no formulário for "glasspad".
 export const GLASSPAD_TAGS_OPTIONS: TagOption[] = [
   { key: "raro", en: "Rare", pt: "Raro", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400" },
+  { key: "artista", en: "Artist", pt: "Artista", color: "border-orange-400/50 bg-orange-500/10 text-orange-300 data-[active=true]:bg-orange-500/30 data-[active=true]:border-orange-400" },
   { key: "competitive", en: "Competitive", pt: "Competitivo", color: "border-violet-400/50 bg-violet-500/10 text-violet-300 data-[active=true]:bg-violet-500/30 data-[active=true]:border-violet-400" },
   { key: "versatile", en: "Bomba", pt: "Bomba", color: "border-red-400/50 bg-red-500/10 text-red-300 data-[active=true]:bg-red-500/30 data-[active=true]:border-red-400" },
   { key: "expensive", en: "Expensive", pt: "Caro", color: "border-rose-400/50 bg-rose-500/10 text-rose-300 data-[active=true]:bg-rose-500/30 data-[active=true]:border-rose-400" },
   { key: "cheap", en: "Cheap", pt: "Barato", color: "border-green-400/50 bg-green-500/10 text-green-300 data-[active=true]:bg-green-500/30 data-[active=true]:border-green-400" },
   { key: "silicone", en: "Silicone", pt: "Silicone", color: "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 data-[active=true]:bg-cyan-500/30 data-[active=true]:border-cyan-400" },
+  { key: "full_silicone", en: "Full Silicone", pt: "Full Silicone", color: "border-indigo-400/50 bg-indigo-500/10 text-indigo-300 data-[active=true]:bg-indigo-500/30 data-[active=true]:border-indigo-400" },
   { key: "borracha", en: "Rubber", pt: "Borracha", color: "border-zinc-400/50 bg-zinc-500/10 text-zinc-300 data-[active=true]:bg-zinc-500/30 data-[active=true]:border-zinc-400" },
   { key: "fibra_carbono", en: "Carbon fiber", pt: "Fibra de Carbono", color: "border-neutral-400/50 bg-neutral-500/10 text-neutral-300 data-[active=true]:bg-neutral-500/30 data-[active=true]:border-neutral-400" },
   { key: "control", en: "Control", pt: "Control", color: "border-blue-400/50 bg-blue-500/10 text-blue-300 data-[active=true]:bg-blue-500/30 data-[active=true]:border-blue-400" },
@@ -107,6 +109,9 @@ export const GLASSPAD_TAGS_OPTIONS: TagOption[] = [
   { key: "liso", en: "Smooth", pt: "Liso", color: "border-sky-400/50 bg-sky-500/10 text-sky-300 data-[active=true]:bg-sky-500/30 data-[active=true]:border-sky-400" },
   { key: "mug", en: "Mug", pt: "Mug", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400" },
   { key: "macio", en: "Soft", pt: "Macio", color: "border-pink-400/50 bg-pink-500/10 text-pink-300 data-[active=true]:bg-pink-500/30 data-[active=true]:border-pink-400" },
+  { key: "grosso", en: "Thick", pt: "Grosso", color: "border-amber-400/50 bg-amber-500/10 text-amber-300 data-[active=true]:bg-amber-500/30 data-[active=true]:border-amber-400" },
+  { key: "fino", en: "Thin", pt: "Fino", color: "border-cyan-400/50 bg-cyan-500/10 text-cyan-300 data-[active=true]:bg-cyan-500/30 data-[active=true]:border-cyan-400" },
+  { key: "silencioso", en: "Quiet", pt: "Silencioso", color: "border-slate-400/50 bg-slate-500/10 text-slate-300 data-[active=true]:bg-slate-500/30 data-[active=true]:border-slate-400" },
   { key: "ia", en: "AI", pt: "IA", color: "border-fuchsia-400/50 bg-fuchsia-500/10 text-fuchsia-300 data-[active=true]:bg-fuchsia-500/30 data-[active=true]:border-fuchsia-400" },
 ]
 

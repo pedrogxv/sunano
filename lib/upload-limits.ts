@@ -52,7 +52,7 @@ export const UPLOAD_LIMITS = {
   support: 5 * 1024 * 1024,
   /** Anexo de comentário — volume muito maior que post, por isso o teto baixo. */
   comment: 2 * 1024 * 1024,
-  /** Vídeo de banner da Loja. */
+  /** Vídeo de banner da Loja e vídeo de deslize de mousepad/glasspad. */
   video: 20 * 1024 * 1024,
 } as const
 

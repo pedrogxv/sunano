@@ -14,7 +14,7 @@ import {
 import { restrictToParentElement } from "@dnd-kit/modifiers"
 import { arrayMove, rectSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag as TagIcon, Layers, FileText, ShoppingCart, Info, Link2, Search, X, GripVertical, Plus, Trash2, Loader2, Eye, UserRound } from "lucide-react"
+import { Upload, ChevronDown, ChevronUp, ImageIcon, Tag as TagIcon, Layers, FileText, ShoppingCart, Info, Link2, Search, X, GripVertical, Plus, Trash2, Loader2, Eye, UserRound, Palette, Video } from "lucide-react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
@@ -73,6 +73,7 @@ import {
 import { getTagOptionsForCategory, hasScoreRanking, sanitizeTagsForCategory, type Category, type Tag } from "@/lib/tag-options"
 import { UPLOAD_LIMITS, formatUploadLimit } from "@/lib/upload-limits"
 import { priceBandModeFor } from "@/lib/price-band"
+import { GLASSPAD_ARTIST_BIO_MAX_LENGTH, parseGlasspadArt, type GlasspadArt } from "@/lib/glasspad-art"
 
 type Tier = "GOAT" | "SS" | "S" | "A" | "B" | "C" | "L"
 type TierField = Tier | "__none__"
@@ -171,6 +172,22 @@ const peripheralSchema = z.object({
   padSpeed: z.string().optional(),
   stoppingPower: z.string().optional(),
   thickness: z.string().optional(),
+  edgeFinish: z.string().optional(),
+  // Glasspad: Arte e raridade (ver lib/glasspad-art.ts).
+  artByArtist: z.string().optional(),
+  artistName: z.string().max(80).optional(),
+  artistBio: z.string().max(GLASSPAD_ARTIST_BIO_MAX_LENGTH, `Máximo de ${GLASSPAD_ARTIST_BIO_MAX_LENGTH} caracteres.`).optional(),
+  artistSocial: z
+    .string()
+    .optional()
+    .refine((value) => !value?.trim() || /^https?:\/\/\S+$/i.test(value.trim()), "Use um link completo (https://...)."),
+  artUsesAi: z.string().optional(),
+  artLimitedDrop: z.string().optional(),
+  artDropQuantity: z
+    .string()
+    .optional()
+    .refine((value) => !value?.trim() || /^[1-9]\d*$/.test(value.trim()), "Informe um número inteiro maior que zero."),
+  artLaunchCountry: z.string().max(60).optional(),
   surfaceMaterial: z.string().optional(),
   // IEM (fones in-ear) — ficha técnica própria, ver a seção de specs por categoria.
   drivers: z.string().optional(),
@@ -415,6 +432,7 @@ function buildSpecsPayload(
     gallery: string[]
     shapeImage?: string | null
     tuningCurveImage?: string | null
+    glideVideo?: string | null
     expertAuthor?: PeripheralExpertAuthor | null
   }
 ) {
@@ -440,8 +458,11 @@ function buildSpecsPayload(
     connectivity: data.connectivity,
     trimode: data.trimode || undefined,
     size: data.size, surface: data.surface, padType: data.padType, driver: data.driver, profile: data.profile,
-    glide: data.glide || undefined, padSpeed: data.padSpeed || undefined,
+    // Glasspad não tem Deslize: o valor antigo sai no próximo save em vez de ficar
+    // gravado sem campo para editar.
+    glide: data.category === "glasspad" ? undefined : data.glide || undefined, padSpeed: data.padSpeed || undefined,
     stoppingPower: data.stoppingPower || undefined, thickness: data.thickness || undefined,
+    edgeFinish: data.category === "glasspad" ? data.edgeFinish || undefined : undefined,
     surfaceMaterial: data.surfaceMaterial || undefined,
     hasBattery: data.hasBattery ?? undefined,
     refreshRate: typeof data.refreshRate === "number" && !Number.isNaN(data.refreshRate) ? data.refreshRate : undefined,
@@ -462,7 +483,20 @@ function buildSpecsPayload(
       pros: splitLines(data.pros), cons: splitLines(data.cons), gallery: opts.gallery,
       buyLinks, compatibility: data.compatibility || undefined,
       comparisons: splitLines(data.comparisons),
-      softwareInfo: data.softwareInfo || undefined,
+      // Glasspad não tem software; o card de Arte e raridade ocupa o lugar dele.
+      softwareInfo: data.category === "glasspad" ? undefined : data.softwareInfo || undefined,
+      art: data.category === "glasspad"
+        ? parseGlasspadArt({
+            byArtist: data.artByArtist,
+            artistName: data.artistName,
+            artistBio: data.artistBio,
+            artistSocial: data.artistSocial,
+            usesAi: data.artUsesAi,
+            limitedDrop: data.artLimitedDrop,
+            dropQuantity: data.artDropQuantity,
+            launchCountry: data.artLaunchCountry,
+          })
+        : undefined,
       switchPeripheralId: data.switchPeripheralId || undefined,
       priceTier: data.priceTier || undefined,
       drivers: data.drivers || undefined, impedance: data.impedance || undefined,
@@ -470,6 +504,7 @@ function buildSpecsPayload(
       plug: data.plug || undefined, material: data.material || undefined,
       microphone: data.microphone || undefined,
       tuningCurveImage: opts.tuningCurveImage || undefined,
+      glideVideo: hasGlideVideo(data.category) ? opts.glideVideo || undefined : undefined,
       weight: data.weight || undefined, latency: data.latency || undefined,
       deadzone: data.deadzone || undefined, rtMin: data.rtMin || undefined,
       features: data.features || undefined,
@@ -546,6 +581,57 @@ const MOUSE_SENSOR_OPTIONS = [
 // Taxas de report que aparecem na ficha; valor fora da escala (125Hz, 500Hz de
 // mouse antigo) continua sendo mostrado, entra na lista como item extra.
 const POLLING_RATE_OPTIONS = ["1000Hz", "2000Hz", "4000Hz", "8000Hz"]
+
+// Base do glasspad. Valor gravado antes desta lista ("Anti-slip Feets") continua
+// aparecendo no select como item extra até alguém trocar.
+const GLASSPAD_BASE_OPTIONS = [
+  "Dots Silicone",
+  "Dots Borracha",
+  "Full Borracha",
+  "Borracha",
+  "Full Silicone",
+  "Silicone",
+]
+
+// Mousepad e glasspad têm o card "Deslize": um clipe curto (5-8s) em loop.
+function hasGlideVideo(category: string | undefined) {
+  return category === "mousepad" || category === "glasspad"
+}
+
+function artFormValuesFrom(art: GlasspadArt | undefined) {
+  return {
+    artByArtist: art?.byArtist ?? "",
+    artistName: art?.artistName ?? "",
+    artistBio: art?.artistBio ?? "",
+    artistSocial: art?.artistSocial ?? "",
+    artUsesAi: art?.usesAi ?? "",
+    artLimitedDrop: art?.limitedDrop ?? "",
+    artDropQuantity: art?.dropQuantity != null ? String(art.dropQuantity) : "",
+    artLaunchCountry: art?.launchCountry ?? "",
+  }
+}
+
+// Espessura do glasspad, de 0,5 em 0,5mm.
+const GLASSPAD_THICKNESS_OPTIONS = [
+  "0.5mm",
+  "1mm",
+  "1.5mm",
+  "2mm",
+  "2.5mm",
+  "3mm",
+  "3.5mm",
+  "4mm",
+  "4.5mm",
+  "5mm",
+]
+
+// Tamanho do glasspad. O valor gravado continua "XL"/"XXL" (é o que a ficha e o
+// comparador mostram); a medida vai só no rótulo. S/M/L de antes desta lista
+// aparece como item extra até alguém trocar.
+const GLASSPAD_SIZE_OPTIONS = [
+  { value: "XL", label: "XL (49x42cm)" },
+  { value: "XXL", label: "XXL (50x50cm)" },
+]
 
 const COATING_OPTIONS = [
   "Emborrachado",
@@ -1278,6 +1364,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [shapeImagePreview, setShapeImagePreview] = useState<string | null>(null)
   const [tuningCurveFile, setTuningCurveFile] = useState<File | null>(null)
   const [tuningCurvePreview, setTuningCurvePreview] = useState<string | null>(null)
+  const [glideVideoFile, setGlideVideoFile] = useState<File | null>(null)
+  // URL gravada, ou `blob:` do arquivo escolhido e ainda não enviado (só no preview).
+  const [glideVideoPreview, setGlideVideoPreview] = useState<string | null>(null)
 
   const form = useForm<PeripheralFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1317,6 +1406,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
       padSpeed: "",
       stoppingPower: "",
       thickness: "",
+      edgeFinish: "",
+      ...artFormValuesFrom(undefined),
       ...psuFormValuesFrom(null),
     },
   })
@@ -1362,7 +1453,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     image_url: images[0] ?? null,
     specs: {
       ...boardSpecs,
-      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview, tuningCurveImage: tuningCurvePreview, expertAuthor }),
+      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview, tuningCurveImage: tuningCurvePreview, glideVideo: glideVideoPreview, expertAuthor }),
     },
   }
 
@@ -1483,6 +1574,22 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     return options
   }, [watchedSensor])
 
+  const watchedPadType = form.watch("padType") || ""
+  const glasspadBaseOptions = useMemo(() => {
+    if (watchedPadType && !GLASSPAD_BASE_OPTIONS.includes(watchedPadType)) {
+      return [watchedPadType, ...GLASSPAD_BASE_OPTIONS]
+    }
+    return GLASSPAD_BASE_OPTIONS
+  }, [watchedPadType])
+
+  const watchedSize = form.watch("size") || ""
+  const glasspadSizeOptions = useMemo(() => {
+    if (watchedSize && !GLASSPAD_SIZE_OPTIONS.some((option) => option.value === watchedSize)) {
+      return [{ value: watchedSize, label: watchedSize }, ...GLASSPAD_SIZE_OPTIONS]
+    }
+    return GLASSPAD_SIZE_OPTIONS
+  }, [watchedSize])
+
   const watchedPollingRate = form.watch("pollingRate") || ""
   const pollingRateOptions = useMemo(() => {
     if (watchedPollingRate && !POLLING_RATE_OPTIONS.includes(watchedPollingRate)) {
@@ -1557,6 +1664,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           cons: Array.isArray(data.specs?.details?.cons) ? data.specs.details.cons.join("\n") : data.specs?.details?.cons ?? "",
           gallery: "",
           ...psuFormValuesFrom(data.specs?.details?.psu),
+          ...artFormValuesFrom(parseGlasspadArt(data.specs?.details?.art)),
           ...Object.fromEntries(
             BUY_LINK_PLATFORMS.map((platform) => [
               platform.field,
@@ -1631,6 +1739,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         setImages([data.image_url, ...galleryArr].filter(Boolean))
         setShapeImagePreview(data.specs?.details?.shapeImage ?? null)
         setTuningCurvePreview(data.specs?.details?.tuningCurveImage ?? null)
+        setGlideVideoPreview(data.specs?.details?.glideVideo ?? null)
+        setGlideVideoFile(null)
         setExpertAuthor(parseExpertAuthor(data.specs?.details?.expertAuthor))
         setShapeImageFile(null)
         setTuningCurveFile(null)
@@ -1719,11 +1829,27 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         tuningCurveUrl = curveData.publicUrl
       }
 
+      let glideVideoUrl = glideVideoFile ? null : glideVideoPreview
+      if (glideVideoFile && hasGlideVideo(data.category)) {
+        setUploading(true)
+        const videoForm = new FormData()
+        videoForm.set("file", glideVideoFile)
+        const videoRes = await fetch("/api/admin/peripherals/upload-video", {
+          method: "POST",
+          body: videoForm,
+        })
+        const videoData = (await videoRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
+        if (!videoRes.ok || !videoData?.publicUrl) {
+          throw new Error(videoData?.error ?? "Falha ao enviar o vídeo de deslize")
+        }
+        glideVideoUrl = videoData.publicUrl
+      }
+
       // Mesmo merge do preview: o que é do board entra primeiro, e os campos do
       // formulário mandam em cima (nenhuma chave de `buildSpecsPayload` começa com "admin").
       const specs = {
         ...boardSpecs,
-        ...buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl, tuningCurveImage: tuningCurveUrl, expertAuthor }),
+        ...buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl, tuningCurveImage: tuningCurveUrl, glideVideo: glideVideoUrl, expertAuthor }),
       }
 
       // Switches usam faixa de preço (priceTier); o valor numérico fica em 0.
@@ -1898,6 +2024,35 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const removeTuningCurve = () => {
     setTuningCurveFile(null)
     setTuningCurvePreview(null)
+  }
+
+  // O preview de um arquivo local é `blob:`; libera o anterior ao trocar ou remover.
+  const replaceGlideVideoPreview = (next: string | null) => {
+    setGlideVideoPreview((prev) => {
+      if (prev?.startsWith("blob:")) URL.revokeObjectURL(prev)
+      return next
+    })
+  }
+
+  const handleGlideVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    if (file.type !== "video/mp4") {
+      toast.error("Envie o vídeo em MP4.")
+      return
+    }
+    if (file.size > UPLOAD_LIMITS.video) {
+      toast.error(`O vídeo passa de ${formatUploadLimit(UPLOAD_LIMITS.video)}.`)
+      return
+    }
+    setGlideVideoFile(file)
+    replaceGlideVideoPreview(URL.createObjectURL(file))
+  }
+
+  const removeGlideVideo = () => {
+    setGlideVideoFile(null)
+    replaceGlideVideoPreview(null)
   }
 
   const toggleTag = (tag: Tag) =>
@@ -2382,10 +2537,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   if (field.key === "ratingSoftware") label = "Velocidade"
                   if (field.key === "ratingBattery" || field.key === "ratingQc") return null
                 }
+                // Glasspad usa o slot de manutenção (livre nessa categoria) para Embalagem.
                 if (watchedCategory === "glasspad") {
                   if (field.key === "ratingSoftware") label = "Base"
                   if (field.key === "ratingBuild") label = "Superfície"
                   if (field.key === "ratingBattery") label = "Velocidade"
+                  if (field.key === "ratingMaintenance") label = "Embalagem"
                 }
                 if (watchedCategory === "chairs") {
                   if (field.key === "ratingPerformance") label = "Conforto"
@@ -2415,7 +2572,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                   if (field.key === "ratingBattery") label = "Potência"
                   if (field.key === "ratingMaintenance") return null
                 }
-                if (watchedCategory !== "chairs" && watchedCategory !== "monitors" && field.key === "ratingMaintenance") return null
+                if (watchedCategory !== "chairs" && watchedCategory !== "monitors" && watchedCategory !== "glasspad" && field.key === "ratingMaintenance") return null
                 return (
                   <RatingInput
                     key={field.key}
@@ -3106,23 +3263,12 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Speed">Speed</SelectItem>
+                      <SelectItem value="Muito Speed">Muito Speed</SelectItem>
                       <SelectItem value="Control">Control</SelectItem>
+                      <SelectItem value="Muito Control">Muito Control</SelectItem>
                       <SelectItem value="Híbrido">Híbrido</SelectItem>
                       <SelectItem value="Híbrido + Speed">Híbrido + Speed</SelectItem>
                       <SelectItem value="Híbrido + Control">Híbrido + Control</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deslize</label>
-                  <Select value={form.watch("glide") || ""} onValueChange={(v) => form.setValue("glide", v)}>
-                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Rápido">Rápido</SelectItem>
-                      <SelectItem value="Devagar">Devagar</SelectItem>
-                      <SelectItem value="Equilibrado">Equilibrado</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -3154,14 +3300,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Base</label>
-                  <Select value={form.watch("padType") || ""} onValueChange={(v) => form.setValue("padType", v)}>
+                  <Select value={watchedPadType} onValueChange={(v) => form.setValue("padType", v)}>
                     <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Borracha">Borracha</SelectItem>
-                      <SelectItem value="Silicone">Silicone</SelectItem>
-                      <SelectItem value="Anti-slip Feets">Anti-slip Feets</SelectItem>
+                      {glasspadBaseOptions.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -3172,26 +3320,39 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="1mm">1mm</SelectItem>
-                      <SelectItem value="2mm">2mm</SelectItem>
-                      <SelectItem value="3mm">3mm</SelectItem>
-                      <SelectItem value="4mm">4mm</SelectItem>
-                      <SelectItem value="5mm">5mm</SelectItem>
+                      {GLASSPAD_THICKNESS_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Borda</label>
+                  <Select value={form.watch("edgeFinish") || ""} onValueChange={(v) => form.setValue("edgeFinish", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Polida">Polida</SelectItem>
+                      <SelectItem value="Pouco Polida">Pouco Polida</SelectItem>
+                      <SelectItem value="Sem tratamento">Sem tratamento</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Tamanho</label>
-                  <Select value={form.watch("size") || ""} onValueChange={(v) => form.setValue("size", v)}>
+                  <Select value={watchedSize} onValueChange={(v) => form.setValue("size", v)}>
                     <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="S">S</SelectItem>
-                      <SelectItem value="M">M</SelectItem>
-                      <SelectItem value="L">L</SelectItem>
-                      <SelectItem value="XL">XL</SelectItem>
-                      <SelectItem value="XXL">XXL</SelectItem>
+                      {glasspadSizeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -3600,6 +3761,128 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           </div>
         </FormSection>
 
+        {/* Mousepad/glasspad: vídeo curto do deslize, em loop na página pública. */}
+        {hasGlideVideo(watchedCategory) && (
+          <FormSection id="section-glide" title={"Deslize"} icon={<Video className="size-4" />} defaultOpen>
+            <div className="space-y-2">
+              <p className="text-[10px] text-muted-foreground/60">
+                {`Clipe curto (5 a 8 segundos) mostrando o deslize. MP4, até ${formatUploadLimit(UPLOAD_LIMITS.video)}. Toca sem som e em loop na página do periférico.`}
+              </p>
+              {glideVideoPreview ? (
+                <div className="relative group w-72 aspect-video rounded-lg overflow-hidden border border-border bg-black">
+                  <video src={glideVideoPreview} autoPlay muted loop playsInline className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={removeGlideVideo}
+                    className="absolute top-1 right-1 size-6 flex items-center justify-center rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/15 bg-[#141416] p-3 transition hover:border-primary/40 hover:bg-primary/[0.06]">
+                  <input accept="video/mp4" className="hidden" onChange={handleGlideVideoSelect} type="file" />
+                  <Upload className="size-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">{"Enviar vídeo"}</span>
+                </label>
+              )}
+            </div>
+          </FormSection>
+        )}
+
+        {/* Glasspad: Arte e raridade. Cada "Sim" abre os campos que dependem dele;
+            "Não" esconde e o save descarta (ver lib/glasspad-art.ts). */}
+        {watchedCategory === "glasspad" && (
+          <FormSection id="section-art" title={"Arte e raridade"} icon={<Palette className="size-4" />} defaultOpen>
+            <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Feito por artista?"}</label>
+                  <Select value={form.watch("artByArtist") || ""} onValueChange={(v) => {
+                    form.setValue("artByArtist", v)
+                    if (v !== "yes") {
+                      form.setValue("artistName", "")
+                      form.setValue("artistBio", "")
+                      form.setValue("artistSocial", "")
+                      form.clearErrors("artistSocial")
+                    }
+                  }}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Sim</SelectItem>
+                      <SelectItem value="no">Não</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              {form.watch("artByArtist") === "yes" && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Artista"}</label>
+                    <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Nome do artista" {...form.register("artistName")} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Rede social"}</label>
+                    <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="https://instagram.com/..." {...form.register("artistSocial")} />
+                    {form.formState.errors.artistSocial && <p className="text-xs text-red-400">{form.formState.errors.artistSocial.message}</p>}
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Bio do artista"}</label>
+                    <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Quem é, estilo, trabalhos conhecidos"} rows={3} maxLength={GLASSPAD_ARTIST_BIO_MAX_LENGTH} {...form.register("artistBio")} />
+                    <p className="text-right text-[10px] tabular-nums text-muted-foreground">
+                      {(form.watch("artistBio") ?? "").length}/{GLASSPAD_ARTIST_BIO_MAX_LENGTH}
+                    </p>
+                  </div>
+                </>
+              )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Uso de IA"}</label>
+                  <Select value={form.watch("artUsesAi") || ""} onValueChange={(v) => form.setValue("artUsesAi", v)}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Sim</SelectItem>
+                      <SelectItem value="no">Não</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Drop limitado?"}</label>
+                  <Select value={form.watch("artLimitedDrop") || ""} onValueChange={(v) => {
+                    form.setValue("artLimitedDrop", v)
+                    if (v !== "yes") {
+                      form.setValue("artDropQuantity", "")
+                      form.setValue("artLaunchCountry", "")
+                      form.clearErrors("artDropQuantity")
+                    }
+                  }}>
+                    <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yes">Sim</SelectItem>
+                      <SelectItem value="no">Não</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              {form.watch("artLimitedDrop") === "yes" && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Quantidade do drop"}</label>
+                    <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" inputMode="numeric" placeholder="500" {...form.register("artDropQuantity")} />
+                    {form.formState.errors.artDropQuantity && <p className="text-xs text-red-400">{form.formState.errors.artDropQuantity.message}</p>}
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"País de lançamento"}</label>
+                    <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="Brasil ou Global" {...form.register("artLaunchCountry")} />
+                  </div>
+                </>
+              )}
+            </div>
+          </FormSection>
+        )}
+
         {/* SECTION 7: Wiki / Conteúdo */}
         <FormSection id="section-wiki-content" forceOpen={forceOpenIds.has("section-wiki-content")} title={t.admin.tierlistForm.sectionWikiContent} icon={<FileText className="size-4" />} defaultOpen={false}>
           <div className="space-y-4">
@@ -3620,7 +3903,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
               </div>
             )}
 
-            {watchedCategory !== "psu" && (
+            {watchedCategory !== "psu" && watchedCategory !== "glasspad" && (
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-foreground">{"Software"}</label>
                 <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Plataformas, softwares e requisitos de compatibilidade"} rows={3} {...form.register("softwareInfo")} />

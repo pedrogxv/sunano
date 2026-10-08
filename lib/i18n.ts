@@ -329,6 +329,8 @@ type Translations = {
     ratingBattery: string
     ratingTyping: string
     ratingStitching: string
+    ratingSpeed: string
+    ratingPackaging: string
     ratingWarranty: string
     ratingPerformance: string
     ratingRipple: string
@@ -340,6 +342,16 @@ type Translations = {
     ratingQualityControl: string
     software: string
     softwareEmpty: string
+    artAndRarity: string
+    artByArtist: string
+    artAiUsage: string
+    artLimitedDrop: string
+    artDropQuantity: string
+    artDropUnits: string
+    artLaunchCountry: string
+    artArtistSocial: string
+    answerYes: string
+    answerNo: string
     communityReviews: string
     whereToBuy: string
     whereToBuyDesc: string
@@ -359,6 +371,8 @@ type Translations = {
     switchSound: string
     switchSoundDesc: string
     switchSoundEmpty: string
+    glide: string
+    glideDesc: string
     grip: string
     gripDesc: string
     youtubeReview: string
@@ -1431,6 +1445,8 @@ export const translations: Record<LocaleCode, Translations> = {
       ratingBattery: "Bateria",
       ratingTyping: "Digitação",
       ratingStitching: "Costura",
+      ratingSpeed: "Velocidade",
+      ratingPackaging: "Embalagem",
       ratingWarranty: "Garantia",
       ratingPerformance: "Performance",
       ratingRipple: "Ripple",
@@ -1442,6 +1458,16 @@ export const translations: Record<LocaleCode, Translations> = {
       ratingQualityControl: "Controle de Qualidade",
       software: "Software do Periférico",
       softwareEmpty: "Informacao de compatibilidade não cadastrada.",
+      artAndRarity: "Arte e raridade",
+      artByArtist: "Feito por artista",
+      artAiUsage: "Uso de IA",
+      artLimitedDrop: "Drop limitado",
+      artDropQuantity: "Quantidade do drop",
+      artDropUnits: "unidades",
+      artLaunchCountry: "País de lançamento",
+      artArtistSocial: "Rede social",
+      answerYes: "Sim",
+      answerNo: "Não",
       communityReviews: "Reviews da comunidade",
       whereToBuy: "Onde comprar",
       whereToBuyDesc: "Links oficiais e lojas recomendadas.",
@@ -1461,6 +1487,8 @@ export const translations: Record<LocaleCode, Translations> = {
       switchSound: "Som do Switch",
       switchSoundDesc: "Veja e ouça o switch em ação.",
       switchSoundEmpty: "Nenhum vídeo de som cadastrado.",
+      glide: "Deslize",
+      glideDesc: "O mouse deslizando sobre a superfície.",
       grip: "Pegada",
       gripDesc: "Recomendacao por tamanho de mao.",
       youtubeReview: "Review no Youtube",
@@ -2950,6 +2978,8 @@ export const translations: Record<LocaleCode, Translations> = {
       ratingBattery: "Battery",
       ratingTyping: "Typing",
       ratingStitching: "Stitching",
+      ratingSpeed: "Speed",
+      ratingPackaging: "Packaging",
       ratingWarranty: "Warranty",
       ratingPerformance: "Performance",
       ratingRipple: "Ripple",
@@ -2961,6 +2991,16 @@ export const translations: Record<LocaleCode, Translations> = {
       ratingQualityControl: "Quality Control",
       software: "Peripheral Software",
       softwareEmpty: "Compatibility information not available.",
+      artAndRarity: "Art and rarity",
+      artByArtist: "Made by an artist",
+      artAiUsage: "AI usage",
+      artLimitedDrop: "Limited drop",
+      artDropQuantity: "Drop size",
+      artDropUnits: "units",
+      artLaunchCountry: "Launch country",
+      artArtistSocial: "Social media",
+      answerYes: "Yes",
+      answerNo: "No",
       communityReviews: "Community reviews",
       whereToBuy: "Where to buy",
       whereToBuyDesc: "Official links and recommended stores.",
@@ -2980,6 +3020,8 @@ export const translations: Record<LocaleCode, Translations> = {
       switchSound: "Switch Sound",
       switchSoundDesc: "See and hear the switch in action.",
       switchSoundEmpty: "No sound video available.",
+      glide: "Glide",
+      glideDesc: "A mouse gliding across the surface.",
       grip: "Grip",
       gripDesc: "Recommendation by hand size.",
       youtubeReview: "YouTube Review",

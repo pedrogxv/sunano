@@ -13,13 +13,16 @@
 -- Produção conferida antes: 0 itens em tier de outro usuário (25 itens).
 -- O FK antigo (`user_tierlist_items_tier_id_fkey`) continua; o novo só
 -- acrescenta a exigência de o dono bater. Ambos em cascade.
+-- O FK depende da unique: sai antes dela, senão a segunda execução quebra
+-- com "other objects depend on it" (2BP01).
+alter table public.user_tierlist_items
+  drop constraint if exists user_tierlist_items_user_tier_fkey;
+
 alter table public.user_tierlist_tiers
   drop constraint if exists user_tierlist_tiers_user_id_id_key;
 alter table public.user_tierlist_tiers
   add constraint user_tierlist_tiers_user_id_id_key unique (user_id, id);
 
-alter table public.user_tierlist_items
-  drop constraint if exists user_tierlist_items_user_tier_fkey;
 alter table public.user_tierlist_items
   add constraint user_tierlist_items_user_tier_fkey
   foreign key (user_id, tier_id)

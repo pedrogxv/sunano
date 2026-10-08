@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, ShieldCheck, Sparkles, Star, Tag, Wrench } from "lucide-react"
+import { ArrowLeft, ArrowRight, Boxes, ChevronLeft, ChevronRight, Flame, Handshake, Loader2, ShieldCheck, Sparkles, Star, Tag, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { LaunchPreorderSection } from "@/components/store/LaunchPreorderSection"
@@ -59,6 +59,8 @@ interface StoreContentProps {
   /** Selos de curadoria e nota dos compradores, colados no Hero (/admin/store/hero). Só na Home. */
   heroTrust?: StoreHeroTrust
   /** Produtos institucionais/do site (category: "site") — seção "Itens para o site" da Home. */
+  /** Produtos da categoria "combos" (kits de periféricos) — seção "Combos Apelões" da Home. */
+  comboItems?: StoreProductCard[]
   siteItems?: StoreProductCard[]
   /** Produtos da categoria "services" — seção "Serviços" da Home. */
   serviceItems?: StoreProductCard[]
@@ -225,7 +227,7 @@ function ProductCarouselSection({
   )
 }
 
-export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], launchItems = [], heroSlides = [], heroTrust, siteItems = [], serviceItems = [], bestSellingItems = [], categoryBanners = [], pageSize, banner, initialCategory = null }: StoreContentProps) {
+export function StoreContent({ initialItems, initialTotal, initialFilterOptions, initialFeatured, preOrderItems = [], launchItems = [], heroSlides = [], heroTrust, comboItems = [], siteItems = [], serviceItems = [], bestSellingItems = [], categoryBanners = [], pageSize, banner, initialCategory = null }: StoreContentProps) {
   const searchParams = useSearchParams()
 
   // A TopBar cai no fallback "Sunano" sem isso — /loja não está no mapa de
@@ -733,6 +735,13 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
               title="Mais vendidos"
               icon={Flame}
               iconClassName="fill-current text-orange-500"
+            />
+            <ProductCarouselSection
+              items={comboItems}
+              eyebrow="Kits de periféricos"
+              title="Combos Apelões"
+              icon={Boxes}
+              iconClassName="text-orange-400"
             />
             <ProductCarouselSection
               items={siteItems}

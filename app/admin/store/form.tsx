@@ -378,6 +378,7 @@ const CATEGORIES = [
   { value: "dac_amp", label: "DAC/AMP" },
   { value: "feet", label: "Feet" },
   { value: "acessorio", label: "Acessório" },
+  { value: "combos", label: "Combos" },
   { value: "services", label: "Serviços" },
   { value: "outro", label: "Outro" },
 ]

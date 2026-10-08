@@ -49,6 +49,7 @@ const CATEGORY_SYNONYMS: Record<string, string[]> = {
   dac_amp: ["dac", "amp", "amplificador"],
   feet: ["feet", "skate", "skates", "pezinho", "pezinhos"],
   acessorio: ["acessorio", "acessorios"],
+  combos: ["combo", "combos", "kit", "kits"],
   services: ["servico", "servicos", "service", "services"],
 }
 

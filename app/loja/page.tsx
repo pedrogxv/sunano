@@ -60,6 +60,7 @@ export default async function LojaPage() {
     filterOptions,
     { items: featuredItems },
     { preorders: preOrderItems, launches: launchItems },
+    { items: comboItems },
     { items: siteItems },
     { items: serviceItems },
     bestSellingItems,
@@ -79,6 +80,12 @@ export default async function LojaPage() {
       pageSize: STORE_SHOWCASE_SLOTS,
     }),
     listLaunchAndPreorderProducts(12),
+    listStoreProductsPaginated({
+      type: "store",
+      categories: ["combos"],
+      page: 1,
+      pageSize: 12,
+    }),
     listStoreProductsPaginated({
       type: "store",
       categories: ["site"],
@@ -124,6 +131,7 @@ export default async function LojaPage() {
         launchItems={launchItems}
         heroSlides={heroSlides}
         heroTrust={heroTrust}
+        comboItems={comboItems}
         siteItems={siteItems}
         serviceItems={serviceItems}
         bestSellingItems={bestSellingItems}

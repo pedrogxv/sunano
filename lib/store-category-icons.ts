@@ -1,4 +1,4 @@
-import { Camera, Cable, Gamepad2, Headphones, Keyboard, Mic, Monitor, Mouse, Package, RectangleHorizontal, type LucideIcon } from "lucide-react"
+import { Boxes, Camera, Cable, Gamepad2, Headphones, Keyboard, Mic, Monitor, Mouse, Package, RectangleHorizontal, type LucideIcon } from "lucide-react"
 
 /** Grupos fixos do menu da Loja — Mouse/Teclado/Mousepad ficam sozinhos,
  *  Audio junta Headset/Iem/Dac e Outros pega o resto (Acessórios, Serviços...). */
@@ -18,6 +18,7 @@ export function classifyStoreNavGroup(category: string): StoreNavGroup {
  * de imagem da Loja, com fallback neutro pra categorias não reconhecidas.
  */
 const CATEGORY_ICON_RULES: { match: RegExp; icon: LucideIcon; tint: string }[] = [
+  { match: /^combos?$|^kits?$/i, icon: Boxes, tint: "oklch(0.72 0.17 30)" },
   { match: /mouse\s*pad|glasspad/i, icon: RectangleHorizontal, tint: "oklch(0.7 0.15 160)" },
   { match: /mouse/i, icon: Mouse, tint: "oklch(0.75 0.15 195)" },
   { match: /teclado|keyboard/i, icon: Keyboard, tint: "oklch(0.8 0.15 85)" },
@@ -53,6 +54,7 @@ const STORE_CATEGORY_LABELS: Record<string, string> = {
   audio: "Áudio",
   feet: "Feet",
   acessorio: "Acessório",
+  combos: "Combos",
   services: "Serviços",
   outro: "Outro",
 }

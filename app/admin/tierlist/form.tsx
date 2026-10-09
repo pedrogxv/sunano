@@ -433,6 +433,7 @@ function buildSpecsPayload(
     shapeImage?: string | null
     tuningCurveImage?: string | null
     glideVideo?: string | null
+    artistImage?: string | null
     expertAuthor?: PeripheralExpertAuthor | null
   }
 ) {
@@ -490,6 +491,7 @@ function buildSpecsPayload(
             byArtist: data.artByArtist,
             artistName: data.artistName,
             artistBio: data.artistBio,
+            artistImage: opts.artistImage,
             artistSocial: data.artistSocial,
             usesAi: data.artUsesAi,
             limitedDrop: data.artLimitedDrop,
@@ -593,7 +595,9 @@ const GLASSPAD_BASE_OPTIONS = [
   "Silicone",
 ]
 
-// Mousepad e glasspad têm o card "Deslize": um clipe curto (5-8s) em loop.
+// Mousepad e glasspad têm o card "Deslize": um clipe curto num player.
+const GLIDE_VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"]
+
 function hasGlideVideo(category: string | undefined) {
   return category === "mousepad" || category === "glasspad"
 }
@@ -1367,6 +1371,9 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
   const [glideVideoFile, setGlideVideoFile] = useState<File | null>(null)
   // URL gravada, ou `blob:` do arquivo escolhido e ainda não enviado (só no preview).
   const [glideVideoPreview, setGlideVideoPreview] = useState<string | null>(null)
+  // Glasspad: foto do artista no card "Arte e raridade".
+  const [artistImageFile, setArtistImageFile] = useState<File | null>(null)
+  const [artistImagePreview, setArtistImagePreview] = useState<string | null>(null)
 
   const form = useForm<PeripheralFormData>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1453,7 +1460,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     image_url: images[0] ?? null,
     specs: {
       ...boardSpecs,
-      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview, tuningCurveImage: tuningCurvePreview, glideVideo: glideVideoPreview, expertAuthor }),
+      ...buildSpecsPayload(watchedAll, { selectedTierlistCategories, gallery: previewGallery, shapeImage: shapeImagePreview, tuningCurveImage: tuningCurvePreview, glideVideo: glideVideoPreview, artistImage: artistImagePreview, expertAuthor }),
     },
   }
 
@@ -1741,6 +1748,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         setTuningCurvePreview(data.specs?.details?.tuningCurveImage ?? null)
         setGlideVideoPreview(data.specs?.details?.glideVideo ?? null)
         setGlideVideoFile(null)
+        setArtistImagePreview(parseGlasspadArt(data.specs?.details?.art)?.artistImage ?? null)
+        setArtistImageFile(null)
         setExpertAuthor(parseExpertAuthor(data.specs?.details?.expertAuthor))
         setShapeImageFile(null)
         setTuningCurveFile(null)
@@ -1845,11 +1854,27 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
         glideVideoUrl = videoData.publicUrl
       }
 
+      let artistImageUrl = artistImagePreview
+      if (artistImageFile && data.category === "glasspad" && data.artByArtist === "yes") {
+        setUploading(true)
+        const artistForm = new FormData()
+        artistForm.set("file", artistImageFile)
+        const artistRes = await fetch("/api/admin/peripherals/upload-image", {
+          method: "POST",
+          body: artistForm,
+        })
+        const artistData = (await artistRes.json().catch(() => null)) as { publicUrl?: string; error?: string } | null
+        if (!artistRes.ok || !artistData?.publicUrl) {
+          throw new Error(artistData?.error ?? "Falha ao enviar a foto do artista")
+        }
+        artistImageUrl = artistData.publicUrl
+      }
+
       // Mesmo merge do preview: o que é do board entra primeiro, e os campos do
       // formulário mandam em cima (nenhuma chave de `buildSpecsPayload` começa com "admin").
       const specs = {
         ...boardSpecs,
-        ...buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl, tuningCurveImage: tuningCurveUrl, glideVideo: glideVideoUrl, expertAuthor }),
+        ...buildSpecsPayload(data, { selectedTierlistCategories, gallery: finalGallery, shapeImage: shapeImageUrl, tuningCurveImage: tuningCurveUrl, glideVideo: glideVideoUrl, artistImage: artistImageUrl, expertAuthor }),
       }
 
       // Switches usam faixa de preço (priceTier); o valor numérico fica em 0.
@@ -2026,6 +2051,20 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     setTuningCurvePreview(null)
   }
 
+  const handleArtistImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    const preview = await fileToDataUrl(file)
+    setArtistImageFile(file)
+    setArtistImagePreview(preview)
+  }
+
+  const removeArtistImage = () => {
+    setArtistImageFile(null)
+    setArtistImagePreview(null)
+  }
+
   // O preview de um arquivo local é `blob:`; libera o anterior ao trocar ou remover.
   const replaceGlideVideoPreview = (next: string | null) => {
     setGlideVideoPreview((prev) => {
@@ -2038,8 +2077,8 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
     const file = e.target.files?.[0]
     e.target.value = ""
     if (!file) return
-    if (file.type !== "video/mp4") {
-      toast.error("Envie o vídeo em MP4.")
+    if (!GLIDE_VIDEO_MIME_TYPES.includes(file.type) && !/\.(mp4|mov)$/i.test(file.name)) {
+      toast.error("Envie o vídeo em MP4 ou MOV.")
       return
     }
     if (file.size > UPLOAD_LIMITS.video) {
@@ -3761,16 +3800,16 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
           </div>
         </FormSection>
 
-        {/* Mousepad/glasspad: vídeo curto do deslize, em loop na página pública. */}
+        {/* Mousepad/glasspad: vídeo curto do deslize, num player na página pública. */}
         {hasGlideVideo(watchedCategory) && (
           <FormSection id="section-glide" title={"Deslize"} icon={<Video className="size-4" />} defaultOpen>
             <div className="space-y-2">
               <p className="text-[10px] text-muted-foreground/60">
-                {`Clipe curto (5 a 8 segundos) mostrando o deslize. MP4, até ${formatUploadLimit(UPLOAD_LIMITS.video)}. Toca sem som e em loop na página do periférico.`}
+                {`Clipe curto mostrando o deslize. MP4 ou MOV, até ${formatUploadLimit(UPLOAD_LIMITS.video)}. Aparece num player na página do periférico.`}
               </p>
               {glideVideoPreview ? (
                 <div className="relative group w-72 aspect-video rounded-lg overflow-hidden border border-border bg-black">
-                  <video src={glideVideoPreview} autoPlay muted loop playsInline className="h-full w-full object-cover" />
+                  <video src={glideVideoPreview} controls playsInline preload="metadata" className="h-full w-full object-contain" />
                   <button
                     type="button"
                     onClick={removeGlideVideo}
@@ -3781,7 +3820,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                 </div>
               ) : (
                 <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/15 bg-[#141416] p-3 transition hover:border-primary/40 hover:bg-primary/[0.06]">
-                  <input accept="video/mp4" className="hidden" onChange={handleGlideVideoSelect} type="file" />
+                  <input accept="video/mp4,video/quicktime,.mp4,.mov" className="hidden" onChange={handleGlideVideoSelect} type="file" />
                   <Upload className="size-4 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">{"Enviar vídeo"}</span>
                 </label>
@@ -3804,6 +3843,7 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                       form.setValue("artistBio", "")
                       form.setValue("artistSocial", "")
                       form.clearErrors("artistSocial")
+                      removeArtistImage()
                     }
                   }}>
                     <SelectTrigger className="border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]">
@@ -3826,9 +3866,31 @@ export const PeripheralForm: React.FC<PeripheralEditProps> = ({ peripheralId }) 
                     <Input className="h-9 border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder="https://instagram.com/..." {...form.register("artistSocial")} />
                     {form.formState.errors.artistSocial && <p className="text-xs text-red-400">{form.formState.errors.artistSocial.message}</p>}
                   </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Foto do artista"}</label>
+                    {artistImagePreview ? (
+                      <div className="relative group size-24 rounded-full overflow-hidden border border-border bg-black">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={artistImagePreview} alt="Foto do artista" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={removeArtistImage}
+                          className="absolute inset-0 flex items-center justify-center bg-black/60 text-white opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex w-fit cursor-pointer items-center gap-2 rounded-lg border border-dashed border-white/15 bg-[#141416] p-3 transition hover:border-primary/40 hover:bg-primary/[0.06]">
+                        <input accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleArtistImageSelect} type="file" />
+                        <Upload className="size-4 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">{"Enviar foto"}</span>
+                      </label>
+                    )}
+                  </div>
                   <div className="space-y-1.5 md:col-span-2">
                     <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{"Bio do artista"}</label>
-                    <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Quem é, estilo, trabalhos conhecidos"} rows={3} maxLength={GLASSPAD_ARTIST_BIO_MAX_LENGTH} {...form.register("artistBio")} />
+                    <Textarea className="resize-none border-white/10 bg-[#1a1a1d] shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset] transition-colors hover:border-white/20 focus-visible:bg-[#202024]" placeholder={"Quem é, estilo, trabalhos conhecidos"} rows={4} maxLength={GLASSPAD_ARTIST_BIO_MAX_LENGTH} {...form.register("artistBio")} />
                     <p className="text-right text-[10px] tabular-nums text-muted-foreground">
                       {(form.watch("artistBio") ?? "").length}/{GLASSPAD_ARTIST_BIO_MAX_LENGTH}
                     </p>

@@ -14,6 +14,7 @@ import { SiShopee } from "react-icons/si"
 
 import { Badge } from "@/components/ui/badge"
 import { UserAvatar } from "@/components/ui/user-avatar"
+import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -911,13 +912,28 @@ export function PeripheralDetailView({
           { label: t.peripheralDetail.spec.rtMin, value: details.rtMin, group: "performance" },
           { label: t.peripheralDetail.spec.features, value: details.features, group: "performance" },
         ]
+      // Mesma ordem e mesmos campos do formulário de admin de cada categoria:
+      // glasspad não tem Superfície nem Deslize (o vidro é a superfície) e tem Borda.
       case "mousepad":
-      case "glasspad":
         return [...specsBase,
           { label: t.peripheralDetail.spec.surface, value: surfaceValue, group: "specs" },
-          { label: t.peripheralDetail.spec.type, value: specs.padType ?? details.padType, group: "specs" },
-          { label: t.peripheralDetail.spec.size, value: specs.size ?? details.size, group: "specs" },
           { label: t.peripheralDetail.spec.profile, value: profileValue, group: "specs" },
+          { label: t.peripheralDetail.spec.padGlide, value: specs.glide, group: "specs" },
+          { label: t.peripheralDetail.spec.padSpeed, value: specs.padSpeed, group: "specs" },
+          { label: t.peripheralDetail.spec.stoppingPower, value: specs.stoppingPower, group: "specs" },
+          { label: t.peripheralDetail.spec.padType, value: specs.padType ?? details.padType, group: "specs" },
+          { label: t.peripheralDetail.spec.thickness, value: specs.thickness, group: "specs" },
+          { label: t.peripheralDetail.spec.size, value: specs.size ?? details.size, group: "specs" },
+        ]
+      case "glasspad":
+        return [...specsBase,
+          { label: t.peripheralDetail.spec.profile, value: profileValue, group: "specs" },
+          { label: t.peripheralDetail.spec.padSpeed, value: specs.padSpeed, group: "specs" },
+          { label: t.peripheralDetail.spec.stoppingPower, value: specs.stoppingPower, group: "specs" },
+          { label: t.peripheralDetail.spec.padType, value: specs.padType ?? details.padType, group: "specs" },
+          { label: t.peripheralDetail.spec.thickness, value: specs.thickness, group: "specs" },
+          { label: t.peripheralDetail.spec.edgeFinish, value: specs.edgeFinish, group: "specs" },
+          { label: t.peripheralDetail.spec.size, value: specs.size ?? details.size, group: "specs" },
         ]
       case "monitors":
         return [...specsBase,
@@ -1131,9 +1147,20 @@ export function PeripheralDetailView({
                     {glasspadArt.byArtist && (
                       <ArtRow label={t.peripheralDetail.artByArtist} value={glasspadArt.byArtist === "yes" ? t.peripheralDetail.answerYes : t.peripheralDetail.answerNo} />
                     )}
-                    {glasspadArt.byArtist === "yes" && (glasspadArt.artistName || glasspadArt.artistBio || artistSocialHref) && (
+                    {glasspadArt.byArtist === "yes" && (glasspadArt.artistName || glasspadArt.artistBio || glasspadArt.artistImage || artistSocialHref) && (
                       <div className="space-y-1 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-                        {glasspadArt.artistName && <p className="font-semibold text-foreground">{glasspadArt.artistName}</p>}
+                        {(glasspadArt.artistImage || glasspadArt.artistName) && (
+                          <div className="flex items-center gap-3 pb-1">
+                            {glasspadArt.artistImage && (
+                              <ProfileAvatar
+                                name={glasspadArt.artistName ?? t.peripheralDetail.artByArtist}
+                                avatarUrl={glasspadArt.artistImage}
+                                size="lg"
+                              />
+                            )}
+                            {glasspadArt.artistName && <p className="font-semibold text-foreground">{glasspadArt.artistName}</p>}
+                          </div>
+                        )}
                         {glasspadArt.artistBio && (
                           <p className="text-xs text-muted-foreground break-words whitespace-pre-wrap">{glasspadArt.artistBio}</p>
                         )}
@@ -1505,13 +1532,11 @@ export function PeripheralDetailView({
                         <video
                           key={glideVideo}
                           src={glideVideo}
-                          autoPlay
-                          muted
-                          loop
+                          controls
                           playsInline
                           preload="metadata"
                           aria-label={`${t.peripheralDetail.glide}: ${data.name}`}
-                          className="h-full w-full object-cover"
+                          className="h-full w-full object-contain"
                         />
                       </div>
                     </CardContent>

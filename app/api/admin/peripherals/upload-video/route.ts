@@ -8,11 +8,15 @@ import { validateVideoUpload } from "@/lib/server/upload-validation"
 import { UPLOAD_LIMITS } from "@/lib/upload-limits"
 
 /**
- * Vídeo de deslize de mousepad/glasspad (clipe curto em loop na página do
- * periférico). Bucket próprio, só MP4 (migration 20261224000000): o
- * `peripherals` aceita só imagem.
+ * Vídeo de deslize de mousepad/glasspad (player na página do periférico).
+ * Bucket próprio (migration 20261224000000): o `peripherals` aceita só imagem.
+ *
+ * Aceita MP4 e MOV, mas grava tudo como `video/mp4`: o bucket só libera esse
+ * tipo, e o Firefox recusa `video/quicktime` mesmo quando o vídeo dentro é o
+ * H.264 de sempre. MOV e MP4 são o mesmo formato de caixas, e os navegadores
+ * tocam o .mov servido como MP4.
  */
-const ALLOWED_MIME_TYPES = ["video/mp4"]
+const ALLOWED_MIME_TYPES = ["video/mp4", "video/quicktime"]
 const STORAGE_BUCKET = "peripheral-videos"
 
 export const dynamic = "force-dynamic"
@@ -42,7 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: validated.error }, { status: 400 })
   }
 
-  const filename = `glide-${Date.now()}-${crypto.randomUUID()}.${validated.extension}`
+  const filename = `glide-${Date.now()}-${crypto.randomUUID()}.mp4`
   const db = createSupabaseAdminClient()
 
   const { error } = await db.storage
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest) {
     // Nome com timestamp nunca é reaproveitado (trocar o vídeo gera path novo),
     // então cachear por um ano é seguro, igual às imagens.
     .upload(filename, validated.bytes, {
-      contentType: validated.mime,
+      contentType: "video/mp4",
       cacheControl: IMMUTABLE_CACHE_CONTROL,
       upsert: false,
     })

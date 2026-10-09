@@ -414,6 +414,11 @@ type Translations = {
       padType: string
       size: string
       profile: string
+      thickness: string
+      padGlide: string
+      padSpeed: string
+      stoppingPower: string
+      edgeFinish: string
       panel: string
       refreshRate: string
       compatibility: string
@@ -1526,9 +1531,14 @@ export const translations: Record<LocaleCode, Translations> = {
         rtMin: "RT Mínimo",
         features: "Features",
         surface: "Superfície",
-        padType: "Tipo",
+        padType: "Base",
         size: "Tamanho",
-        profile: "Profile",
+        profile: "Perfil",
+        thickness: "Espessura",
+        padGlide: "Deslize",
+        padSpeed: "Velocidade",
+        stoppingPower: "Poder de parada",
+        edgeFinish: "Borda",
         panel: "Painel",
         refreshRate: "Taxa de atualização",
         compatibility: "Compatibilidade",
@@ -3059,9 +3069,14 @@ export const translations: Record<LocaleCode, Translations> = {
         rtMin: "Min RT",
         features: "Features",
         surface: "Surface",
-        padType: "Type",
+        padType: "Base",
         size: "Size",
         profile: "Profile",
+        thickness: "Thickness",
+        padGlide: "Glide",
+        padSpeed: "Speed",
+        stoppingPower: "Stopping power",
+        edgeFinish: "Edge",
         panel: "Panel",
         refreshRate: "Refresh rate",
         compatibility: "Compatibility",

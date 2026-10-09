@@ -77,19 +77,32 @@ export async function validateImageUpload(
 }
 
 /** Detecta MP4 pelos bytes 4-7, que são a marca ASCII "ftyp" da box de tipo do arquivo. */
+// Átomos com que um .mov antigo (sem `ftyp`) costuma abrir.
+const QUICKTIME_LEADING_ATOMS = new Set(["moov", "mdat", "wide", "free", "skip"])
+
+/**
+ * MP4 e MOV são o mesmo formato de caixas (ISO BMFF nasceu do QuickTime): o que
+ * os separa é a marca do `ftyp` ("qt  " = QuickTime) ou, no .mov antigo, a falta
+ * do `ftyp`. Quem só aceita MP4 continua recusando MOV pelo `allowedMimeTypes`.
+ */
 export function detectVideoType(bytes: Uint8Array): { mime: string; extension: string } | null {
-  if (
-    bytes.length >= 12 &&
-    bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70 // "ftyp"
-  ) {
-    return { mime: "video/mp4", extension: "mp4" }
+  if (bytes.length < 12) return null
+  const atom = String.fromCharCode(bytes[4], bytes[5], bytes[6], bytes[7])
+  if (atom === "ftyp") {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11])
+    return brand === "qt  "
+      ? { mime: "video/quicktime", extension: "mov" }
+      : { mime: "video/mp4", extension: "mp4" }
+  }
+  if (QUICKTIME_LEADING_ATOMS.has(atom)) {
+    return { mime: "video/quicktime", extension: "mov" }
   }
   return null
 }
 
 /**
  * Valida um `File` de vídeo: checa tamanho, MIME declarado E os bytes reais
- * (magic bytes do MP4). Mesmo formato de retorno de `validateImageUpload`.
+ * (magic bytes do MP4/MOV). Mesmo formato de retorno de `validateImageUpload`.
  */
 export async function validateVideoUpload(
   file: File,
@@ -110,7 +123,7 @@ export async function validateVideoUpload(
   const detected = detectVideoType(bytes)
 
   if (!detected || !options.allowedMimeTypes.includes(detected.mime)) {
-    return { ok: false, error: "O conteúdo do arquivo não corresponde a um vídeo MP4 válido." }
+    return { ok: false, error: "O conteúdo do arquivo não corresponde a um vídeo válido." }
   }
 
   return { ok: true, extension: detected.extension, mime: detected.mime, bytes }

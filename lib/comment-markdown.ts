@@ -68,7 +68,10 @@ const HEADING_PATTERN = /^[ \t]*(#{1,3})[ \t]+/
  * `FormattedText`/`CommentBody`).
  */
 export function parseTextLines(body: string): TextLine[] {
-  return body.split("\n").map((line) => {
+  // Texto colado do Windows/Word chega com `\r\n`. Partindo só no `\n`, o `\r`
+  // sobrava no fim da linha e o `pre-wrap` o desenhava como mais uma quebra:
+  // cada parágrafo colado ganhava linhas em branco a mais que os digitados.
+  return body.split(/\r\n?|\n/).map((line) => {
     const bulletMatch = line.match(BULLET_PATTERN)
     if (bulletMatch) {
       return { bullet: true, heading: null, segments: parseTextMarkdown(line.slice(bulletMatch[0].length)) }

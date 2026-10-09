@@ -50,7 +50,8 @@ const HEADING_CLASS: Record<1 | 2 | 3, string> = {
  * fórum/comentários, como a descrição de produto.
  */
 export function FormattedText({ text }: { text: string }) {
-  const lines = parseTextLines(text)
+  // Quebra no começo/fim do texto só empurra o card (com `pre-wrap` ela vira espaço).
+  const lines = parseTextLines(text.replace(/^[\r\n]+|[\r\n]+$/g, ""))
 
   const blocks: { bullet: boolean; heading: 1 | 2 | 3 | null; lines: (typeof lines)[number][] }[] = []
   for (const line of lines) {

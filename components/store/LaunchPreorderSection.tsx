@@ -4,6 +4,7 @@ import { useRef } from "react"
 import { ChevronLeft, ChevronRight, Megaphone, Rocket } from "lucide-react"
 
 import { LaunchCard } from "@/components/store/LaunchCard"
+import { STORE_CARD_RAIL_CLASS } from "@/components/store/card-rail"
 import { PreorderCard } from "@/components/store/PreorderCard"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 
@@ -49,7 +50,7 @@ function Row({
           </div>
         )}
       </div>
-      <div ref={scrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 pt-1 scrollbar-hide sm:gap-3.5 lg:-mx-8 lg:px-8">
+      <div ref={scrollRef} className={STORE_CARD_RAIL_CLASS}>
         {children}
       </div>
     </div>

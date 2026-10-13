@@ -5,10 +5,12 @@ import { dbErrorResponse } from "@/lib/db-errors"
 import { ORDER_PAID_STATUSES } from "@/lib/order-status"
 import { orderHasService } from "@/lib/server/repositories/support-repository"
 import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
+import { markStripeOrdersPaid } from "@/lib/server/repositories/stripe-orders-repository"
 
 /**
  * Usada pela página de checkout PIX para fazer polling do status do
- * pagamento enquanto aguarda o webhook do Asaas confirmar.
+ * pagamento enquanto aguarda o webhook (Asaas/Stripe) confirmar. Pedido do
+ * Stripe também é conferido na origem a cada consulta (ver abaixo).
  *
  * Posse do pedido é provada SÓ pela sessão: o pedido tem que ser do usuário
  * logado (`metadata.user_id`), e qualquer outro caso responde 404 — sem
@@ -58,6 +60,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // resposta. Sem o parâmetro a resposta segue completa (primeira carga,
   // recarregar a página, qualquer outro consumidor).
   const slim = request.nextUrl.searchParams.get("slim") === "1"
+
+  // Rede de segurança do webhook do Stripe: enquanto o pedido está pendente,
+  // o polling confere o pagamento NA ORIGEM. Em 13/10/2026 o primeiro PIX
+  // live foi pago, o `payment_intent.succeeded` não foi entregue e a tela
+  // ficou em "Aguardando" para sempre: ela só lia o banco. `markStripeOrdersPaid`
+  // é o mesmo caminho do webhook (relê o PaymentIntent, só age em `succeeded`,
+  // UPDATE condicional), então chamar dos dois lados não duplica efeito.
+  if (order.status === "pending" && order.stripe_payment_intent_id) {
+    try {
+      await markStripeOrdersPaid(order.stripe_payment_intent_id)
+      const { data: fresh } = await db.from("store_orders").select("status").eq("id", order.id).single()
+      if (fresh?.status) order.status = fresh.status
+    } catch (err) {
+      console.error(`[orders/${order.id}] conferência no Stripe falhou:`, err)
+    }
+  }
 
   // A tela de pagamento só distingue "ainda não pagou" de "pagou". Pago sem
   // endereço é `awaiting_shipping_info` no banco (e depois vem `shipped`,

@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowRight, Boxes, ChevronLeft, ChevronRight, Flame, Handsha
 import { cn } from "@/lib/utils"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { LaunchPreorderSection } from "@/components/store/LaunchPreorderSection"
+import { STORE_CARD_RAIL_CLASS } from "@/components/store/card-rail"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
@@ -213,7 +214,7 @@ function ProductCarouselSection({
           </div>
         )}
       </div>
-      <div ref={scrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 scrollbar-hide sm:gap-3.5 lg:-mx-8 lg:px-8">
+      <div ref={scrollRef} className={STORE_CARD_RAIL_CLASS}>
         {items.map((product) => (
           <div
             key={product.id}
@@ -710,7 +711,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
                 </div>
               )}
             </div>
-            <div ref={featuredScrollRef} className="-mx-4 flex gap-3 overflow-x-auto px-4 pt-1 pb-2 scrollbar-hide sm:gap-3.5 lg:-mx-8 lg:px-8">
+            <div ref={featuredScrollRef} className={STORE_CARD_RAIL_CLASS}>
               {featuredItems.map((product) => (
                 <div key={product.id} className="w-[188px] shrink-0 sm:w-[258px]">
                   <ProductCard {...product} />

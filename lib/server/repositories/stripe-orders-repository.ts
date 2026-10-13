@@ -145,6 +145,9 @@ export async function markStripeOrdersPaid(
       orderId: order.id,
       status: "payment_mismatch",
       actor: "webhook-stripe",
+      // Também roda a cada consulta do polling do PIX (rede de segurança do
+      // webhook, em /api/store/orders/[id]): sem a chave, o aviso repetiria.
+      eventKey: `underpaid:${paymentIntentId}`,
       note: `Stripe confirmou R$ ${(paidCents / 100).toFixed(2)} para um pedido de R$ ${(order.total_cents / 100).toFixed(2)} (${paymentIntentId}).`,
     })
   }

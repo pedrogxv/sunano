@@ -11,6 +11,7 @@ import {
   refundOrder,
 } from "@/lib/server/repositories/orders-repository"
 import { registerManualPayment } from "@/lib/server/repositories/order-manual-payment-repository"
+import { approveStripeCardReview } from "@/lib/server/repositories/stripe-orders-repository"
 
 const patchSchema = z.discriminatedUnion("action", [
   z.object({
@@ -30,6 +31,9 @@ const patchSchema = z.discriminatedUnion("action", [
     action: z.literal("cancel"),
     reason: z.string().trim().max(300).optional(),
   }),
+  // Cartão do Stripe autorizado e segurado para revisão: aprovar = capturar.
+  // Recusar é o `cancel` de sempre (solta a autorização).
+  z.object({ action: z.literal("approve_card_review") }),
   // Pago por fora do site (link avulso da Asaas, PIX direto).
   z.object({
     action: z.literal("manual_payment"),
@@ -70,6 +74,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       totalCents: manual.totalCents,
       manualPayment: manual.manualPayment,
     })
+  }
+
+  if (parsed.data.action === "approve_card_review") {
+    const approved = await approveStripeCardReview(id, auth.profile.id)
+    if (!approved.ok) {
+      return NextResponse.json({ error: approved.error }, { status: approved.status })
+    }
+    return NextResponse.json({ ok: true })
   }
 
   const result =

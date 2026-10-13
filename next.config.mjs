@@ -14,15 +14,22 @@ const isDev = process.env.NODE_ENV !== "production"
 // `safeHref` (lib/safe-url.ts). `upgrade-insecure-requests` fecha mixed content.
 const csp = [
 	"default-src 'self'",
-	`script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com${isDev ? " 'unsafe-eval'" : ""}`,
+	// js.stripe.com: formulário de cartão da Loja (Payment Element, /checkout/card).
+	// Lista oficial em https://docs.stripe.com/security/guide#content-security-policy
+	`script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://*.js.stripe.com${isDev ? " 'unsafe-eval'" : ""}`,
 	"style-src 'self' 'unsafe-inline'",
 	"img-src 'self' data: blob: https:",
 	"font-src 'self' data:",
+	// <video> sem media-src cai no default-src 'self': o vídeo de deslize
+	// (Storage do Supabase) e a prévia local (blob:) do admin ficavam bloqueados.
+	"media-src 'self' blob: https://*.supabase.co",
 	// api.klipy.com: o seletor de GIF chama o KLIPY direto do browser (exigência
 	// deles — sem proxy). static*.klipy.com serve as miniaturas via <img> (já
 	// coberto por img-src https:), mas o share trigger é um POST → connect-src.
-	`connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://api.klipy.com${isDev ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
-	"frame-src https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com",
+	`connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://api.klipy.com https://api.stripe.com${isDev ? " ws://localhost:* ws://127.0.0.1:*" : ""}`,
+	// Stripe: os campos do cartão são iframes de js.stripe.com, e o desafio do
+	// banco (3D Secure) abre em hooks.stripe.com — sem ele o 3DS não aparece.
+	"frame-src https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com",
 	"object-src 'none'",
 	"base-uri 'self'",
 	"form-action 'self'",

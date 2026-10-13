@@ -37,6 +37,10 @@ export function renderTextSegments(segments: TextSegment[]) {
   })
 }
 
+function isBlankLine(line: ReturnType<typeof parseTextLines>[number]) {
+  return !line.bullet && !line.heading && line.segments.every((segment) => !segment.text.trim())
+}
+
 const HEADING_CLASS: Record<1 | 2 | 3, string> = {
   1: "text-xl font-semibold",
   2: "text-lg font-semibold",
@@ -48,14 +52,33 @@ const HEADING_CLASS: Record<1 | 2 | 3, string> = {
  * `==destaque==`, `[texto](url)`, `- item` para lista, `#`/`##`/`###` para
  * título) sem a lógica de @menções do `CommentBody` — pra textos fora do
  * fórum/comentários, como a descrição de produto.
+ *
+ * `paragraphs`: linha em branco separa PARÁGRAFO (`<p>` com margem), em vez de
+ * virar uma linha vazia inteira sob `pre-wrap`. Com o modo antigo, cada
+ * Enter duplo no admin abria um buraco do tamanho de uma linha de texto — e
+ * dois ou três Enters seguidos, um buraco maior ainda. O container NÃO deve
+ * ter `whitespace-pre-wrap` nesse modo (as quebras simples saem como `<br>`).
  */
-export function FormattedText({ text }: { text: string }) {
+export function FormattedText({ text, paragraphs = false }: { text: string; paragraphs?: boolean }) {
   // Quebra no começo/fim do texto só empurra o card (com `pre-wrap` ela vira espaço).
   const lines = parseTextLines(text.replace(/^[\r\n]+|[\r\n]+$/g, ""))
 
   const blocks: { bullet: boolean; heading: 1 | 2 | 3 | null; lines: (typeof lines)[number][] }[] = []
   for (const line of lines) {
+    if (paragraphs && isBlankLine(line)) {
+      // Linha vazia fecha o bloco atual; várias seguidas contam como uma só.
+      if (blocks.length > 0 && blocks[blocks.length - 1].lines.length > 0) {
+        blocks.push({ bullet: false, heading: null, lines: [] })
+      }
+      continue
+    }
     const last = blocks[blocks.length - 1]
+    if (paragraphs && last && last.lines.length === 0) {
+      last.bullet = line.bullet
+      last.heading = line.heading
+      last.lines.push(line)
+      continue
+    }
     if (last && last.bullet === line.bullet && last.heading === line.heading && !line.heading) {
       last.lines.push(line)
     } else {
@@ -84,6 +107,19 @@ export function FormattedText({ text }: { text: string }) {
                 </li>
               ))}
             </ul>
+          )
+        }
+        if (paragraphs) {
+          if (block.lines.length === 0) return null
+          return (
+            <p key={blockIndex}>
+              {block.lines.map((line, lineIndex) => (
+                <Fragment key={lineIndex}>
+                  {lineIndex > 0 && <br />}
+                  {renderTextSegments(line.segments)}
+                </Fragment>
+              ))}
+            </p>
           )
         }
         return (

@@ -58,10 +58,11 @@ type ThreadRow = {
  * Origem do evento, só para a assinatura do card ("via …"). Deixa óbvio no
  * canal se quem mexeu foi o gateway, o cron ou uma pessoa.
  */
-export type DiscordOrderActor = "webhook-asaas" | "admin" | "cron" | "checkout" | "cliente"
+export type DiscordOrderActor = "webhook-asaas" | "webhook-stripe" | "admin" | "cron" | "checkout" | "cliente"
 
 const ACTOR_LABEL: Record<DiscordOrderActor, string> = {
   "webhook-asaas": "webhook Asaas",
+  "webhook-stripe": "webhook Stripe",
   admin: "painel do admin",
   cron: "rotina automática",
   checkout: "checkout da loja",

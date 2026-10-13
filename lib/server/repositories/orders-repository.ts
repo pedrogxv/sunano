@@ -10,6 +10,9 @@ import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-re
 import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repository"
 import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 import { computeEffectivePrice } from "@/lib/store-pricing"
+import { getSelectionRulesForCheckout } from "@/lib/server/repositories/store-repository"
+import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
+import type { OrderPaymentSourceFilter, PaymentGateway } from "@/lib/payment-gateways"
 import {
   shippingAddressColumns,
   type ShippingAddressInput,
@@ -90,6 +93,39 @@ export function parseOrderKind(value: string | null | undefined): OrderKind {
 function requiresShippingFor(kind: OrderKind): boolean | null {
   if (kind === "all") return null
   return kind === "product"
+}
+
+/**
+ * Como cada gateway se reconhece numa linha de `store_orders`. Mesma regra de
+ * `orderPaymentGateway` (lib/payment-gateways.ts), escrita como filtro do
+ * PostgREST para recortar no banco. É `Record<PaymentGateway, …>` de
+ * propósito: gateway novo não compila até ganhar o seu ramo aqui.
+ *
+ * Asaas é o "resto": sem referência de Stripe e não pago com Aura (inclui os
+ * legados de gateways que já saíram, como o `orderPaymentGateway`).
+ */
+type OrderFilterQuery<T> = {
+  eq: (col: string, val: unknown) => T
+  is: (col: string, val: null) => T
+  or: (filters: string) => T
+}
+
+const GATEWAY_ORDER_FILTER: Record<PaymentGateway, <T extends OrderFilterQuery<T>>(query: T) => T> = {
+  stripe: (query) => query.or("stripe_payment_intent_id.not.is.null,stripe_session_id.not.is.null"),
+  asaas: (query) =>
+    query
+      .is("stripe_payment_intent_id", null)
+      .is("stripe_session_id", null)
+      // `payment_method` aceita null; `neq` sozinho descartaria essas linhas.
+      .or("payment_method.is.null,payment_method.neq.aura"),
+}
+
+/** Recorte por gateway (ou Aura) numa query de `store_orders`. */
+function withPaymentSource<T>(query: T, source: OrderPaymentSourceFilter): T {
+  if (source === "all") return query
+  const q = query as unknown as OrderFilterQuery<T>
+  if (source === "aura") return q.eq("payment_method", "aura")
+  return GATEWAY_ORDER_FILTER[source](q as never) as T
 }
 
 /**
@@ -316,6 +352,12 @@ export function mapShippingAddress(row: Partial<RawShippingColumns> | null | und
   }
 }
 
+/** Comprovante de um pedido pago pelo Stripe (o webhook guarda no metadata). */
+export function orderStripeReceiptUrl(metadata: Record<string, unknown> | null | undefined): string | null {
+  const url = metadata?.stripe_receipt_url
+  return typeof url === "string" ? url : null
+}
+
 export type UserOrderSummary = {
   id: string
   status: OrderStatus
@@ -337,7 +379,7 @@ export type UserOrderSummary = {
 }
 
 const ORDER_COLUMNS =
-  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, " +
+  "id, status, total_cents, items, created_at, payment_method, aura_cost_paid, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, metadata, pix_copy_paste, pix_qr_code_base64, tracking_code, carrier, " +
   SHIPPING_COLUMNS
 
 /**
@@ -368,8 +410,9 @@ export async function listOrdersByUser(
     .from("store_orders")
     .select(ORDER_COLUMNS, { count: "exact" })
     .eq("metadata->>user_id", userId)
-    // O cliente nunca vê pedido de sandbox — para ele aquilo nunca existiu.
-    .eq("is_sandbox", false)
+    // Pedido de sandbox não existe para o cliente — exceto no deploy que
+    // cobra em sandbox (localhost/preview), onde todo pedido é de teste.
+    .eq("is_sandbox", deployChargesInSandbox())
 
   if (filters?.status) query = query.eq("status", filters.status)
   if (filters?.dateFrom) query = query.gte("created_at", filters.dateFrom)
@@ -404,9 +447,18 @@ export async function listOrdersByUser(
  * telas consomem, com o endereço já colapsado em um objeto só.
  */
 function toUserOrderSummary(row: unknown): UserOrderSummary {
-  const raw = row as UserOrderSummary & RawShippingColumns
+  const {
+    stripe_payment_intent_id: stripePaymentIntentId,
+    metadata,
+    ...raw
+  } = row as UserOrderSummary &
+    RawShippingColumns & { stripe_payment_intent_id: string | null; metadata: Record<string, unknown> | null }
   return {
     ...raw,
+    // Pedido do Stripe: a cobrança e o comprovante entram nos mesmos campos
+    // que a tela já mostra. `metadata` não vai para o cliente.
+    asaas_payment_id: raw.asaas_payment_id ?? stripePaymentIntentId,
+    asaas_receipt_url: raw.asaas_receipt_url ?? orderStripeReceiptUrl(metadata),
     shipping_address: mapShippingAddress(raw),
     // Pedidos anteriores à coluna são físicos por definição (a loja só
     // vendia produto físico até então) — daí o `!== false`, não `=== true`.
@@ -421,7 +473,7 @@ export async function getLatestPendingOrderByUser(userId: string): Promise<UserO
     .from("store_orders")
     .select(ORDER_COLUMNS)
     .eq("metadata->>user_id", userId)
-    .eq("is_sandbox", false)
+    .eq("is_sandbox", deployChargesInSandbox())
     .eq("status", "pending")
     .order("created_at", { ascending: false })
     .limit(1)
@@ -467,6 +519,24 @@ export type OrderManualPayment = {
   registered_at: string
 }
 
+export type OrderCardReviewFlag = {
+  reason: string
+  risk_level: string | null
+  three_d_secure: string | null
+  held_at: string
+  approved_at?: string
+}
+
+export type OrderChargebackFlag = {
+  event: string
+  dispute_status: string
+  reason?: string
+  amount_cents?: number
+  evidence_due_by?: string | null
+  lost?: boolean
+  detected_at: string
+}
+
 export type AdminOrderRow = {
   id: string
   status: OrderStatus
@@ -489,6 +559,16 @@ export type AdminOrderRow = {
   refund_reason: string | null
   refunded_at: string | null
   asaas_payment_id: string | null
+  /** Pedido cobrado pelo Stripe (gateway alternativo): PIX e cartão, desde a criação. */
+  stripe_payment_intent_id: string | null
+  /** Sessão do Stripe Checkout hospedado — legado, o cartão hoje é no nosso site. */
+  stripe_session_id: string | null
+  /** Cartão do Stripe autorizado e SEGURADO para revisão (nada cobrado ainda). */
+  card_review: OrderCardReviewFlag | null
+  /** Aviso precoce de fraude do emissor (Stripe Radar). */
+  fraud_warning: { actionable: boolean; detected_at: string } | null
+  /** Disputa (chargeback) no cartão. */
+  chargeback: OrderChargebackFlag | null
   /** Presente quando o pedido foi feito por um usuário logado (metadata.user_id). */
   user_id: string | null
   user_display_name: string | null
@@ -513,7 +593,7 @@ export type AdminOrderRow = {
 }
 
 const ADMIN_ORDER_COLUMNS =
-  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, is_sandbox, " +
+  "id, status, total_cents, pix_price_cents, items, created_at, updated_at, payment_method, aura_cost_paid, customer_name, customer_email, metadata, tracking_code, carrier, shipped_at, delivered_at, refunded_cents, refund_reason, refunded_at, asaas_payment_id, stripe_payment_intent_id, stripe_session_id, is_sandbox, " +
   SHIPPING_COLUMNS
 
 type AdminOrderRawRow = {
@@ -537,6 +617,8 @@ type AdminOrderRawRow = {
   refund_reason: string | null
   refunded_at: string | null
   asaas_payment_id: string | null
+  stripe_payment_intent_id: string | null
+  stripe_session_id: string | null
   is_sandbox: boolean
 } & RawShippingColumns
 
@@ -566,18 +648,23 @@ export async function listOrdersForAdmin(filters?: {
   missingShipping?: boolean
   /** Recorte de ambiente do gateway. Sem valor = só produção. */
   environment?: OrderEnvironment
+  /** Gateway que cobrou (ou Aura). Sem valor = todos. */
+  paymentSource?: OrderPaymentSourceFilter
   /** Produtos (com entrega) ou serviços (sem entrega). Sem valor = os dois. */
   kind?: OrderKind
   page?: number
   pageSize?: number
 }): Promise<AdminOrderListResult> {
   const db = createSupabaseAdminClient()
-  let query = withEnvironment(
-    db
-      .from("store_orders")
-      .select(ADMIN_ORDER_COLUMNS, { count: "exact" })
-      .order("created_at", { ascending: false }),
-    filters?.environment ?? "production"
+  let query = withPaymentSource(
+    withEnvironment(
+      db
+        .from("store_orders")
+        .select(ADMIN_ORDER_COLUMNS, { count: "exact" })
+        .order("created_at", { ascending: false }),
+      filters?.environment ?? "production"
+    ),
+    filters?.paymentSource ?? "all"
   )
 
   if (filters?.status) query = query.eq("status", filters.status)
@@ -658,6 +745,8 @@ export async function listOrdersForAdmin(filters?: {
       refund_reason: row.refund_reason,
       refunded_at: row.refunded_at,
       asaas_payment_id: row.asaas_payment_id,
+      stripe_payment_intent_id: row.stripe_payment_intent_id ?? null,
+      stripe_session_id: row.stripe_session_id ?? null,
       user_id: userId,
       user_display_name: userId ? profiles[userId]?.display_name ?? null : null,
       customer_cpf: userId ? cpfByUser[userId] ?? null : null,
@@ -667,6 +756,12 @@ export async function listOrdersForAdmin(filters?: {
       is_sandbox: row.is_sandbox === true,
       service_ticket_id: (row.metadata?.service_ticket_id as string | undefined) ?? null,
       manual_payment: (row.metadata?.manual_payment as OrderManualPayment | undefined) ?? null,
+      card_review: (() => {
+        const review = row.metadata?.card_review as OrderCardReviewFlag | undefined
+        return review && !review.approved_at ? review : null
+      })(),
+      fraud_warning: (row.metadata?.fraud_warning as AdminOrderRow["fraud_warning"] | undefined) ?? null,
+      chargeback: (row.metadata?.chargeback as OrderChargebackFlag | undefined) ?? null,
     }
   })
 
@@ -684,8 +779,10 @@ export type OrderStatusCounts = Record<OrderStatus | "all", number>
  */
 export async function countOrdersByStatus(
   environment: OrderEnvironment = "production",
-  kind: OrderKind = "all"
+  kind: OrderKind = "all",
+  paymentSource: OrderPaymentSourceFilter = "all"
 ): Promise<OrderStatusCounts> {
+  if (paymentSource !== "all") return countOrdersByStatusForSource(environment, kind, paymentSource)
   const db = createSupabaseAdminClient()
   const requiresShipping = requiresShippingFor(kind)
   const { data, error } = await db.rpc("count_orders_by_status", {
@@ -714,6 +811,53 @@ export async function countOrdersByStatus(
   for (const row of (data ?? []) as { status: OrderStatus; count: number }[]) {
     counts[row.status] = (counts[row.status] ?? 0) + Number(row.count)
     counts.all += Number(row.count)
+  }
+  return counts
+}
+
+/**
+ * Mesmas contagens com recorte de gateway. A RPC `count_orders_by_status` não
+ * conhece gateway (ele é deduzido das colunas de referência, não gravado), então
+ * aqui é um `count` por status, em paralelo e sem trazer linha nenhuma
+ * (`head: true`). Só roda quando o admin escolhe um gateway; o caso comum
+ * continua no group by da RPC.
+ */
+async function countOrdersByStatusForSource(
+  environment: OrderEnvironment,
+  kind: OrderKind,
+  paymentSource: Exclude<OrderPaymentSourceFilter, "all">
+): Promise<OrderStatusCounts> {
+  const db = createSupabaseAdminClient()
+  const requiresShipping = requiresShippingFor(kind)
+  const statuses: OrderStatus[] = [
+    "pending",
+    "paid",
+    "awaiting_shipping_info",
+    "shipped",
+    "delivered",
+    "cancelled",
+    "refunded",
+    "expired",
+  ]
+  const results = await Promise.all(
+    statuses.map(async (status) => {
+      let query = withPaymentSource(
+        withEnvironment(
+          db.from("store_orders").select("id", { count: "exact", head: true }).eq("status", status),
+          environment
+        ),
+        paymentSource
+      )
+      if (requiresShipping !== null) query = query.eq("requires_shipping_address", requiresShipping)
+      const { count, error } = await query
+      if (error) console.error("[orders-repository] countOrdersByStatusForSource:", error)
+      return [status, count ?? 0] as const
+    })
+  )
+  const counts = { all: 0 } as OrderStatusCounts
+  for (const [status, count] of results) {
+    counts[status] = count
+    counts.all += count
   }
   return counts
 }
@@ -966,14 +1110,19 @@ export async function advanceOrderStatus(
  */
 export async function refundOrder(
   id: string,
-  params: { valueCents?: number; reason?: string },
+  params: {
+    valueCents?: number
+    reason?: string
+    /** Estorno por suspeita de fraude (aviso do emissor). Só o Stripe usa o sinal (alimenta o Radar). */
+    fraudulent?: boolean
+  },
   adminId?: string | null
 ): Promise<RepositoryResult> {
   const db = createSupabaseAdminClient()
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, total_cents, pix_price_cents, refunded_cents, asaas_payment_id, metadata, affiliate_id")
+    .select("id, status, total_cents, pix_price_cents, refunded_cents, asaas_payment_id, stripe_payment_intent_id, metadata, affiliate_id")
     .eq("id", id)
     .maybeSingle()
 
@@ -983,7 +1132,7 @@ export async function refundOrder(
   if (!["paid", "awaiting_shipping_info", "shipped", "delivered"].includes(existing.status)) {
     return { ok: false, error: "Só é possível extornar um pedido pago.", status: 400 }
   }
-  if (!existing.asaas_payment_id) {
+  if (!existing.asaas_payment_id && !existing.stripe_payment_intent_id) {
     return {
       ok: false,
       error: "Este pedido não tem cobrança Asaas associada; extorne manualmente e atualize o status.",
@@ -997,9 +1146,30 @@ export async function refundOrder(
     return { ok: false, error: "Valor de extorno inválido para o saldo restante do pedido.", status: 400 }
   }
 
+  // Pedido do Stripe (gateway alternativo): mesma regra — o gateway estorna
+  // primeiro, o banco só grava se ele aceitar.
+  if (!existing.asaas_payment_id && existing.stripe_payment_intent_id) {
+    const { refundStripePayment, stripeErrorMessage } = await import("@/lib/server/integrations/stripe")
+    try {
+      await refundStripePayment(existing.stripe_payment_intent_id, {
+        amountCents: refundCents,
+        reason: params.reason,
+        stripeReason: params.fraudulent ? "fraudulent" : "requested_by_customer",
+        idempotencyKey: `store-refund-${existing.id}-${existing.refunded_cents + refundCents}`,
+      })
+    } catch (err) {
+      console.error("[orders-repository] refundOrder — Stripe:", err)
+      const message = stripeErrorMessage(err)
+      return {
+        ok: false,
+        error: message ? `Stripe recusou o extorno: ${message}` : "Não foi possível extornar no Stripe. Tente novamente.",
+        status: 502,
+      }
+    }
+  } else {
   const { refundPayment, AsaasError } = await import("@/lib/server/integrations/asaas")
   try {
-    await refundPayment(existing.asaas_payment_id, { valueCents: refundCents, description: params.reason })
+    await refundPayment(existing.asaas_payment_id!, { valueCents: refundCents, description: params.reason })
   } catch (err) {
     console.error("[orders-repository] refundOrder — Asaas:", err)
     // 4xx da Asaas é regra de negócio (saldo insuficiente na conta, cobrança
@@ -1008,6 +1178,7 @@ export async function refundOrder(
       return { ok: false, error: `Asaas recusou o extorno: ${err.description}`, status: 502 }
     }
     return { ok: false, error: "Não foi possível extornar no Asaas. Tente novamente.", status: 502 }
+  }
   }
 
   const newRefundedCents = existing.refunded_cents + refundCents
@@ -1030,7 +1201,7 @@ export async function refundOrder(
     // O estorno já aconteceu de verdade no Asaas — não propaga como falha
     // total, mas também não finge que o banco está em dia.
     console.error("[orders-repository] refundOrder — grava status:", error)
-    return { ok: false, error: "Extorno feito no Asaas, mas falhou ao atualizar o pedido. Verifique manualmente.", status: 500 }
+    return { ok: false, error: "Extorno feito no gateway, mas falhou ao atualizar o pedido. Verifique manualmente.", status: 500 }
   }
 
   if (isFullRefund) {
@@ -1047,7 +1218,7 @@ export async function refundOrder(
   await notifyDiscordOrderEvent({
     orderId: id,
     status: isFullRefund ? "refunded" : "partial_refund",
-    actor: "admin",
+    actor: adminId ? "admin" : "webhook-stripe",
     eventKey: isFullRefund ? undefined : String(newRefundedCents),
     note: params.reason ?? null,
   })
@@ -1106,11 +1277,24 @@ export async function cancelOrder(
     .update({ status: "cancelled", updated_at: new Date().toISOString() })
     .eq("id", id)
     .eq("status", "pending")
-    .select("id, items, metadata, asaas_payment_id")
+    .select("id, items, metadata, asaas_payment_id, stripe_payment_intent_id")
     .maybeSingle()
 
   if (!existing) {
     return { ok: false, error: "Só é possível cancelar um pedido aguardando pagamento.", status: 400 }
+  }
+
+  // Pedido do Stripe: cancela o PaymentIntent para o QR deixar de ser pagável
+  // e, no cartão, para SOLTAR a autorização (é assim que o admin recusa um
+  // pagamento em revisão). Mesma tolerância a falha do ramo da Asaas — se o
+  // Stripe recusar (já pago, já expirado), o webhook cuida do caso tardio.
+  if (existing.stripe_payment_intent_id) {
+    const { cancelStripePayment } = await import("@/lib/server/integrations/stripe")
+    try {
+      await cancelStripePayment(existing.stripe_payment_intent_id)
+    } catch (err) {
+      console.error("[orders-repository] cancelOrder — Stripe:", err)
+    }
   }
 
   if (existing.asaas_payment_id) {
@@ -1185,7 +1369,7 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
     .update({ status: "expired", updated_at: now })
     .eq("status", "pending")
     .or(`pix_expires_at.lt.${now},and(pix_expires_at.is.null,created_at.lt.${fallbackCutoff})`)
-    .select("id, items, metadata")
+    .select("id, items, metadata, stripe_payment_intent_id")
 
   if (error) {
     console.error("[orders-repository] expireStalePendingOrders — update:", error)
@@ -1202,6 +1386,27 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
     items: Record<string, unknown>[]
     metadata: Record<string, unknown> | null
   }[]
+
+  // Pedido do Stripe: o banco expirou, mas a cobrança seguia viva lá — a aba
+  // aberta ainda conseguia pagar um pedido morto (e o estoque já voltou para
+  // a prateleira). Cancelar fecha o PIX e impede autorizar o cartão. Falha
+  // aqui não trava o cron: autorização tardia é solta pelo webhook, e PIX
+  // tardio cai em `reReserveStockForLatePayment`.
+  const stripeIntents = orders
+    .map((order) => (order as { stripe_payment_intent_id?: string | null }).stripe_payment_intent_id)
+    .filter((id): id is string => Boolean(id))
+  if (stripeIntents.length > 0) {
+    const { cancelStripePayment, isStripeAlreadyFinalError } = await import("@/lib/server/integrations/stripe")
+    for (const intentId of stripeIntents) {
+      try {
+        await cancelStripePayment(intentId)
+      } catch (err) {
+        if (!isStripeAlreadyFinalError(err)) {
+          console.error(`[orders-repository] expireStalePendingOrders — cancelar ${intentId} no Stripe:`, err)
+        }
+      }
+    }
+  }
 
   for (const order of orders) {
     const ownerId = orderOwnerId(order.metadata)
@@ -1298,17 +1503,30 @@ export type ExpireOrderByPaymentResult = {
 export async function expireOrderByPaymentId(
   paymentId: string
 ): Promise<ExpireOrderByPaymentResult> {
+  return expirePendingOrderByGatewayRef("asaas_payment_id", paymentId, "webhook-asaas")
+}
+
+/**
+ * Mesma expiração pontual, pela referência de cobrança de qualquer gateway
+ * (`asaas_payment_id`, ou `stripe_payment_intent_id` / `stripe_session_id`
+ * para os pedidos do Stripe).
+ */
+export async function expirePendingOrderByGatewayRef(
+  column: "asaas_payment_id" | "stripe_payment_intent_id" | "stripe_session_id",
+  value: string,
+  actor: "webhook-asaas" | "webhook-stripe"
+): Promise<ExpireOrderByPaymentResult> {
   const db = createSupabaseAdminClient()
 
   const { data: expiredOrders, error } = await db
     .from("store_orders")
     .update({ status: "expired", updated_at: new Date().toISOString() })
-    .eq("asaas_payment_id", paymentId)
+    .eq(column, value)
     .eq("status", "pending")
     .select("id, items, metadata")
 
   if (error) {
-    console.error("[orders-repository] expireOrderByPaymentId — update:", error)
+    console.error("[orders-repository] expirePendingOrderByGatewayRef — update:", error)
     return { expired: false, orderId: null, errors: [error.message] }
   }
 
@@ -1323,7 +1541,7 @@ export async function expireOrderByPaymentId(
     await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
   }
 
-  await notifyDiscordOrderEvent({ orderId: order.id, status: "expired", actor: "webhook-asaas" })
+  await notifyDiscordOrderEvent({ orderId: order.id, status: "expired", actor })
 
   // Pré-venda não teve estoque descontado — devolver aqui inventaria unidades.
   const cart = ((order.items ?? []) as unknown as OrderStockLine[]).filter(lineMovesPhysicalStock)
@@ -1339,7 +1557,7 @@ export async function expireOrderByPaymentId(
   for (const { item, restored } of results) {
     if (restored) continue
     const message = `Falha ao devolver estoque do pedido expirado ${order.id} (item ${item.variant_id ?? item.id})`
-    console.error("[orders-repository] expireOrderByPaymentId —", message)
+    console.error("[orders-repository] expirePendingOrderByGatewayRef —", message)
     errors.push(message)
   }
 
@@ -1448,6 +1666,73 @@ export async function syncOrderRefundState(paymentId: string): Promise<Repositor
     .filter((refund) => refund.status === "DONE")
     .reduce((sum, refund) => sum + Math.round(refund.value * 100), 0)
 
+  return reconcileOrderRefundedCents(existing, refundedCents, "webhook-asaas")
+}
+
+/**
+ * Versão Stripe de `syncOrderRefundState`: o valor estornado vem de
+ * `charge.amount_refunded`, relido na origem (nunca do corpo do evento).
+ */
+export async function syncStripeOrderRefundState(paymentIntentId: string): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
+  const { data: existing } = await db
+    .from("store_orders")
+    .select("id, status, total_cents, pix_price_cents, refunded_cents, metadata, affiliate_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle()
+
+  if (!existing) {
+    return { ok: false, error: "Pedido não encontrado para este pagamento.", status: 404 }
+  }
+  if (!["paid", "awaiting_shipping_info", "shipped", "delivered", "refunded"].includes(existing.status)) {
+    return { ok: false, error: "Pedido fora do fluxo pós-pagamento, nada a reconciliar.", status: 400 }
+  }
+
+  // Pedido pago por FORA (registro manual no admin) não é desta cobrança:
+  // um estorno no Stripe é a devolução de um pagamento em duplicidade, não do
+  // pedido — reconciliar aqui marcaria como estornado um pedido pago.
+  const metadata = (existing.metadata ?? {}) as Record<string, unknown>
+  if (metadata.manual_payment) return { ok: true }
+
+  const { getStripePayment } = await import("@/lib/server/integrations/stripe")
+  const verified = await getStripePayment(paymentIntentId)
+
+  // Disputa PERDIDA também é dinheiro que voltou ao cliente (o Stripe debita
+  // do saldo, sem gerar estorno). Contá-la aqui é o que faz a Aura, as
+  // medalhas e a comissão da compra serem revertidas pelos mesmos triggers do
+  // estorno — sem isso quem ganhava o chargeback ficava com produto, dinheiro
+  // E a Aura. Lido do metadata (gravado pelo webhook da disputa) para que um
+  // estorno posterior não "esqueça" a perda ao reconciliar.
+  const chargeback = metadata.chargeback as { lost?: boolean; amount_cents?: number } | undefined
+  const lostCents = chargeback?.lost ? Math.max(0, Math.trunc(chargeback.amount_cents ?? 0)) : 0
+
+  return reconcileOrderRefundedCents(
+    existing,
+    Math.min(existing.total_cents, verified.refundedCents + lostCents),
+    "webhook-stripe"
+  )
+}
+
+/**
+ * Grava o total estornado que o GATEWAY reporta e ajusta status, avisos e
+ * comissão. Compartilhado pelos webhooks da Asaas e do Stripe.
+ */
+async function reconcileOrderRefundedCents(
+  existing: {
+    id: string
+    status: string
+    total_cents: number
+    pix_price_cents: number | null
+    refunded_cents: number
+    metadata: unknown
+    affiliate_id: string | null
+  },
+  refundedCents: number,
+  actor: "webhook-asaas" | "webhook-stripe"
+): Promise<RepositoryResult> {
+  const db = createSupabaseAdminClient()
+
   if (refundedCents === existing.refunded_cents) {
     return { ok: true }
   }
@@ -1480,7 +1765,7 @@ export async function syncOrderRefundState(paymentId: string): Promise<Repositor
     await notifyDiscordOrderEvent({
       orderId: existing.id,
       status: update.status,
-      actor: "webhook-asaas",
+      actor,
       eventKey: String(refundedCents),
     })
   }
@@ -1710,10 +1995,13 @@ export async function getOrderItemsForReorder(
   ]
   if (productIds.length === 0) return { ok: true, items: [] }
 
-  const { data: products } = await db
-    .from("store_products")
-    .select("id, slug, name, price_cents, promo_price_cents, stock, images, is_active, is_sold_out")
-    .in("id", productIds)
+  const [{ data: products }, selectionRules] = await Promise.all([
+    db
+      .from("store_products")
+      .select("id, slug, name, price_cents, promo_price_cents, stock, images, is_active, is_sold_out")
+      .in("id", productIds),
+    getSelectionRulesForCheckout(productIds),
+  ])
 
   const reorderItems: ReorderItem[] = []
   for (const item of items) {
@@ -1736,7 +2024,16 @@ export async function getOrderItemsForReorder(
       priceCents: effectiveCents,
       image: product.images?.[0] ?? null,
       stock: product.stock,
-      available: product.is_active && !product.is_sold_out,
+      // Produto que exige escolha que o snapshot não guarda (opção de grupo,
+      // ou variante quando o pedido antigo não tinha) não volta pronto para o
+      // carrinho: o checkout recusaria a linha incompleta (ver
+      // `getSelectionRulesForCheckout`). A pessoa escolhe de novo na página.
+      available:
+        product.is_active &&
+        !product.is_sold_out &&
+        selectionRules !== null &&
+        (selectionRules.get(product.id)?.groupIds.length ?? 0) === 0 &&
+        (!selectionRules.get(product.id)?.requiresVariant || Boolean(item.variant_id)),
     })
   }
 

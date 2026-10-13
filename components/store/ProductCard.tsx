@@ -113,7 +113,7 @@ function StandardProductCard(props: ProductCardProps) {
   const showcase = props.variant === "showcase"
   const router = useRouter()
   const { add, setOpen: setCartOpen } = useCart()
-  const { cardSurchargePercent, cardMaxInstallments } = useStoreSettings()
+  const { cardSurchargePercent, cardMaxInstallments, cardEnabled } = useStoreSettings()
   const href = `/loja/${props.slug}`
   const variants = props.variants ?? []
   // Mesma variante e mesmo "esgotado" que o servidor usou para o selo e a
@@ -371,12 +371,15 @@ function StandardProductCard(props: ProductCardProps) {
                   )}>no PIX</span>
                 )}
               </div>
-              {/* Serviço tem preço único: sem desconto de PIX, não há "ou X no cartão". */}
-              <p className={cn("text-[#7a7a7a]", showcase ? "text-[12px]" : "text-[10px]")}>
-                {singlePrice
-                  ? `Mesmo preço no cartão${cardMaxInstallments > 1 ? `, em até ${cardMaxInstallments}x sem juros` : ""}`
-                  : `ou ${formatBRL(computeItemCardPriceCents(effectivePriceCents, cardSurchargePercent, false))} no cartão${cardMaxInstallments > 1 ? ` em até ${cardMaxInstallments}x sem juros` : ""}`}
-              </p>
+              {/* Serviço tem preço único: sem desconto de PIX, não há "ou X no cartão".
+                  Cartão desligado (só PIX): nenhuma linha de cartão. */}
+              {cardEnabled && (
+                <p className={cn("text-[#7a7a7a]", showcase ? "text-[12px]" : "text-[10px]")}>
+                  {singlePrice
+                    ? `Mesmo preço no cartão${cardMaxInstallments > 1 ? `, em até ${cardMaxInstallments}x sem juros` : ""}`
+                    : `ou ${formatBRL(computeItemCardPriceCents(effectivePriceCents, cardSurchargePercent, false))} no cartão${cardMaxInstallments > 1 ? ` em até ${cardMaxInstallments}x sem juros` : ""}`}
+                </p>
+              )}
               {singlePrice && (
                 <p className={cn("text-[#7a7a7a]", showcase ? "text-[12px]" : "text-[10px]")}>
                   * Valor de consulta, não representa o valor final

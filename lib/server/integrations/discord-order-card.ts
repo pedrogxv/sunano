@@ -34,8 +34,12 @@ export type OrderEventStatus =
   | "partial_refund"
   /** Pagamento chegou depois da expiração e não havia estoque. */
   | "oversold"
-  /** O valor confirmado na Asaas não bate com o total do pedido. */
+  /** O valor confirmado no gateway não bate com o total do pedido. */
   | "payment_mismatch"
+  /** Cartão autorizado, mas segurado para revisão manual (risco/3DS). */
+  | "payment_review"
+  /** O emissor avisou fraude (early fraud warning) numa cobrança paga. */
+  | "fraud_warning"
 
 type StatusStyle = {
   /** Emoji do título — é o que se lê primeiro na lista de threads. */
@@ -138,7 +142,7 @@ const STATUS_STYLE: Record<OrderEventStatus, StatusStyle> = {
     label: "Chargeback aberto",
     color: COLORS.red,
     headline: "O cliente abriu disputa no cartão. O status do pedido NÃO mudou.",
-    action: "Reúna comprovantes (rastreio, conversa, nota) e responda a disputa na Asaas **dentro do prazo** — sem resposta a loja perde por padrão.",
+    action: "Reúna comprovantes (rastreio, conversa, nota) e responda a disputa no painel do gateway **dentro do prazo** — sem resposta a loja perde por padrão.",
   },
   oversold: {
     emoji: "🔥",
@@ -152,7 +156,21 @@ const STATUS_STYLE: Record<OrderEventStatus, StatusStyle> = {
     label: "Valor divergente",
     color: COLORS.red,
     headline: "A Asaas confirmou um valor diferente do total do pedido. O pedido NÃO foi liberado.",
-    action: "Confira a cobrança no painel da Asaas. Se o valor estiver certo, libere o pedido manualmente; se não, trate como tentativa de fraude.",
+    action: "Confira a cobrança no painel do gateway. Se o valor estiver certo, libere o pedido manualmente; se não, trate como tentativa de fraude.",
+  },
+  payment_review: {
+    emoji: "🕵️",
+    label: "Pagamento em revisão",
+    color: COLORS.amber,
+    headline: "O cartão foi AUTORIZADO mas não capturado: o risco pediu revisão. Nada foi cobrado ainda.",
+    action: "Abra o pedido no admin e aprove (captura) ou cancele (solta a autorização). A autorização vence em ~7 dias.",
+  },
+  fraud_warning: {
+    emoji: "🚨",
+    label: "Aviso de fraude",
+    color: COLORS.red,
+    headline: "O banco emissor avisou que esta compra pode ser fraude (early fraud warning).",
+    action: "Se ainda não foi enviado, o pedido já foi estornado sozinho. Se já foi enviado, tente segurar a entrega e prepare-se para a disputa.",
   },
 }
 

@@ -4,6 +4,7 @@ import { getRequestUser } from "@/lib/server/auth/current-user"
 import { dbErrorResponse } from "@/lib/db-errors"
 import { ORDER_PAID_STATUSES } from "@/lib/order-status"
 import { orderHasService } from "@/lib/server/repositories/support-repository"
+import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
 
 /**
  * Usada pela página de checkout PIX para fazer polling do status do
@@ -29,13 +30,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { data: order, error } = await db
     .from("store_orders")
     .select(
-      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at, requires_shipping_address"
+      "id, status, total_cents, pix_copy_paste, pix_qr_code_base64, metadata, items, created_at, payment_method, asaas_payment_id, asaas_receipt_url, stripe_payment_intent_id, installment_count, pix_price_cents, card_surcharge_percent, pix_expires_at, requires_shipping_address"
     )
     .eq("id", id)
     // Pedido de sandbox não existe para o cliente — nem por link direto
     // guardado de antes (a tela do PIX ficaria fazendo polling de uma
-    // cobrança de teste).
-    .eq("is_sandbox", false)
+    // cobrança de teste). Exceção: deploy que cobra em sandbox, onde todo
+    // pedido é de teste (ver `deployChargesInSandbox`).
+    .eq("is_sandbox", deployChargesInSandbox())
     .single()
 
   if (error || !order) {
@@ -92,8 +94,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     receipt:
       isPaid
         ? {
-            asaasPaymentId: order.asaas_payment_id,
-            asaasReceiptUrl: order.asaas_receipt_url,
+            // Nomes mantidos pela tela; valem para os dois gateways.
+            asaasPaymentId: order.asaas_payment_id ?? order.stripe_payment_intent_id,
+            asaasReceiptUrl:
+              order.asaas_receipt_url ??
+              (typeof order.metadata?.stripe_receipt_url === "string" ? order.metadata.stripe_receipt_url : null),
           }
         : null,
   })

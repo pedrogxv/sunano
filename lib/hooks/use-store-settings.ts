@@ -5,10 +5,19 @@ import { useEffect, useState } from "react"
 export type UseStoreSettingsResult = {
   cardSurchargePercent: number
   cardMaxInstallments: number
+  /** A Loja aceita cartão (Asaas sim; Stripe, por ora, só PIX). Falso = nada de preço/parcela no cartão na tela. */
+  cardEnabled: boolean
   loading: boolean
 }
 
-const DEFAULTS: Omit<UseStoreSettingsResult, "loading"> = { cardSurchargePercent: 10, cardMaxInstallments: 6 }
+// `cardEnabled: true` até a resposta chegar: é o comportamento da Asaas,
+// o gateway padrão, que as telas sempre tiveram. Com o Stripe (só PIX) a
+// linha do cartão some quando a resposta chega, e o checkout recusa cartão.
+const DEFAULTS: Omit<UseStoreSettingsResult, "loading"> = {
+  cardSurchargePercent: 10,
+  cardMaxInstallments: 6,
+  cardEnabled: true,
+}
 
 // Cache em módulo (não em contexto React) — várias instâncias de
 // ProductCard renderizam na mesma página e todas precisam do mesmo
@@ -26,6 +35,7 @@ function fetchSettings() {
         cachedSettings = {
           cardSurchargePercent: data.cardSurchargePercent ?? DEFAULTS.cardSurchargePercent,
           cardMaxInstallments: data.cardMaxInstallments ?? DEFAULTS.cardMaxInstallments,
+          cardEnabled: data.cardEnabled ?? DEFAULTS.cardEnabled,
         }
         return cachedSettings
       })
@@ -34,7 +44,7 @@ function fetchSettings() {
   return inFlight
 }
 
-/** Percentual de acréscimo do cartão e teto de parcelas, configurados pelo admin. */
+/** Percentual de acréscimo do cartão, teto de parcelas e se o cartão está disponível. */
 export function useStoreSettings(): UseStoreSettingsResult {
   const [settings, setSettings] = useState(cachedSettings ?? DEFAULTS)
   const [loading, setLoading] = useState(!cachedSettings)

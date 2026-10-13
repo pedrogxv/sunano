@@ -16,6 +16,7 @@ export type StoreAuditAction =
   | "order.refund"
   | "order.cancel"
   | "order.manual_payment"
+  | "order.card_review_approve"
   | "store_settings.update"
 
 type LogAdminActionParams = {

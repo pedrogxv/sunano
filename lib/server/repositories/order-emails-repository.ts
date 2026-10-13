@@ -268,7 +268,12 @@ export async function sendOrderEmail(
       paymentMethod: (row.payment_method as string | null) ?? null,
       customerName: (row.customer_name as string | null) ?? null,
       requiresShipping: row.requires_shipping_address !== false,
-      receiptUrl: (row.asaas_receipt_url as string | null) ?? null,
+      receiptUrl:
+        (row.asaas_receipt_url as string | null) ??
+        // Comprovante do Stripe (gateway alternativo), guardado pelo webhook.
+        (typeof (row.metadata as Record<string, unknown> | null)?.stripe_receipt_url === "string"
+          ? ((row.metadata as Record<string, unknown>).stripe_receipt_url as string)
+          : null),
       trackingCode: (row.tracking_code as string | null) ?? null,
       carrier: (row.carrier as string | null) ?? null,
       items: parseItems(row.items),

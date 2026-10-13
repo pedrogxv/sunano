@@ -74,6 +74,8 @@ const EMPTY_PAYER_FORM: PayerForm = {
 }
 
 interface PayerInfoResponse {
+  /** Quem hospeda a página do cartão (gateway ativo da loja). */
+  paymentGatewayLabel?: string
   fullName?: string | null
   cpf?: string | null
   email?: string | null
@@ -152,6 +154,9 @@ export default function CheckoutPage() {
   const [cartNeedsShipping, setCartNeedsShipping] = useState(true)
   const [singlePriceProductIds, setSinglePriceProductIds] = useState<Set<string>>(() => new Set())
   const [payerEmail, setPayerEmail] = useState<string | null>(null)
+  // Nome mostrado em "página segura da …": vem do servidor, que sabe qual
+  // gateway está cobrando (Asaas por padrão, Stripe quando ligado).
+  const [paymentGatewayLabel, setPaymentGatewayLabel] = useState("Asaas")
   const [editingPayer, setEditingPayer] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -164,7 +169,12 @@ export default function CheckoutPage() {
   // abertura da tela — mostradas ANTES do submit, não como erro depois dele.
   const [cartIssues, setCartIssues] = useState<ValidatedCartLine[]>([])
   const [staleLines, setStaleLines] = useState<ValidatedCartLine[]>([])
-  const { cardSurchargePercent } = useStoreSettings()
+  const { cardSurchargePercent, cardEnabled } = useStoreSettings()
+  // Cartão desligado no gateway ativo (Stripe: só PIX) — o checkout recusaria.
+  // Garante PIX mesmo se o cartão estava escolhido antes da resposta chegar.
+  useEffect(() => {
+    if (!cardEnabled) setPaymentMethod("pix")
+  }, [cardEnabled])
 
   // Para usuário logado: só sabemos se falta nome/CPF (ou endereço, no caso
   // de cartão) no perfil depois de consultar o servidor — até lá, não
@@ -208,6 +218,7 @@ export default function CheckoutPage() {
         setNeedsPayerInfo(!data.hasCompletePayerInfo)
         setNeedsAddressInfo(!data.hasCompleteAddressInfo)
         setPayerEmail(data.email ?? null)
+        if (data.paymentGatewayLabel) setPaymentGatewayLabel(data.paymentGatewayLabel)
         // Pré-preenche a entrega com a ÚLTIMA ENTREGA, não com a cobrança:
         // são endereços diferentes desde que ganharam colunas próprias no
         // perfil. Na primeira compra ainda não há entrega salva, e aí a
@@ -463,6 +474,8 @@ export default function CheckoutPage() {
         orderId?: string
         accessToken?: string | null
         checkoutUrl?: string
+        /** Stripe: o cartão é digitado no nosso site, em `/checkout/card`. */
+        cardPayment?: boolean
         error?: string
       }
 
@@ -476,7 +489,14 @@ export default function CheckoutPage() {
       // um segundo checkout geraria um pedido duplicado.
       clear()
 
-      // Cartão: a Asaas hospeda a página de pagamento — redireciona pra lá
+      // Cartão no Stripe: o formulário é nosso (Payment Element), em
+      // `/checkout/card`. O pedido e o PaymentIntent já existem.
+      if (paymentMethod === "credit_card" && data.cardPayment) {
+        window.location.href = `/checkout/card?orderId=${data.orderId}`
+        return
+      }
+
+      // Cartão na Asaas: ela hospeda a página de pagamento — redireciona pra lá
       // (não é navegação client-side, é troca completa de domínio).
       if (paymentMethod === "credit_card" && data.checkoutUrl) {
         window.location.href = data.checkoutUrl
@@ -633,8 +653,9 @@ export default function CheckoutPage() {
         })}
       </div>
 
-      {/* Payment method toggle */}
-      <div className="mb-6 grid grid-cols-2 gap-2">
+      {/* Payment method toggle. Sem cartão (Stripe: só PIX), o PIX é o único
+          botão e não anuncia desconto em relação a um meio que não existe. */}
+      <div className={cn("mb-6 grid gap-2", cardEnabled ? "grid-cols-2" : "grid-cols-1")}>
         <button
           type="button"
           onClick={() => setPaymentMethod("pix")}
@@ -649,9 +670,10 @@ export default function CheckoutPage() {
           PIX
           <span className="text-[10px] font-normal text-muted-foreground">
             {formatBRL(total)}
-            {cardSurchargeCents > 0 && ` (-${cardSurchargePercent}%)`}
+            {cardEnabled && cardSurchargeCents > 0 && ` (-${cardSurchargePercent}%)`}
           </span>
         </button>
+        {cardEnabled && (
         <button
           type="button"
           onClick={() => setPaymentMethod("credit_card")}
@@ -666,6 +688,7 @@ export default function CheckoutPage() {
           Cartão de crédito
           <span className="text-[10px] font-normal text-muted-foreground">{formatBRL(cardTotal)}</span>
         </button>
+        )}
       </div>
 
       {/* Divergências desde que o item foi posto no carrinho. Aparecem aqui,
@@ -747,7 +770,7 @@ export default function CheckoutPage() {
             <span>+{formatBRL(cardSurchargeCents)}</span>
           </div>
         )}
-        {paymentMethod === "pix" && cardSurchargeCents > 0 && (
+        {paymentMethod === "pix" && cardEnabled && cardSurchargeCents > 0 && (
           <div className="flex items-center justify-between text-xs text-emerald-400">
             <span>Economia à vista no PIX</span>
             <span>{formatBRL(cardSurchargeCents)}</span>
@@ -769,7 +792,9 @@ export default function CheckoutPage() {
           <span>
             {paymentMethod === "pix"
               ? "PIX (aprovação imediata)"
-              : "Cartão de crédito, via página segura da Asaas"}
+              : paymentGatewayLabel === "Stripe"
+                ? "Cartão de crédito à vista"
+                : `Cartão de crédito, via página segura da ${paymentGatewayLabel}`}
           </span>
         </div>
         <div className="flex items-center justify-between border-t border-border/60 pt-1.5 text-sm font-bold">
@@ -824,7 +849,9 @@ export default function CheckoutPage() {
           <span className="text-[11px] text-muted-foreground">
             {paymentMethod === "pix"
               ? "Pagamento via PIX, sem cadastro de cartão"
-              : "Cartão digitado direto na página segura da Asaas, nunca no nosso site"}
+              : paymentGatewayLabel === "Stripe"
+                ? "Os dados do cartão vão direto para o Stripe, criptografados — nunca para o nosso servidor"
+                : `Cartão digitado direto na página segura da ${paymentGatewayLabel}, nunca no nosso site`}
           </span>
         </div>
         <div className={cn("flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors", CARD_SURFACE)}>

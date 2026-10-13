@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAuthorizedProfile } from "@/lib/server/auth/admin-auth"
 import { hasAdminPermission } from "@/lib/admin-permissions"
 import { ORDER_STATUS_GROUPS, parseOrderStatusGroup } from "@/lib/order-status"
+import { parseOrderPaymentSource } from "@/lib/payment-gateways"
 import {
   countOrdersByStatus,
   listOrdersForAdmin,
@@ -46,14 +47,16 @@ export async function GET(request: NextRequest) {
   // Sem o parâmetro, a fila mostra só produção — pedido de sandbox só aparece
   // quando o admin pede explicitamente.
   const environment = parseOrderEnvironment(url.searchParams.get("environment"))
+  // Gateway que cobrou (ou Aura). Sem o parâmetro = todos.
+  const paymentSource = parseOrderPaymentSource(url.searchParams.get("gateway"))
   // Aba Produtos/Serviços. Vale para a lista E para as contagens por status.
   const kind = parseOrderKind(url.searchParams.get("kind"))
   const page = Number(url.searchParams.get("page") ?? "1") || 1
   const pageSize = Number(url.searchParams.get("pageSize") ?? "20") || 20
 
   const [{ orders, total }, counts] = await Promise.all([
-    listOrdersForAdmin({ status, statuses, productId, userQuery, userId, dateFrom, dateTo, missingShipping, environment, kind, page, pageSize }),
-    countOrdersByStatus(environment, kind),
+    listOrdersForAdmin({ status, statuses, productId, userQuery, userId, dateFrom, dateTo, missingShipping, environment, paymentSource, kind, page, pageSize }),
+    countOrdersByStatus(environment, kind, paymentSource),
   ])
-  return NextResponse.json({ ok: true, orders, total, page, pageSize, counts, environment, kind })
+  return NextResponse.json({ ok: true, orders, total, page, pageSize, counts, environment, paymentSource, kind })
 }

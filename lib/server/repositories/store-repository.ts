@@ -1922,6 +1922,51 @@ export async function getVariantOptionsForCheckout(optionIds: string[]): Promise
     .filter((row): row is CheckoutVariantOption => row.group != null)
 }
 
+export type CheckoutSelectionRules = {
+  /** O produto tem variante ATIVA: o checkout exige escolher uma. */
+  requiresVariant: boolean
+  /** Grupos de opção do produto: o checkout exige uma opção de CADA um. */
+  groupIds: string[]
+}
+
+/**
+ * O que a compra de cada produto é OBRIGADA a escolher — a mesma regra do
+ * botão "Comprar" da página (`canBuy` em `use-product-selection.ts`):
+ * variante, se houver alguma ativa, e uma opção por grupo.
+ *
+ * Sem isto o checkout aceitava o produto "pelado": preço e estoque caíam no
+ * do produto, que é `null` (ilimitado) quando quem controla o estoque são as
+ * variantes. Dava para comprar cor esgotada sem limite, e qualquer variante
+ * ou opção mais cara que o preço base saía pelo preço base.
+ */
+export async function getSelectionRulesForCheckout(
+  productIds: string[]
+): Promise<Map<string, CheckoutSelectionRules> | null> {
+  const rules = new Map<string, CheckoutSelectionRules>(
+    productIds.map((id) => [id, { requiresVariant: false, groupIds: [] }])
+  )
+  if (productIds.length === 0) return rules
+  const db = createSupabaseAdminClient()
+  const [variants, groups] = await Promise.all([
+    db.from("store_product_variants").select("product_id").in("product_id", productIds).eq("is_active", true),
+    db.from("store_product_variant_groups").select("id, product_id").in("product_id", productIds),
+  ])
+  // Falha de leitura NÃO pode virar "sem regra" (seria liberar a compra
+  // pelada de novo): quem chama recusa o checkout.
+  if (variants.error || groups.error) {
+    console.error("[store-repository] getSelectionRulesForCheckout:", variants.error ?? groups.error)
+    return null
+  }
+  for (const row of variants.data ?? []) {
+    const rule = rules.get(row.product_id)
+    if (rule) rule.requiresVariant = true
+  }
+  for (const row of groups.data ?? []) {
+    rules.get(row.product_id)?.groupIds.push(row.id)
+  }
+  return rules
+}
+
 const MAX_VARIANT_GROUPS_PER_PRODUCT = 6
 const MAX_OPTIONS_PER_VARIANT_GROUP = 12
 

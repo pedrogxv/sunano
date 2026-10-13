@@ -60,7 +60,7 @@ export async function registerManualPayment(
 
   const { data: existing } = await db
     .from("store_orders")
-    .select("id, status, total_cents, pix_price_cents, payment_method, metadata")
+    .select("id, status, total_cents, pix_price_cents, payment_method, metadata, stripe_payment_intent_id")
     .eq("id", id)
     .maybeSingle()
 
@@ -90,6 +90,21 @@ export async function registerManualPayment(
       ok: false,
       error: `O valor recebido é menor que o do pedido no ${METHOD_LABEL[params.method]} (${formatBRL(expectedCents)}).`,
       status: 400,
+    }
+  }
+
+  // Cobrança do Stripe ainda viva (o cron/cancelamento devia ter matado e
+  // falhou): fecha agora, senão o cliente paga o PIX antigo em cima do
+  // pagamento por fora. Se ela entrar mesmo assim, o webhook devolve como
+  // duplicidade (ver `markStripeOrdersPaid`).
+  if (existing.stripe_payment_intent_id) {
+    const { cancelStripePayment, isStripeAlreadyFinalError } = await import("@/lib/server/integrations/stripe")
+    try {
+      await cancelStripePayment(existing.stripe_payment_intent_id)
+    } catch (err) {
+      if (!isStripeAlreadyFinalError(err)) {
+        console.error("[order-manual-payment] cancelar cobrança Stripe:", err)
+      }
     }
   }
 

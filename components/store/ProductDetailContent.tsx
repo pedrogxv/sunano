@@ -86,7 +86,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
   const { product, linkedPeripheral, linkedPeripherals, specs, variants, variantGroups } = detail
   const router = useRouter()
   const { add, setOpen } = useCart()
-  const { cardSurchargePercent, cardMaxInstallments } = useStoreSettings()
+  const { cardSurchargePercent, cardMaxInstallments, cardEnabled } = useStoreSettings()
   const [qty, setQty] = useState(1)
   const [added, setAdded] = useState(false)
 
@@ -283,7 +283,9 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
                   <span className="rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold text-white">-{discountPercent}%</span>
                 )}
               </div>
-              {singlePrice ? (
+              {/* Cartão desligado (só PIX): sem linha de cartão nem "desconto
+                  no PIX" — desconto em relação a um meio que não existe. */}
+              {!cardEnabled ? null : singlePrice ? (
                 <p className="mt-2 text-sm text-muted-foreground">
                   Preço único: o mesmo no PIX e no cartão
                   {cardMaxInstallments > 1 && (
@@ -495,6 +497,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
             <ProductPurchaseBenefits
               freeShipping={freeShipping}
               singlePrice={singlePrice}
+              cardEnabled={cardEnabled}
               aura={purchaseAuraFor(effectiveCents * qty)}
             />
 

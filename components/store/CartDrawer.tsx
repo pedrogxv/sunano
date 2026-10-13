@@ -36,7 +36,7 @@ export function CartButton() {
 
 export function CartDrawer() {
   const { items, count, remove, increment, decrement, clear, isOpen, setOpen } = useCart()
-  const { cardSurchargePercent } = useStoreSettings()
+  const { cardSurchargePercent, cardEnabled } = useStoreSettings()
   const { user, loading: authLoading } = useAuthUser()
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(null)
 
@@ -246,11 +246,14 @@ export function CartDrawer() {
               <span className="text-lg font-black text-foreground">{formatBRL(total)}</span>
             </div>
 
-            {/* Carrinho só de serviço tem preço único: não há desconto de PIX a anunciar. */}
+            {/* Carrinho só de serviço tem preço único: não há desconto de PIX a anunciar.
+                Cartão desligado: o PIX é o único meio, sem comparação a fazer. */}
             <p className="text-[10px] text-muted-foreground">
-              {cardTotal > total
-                ? `PIX: ${formatBRL(total)} (${cardSurchargePercent}% de desconto) · Cartão: ${formatBRL(cardTotal)}`
-                : "Mesmo preço no PIX e no cartão"}
+              {!cardEnabled
+                ? "Pagamento via PIX"
+                : cardTotal > total
+                  ? `PIX: ${formatBRL(total)} (${cardSurchargePercent}% de desconto) · Cartão: ${formatBRL(cardTotal)}`
+                  : "Mesmo preço no PIX e no cartão"}
             </p>
 
             {hasPreOrderItem && (

@@ -5,7 +5,7 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { RouteLink } from "@/components/ui/route-link"
-import { Activity, AudioLines, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Palette, Ruler, Video, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
+import { Activity, AudioLines, Gauge, Hand, ListChecks, MessageSquare, MessageSquareText, Package, Palette, Quote, Ruler, Video, ShieldAlert, ShoppingBag, Star, ThumbsDown, ThumbsUp, Trophy, Volume2, Youtube, Zap } from "lucide-react"
 import { AuraIcon } from "@/components/ui/AuraIcon"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -1799,35 +1799,48 @@ export function PeripheralDetailView({
                   </CardContent>
                 </Card>
 
-              <Card size="sm" className="border-border/60 bg-secondary/50">
+              <Card size="sm" className="relative overflow-hidden border-border/60 bg-secondary/50">
+                {/* Aspas gigantes ao fundo: o card é uma CITAÇÃO assinada, não mais uma ficha. */}
+                <Quote
+                  aria-hidden
+                  className="pointer-events-none absolute -right-3 -top-4 size-32 rotate-180 text-fuchsia-400/[0.06]"
+                  fill="currentColor"
+                  strokeWidth={0}
+                />
                 <CardHeader>
                   <InfoCardTitle icon={MessageSquare} accent="fuchsia">{t.peripheralDetail.expertComments}</InfoCardTitle>
+                  {/* Assinatura no topo: quem escreveu aparece antes do texto, sem precisar rolar. */}
                   {expertAuthor && (
-                    <CardDescription className="flex items-center gap-2">
+                    <CardDescription className="mt-1 flex items-center gap-2.5">
                       <AuthorAvatarLink
                         author={{ userId: expertAuthor.userId, displayName: expertAuthor.displayName, displaySlug: expertAuthor.displaySlug }}
                         avatarUrl={expertAuthor.avatarUrl}
                         size="sm"
                       />
-                      <span className="text-xs">
+                      <span className="text-sm text-muted-foreground">
                         por{" "}
                         <AuthorNameLink
                           author={{ userId: expertAuthor.userId, displayName: expertAuthor.displayName, displaySlug: expertAuthor.displaySlug }}
-                          className="text-xs"
+                          className="text-sm font-semibold text-foreground"
                         />
                       </span>
                     </CardDescription>
                   )}
                 </CardHeader>
-                <CardContent className="whitespace-pre-wrap break-words text-base text-muted-foreground">
+                <CardContent className="relative">
                   {generalComments ? (
-                    // O admin escreve o comentário com o markdown mínimo do
-                    // projeto (`**negrito**`, `- item`, `##` título); antes o
-                    // texto saía cru, com os asteriscos à mostra. `FormattedText`
-                    // e não `CommentBody` porque aqui não há @menções a resolver.
-                    <FormattedText text={generalComments} />
+                      <div className="relative border-l-2 border-fuchsia-400/40 pl-4">
+                        {/* O admin escreve o comentário com o markdown mínimo do
+                            projeto (`**negrito**`, `- item`, `##` título); `FormattedText`
+                            e não `CommentBody` porque aqui não há @menções a resolver.
+                            `paragraphs`: linha em branco vira espaço entre parágrafos
+                            (space-y-3), e não uma linha vazia inteira de `pre-wrap`. */}
+                        <div className="space-y-3 break-words text-[15px] leading-relaxed text-muted-foreground [&>p:first-child]:text-base [&>p:first-child]:text-foreground/90">
+                          <FormattedText text={generalComments} paragraphs />
+                        </div>
+                      </div>
                   ) : (
-                    t.peripheralDetail.noExpertComments
+                    <p className="text-base text-muted-foreground">{t.peripheralDetail.noExpertComments}</p>
                   )}
                 </CardContent>
               </Card>

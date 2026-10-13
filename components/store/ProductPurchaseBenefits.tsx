@@ -16,6 +16,8 @@ interface ProductPurchaseBenefitsProps {
   freeShipping: boolean
   /** Serviço: mesmo preço no PIX e no cartão, sem desconto a anunciar. */
   singlePrice: boolean
+  /** A Loja aceita cartão. Sem ele, "Preço único — PIX e cartão" prometeria um meio que não existe. */
+  cardEnabled: boolean
   /** Aura que a compra rende (já multiplicada pela quantidade). */
   aura: number
   className?: string
@@ -30,7 +32,7 @@ interface ProductPurchaseBenefitsProps {
  * Os itens de confiança vão numa faixa só, em colunas; a Aura, que é o
  * atrativo, ganha a linha própria com a chama pulsando.
  */
-export function ProductPurchaseBenefits({ freeShipping, singlePrice, aura, className }: ProductPurchaseBenefitsProps) {
+export function ProductPurchaseBenefits({ freeShipping, singlePrice, cardEnabled, aura, className }: ProductPurchaseBenefitsProps) {
   const benefits: Benefit[] = []
 
   if (freeShipping) {
@@ -42,7 +44,7 @@ export function ProductPurchaseBenefits({ freeShipping, singlePrice, aura, class
       text: "Todo o Brasil",
     })
   }
-  if (singlePrice) {
+  if (singlePrice && cardEnabled) {
     benefits.push({
       key: "single-price",
       icon: <BadgeDollarSign className="size-4" />,

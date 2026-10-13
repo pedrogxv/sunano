@@ -18,8 +18,9 @@
 // segurança para leitura em client legado; não dependa dele em código novo.
 
 // Fechamento de emergência (08/10/2026, problema com a Asaas). Ganha da env:
-// volte para `false` e publique para reabrir.
-const STORE_FORCED_CLOSED = true
+// volte para `false` e publique para reabrir. Só em produção: no `next dev` a
+// Loja segue a env, para testar o gateway novo.
+const STORE_FORCED_CLOSED = process.env.NODE_ENV === "production"
 
 export function isStoreMaintenanceEnabled() {
   if (STORE_FORCED_CLOSED) return true

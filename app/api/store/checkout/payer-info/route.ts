@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
+import { activePaymentGateway } from "@/lib/server/payments/gateway"
+import { PAYMENT_GATEWAY_LABEL } from "@/lib/payment-gateways"
 
 /**
  * Diz ao checkout, ANTES de tentar gerar o PIX/cartão, se falta nome/CPF (ou,
@@ -71,6 +73,7 @@ export async function GET(request: NextRequest) {
     state: profile?.state ?? null,
     hasCompletePayerInfo: Boolean(profile?.full_name && profile?.cpf),
     hasCompleteAddressInfo,
+    paymentGatewayLabel: PAYMENT_GATEWAY_LABEL[activePaymentGateway()],
     // ENTREGA: última usada, só para pré-preencher o card. O que vale para
     // despachar é sempre o snapshot no pedido.
     shipping: {

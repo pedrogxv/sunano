@@ -3,12 +3,14 @@
 import { Suspense, useEffect, useState, useCallback, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { CheckCircle, Loader2, ShoppingBag, Receipt, XCircle } from "lucide-react"
+import { CheckCircle, Loader2, ShoppingBag, Receipt, XCircle, ShieldCheck, CreditCard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useCart } from "@/components/providers/cart-context"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { OrderPaidNextStepsDialog } from "@/components/store/OrderPaidNextStepsDialog"
+import { StripeCardForm } from "@/components/store/StripeCardForm"
+import type { CardPaymentState } from "@/lib/store-card-payment"
 
 interface OrderItem {
   id?: string
@@ -26,6 +28,7 @@ interface OrderStatus {
   items: OrderItem[]
   createdAt: string
   installmentCount: number | null
+  paymentMethod?: string | null
   pixPriceCents: number | null
   cardSurchargePercent: number | null
   /** false = serviço/digital: o chamado de suporte é aberto no pagamento. */
@@ -37,6 +40,13 @@ interface OrderStatus {
 
 const POLL_INTERVAL_MS = 3000
 
+/**
+ * Pagamento com cartão do Stripe (formulário no nosso site). `null` = ainda
+ * não consultado; `"hosted"` = pedido da Asaas, cujo cartão é pago na página
+ * dela e que volta aqui só para aguardar a confirmação.
+ */
+type CardInfo = { state: CardPaymentState; amountCents: number; lastError?: string | null } | "hosted" | null
+
 function CardCheckoutContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -45,8 +55,27 @@ function CardCheckoutContent() {
 
   const [order, setOrder] = useState<OrderStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [card, setCard] = useState<CardInfo>(null)
   const statusRef = useRef<OrderStatus["status"] | null>(null)
   statusRef.current = order?.status ?? null
+  const cardRef = useRef<CardInfo>(null)
+  cardRef.current = card
+
+  const fetchCardState = useCallback(async () => {
+    if (!orderId) return
+    try {
+      const res = await fetch(`/api/store/orders/${orderId}/card-payment`)
+      // 404: não é pedido de cartão do Stripe (Asaas hospeda o cartão).
+      if (res.status === 404) {
+        setCard("hosted")
+        return
+      }
+      if (!res.ok) return
+      setCard((await res.json()) as Exclude<CardInfo, "hosted" | null>)
+    } catch {
+      // Falha passageira: o polling tenta de novo.
+    }
+  }, [orderId])
 
   const fetchOrder = useCallback(async () => {
     if (!orderId) return
@@ -81,9 +110,20 @@ function CardCheckoutContent() {
         return
       }
       fetchOrder()
+      // Cartão autorizado: o webhook pode capturar (vira "paid" acima) ou
+      // segurar para revisão — só a rota do cartão conta o segundo caso.
+      const current = cardRef.current
+      if (current && current !== "hosted" && current.state === "processing") {
+        fetchCardState()
+      }
     }, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
-  }, [orderId, fetchOrder])
+  }, [orderId, fetchOrder, fetchCardState])
+
+  // Pedido pendente: descobre se é para mostrar o formulário de cartão.
+  useEffect(() => {
+    if (order?.status === "pending" && card === null) fetchCardState()
+  }, [order?.status, card, fetchCardState])
 
   useEffect(() => {
     if (order?.status === "paid") {
@@ -252,6 +292,70 @@ function CardCheckoutContent() {
         <p className="text-muted-foreground">Este pedido não está mais disponível para pagamento.</p>
         <Link href="/loja">
           <Button variant="outline">Voltar à loja</Button>
+        </Link>
+      </div>
+    )
+  }
+
+  if (card === null) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (card !== "hosted" && card.state === "ready") {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col gap-6 px-4 py-10">
+        <div className="space-y-1 text-center">
+          <div className="mx-auto mb-3 flex size-14 items-center justify-center rounded-full bg-emerald-500/15">
+            <CreditCard className="size-7 text-emerald-400" />
+          </div>
+          <h1 className="text-2xl font-black text-foreground">Pagamento com cartão</h1>
+          <p className="text-sm text-muted-foreground">
+            Pedido <span className="font-mono font-semibold text-foreground">#{orderNumber(order.id)}</span> ·{" "}
+            {formatBRL(card.amountCents)} à vista
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-border bg-muted/20 p-4">
+          <StripeCardForm
+            orderId={order.id}
+            amountCents={card.amountCents}
+            initialError={card.lastError}
+            onAuthorized={() => {
+              setCard({ state: "processing", amountCents: card.amountCents })
+              fetchOrder()
+            }}
+          />
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground">
+          Prefere PIX? <Link href="/conta/pedidos" className="underline">Cancele este pedido em Meus Pedidos</Link> e
+          finalize de novo escolhendo PIX.
+        </p>
+      </div>
+    )
+  }
+
+  if (card !== "hosted" && card.state === "review") {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 px-4 py-10 text-center">
+        <ShieldCheck className="size-10 text-amber-400" />
+        <div className="space-y-1">
+          <h1 className="text-2xl font-black text-foreground">Pagamento em análise</h1>
+          <p className="text-sm text-muted-foreground">
+            Seu cartão foi autorizado e o pagamento está passando por uma verificação de segurança.
+            Nada foi cobrado ainda: se aprovado, avisamos em Meus Pedidos; se não, a autorização é
+            liberada no seu cartão.
+          </p>
+        </div>
+        <Link href="/conta/pedidos">
+          <Button variant="outline" className="gap-2">
+            <Receipt className="size-4" />
+            Ver meus pedidos
+          </Button>
         </Link>
       </div>
     )

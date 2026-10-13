@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ChevronsUpDown,
   Clock,
+  CreditCard,
   ExternalLink,
   Eye,
   FlaskConical,
@@ -70,6 +71,14 @@ import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
+import { AuraIcon } from "@/components/ui/AuraIcon"
+import {
+  ORDER_PAYMENT_SOURCE_FILTERS,
+  ORDER_PAYMENT_SOURCE_LABEL,
+  PAYMENT_GATEWAY_LABEL,
+  orderPaymentGateway,
+  type OrderPaymentSourceFilter,
+} from "@/lib/payment-gateways"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
 import { ORDER_STATUS_GROUPS, orderStatusLabel, type OrderStatusGroup } from "@/lib/order-status"
@@ -77,6 +86,7 @@ import { formatCpfInput } from "@/components/store/CheckoutPayerCard"
 import { SHIPPING_RESIDENCE_TYPE_LABELS, isoToBirthDateInput } from "@/components/store/ShippingAddressFields"
 // `import type` é apagado no build: não puxa `server-only` para o bundle.
 import type {
+  AdminOrderRow,
   ManualPaymentMethod,
   OrderManualPayment,
   OrderShippingAddress,
@@ -128,6 +138,11 @@ type AdminOrder = {
   refund_reason: string | null
   refunded_at: string | null
   asaas_payment_id: string | null
+  stripe_payment_intent_id: string | null
+  stripe_session_id: string | null
+  card_review: AdminOrderRow["card_review"]
+  fraud_warning: AdminOrderRow["fraud_warning"]
+  chargeback: AdminOrderRow["chargeback"]
   user_id: string | null
   user_display_name: string | null
   oversold: OrderOversoldFlag | null
@@ -407,11 +422,11 @@ function CustomerFilterCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between font-normal sm:w-64", !value && "text-muted-foreground")}
+          className={cn("w-full min-w-0 justify-between font-normal", !value && "text-muted-foreground")}
         >
           <span className="flex min-w-0 items-center gap-1.5 truncate">
             <User className="size-3.5 shrink-0" />
-            <span className="truncate">{value ? value.name ?? value.email ?? "Cliente" : "Filtrar por cliente"}</span>
+            <span className="truncate">{value ? value.name ?? value.email ?? "Cliente" : "Todos os clientes"}</span>
           </span>
           {value ? (
             <X
@@ -486,7 +501,7 @@ function DateRangeFilter({
     ? dateTo
       ? `${formatDateShort(dateFrom)} – ${formatDateShort(dateTo)}`
       : `A partir de ${formatDateShort(dateFrom)}`
-    : "Filtrar por período"
+    : "Qualquer período"
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -494,7 +509,7 @@ function DateRangeFilter({
         <Button
           type="button"
           variant="outline"
-          className={cn("w-full justify-between font-normal sm:w-64", !dateFrom && "text-muted-foreground")}
+          className={cn("w-full min-w-0 justify-between font-normal", !dateFrom && "text-muted-foreground")}
         >
           <span className="flex min-w-0 items-center gap-1.5 truncate">
             <CalendarIcon className="size-3.5 shrink-0" />
@@ -591,7 +606,7 @@ function ProductFilterCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn("w-full justify-between font-normal sm:w-56", !value && "text-muted-foreground")}
+          className={cn("w-full min-w-0 justify-between font-normal", !value && "text-muted-foreground")}
         >
           <span className="flex min-w-0 items-center gap-1.5 truncate">
             <Package className="size-3.5 shrink-0" />
@@ -679,6 +694,9 @@ export default function AdminOrdersPage() {
   // pagamento de teste e não são trabalho a fazer — mas continuam no banco,
   // acessíveis trocando este seletor.
   const [environment, setEnvironment] = useState<OrderEnvironment>("production")
+  // Gateway que cobrou o pedido (ou Aura). A lista vem de lib/payment-gateways:
+  // gateway novo aparece aqui sem mexer na tela.
+  const [paymentSource, setPaymentSource] = useState<OrderPaymentSourceFilter>("all")
   // Aba, não filtro: "Limpar filtros" não mexe nela.
   const [kind, setKind] = useState<OrderKind>("all")
   const [page, setPage] = useState(1)
@@ -699,6 +717,7 @@ export default function AdminOrdersPage() {
       if (dateTo) params.set("dateTo", new Date(`${dateTo}T23:59:59.999`).toISOString())
       if (missingShippingOnly && kind !== "service") params.set("missingShipping", "1")
       params.set("environment", environment)
+      if (paymentSource !== "all") params.set("gateway", paymentSource)
       if (kind !== "all") params.set("kind", kind)
       params.set("page", String(page))
       params.set("pageSize", String(PAGE_SIZE))
@@ -721,7 +740,7 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false)
     }
-  }, [statusGroup, statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, kind, page])
+  }, [statusGroup, statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, paymentSource, kind, page])
 
   useEffect(() => {
     const timeout = setTimeout(load, userQuery ? 350 : 0)
@@ -731,7 +750,7 @@ export default function AdminOrdersPage() {
   // Qualquer mudança de filtro volta pra primeira página.
   useEffect(() => {
     setPage(1)
-  }, [statusGroup, statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, kind])
+  }, [statusGroup, statusFilter, productFilter, userQuery, customerFilter, dateFrom, dateTo, missingShippingOnly, environment, paymentSource, kind])
 
   const groupStatuses = statusesOfGroup(statusGroup)
   const statusOptions = STATUS_FILTERS.filter((f) => f.value === "all" || groupStatuses.includes(f.value))
@@ -761,7 +780,7 @@ export default function AdminOrdersPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const hasActiveFilters =
-    statusFilter !== "all" || productFilter !== null || userQuery.trim() !== "" || customerFilter !== null || dateFrom !== "" || dateTo !== "" || missingShippingOnly || environment !== "production"
+    statusFilter !== "all" || productFilter !== null || userQuery.trim() !== "" || customerFilter !== null || dateFrom !== "" || dateTo !== "" || missingShippingOnly || environment !== "production" || paymentSource !== "all"
 
   function clearFilters() {
     setStatusFilter("all")
@@ -772,6 +791,7 @@ export default function AdminOrdersPage() {
     setDateTo("")
     setMissingShippingOnly(false)
     setEnvironment("production")
+    setPaymentSource("all")
   }
 
   function applyOrderPatch(id: string, patch: Partial<AdminOrder>) {
@@ -782,35 +802,42 @@ export default function AdminOrdersPage() {
   usePageHeader("Pedidos", "Acompanhe, gerencie e extorne pedidos da loja.")
 
   return (
-    <div className="space-y-6">
-      <Tabs value={kind} onValueChange={(value) => setKind(value as OrderKind)}>
-        <TabsList>
-          {KIND_TABS.map(({ value, label, icon: Icon }) => (
-            <TabsTrigger key={value} value={value} className="gap-1.5">
-              <Icon className="size-3.5" />
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
-      <Tabs value={statusGroup} onValueChange={(value) => changeStatusGroup(value as OrderStatusGroup)}>
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+    <div className="space-y-4">
+      {/* Abas: tipo de pedido + etapa da fila, na mesma linha quando cabe. */}
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+        <Tabs value={kind} onValueChange={(value) => setKind(value as OrderKind)}>
           <TabsList>
-            {STATUS_GROUP_TABS.map(({ value, label, icon: Icon }) => (
+            {KIND_TABS.map(({ value, label, icon: Icon }) => (
               <TabsTrigger key={value} value={value} className="gap-1.5">
                 <Icon className="size-3.5" />
                 {label}
-                <span className="text-muted-foreground">({groupCount(counts, value)})</span>
               </TabsTrigger>
             ))}
           </TabsList>
-        </div>
-      </Tabs>
+        </Tabs>
 
-      {/* Filtros */}
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <Tabs
+          value={statusGroup}
+          onValueChange={(value) => changeStatusGroup(value as OrderStatusGroup)}
+          className="min-w-0"
+        >
+          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            <TabsList>
+              {STATUS_GROUP_TABS.map(({ value, label, icon: Icon }) => (
+                <TabsTrigger key={value} value={value} className="gap-1.5">
+                  <Icon className="size-3.5" />
+                  {label}
+                  <span className="text-muted-foreground">({groupCount(counts, value)})</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+        </Tabs>
+      </div>
+
+      {/* Filtros: busca + atalhos em cima, recortes numa grade de largura igual. */}
+      <div className="space-y-2 rounded-xl border border-border bg-card/40 p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -820,15 +847,45 @@ export default function AdminOrdersPage() {
               className="pl-9"
             />
           </div>
+          <div className="flex items-center gap-2">
+            {kind !== "service" && (
+              <Button
+                type="button"
+                variant={missingShippingOnly ? "default" : "outline"}
+                onClick={toggleMissingShipping}
+                className={cn(
+                  "gap-1.5",
+                  missingShippingOnly && "bg-amber-500 text-black hover:bg-amber-400"
+                )}
+                title="Pedidos pagos de item físico que ainda estão sem endereço"
+              >
+                <MapPinOff className="size-3.5" />
+                Sem endereço
+              </Button>
+            )}
+            {hasActiveFilters && (
+              <Button variant="ghost" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
+                <X className="size-3.5" />
+                Limpar
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <CustomerFilterCombobox
             value={customerFilter}
             onChange={setCustomerFilter}
             environment={environment}
           />
           <ProductFilterCombobox value={productFilter} onChange={setProductFilter} />
-          {statusOptions.length > 2 && (
-          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as OrderStatus | "all")}>
-            <SelectTrigger className="w-full border-border bg-card text-sm sm:w-64">
+          {/* Sempre na grade (mesmo com uma etapa só) para os campos não pularem de lugar ao trocar de aba. */}
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as OrderStatus | "all")}
+            disabled={statusOptions.length <= 2}
+          >
+            <SelectTrigger className="w-full min-w-0 border-border bg-card text-sm">
               <SelectValue>
                 {(() => {
                   const current = statusOptions.find((f) => f.value === statusFilter)
@@ -837,18 +894,17 @@ export default function AdminOrdersPage() {
                   const label = current.value === "all" ? "Todas as etapas" : current.label
                   const count = current.value === "all" ? groupCount(counts, statusGroup) : counts[current.value] ?? 0
                   return (
-                    <span className="flex items-center gap-2">
-                      <span className="text-muted-foreground">Status:</span>
+                    <span className="flex min-w-0 items-center gap-2">
                       <span
                         className={cn(
-                          "flex size-5 items-center justify-center rounded-md",
+                          "flex size-5 shrink-0 items-center justify-center rounded-md",
                           STATUS_FILTER_ICON_STYLE[current.value]
                         )}
                       >
                         <Icon className="size-3" />
                       </span>
-                      <span>{label}</span>
-                      <span className="text-muted-foreground">({count})</span>
+                      <span className="truncate">{label}</span>
+                      <span className="shrink-0 text-muted-foreground">({count})</span>
                     </span>
                   )
                 })()}
@@ -875,10 +931,6 @@ export default function AdminOrdersPage() {
               ))}
             </SelectContent>
           </Select>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
           <DateRangeFilter
             dateFrom={dateFrom}
             dateTo={dateTo}
@@ -890,15 +942,15 @@ export default function AdminOrdersPage() {
           <Select value={environment} onValueChange={(v) => setEnvironment(v as OrderEnvironment)}>
             <SelectTrigger
               className={cn(
-                "w-full border-border bg-card text-sm sm:w-52",
+                "w-full min-w-0 border-border bg-card text-sm",
                 environment !== "production" && "border-amber-500/50 text-amber-300"
               )}
             >
               <SelectValue>
-                <span className="flex items-center gap-2">
-                  <FlaskConical className="size-3.5 text-muted-foreground" />
+                <span className="flex min-w-0 items-center gap-2">
+                  <FlaskConical className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="text-muted-foreground">Ambiente:</span>
-                  <span>{ENVIRONMENT_FILTERS.find((e) => e.value === environment)?.label}</span>
+                  <span className="truncate">{ENVIRONMENT_FILTERS.find((e) => e.value === environment)?.label}</span>
                 </span>
               </SelectValue>
             </SelectTrigger>
@@ -910,28 +962,32 @@ export default function AdminOrdersPage() {
               ))}
             </SelectContent>
           </Select>
-          {kind !== "service" && (
-          <Button
-            type="button"
-            variant={missingShippingOnly ? "default" : "outline"}
-            size="sm"
-            onClick={toggleMissingShipping}
-            className={cn(
-              "gap-1.5",
-              missingShippingOnly && "bg-amber-500 text-black hover:bg-amber-400"
-            )}
-            title="Pedidos pagos de item físico que ainda estão sem endereço"
-          >
-            <MapPinOff className="size-3.5" />
-            Sem endereço
-          </Button>
-          )}
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
-              <X className="size-3.5" />
-              Limpar filtros
-            </Button>
-          )}
+          <Select value={paymentSource} onValueChange={(v) => setPaymentSource(v as OrderPaymentSourceFilter)}>
+            <SelectTrigger
+              className={cn(
+                "w-full min-w-0 border-border bg-card text-sm",
+                paymentSource !== "all" && "border-sky-500/50 text-sky-300"
+              )}
+            >
+              <SelectValue>
+                <span className="flex min-w-0 items-center gap-2">
+                  <CreditCard className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="text-muted-foreground">Gateway:</span>
+                  <span className="truncate">{ORDER_PAYMENT_SOURCE_LABEL[paymentSource]}</span>
+                </span>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {ORDER_PAYMENT_SOURCE_FILTERS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  <span className="flex items-center gap-2">
+                    {value === "aura" && <AuraIcon size="sm" />}
+                    {value === "aura" ? "Aura (resgate, sem gateway)" : ORDER_PAYMENT_SOURCE_LABEL[value]}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -996,7 +1052,12 @@ export default function AdminOrdersPage() {
                         {(order.aura_cost_paid ?? 0).toLocaleString("pt-BR")} Aura
                       </span>
                     ) : (
-                      <span className="text-sm font-semibold text-emerald-400">{formatBRL(order.total_cents)}</span>
+                      <>
+                        <span className="text-sm font-semibold text-emerald-400">{formatBRL(order.total_cents)}</span>
+                        <p className="text-[10px] text-muted-foreground">
+                          via {PAYMENT_GATEWAY_LABEL[orderPaymentGateway(order)]}
+                        </p>
+                      </>
                     )}
                     {order.refunded_cents > 0 && (
                       <p className="text-[10px] text-sky-400">-{formatBRL(order.refunded_cents)} extornado</p>
@@ -1023,6 +1084,24 @@ export default function AdminOrdersPage() {
                           SEM ESTOQUE
                         </span>
                       )}
+                      {order.card_review && order.status === "pending" && (
+                        <span
+                          title="Cartão autorizado e segurado para revisão: aprovar ou cancelar no pedido"
+                          className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-amber-400"
+                        >
+                          <AlertCircle className="size-2.5" strokeWidth={2.5} />
+                          REVISAR PAGAMENTO
+                        </span>
+                      )}
+                      {(order.fraud_warning || order.chargeback) && (
+                        <span
+                          title={order.chargeback ? "Disputa (chargeback) no cartão" : "Aviso de fraude do emissor"}
+                          className="inline-flex items-center gap-1 rounded-md bg-red-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-red-400"
+                        >
+                          <AlertCircle className="size-2.5" strokeWidth={2.5} />
+                          {order.chargeback ? "DISPUTA" : "AVISO DE FRAUDE"}
+                        </span>
+                      )}
                       {!order.requires_shipping_address && (
                         <span
                           title="Serviço/item digital: sem entrega, o atendimento é combinado no chamado de suporte"
@@ -1043,7 +1122,7 @@ export default function AdminOrdersPage() {
                       )}
                       {order.is_sandbox && (
                         <span
-                          title="Pedido feito contra a Asaas sandbox: pagamento de teste, não gerou receita nem comissão"
+                          title={`Pedido de teste (sandbox${order.payment_method === "aura" ? "" : ` da ${PAYMENT_GATEWAY_LABEL[orderPaymentGateway(order)]}`}): não gerou receita nem comissão`}
                           className="inline-flex items-center gap-1 rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[9.5px] font-bold text-violet-400"
                         >
                           <FlaskConical className="size-2.5" strokeWidth={2.5} />
@@ -1151,6 +1230,7 @@ function OrderManageDialog({
   const [cancelOpen, setCancelOpen] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [cancelling, setCancelling] = useState(false)
+  const [approvingReview, setApprovingReview] = useState(false)
 
   const [manualOpen, setManualOpen] = useState(false)
   const [manualMethod, setManualMethod] = useState<ManualPaymentMethod>("pix")
@@ -1182,6 +1262,8 @@ function OrderManageDialog({
   const remainingCents = order.total_cents - order.refunded_cents
   // Pedido de Aura não tem cobrança em dinheiro — não há o que estornar pelo gateway.
   const canRefund = !isAuraOrder && REFUNDABLE_STATUSES.includes(order.status) && remainingCents > 0
+  // Cobrança no gateway que o painel sabe estornar: Asaas ou Stripe.
+  const hasGatewayCharge = Boolean(order.asaas_payment_id || order.stripe_payment_intent_id)
   const canRegisterManual = !isAuraOrder && MANUAL_PAYABLE_STATUSES.includes(order.status)
 
   async function handleAdvance() {
@@ -1212,6 +1294,31 @@ function OrderManageDialog({
       toast.error("Erro ao atualizar pedido", { description: message })
     } finally {
       setAdvancing(false)
+    }
+  }
+
+  // Cartão segurado para revisão: aprovar captura a autorização e libera o
+  // pedido. Recusar é o "Cancelar pedido" abaixo (solta a autorização).
+  async function handleApproveCardReview() {
+    if (!order) return
+    setApprovingReview(true)
+    try {
+      const res = await fetch(`/api/admin/store/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "approve_card_review" }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao aprovar pagamento")
+      // O status real (pago / aguardando endereço) vem do trigger; recarregar
+      // a lista traz o certo. Aqui só tira o alerta.
+      onOrderPatched(order.id, { card_review: null, status: "paid" })
+      toast.success("Pagamento capturado", { description: `#${orderNumber(order.id)}` })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao aprovar pagamento"
+      toast.error("Erro ao aprovar pagamento", { description: message })
+    } finally {
+      setApprovingReview(false)
     }
   }
 
@@ -1367,6 +1474,65 @@ function OrderManageDialog({
                 <p className="text-muted-foreground">
                   Detectado em {formatDateTime(order.oversold.detected_at)}. Reponha o estoque
                   para enviar normalmente, ou extorne o pagamento abaixo.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Cartão autorizado e SEGURADO: nada foi cobrado. Decidir antes de
+              tudo — a autorização vence sozinha em ~7 dias. */}
+          {order.card_review && order.status === "pending" && (
+            <Alert className="border-amber-500/40 bg-amber-500/10">
+              <AlertCircle className="size-4 text-amber-400" />
+              <AlertDescription className="space-y-2 text-xs">
+                <p className="font-bold text-amber-400">Pagamento em revisão</p>
+                <p className="text-foreground">
+                  O cartão foi autorizado, mas a cobrança foi segurada: {order.card_review.reason}
+                </p>
+                <p className="text-muted-foreground">
+                  Risco no Radar: {order.card_review.risk_level ?? "?"} · 3DS:{" "}
+                  {order.card_review.three_d_secure ?? "não houve"} · desde{" "}
+                  {formatDateTime(order.card_review.held_at)}. Aprovar cobra o cliente; recusar é
+                  cancelar o pedido (a autorização é solta e nada é cobrado).
+                </p>
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleApproveCardReview}
+                  disabled={approvingReview}
+                >
+                  {approvingReview ? <Loader2 className="size-3.5 animate-spin" /> : <CheckCircle2 className="size-3.5" />}
+                  Aprovar e capturar
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {order.fraud_warning && (
+            <Alert className="border-red-500/40 bg-red-500/10">
+              <AlertCircle className="size-4 text-red-400" />
+              <AlertDescription className="space-y-1 text-xs">
+                <p className="font-bold text-red-400">Aviso de fraude do emissor</p>
+                <p className="text-foreground">
+                  O banco avisou que esta compra pode ser fraude ({formatDateTime(order.fraud_warning.detected_at)}).
+                  Pedido não enviado é estornado sozinho; se já saiu, tente segurar a entrega.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {order.chargeback && (
+            <Alert className="border-red-500/40 bg-red-500/10">
+              <AlertCircle className="size-4 text-red-400" />
+              <AlertDescription className="space-y-1 text-xs">
+                <p className="font-bold text-red-400">
+                  Disputa no cartão{order.chargeback.lost ? " — PERDIDA" : ""} ({order.chargeback.dispute_status})
+                </p>
+                <p className="text-foreground">
+                  {order.chargeback.reason ? `Motivo: ${order.chargeback.reason}. ` : ""}
+                  {order.chargeback.evidence_due_by
+                    ? `Responder no painel do gateway até ${formatDateTime(order.chargeback.evidence_due_by)}.`
+                    : "Acompanhe no painel do gateway."}
                 </p>
               </AlertDescription>
             </Alert>
@@ -1540,12 +1706,20 @@ function OrderManageDialog({
                   </>
                 ) : (
                   <p className="text-foreground">
-                    {order.asaas_payment_id ? "Asaas" : "—"} ·{" "}
+                    {order.asaas_payment_id
+                      ? "Asaas"
+                      : order.stripe_payment_intent_id || order.stripe_session_id
+                        ? "Stripe"
+                        : "—"}{" "}
+                    ·{" "}
                     {order.payment_method === "credit_card" ? "Cartão" : "PIX"}
                   </p>
                 )}
                 {order.asaas_payment_id && (
                   <p className="break-all text-muted-foreground">ID Asaas: {order.asaas_payment_id}</p>
+                )}
+                {order.stripe_payment_intent_id && (
+                  <p className="break-all text-muted-foreground">ID Stripe: {order.stripe_payment_intent_id}</p>
                 )}
               </>
             )}
@@ -1743,7 +1917,12 @@ function OrderManageDialog({
               ) : (
                 <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3">
                   <p className="text-xs text-muted-foreground">
-                    O pedido será cancelado{order.asaas_payment_id ? " e a cobrança removida no Asaas" : ""}
+                    O pedido será cancelado
+                    {order.asaas_payment_id
+                      ? " e a cobrança removida no Asaas"
+                      : order.stripe_payment_intent_id || order.stripe_session_id
+                        ? " e a cobrança encerrada no Stripe"
+                        : ""}
                     , e o estoque reservado será devolvido.
                   </p>
                   <div className="space-y-1">
@@ -1783,10 +1962,10 @@ function OrderManageDialog({
           {canRefund && (
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Extorno {!order.asaas_payment_id && "(indisponível)"}
+                Extorno {!hasGatewayCharge && "(indisponível)"}
               </p>
 
-              {!order.asaas_payment_id && (
+              {!hasGatewayCharge && (
                 <Alert className="border-amber-500/30 bg-amber-500/10 py-2">
                   <AlertCircle className="size-3.5 text-amber-400" />
                   <AlertDescription className="text-xs text-amber-300">
@@ -1816,7 +1995,7 @@ function OrderManageDialog({
                     setRefundValue((remainingCents / 100).toFixed(2))
                     setRefundOpen(true)
                   }}
-                  disabled={!order.asaas_payment_id}
+                  disabled={!hasGatewayCharge}
                 >
                   <RotateCcw className="size-4" />
                   Extornar pedido
@@ -1887,6 +2066,18 @@ function OrderManageDialog({
             >
               <ExternalLink className="size-3.5" />
               Ver cobrança no painel Asaas
+            </a>
+          )}
+
+          {order.stripe_payment_intent_id && (
+            <a
+              href={`https://dashboard.stripe.com/${order.is_sandbox ? "test/" : ""}payments/${encodeURIComponent(order.stripe_payment_intent_id)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+            >
+              <ExternalLink className="size-3.5" />
+              Ver pagamento no painel Stripe
             </a>
           )}
         </div>

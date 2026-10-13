@@ -28,7 +28,7 @@ import type { StoreProductCard } from "@/lib/server/repositories/store-repositor
  */
 export function LaunchCard(props: StoreProductCard) {
   const { add, setOpen: setCartOpen } = useCart()
-  const { cardSurchargePercent, cardMaxInstallments } = useStoreSettings()
+  const { cardSurchargePercent, cardMaxInstallments, cardEnabled } = useStoreSettings()
   const [pickerOpen, setPickerOpen] = useState(false)
   const [justAdded, setJustAdded] = useState(false)
   const href = `/loja/${props.slug}`
@@ -165,7 +165,7 @@ export function LaunchCard(props: StoreProductCard) {
               <span className="ml-1.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-400/80">no PIX</span>
             )}
           </p>
-          {!singlePrice && (
+          {!singlePrice && cardEnabled && (
             <p className="text-[10px] text-[#7a7a7a]">
               ou {formatBRL(computeItemCardPriceCents(effectiveCents, cardSurchargePercent, false))} no cartão
               {cardMaxInstallments > 1 && ` em até ${cardMaxInstallments}x sem juros`}

@@ -6,9 +6,14 @@ import {
   createPixPayment,
   getPixQrCode,
   createCheckout,
-  isSandboxGateway,
   type AsaasCheckoutItem,
 } from "@/lib/server/integrations/asaas"
+import {
+  cancelStripePayment,
+  createStripeCardPayment,
+  createStripePixPayment,
+} from "@/lib/server/integrations/stripe"
+import { activePaymentGateway, isActiveGatewaySandbox, storeCardPaymentsEnabled } from "@/lib/server/payments/gateway"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import { getRequestUser, isImpersonating } from "@/lib/server/auth/current-user"
 import {
@@ -24,6 +29,7 @@ import { checkRateLimit, getClientIpIdentifier } from "@/lib/server/rate-limit"
 import { dbErrorResponse } from "@/lib/db-errors"
 import {
   getVariantsForCheckout,
+  getSelectionRulesForCheckout,
   getVariantOptionsForCheckout,
   getRecentProductPurchaseQuantity,
   getSkusForProducts,
@@ -51,6 +57,7 @@ import { computeCardTotalCents, computeItemCardPriceCents, isSinglePriceProduct 
 import { effectivePreorderStatus, PREORDER_STATUS_LABEL } from "@/lib/store-preorder"
 import { resolveSelection, type ResolvedSelection } from "@/lib/store-sku"
 import { SITE_URL } from "@/lib/site-url"
+import { orderNumber } from "@/lib/order-number"
 import type { Database } from "@/lib/database.types"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
@@ -325,6 +332,31 @@ function buildAsaasCheckoutItems(
   return items
 }
 
+/**
+ * "2× Mouse X (Preto), Mousepad Y +1" — resumo dos itens para a descrição da
+ * cobrança. Cortado em ~200 caracteres: a Asaas aceita 500 e o painel do
+ * Stripe trunca a coluna bem antes disso.
+ */
+function summarizeChargeItems(
+  items: { name: string; quantity: number; variant_label: string | null }[]
+): string {
+  const MAX = 200
+  const parts = items.map((item) => {
+    const qty = item.quantity > 1 ? `${item.quantity}× ` : ""
+    const variant = item.variant_label ? ` (${item.variant_label})` : ""
+    return `${qty}${item.name}${variant}`
+  })
+  let out = ""
+  for (let i = 0; i < parts.length; i++) {
+    const next = out ? `${out}, ${parts[i]}` : parts[i]
+    const rest = parts.length - i - 1
+    const suffix = rest > 0 ? ` +${rest}` : ""
+    if (out && (next + suffix).length > MAX) return `${out} +${parts.length - i}`
+    out = next
+  }
+  return out.length > MAX ? `${out.slice(0, MAX - 1)}…` : out
+}
+
 export async function POST(request: NextRequest) {
   // Declarado fora do try para o catch externo conseguir reverter reservas
   // de estoque já aplicadas mesmo se uma exceção (ex. chamada ao gateway)
@@ -422,7 +454,7 @@ export async function POST(request: NextRequest) {
       .from("store_orders")
       .select("id", { count: "exact", head: true })
       .eq("status", "pending")
-      .eq("is_sandbox", isSandboxGateway())
+      .eq("is_sandbox", isActiveGatewaySandbox())
       .contains("metadata", { user_id: user.id })
     if (pendingError) {
       const { body, status } = dbErrorResponse(
@@ -466,6 +498,15 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+    }
+
+    // Cartão desligado no gateway ativo (Stripe: só PIX). A tela já não
+    // oferece o botão; isto barra o corpo montado à mão.
+    if (paymentMethod === "credit_card" && !storeCardPaymentsEnabled()) {
+      return NextResponse.json(
+        { error: "Pagamento com cartão indisponível no momento. Use PIX." },
+        { status: 400 }
+      )
     }
 
     // Limite adicional (mais rígido) só pra tentativas de cartão, em cima do
@@ -556,6 +597,7 @@ export async function POST(request: NextRequest) {
       variants,
       variantOptions,
       skus,
+      selectionRules,
     ] = await Promise.all([
       db
         .from("store_products")
@@ -566,6 +608,7 @@ export async function POST(request: NextRequest) {
       getVariantsForCheckout(variantIds),
       getVariantOptionsForCheckout(optionIds),
       getSkusForProducts(productIds),
+      getSelectionRulesForCheckout(productIds),
     ])
 
     if (dbError) {
@@ -580,6 +623,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Um ou mais produtos não encontrados" },
         { status: 404 }
+      )
+    }
+
+    if (!selectionRules) {
+      return NextResponse.json(
+        { error: "Não foi possível carregar os produtos do carrinho." },
+        { status: 503 }
       )
     }
 
@@ -699,6 +749,25 @@ export async function POST(request: NextRequest) {
           {
             error: `Selecione só uma opção por grupo de variantes: "${product.name}"`,
           },
+          { status: 400 }
+        )
+      }
+
+      // E no MÍNIMO: variante (se o produto tem) e uma opção de cada grupo —
+      // a regra do botão "Comprar" da página, imposta aqui porque o corpo da
+      // requisição é do cliente. Sem isto, mandar só o `productId` caía no
+      // preço base e no estoque do produto (ilimitado quando quem controla
+      // são as variantes). Ver `getSelectionRulesForCheckout`.
+      const rules = selectionRules.get(product.id)
+      const chosenGroups = new Set(options.map((o) => o.group.id))
+      if (
+        !rules ||
+        (rules.requiresVariant && !variant) ||
+        (!rules.requiresVariant && variant) ||
+        rules.groupIds.some((groupId) => !chosenGroups.has(groupId))
+      ) {
+        return NextResponse.json(
+          { error: `Escolha a versão de "${product.name}" na página do produto e adicione de novo ao carrinho.` },
           { status: 400 }
         )
       }
@@ -1174,7 +1243,137 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const description = `Pedido Sunano · ${orderItems.length} ${orderItems.length === 1 ? "item" : "itens"}`
+    // Texto da cobrança no painel do gateway: o que foi comprado, para quem
+    // olha a transação saber do que se trata sem abrir o pedido no admin.
+    const itemsSummary = summarizeChargeItems(orderItems)
+    const description = `Pedido Sunano · ${itemsSummary}`
+
+    // -----------------------------------------------------------------
+    // Stripe (gateway alternativo, `PAYMENT_GATEWAY=stripe`)
+    // -----------------------------------------------------------------
+    // Tudo acima (preço, estoque, afiliado, endereço) é o mesmo para os dois
+    // gateways; daqui pra baixo só muda quem emite a cobrança. A Asaas segue
+    // sendo o padrão e o fluxo dela, logo abaixo, não passa por este bloco.
+    if (activePaymentGateway() === "stripe") {
+      // Id do pedido antes da cobrança: ele vai no metadata do Stripe e é por
+      // ele (e pelo id da cobrança) que o webhook acha o pedido.
+      const orderId = randomUUID()
+      // Aqui o id já existe: o número é o mesmo de "Meus pedidos" e do admin.
+      const stripeDescription = `Pedido #${orderNumber(orderId)} · ${itemsSummary}`
+      const isSandbox = isActiveGatewaySandbox()
+      const pixExpiresAt = new Date(Date.now() + expirationMinutes * 60_000).toISOString()
+
+      let stripeInsert: Partial<Database["public"]["Tables"]["store_orders"]["Insert"]> & { total_cents: number }
+      let undoCharge: () => Promise<void>
+      let response: Record<string, unknown>
+
+      if (paymentMethod === "credit_card") {
+        const settings = await getStoreSettings()
+        const cardTotalCents = computeCardTotalCents(
+          orderItems.map((item) => ({
+            priceCents: item.price_cents,
+            quantity: item.quantity,
+            singlePrice: item.single_price,
+          })),
+          settings.cardSurchargePercent
+        )
+
+        // Cartão no NOSSO site: aqui só nasce o PaymentIntent (valor fixado
+        // no servidor, captura manual). O cartão é digitado em
+        // `/checkout/card` no Payment Element e confirmado pela rota
+        // `/api/store/orders/[id]/card-payment`. Sem parcelamento: o Stripe
+        // Brasil não oferece planos de parcelas.
+        let cardPayment
+        try {
+          cardPayment = await createStripeCardPayment({
+            orderId,
+            description: stripeDescription,
+            amountCents: cardTotalCents,
+            customerEmail,
+          })
+        } catch (cardError) {
+          console.error("[checkout] Stripe createStripeCardPayment falhou:", cardError)
+          await revertDecrements(db, decrementedLines, reservationGroup)
+          return NextResponse.json(
+            { error: "Não foi possível iniciar o pagamento com cartão. Tente novamente ou use PIX." },
+            { status: 402 }
+          )
+        }
+
+        stripeInsert = {
+          id: orderId,
+          stripe_payment_intent_id: cardPayment.paymentIntentId,
+          total_cents: cardTotalCents,
+          payment_method: "credit_card",
+          pix_price_cents: totalCents,
+          card_surcharge_percent: settings.cardSurchargePercent,
+          installment_count: 1,
+          // Prazo da LOJA, lido pelo cron de expiração (ver o ramo de cartão
+          // da Asaas abaixo para o porquê do nome). Ao expirar, o cron
+          // cancela o PaymentIntent e o cartão deixa de ser autorizável.
+          pix_expires_at: pixExpiresAt,
+        }
+        undoCharge = () => cancelStripePayment(cardPayment.paymentIntentId)
+        // Sem `checkoutUrl`: a tela segue para `/checkout/card` (formulário nosso).
+        response = { orderId, cardPayment: true }
+      } else {
+        const pix = await createStripePixPayment({
+          orderId,
+          amountCents: totalCents,
+          description: stripeDescription,
+          payerName,
+          payerEmail: customerEmail,
+          payerDocument,
+          expiresInSeconds: expirationMinutes * 60,
+        })
+
+        stripeInsert = {
+          id: orderId,
+          stripe_payment_intent_id: pix.paymentIntentId,
+          total_cents: totalCents,
+          payment_method: "pix",
+          pix_copy_paste: pix.copyPaste,
+          pix_qr_code_base64: pix.qrCodeDataUri,
+          pix_expires_at: pixExpiresAt,
+        }
+        undoCharge = () => cancelStripePayment(pix.paymentIntentId)
+        response = { orderId, qrCodeBase64: pix.qrCodeDataUri, copyPaste: pix.copyPaste }
+      }
+
+      const { data: order, error: insertError } = await db
+        .from("store_orders")
+        .insert({
+          ...stripeInsert,
+          ...shippingColumns,
+          items: orderItems,
+          status: "pending",
+          customer_email: customerEmail,
+          customer_name: payerName,
+          is_sandbox: isSandbox,
+          metadata: { user_id: user.id },
+          affiliate_id: affiliateForOrder?.affiliateId ?? null,
+          affiliate_code: affiliateForOrder?.affiliateCode ?? null,
+        })
+        .select("id")
+        .single()
+
+      if (insertError || !order) {
+        await revertDecrements(db, decrementedLines, reservationGroup)
+        // A cobrança já existe no Stripe e não tem pedido: fecha para ela não
+        // ser paga por um pedido que nunca vai ser liberado.
+        await undoCharge().catch((err) =>
+          console.error("[checkout] Stripe: falha ao desfazer cobrança sem pedido:", err)
+        )
+        const { body, status } = dbErrorResponse(insertError, "Não foi possível registrar o pedido.")
+        return NextResponse.json(body, { status })
+      }
+
+      await confirmReservations(db, reservationGroup)
+      await notifyOrderStatusChange({ userId: user.id, orderId: order.id, status: "pending" })
+      notifyDiscordOrderEventInBackground({ orderId: order.id, status: "pending", actor: "checkout" })
+
+      return NextResponse.json(response)
+    }
 
     let orderInsert: Partial<
       Database["public"]["Tables"]["store_orders"]["Insert"]
@@ -1291,7 +1490,7 @@ export async function POST(request: NextRequest) {
           // foi dinheiro de verdade ou de teste. `ASAAS_ENV` só existe em
           // runtime — sem gravar, um pedido de sandbox fica indistinguível de
           // um real depois que o deploy vira produção.
-          is_sandbox: isSandboxGateway(),
+          is_sandbox: isActiveGatewaySandbox(),
           metadata: { user_id: user.id },
           affiliate_id: affiliateForOrder?.affiliateId ?? null,
           affiliate_code: affiliateForOrder?.affiliateCode ?? null,
@@ -1386,7 +1585,7 @@ export async function POST(request: NextRequest) {
         payment_method: "pix",
         customer_email: customerEmail,
         customer_name: payerName,
-        is_sandbox: isSandboxGateway(),
+        is_sandbox: isActiveGatewaySandbox(),
         metadata: { user_id: user.id },
         affiliate_id: affiliateForOrder?.affiliateId ?? null,
         affiliate_code: affiliateForOrder?.affiliateCode ?? null,

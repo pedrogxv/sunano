@@ -14,7 +14,7 @@ export type AuthContextUser = {
   displayName: string
   avatarUrl: string | null
   isAdmin: boolean
-  /** Cargo WEB MASTER. NÃO fura a manutenção da Loja: quem decide é `canUseStore`. */
+  /** Cargo WEB MASTER. Para a Loja, leia `canUseStore` (já embute o bypass do cargo). */
   isWebMaster: boolean
   /**
    * A Loja e o Programa de Afiliados estão abertos PARA ESTE usuário agora.
@@ -27,6 +27,8 @@ export type AuthContextUser = {
    * origem do vazamento de UI descrito em lib/store-maintenance.ts.
    */
   canUseStore: boolean
+  /** Vê a Loja em manutenção por bypass (ver `AuthUserPayload.storeMaintenanceBypass`). */
+  storeMaintenanceBypass: boolean
   /** Se já abriu algum chamado de suporte — controla o item "Meus Tickets" do dropdown/nav (só aparece com histórico). */
   hasSupportTicket: boolean
   /** Quantos tickets abertos estão aguardando resposta do usuário — alimenta o ponto amber no sino e em "Meus Tickets". */
@@ -174,6 +176,7 @@ type MeResponse = {
   vipExpiresAt?: string | null
   subscriptionStatus?: string | null
   canUseStore?: boolean
+  storeMaintenanceBypass?: boolean
   equippedFrameUrl?: string | null
   equippedFrameSlug?: string | null
   isFounder?: boolean
@@ -190,7 +193,7 @@ type MeResponse = {
  * lib/client/auth-snapshot.ts sobre por que isso ainda não é possível).
  */
 export function buildAuthUser(data: MeResponse): AuthContextUser | null {
-  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut } = data
+  const { user, userProfile, adminProfile, hasSupportTicket, supportTicketsAwaitingMe, hasForumPost, accountTier, vipExpiresAt, subscriptionStatus, canUseStore, storeMaintenanceBypass, equippedFrameUrl, equippedFrameSlug, isFounder, longestStreak, frameOptOut } = data
   if (!user) return null
 
   return {
@@ -205,6 +208,7 @@ export function buildAuthUser(data: MeResponse): AuthContextUser | null {
     isAdmin: Boolean(adminProfile),
     isWebMaster: adminProfile?.role === "webmaster",
     canUseStore: Boolean(canUseStore),
+    storeMaintenanceBypass: Boolean(storeMaintenanceBypass),
     hasSupportTicket: Boolean(hasSupportTicket),
     supportTicketsAwaitingMe: supportTicketsAwaitingMe ?? 0,
     isVip: isVipActive(accountTier, vipExpiresAt),

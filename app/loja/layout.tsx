@@ -1,3 +1,4 @@
+import { StoreBypassNotice } from "@/components/store/StoreBypassNotice"
 import { StoreCommerceBarProvider } from "@/components/store/StoreCommerceBarContext"
 import { getStoreCommerceBar } from "@/lib/server/repositories/store-commerce-bar-repository"
 
@@ -17,6 +18,7 @@ export default async function LojaLayout({ children }: { children: React.ReactNo
 
   return (
     <StoreCommerceBarProvider config={config} serverNow={serverNow}>
+      <StoreBypassNotice />
       {children}
     </StoreCommerceBarProvider>
   )

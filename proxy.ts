@@ -118,6 +118,11 @@ function isServerActionRequest(request: NextRequest) {
   return request.method === "POST" && request.headers.has("next-action")
 }
 
+// Página de categoria da Loja (ISR) e a cópia dinâmica servida a quem
+// atravessa a manutenção. Ver o rewrite no fim de `proxy()`.
+const STORE_CATEGORY_PREFIX = "/loja/categoria/"
+const STORE_BYPASS_CATEGORY_PREFIX = "/loja/acesso-equipe/categoria/"
+
 // Tela de aviso pública do modo de manutenção (app/maintenance/page.tsx).
 const MAINTENANCE_PATH = "/maintenance"
 
@@ -601,15 +606,16 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     }
   }
 
-  // Loja em manutenção, mas há sessão: passa só quem tem a liberação
-  // individual do "pacote Loja" (`user_profiles.store_access`, concedida em
-  // /admin/users). Qualquer outro usuário logado continua recusado, WEB
-  // MASTER incluído: o cargo sozinho não fura mais a manutenção.
+  // Loja em manutenção, mas há sessão: passa quem tem a liberação individual
+  // do "pacote Loja" (`user_profiles.store_access`, concedida em
+  // /admin/users) ou é WEB MASTER (Loja só para a equipe, 13/10/2026).
+  // Qualquer outro usuário logado continua recusado.
   //
   // `hasStoreAccess` vem da query de `user_profiles` que o updateSession já
   // faz. A regra equivalente no lado server-only vive em
   // lib/server/auth/store-access.ts; as duas precisam concordar.
-  if (storeMaintenanceMode && !hasStoreAccess) {
+  const storeBypass = hasStoreAccess || isWebMaster(profile)
+  if (storeMaintenanceMode && !storeBypass) {
     const blockedResponse = storeMaintenanceResponse(request, isAffiliatePath)
     copyCookies(response, blockedResponse)
     return blockedResponse
@@ -802,6 +808,23 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
     const redirectResponse = NextResponse.redirect(targetUrl)
     copyCookies(response, redirectResponse)
     return redirectResponse
+  }
+
+  // A página de categoria da Loja é ISR (igual para todo visitante) e por isso
+  // mostra "Coming soon" a todo mundo durante a manutenção. Quem atravessa a
+  // manutenção é servido pela cópia dinâmica da mesma página
+  // (app/loja/acesso-equipe/categoria/[categoria]), sem mudar a URL.
+  if (
+    storeBypass &&
+    isStoreMaintenanceEnabled() &&
+    pathname.startsWith(STORE_CATEGORY_PREFIX) &&
+    pathname.length > STORE_CATEGORY_PREFIX.length
+  ) {
+    const bypassUrl = request.nextUrl.clone()
+    bypassUrl.pathname = STORE_BYPASS_CATEGORY_PREFIX + pathname.slice(STORE_CATEGORY_PREFIX.length)
+    const rewriteResponse = NextResponse.rewrite(bypassUrl)
+    copyCookies(response, rewriteResponse)
+    return rewriteResponse
   }
 
   if (profile && pathname.startsWith("/admin/users") && !isWebMaster(profile)) {

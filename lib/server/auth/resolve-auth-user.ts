@@ -45,6 +45,12 @@ export type AuthUserPayload = {
   vipExpiresAt: string | null
   subscriptionStatus: string | null
   canUseStore: boolean
+  /**
+   * A Loja está em manutenção e esta pessoa só a vê por bypass (WEB MASTER ou
+   * `store_access`). As telas da Loja mostram o aviso "Web Master special"
+   * (`StoreBypassNotice`), para ninguém tomar isso pela Loja aberta.
+   */
+  storeMaintenanceBypass: boolean
   /** Asset da moldura de avatar equipada — a topbar desenha a mesma moldura do resto do site. */
   equippedFrameUrl: string | null
   /** Slug do mesmo item (ver `lib/profile-frames.ts`). */
@@ -82,6 +88,7 @@ function anonymousPayload(): AuthUserPayload {
     vipExpiresAt: null,
     subscriptionStatus: null,
     canUseStore: !isStoreMaintenanceEnabled(),
+    storeMaintenanceBypass: false,
     equippedFrameUrl: null,
     equippedFrameSlug: null,
     isFounder: false,
@@ -195,6 +202,7 @@ export const resolveAuthUser = cache(async function resolveAuthUser(): Promise<A
     vipExpiresAt: profileAndVip.vip?.vip_expires_at ?? null,
     subscriptionStatus: subscription?.status ?? null,
     canUseStore,
+    storeMaintenanceBypass: canUseStore && isStoreMaintenanceEnabled(),
     equippedFrameUrl: profileAndVip.equippedFrame?.frameAssetUrl ?? null,
     equippedFrameSlug: profileAndVip.equippedFrame?.slug ?? null,
     isFounder,

@@ -347,7 +347,12 @@ export default function CheckoutPage() {
   // depois do /api/auth/me, e assumir fechado nesse intervalo faria a faixa de
   // loja fechada piscar em toda visita — o botão de pagar já fica desabilitado
   // por `authLoading` no mesmo período, então nada escapa.
-  const storeClosed = !authLoading && !(user?.canUseStore ?? false)
+  //
+  // Visitante também não leva a faixa: o contexto é `null` sem sessão, e ler
+  // `null` como "sem acesso" anunciava a Loja fechada para todo deslogado com
+  // ela aberta. Deslogado já não tem botão de pagar (o card de login ocupa o
+  // lugar); depois do login o `canUseStore` real chega e decide.
+  const storeClosed = !authLoading && user !== null && !user.canUseStore
 
   const requireAddress = paymentMethod === "credit_card"
   // Cartão exige endereço; se o perfil não tem, o card já abre em edição.

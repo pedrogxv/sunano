@@ -31,3 +31,12 @@ export function reviewCategoryKeyFor(category: string): ReviewCategoryKey | null
 
 /** Todas as categorias do catálogo avaliáveis nesta fase — filtro do picker de criação. */
 export const REVIEWABLE_CATALOG_CATEGORIES = REVIEW_CATEGORY_GROUPS.flatMap((g) => g.categories)
+
+/**
+ * Texto da review: obrigatório. Review só de estrelas não diz nada a quem lê a
+ * ficha. Reviews antigas sem texto continuam no ar; a regra vale para criar e
+ * para editar (quem edita uma antiga precisa escrever o comentário).
+ * O mínimo barra "." / "bom" — a rota e o formulário leem daqui.
+ */
+export const REVIEW_BODY_MIN_LENGTH = 10
+export const REVIEW_BODY_MAX_LENGTH = 400

@@ -3,7 +3,17 @@
 import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { ExternalLink, Pencil, Trash2 } from "lucide-react"
+import {
+  ExternalLink,
+  Headphones,
+  Keyboard,
+  Monitor,
+  Mouse,
+  Pencil,
+  RectangleHorizontal,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react"
 
 import {
   AlertDialog,
@@ -19,22 +29,32 @@ import {
 import {
   PeripheralMiniCard,
   reviewCountLabel,
-  type MiniCardAuthor,
 } from "@/components/profile/PeripheralMiniCard"
 import { StarRating } from "@/components/ui/star-rating"
 import { CARD_SURFACE_INTERACTIVE } from "@/lib/ui-styles"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { cn } from "@/lib/utils"
+import type { ReviewCategoryKey } from "@/lib/peripheral-review-categories"
 import type { ShowcaseReview, ShowcaseReviewCategoryBlock } from "@/lib/profile-showcase"
+
+/** Ícone de cada grupo de `REVIEW_CATEGORY_GROUPS` — abas do perfil e cabeçalho da página completa. */
+export const REVIEW_CATEGORY_ICON: Record<ReviewCategoryKey, LucideIcon> = {
+  mouse: Mouse,
+  mousepad: RectangleHorizontal,
+  keyboard: Keyboard,
+  monitor: Monitor,
+  headset: Headphones,
+}
 
 interface ReviewCategorySectionProps {
   block: ShowcaseReviewCategoryBlock
-  /** Dono do perfil — a foto ao lado da nota, no rodapé do card. */
-  author: MiniCardAuthor
   isOwner: boolean
   onEdit?: (review: ShowcaseReview) => void
   onDelete?: (review: ShowcaseReview) => Promise<void>
-  /** Cards compactos sem o texto do review — usado no carrossel do perfil. */
+  /**
+   * Cards compactos sem o texto do review e sem o cabeçalho — usado no
+   * carrossel do perfil, onde a categoria já aparece nas abas acima.
+   */
   compact?: boolean
 }
 
@@ -46,7 +66,6 @@ interface ReviewCategorySectionProps {
  */
 export function ReviewCategorySection({
   block,
-  author,
   isOwner,
   onEdit,
   onDelete,
@@ -64,11 +83,20 @@ export function ReviewCategorySection({
     }
   }
 
+  const Icon = REVIEW_CATEGORY_ICON[block.key]
+
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-        {block.label} ({block.reviews.length})
-      </h3>
+      {!compact && (
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+          <Icon className="size-4 text-muted-foreground" />
+          {block.label}
+          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+            {block.reviews.length}
+          </span>
+          <span aria-hidden className="h-px flex-1 bg-border/60" />
+        </h3>
+      )}
 
       <ul
         className={
@@ -140,7 +168,6 @@ export function ReviewCategorySection({
                 <PeripheralMiniCard
                   peripheral={review.peripheral}
                   rating={review.rating}
-                  author={author}
                   href={href}
                   actions={actions}
                   className="h-full"

@@ -17,10 +17,12 @@ import {
 } from "@/components/ui/dialog"
 import { StarRating } from "@/components/ui/star-rating"
 import { Textarea } from "@/components/ui/textarea"
-import { REVIEWABLE_CATALOG_CATEGORIES } from "@/lib/peripheral-review-categories"
+import {
+  REVIEW_BODY_MAX_LENGTH as BODY_MAX_LENGTH,
+  REVIEW_BODY_MIN_LENGTH as BODY_MIN_LENGTH,
+  REVIEWABLE_CATALOG_CATEGORIES,
+} from "@/lib/peripheral-review-categories"
 import type { ShowcasePeripheral, ShowcaseReview } from "@/lib/profile-showcase"
-
-const BODY_MAX_LENGTH = 400
 
 interface ReviewFormDialogProps {
   open: boolean
@@ -49,6 +51,8 @@ export function ReviewFormDialog({
   const [rating, setRating] = useState(initialRating ?? 0)
   const [body, setBody] = useState(initialBody ?? "")
   const [saving, setSaving] = useState(false)
+  const bodyLength = body.trim().length
+  const bodyTooShort = bodyLength < BODY_MIN_LENGTH
 
   function handleOpenChange(next: boolean) {
     onOpenChange(next)
@@ -60,13 +64,13 @@ export function ReviewFormDialog({
   }
 
   async function handleSubmit() {
-    if (!selected || rating < 1) return
+    if (!selected || rating < 1 || bodyTooShort) return
     setSaving(true)
     try {
       const res = await fetch(`/api/peripherals/${selected.id}/reviews`, {
         method: mode === "create" ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rating, body: body.trim() || null }),
+        body: JSON.stringify({ rating, body: body.trim() }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok || !data?.ok) throw new Error(data?.error ?? "Erro ao salvar sua avaliação")
@@ -86,8 +90,8 @@ export function ReviewFormDialog({
         <DialogHeader>
           <DialogTitle>{mode === "create" ? "Criar review" : "Editar review"}</DialogTitle>
           <DialogDescription>
-            Escolha o periférico, dê sua nota (1 a 5 estrelas, meia estrela vale) e, se quiser, conte
-            sua experiência em até {BODY_MAX_LENGTH} caracteres.
+            Escolha o periférico, dê sua nota (1 a 5 estrelas, meia estrela vale) e conte sua
+            experiência ({BODY_MIN_LENGTH} a {BODY_MAX_LENGTH} caracteres).
           </DialogDescription>
         </DialogHeader>
 
@@ -132,7 +136,7 @@ export function ReviewFormDialog({
 
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium text-muted-foreground">Comentário (opcional)</p>
+                  <p className="text-xs font-medium text-muted-foreground">Comentário</p>
                   <span className="text-[11px] text-muted-foreground/60">
                     {body.length}/{BODY_MAX_LENGTH}
                   </span>
@@ -144,13 +148,18 @@ export function ReviewFormDialog({
                   className="min-h-24"
                   maxLength={BODY_MAX_LENGTH}
                 />
+                {bodyLength > 0 && bodyTooShort && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Mínimo de {BODY_MIN_LENGTH} caracteres.
+                  </p>
+                )}
               </div>
             </>
           )}
         </div>
 
         <DialogFooter>
-          <Button type="button" onClick={handleSubmit} disabled={!selected || rating < 1 || saving} className="gap-2">
+          <Button type="button" onClick={handleSubmit} disabled={!selected || rating < 1 || bodyTooShort || saving} className="gap-2">
             {saving && <Loader2 className="size-4 animate-spin" />}
             {mode === "create" ? "Enviar review" : "Salvar alterações"}
           </Button>

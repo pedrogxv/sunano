@@ -56,7 +56,7 @@ import { buildPeripheralSlug } from "@/lib/peripheral-slug"
 import { hasScoreRanking } from "@/lib/tag-options"
 import { CARD_TAG_STYLES } from "@/lib/tierlist-theme"
 import { CARD_SURFACE } from "@/lib/ui-styles"
-import { formatCurrencyBRL } from "@/lib/format"
+import { formatCurrencyBRLCompact } from "@/lib/format"
 import { useDebouncedValue } from "@/lib/hooks/use-debounced-value"
 import { cn } from "@/lib/utils"
 import type { PeripheralFilterOptions, RankedPeripheral } from "@/lib/server/repositories/peripherals-repository"
@@ -1208,7 +1208,7 @@ export function PerifericosContent({
                       </div>
 
                       <span className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-sm font-bold text-emerald-300">
-                        {formatCurrencyBRL(item.price)}
+                        {formatCurrencyBRLCompact(item.price)}
                       </span>
 
                       {item.tags?.length > 0 && (

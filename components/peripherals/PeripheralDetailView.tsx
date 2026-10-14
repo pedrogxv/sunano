@@ -1245,6 +1245,96 @@ export function PeripheralDetailView({
                   </CardContent>
                 </Card>
               )}
+
+              {/* Discussões do fórum que citam este periférico — link reverso
+                  de `forum_post_peripherals`. Card próprio, e não dentro do
+                  de review: aquele é do YouTube, e misturar os dois rotularia
+                  a discussão como review. Renderizado no servidor, então o
+                  Googlebot lê ficha -> tópico sem executar JS. */}
+              {forumPosts.length > 0 && (
+                /* `relative` + `z-10`: sem contexto de empilhamento próprio,
+                   o card irmão seguinte (pintado depois na mesma coluna)
+                   cobria o item elevado no hover. */
+                <Card size="sm" className="relative z-10 border-border/60 bg-secondary/50">
+                  <CardHeader>
+                    <InfoCardTitle icon={MessageSquare} accent="violet">
+                      Discussões no fórum
+                    </InfoCardTitle>
+                    <CardDescription className="text-xs">
+                      Tópicos da comunidade que citam este periférico.
+                    </CardDescription>
+                  </CardHeader>
+                  {/* Sem `overflow-auto` aqui de propósito: o card sobe
+                      0.5 no hover e qualquer overflow diferente de `visible`
+                      recorta essa elevação (e a sombra) na borda do
+                      CardContent. A lista é curta (limite de 5 no
+                      `getPostsForPeripheral`), então não precisa de scroll. */}
+                  <CardContent className="space-y-2.5">
+                    {forumPosts.map((post) => (
+                      <Link
+                        key={post.slug}
+                        href={`/forum/${post.slug}`}
+                        /* Sem `-translate-y` no hover: o `Card` pai tem
+                           `overflow-hidden` (padrão do componente, que
+                           arredonda imagem no topo/base), então qualquer
+                           elevação era recortada na borda — e dentro de
+                           `columns-2` o item ainda ficava atrás do conteúdo
+                           pintado depois. `relative`+`z-10` resolve o
+                           empilhamento, e o destaque vem de escala e glow,
+                           que acontecem DENTRO do padding do card. */
+                        className="group/topic relative z-0 block rounded-xl border border-border bg-muted/30 p-3 transition-all duration-200 hover:z-10 hover:scale-[1.02] hover:border-violet-500/50 hover:bg-muted/60 hover:shadow-[0_0_18px_rgba(139,92,246,0.18)]"
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <UserAvatar
+                            name={post.author_display_name}
+                            avatarUrl={post.author_avatar_url}
+                            size={8}
+                            frame={profileFrameOf({
+                              equipped_avatar_frame_slug: post.author_equipped_frame_slug,
+                              equipped_avatar_frame_url: post.author_equipped_frame_url,
+                              account_tier: post.author_account_tier,
+                              vip_expires_at: post.author_vip_expires_at,
+                              is_founder: post.author_is_founder,
+                              longest_streak: post.author_longest_streak,
+                              avatar_frame_opt_out: post.author_frame_opt_out,
+                            })}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground transition-colors group-hover/topic:text-violet-400">
+                              {post.title}
+                            </p>
+                            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                              por {post.author_display_name}
+                            </p>
+                          </div>
+                          <span className="mt-0.5 shrink-0 text-muted-foreground transition-transform duration-200 group-hover/topic:translate-x-0.5 group-hover/topic:text-violet-400">
+                            →
+                          </span>
+                        </div>
+
+                        <div className="mt-2 flex items-center gap-3 pl-[42px] text-[11px] text-muted-foreground">
+                          {post.aura_count > 0 && (
+                            <span className="flex items-center gap-1 font-semibold text-orange-500">
+                              <AuraIcon size="sm" tone="inherit" />
+                              {post.aura_count}
+                            </span>
+                          )}
+                          <span className="flex items-center gap-1">
+                            <MessageSquare className="size-3" />
+                            {post.comment_count}
+                          </span>
+                          {/* Mesmo formato curto do resto do fórum
+                              (`ForumPostSidebar`), não o "16 de ago. de 2026"
+                              do toLocaleDateString. */}
+                          <span className="ml-auto">
+                            {format(new Date(post.created_at), "dd MMM yyyy", { locale: ptBR })}
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* @container/col: os grids desta coluna precisam medir a coluna, não a
@@ -1667,95 +1757,6 @@ export function PeripheralDetailView({
                 </Card>
                 )}
 
-                {/* Discussões do fórum que citam este periférico — link reverso
-                    de `forum_post_peripherals`. Card próprio, e não dentro do
-                    de review: aquele é do YouTube, e misturar os dois rotularia
-                    a discussão como review. Renderizado no servidor, então o
-                    Googlebot lê ficha -> tópico sem executar JS. */}
-                {forumPosts.length > 0 && (
-                  /* `relative` + `z-10`: sem contexto de empilhamento próprio,
-                     o card irmão seguinte (pintado depois na mesma coluna)
-                     cobria o item elevado no hover. */
-                  <Card size="sm" className="relative z-10 mb-3 break-inside-avoid border-border/60 bg-secondary/50">
-                    <CardHeader>
-                      <InfoCardTitle icon={MessageSquare} accent="violet">
-                        Discussões no fórum
-                      </InfoCardTitle>
-                      <CardDescription className="text-xs">
-                        Tópicos da comunidade que citam este periférico.
-                      </CardDescription>
-                    </CardHeader>
-                    {/* Sem `overflow-auto` aqui de propósito: o card sobe
-                        0.5 no hover e qualquer overflow diferente de `visible`
-                        recorta essa elevação (e a sombra) na borda do
-                        CardContent. A lista é curta (limite de 5 no
-                        `getPostsForPeripheral`), então não precisa de scroll. */}
-                    <CardContent className="space-y-2.5">
-                      {forumPosts.map((post) => (
-                        <Link
-                          key={post.slug}
-                          href={`/forum/${post.slug}`}
-                          /* Sem `-translate-y` no hover: o `Card` pai tem
-                             `overflow-hidden` (padrão do componente, que
-                             arredonda imagem no topo/base), então qualquer
-                             elevação era recortada na borda — e dentro de
-                             `columns-2` o item ainda ficava atrás do conteúdo
-                             pintado depois. `relative`+`z-10` resolve o
-                             empilhamento, e o destaque vem de escala e glow,
-                             que acontecem DENTRO do padding do card. */
-                          className="group/topic relative z-0 block rounded-xl border border-border bg-muted/30 p-3 transition-all duration-200 hover:z-10 hover:scale-[1.02] hover:border-violet-500/50 hover:bg-muted/60 hover:shadow-[0_0_18px_rgba(139,92,246,0.18)]"
-                        >
-                          <div className="flex items-start gap-2.5">
-                            <UserAvatar
-                              name={post.author_display_name}
-                              avatarUrl={post.author_avatar_url}
-                              size={8}
-                              frame={profileFrameOf({
-                                equipped_avatar_frame_slug: post.author_equipped_frame_slug,
-                                equipped_avatar_frame_url: post.author_equipped_frame_url,
-                                account_tier: post.author_account_tier,
-                                vip_expires_at: post.author_vip_expires_at,
-                                is_founder: post.author_is_founder,
-                                longest_streak: post.author_longest_streak,
-                                avatar_frame_opt_out: post.author_frame_opt_out,
-                              })}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="line-clamp-2 text-sm font-medium leading-snug text-foreground transition-colors group-hover/topic:text-violet-400">
-                                {post.title}
-                              </p>
-                              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                                por {post.author_display_name}
-                              </p>
-                            </div>
-                            <span className="mt-0.5 shrink-0 text-muted-foreground transition-transform duration-200 group-hover/topic:translate-x-0.5 group-hover/topic:text-violet-400">
-                              →
-                            </span>
-                          </div>
-
-                          <div className="mt-2 flex items-center gap-3 pl-[42px] text-[11px] text-muted-foreground">
-                            {post.aura_count > 0 && (
-                              <span className="flex items-center gap-1 font-semibold text-orange-500">
-                                <AuraIcon size="sm" tone="inherit" />
-                                {post.aura_count}
-                              </span>
-                            )}
-                            <span className="flex items-center gap-1">
-                              <MessageSquare className="size-3" />
-                              {post.comment_count}
-                            </span>
-                            {/* Mesmo formato curto do resto do fórum
-                                (`ForumPostSidebar`), não o "16 de ago. de 2026"
-                                do toLocaleDateString. */}
-                            <span className="ml-auto">
-                              {format(new Date(post.created_at), "dd MMM yyyy", { locale: ptBR })}
-                            </span>
-                          </div>
-                        </Link>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
               </div>
 
               <Card size="sm" className="border-border/60 bg-secondary/50">

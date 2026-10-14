@@ -94,11 +94,6 @@ export default async function PerfilReviewsPage({
 
       <AllReviewsClient
         initialBlocks={blocks}
-        author={{
-          name: profile.display_name,
-          avatarUrl: profile.avatar_url,
-          frame: profileFrameOf(profile),
-        }}
         initialReviewedIds={reviewedIds}
         initialIntegrityAccepted={Boolean(profile.reviews_integrity_accepted_at)}
         isOwner={isOwner}

@@ -4,12 +4,8 @@ import type { ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
 
-import { ProfileAvatar } from "@/components/ui/ProfileAvatar"
-import { SunanoIcon } from "@/components/ui/SunanoLogo"
 import { StarRating } from "@/components/ui/star-rating"
-import { formatCurrencyBRL } from "@/lib/format"
 import { buildPeripheralSlug } from "@/lib/peripheral-slug"
-import type { ProfileFrameIdentity } from "@/lib/profile-frames"
 import type { ShowcasePeripheral } from "@/lib/profile-showcase"
 import { cn } from "@/lib/utils"
 
@@ -18,9 +14,10 @@ import { cn } from "@/lib/utils"
  * setup", "Periféricos favoritos" e "Meus Reviews".
  *
  * A estrutura é fixa, de cima para baixo: foto numa caixa clara centralizada,
- * nome em negrito, linha de preço com um filete abaixo dela e, no rodapé, a
- * foto de quem deu a nota ao lado das estrelas, com a contagem de reviews da
- * comunidade embaixo. As três seções desenham exatamente isso — antes cada
+ * nome em negrito e, abaixo de um filete, as estrelas com a contagem de
+ * reviews da comunidade embaixo. Sem preço e sem a foto de quem deu a nota:
+ * o card só aparece no perfil da própria pessoa, então a foto dela repetida
+ * em cada card era ruído, e o preço do catálogo não é o assunto da review. As três seções desenham exatamente isso — antes cada
  * uma tinha o seu card (foto de 64px aqui, `aspect-square` ali, borda e
  * padding diferentes em cada) e o perfil parecia três telas coladas.
  *
@@ -29,39 +26,24 @@ import { cn } from "@/lib/utils"
  * responsabilidade de quem usa o card.
  *
  * "Meu setup" e "Periféricos favoritos" passam `showDetails={false}`: lá o
- * card é só foto e nome. Preço e nota ficam para "Meus Reviews", que é onde
- * a classificação é o assunto.
+ * card é só foto e nome. A nota fica para "Meus Reviews", que é onde a
+ * classificação é o assunto.
  */
 
 /** Altura da caixa da foto. Único número a mexer para o card inteiro acompanhar. */
 const IMAGE_BOX = "h-20"
 
-/** Quem deu a nota — o dono do perfil. Ver `profileFrameOf` em `lib/profile-frames.ts`. */
-export type MiniCardAuthor = {
-  name: string
-  avatarUrl: string | null
-  /** Moldura em UM objeto, como manda o `AGENTS.md` — nunca tier/VIP soltos. */
-  frame: ProfileFrameIdentity | null
-}
-
 interface PeripheralMiniCardProps {
   peripheral: ShowcasePeripheral
-  /**
-   * Nota do DONO do perfil neste periférico (a review dele). Com ela o rodapé
-   * mostra a foto dele ao lado das estrelas; sem ela, o card cai na média da
-   * comunidade e o avatar não aparece — pôr a foto de alguém ao lado de uma
-   * nota que não é dele seria dizer que ele a deu.
-   */
+  /** Nota do DONO do perfil neste periférico (a review dele); sem ela, a média da comunidade. */
   rating?: number | null
-  /** Dono do perfil, para a foto do rodapé. */
-  author?: MiniCardAuthor
   /** Faixa acima da foto — o rótulo do slot no "Meu setup". */
   header?: ReactNode
   /** Botões do dono, posicionados sobre o card (`absolute`). */
   actions?: ReactNode
   /** Link próprio; por padrão vai para a ficha do periférico. */
   href?: string
-  /** `false` esconde a linha de preço e o rodapé de nota. */
+  /** `false` esconde o rodapé de nota. */
   showDetails?: boolean
   className?: string
 }
@@ -77,15 +59,9 @@ function ratingLabel(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(".", ",")
 }
 
-/** `0` é o "não sei o preço" do catálogo — ver o campo em `ShowcasePeripheral`. */
-function priceLabel(price: number): string {
-  return price > 0 ? formatCurrencyBRL(price) : "Preço não disponível"
-}
-
 export function PeripheralMiniCard({
   peripheral,
   rating,
-  author,
   header,
   actions,
   href,
@@ -93,7 +69,6 @@ export function PeripheralMiniCard({
   className,
 }: PeripheralMiniCardProps) {
   const target = href ?? `/perifericos/${buildPeripheralSlug(peripheral.name, peripheral.id)}`
-  const isOwnRating = rating != null
   const shownRating = rating ?? peripheral.reviews.average
 
   return (
@@ -108,7 +83,7 @@ export function PeripheralMiniCard({
       <Link
         href={target}
         className={cn(
-          "relative mx-auto block w-full max-w-28 shrink-0 rounded-md bg-muted/40",
+          "relative mx-auto block w-full max-w-28 shrink-0",
           IMAGE_BOX
         )}
       >
@@ -132,46 +107,19 @@ export function PeripheralMiniCard({
       </Link>
 
       {showDetails && (
-        <>
-          <p className="mt-1.5 truncate border-b border-border/60 pb-1.5 text-[11px] text-muted-foreground/80">
-            {priceLabel(peripheral.price)}
-          </p>
-
-          <div className="mt-2 flex items-center gap-2">
-            {/* Quem assina a nota. A foto da pessoa só aparece quando a nota é
-                DELA; quando é a média da comunidade quem assina é o site, senão o
-                card diria que ela deu uma nota que não deu. */}
-            {shownRating != null &&
-              (isOwnRating && author ? (
-                <ProfileAvatar
-                  name={author.name}
-                  avatarUrl={author.avatarUrl}
-                  frame={author.frame}
-                  size="sm"
-                  wrapperClassName="shrink-0"
-                />
-              ) : (
-                <SunanoIcon
-                  className="size-8 shrink-0 rounded-full bg-muted/40 p-0.5"
-                  title="Média da comunidade"
-                />
-              ))}
-
-            <div className="min-w-0">
-              {shownRating != null && (
-                <div className="flex items-center gap-1.5">
-                  <StarRating value={shownRating} size="sm" className="gap-0" />
-                  <span className="text-[11px] font-semibold text-amber-400">
-                    {ratingLabel(shownRating)}
-                  </span>
-                </div>
-              )}
-              <p className="truncate text-[11px] text-muted-foreground/70">
-                {reviewCountLabel(peripheral.reviews.count)}
-              </p>
+        <div className="mt-2 border-t border-border/60 pt-2">
+          {shownRating != null && (
+            <div className="flex items-center gap-1.5">
+              <StarRating value={shownRating} size="sm" className="gap-0" />
+              <span className="text-[11px] font-semibold text-amber-400">
+                {ratingLabel(shownRating)}
+              </span>
             </div>
-          </div>
-        </>
+          )}
+          <p className="truncate text-[11px] text-muted-foreground/70">
+            {reviewCountLabel(peripheral.reviews.count)}
+          </p>
+        </div>
       )}
 
       {actions}
@@ -212,10 +160,10 @@ export function PeripheralMiniCardEmpty({
       </div>
       <p className="mt-3 truncate text-sm font-semibold text-muted-foreground/50">{label}</p>
       {showDetails && (
-        <>
-          <p className="mt-1.5 border-b border-border/40 pb-1.5 text-[11px] text-transparent">&nbsp;</p>
-          <p className="mt-2 truncate text-[11px] text-transparent">&nbsp;</p>
-        </>
+        <div className="mt-2 border-t border-border/40 pt-2">
+          <p className="text-[11px] text-transparent">&nbsp;</p>
+          <p className="text-[11px] text-transparent">&nbsp;</p>
+        </div>
       )}
     </div>
   )

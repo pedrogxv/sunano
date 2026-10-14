@@ -97,15 +97,6 @@ export function ProfileShowcase({
     </div>
   )
 
-  // O dono do perfil, para a foto que acompanha a nota dele no rodapé dos
-  // cards de "Meus Reviews" (ver `PeripheralMiniCard`). Montado uma vez: a
-  // seção desenha o mesmo avatar dezenas de vezes.
-  const cardAuthor = {
-    name: profile.display_name,
-    avatarUrl: profile.avatar_url,
-    frame: profileFrameOf(profile),
-  }
-
   const medals = <MedalhasGrid medals={profile.medals} />
   const medalsCentered = (
     <MedalhasGrid medals={profile.medals} className="justify-center text-center" />
@@ -237,7 +228,6 @@ export function ProfileShowcase({
 
         <MeusReviewsGrid
           reviewsByCategory={profile.reviewsByCategory}
-          author={cardAuthor}
           reviewsIntegrityAcceptedAt={profile.reviews_integrity_accepted_at}
           reviewedPeripheralIds={profile.reviewed_peripheral_ids}
           isOwner={isOwner}

@@ -3,7 +3,6 @@
 import { Plus, Star } from "lucide-react"
 
 import { ReviewCategorySection } from "@/components/profile/ReviewCategorySection"
-import type { MiniCardAuthor } from "@/components/profile/PeripheralMiniCard"
 import { ReviewFormDialog } from "@/components/profile/ReviewFormDialog"
 import { IntegrityTermDialog } from "@/components/profile/IntegrityTermDialog"
 import { useReviewsController } from "@/components/profile/useReviewsController"
@@ -12,8 +11,6 @@ import type { ShowcaseReviewCategoryBlock } from "@/lib/profile-showcase"
 
 interface AllReviewsClientProps {
   initialBlocks: ShowcaseReviewCategoryBlock[]
-  /** Dono do perfil — a foto ao lado da nota, no rodapé do card. */
-  author: MiniCardAuthor
   initialReviewedIds: string[]
   initialIntegrityAccepted: boolean
   isOwner: boolean
@@ -22,7 +19,6 @@ interface AllReviewsClientProps {
 /** Página completa `/perfil/[handle]/reviews` — todos os blocos de categoria empilhados, sem cap, scroll normal. */
 export function AllReviewsClient({
   initialBlocks,
-  author,
   initialReviewedIds,
   initialIntegrityAccepted,
   isOwner,
@@ -65,7 +61,6 @@ export function AllReviewsClient({
           <ReviewCategorySection
             key={block.key}
             block={block}
-            author={author}
             isOwner={isOwner}
             onEdit={isOwner ? handleEdit : undefined}
             onDelete={isOwner ? handleDelete : undefined}

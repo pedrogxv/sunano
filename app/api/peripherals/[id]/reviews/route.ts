@@ -10,6 +10,7 @@ import {
   PERIPHERAL_REVIEWS_PAGE_SIZE,
   updateOwnPeripheralReview,
 } from "@/lib/server/repositories/peripheral-reviews-repository"
+import { REVIEW_BODY_MAX_LENGTH, REVIEW_BODY_MIN_LENGTH } from "@/lib/peripheral-review-categories"
 
 /**
  * Review é um recurso singleton por `(user, peripheral)` (constraint unique
@@ -56,11 +57,15 @@ const ratingSchema = z
   .max(5)
   .refine((v) => Number.isInteger(v * 2), { message: "Nota deve estar em passos de meia estrela." })
 
-const bodySchema = z.string().trim().max(400).nullable().optional()
+const bodySchema = z
+  .string({ error: "Escreva um comentário sobre o periférico." })
+  .trim()
+  .min(REVIEW_BODY_MIN_LENGTH, { message: `O comentário precisa ter pelo menos ${REVIEW_BODY_MIN_LENGTH} caracteres.` })
+  .max(REVIEW_BODY_MAX_LENGTH)
 
 const createSchema = z.object({ rating: ratingSchema, body: bodySchema })
 const updateSchema = z
-  .object({ rating: ratingSchema.optional(), body: bodySchema })
+  .object({ rating: ratingSchema.optional(), body: bodySchema.optional() })
   .refine((d) => d.rating !== undefined || d.body !== undefined, { message: "Nada para atualizar." })
 
 /** Cria a review do usuário atual pra este periférico. */
@@ -95,7 +100,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       peripheralId: id,
       userId: user.id,
       rating: parsed.data.rating,
-      body: parsed.data.body?.trim() || null,
+      body: parsed.data.body,
     })
 
     if (!result.ok) {
@@ -139,7 +144,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       peripheralId: id,
       userId: user.id,
       rating: parsed.data.rating,
-      body: parsed.data.body !== undefined ? parsed.data.body?.trim() || null : undefined,
+      body: parsed.data.body,
     })
 
     if (!result.ok) {

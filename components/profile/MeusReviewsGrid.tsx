@@ -4,8 +4,7 @@ import { useRef, useState } from "react"
 import Link from "next/link"
 import { ChevronLeft, ChevronRight, Plus, Star } from "lucide-react"
 
-import { ReviewCategorySection } from "@/components/profile/ReviewCategorySection"
-import type { MiniCardAuthor } from "@/components/profile/PeripheralMiniCard"
+import { REVIEW_CATEGORY_ICON, ReviewCategorySection } from "@/components/profile/ReviewCategorySection"
 import { ReviewFormDialog } from "@/components/profile/ReviewFormDialog"
 import { IntegrityTermDialog } from "@/components/profile/IntegrityTermDialog"
 import { useReviewsController } from "@/components/profile/useReviewsController"
@@ -18,8 +17,6 @@ const SWIPE_THRESHOLD_PX = 40
 
 interface MeusReviewsGridProps {
   reviewsByCategory: ShowcaseReviewCategoryBlock[]
-  /** Dono do perfil — a foto ao lado da nota, no rodapé do card. */
-  author: MiniCardAuthor
   reviewsIntegrityAcceptedAt: string | null
   reviewedPeripheralIds: string[]
   isOwner: boolean
@@ -28,13 +25,14 @@ interface MeusReviewsGridProps {
 
 /**
  * Seção "Meus Reviews" do perfil — um bloco de CATEGORIA visível por vez
- * (não um review por vez), setas/swipe trocam de categoria na ordem fixa de
- * `REVIEW_CATEGORY_GROUPS`. "Carregar Reviews Completos" abre a página cheia,
+ * (não um review por vez). As abas acima dos cards dizem qual categoria está
+ * aberta e trocam de bloco; setas/swipe andam na ordem fixa de
+ * `REVIEW_CATEGORY_GROUPS`. A categoria vive SÓ nas abas: um subtítulo no
+ * mesmo estilo do "Meus Reviews" parecia dois títulos empilhados. "Carregar Reviews Completos" abre a página cheia,
  * sem cap, com scroll normal.
  */
 export function MeusReviewsGrid({
   reviewsByCategory,
-  author,
   reviewsIntegrityAcceptedAt,
   reviewedPeripheralIds,
   isOwner,
@@ -107,6 +105,34 @@ export function MeusReviewsGrid({
         </div>
       ) : (
         <>
+          <div role="tablist" aria-label="Categorias" className="flex flex-wrap gap-1.5">
+            {blocks.map((b, i) => {
+              const Icon = REVIEW_CATEGORY_ICON[b.key]
+              const active = i === currentIndex
+              return (
+                <button
+                  key={b.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => goTo(i)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                    active
+                      ? "border-foreground/25 bg-foreground/10 text-foreground"
+                      : "border-border/60 text-muted-foreground hover:border-border hover:text-foreground"
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  {b.label}
+                  <span className={cn("tabular-nums", active ? "text-foreground/60" : "text-muted-foreground/60")}>
+                    {b.reviews.length}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+
           <div
             className="relative touch-pan-y"
             onPointerDown={onPointerDown}
@@ -130,7 +156,6 @@ export function MeusReviewsGrid({
               <div className="min-w-0 flex-1">
                 <ReviewCategorySection
                   block={blocks[currentIndex]}
-                  author={author}
                   isOwner={isOwner}
                   onEdit={isOwner ? handleEdit : undefined}
                   onDelete={isOwner ? handleDelete : undefined}
@@ -150,23 +175,6 @@ export function MeusReviewsGrid({
               )}
             </div>
 
-            {total > 1 && (
-              <div className="mt-2 flex items-center justify-center gap-1.5">
-                {blocks.map((b, i) => (
-                  <button
-                    key={b.key}
-                    type="button"
-                    onClick={() => goTo(i)}
-                    aria-label={`Ir para ${b.label}`}
-                    aria-current={i === currentIndex}
-                    className={cn(
-                      "h-1.5 rounded-full transition-all",
-                      i === currentIndex ? "w-5 bg-primary" : "w-1.5 bg-muted-foreground/30"
-                    )}
-                  />
-                ))}
-              </div>
-            )}
           </div>
 
           <Link href={reviewsPageHref} className="block text-center text-xs font-medium text-primary hover:underline">

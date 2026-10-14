@@ -35,7 +35,7 @@ interface SetupGridProps {
 
 /**
  * Grid do "Meu Setup" — um card por periférico, sempre com os 5 slots. Só foto
- * e nome: preço e nota ficam para "Meus Reviews".
+ * e nome: a nota fica para "Meus Reviews".
  */
 export function SetupGrid({ setup, isOwner = false }: SetupGridProps) {
   return (

@@ -1,10 +1,18 @@
 import { StoreBypassNotice } from "@/components/store/StoreBypassNotice"
 import { StoreCommerceBarProvider } from "@/components/store/StoreCommerceBarContext"
+import { storeCardPaymentsEnabled } from "@/lib/server/payments/gateway"
 import { getStoreCommerceBar } from "@/lib/server/repositories/store-commerce-bar-repository"
+import { benefitsForPaymentMethods } from "@/lib/store-commerce-bar"
 
 /** Configuração + o relógio do servidor no momento da leitura (para a hidratação decidir o modo igual). */
 async function loadCommerceBar() {
-  const config = await getStoreCommerceBar()
+  const saved = await getStoreCommerceBar()
+  // Benefício de cartão só aparece com cartão ligado (gateway ativo). Filtrado
+  // aqui, no servidor, para a barra já sair certa no HTML, sem piscar.
+  const config = {
+    ...saved,
+    benefits: benefitsForPaymentMethods(saved.benefits, { cardEnabled: storeCardPaymentsEnabled() }),
+  }
   return { config, serverNow: Date.now() }
 }
 

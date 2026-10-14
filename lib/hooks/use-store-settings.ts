@@ -10,13 +10,15 @@ export type UseStoreSettingsResult = {
   loading: boolean
 }
 
-// `cardEnabled: true` até a resposta chegar: é o comportamento da Asaas,
-// o gateway padrão, que as telas sempre tiveram. Com o Stripe (só PIX) a
-// linha do cartão some quando a resposta chega, e o checkout recusa cartão.
+// Cartão DESLIGADO até a resposta chegar (e se ela falhar). Começar ligado
+// fazia a loja só PIX (Stripe) piscar "em até 6x sem juros" em todo card até
+// o fetch voltar. Assim nada promete cartão antes de o servidor confirmar:
+// com a Asaas a linha do cartão só aparece um instante depois, e o checkout já
+// abre em PIX de qualquer jeito.
 const DEFAULTS: Omit<UseStoreSettingsResult, "loading"> = {
   cardSurchargePercent: 10,
-  cardMaxInstallments: 6,
-  cardEnabled: true,
+  cardMaxInstallments: 1,
+  cardEnabled: false,
 }
 
 // Cache em módulo (não em contexto React) — várias instâncias de

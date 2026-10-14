@@ -149,3 +149,41 @@ export function nextCommerceBarChange(campaign: StoreCommerceCampaign, nowMs: nu
     .filter((value): value is number => value !== null && value > nowMs)
   return moments.length > 0 ? Math.min(...moments) : null
 }
+
+// Benefício que promete cartão: pelo ícone OU pelo texto, porque o admin pode
+// escrever "Até 6x sem juros" com o ícone de desconto. `\d+\s*x\b` pega
+// "6x"/"12 x" sem casar palavra com x no meio.
+const CARD_BENEFIT_TEXT = /cart[aã]o|cr[eé]dito|sem juros|parcel|\b\d+\s*x\b/i
+// "PIX com desconto" só é verdade com cartão: o desconto do PIX é o
+// acréscimo do cartão visto do outro lado (lib/store-pricing.ts). Só PIX,
+// não há preço maior para comparar.
+const PIX_DISCOUNT_TEXT = /desconto|\boff\b|\d+\s*%/i
+const PIX_ONLY_BENEFIT_TEXT = "Pagamento instantâneo via PIX"
+
+/**
+ * Benefícios que valem para os meios de pagamento que a Loja aceita AGORA.
+ *
+ * Com o cartão desligado (Stripe: só PIX, ver `storeCardPaymentsEnabled`),
+ * benefício de cartão some e "PIX com desconto" vira só PIX. É automático:
+ * a configuração salva no painel não muda, e volta inteira quando o cartão
+ * religar. Sem isso a barra dizia "Até 6x sem juros" numa Loja que nem
+ * oferece o botão de cartão.
+ */
+export function benefitsForPaymentMethods(
+  benefits: StoreCommerceBenefit[],
+  { cardEnabled }: { cardEnabled: boolean }
+): StoreCommerceBenefit[] {
+  if (cardEnabled) return benefits
+
+  const result: StoreCommerceBenefit[] = []
+  for (const benefit of benefits) {
+    if (benefit.icon === "card" || CARD_BENEFIT_TEXT.test(benefit.text)) continue
+    const isPixDiscount =
+      PIX_DISCOUNT_TEXT.test(benefit.text) && (benefit.icon === "pix" || /\bpix\b/i.test(benefit.text))
+    const next = isPixDiscount ? { ...benefit, icon: "pix" as const, text: PIX_ONLY_BENEFIT_TEXT } : benefit
+    // Dois "PIX com desconto" no painel viram dois textos iguais: mostra um.
+    if (isPixDiscount && result.some((item) => item.text === PIX_ONLY_BENEFIT_TEXT)) continue
+    result.push(next)
+  }
+  return result
+}

@@ -19,8 +19,10 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { BANNER_LINK_HINT, isValidBannerLink } from "@/lib/banner-link"
 import { fromLocalInput, toLocalInput } from "@/lib/datetime-local"
+import { useStoreSettings } from "@/lib/hooks/use-store-settings"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 import {
+  benefitsForPaymentMethods,
   COMMERCE_BENEFIT_ICON_LABEL,
   COMMERCE_BENEFIT_ICONS,
   COMMERCE_BENEFIT_TEXT_MAX,
@@ -150,7 +152,15 @@ export default function AdminStoreCommerceBarPage() {
     }
   }, [])
 
-  const preview = useMemo(() => (form ? toConfig(form) : null), [form])
+  // A prévia passa pelo mesmo filtro do layout da Loja: com o cartão desligado
+  // (gateway só PIX), benefício de cartão não aparece na vitrine, e a prévia
+  // não pode prometer o contrário.
+  const { cardEnabled } = useStoreSettings()
+  const preview = useMemo(() => {
+    if (!form) return null
+    const config = toConfig(form)
+    return { ...config, benefits: benefitsForPaymentMethods(config.benefits, { cardEnabled }) }
+  }, [form, cardEnabled])
   // `Date.now()` só na hora de desenhar: a prévia diz se a campanha estaria no ar AGORA.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -311,6 +321,12 @@ export default function AdminStoreCommerceBarPage() {
             <p className="text-[11px] text-muted-foreground">
               Frases curtas, até {COMMERCE_BENEFIT_TEXT_MAX} caracteres. Aparecem quando não há campanha no ar.
             </p>
+            {!cardEnabled && (
+              <p className="mt-1 text-[11px] text-amber-400">
+                A Loja está só com PIX: benefícios de cartão (parcelas, &quot;sem juros&quot;) ficam ocultos e
+                &quot;PIX com desconto&quot; vira só PIX. Voltam sozinhos quando o cartão for religado.
+              </p>
+            )}
           </div>
           <Button
             type="button"

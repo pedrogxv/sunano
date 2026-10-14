@@ -120,7 +120,14 @@ como newsletter, aí sim vale um checkbox separado.
 **Onde**: `package.json` (o campo `overrides` que força `sharp`/`postcss` para versões seguras
 dentro do `next` já está lá, pendente de commit — ver abaixo).
 
-**Status atual**: as 3 vulnerabilidades altas reais (postcss e sharp, aninhados dentro do próprio
+**Atualização 13/10/2026**: o `npm audit` de produção voltou a 0 vulnerabilidades com um bump
+MÍNIMO, sem o `npm install` amplo descrito abaixo: `next` 16.3.3 → 16.3.8 (inclui o RCE crítico em
+`next/og`, GHSA-vcvr-r3jv-pc5j, e mais cinco advisories), `sharp` 0.35.4 → 0.35.5 e `source-map-js`
+1.2.1 → 1.2.2. Só `package.json` (piso do `next`) e `package-lock.json` mudaram, e `stripe@23.0.0`
+com a `apiVersion` fixada seguem compilando. O bump AMPLO (React, Supabase JS, Zod etc.) continua
+sendo a tarefa de manutenção descrita abaixo; não é mais necessário para zerar o audit de produção.
+
+**Status anterior (histórico)**: as 3 vulnerabilidades altas reais (postcss e sharp, aninhados dentro do próprio
 `next`) precisam de um `npm install` que **inevitavelmente** também atualiza React (19.2.5→19.2.8),
 Supabase JS (2.103→2.111), Next (16.2.11→16.2.12), Zod (4.3.6→4.4.3), Tailwind, Framer Motion e
 outras libs diretas para suas versões mais recentes dentro do range `^`. Numa tentativa isso quebrou

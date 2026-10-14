@@ -569,8 +569,14 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
           era estética: o preview ficava no topo e os campos que ele reflete
           (bio, sociais) uns 800px abaixo, então quem digitava a bio não via o
           resultado sem rolar de volta. Com a coluna esquerda `sticky`, cada
-          tecla aparece no mesmo enquadramento em que o público vai ver. */}
-      <div className="grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[26rem_minmax(0,1fr)]">
+          tecla aparece no mesmo enquadramento em que o público vai ver.
+
+          `grid-cols-1` (= `minmax(0,1fr)`) em TODO grid daqui, inclusive os de
+          dentro das abas: sem template a coluna é `auto` e cresce até o
+          min-content, e um `truncate` (descrição de medalha, nome de
+          periférico) não quebra linha. No celular a coluna esticava além da
+          tela e cortava os botões de editar de "Aparência" e "Meu Espaço". */}
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[22rem_minmax(0,1fr)] 2xl:grid-cols-[26rem_minmax(0,1fr)]">
         {/* ── Coluna de previews ── */}
         {/* `top-20` e não `top-6`: a TopBar é `sticky top-0` com `min-h-16`
             (64px), então qualquer valor menor prenderia o preview PARCIALMENTE
@@ -594,7 +600,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 volta a ser uma coluna só). A foto é COMPARTILHADA pelos dois:
                 mantê-los na mesma vista é o que faz um clique na foto ser
                 visível nos dois lugares ao mesmo tempo. */}
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-1">
               <PreviewFrame label="Perfil público" hint="sunano.com.br/perfil">
                 <ProfilePagePreview
                   banner={bannerPreview}
@@ -676,7 +682,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
           <TabsContent value="identidade" forceMount hidden={tab !== "identidade"}>
             <Card className={cn(CARD_SURFACE)}>
               <CardContent className="space-y-5">
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Nome de exibição
@@ -754,7 +760,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       <Youtube className="size-3.5" />
@@ -805,7 +811,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 />
 
                 {hasAnyMedia ? (
-                  <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     {bannerPreview.src && (
                       <AdjusterField label="Banner do perfil">
                         <MediaAdjuster
@@ -921,7 +927,7 @@ export function ProfileSection({ profile, onProfileChange }: ProfileSectionProps
                 {/* Setup e favoritos lado a lado: são duas listas curtas, e em
                     coluna única a segunda nascia fora da tela. Medalhas ficam
                     na largura inteira porque a lista é a mais longa das três. */}
-                <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
                   <SetupEditor setup={setup} onChange={updateSlot} />
                   <FavoritosEditor
                     favorites={favorites}

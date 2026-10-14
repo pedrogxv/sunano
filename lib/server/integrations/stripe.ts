@@ -22,8 +22,24 @@ import { orderNumber } from "@/lib/order-number"
  *
  * Usa a chave em `STRIPE_SECRET_KEY`. Prefira uma restricted key (`rk_`) com
  * só as permissões usadas aqui: PaymentIntents (write), ConfirmationTokens
- * (read), Charges (read), Refunds (write) e Radar Early Fraud Warnings (read).
+ * (read), Charges (read), Refunds (write, que já inclui a listagem usada em
+ * `getStripePayment`), Disputes (read, usada por `getStripeDispute`; sem ela o
+ * webhook de disputa responde 500 para sempre) e Radar Early Fraud Warnings
+ * (read). Os eventos do Radar chegam pelo webhook e não exigem chamada à API.
  */
+
+/**
+ * Configuração de Stripe ausente ou incoerente (env faltando, chave de outro
+ * modo, sandbox em produção). Tipada para o webhook responder 500 (erro NOSSO,
+ * o Stripe reentrega) em vez de 400 "assinatura inválida", que esconderia a
+ * causa e faria o Stripe desistir do evento.
+ */
+export class StripeConfigError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "StripeConfigError"
+  }
+}
 
 /**
  * Versão da API fixada. Mudar a versão muda o formato dos objetos que o
@@ -49,7 +65,7 @@ export type StripeEnvironment = "sandbox" | "production"
 export function resolveStripeEnvironment(): StripeEnvironment {
   const env = process.env.STRIPE_ENV?.trim().toLowerCase()
   if (env !== "production" && env !== "sandbox") {
-    throw new Error(
+    throw new StripeConfigError(
       `STRIPE_ENV precisa ser "production" ou "sandbox" (recebido: ${
         process.env.STRIPE_ENV ? `"${process.env.STRIPE_ENV}"` : "ausente"
       }).`
@@ -60,13 +76,13 @@ export function resolveStripeEnvironment(): StripeEnvironment {
   const keyIsTest = /^(sk|rk)_test_/.test(key)
   const keyIsLive = /^(sk|rk)_live_/.test(key)
   if (!keyIsTest && !keyIsLive) {
-    throw new Error("STRIPE_SECRET_KEY não parece uma chave secreta/restrita do Stripe (sk_… ou rk_…).")
+    throw new StripeConfigError("STRIPE_SECRET_KEY não parece uma chave secreta/restrita do Stripe (sk_… ou rk_…).")
   }
   if (env === "sandbox" && !keyIsTest) {
-    throw new Error("STRIPE_ENV=sandbox com chave de produção (live). Use a chave de teste.")
+    throw new StripeConfigError("STRIPE_ENV=sandbox com chave de produção (live). Use a chave de teste.")
   }
   if (env === "production" && !keyIsLive) {
-    throw new Error("STRIPE_ENV=production com chave de teste. Use a chave live.")
+    throw new StripeConfigError("STRIPE_ENV=production com chave de teste. Use a chave live.")
   }
 
   // A chave publicável monta o formulário do cartão. De outro modo que a
@@ -76,12 +92,14 @@ export function resolveStripeEnvironment(): StripeEnvironment {
   if (publishable) {
     const publishableIsTest = publishable.startsWith("pk_test_")
     if (publishableIsTest !== keyIsTest) {
-      throw new Error("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY e STRIPE_SECRET_KEY são de modos diferentes (teste × produção).")
+      throw new StripeConfigError(
+        "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY e STRIPE_SECRET_KEY são de modos diferentes (teste × produção)."
+      )
     }
   }
 
   if (env === "sandbox" && process.env.VERCEL_ENV === "production") {
-    throw new Error(
+    throw new StripeConfigError(
       "STRIPE_ENV=sandbox em deploy de produção — pagamentos de teste liberariam pedidos reais. Configure STRIPE_ENV=production."
     )
   }
@@ -96,7 +114,7 @@ export function isStripeSandbox(): boolean {
 
 function getSecretKey(): string {
   const key = process.env.STRIPE_SECRET_KEY?.trim()
-  if (!key) throw new Error("STRIPE_SECRET_KEY não configurada.")
+  if (!key) throw new StripeConfigError("STRIPE_SECRET_KEY não configurada.")
   return key
 }
 
@@ -314,6 +332,12 @@ export type StripeCardConfirmResult =
  * a rota contar tentativas e recusar o excesso: com o `client_secret` no
  * navegador, um robô testaria milhares de cartões roubados direto na API do
  * Stripe, sem passar por nós — e a conta é que seria suspensa.
+ *
+ * Limite conhecido: quando o banco exige 3DS, o `client_secret` PRECISA ir ao
+ * navegador (`stripe.handleNextAction` o exige). Daí em diante quem tem esse
+ * segredo pode tentar confirmar o mesmo PaymentIntent com outro cartão sem
+ * passar pela contagem da rota. O contrapeso é o Radar (regras de velocidade
+ * por IP/cartão/e-mail, ver STRIPE_SETUP.md): ative antes de religar o cartão.
  */
 export async function confirmStripeCardPayment(params: {
   paymentIntentId: string
@@ -367,9 +391,25 @@ export async function getStripeCardPaymentState(paymentIntentId: string): Promis
   }
 }
 
-/** Captura uma autorização (valor integral). */
+/**
+ * Captura uma autorização (valor integral).
+ *
+ * SEM chave de idempotência de propósito: o Stripe guarda o resultado da
+ * primeira chamada com a chave, ERRO inclusive, e o devolve por 24 horas. Uma
+ * falha passageira (5xx, saldo, rede) ficaria repetida em toda reentrega do
+ * webhook e a autorização venceria sem captura. Capturar duas vezes não cobra
+ * duas vezes (a segunda recusa por estado), então a chave não protegia nada.
+ *
+ * "Já finalizado" (capturado pelo webhook enquanto o admin clicava, ou
+ * cancelado) não é erro aqui: quem chama relê o PaymentIntent
+ * (`markStripeOrdersPaid` só age em `succeeded`) e decide pelo status real.
+ */
 export async function captureStripePayment(paymentIntentId: string): Promise<void> {
-  await getStripe().paymentIntents.capture(paymentIntentId, {}, { idempotencyKey: `store-capture-${paymentIntentId}` })
+  try {
+    await getStripe().paymentIntents.capture(paymentIntentId)
+  } catch (err) {
+    if (!isStripeAlreadyFinalError(err)) throw err
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -487,6 +527,12 @@ export async function refundStripePayment(
      * dois cliques simultâneos no admin passavam juntos pela checagem de saldo
      * do banco e geravam dois estornos parciais. Com a chave, o segundo devolve
      * o mesmo estorno.
+     *
+     * ATENÇÃO: o Stripe guarda também a FALHA da primeira chamada e a repete por
+     * 24 horas com a mesma chave (ex.: saldo insuficiente, que o admin resolve e
+     * tenta de novo). Por isso quem chama inclui na chave um contador de
+     * tentativas (`refund_attempt` no metadata do pedido), incrementado a cada
+     * falha: o clique duplo continua colapsando e a nova tentativa passa.
      */
     idempotencyKey?: string
   }
@@ -537,7 +583,7 @@ export const STRIPE_WEBHOOK_EVENTS = [
  */
 export function constructStripeEvent(rawBody: string, signature: string): Stripe.Event {
   const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim()
-  if (!secret) throw new Error("STRIPE_WEBHOOK_SECRET não configurado.")
+  if (!secret) throw new StripeConfigError("STRIPE_WEBHOOK_SECRET não configurado.")
   return getStripe().webhooks.constructEvent(rawBody, signature, secret)
 }
 

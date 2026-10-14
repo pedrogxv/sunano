@@ -2,6 +2,7 @@ import "server-only"
 
 import { formatBRL } from "@/lib/format"
 import { orderStatusDescription, type OrderStatusValue } from "@/lib/order-status"
+import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
 import { absoluteUrl } from "@/lib/site-url"
 import { getResendConfig, ResendApiError, sendEmail } from "@/lib/server/integrations/resend"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
@@ -271,9 +272,8 @@ export async function sendOrderEmail(
       receiptUrl:
         (row.asaas_receipt_url as string | null) ??
         // Comprovante do Stripe (gateway alternativo), guardado pelo webhook.
-        (typeof (row.metadata as Record<string, unknown> | null)?.stripe_receipt_url === "string"
-          ? ((row.metadata as Record<string, unknown>).stripe_receipt_url as string)
-          : null),
+        // Só https de domínio do Stripe: o valor vira `href` no e-mail.
+        stripeReceiptUrlOf(row.metadata as Record<string, unknown> | null),
       trackingCode: (row.tracking_code as string | null) ?? null,
       carrier: (row.carrier as string | null) ?? null,
       items: parseItems(row.items),

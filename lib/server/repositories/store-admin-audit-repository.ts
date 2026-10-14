@@ -14,13 +14,16 @@ export type StoreAuditAction =
   | "product.delete"
   | "order.advance"
   | "order.refund"
+  /** Estorno disparado pelo sistema (aviso de fraude do emissor), sem admin. */
+  | "order.refund_automatic"
   | "order.cancel"
   | "order.manual_payment"
   | "order.card_review_approve"
   | "store_settings.update"
 
 type LogAdminActionParams = {
-  adminId: string
+  /** `null` = ação do sistema (webhook), sem admin logado. */
+  adminId: string | null
   action: StoreAuditAction
   entityType: "store_product" | "store_order" | "store_settings"
   entityId: string

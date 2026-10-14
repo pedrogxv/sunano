@@ -75,7 +75,8 @@ como fronteira controlada.
 ```
 lib/
   database.types.ts          Tipos do schema (sem código, seguro em qualquer lugar)
-  stripe.ts                  Helpers puros (formatBRL) — seguro no cliente
+  payment-gateways.ts        Gateways da Loja (asaas | stripe): rótulos e dedução; puro, seguro no cliente
+  stripe-receipt.ts          Validador do link de comprovante do Stripe; puro, seguro no cliente
   utils.ts, i18n.ts, ...     Utilitários puros e framework-agnósticos
 
   client/
@@ -99,7 +100,7 @@ lib/
       admin-auth.ts          Autorização do painel admin
       current-user.ts        Resolve o usuário da requisição
     integrations/            Serviços externos (segredos ficam aqui)
-      stripe.ts              Cliente Stripe (STRIPE_SECRET_KEY)
+      stripe.ts              Cliente Stripe (STRIPE_SECRET_KEY), gateway alternativo da Loja; ver STRIPE_SETUP.md
       youtube.ts
       telegram-offers.ts
     rate-limit.ts

@@ -11,6 +11,8 @@ import { logAdminAction } from "@/lib/server/repositories/store-admin-audit-repo
 import { clampPage, clampPageSize, escapeLikePattern, escapeOrFilterValue, rangeFor } from "@/lib/server/repositories/_shared"
 import { computeEffectivePrice } from "@/lib/store-pricing"
 import { getSelectionRulesForCheckout } from "@/lib/server/repositories/store-repository"
+import { patchOrderMetadata } from "@/lib/server/repositories/order-metadata-repository"
+import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
 import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
 import type { OrderPaymentSourceFilter, PaymentGateway } from "@/lib/payment-gateways"
 import {
@@ -354,8 +356,7 @@ export function mapShippingAddress(row: Partial<RawShippingColumns> | null | und
 
 /** Comprovante de um pedido pago pelo Stripe (o webhook guarda no metadata). */
 export function orderStripeReceiptUrl(metadata: Record<string, unknown> | null | undefined): string | null {
-  const url = metadata?.stripe_receipt_url
-  return typeof url === "string" ? url : null
+  return stripeReceiptUrlOf(metadata)
 }
 
 export type UserOrderSummary = {
@@ -1150,15 +1151,26 @@ export async function refundOrder(
   // primeiro, o banco só grava se ele aceitar.
   if (!existing.asaas_payment_id && existing.stripe_payment_intent_id) {
     const { refundStripePayment, stripeErrorMessage } = await import("@/lib/server/integrations/stripe")
+    // O Stripe guarda a FALHA junto com a chave de idempotência e a repete por
+    // 24 h (saldo insuficiente que o admin acabou de resolver, por exemplo).
+    // O contador de falhas entra na chave: clique duplo continua colapsando
+    // (os dois leem o mesmo número) e a nova tentativa depois de uma falha usa
+    // chave nova.
+    const failedAttempts = refundAttemptsOf(existing.metadata)
     try {
       await refundStripePayment(existing.stripe_payment_intent_id, {
         amountCents: refundCents,
         reason: params.reason,
         stripeReason: params.fraudulent ? "fraudulent" : "requested_by_customer",
-        idempotencyKey: `store-refund-${existing.id}-${existing.refunded_cents + refundCents}`,
+        idempotencyKey: `store-refund-${existing.id}-${existing.refunded_cents + refundCents}-${failedAttempts}`,
       })
     } catch (err) {
       console.error("[orders-repository] refundOrder — Stripe:", err)
+      try {
+        await patchOrderMetadata(existing.id, { refund_attempt: failedAttempts + 1 })
+      } catch (patchErr) {
+        console.error("[orders-repository] refundOrder — contador de tentativas:", patchErr)
+      }
       const message = stripeErrorMessage(err)
       return {
         ok: false,
@@ -1238,18 +1250,29 @@ export async function refundOrder(
     console.error("[orders-repository] refundOrder — syncCommissionForRefund:", err)
   }
 
-  if (adminId) {
-    await logAdminAction({
-      adminId,
-      action: "order.refund",
-      entityType: "store_order",
-      entityId: id,
-      before: { status: existing.status, refunded_cents: existing.refunded_cents },
-      after: { status: update.status ?? existing.status, refunded_cents: newRefundedCents, reason: params.reason ?? null },
-    })
-  }
+  // Estorno automático (aviso de fraude do emissor) não tem admin, mas move
+  // dinheiro: também deixa trilha, com `admin_id` nulo e a marca `automatic`.
+  await logAdminAction({
+    adminId: adminId ?? null,
+    action: adminId ? "order.refund" : "order.refund_automatic",
+    entityType: "store_order",
+    entityId: id,
+    before: { status: existing.status, refunded_cents: existing.refunded_cents },
+    after: {
+      status: update.status ?? existing.status,
+      refunded_cents: newRefundedCents,
+      reason: params.reason ?? null,
+      ...(adminId ? {} : { automatic: true, fraudulent: params.fraudulent === true }),
+    },
+  })
 
   return { ok: true }
+}
+
+/** Quantas tentativas de estorno já falharam no Stripe para este pedido (ver `refundOrder`). */
+function refundAttemptsOf(metadata: unknown): number {
+  const value = (metadata as Record<string, unknown> | null)?.refund_attempt
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0
 }
 
 /**
@@ -1339,6 +1362,28 @@ export async function cancelOrder(
   return { ok: true }
 }
 
+/** Cancelamentos simultâneos no Stripe: o bastante para caber nos 30 s do cron sem rajada. */
+const STRIPE_CANCEL_BATCH_SIZE = 8
+
+/**
+ * Cancela PaymentIntents do Stripe sem nunca lançar: em lotes paralelos e com
+ * `allSettled`, para uma cobrança lenta ou recusada não segurar nem derrubar as
+ * demais. "Já finalizado" (pago, já cancelado) é o resultado esperado de uma
+ * corrida e não vira log de erro.
+ */
+async function cancelStripeIntentsBestEffort(intentIds: string[]): Promise<void> {
+  if (intentIds.length === 0) return
+  const { cancelStripePayment, isStripeAlreadyFinalError } = await import("@/lib/server/integrations/stripe")
+  for (let start = 0; start < intentIds.length; start += STRIPE_CANCEL_BATCH_SIZE) {
+    const batch = intentIds.slice(start, start + STRIPE_CANCEL_BATCH_SIZE)
+    const results = await Promise.allSettled(batch.map((intentId) => cancelStripePayment(intentId)))
+    results.forEach((result, index) => {
+      if (result.status === "fulfilled" || isStripeAlreadyFinalError(result.reason)) return
+      console.error(`[orders-repository] cancelar ${batch[index]} no Stripe:`, result.reason)
+    })
+  }
+}
+
 export type ExpireStalePendingOrdersResult = {
   expired_count: number
   stock_restored_count: number
@@ -1385,40 +1430,15 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
     id: string
     items: Record<string, unknown>[]
     metadata: Record<string, unknown> | null
+    stripe_payment_intent_id: string | null
   }[]
 
-  // Pedido do Stripe: o banco expirou, mas a cobrança seguia viva lá — a aba
-  // aberta ainda conseguia pagar um pedido morto (e o estoque já voltou para
-  // a prateleira). Cancelar fecha o PIX e impede autorizar o cartão. Falha
-  // aqui não trava o cron: autorização tardia é solta pelo webhook, e PIX
-  // tardio cai em `reReserveStockForLatePayment`.
-  const stripeIntents = orders
-    .map((order) => (order as { stripe_payment_intent_id?: string | null }).stripe_payment_intent_id)
-    .filter((id): id is string => Boolean(id))
-  if (stripeIntents.length > 0) {
-    const { cancelStripePayment, isStripeAlreadyFinalError } = await import("@/lib/server/integrations/stripe")
-    for (const intentId of stripeIntents) {
-      try {
-        await cancelStripePayment(intentId)
-      } catch (err) {
-        if (!isStripeAlreadyFinalError(err)) {
-          console.error(`[orders-repository] expireStalePendingOrders — cancelar ${intentId} no Stripe:`, err)
-        }
-      }
-    }
-  }
-
-  for (const order of orders) {
-    const ownerId = orderOwnerId(order.metadata)
-    if (!ownerId) continue
-    await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
-  }
-
-  // Em série, não em paralelo: um lote grande de expirações dispararia
-  // dezenas de requisições simultâneas e bateria no rate limit do Discord.
-  for (const order of orders) {
-    await notifyDiscordOrderEvent({ orderId: order.id, status: "expired", actor: "cron" })
-  }
+  // ORDEM IMPORTA (a função tem `maxDuration` de 30 s e os pedidos acima já
+  // saíram de `pending`, então nada os reprocessa): primeiro o que não pode se
+  // perder, o ESTOQUE; depois fechar a cobrança no Stripe, que é rede externa e
+  // pode demorar; por último os avisos. Antes, o cancelamento no Stripe rodava
+  // em série ANTES de devolver o estoque: um Stripe lento matava a função no
+  // meio e as unidades ficavam descontadas para sempre.
 
   // Achata (pedido, item) numa lista única e restaura o estoque em paralelo —
   // cada RPC é independente (produto/variante diferentes), então não há
@@ -1446,6 +1466,27 @@ export async function expireStalePendingOrders(): Promise<ExpireStalePendingOrde
       console.error("[orders-repository] expireStalePendingOrders —", message)
       errors.push(message)
     }
+  }
+
+  // Pedido do Stripe: o banco expirou, mas a cobrança seguia viva lá, e a aba
+  // aberta ainda conseguia pagar um pedido morto (o estoque já voltou para a
+  // prateleira). Cancelar fecha o PIX e impede autorizar o cartão. Falha aqui
+  // não trava o cron: autorização tardia é solta pelo webhook, e PIX tardio cai
+  // em `reReserveStockForLatePayment`.
+  await cancelStripeIntentsBestEffort(
+    orders.map((order) => order.stripe_payment_intent_id).filter((id): id is string => Boolean(id))
+  )
+
+  for (const order of orders) {
+    const ownerId = orderOwnerId(order.metadata)
+    if (!ownerId) continue
+    await notifyOrderStatusChange({ userId: ownerId, orderId: order.id, status: "expired" })
+  }
+
+  // Em série, não em paralelo: um lote grande de expirações dispararia
+  // dezenas de requisições simultâneas e bateria no rate limit do Discord.
+  for (const order of orders) {
+    await notifyDiscordOrderEvent({ orderId: order.id, status: "expired", actor: "cron" })
   }
 
   // Reservas órfãs: estoque decrementado pelo checkout cuja Function morreu

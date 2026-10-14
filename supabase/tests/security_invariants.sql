@@ -96,7 +96,7 @@ join tables t on t.oid = a.attrelid
 cross join client_roles cr
 where a.attnum > 0
   and not a.attisdropped
-  and a.attname ~ '((^|_)(cpf|ip|phone|email|token|secret|password|pix|asaas|admin)(_|$))|(^|_)order_id$|^granted_by$'
+  and a.attname ~ '((^|_)(cpf|ip|phone|email|token|secret|password|pix|asaas|stripe|admin)(_|$))|(^|_)order_id$|^granted_by$'
   and has_column_privilege(cr.r, a.attrelid, a.attnum, 'SELECT')
   and not (t.relname = 'admin_profiles' and a.attname = 'email')
 

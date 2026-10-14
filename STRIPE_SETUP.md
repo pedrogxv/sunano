@@ -1,221 +1,195 @@
-# Configuração da Stripe — Loja & Bazar
+# Stripe: gateway alternativo da Loja
 
-Este documento descreve como configurar a integração Stripe para a **Loja** e o **Bazar** do Sunano.
+A Asaas é o gateway padrão. O Stripe só cobra quando `PAYMENT_GATEWAY=stripe`, e
+existe para a Loja não ficar sem vender se a conta da Asaas ficar indisponível.
 
----
+- **Hoje: só PIX.** O cartão está pronto no código, mas desligado
+  (`storeCardPaymentsEnabled()` em `lib/server/payments/gateway.ts`). Ver a seção
+  "Religar o cartão" antes de ligar.
+- **Pedido já criado segue no gateway em que nasceu.** Trocar `PAYMENT_GATEWAY`
+  com pedidos em aberto não quebra webhook, cancelamento nem estorno deles.
+- **A assinatura VIP continua sempre na Asaas.**
 
-## 1. Criar conta Stripe
-
-1. Acesse [https://dashboard.stripe.com/register](https://dashboard.stripe.com/register)
-2. Crie uma conta **business** em nome do canal/empresa
-3. Complete a verificação de identidade (necessária para receber pagamentos)
-4. **Importante**: Para PIX funcionar, a conta Stripe deve ser registrada no Brasil ou você deve usar Stripe Connect com uma conta conectada brasileira.
-
----
-
-## 2. Credenciais necessárias no `.env.local`
-
-```env
-# Chave secreta da API (não expor ao cliente)
-STRIPE_SECRET_KEY=sk_live_...
-
-# Segredo do webhook (gerado ao criar o endpoint no dashboard)
-STRIPE_WEBHOOK_SECRET=whsec_...
-
-# Chave pública (não usada diretamente hoje, mas boa prática ter)
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_live_...
-```
-
-### Onde encontrar as chaves
-
-| Variável | Localização no Dashboard |
-|----------|--------------------------|
-| `STRIPE_SECRET_KEY` | Dashboard → Developers → API keys → Secret key |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Dashboard → Developers → API keys → Publishable key |
-| `STRIPE_WEBHOOK_SECRET` | Dashboard → Developers → Webhooks → (após criar o endpoint) → Signing secret |
-
-**Em desenvolvimento**, use as chaves de teste (`sk_test_...`, `pk_test_...`).  
-**Em produção**, use as chaves live (`sk_live_...`, `pk_live_...`).
+Código: `lib/server/integrations/stripe.ts` (cliente), `app/api/webhooks/stripe/route.ts`
+(webhook), `lib/server/repositories/stripe-orders-repository.ts` (o que cada evento
+faz no pedido).
 
 ---
 
-## 3. Configurar o Webhook
+## 1. Variáveis de ambiente
 
-O webhook é essencial: é ele que confirma o pagamento, atualiza o pedido no banco e desconta o estoque.
+| Variável | Valor |
+|---|---|
+| `PAYMENT_GATEWAY` | `stripe` liga o Stripe. Qualquer outro valor (ou ausente) mantém a Asaas. |
+| `STRIPE_ENV` | **Obrigatória.** `sandbox` ou `production`. |
+| `STRIPE_SECRET_KEY` | Chave secreta ou restrita (`sk_`/`rk_`). |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Chave publicável (`pk_`), do **mesmo modo** da secreta. Só o formulário de cartão usa. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret do endpoint (`whsec_`). |
 
-### 3.1 Criar o endpoint
+Coerência que o código **exige** (erro alto, nunca cobrança errada em silêncio):
 
-1. Acesse Dashboard → Developers → Webhooks
-2. Clique em **"Add endpoint"**
-3. URL do endpoint:
-   - **Produção**: `https://seudominio.com.br/api/webhooks/stripe`
-   - **Desenvolvimento**: use o Stripe CLI (veja abaixo)
-4. Selecione os eventos a escutar:
-   - ✅ `checkout.session.completed`
-   - ✅ `checkout.session.expired`
-   - ✅ `charge.refunded`
-5. Clique em **"Add endpoint"**
-6. Copie o **Signing secret** (`whsec_...`) e adicione ao `.env.local` como `STRIPE_WEBHOOK_SECRET`
+- `STRIPE_ENV=sandbox` só com chave `*_test_`; `STRIPE_ENV=production` só com `*_live_`.
+- A chave publicável tem de ser do mesmo modo da secreta.
+- `STRIPE_ENV=sandbox` é recusado quando `VERCEL_ENV=production`.
 
-### 3.2 Testar localmente com Stripe CLI
+Em desenvolvimento use as chaves de teste. As chaves ficam no Dashboard em
+Desenvolvedores > Chaves de API.
+
+### Permissões da chave restrita (`rk_`)
+
+Prefira uma chave restrita só com o que o código usa:
+
+| Recurso | Permissão | Para quê |
+|---|---|---|
+| PaymentIntents | Write | criar, confirmar, capturar, cancelar, reler |
+| ConfirmationTokens | Read | confirmar o cartão com o token do navegador |
+| Charges | Read | risco do Radar, 3DS, comprovante |
+| Refunds | Write | estornar (inclui a listagem) |
+| Disputes | **Read** | reler a disputa. Sem ela o webhook de disputa responde 500 para sempre |
+| Radar Early Fraud Warnings | Read | aviso de fraude |
+
+---
+
+## 2. Webhook
+
+Dashboard > Desenvolvedores > Webhooks > Adicionar endpoint:
+
+- **URL de produção:** `https://sunano.com.br/api/webhooks/stripe`
+- **Eventos:** exatamente a lista `STRIPE_WEBHOOK_EVENTS` em
+  `lib/server/integrations/stripe.ts` (hoje 16 eventos: `payment_intent.*`,
+  `charge.refunded`, `charge.refund.updated`, `refund.*`,
+  `radar.early_fraud_warning.created`, `review.*`, `charge.dispute.*`).
+  Evento tratado no código e não assinado aqui **nunca dispara**.
+- Copie o Signing secret (`whsec_`) para `STRIPE_WEBHOOK_SECRET`.
+
+Desenvolvimento local:
 
 ```bash
-# Instalar Stripe CLI (macOS)
 brew install stripe/stripe-cli/stripe
-
-# Login
 stripe login
-
-# Redirecionar webhooks para o servidor local
-stripe listen --forward-to localhost:3000/api/webhooks/stripe
+stripe listen --forward-to localhost:3000/api/webhooks/stripe   # imprime um whsec_ temporário
 ```
 
-O CLI imprimirá um `whsec_...` temporário — use esse como `STRIPE_WEBHOOK_SECRET` durante desenvolvimento.
+### Como o webhook se protege
+
+- A assinatura é conferida sobre o **corpo cru**, antes de qualquer outra coisa.
+- Evento de outro modo (`livemode`) é ignorado, nunca mexe em pedido.
+- **Nada é liberado, capturado ou devolvido pelo corpo do evento.** O PaymentIntent
+  é relido na origem (`getStripePayment`) e só então valor e moeda são conferidos.
+- Toda transição é condicional (`status in (...)`): reentrega e eventos fora de
+  ordem não duplicam efeito.
+- Resposta `500` faz o Stripe reentregar (com backoff, por até 3 dias).
+- Aura, medalhas e aviso aos admins nascem de **trigger** em `store_orders`, no
+  mesmo `UPDATE` do pagamento.
+
+### Quando o pedido não vira pago
+
+A tela do PIX também confere o pagamento na origem (no máximo uma vez a cada 5 s por
+pedido), como rede de segurança do webhook. Se mesmo assim ficar em "Aguardando":
+
+1. Dashboard > Webhooks > o endpoint > **Entregas**. Há tentativa para
+   `payment_intent.succeeded`? Qual resposta?
+2. `400` = assinatura inválida (o `whsec_` do endpoint não é o da env).
+   `500 Webhook não configurado` = env ausente ou incoerente (ver seção 1).
+3. Faltando só os eventos de disputa: conferir a permissão Disputes (read).
 
 ---
 
-## 4. Configurar PIX (Brasil)
+## 3. PIX
 
-Para aceitar PIX, a conta Stripe precisa estar habilitada para pagamentos no Brasil:
+1. Dashboard > Configurações > Métodos de pagamento: habilite **PIX** (a conta
+   precisa ser brasileira e estar verificada).
+2. Moeda BRL.
 
-1. Dashboard → Settings → Payment methods
-2. Habilite **PIX** (pode precisar verificar sua conta primeiro)
-3. Confirme que a moeda padrão está em **BRL**
-
-O código já está configurado para aceitar `['card', 'pix']`. Quando PIX não estiver disponível (ex: conta não-brasileira em teste), o Stripe automaticamente mostrará apenas cartão.
+O QR vale o mesmo prazo que a Loja impõe (`PIX_EXPIRATION_MINUTES`, padrão 60 min;
+pré-venda 24 h; o Stripe aceita de 10 s a 14 dias). Ao vencer, o cron
+`/api/cron/expire-pending-orders` (a cada 15 min) expira o pedido, **devolve o
+estoque primeiro** e só depois cancela o PaymentIntent no Stripe.
 
 ---
 
-## 5. Executar a migration do banco
+## 4. Religar o cartão
 
-Antes de usar a loja, execute o SQL em **Supabase → SQL Editor**:
+Está desligado de propósito. Antes de trocar `storeCardPaymentsEnabled()`:
 
-```sql
--- Cole o conteúdo completo de: supabase/store.sql
-```
+- [ ] **Radar:** crie regras de velocidade (várias tentativas por IP, cartão ou
+      e-mail em pouco tempo) e de 3D Secure. Quando o banco pede 3DS o
+      `client_secret` vai ao navegador e quem o tem consegue tentar outro cartão
+      direto no Stripe, fora da contagem da nossa rota. O Radar é o contrapeso.
+- [ ] `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` configurada (do mesmo modo da secreta).
+- [ ] Testar com os cartões de teste do Stripe (aprovado, recusado, 3DS) em sandbox.
+- [ ] Conferir o fluxo de **revisão**: cartão acima de R$ 1.500,00 sem 3DS, ou com
+      risco elevado, fica autorizado e **não capturado** até um admin aprovar
+      (`approve_card_review`) ou cancelar. A autorização vence em ~7 dias.
 
-Ou via Supabase CLI:
+Como funciona: o número do cartão nunca chega ao nosso servidor (Payment Element, PCI
+SAQ A). O navegador gera um `ctoken_` e a **nossa rota** confirma o pagamento, com
+tetos de tentativa por pedido (6), por conta (10) e por IP (20). A captura é manual:
+o webhook decide capturar, segurar ou soltar.
+
+---
+
+## 5. Banco de dados
+
+**Nunca cole SQL no Dashboard.** Migration só por `supabase db push` (ver AGENTS.md).
+
+- `20261225000000_store_orders_stripe_gateway.sql`: índices de busca do webhook.
+- `20261226000000_store_orders_stripe_hardening.sql`: PaymentIntent único por
+  pedido, remoção de índices redundantes e a função `merge_store_order_metadata`.
+
+Depois de qualquer migration:
+
 ```bash
-supabase db push
-# ou manualmente:
-psql -h <host> -U postgres -d postgres -f supabase/store.sql
+npx supabase db query --linked -f supabase/tests/security_invariants.sql   # tem que voltar vazio
 ```
+
+`store_orders` não tem grant nem policy para `anon`/`authenticated`: tudo passa por
+rota com `service_role`.
+
+### Por que `metadata` é gravado por merge atômico
+
+Comprovante, revisão de cartão, aviso de fraude, disputa e contador de estorno
+mexem no mesmo `store_orders.metadata` e podem chegar juntos. Ler o objeto,
+espalhar e gravar tudo perdia a chave de quem chegou segundo. Use sempre
+`patchOrderMetadata` (`lib/server/repositories/order-metadata-repository.ts`).
 
 ---
 
-## 6. Permissões admin
+## 6. Idempotência (cuidado)
 
-Adicione `store_read` e `store_write` ao perfil de admin que vai gerenciar a loja:
+O Stripe guarda o resultado da primeira chamada com uma `idempotencyKey`, **erro
+inclusive**, e o devolve por 24 horas.
 
-```sql
--- No Supabase SQL Editor
-update public.admin_profiles
-set permissions = permissions || '{"store_read": true, "store_write": true}'::jsonb
-where id = '<uuid-do-admin>';
-```
-
-Ou via painel admin: Settings → Usuários → editar permissões.
-
----
-
-## 7. Fluxo completo de pagamento
-
-```
-Usuário → Adiciona produto ao carrinho
-        → Clica "Finalizar Compra"
-        → POST /api/store/checkout
-           - Valida estoque em tempo real
-           - Cria Stripe Checkout Session (card + pix)
-           - Cria pedido "pending" no banco
-           - Retorna URL do checkout Stripe
-        → Redireciona para página Stripe (hosted checkout)
-        → Usuário paga (cartão ou PIX)
-        → Stripe dispara webhook checkout.session.completed
-           → POST /api/webhooks/stripe
-           - Atualiza pedido para "paid"
-           - Decrementa estoque no banco
-        → Usuário é redirecionado para /checkout/success
-```
+- **Criação** (`store-pix-<pedido>`, `store-card-pi-<pedido>`): o id do pedido é novo
+  a cada tentativa, então uma falha nunca é repetida.
+- **Estorno:** a chave leva o total já estornado **e um contador de falhas**
+  (`metadata.refund_attempt`). Clique duplo continua colapsando; depois de uma falha
+  (saldo insuficiente, por exemplo) a nova tentativa usa chave nova.
+- **Captura:** sem chave. Capturar duas vezes não cobra duas vezes (a segunda recusa
+  por estado), e uma falha passageira não pode ficar repetida nas reentregas.
 
 ---
 
-## 8. Testar pagamentos
+## 7. Ir para produção
 
-Use os [cartões de teste da Stripe](https://stripe.com/docs/testing#cards):
+1. Chaves **live**, `STRIPE_ENV=production`, publicável `pk_live_`.
+2. Endpoint de webhook **live** com os 16 eventos e o `whsec_` live.
+3. `PAYMENT_GATEWAY=stripe` e novo deploy.
+4. Pague um PIX real de valor baixo, confira o pedido virar pago, a Aura creditada
+   e a **entrega do webhook** no Dashboard.
+5. Estorne esse pedido pelo admin e confira o pedido virar `refunded`.
 
-| Número | Resultado |
-|--------|-----------|
-| `4242 4242 4242 4242` | Pagamento aprovado |
-| `4000 0000 0000 9995` | Pagamento recusado (fundos insuficientes) |
-| `4000 0025 0000 3155` | Requer autenticação 3DS |
-
-- Validade: qualquer data futura (ex: `12/30`)
-- CVV: qualquer 3 dígitos (ex: `123`)
-
-Para PIX em ambiente de teste, o Stripe simula o pagamento automaticamente após alguns segundos no checkout.
+Pedidos de sandbox ficam fora das telas do cliente e da fila padrão do admin
+(`is_sandbox`).
 
 ---
 
-## 9. Estrutura dos arquivos criados
+## 8. Mais
 
-```
-app/
-├── loja/
-│   ├── page.tsx                    # Listagem da loja (server component, ISR 60s)
-│   └── [slug]/page.tsx             # Detalhe do produto
-├── bazar/
-│   ├── page.tsx                    # Listagem do bazar (server component, ISR 60s)
-│   └── [slug]/page.tsx             # Detalhe do item de bazar
-├── checkout/
-│   ├── success/page.tsx            # Página de sucesso (limpa carrinho)
-│   └── cancel/page.tsx             # Página de cancelamento
-├── api/
-│   ├── store/checkout/route.ts     # POST: cria Stripe Checkout Session
-│   ├── webhooks/stripe/route.ts    # POST: recebe eventos da Stripe
-│   └── admin/store/
-│       ├── products/route.ts       # GET/POST: lista e cria produtos
-│       ├── products/[id]/route.ts  # GET/PATCH/DELETE: produto individual
-│       └── upload-image/route.ts  # POST: upload de imagem para Supabase
-└── admin/store/
-    ├── page.tsx                    # Listagem admin (loja + bazar)
-    ├── form.tsx                    # Formulário de produto compartilhado
-    ├── new/page.tsx                # Criar produto
-    └── [id]/page.tsx               # Editar produto
-
-components/store/
-├── CartDrawer.tsx                  # Carrinho lateral + botão de carrinho
-└── ProductCard.tsx                 # Card de produto (loja e bazar)
-
-lib/
-├── stripe.ts                       # Cliente Stripe + helpers (formatBRL, parseSlug)
-└── cart-context.tsx                # Context + Provider do carrinho (localStorage)
-
-supabase/
-└── store.sql                       # Schema: store_products, store_orders, RLS
-```
-
----
-
-## 10. Variáveis de ambiente — resumo completo
-
-```env
-# Obrigatórias para a loja funcionar:
-STRIPE_SECRET_KEY=sk_live_...         # ou sk_test_... em desenvolvimento
-STRIPE_WEBHOOK_SECRET=whsec_...        # gerado ao criar o webhook endpoint
-NEXT_PUBLIC_APP_URL=https://...        # URL base (ex: https://sunano.com.br)
-
-# Já existentes no projeto (Supabase):
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...          # necessário para admin e webhook
-```
-
----
-
-## 11. Considerações de segurança
-
-- **Nunca** exponha `STRIPE_SECRET_KEY` ou `SUPABASE_SERVICE_ROLE_KEY` ao cliente
-- O webhook valida a assinatura Stripe antes de processar qualquer evento
-- Stock é decrementado apenas **após** confirmação de pagamento via webhook
-- Todas as rotas admin verificam autenticação + permissão `store_write`
-- RLS no Supabase: produtos ativos são públicos; pedidos e escrita requerem service role
+- Disputa: o aviso no Discord traz o prazo (`due_by`). Sem resposta até lá a loja
+  perde por padrão; disputa perdida é reconciliada como estorno.
+- Aviso de fraude do emissor: pedido pendente é solto e expira; pago e **não
+  enviado** é estornado sozinho (fica registrado em `store_admin_audit_log` como
+  `order.refund_automatic`); já enviado só avisa.
+- Documentação oficial: https://docs.stripe.com/payments/pix e
+  https://docs.stripe.com/webhooks

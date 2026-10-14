@@ -64,6 +64,7 @@ import {
 } from "@/lib/hooks/use-user-orders"
 import { formatBRL } from "@/lib/format"
 import { orderNumber } from "@/lib/order-number"
+import { safeHref } from "@/lib/safe-url"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { OrderShippingAddressDialog } from "@/components/store/OrderShippingAddressDialog"
@@ -887,9 +888,9 @@ function OrderDetailsDialog({
                     {receipt}
                   </p>
                 )}
-                {receiptUrl && (
+                {safeHref(receiptUrl) && (
                   <a
-                    href={receiptUrl}
+                    href={safeHref(receiptUrl)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block text-xs font-medium text-emerald-400 hover:underline"

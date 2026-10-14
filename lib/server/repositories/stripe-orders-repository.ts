@@ -7,9 +7,12 @@ import {
   getStripePayment,
   isStripeAlreadyFinalError,
   refundStripePayment,
+  stripeErrorMessage,
   type StripePaymentSnapshot,
 } from "@/lib/server/integrations/stripe"
 import { decideCardCapture } from "@/lib/server/payments/card-capture-policy"
+import { patchOrderMetadata } from "@/lib/server/repositories/order-metadata-repository"
+import { safeStripeReceiptUrl } from "@/lib/stripe-receipt"
 import {
   expirePendingOrderByGatewayRef,
   orderOwnerId,
@@ -182,13 +185,19 @@ export async function markStripeOrdersPaid(
         ).data ?? [])
 
   // Comprovante do Stripe: vai no metadata para as telas de pedido e o
-  // e-mail o mostrarem sem coluna nova (ver `orderStripeReceiptUrl`).
-  if (verified.receiptUrl) {
+  // e-mail o mostrarem sem coluna nova (ver `orderStripeReceiptUrl`). Só passa
+  // https de domínio do Stripe, e a gravação é um merge atômico: o aviso de
+  // fraude ou a disputa podem mexer no mesmo metadata ao mesmo tempo. Falhar
+  // aqui NÃO pode interromper os efeitos abaixo (o status já foi para `paid`, e
+  // uma reentrega do webhook não acharia mais nada para atualizar).
+  const receiptUrl = safeStripeReceiptUrl(verified.receiptUrl)
+  if (receiptUrl) {
     for (const order of updatedOrders) {
-      await db
-        .from("store_orders")
-        .update({ metadata: { ...metadataOf(order.metadata), stripe_receipt_url: verified.receiptUrl } })
-        .eq("id", order.id)
+      try {
+        await patchOrderMetadata(order.id, { stripe_receipt_url: receiptUrl })
+      } catch (err) {
+        console.error("[stripe-orders] gravar comprovante:", err)
+      }
     }
   }
 
@@ -326,18 +335,14 @@ export async function handleStripeCardAuthorized(paymentIntentId: string): Promi
       three_d_secure: verified.threeDSecureResult,
       held_at: new Date().toISOString(),
     }
-    const { data: held } = await db
-      .from("store_orders")
-      .update({
-        metadata: { ...metadataOf(order.metadata), card_review: review },
-        // Fora do alcance do cron de expiração enquanto o admin decide.
-        pix_expires_at: new Date(Date.now() + REVIEW_HOLD_MS).toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", order.id)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle()
+    // Merge atômico condicionado a `pending`: a decisão de reter não pode
+    // vencer um cancelamento/expiração que chegou no meio. O prazo novo fica
+    // fora do alcance do cron de expiração enquanto o admin decide.
+    const held = await patchOrderMetadata(
+      order.id,
+      { card_review: review },
+      { requireStatus: "pending", pixExpiresAt: new Date(Date.now() + REVIEW_HOLD_MS).toISOString() }
+    )
 
     if (!held) {
       // O pedido saiu de pendente entre a leitura e o UPDATE (cron/cancelamento).
@@ -399,21 +404,49 @@ export async function approveStripeCardReview(orderId: string, adminId: string):
     return { ok: false, error: "O valor autorizado não cobre o pedido.", status: 409 }
   }
 
-  await db
-    .from("store_orders")
-    .update({
-      metadata: {
-        ...metadataOf(order.metadata),
-        card_review: { ...review, approved_by: adminId, approved_at: new Date().toISOString() },
-      },
-    })
-    .eq("id", order.id)
+  // A marca de aprovação vai ANTES da captura de propósito: com ela, uma
+  // reentrega de `amount_capturable_updated` no meio da captura não reavalia o
+  // cartão e o segura de novo (`orderCardReview` devolve null quando aprovado).
+  await patchOrderMetadata(order.id, {
+    card_review: { ...review, approved_by: adminId, approved_at: new Date().toISOString() },
+  })
 
+  let captured: StripePaymentSnapshot
   try {
-    await captureAndRelease(order.stripe_payment_intent_id)
+    await captureStripePayment(order.stripe_payment_intent_id)
+    // Confere o resultado na origem: "já finalizado" é tolerado pela captura, e
+    // um PaymentIntent cancelado nunca pode virar pedido pago.
+    captured = await getStripePayment(order.stripe_payment_intent_id)
+    if (captured.status !== "succeeded") {
+      throw new Error(`PaymentIntent ficou em ${captured.status} depois da captura`)
+    }
   } catch (err) {
-    console.error("[stripe-orders] approveStripeCardReview — captura:", err)
-    return { ok: false, error: "O Stripe recusou a captura. Confira o pagamento no painel do Stripe.", status: 502 }
+    console.error("[stripe-orders] approveStripeCardReview, captura:", err)
+    // Desfaz a marca: sem isto o pedido deixa de contar como "em revisão" com o
+    // cartão ainda só autorizado, e o admin não consegue tentar de novo (só
+    // cancelar).
+    try {
+      await patchOrderMetadata(order.id, { card_review: review })
+    } catch (rollbackErr) {
+      console.error("[stripe-orders] approveStripeCardReview, desfazer aprovação:", rollbackErr)
+    }
+    const reason = stripeErrorMessage(err)
+    return {
+      ok: false,
+      error: reason
+        ? `O Stripe recusou a captura: ${reason}`
+        : "A captura não foi concluída. Confira o pagamento no painel do Stripe e tente de novo.",
+      status: 502,
+    }
+  }
+
+  // O dinheiro já foi capturado. Se liberar o pedido falhar agora, o webhook
+  // `payment_intent.succeeded` (e o polling da tela) refazem a mesma função,
+  // que é idempotente; devolver erro aqui faria o admin achar que não cobrou.
+  try {
+    await markStripeOrdersPaid(order.stripe_payment_intent_id, captured)
+  } catch (err) {
+    console.error("[stripe-orders] approveStripeCardReview, liberar pedido (o webhook conclui):", err)
   }
 
   await logAdminAction({
@@ -447,19 +480,14 @@ export async function handleStripeEarlyFraudWarning(paymentIntentId: string, act
   const db = createSupabaseAdminClient()
   const { data: order } = await db
     .from("store_orders")
-    .select("id, status, total_cents, refunded_cents, metadata")
+    .select("id, status, total_cents, refunded_cents")
     .eq("stripe_payment_intent_id", paymentIntentId)
     .maybeSingle()
   if (!order) return
 
-  const metadata = metadataOf(order.metadata)
-  await db
-    .from("store_orders")
-    .update({
-      metadata: { ...metadata, fraud_warning: { actionable, detected_at: new Date().toISOString() } },
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", order.id)
+  await patchOrderMetadata(order.id, {
+    fraud_warning: { actionable, detected_at: new Date().toISOString() },
+  })
 
   let outcome: string
   if (order.status === "pending") {

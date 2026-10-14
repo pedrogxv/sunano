@@ -58,6 +58,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ state: "review" satisfies CardPaymentState, amountCents: order.totalCents })
   }
 
+  // Cada consulta é uma chamada à API do Stripe e a tela chama a cada 3 s: um
+  // teto por pedido (1 a cada 2 s) impede que um script com a sessão do dono
+  // consuma a cota do Stripe. A tela ignora respostas que não sejam 2xx e
+  // mantém o estado que já tinha, então o 429 não a quebra.
+  const stateLimit = await checkRateLimit({
+    action: "store_card_state",
+    identifier: order.id,
+    maxAttempts: 1,
+    windowSeconds: 2,
+    onError: "closed",
+  })
+  if (!stateLimit.allowed) {
+    return NextResponse.json(
+      { error: "Consulta muito frequente." },
+      { status: 429, headers: { "Retry-After": "2" } }
+    )
+  }
+
   const intent = await getStripeCardPaymentState(order.paymentIntentId)
   // `requires_action` aqui = o desafio do banco (3DS) foi interrompido (a
   // pessoa recarregou ou fechou). O PaymentIntent aceita nova confirmação

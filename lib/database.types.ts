@@ -2966,6 +2966,20 @@ export type Database = {
         Args: { p_product_id: string; p_quantity: number }
         Returns: boolean
       }
+      /**
+       * Merge atômico de chaves em `store_orders.metadata` (20261226000000).
+       * `true` quando atualizou o pedido; `false` se ele não existe ou saiu do
+       * status exigido em `p_require_status`.
+       */
+      merge_store_order_metadata: {
+        Args: {
+          p_order_id: string
+          p_patch: Record<string, unknown>
+          p_require_status?: string
+          p_pix_expires_at?: string
+        }
+        Returns: boolean
+      }
       release_orphaned_stock_reservations: {
         Args: { p_older_than_minutes?: number }
         Returns: number

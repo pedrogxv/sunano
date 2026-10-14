@@ -5,7 +5,9 @@ import { dbErrorResponse } from "@/lib/db-errors"
 import { ORDER_PAID_STATUSES } from "@/lib/order-status"
 import { orderHasService } from "@/lib/server/repositories/support-repository"
 import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
+import { checkRateLimit } from "@/lib/server/rate-limit"
 import { markStripeOrdersPaid } from "@/lib/server/repositories/stripe-orders-repository"
+import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
 
 /**
  * Usada pela página de checkout PIX para fazer polling do status do
@@ -67,13 +69,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   // ficou em "Aguardando" para sempre: ela só lia o banco. `markStripeOrdersPaid`
   // é o mesmo caminho do webhook (relê o PaymentIntent, só age em `succeeded`,
   // UPDATE condicional), então chamar dos dois lados não duplica efeito.
+  //
+  // Cada conferência é uma chamada à API do Stripe, e esta rota é chamada a
+  // cada 3 s por aba aberta (e por qualquer script com a sessão do dono).
+  // Limite por PEDIDO: no máximo uma conferência a cada 5 s; as demais consultas
+  // devolvem o status do banco, que é o que o webhook mantém. Falha do contador
+  // (`closed`) também pula a conferência, para o banco degradado não virar uma
+  // rajada no Stripe.
   if (order.status === "pending" && order.stripe_payment_intent_id) {
-    try {
-      await markStripeOrdersPaid(order.stripe_payment_intent_id)
-      const { data: fresh } = await db.from("store_orders").select("status").eq("id", order.id).single()
-      if (fresh?.status) order.status = fresh.status
-    } catch (err) {
-      console.error(`[orders/${order.id}] conferência no Stripe falhou:`, err)
+    const syncLimit = await checkRateLimit({
+      action: "store_order_stripe_sync",
+      identifier: order.id,
+      maxAttempts: 1,
+      windowSeconds: 5,
+      onError: "closed",
+    })
+    if (syncLimit.allowed) {
+      try {
+        await markStripeOrdersPaid(order.stripe_payment_intent_id)
+        const { data: fresh } = await db.from("store_orders").select("status").eq("id", order.id).single()
+        if (fresh?.status) order.status = fresh.status
+      } catch (err) {
+        console.error(`[orders/${order.id}] conferência no Stripe falhou:`, err)
+      }
     }
   }
 
@@ -114,9 +132,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         ? {
             // Nomes mantidos pela tela; valem para os dois gateways.
             asaasPaymentId: order.asaas_payment_id ?? order.stripe_payment_intent_id,
-            asaasReceiptUrl:
-              order.asaas_receipt_url ??
-              (typeof order.metadata?.stripe_receipt_url === "string" ? order.metadata.stripe_receipt_url : null),
+            asaasReceiptUrl: order.asaas_receipt_url ?? stripeReceiptUrlOf(order.metadata),
           }
         : null,
   })

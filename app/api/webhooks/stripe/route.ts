@@ -4,8 +4,10 @@ import {
   getStripeDispute,
   getStripePayment,
   isStripeSandbox,
+  StripeConfigError,
   type Stripe,
 } from "@/lib/server/integrations/stripe"
+import { patchOrderMetadata } from "@/lib/server/repositories/order-metadata-repository"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import {
   expirePendingOrderByGatewayRef,
@@ -95,9 +97,11 @@ export async function POST(request: NextRequest) {
   try {
     event = constructStripeEvent(rawBody, signature)
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    if (message.includes("não configurad")) {
-      console.error("[webhooks/stripe]", message)
+    // Config nossa errada (env ausente, chave de outro modo) é 500: o Stripe
+    // reentrega quando a gente consertar. Qualquer outra falha aqui é assinatura
+    // ou corpo inválido, 400 sem reentrega.
+    if (err instanceof StripeConfigError) {
+      console.error("[webhooks/stripe]", err.message)
       return NextResponse.json({ error: "Webhook não configurado" }, { status: 500 })
     }
     return NextResponse.json({ error: "Assinatura inválida" }, { status: 400 })
@@ -217,32 +221,26 @@ async function handleDispute(eventType: string, eventDispute: Stripe.Dispute) {
   const db = createSupabaseAdminClient()
   const { data: orders } = await db
     .from("store_orders")
-    .select("id, metadata")
+    .select("id")
     .eq("stripe_payment_intent_id", intentId)
 
   const dueBy = dispute.evidence_details?.due_by ? new Date(dispute.evidence_details.due_by * 1000) : null
 
   for (const order of orders ?? []) {
-    const metadata = (order.metadata ?? {}) as Record<string, unknown>
-    await db
-      .from("store_orders")
-      .update({
-        metadata: {
-          ...metadata,
-          chargeback: {
-            event: eventType,
-            dispute_id: dispute.id,
-            dispute_status: dispute.status,
-            reason: dispute.reason,
-            amount_cents: dispute.amount,
-            evidence_due_by: dueBy?.toISOString() ?? null,
-            lost: dispute.status === "lost",
-            detected_at: new Date().toISOString(),
-          },
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", order.id)
+    // Merge atômico: o pagamento, o aviso de fraude e a disputa mexem no mesmo
+    // metadata e podem chegar juntos.
+    await patchOrderMetadata(order.id, {
+      chargeback: {
+        event: eventType,
+        dispute_id: dispute.id,
+        dispute_status: dispute.status,
+        reason: dispute.reason,
+        amount_cents: dispute.amount,
+        evidence_due_by: dueBy?.toISOString() ?? null,
+        lost: dispute.status === "lost",
+        detected_at: new Date().toISOString(),
+      },
+    })
 
     console.error(`[webhooks/stripe] DISPUTA ${eventType} no pedido ${order.id} (${intentId}) — requer ação manual`)
 

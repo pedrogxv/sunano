@@ -56,6 +56,8 @@ function CardCheckoutContent() {
   const [order, setOrder] = useState<OrderStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [card, setCard] = useState<CardInfo>(null)
+  // Sobe a cada 429 da consulta de cartão para o efeito que a dispara rodar de novo.
+  const [cardRetry, setCardRetry] = useState(0)
   const statusRef = useRef<OrderStatus["status"] | null>(null)
   statusRef.current = order?.status ?? null
   const cardRef = useRef<CardInfo>(null)
@@ -68,6 +70,13 @@ function CardCheckoutContent() {
       // 404: não é pedido de cartão do Stripe (Asaas hospeda o cartão).
       if (res.status === 404) {
         setCard("hosted")
+        return
+      }
+      // 429: o servidor limita a consulta a 1 a cada 2 s por pedido (cada uma
+      // chama o Stripe). Sem tentar de novo, um recarregamento rápido deixava a
+      // tela no spinner, porque o efeito só roda quando o estado muda.
+      if (res.status === 429) {
+        setTimeout(() => setCardRetry((n) => n + 1), 2500)
         return
       }
       if (!res.ok) return
@@ -123,7 +132,7 @@ function CardCheckoutContent() {
   // Pedido pendente: descobre se é para mostrar o formulário de cartão.
   useEffect(() => {
     if (order?.status === "pending" && card === null) fetchCardState()
-  }, [order?.status, card, fetchCardState])
+  }, [order?.status, card, fetchCardState, cardRetry])
 
   useEffect(() => {
     if (order?.status === "paid") {

@@ -1,21 +1,23 @@
 import "server-only"
 
 import { formatBRL } from "@/lib/format"
-import { orderStatusDescription, type OrderStatusValue } from "@/lib/order-status"
+import { ORDER_TRACKING_NOTICE, orderStatusDescription, type OrderStatusValue } from "@/lib/order-status"
 import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
 import { absoluteUrl } from "@/lib/site-url"
 import { getResendConfig, ResendApiError, sendEmail } from "@/lib/server/integrations/resend"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 
 /**
- * E-mails de pedido para o cliente da Loja. São SÓ DOIS, no máximo um de
- * cada por pedido:
+ * E-mails de pedido para o cliente da Loja. São SÓ TRÊS:
  *
  *   • `confirmed` — "compra confirmada", quando o pedido sai de "aguardando
  *     pagamento" para pago (`paid`/`awaiting_shipping_info`): webhooks da
  *     Asaas (PIX e cartão) e o resgate de periférico com Aura;
  *   • `shipped` — "pedido enviado", com o rastreio, quando o admin marca o
- *     envio.
+ *     envio;
+ *   • `tracking_updated` — o código de rastreio mudou (a encomenda entrou no
+ *     Brasil e ganhou código novo). Um por código: sem ele o cliente fica
+ *     olhando um rastreio parado. É raro, não pesa na cota.
  *
  * O resto do fluxo fica SÓ na notificação do site, de propósito — o Resend
  * está no plano gratuito (100 e-mails/dia, 3.000/mês):
@@ -38,7 +40,7 @@ const ORDER_COLUMNS =
   "id, status, total_cents, aura_cost_paid, items, payment_method, customer_name, customer_email, " +
   "is_sandbox, requires_shipping_address, asaas_receipt_url, tracking_code, carrier, metadata"
 
-export type OrderEmailKind = "confirmed" | "shipped"
+export type OrderEmailKind = "confirmed" | "shipped" | "tracking_updated"
 
 /**
  * Status em que cada e-mail ainda faz sentido. Relido do banco na hora do
@@ -48,6 +50,7 @@ export type OrderEmailKind = "confirmed" | "shipped"
 const KIND_STATUSES: Record<OrderEmailKind, OrderStatusValue[]> = {
   confirmed: ["paid", "awaiting_shipping_info"],
   shipped: ["shipped"],
+  tracking_updated: ["shipped"],
 }
 
 const PAYMENT_LABEL: Record<string, string> = {
@@ -123,10 +126,13 @@ function buildEmail(data: OrderEmailData): { subject: string; html: string; text
   const shortId = data.orderId.slice(0, 8).toUpperCase()
   const firstName = data.customerName?.trim().split(/\s+/)[0] ?? null
   const greeting = firstName ? `Olá, ${firstName}!` : "Olá!"
-  const shipped = data.kind === "shipped"
-  const title = shipped ? "Pedido enviado 📦" : "Compra confirmada ✅"
-  const lead = shipped
-    ? (orderStatusDescription(data.status, data.requiresShipping) ?? "Seu pedido está a caminho.")
+  const trackingUpdated = data.kind === "tracking_updated"
+  const shipped = data.kind === "shipped" || trackingUpdated
+  const title = trackingUpdated ? "Novo código de rastreio 🔄" : shipped ? "Pedido enviado 📦" : "Compra confirmada ✅"
+  const lead = trackingUpdated
+    ? "O código de rastreio do seu pedido mudou. Isso costuma acontecer quando a encomenda chega ao Brasil. Use o código abaixo para acompanhar a entrega."
+    : shipped
+    ? `Produto enviado! ${orderStatusDescription(data.status, data.requiresShipping) ?? "Seu pedido está a caminho."}`
     : // A frase do status às vezes já abre com "Pagamento confirmado." —
       // repetir depois de "Recebemos o seu pagamento" soa como erro.
       `Recebemos o seu pagamento. ${(orderStatusDescription(data.status, data.requiresShipping) ?? "").replace(/^Pagamento confirmado\.\s*/, "")}`.trim()
@@ -139,7 +145,15 @@ function buildEmail(data: OrderEmailData): { subject: string; html: string; text
     ? `${data.carrier ? `${data.carrier} — ` : ""}${data.trackingCode}`
     : null
 
-  const subject = shipped
+  // Aviso da primeira semana só no envio; na troca de código a encomenda já
+  // está no Brasil e o "obs." sobre a troca é justamente o que aconteceu.
+  const notice = data.kind === "shipped" && data.requiresShipping
+    ? [ORDER_TRACKING_NOTICE.intro, ORDER_TRACKING_NOTICE.codeChange]
+    : []
+
+  const subject = trackingUpdated
+    ? `Pedido #${shortId}: novo código de rastreio`
+    : shipped
     ? `Pedido #${shortId} enviado`
     : `Compra confirmada — pedido #${shortId}`
 
@@ -169,6 +183,7 @@ function buildEmail(data: OrderEmailData): { subject: string; html: string; text
         <tr><td style="font-size:15px;color:#222222;line-height:1.5;padding-bottom:8px;">${escapeHtml(greeting)}</td></tr>
         <tr><td style="font-size:15px;color:#222222;line-height:1.5;padding-bottom:${tracking ? 16 : 24}px;">${escapeHtml(lead)}</td></tr>
         ${tracking ? `<tr><td style="padding-bottom:24px;"><div style="background:#f4f4f5;border-radius:8px;padding:12px 16px;font-size:14px;color:#222222;">Código de rastreio: <strong style="font-family:Menlo,Consolas,monospace;">${escapeHtml(tracking)}</strong></div></td></tr>` : ""}
+        ${notice.map((paragraph) => `<tr><td style="font-size:13px;color:#555555;line-height:1.5;padding-bottom:16px;">${escapeHtml(paragraph)}</td></tr>`).join("")}
         <tr><td>
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             ${itemRows}
@@ -198,6 +213,7 @@ function buildEmail(data: OrderEmailData): { subject: string; html: string; text
     greeting,
     lead,
     ...(tracking ? ["", `Código de rastreio: ${tracking}`] : []),
+    ...notice.flatMap((paragraph) => ["", paragraph]),
     "",
     ...data.items.map((item) => {
       const price = itemPrice(item)
@@ -279,7 +295,13 @@ export async function sendOrderEmail(
       items: parseItems(row.items),
     })
 
-    await sendEmail({ config, to, ...email, idempotencyKey: `order-${kind}/${orderId}` })
+    // Rastreio alterado pode acontecer mais de uma vez: a chave leva o código,
+    // senão o Resend descartaria a segunda troca como reenvio.
+    const idempotencyKey =
+      kind === "tracking_updated"
+        ? `order-${kind}/${orderId}/${encodeURIComponent(String(row.tracking_code ?? ""))}`
+        : `order-${kind}/${orderId}`
+    await sendEmail({ config, to, ...email, idempotencyKey })
     return { delivered: true }
   } catch (err) {
     // 403 é domínio do remetente não verificado — configuração, não queda.

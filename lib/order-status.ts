@@ -94,3 +94,21 @@ export function orderStatusDescription(
       return null
   }
 }
+
+/**
+ * Aviso de rastreio para o cliente, depois do envio. Fonte única: Meus
+ * Pedidos, e-mail de envio e e-mail de rastreio alterado leem daqui.
+ *
+ * O produto sai da China: o código costuma levar dias para aparecer na
+ * transportadora e, em alguns casos, MUDA quando a encomenda entra no Brasil
+ * (por isso o admin pode trocar o código enquanto o pedido está "Enviado").
+ */
+export const ORDER_TRACKING_NOTICE = {
+  intro:
+    "Como o produto acabou de ser enviado, o pedido ainda está na China e provavelmente não vai aparecer no rastreamento por enquanto. Fique tranquilo caso não consiga ver o rastreio na primeira semana.",
+  codeChange:
+    "Obs.: em alguns casos, assim que o produto chega ao Brasil, o código de rastreio muda automaticamente. Se a nossa equipe ainda não tiver atualizado o código aqui, abra um chamado pedindo mais informações sobre o seu pedido que a gente ajuda com tudo que você precisar.",
+} as const
+
+/** Status em que o admin pode trocar o código de rastreio. */
+export const TRACKING_EDITABLE_STATUSES: OrderStatusValue[] = ["shipped"]

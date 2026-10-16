@@ -77,6 +77,7 @@ import { formatShippingAddressLine } from "@/components/store/ShippingAddressFie
 import {
   ORDER_PAID_STATUSES,
   ORDER_STATUS_LABEL,
+  ORDER_TRACKING_NOTICE,
   orderStatusDescription,
   orderStatusLabel,
 } from "@/lib/order-status"
@@ -872,10 +873,15 @@ function OrderDetailsDialog({
                   </Button>
                 </div>
                 {order.status === "shipped" && (
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Se o rastreio ainda não aparecer no site da transportadora, é porque o produto ainda não
-                    chegou ao Brasil. Ele passa a ser atualizado assim que a encomenda entrar no país.
-                  </p>
+                  <div className="space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+                    <p>{ORDER_TRACKING_NOTICE.intro}</p>
+                    <p>
+                      {ORDER_TRACKING_NOTICE.codeChange}{" "}
+                      <Link href="/suporte" className="font-medium text-emerald-400 hover:underline">
+                        Abrir chamado
+                      </Link>
+                    </p>
+                  </div>
                 )}
               </div>
             )}

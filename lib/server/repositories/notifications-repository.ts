@@ -255,11 +255,43 @@ export async function notifyOrderStatusChange(params: {
       ? "O prazo do pagamento acabou e os itens voltaram ao estoque. Você pode refazer a compra em um clique."
       : isCompleted
         ? `Ajude quem quer comprar e farme Aura com sua avaliação: +${STORE_REVIEW_AURA}, ou +${STORE_REVIEW_WITH_PHOTO_AURA} com foto.`
-        : statusText,
+        : // Recém-enviado ainda está na China: sem este aviso, o rastreio
+          // vazio da primeira semana vira chamado de "meu pedido sumiu".
+          status === "shipped" && requiresShipping
+          ? "Produto enviado! Ele ainda está saindo da China, então o rastreio pode levar até uma semana para aparecer."
+          : statusText,
   })
 
   if (error) {
     console.error("[notifications-repository] notifyOrderStatusChange:", error)
+  }
+}
+
+/**
+ * Avisa o cliente que o código de rastreio do pedido mudou (em geral, quando
+ * a encomenda entra no Brasil e ganha código nacional). Mesmo contrato de
+ * `notifyOrderStatusChange`: best-effort, nunca lança.
+ */
+export async function notifyOrderTrackingUpdated(params: {
+  userId: string
+  orderId: string
+  trackingCode: string
+}): Promise<void> {
+  const db = createSupabaseAdminClient()
+  const shortId = params.orderId.slice(0, 8).toUpperCase()
+
+  const { error } = await db.from("notifications").insert({
+    user_id: params.userId,
+    type: "order_status",
+    entity_type: "order",
+    entity_id: params.orderId,
+    link: "/conta/pedidos",
+    title: `Novo código de rastreio do pedido #${shortId}`,
+    body: `O código de rastreio mudou para ${params.trackingCode}. Use o novo código para acompanhar a entrega.`,
+  })
+
+  if (error) {
+    console.error("[notifications-repository] notifyOrderTrackingUpdated:", error)
   }
 }
 

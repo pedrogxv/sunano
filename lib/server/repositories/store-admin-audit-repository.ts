@@ -13,6 +13,8 @@ import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 export type StoreAuditAction =
   | "product.delete"
   | "order.advance"
+  /** Troca do código de rastreio de um pedido já enviado. */
+  | "order.tracking_update"
   | "order.refund"
   /** Estorno disparado pelo sistema (aviso de fraude do emissor), sem admin. */
   | "order.refund_automatic"

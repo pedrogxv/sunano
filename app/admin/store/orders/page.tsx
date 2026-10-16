@@ -1221,6 +1221,7 @@ function OrderManageDialog({
   const [trackingCode, setTrackingCode] = useState("")
   const [carrier, setCarrier] = useState("")
   const [advancing, setAdvancing] = useState(false)
+  const [savingTracking, setSavingTracking] = useState(false)
 
   const [refundOpen, setRefundOpen] = useState(false)
   const [refundValue, setRefundValue] = useState("")
@@ -1283,17 +1284,53 @@ function OrderManageDialog({
       const data = (await res.json().catch(() => ({}))) as { error?: string }
       if (!res.ok) throw new Error(data.error ?? "Erro ao atualizar pedido")
 
-      onOrderPatched(order.id, {
-        status: next,
-        tracking_code: trackingCode.trim() || order.tracking_code,
-        carrier: carrier.trim() || order.carrier,
-      })
+      // Só o envio grava rastreio; ao marcar "Entregue", um código digitado e
+      // não salvo no campo de edição não foi para o banco.
+      onOrderPatched(
+        order.id,
+        next === "shipped"
+          ? {
+              status: next,
+              tracking_code: trackingCode.trim() || order.tracking_code,
+              carrier: carrier.trim() || order.carrier,
+            }
+          : { status: next }
+      )
       toast.success(`Pedido marcado como "${orderStatusLabel(next, order.requires_shipping_address)}"`, { description: `#${orderNumber(order.id)}` })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Erro ao atualizar pedido"
       toast.error("Erro ao atualizar pedido", { description: message })
     } finally {
       setAdvancing(false)
+    }
+  }
+
+  // O código muda em alguns casos quando a encomenda chega ao Brasil; o
+  // cliente é avisado (site + e-mail) só quando o CÓDIGO muda.
+  async function handleUpdateTracking() {
+    if (!order) return
+    const code = trackingCode.trim()
+    const nextCarrier = carrier.trim()
+    setSavingTracking(true)
+    try {
+      const res = await fetch(`/api/admin/store/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "update_tracking", trackingCode: code, carrier: nextCarrier }),
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      if (!res.ok) throw new Error(data.error ?? "Erro ao atualizar rastreio")
+
+      onOrderPatched(order.id, { tracking_code: code, carrier: nextCarrier || null })
+      toast.success("Rastreio atualizado", {
+        description:
+          code !== order.tracking_code ? "O cliente foi avisado do novo código." : `#${orderNumber(order.id)}`,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao atualizar rastreio"
+      toast.error("Erro ao atualizar rastreio", { description: message })
+    } finally {
+      setSavingTracking(false)
     }
   }
 
@@ -1725,7 +1762,7 @@ function OrderManageDialog({
             )}
           </div>
 
-          {order.tracking_code && (
+          {order.tracking_code && order.status !== "shipped" && (
             <div className="space-y-1 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
               <p className="font-semibold uppercase tracking-wider text-muted-foreground">Rastreio</p>
               <p className="text-foreground">
@@ -1758,6 +1795,53 @@ function OrderManageDialog({
             </div>
           )}
 
+          {/* Enviado: o código pode mudar quando a encomenda entra no Brasil. */}
+          {order.status === "shipped" && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Rastreio
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="edit-tracking-code" className="text-xs">Código de rastreio</Label>
+                  <Input
+                    id="edit-tracking-code"
+                    value={trackingCode}
+                    onChange={(e) => setTrackingCode(e.target.value)}
+                    placeholder="Ex: BR123456789"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="edit-carrier" className="text-xs">Transportadora</Label>
+                  <Input
+                    id="edit-carrier"
+                    value={carrier}
+                    onChange={(e) => setCarrier(e.target.value)}
+                    placeholder="Ex: Correios"
+                  />
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                onClick={handleUpdateTracking}
+                disabled={
+                  savingTracking ||
+                  !trackingCode.trim() ||
+                  (trackingCode.trim() === (order.tracking_code ?? "") &&
+                    carrier.trim() === (order.carrier ?? ""))
+                }
+                className="w-full gap-2"
+              >
+                <Truck className="size-4" />
+                {savingTracking ? "Salvando..." : order.tracking_code ? "Salvar novo rastreio" : "Salvar rastreio"}
+              </Button>
+              <p className="text-[11px] text-muted-foreground">
+                Em alguns casos o código muda quando a encomenda chega ao Brasil. Ao trocar o código, o
+                cliente recebe uma notificação e um e-mail com o novo.
+              </p>
+            </div>
+          )}
+
           {/* Ações de status */}
           {next && (
             <div className="space-y-3">
@@ -1785,6 +1869,12 @@ function OrderManageDialog({
                     />
                   </div>
                 </div>
+              )}
+              {next === "shipped" && (
+                <p className="text-[11px] text-muted-foreground">
+                  O cliente recebe o aviso de que o rastreio pode levar até uma semana para aparecer
+                  (o pedido ainda está saindo da China). Dá para trocar o código depois.
+                </p>
               )}
               {next === "shipped" && order.requires_shipping_address && !order.shipping_address && (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">

@@ -9,6 +9,7 @@ import {
   advanceOrderStatus,
   cancelOrder,
   refundOrder,
+  updateOrderTracking,
 } from "@/lib/server/repositories/orders-repository"
 import { registerManualPayment } from "@/lib/server/repositories/order-manual-payment-repository"
 import { approveStripeCardReview } from "@/lib/server/repositories/stripe-orders-repository"
@@ -20,6 +21,12 @@ const patchSchema = z.discriminatedUnion("action", [
     // de um clique (ver trg_store_orders_shipping_stage).
     status: z.enum(ADMIN_ADVANCE_STATUSES),
     trackingCode: z.string().trim().max(120).optional(),
+    carrier: z.string().trim().max(80).optional(),
+  }),
+  // O código muda em alguns casos quando a encomenda chega ao Brasil.
+  z.object({
+    action: z.literal("update_tracking"),
+    trackingCode: z.string().trim().min(1, "Informe o código de rastreio.").max(120),
     carrier: z.string().trim().max(80).optional(),
   }),
   z.object({
@@ -80,6 +87,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const approved = await approveStripeCardReview(id, auth.profile.id)
     if (!approved.ok) {
       return NextResponse.json({ error: approved.error }, { status: approved.status })
+    }
+    return NextResponse.json({ ok: true })
+  }
+
+  if (parsed.data.action === "update_tracking") {
+    const tracking = await updateOrderTracking(
+      id,
+      { trackingCode: parsed.data.trackingCode, carrier: parsed.data.carrier },
+      auth.profile.id
+    )
+    if (!tracking.ok) {
+      return NextResponse.json({ error: tracking.error }, { status: tracking.status })
     }
     return NextResponse.json({ ok: true })
   }

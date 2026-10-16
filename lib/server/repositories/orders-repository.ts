@@ -3,7 +3,7 @@ import "server-only"
 import { createSupabaseAdminClient } from "@/lib/server/supabase/admin-client"
 import type { Database } from "@/lib/database.types"
 import { getUserProfiles } from "@/lib/server/repositories/users-repository"
-import { notifyOrderStatusChange } from "@/lib/server/repositories/notifications-repository"
+import { notifyOrderStatusChange, notifyOrderTrackingUpdated } from "@/lib/server/repositories/notifications-repository"
 import { notifyDiscordOrderEvent } from "@/lib/server/repositories/discord-orders-repository"
 import { sendOrderEmail } from "@/lib/server/repositories/order-emails-repository"
 import { syncCommissionForRefund } from "@/lib/server/repositories/affiliates-repository"
@@ -13,6 +13,7 @@ import { computeEffectivePrice } from "@/lib/store-pricing"
 import { getSelectionRulesForCheckout } from "@/lib/server/repositories/store-repository"
 import { patchOrderMetadata } from "@/lib/server/repositories/order-metadata-repository"
 import { stripeReceiptUrlOf } from "@/lib/stripe-receipt"
+import { TRACKING_EDITABLE_STATUSES } from "@/lib/order-status"
 import { deployChargesInSandbox } from "@/lib/server/payments/gateway"
 import type { OrderPaymentSourceFilter, PaymentGateway } from "@/lib/payment-gateways"
 import {
@@ -1094,6 +1095,97 @@ export async function advanceOrderStatus(
       entityId: id,
       before: { status: currentStatus },
       after: { status: nextStatus, trackingCode: extra?.trackingCode ?? null, carrier: extra?.carrier ?? null },
+    })
+  }
+
+  return { ok: true }
+}
+
+/**
+ * Troca o código de rastreio de um pedido já enviado. O produto sai da China
+ * e, em alguns casos, o código muda quando a encomenda entra no Brasil: o
+ * cliente precisa do código NOVO, senão fica olhando um rastreio parado.
+ *
+ * Só em `TRACKING_EDITABLE_STATUSES` (enviado). Antes do envio o código entra
+ * pelo `advanceOrderStatus`; depois de entregue não há mais o que rastrear.
+ * O status entra no filtro do UPDATE para um "Já recebi" do cliente no meio
+ * não ser sobrescrito.
+ */
+export async function updateOrderTracking(
+  id: string,
+  params: { trackingCode: string; carrier?: string },
+  adminId?: string | null
+): Promise<RepositoryResult> {
+  const trackingCode = params.trackingCode.trim()
+  if (!trackingCode) {
+    return { ok: false, error: "Informe o código de rastreio.", status: 400 }
+  }
+
+  const db = createSupabaseAdminClient()
+
+  const { data: existing } = await db
+    .from("store_orders")
+    .select("id, status, tracking_code, carrier, metadata, requires_shipping_address")
+    .eq("id", id)
+    .maybeSingle()
+
+  if (!existing) {
+    return { ok: false, error: "Pedido não encontrado.", status: 404 }
+  }
+
+  const currentStatus = existing.status as OrderStatus
+  if (!(TRACKING_EDITABLE_STATUSES as OrderStatus[]).includes(currentStatus)) {
+    return { ok: false, error: "Só é possível alterar o rastreio de um pedido enviado.", status: 400 }
+  }
+
+  // `carrier` ausente mantém a transportadora; string vazia a apaga.
+  const carrier = params.carrier === undefined ? existing.carrier : params.carrier.trim() || null
+  if (trackingCode === existing.tracking_code && carrier === existing.carrier) {
+    return { ok: true }
+  }
+
+  const { data: updated, error } = await db
+    .from("store_orders")
+    .update({ tracking_code: trackingCode, carrier })
+    .eq("id", id)
+    .eq("status", currentStatus)
+    .select("id")
+    .maybeSingle()
+
+  if (error) {
+    return { ok: false, error: "Não foi possível atualizar o rastreio.", status: 400 }
+  }
+  if (!updated) {
+    return { ok: false, error: "O pedido mudou de status enquanto você editava. Recarregue a página.", status: 409 }
+  }
+
+  // Só a transportadora mudou: não é um código novo para o cliente acompanhar.
+  const codeChanged = trackingCode !== existing.tracking_code
+
+  if (codeChanged) {
+    const ownerId = orderOwnerId(existing.metadata as Record<string, unknown> | null)
+    if (ownerId) {
+      await notifyOrderTrackingUpdated({ userId: ownerId, orderId: id, trackingCode })
+    }
+    await sendOrderEmail(id, "tracking_updated")
+  }
+
+  await notifyDiscordOrderEvent({
+    orderId: id,
+    status: currentStatus,
+    actor: "admin",
+    eventKey: `tracking:${trackingCode}:${carrier ?? ""}`,
+    note: `Rastreio alterado: ${existing.tracking_code ?? "(vazio)"} → ${trackingCode}${carrier ? ` · ${carrier}` : ""}`,
+  })
+
+  if (adminId) {
+    await logAdminAction({
+      adminId,
+      action: "order.tracking_update",
+      entityType: "store_order",
+      entityId: id,
+      before: { trackingCode: existing.tracking_code ?? null, carrier: existing.carrier ?? null },
+      after: { trackingCode, carrier },
     })
   }
 

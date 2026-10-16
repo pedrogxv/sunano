@@ -4,7 +4,8 @@ import { useRef } from "react"
 import { ChevronLeft, ChevronRight, Megaphone, Rocket } from "lucide-react"
 
 import { LaunchCard } from "@/components/store/LaunchCard"
-import { STORE_CARD_RAIL_CLASS } from "@/components/store/card-rail"
+import { STORE_CARD_RAIL_CLASS, STORE_CARD_RAIL_HEADER_CLASS } from "@/components/store/card-rail"
+import { cn } from "@/lib/utils"
 import { PreorderCard } from "@/components/store/PreorderCard"
 import type { StoreProductCard } from "@/lib/server/repositories/store-repository"
 
@@ -24,7 +25,7 @@ function Row({
   const scrollRef = useRef<HTMLDivElement>(null)
   return (
     <div className="flex flex-col gap-2.5">
-      <div className="flex items-center justify-between gap-3">
+      <div className={cn("flex items-center justify-between gap-3", STORE_CARD_RAIL_HEADER_CLASS)}>
         <p className="flex items-center gap-2 text-[15px] font-bold text-[#dcdcdc] sm:text-[17px]">
           <Icon className={`size-4 sm:size-[18px] ${iconClassName}`} strokeWidth={2.2} />
           {label}

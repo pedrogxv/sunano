@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, Boxes, ChevronLeft, ChevronRight, Flame, Handsha
 import { cn } from "@/lib/utils"
 import { usePageHeader } from "@/components/providers/page-header-context"
 import { LaunchPreorderSection } from "@/components/store/LaunchPreorderSection"
-import { STORE_CARD_RAIL_CLASS } from "@/components/store/card-rail"
+import { STORE_CARD_RAIL_CLASS, STORE_CARD_RAIL_HEADER_CLASS } from "@/components/store/card-rail"
 import { ProductCard, ProductCardSkeleton } from "@/components/store/ProductCard"
 import { CategoryTiles } from "@/components/store/CategoryTiles"
 import { StoreCategoryNav } from "@/components/store/StoreCategoryNav"
@@ -185,7 +185,7 @@ function ProductCarouselSection({
 
   return (
     <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-      <div className="flex items-end justify-between gap-3 sm:gap-4">
+      <div className={cn("flex items-end justify-between gap-3 sm:gap-4", STORE_CARD_RAIL_HEADER_CLASS)}>
         <div className="flex flex-col gap-[3px] sm:gap-1">
           <p className="flex items-center gap-[5px] text-[10px] font-extrabold uppercase leading-none tracking-[0.14em] text-[#7a7a7a] sm:gap-1.5 sm:text-[10.5px]">
             <Icon className={cn("size-[11px] shrink-0 sm:size-3", iconClassName)} strokeWidth={2.2} />
@@ -674,7 +674,7 @@ export function StoreContent({ initialItems, initialTotal, initialFilterOptions,
             filtros + catálogo, sem essa seção antes do que o usuário veio ver. */}
         {!banner && featuredItems.length > 0 && (
           <section className="flex flex-col gap-3.5 sm:gap-[18px]">
-            <div className="flex items-end justify-between gap-3 sm:gap-4">
+            <div className={cn("flex items-end justify-between gap-3 sm:gap-4", STORE_CARD_RAIL_HEADER_CLASS)}>
               <div className="flex flex-col gap-[3px] sm:gap-1">
                 <p className="flex items-center gap-[5px] text-[10px] font-extrabold uppercase tracking-[0.14em] text-[#7a7a7a] sm:gap-1.5 sm:text-[10.5px]">
                   <FeaturedIcon className="size-[11px] fill-amber-400 text-amber-400 sm:size-3" strokeWidth={0} />

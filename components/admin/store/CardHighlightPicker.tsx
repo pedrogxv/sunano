@@ -21,8 +21,7 @@ import { cn } from "@/lib/utils"
 const CHIP_CLASS =
   "flex h-[22px] items-center whitespace-nowrap rounded-md border border-white/10 bg-white/[0.04] px-1.5 text-[10.5px] font-semibold text-[#cfcfcf]"
 
-function usesLabel(option: CardHighlightOption): string {
-  const total = option.manualUses + option.autoUses
+function usesLabel(total: number): string {
   return `${total} ${total === 1 ? "produto" : "produtos"}`
 }
 
@@ -68,11 +67,14 @@ function SortableChip({ label, onRemove }: { label: string; onRemove: () => void
  */
 export function CardHighlightPicker({
   productId,
+  category,
   value,
   onChange,
 }: {
   /** Produto já salvo; sem ele não há sugestão do Database. */
   productId: string | null
+  /** Categoria escolhida no formulário; vazia = produto sem tipo, a lista mostra tudo. */
+  category: string
   value: string[]
   onChange: (value: string[]) => void
 }) {
@@ -104,9 +106,21 @@ export function CardHighlightPicker({
 
   const suggested = vocabulary.suggested.filter((label) => !selectedKeys.has(label.toLowerCase()))
   const suggestedKeys = new Set(vocabulary.suggested.map((label) => label.toLowerCase()))
-  const used = vocabulary.options.filter(
+  const available = vocabulary.options.filter(
     (option) => !selectedKeys.has(option.label.toLowerCase()) && !suggestedKeys.has(option.label.toLowerCase())
   )
+  // Só o que já aparece em produto do mesmo tipo: sensor de mouse não entra
+  // na lista de um teclado. As de outros tipos continuam achando pela busca
+  // (um termo pode valer para os dois, como "Sem fio"), mas não poluem a
+  // lista aberta.
+  const used = category
+    ? available
+        .filter((option) => (option.usesByCategory[category] ?? 0) > 0)
+        .sort((a, b) => (b.usesByCategory[category] ?? 0) - (a.usesByCategory[category] ?? 0))
+    : available
+  const others = category && term ? available.filter((option) => !(option.usesByCategory[category] ?? 0)) : []
+  const usesIn = (option: CardHighlightOption) =>
+    category ? (option.usesByCategory[category] ?? 0) : option.manualUses + option.autoUses
   const exists =
     selectedKeys.has(term.toLowerCase()) ||
     vocabulary.options.some((option) => option.label.toLowerCase() === term.toLowerCase()) ||
@@ -190,7 +204,7 @@ export function CardHighlightPicker({
             )}
 
             {!loading && used.length > 0 && (
-              <CommandGroup heading="Já usadas na loja">
+              <CommandGroup heading={category ? "Já usadas nesta categoria" : "Já usadas na loja"}>
                 {used.map((option) => (
                   <CommandItem key={option.label} value={option.label} onSelect={() => add(option.label)}>
                     {option.manualUses > 0 ? (
@@ -199,7 +213,18 @@ export function CardHighlightPicker({
                       <Database className="text-muted-foreground" aria-label="Do automático" />
                     )}
                     <span className="truncate">{option.label}</span>
-                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/70">{usesLabel(option)}</span>
+                    <span className="ml-auto shrink-0 text-[10px] text-muted-foreground/70">{usesLabel(usesIn(option))}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+
+            {!loading && others.length > 0 && (
+              <CommandGroup heading="De outras categorias">
+                {others.map((option) => (
+                  <CommandItem key={option.label} value={option.label} onSelect={() => add(option.label)}>
+                    <Database className="text-muted-foreground/60" />
+                    <span className="truncate text-muted-foreground">{option.label}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>

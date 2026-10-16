@@ -73,9 +73,13 @@ export function SaleWindowCountdown({
       <div className="flex items-center justify-between gap-2">
         <p className={cn("flex min-w-0 items-center gap-1.5 font-semibold", compact ? "text-[11px]" : "text-xs", tone.label)}>
           <Timer className="size-3.5 shrink-0" strokeWidth={2.2} />
-          <span className="truncate">{saleWindowCountdownLabel(kind, saleWindow.endAction)}</span>
+          {/* Quebra em vez de cortar: no card estreito "Desconto de Pré-venda"
+              não cabe ao lado do relógio, e cortado vira "Desconto de Pré-ven…". */}
+          <span className="leading-tight">{saleWindowCountdownLabel(kind, saleWindow.endAction, compact)}</span>
         </p>
-        <span className={cn("shrink-0 font-display font-bold tabular-nums text-white", compact ? "text-[13px]" : "text-sm")}>
+        {/* Vermelho pulsando: o prazo é o que dá a pressa, então é ele que
+            puxa o olho (animação em globals.css, `.sale-countdown-urgent`). */}
+        <span className={cn("sale-countdown-urgent shrink-0 font-display font-bold tabular-nums text-red-400", compact ? "text-[13px]" : "text-sm")}>
           {formatCountdown(targetMs - now)}
         </span>
       </div>

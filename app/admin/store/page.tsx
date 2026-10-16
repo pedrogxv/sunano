@@ -61,6 +61,8 @@ interface StoreProduct {
   brand: string | null
   condition: "new" | "used" | "opened"
   sale_type: "pre_order" | "ready_stock" | "normal"
+  /** Lançamento marcado e ainda no prazo (já resolvido no repositório). */
+  is_launch: boolean
   is_active: boolean
   is_sold_out: boolean
   is_featured: boolean
@@ -122,6 +124,9 @@ const SALE_TYPE_BADGE_COLOR: Record<SaleType, string> = {
   pre_order: "bg-orange-500/10 text-orange-400 border-orange-500/30",
   ready_stock: "bg-sky-500/10 text-sky-400 border-sky-500/30",
 }
+
+/** Violeta, a mesma cor do selo de Lançamento na Loja (lib/store-card.ts). */
+const LAUNCH_BADGE_COLOR = "bg-violet-500/10 text-violet-400 border-violet-500/30"
 
 const PAGE_SIZE = 50
 
@@ -667,6 +672,11 @@ export default function AdminStorePage() {
                                 SALE_TYPE_BADGE_COLOR[p.sale_type]
                               )}>
                                 {SALE_TYPE_LABEL[p.sale_type]}
+                              </span>
+                            )}
+                            {p.is_launch && (
+                              <span className={cn("rounded-full border px-1.5 py-0 text-[9px] font-semibold", LAUNCH_BADGE_COLOR)}>
+                                📣 Lançamento
                               </span>
                             )}
                           </div>

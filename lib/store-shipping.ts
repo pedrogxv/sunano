@@ -10,12 +10,19 @@
  * então também não anuncia "frete grátis".
  */
 
+import { isSinglePriceProduct } from "@/lib/store-pricing"
+
 /** Prazo de entrega anunciado, em dias úteis, contado da confirmação do pagamento. */
 export const STORE_DELIVERY_BUSINESS_DAYS = 15
 
-/** O produto vai pelo correio? `requires_shipping` ausente conta como físico, igual ao checkout. */
-export function hasFreeShipping(product: { requires_shipping?: boolean | null }): boolean {
-  return product.requires_shipping !== false
+/**
+ * O produto anuncia frete grátis? `requires_shipping` ausente conta como
+ * físico, igual ao checkout. Serviço nunca anuncia, mesmo quando pede
+ * endereço (o Xianyu Express despacha o que comprou): o que vai pelo correio
+ * ali não é um produto nosso, e "frete grátis" prometeria o envio dele.
+ */
+export function hasFreeShipping(product: { requires_shipping?: boolean | null; category?: string | null }): boolean {
+  return product.requires_shipping !== false && !isSinglePriceProduct(product)
 }
 
 // ────────────────────────────────────────────

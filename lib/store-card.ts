@@ -53,7 +53,14 @@ export function isStoreCardBadgeChoice(value: unknown): value is StoreCardBadgeC
  */
 export const STORE_CARD_BADGE: Record<
   StoreCardBadge,
-  { label: string; icon: LucideIcon; className: string; iconClassName?: string }
+  {
+    label: string
+    icon: LucideIcon
+    className: string
+    iconClassName?: string
+    /** Pele do card inteiro (borda, fundo, brilho). Só onde o selo sozinho não basta. */
+    cardClassName?: string
+  }
 > = {
   pre_order: { label: "Pré-venda", icon: Rocket, className: "bg-amber-400 text-[#1a1200]" },
   launch: { label: "Lançamento", icon: Megaphone, className: "bg-violet-400 text-violet-950" },
@@ -71,6 +78,11 @@ export const STORE_CARD_BADGE: Record<
     // Chama pulsando (globals.css): é o único selo animado, para "em alta"
     // puxar o olho. Animar os outros tiraria o destaque deste.
     iconClassName: "store-badge-flame",
+    // O card inteiro em brasa: quem está comprando bate o olho e acha o que
+    // os outros compram. Gradiente de cima (onde está o selo) apagando para o
+    // fundo do card, para o preço continuar legível.
+    cardClassName:
+      "border-orange-500/45 bg-[linear-gradient(180deg,rgba(220,38,38,0.22)_0%,rgba(234,88,12,0.10)_40%,var(--card)_75%)] shadow-[0_0_32px_-14px_rgba(239,68,68,0.7)] group-hover:border-orange-400/80 group-hover:shadow-[0_22px_55px_-18px_rgba(239,68,68,0.75)]",
   },
   best_value: { label: "Melhor custo-benefício", icon: ThumbsUp, className: "bg-emerald-400 text-emerald-950" },
   new: { label: "Novo", icon: Sparkles, className: "bg-lime-300 text-lime-950" },
@@ -148,6 +160,12 @@ export type CardHighlightOption = {
   manualUses: number
   /** Produtos cujo card mostra este termo pelo automático (Database). */
   autoUses: number
+  /**
+   * Uso por categoria da Loja (`mouse`, `keyboard`, ...). É o que deixa o
+   * seletor oferecer só o que faz sentido no tipo do produto: sensor de mouse
+   * não aparece na lista de um teclado. Produto sem categoria cai em `""`.
+   */
+  usesByCategory: Record<string, number>
 }
 
 export type CardHighlightVocabulary = {

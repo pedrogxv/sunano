@@ -341,6 +341,31 @@ button,
   50%      { transform: translate(-1.5rem, -1rem) scale(1.1); }
 }
 
+/* Números do prazo da pré-venda/lançamento (SaleWindowCountdown): vermelho
+   que acende e apaga devagar, para o relógio passar urgência sem virar
+   pisca-pisca de banner. */
+@keyframes sale-countdown-pulse {
+  0%, 100% {
+    color: oklch(0.7 0.2 25);
+    text-shadow: 0 0 2px oklch(0.63 0.24 25 / 0.35);
+  }
+  50% {
+    color: oklch(0.8 0.17 30);
+    text-shadow: 0 0 10px oklch(0.63 0.24 25 / 0.95), 0 0 2px oklch(0.85 0.15 40 / 0.9);
+  }
+}
+
+.sale-countdown-urgent {
+  animation: sale-countdown-pulse 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sale-countdown-urgent {
+    animation: none;
+    text-shadow: 0 0 6px oklch(0.63 0.24 25 / 0.7);
+  }
+}
+
 /* Item "Promoções" da sidebar — pill âmbar com glow pulsante + texto em gradiente de fogo */
 @keyframes fire-text-flow {
   0%, 100% { background-position: 0% 50%; }

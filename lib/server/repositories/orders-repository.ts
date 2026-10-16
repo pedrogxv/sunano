@@ -1193,9 +1193,9 @@ export async function updateOrderTracking(
 }
 
 /**
- * Extorna um pedido pago via Asaas — integral (sem `valueCents`) ou parcial.
+ * Estorna um pedido pago via Asaas — integral (sem `valueCents`) ou parcial.
  * Exige `asaas_payment_id`; pedidos legados sem ele (pagos por gateways
- * anteriores) precisam ser extornados manualmente e só têm o status
+ * anteriores) precisam ser estornados manualmente e só têm o status
  * marcado aqui.
  *
  * A cobrança na Asaas é a fonte da verdade — chamamos `refundPayment` antes
@@ -1223,12 +1223,12 @@ export async function refundOrder(
     return { ok: false, error: "Pedido não encontrado.", status: 404 }
   }
   if (!["paid", "awaiting_shipping_info", "shipped", "delivered"].includes(existing.status)) {
-    return { ok: false, error: "Só é possível extornar um pedido pago.", status: 400 }
+    return { ok: false, error: "Só é possível estornar um pedido pago.", status: 400 }
   }
   if (!existing.asaas_payment_id && !existing.stripe_payment_intent_id) {
     return {
       ok: false,
-      error: "Este pedido não tem cobrança Asaas associada; extorne manualmente e atualize o status.",
+      error: "Este pedido não tem cobrança Asaas associada; estorne manualmente e atualize o status.",
       status: 400,
     }
   }
@@ -1236,7 +1236,7 @@ export async function refundOrder(
   const remainingCents = existing.total_cents - existing.refunded_cents
   const refundCents = params.valueCents ?? remainingCents
   if (refundCents <= 0 || refundCents > remainingCents) {
-    return { ok: false, error: "Valor de extorno inválido para o saldo restante do pedido.", status: 400 }
+    return { ok: false, error: "Valor de estorno inválido para o saldo restante do pedido.", status: 400 }
   }
 
   // Pedido do Stripe (gateway alternativo): mesma regra — o gateway estorna
@@ -1266,7 +1266,7 @@ export async function refundOrder(
       const message = stripeErrorMessage(err)
       return {
         ok: false,
-        error: message ? `Stripe recusou o extorno: ${message}` : "Não foi possível extornar no Stripe. Tente novamente.",
+        error: message ? `Stripe recusou o estorno: ${message}` : "Não foi possível estornar no Stripe. Tente novamente.",
         status: 502,
       }
     }
@@ -1279,9 +1279,9 @@ export async function refundOrder(
     // 4xx da Asaas é regra de negócio (saldo insuficiente na conta, cobrança
     // já estornada) — repetir não resolve, então mostramos o motivo dela.
     if (err instanceof AsaasError && err.description) {
-      return { ok: false, error: `Asaas recusou o extorno: ${err.description}`, status: 502 }
+      return { ok: false, error: `Asaas recusou o estorno: ${err.description}`, status: 502 }
     }
-    return { ok: false, error: "Não foi possível extornar no Asaas. Tente novamente.", status: 502 }
+    return { ok: false, error: "Não foi possível estornar no Asaas. Tente novamente.", status: 502 }
   }
   }
 
@@ -1305,7 +1305,7 @@ export async function refundOrder(
     // O estorno já aconteceu de verdade no Asaas — não propaga como falha
     // total, mas também não finge que o banco está em dia.
     console.error("[orders-repository] refundOrder — grava status:", error)
-    return { ok: false, error: "Extorno feito no gateway, mas falhou ao atualizar o pedido. Verifique manualmente.", status: 500 }
+    return { ok: false, error: "Estorno feito no gateway, mas falhou ao atualizar o pedido. Verifique manualmente.", status: 500 }
   }
 
   if (isFullRefund) {
@@ -1371,7 +1371,7 @@ function refundAttemptsOf(metadata: unknown): number {
  * Cancela um pedido ainda não pago (`pending`), devolvendo o estoque
  * reservado no checkout e, se houver cobrança Asaas associada, removendo-a
  * lá também (`DELETE /payments/{id}` — só vale para cobrança ainda não
- * paga; pedido já pago é extorno, não cancelamento, ver `refundOrder`).
+ * paga; pedido já pago é estorno, não cancelamento, ver `refundOrder`).
  *
  * Pedidos legados sem `asaas_payment_id` são cancelados só localmente — o
  * PIX gerado simplesmente nunca será pago e expira sozinho no gateway.

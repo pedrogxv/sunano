@@ -19,7 +19,7 @@ import type { CardHighlightVocabulary, CardHighlightOption } from "@/lib/store-c
 export async function getCardHighlightVocabulary(productId: string | null): Promise<CardHighlightVocabulary> {
   const db = createSupabaseAdminClient()
   const [{ data, error }, catalog] = await Promise.all([
-    db.from("store_products").select("id, card_highlights").eq("type", "store"),
+    db.from("store_products").select("id, category, card_highlights").eq("type", "store"),
     getStoreCatalogIndex(),
   ])
   if (error) console.error("[store-card-highlights-repository] getCardHighlightVocabulary:", error)
@@ -27,11 +27,13 @@ export async function getCardHighlightVocabulary(productId: string | null): Prom
   // Chave em minúsculas, igual ao dedupe de `sanitizeCardHighlights`: "8k" e
   // "8K" são a mesma característica. Vale a grafia do primeiro que apareceu.
   const byKey = new Map<string, CardHighlightOption>()
-  function count(label: string, source: "manual" | "auto") {
+  function count(label: string, source: "manual" | "auto", category: string | null) {
     const key = label.toLowerCase()
-    const option = byKey.get(key) ?? { label, manualUses: 0, autoUses: 0 }
+    const option = byKey.get(key) ?? { label, manualUses: 0, autoUses: 0, usesByCategory: {} }
     if (source === "manual") option.manualUses += 1
     else option.autoUses += 1
+    const cat = category ?? ""
+    option.usesByCategory[cat] = (option.usesByCategory[cat] ?? 0) + 1
     byKey.set(key, option)
   }
 
@@ -39,13 +41,13 @@ export async function getCardHighlightVocabulary(productId: string | null): Prom
   for (const row of data ?? []) {
     const manual = sanitizeCardHighlights(Array.isArray(row.card_highlights) ? row.card_highlights : [])
     if (manual.length > 0) manualIds.add(row.id)
-    for (const label of manual) count(label, "manual")
+    for (const label of manual) count(label, "manual", row.category)
   }
   // O automático só conta para quem NÃO escolheu à mão: é o que o card dele
   // mostra de fato (ver `withCardDisplay`).
   for (const [id, entry] of Object.entries(catalog)) {
     if (manualIds.has(id)) continue
-    for (const label of deriveCardHighlights(entry.category, entry.attributes)) count(label, "auto")
+    for (const label of deriveCardHighlights(entry.category, entry.attributes)) count(label, "auto", entry.category)
   }
 
   const entry = productId ? catalog[productId] : undefined

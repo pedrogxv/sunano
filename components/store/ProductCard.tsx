@@ -238,7 +238,11 @@ function StandardProductCard(props: ProductCardProps) {
           "relative z-0 flex h-full flex-col overflow-hidden border bg-card transition-[transform,border-color,box-shadow] duration-200",
           showcase
             ? "rounded-[26px] border-[#2c2c2c] bg-gradient-to-b from-[#1a1a1f] to-card group-hover:-translate-y-1.5 group-hover:border-violet-400/40 group-hover:shadow-[0_22px_60px_-24px_rgba(167,139,250,0.5)]"
-            : "rounded-[18px] border-[#262626] group-hover:-translate-y-1 group-hover:border-white/25 group-hover:shadow-xl group-hover:shadow-black/40",
+            : cn(
+                "rounded-[18px] group-hover:-translate-y-1",
+                (props.badge && STORE_CARD_BADGE[props.badge].cardClassName) ||
+                  "border-[#262626] group-hover:border-white/25 group-hover:shadow-xl group-hover:shadow-black/40"
+              ),
           // Esgotado sai de cena inteiro (rótulo, borda, frete), como no card de pré-venda.
           soldOut && "grayscale"
         )}>

@@ -501,7 +501,7 @@ export function ProductDetailContent({ filterOptions, rating, ...detail }: Produ
               aura={purchaseAuraFor(effectiveCents * qty)}
             />
 
-            {freeShipping && canBuy && <ProductDeliveryInfo preOrder={isPreOrder} />}
+            {freeShipping && canBuy && <ProductDeliveryInfo preOrder={isPreOrder} shipsAt={preorder?.shipsAt} />}
 
             {/* Só aparece para afiliado aprovado — para o resto, nada. */}
             <AffiliateShareButton className="w-full justify-center" />

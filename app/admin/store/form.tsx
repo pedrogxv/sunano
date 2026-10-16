@@ -44,7 +44,7 @@ import {
   STORE_CARD_BADGE_CHOICE_LABEL,
   STORE_CARD_BADGE_CHOICES,
 } from "@/lib/store-card"
-import { PREORDER_STATUSES, PREORDER_STATUS_LABEL, type PreorderStatus } from "@/lib/store-preorder"
+import { PREORDER_BATCH_OPTIONS, PREORDER_STATUSES, PREORDER_STATUS_LABEL, type PreorderStatus } from "@/lib/store-preorder"
 import {
   SALE_WINDOW_END_ACTION_LABEL,
   SALE_WINDOW_END_ACTIONS,
@@ -384,6 +384,7 @@ const CATEGORIES = [
 ]
 
 const NO_CATEGORY = "__none__"
+const NO_BATCH = "__none__"
 const MAX_STOCK = 999_999
 const MAX_IMAGES = 8
 const MAX_VARIANT_IMAGES = 3
@@ -1522,14 +1523,28 @@ export function StoreProductForm({
           </p>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Nome do lote</Label>
-          <Input
-            value={formData.preorder_batch_name}
-            maxLength={60}
-            onChange={(e) => set("preorder_batch_name", e.target.value)}
-            placeholder="Ex: Lote 1"
-            className="h-9 border-border bg-muted/20 text-sm"
-          />
+          <Label className="text-xs">Batch</Label>
+          <Select
+            value={formData.preorder_batch_name || NO_BATCH}
+            onValueChange={(v) => set("preorder_batch_name", v === NO_BATCH ? "" : v)}
+          >
+            <SelectTrigger className="h-9 w-full border-border bg-muted/20 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_BATCH}>Sem batch</SelectItem>
+              {PREORDER_BATCH_OPTIONS.map((batch) => (
+                <SelectItem key={batch} value={batch}>
+                  {batch}
+                </SelectItem>
+              ))}
+              {/* Nome livre de antes ("Lote 1"): aparece para não sumir ao abrir e salvar. */}
+              {formData.preorder_batch_name &&
+                !(PREORDER_BATCH_OPTIONS as readonly string[]).includes(formData.preorder_batch_name) && (
+                  <SelectItem value={formData.preorder_batch_name}>{formData.preorder_batch_name}</SelectItem>
+                )}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs">Previsão de envio</Label>
@@ -1946,7 +1961,12 @@ export function StoreProductForm({
 
           <div className="space-y-2">
             <Label>Características no card</Label>
-            <CardHighlightPicker productId={product?.id ?? null} value={cardHighlights} onChange={setCardHighlights} />
+            <CardHighlightPicker
+              productId={product?.id ?? null}
+              category={formData.category}
+              value={cardHighlights}
+              onChange={setCardHighlights}
+            />
             <p className="text-[10px] text-muted-foreground/70">
               Sem escolha = automático, pelo Database e pela Especificação Técnica (mouse: peso, sensor, polling;
               teclado: switch, polling, case; IEM: assinatura, drivers, material). Busque um termo que a loja já usa ou

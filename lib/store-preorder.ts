@@ -28,11 +28,11 @@ export const PREORDER_STATUS_LABEL: Record<PreorderStatus, string> = {
 
 /** Uma frase do que o status significa para quem está olhando. */
 export const PREORDER_STATUS_HINT: Record<PreorderStatus, string> = {
-  open: "Reserve agora e receba assim que o lote chegar.",
-  sold_out: "As unidades deste lote acabaram.",
-  next_batch_soon: "Um novo lote vai abrir. Peça para ser avisado.",
-  closed: "Esta pré-venda terminou.",
-  shipping: "O lote chegou e os pedidos estão sendo enviados.",
+  open: "Reserve agora e receba assim que o lote chegar",
+  sold_out: "As unidades deste lote acabaram",
+  next_batch_soon: "Um novo lote vai abrir. Peça para ser avisado",
+  closed: "Esta pré-venda terminou",
+  shipping: "O lote chegou e os pedidos estão sendo enviados",
 }
 
 /**
@@ -52,6 +52,13 @@ export const PREORDER_STATUS_STYLE: Record<PreorderStatus, { icon: LucideIcon; c
   closed: { icon: PackageOpen, chip: "border-border bg-muted/40 text-muted-foreground", text: "text-muted-foreground", bar: "bg-muted-foreground" },
   shipping: { icon: Truck, chip: "border-emerald-400/30 bg-emerald-400/15 text-emerald-300", text: "text-emerald-300", bar: "bg-emerald-400" },
 }
+
+/**
+ * Lotes que o admin escolhe. É o nome que a vitrine mostra ("Pré-venda ·
+ * Batch 1"), gravado como texto em `preorder_batch_name`: produto antigo com
+ * nome livre ("Lote 1") continua valendo até alguém trocar.
+ */
+export const PREORDER_BATCH_OPTIONS = ["Batch 1", "Batch 2+"] as const
 
 /** O texto do botão principal de uma pré-venda aberta. */
 export const PREORDER_CTA_LABEL = "Reservar na pré-venda"

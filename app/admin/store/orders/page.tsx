@@ -799,7 +799,7 @@ export default function AdminOrdersPage() {
     setManageOrder((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev))
   }
 
-  usePageHeader("Pedidos", "Acompanhe, gerencie e extorne pedidos da loja.")
+  usePageHeader("Pedidos", "Acompanhe, gerencie e estorne pedidos da loja.")
 
   return (
     <div className="space-y-4">
@@ -1060,7 +1060,7 @@ export default function AdminOrdersPage() {
                       </>
                     )}
                     {order.refunded_cents > 0 && (
-                      <p className="text-[10px] text-sky-400">-{formatBRL(order.refunded_cents)} extornado</p>
+                      <p className="text-[10px] text-sky-400">-{formatBRL(order.refunded_cents)} estornado</p>
                     )}
                   </td>
                   <td className="px-4 py-3">
@@ -1364,7 +1364,7 @@ function OrderManageDialog({
     const trimmedValue = refundValue.trim()
     const valueCents = trimmedValue ? Math.round(Number(trimmedValue.replace(",", ".")) * 100) : undefined
     if (trimmedValue && (!Number.isFinite(valueCents) || (valueCents as number) <= 0)) {
-      toast.error("Valor de extorno inválido")
+      toast.error("Valor de estorno inválido")
       return
     }
 
@@ -1376,7 +1376,7 @@ function OrderManageDialog({
         body: JSON.stringify({ action: "refund", valueCents, reason: refundReason.trim() || undefined }),
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string }
-      if (!res.ok) throw new Error(data.error ?? "Erro ao extornar pedido")
+      if (!res.ok) throw new Error(data.error ?? "Erro ao estornar pedido")
 
       const refundedNow = valueCents ?? remainingCents
       const newRefundedCents = order.refunded_cents + refundedNow
@@ -1386,13 +1386,13 @@ function OrderManageDialog({
         refunded_at: new Date().toISOString(),
         status: newRefundedCents >= order.total_cents ? "refunded" : order.status,
       })
-      toast.success("Extorno realizado", { description: `${formatBRL(refundedNow)} · #${orderNumber(order.id)}` })
+      toast.success("Estorno realizado", { description: `${formatBRL(refundedNow)} · #${orderNumber(order.id)}` })
       setRefundOpen(false)
       setRefundValue("")
       setRefundReason("")
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Erro ao extornar pedido"
-      toast.error("Erro ao extornar pedido", { description: message })
+      const message = err instanceof Error ? err.message : "Erro ao estornar pedido"
+      toast.error("Erro ao estornar pedido", { description: message })
     } finally {
       setRefunding(false)
     }
@@ -1510,7 +1510,7 @@ function OrderManageDialog({
                 </p>
                 <p className="text-muted-foreground">
                   Detectado em {formatDateTime(order.oversold.detected_at)}. Reponha o estoque
-                  para enviar normalmente, ou extorne o pagamento abaixo.
+                  para enviar normalmente, ou estorne o pagamento abaixo.
                 </p>
               </AlertDescription>
             </Alert>
@@ -1712,7 +1712,7 @@ function OrderManageDialog({
             </div>
             {order.refunded_cents > 0 && (
               <div className="flex items-center justify-between text-xs text-sky-400">
-                <span>Extornado</span>
+                <span>Estornado</span>
                 <span>-{formatBRL(order.refunded_cents)}</span>
               </div>
             )}
@@ -1774,7 +1774,7 @@ function OrderManageDialog({
 
           {order.refund_reason && (
             <div className="space-y-1 rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-xs">
-              <p className="font-semibold uppercase tracking-wider text-sky-400">Motivo do extorno</p>
+              <p className="font-semibold uppercase tracking-wider text-sky-400">Motivo do estorno</p>
               <p className="text-foreground">{order.refund_reason}</p>
             </div>
           )}
@@ -1967,7 +1967,7 @@ function OrderManageDialog({
                     />
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Extorno deste pagamento não sai pelo botão do painel: o site não tem a cobrança. Faça direto
+                    Estorno deste pagamento não sai pelo botão do painel: o site não tem a cobrança. Faça direto
                     na Asaas.
                   </p>
                   <div className="flex gap-2">
@@ -2048,11 +2048,11 @@ function OrderManageDialog({
             </div>
           )}
 
-          {/* Extorno */}
+          {/* Estorno */}
           {canRefund && (
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Extorno {!hasGatewayCharge && "(indisponível)"}
+                Estorno {!hasGatewayCharge && "(indisponível)"}
               </p>
 
               {!hasGatewayCharge && (
@@ -2060,8 +2060,8 @@ function OrderManageDialog({
                   <AlertCircle className="size-3.5 text-amber-400" />
                   <AlertDescription className="text-xs text-amber-300">
                     {order.manual_payment
-                      ? "Este pedido foi pago por fora do site e registrado à mão. Extorne direto no painel da Asaas."
-                      : "Este pedido não tem cobrança Asaas associada (pago por um gateway anterior). Extorne manualmente no painel do gateway e depois marque o pedido como reembolsado."}
+                      ? "Este pedido foi pago por fora do site e registrado à mão. Estorne direto no painel da Asaas."
+                      : "Este pedido não tem cobrança Asaas associada (pago por um gateway anterior). Estorne manualmente no painel do gateway e depois marque o pedido como reembolsado."}
                   </AlertDescription>
                 </Alert>
               )}
@@ -2070,7 +2070,7 @@ function OrderManageDialog({
                 <Alert className="border-sky-500/30 bg-sky-500/10 py-2">
                   <AlertCircle className="size-3.5 text-sky-400" />
                   <AlertDescription className="text-xs text-sky-300">
-                    A chamada de extorno via Asaas ainda precisa ser validada/confirmada manualmente
+                    A chamada de estorno via Asaas ainda precisa ser validada/confirmada manualmente
                     no painel do Asaas para que o dinheiro seja de fato devolvido ao cliente. Marcar
                     o pedido como reembolsado aqui não garante que o valor já caiu.
                   </AlertDescription>
@@ -2088,13 +2088,13 @@ function OrderManageDialog({
                   disabled={!hasGatewayCharge}
                 >
                   <RotateCcw className="size-4" />
-                  Extornar pedido
+                  Estornar pedido
                 </Button>
               ) : (
                 <div className="space-y-3 rounded-lg border border-red-500/30 bg-red-500/5 p-3">
                   <div className="space-y-1">
                     <Label htmlFor="refund-value" className="text-xs">
-                      Valor a extornar (máx. {formatBRL(remainingCents)})
+                      Valor a estornar (máx. {formatBRL(remainingCents)})
                     </Label>
                     <Input
                       id="refund-value"
@@ -2129,7 +2129,7 @@ function OrderManageDialog({
                       onClick={handleRefund}
                       disabled={refunding}
                     >
-                      {refunding ? "Extornando..." : "Confirmar extorno"}
+                      {refunding ? "Estornando..." : "Confirmar estorno"}
                     </Button>
                   </div>
                 </div>

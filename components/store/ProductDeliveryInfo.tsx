@@ -3,10 +3,13 @@
 import { CalendarClock } from "lucide-react"
 
 import { useDeliveryEstimate } from "@/lib/hooks/use-delivery-estimate"
+import { formatPreorderShipDate } from "@/lib/store-preorder"
 import { STORE_DELIVERY_BUSINESS_DAYS } from "@/lib/store-shipping"
 
 interface ProductDeliveryInfoProps {
   preOrder: boolean
+  /** Previsão de envio do lote ("YYYY-MM-DD"); sem ela, o título não promete data. */
+  shipsAt?: string | null
 }
 
 /**
@@ -18,7 +21,7 @@ interface ProductDeliveryInfoProps {
  * A data ("Receba até sex., 23 de out.") só aparece depois de montar no
  * navegador (ver `useDeliveryEstimate`); até lá, o prazo em dias úteis.
  */
-export function ProductDeliveryInfo({ preOrder }: ProductDeliveryInfoProps) {
+export function ProductDeliveryInfo({ preOrder, shipsAt }: ProductDeliveryInfoProps) {
   const deadline = useDeliveryEstimate()
   const days = STORE_DELIVERY_BUSINESS_DAYS
 
@@ -29,8 +32,11 @@ export function ProductDeliveryInfo({ preOrder }: ProductDeliveryInfoProps) {
       </span>
       {preOrder ? (
         <div>
-          <p className="text-[15px] font-semibold text-foreground">Envios a partir do dia de Lançamento</p>
-          <p className="text-[13px] text-muted-foreground">A partir do lançamento, a entrega leva até {days} dias úteis.</p>
+          <p className="text-[15px] font-semibold text-foreground">
+            {shipsAt ? `Lançamento dia ${formatPreorderShipDate(shipsAt)}` : "Envios a partir do dia de Lançamento"}
+          </p>
+          {/* O prazo conta do ENVIO, não do lançamento: o lote pode chegar e sair aos poucos. */}
+          <p className="text-[13px] text-muted-foreground">A partir do envio, a entrega leva até {days} dias úteis</p>
         </div>
       ) : (
         <div>
@@ -43,7 +49,7 @@ export function ProductDeliveryInfo({ preOrder }: ProductDeliveryInfoProps) {
               `Receba em até ${days} dias úteis`
             )}
           </p>
-          <p className="text-[13px] text-muted-foreground">Até {days} dias úteis, contados da confirmação do pagamento.</p>
+          <p className="text-[13px] text-muted-foreground">Até {days} dias úteis, contados da confirmação do pagamento</p>
         </div>
       )}
     </div>

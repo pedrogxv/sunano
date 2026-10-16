@@ -59,7 +59,7 @@ export function RestockAlertButton({
 
   async function toggle() {
     if (!user) {
-      toast.error("Faça login para ser avisado quando o produto voltar.")
+      toast.error("Faça login para ser avisado quando o produto voltar")
       return
     }
     setLoading(true)
@@ -71,17 +71,17 @@ export function RestockAlertButton({
         body: JSON.stringify({ productId, variantId, subscribe: next }),
       })
       const data = (await res.json()) as { error?: string }
-      if (!res.ok) throw new Error(data.error ?? "Erro ao salvar o aviso.")
+      if (!res.ok) throw new Error(data.error ?? "Erro ao salvar o aviso")
       setSubscribed(next)
       toast.success(
         next
           ? variantLabel
-            ? `Avisaremos por e-mail e no site quando "${variantLabel}" voltar.`
-            : "Avisaremos por e-mail e no site quando o produto voltar."
-          : "Aviso desativado."
+            ? `Avisaremos por e-mail e no site quando "${variantLabel}" voltar`
+            : "Avisaremos por e-mail e no site quando o produto voltar"
+          : "Aviso desativado"
       )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Erro ao salvar o aviso.")
+      toast.error(error instanceof Error ? error.message : "Erro ao salvar o aviso")
     } finally {
       setLoading(false)
     }

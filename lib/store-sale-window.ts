@@ -56,8 +56,17 @@ export function toSaleWindow(row: {
  * ("o desconto acaba"), que é a urgência real; quando não muda, é só a saída
  * da seção.
  */
-export function saleWindowCountdownLabel(kind: SaleWindowKind, endAction: SaleWindowEndAction): string {
+export function saleWindowCountdownLabel(
+  kind: SaleWindowKind,
+  endAction: SaleWindowEndAction,
+  /** Card da vitrine: a frase com "acaba em" não cabe ao lado do relógio e saía cortada. */
+  compact = false
+): string {
   const priceChanges = endAction !== "keep"
+  if (compact) {
+    if (kind === "preorder") return priceChanges ? "Desconto de Pré-venda" : "Pré-venda termina em"
+    return priceChanges ? "Desconto de Lançamento" : "Lançamento termina em"
+  }
   if (kind === "preorder") return priceChanges ? "Preço de pré-venda acaba em" : "Pré-venda termina em"
   return priceChanges ? "Preço de lançamento acaba em" : "Lançamento termina em"
 }
